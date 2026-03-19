@@ -1,0 +1,15 @@
+{
+	"name": "nftlox",
+	"private": true,
+	"workspaces": [
+		"packages/*"
+	],
+	"scripts": {
+		"dev:indexer": "bun run --filter nftlox-indexer dev",
+		"dev:playground": "bun run --filter nftlox-playground dev",
+		"test": "bun run --filter '*' test",
+		"test:sdk": "bun test packages/sdk",
+		"test:indexer": "bun test packages/indexer",
+		"typecheck": "bun run --filter '*' typecheck"
+	}
+}

@@ -1,0 +1,341 @@
+// NFTLox DNA Generation Module
+// Implements dual DNA system: originDna (collection) + instanceDna (individual NFT)
+
+import {
+	ORIGIN_DNA_LENGTH,
+	INSTANCE_DNA_LENGTH,
+	ACCESS_KEY_LENGTH,
+} from "./constants";
+
+// ============ HASH FUNCTIONS ============
+
+export async function generateHashAsync(input: string): Promise<string> {
+	const encoder = new TextEncoder();
+	const data = encoder.encode(input);
+	const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function generateHashSync(input: string): string {
+	let hash = 0;
+	for (let i = 0; i < input.length; i++) {
+		const char = input.charCodeAt(i);
+		hash = (hash << 5) - hash + char;
+		hash = hash & hash;
+	}
+	const timestamp = Date.now().toString(16);
+	const random = Math.random().toString(16).slice(2, 10);
+	return `${Math.abs(hash).toString(16).padStart(8, "0")}${timestamp}${random}`;
+}
+
+// ============ ORIGIN DNA (Collection Level) ============
+
+/**
+ * Generates the origin DNA for a collection.
+ * This DNA is shared by all NFTs in the collection (genetic thread).
+ * DETERMINISTIC: Same collectionId always produces same originDna.
+ */
+export async function generateOriginDna(collectionId: string): Promise<string> {
+	const input = `nftlox:origin:${collectionId}`;
+	const fullHash = await generateHashAsync(input);
+	return fullHash.slice(0, ORIGIN_DNA_LENGTH).toUpperCase();
+}
+
+/**
+ * Synchronous version for contexts where async is not available.
+ * Uses a deterministic seed based on collectionId.
+ */
+export function generateOriginDnaSync(collectionId: string): string {
+	let hash = 5381;
+	const input = `nftlox:origin:${collectionId}`;
+	for (let i = 0; i < input.length; i++) {
+		hash = (hash * 33) ^ input.charCodeAt(i);
+	}
+	return Math.abs(hash).toString(16).padStart(ORIGIN_DNA_LENGTH, "0").slice(0, ORIGIN_DNA_LENGTH).toUpperCase();
+}
+
+// ============ INSTANCE DNA (NFT Level) ============
+
+/**
+ * Generates the instance DNA for an individual NFT.
+ * Each NFT has a unique instanceDna while sharing originDna with siblings.
+ * NOT deterministic: includes randomness for uniqueness.
+ */
+export function generateInstanceDna(
+	originDna: string,
+	edition: number,
+	imageHash: string,
+): string {
+	const input = `${originDna}:${edition}:${imageHash}:${Date.now()}:${Math.random()}`;
+	const hash = generateHashSync(input);
+	return hash.slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
+}
+
+/**
+ * Generates instance DNA for a replica.
+ * Derived from the original's instanceDna to maintain lineage.
+ */
+export function generateReplicaInstanceDna(
+	originDna: string,
+	originalInstanceDna: string,
+): string {
+	const input = `${originDna}:replica:${originalInstanceDna}:${Date.now()}:${Math.random()}`;
+	const hash = generateHashSync(input);
+	return hash.slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
+}
+
+// ============ ACCESS KEY ============
+
+/**
+ * Generates a unique access key for an NFT.
+ * Used for software activation, membership access, etc.
+ */
+export function generateAccessKey(instanceDna: string, owner: string): string {
+	const input = `${instanceDna}:${owner}:${Date.now()}:${Math.random()}`;
+	const hash = generateHashSync(input);
+	return hash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
+}
+
+// ============ IMAGE HASH ============
+
+/**
+ * Generates a hash for an image URL.
+ * Used when no external hash is provided.
+ */
+export function generateImageHash(imageUrl: string): string {
+	return `img_${generateHashSync(imageUrl + Date.now())}`;
+}
+
+// ============ ID GENERATION ============
+
+/**
+ * Generates a unique ID with a prefix.
+ */
+export function generateId(prefix: string): string {
+	const timestamp = Date.now().toString(36);
+	const random = Math.random().toString(36).slice(2, 8);
+	return `${prefix}_${timestamp}${random}`;
+}
+
+/**
+ * Generates a replica ID from an original NFT ID.
+ */
+export function generateReplicaId(originalId: string): string {
+	const suffix = Math.random().toString(36).slice(2, 10);
+	return `${originalId}_r${suffix}`;
+}
+
+/**
+ * Extracts the original NFT ID from a replica ID.
+ */
+export function extractOriginalId(replicaId: string): string | null {
+	const rIndex = replicaId.lastIndexOf("_r");
+	if (rIndex === -1) return null;
+	return replicaId.slice(0, rIndex);
+}
+
+/**
+ * Checks if an ID is a replica ID.
+ */
+export function isReplicaId(id: string): boolean {
+	return id.includes("_r");
+}
+
+// ============ OFFER ID ============
+
+/**
+ * Generates a unique offer ID.
+ */
+export function generateOfferId(): string {
+	return generateId("offer");
+}
+
+// ============ SEED & INSTANCE IDS ============
+
+/**
+ * Generates a unique seed ID.
+ * Seeds are non-transferable NFTs that can spawn instances.
+ */
+export function generateSeedId(): string {
+	const suffix = Math.random().toString(36).slice(2, 10);
+	return `seed_${suffix}`;
+}
+
+/**
+ * Generates an instance ID from a seed.
+ * Format: nft_[seedSuffix]_[instanceNumber]_[random]
+ */
+export function generateInstanceId(seedId: string, instanceNumber: number): string {
+	const seedSuffix = seedId.replace("seed_", "");
+	const randomSuffix = Math.random().toString(36).slice(2, 6);
+	return `nft_${seedSuffix}_${instanceNumber}_${randomSuffix}`;
+}
+
+/**
+ * Extracts the seed ID from an instance ID.
+ * Returns null if the ID is not a valid instance format.
+ */
+export function extractSeedId(instanceId: string): string | null {
+	const match = instanceId.match(/^nft_([a-z0-9]+)_\d+_[a-z0-9]+$/);
+	return match ? `seed_${match[1]}` : null;
+}
+
+/**
+ * Extracts the instance number from an instance ID.
+ * Returns null if the ID is not a valid instance format.
+ */
+export function extractInstanceNumber(instanceId: string): number | null {
+	const match = instanceId.match(/^nft_[a-z0-9]+_(\d+)_[a-z0-9]+$/);
+	return match ? parseInt(match[1]!, 10) : null;
+}
+
+/**
+ * Checks if an ID is a seed ID.
+ */
+export function isSeedId(id: string): boolean {
+	return id.startsWith("seed_");
+}
+
+/**
+ * Checks if an ID is an instance ID (spawned from a seed).
+ */
+export function isInstanceId(id: string): boolean {
+	return /^nft_[a-z0-9]+_\d+_[a-z0-9]+$/.test(id);
+}
+
+// ============ ART ID VALIDATION ============
+
+export interface ArtIdValidationResult {
+	valid: boolean;
+	error?: string;
+}
+
+/**
+ * Validates an artId according to protocol rules:
+ * - Required field
+ * - Max 14 characters
+ * - Only letters, numbers, and hyphens
+ * - No repeated hyphens (--)
+ * - Cannot start or end with hyphen
+ */
+export function validateArtId(artId: string): ArtIdValidationResult {
+	if (!artId) {
+		return { valid: false, error: "artId is required" };
+	}
+	if (artId.length > 14) {
+		return { valid: false, error: "maximum 14 characters" };
+	}
+	if (!/^[a-zA-Z0-9-]+$/.test(artId)) {
+		return { valid: false, error: "only letters, numbers and hyphens allowed" };
+	}
+	if (/--/.test(artId)) {
+		return { valid: false, error: "repeated hyphens not allowed" };
+	}
+	if (artId.startsWith("-") || artId.endsWith("-")) {
+		return { valid: false, error: "cannot start or end with hyphen" };
+	}
+	return { valid: true };
+}
+
+/**
+ * Validates an array of artIds and checks for duplicates.
+ */
+export function validateArtIdArray(artIds: string[]): {
+	formatErrors: Array<{ index: number; artId: string; error: string }>;
+	duplicates: string[];
+	valid: boolean;
+} {
+	const formatErrors: Array<{ index: number; artId: string; error: string }> = [];
+	const seen = new Map<string, number>();
+	const duplicates: string[] = [];
+
+	for (let i = 0; i < artIds.length; i++) {
+		const artId = artIds[i]!;
+		const validation = validateArtId(artId);
+
+		if (!validation.valid) {
+			formatErrors.push({ index: i, artId, error: validation.error! });
+		}
+
+		const normalized = artId.toLowerCase();
+		if (seen.has(normalized)) {
+			duplicates.push(artId);
+		} else {
+			seen.set(normalized, i);
+		}
+	}
+
+	return {
+		formatErrors,
+		duplicates: [...new Set(duplicates)],
+		valid: formatErrors.length === 0 && duplicates.length === 0,
+	};
+}
+
+// ============ DETERMINISTIC ID GENERATION ============
+
+/**
+ * Deterministic hash function (no random, no timestamp).
+ * Uses FNV-1a algorithm for better distribution and collision resistance.
+ */
+export function deterministicHash(input: string): string {
+	// FNV-1a 32-bit hash
+	let hash1 = 2166136261;
+	for (let i = 0; i < input.length; i++) {
+		hash1 ^= input.charCodeAt(i);
+		hash1 = Math.imul(hash1, 16777619);
+	}
+
+	// Second pass with different seed for more bits
+	let hash2 = 2166136261;
+	for (let i = input.length - 1; i >= 0; i--) {
+		hash2 ^= input.charCodeAt(i);
+		hash2 = Math.imul(hash2, 16777619);
+	}
+
+	// Combine both hashes for better uniqueness
+	const combined = (Math.abs(hash1) >>> 0).toString(36) + (Math.abs(hash2) >>> 0).toString(36);
+	return combined.padStart(12, "0").slice(0, 12);
+}
+
+/**
+ * Generates a deterministic collection ID from creator + name + symbol.
+ * Same inputs always produce the same collectionId.
+ */
+export function generateDeterministicCollectionId(
+	creator: string,
+	name: string,
+	symbol: string,
+): string {
+	const input = `nftlox:col:${creator.toLowerCase()}:${name}:${symbol.toUpperCase()}`;
+	const hash = deterministicHash(input);
+	return `col_${hash.slice(0, 12)}`;
+}
+
+/**
+ * Generates a deterministic seed ID from collectionId + artId.
+ * Same collectionId + artId always produce the same seedId.
+ */
+export function generateDeterministicSeedId(
+	collectionId: string,
+	artId: string,
+): string {
+	const input = `nftlox:seed:${collectionId}:${artId.toLowerCase()}`;
+	const hash = deterministicHash(input);
+	return `seed_${hash.slice(0, 8)}`;
+}
+
+/**
+ * Generates a deterministic instance ID from seedId + instanceNumber.
+ * Same seedId + instanceNumber always produce the same instanceId.
+ */
+export function generateDeterministicInstanceId(
+	seedId: string,
+	instanceNumber: number,
+): string {
+	const input = `nftlox:inst:${seedId}:${instanceNumber}`;
+	const hash = deterministicHash(input);
+	const seedSuffix = seedId.replace("seed_", "");
+	return `nft_${seedSuffix}_${instanceNumber}_${hash.slice(0, 4)}`;
+}

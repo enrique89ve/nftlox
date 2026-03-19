@@ -1,0 +1,37 @@
+[
+	{
+		"artId": "gen-001",
+		"name": "Genesis Seed #1",
+		"brief": "Ultra Rare - The first seed of the collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxGenesis/001.png",
+		"maxSupply": 100
+	},
+	{
+		"artId": "gen-002",
+		"name": "Genesis Seed #2",
+		"brief": "Legendary - A powerful seed with limited supply",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxGenesis/002.png",
+		"maxSupply": 500
+	},
+	{
+		"artId": "gen-003",
+		"name": "Genesis Seed #3",
+		"brief": "Epic - A versatile seed for the community",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxGenesis/003.png",
+		"maxSupply": 1000
+	},
+	{
+		"artId": "gen-004",
+		"name": "Genesis Seed #4",
+		"brief": "Rare - Common but valuable seed",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxGenesis/004.png",
+		"maxSupply": 5000
+	},
+	{
+		"artId": "gen-005",
+		"name": "Genesis Seed #5",
+		"brief": "Common - Available for everyone",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxGenesis/005.png",
+		"maxSupply": 10000
+	}
+]

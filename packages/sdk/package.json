@@ -1,0 +1,20 @@
+{
+	"name": "nftlox-sdk",
+	"version": "0.2.1",
+	"description": "NFTLox Protocol SDK — Polymorphic Ownership on Hive blockchain",
+	"module": "src/index.ts",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "bunx tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	}
+}

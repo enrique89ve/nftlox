@@ -1,0 +1,21 @@
+{
+	"name": "nftlox-playground",
+	"module": "src/server.ts",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "bun --hot src/server.ts",
+		"start": "bun run src/server.ts",
+		"typecheck": "bunx tsc --noEmit"
+	},
+	"dependencies": {
+		"@hiveio/wax": "^1.28.4-rc0",
+		"nftlox-sdk": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	}
+}

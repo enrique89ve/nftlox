@@ -1,0 +1,1402 @@
+[
+	{
+		"artId": "CHAR001",
+		"name": "Character #1",
+		"brief": "Ultra Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/001.png",
+		"maxSupply": 1000
+	},
+	{
+		"artId": "CHAR002",
+		"name": "Character #2",
+		"brief": "Ultra Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/002.png",
+		"maxSupply": 1000
+	},
+	{
+		"artId": "CHAR003",
+		"name": "Character #3",
+		"brief": "Ultra Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/003.png",
+		"maxSupply": 1000
+	},
+	{
+		"artId": "CHAR004",
+		"name": "Character #4",
+		"brief": "Ultra Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/004.png",
+		"maxSupply": 1000
+	},
+	{
+		"artId": "CHAR005",
+		"name": "Character #5",
+		"brief": "Ultra Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/005.png",
+		"maxSupply": 1000
+	},
+	{
+		"artId": "CHAR006",
+		"name": "Character #6",
+		"brief": "Legendary character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/006.png",
+		"maxSupply": 3000
+	},
+	{
+		"artId": "CHAR007",
+		"name": "Character #7",
+		"brief": "Legendary character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/007.png",
+		"maxSupply": 3000
+	},
+	{
+		"artId": "CHAR008",
+		"name": "Character #8",
+		"brief": "Legendary character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/008.png",
+		"maxSupply": 3000
+	},
+	{
+		"artId": "CHAR009",
+		"name": "Character #9",
+		"brief": "Legendary character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/009.png",
+		"maxSupply": 3000
+	},
+	{
+		"artId": "CHAR010",
+		"name": "Character #10",
+		"brief": "Legendary character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/010.png",
+		"maxSupply": 3000
+	},
+	{
+		"artId": "CHAR011",
+		"name": "Character #11",
+		"brief": "Legendary character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/011.png",
+		"maxSupply": 3000
+	},
+	{
+		"artId": "CHAR012",
+		"name": "Character #12",
+		"brief": "Legendary character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/012.png",
+		"maxSupply": 3000
+	},
+	{
+		"artId": "CHAR013",
+		"name": "Character #13",
+		"brief": "Legendary character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/013.png",
+		"maxSupply": 3000
+	},
+	{
+		"artId": "CHAR014",
+		"name": "Character #14",
+		"brief": "Legendary character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/014.png",
+		"maxSupply": 3000
+	},
+	{
+		"artId": "CHAR015",
+		"name": "Character #15",
+		"brief": "Legendary character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/015.png",
+		"maxSupply": 3000
+	},
+	{
+		"artId": "CHAR016",
+		"name": "Character #16",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/016.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR017",
+		"name": "Character #17",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/017.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR018",
+		"name": "Character #18",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/018.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR019",
+		"name": "Character #19",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/019.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR020",
+		"name": "Character #20",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/020.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR021",
+		"name": "Character #21",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/021.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR022",
+		"name": "Character #22",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/022.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR023",
+		"name": "Character #23",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/023.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR024",
+		"name": "Character #24",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/024.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR025",
+		"name": "Character #25",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/025.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR026",
+		"name": "Character #26",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/026.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR027",
+		"name": "Character #27",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/027.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR028",
+		"name": "Character #28",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/028.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR029",
+		"name": "Character #29",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/029.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR030",
+		"name": "Character #30",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/030.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR031",
+		"name": "Character #31",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/031.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR032",
+		"name": "Character #32",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/032.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR033",
+		"name": "Character #33",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/033.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR034",
+		"name": "Character #34",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/034.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR035",
+		"name": "Character #35",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/035.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR036",
+		"name": "Character #36",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/036.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR037",
+		"name": "Character #37",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/037.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR038",
+		"name": "Character #38",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/038.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR039",
+		"name": "Character #39",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/039.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR040",
+		"name": "Character #40",
+		"brief": "Epic character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/040.png",
+		"maxSupply": 8000
+	},
+	{
+		"artId": "CHAR041",
+		"name": "Character #41",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/041.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR042",
+		"name": "Character #42",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/042.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR043",
+		"name": "Character #43",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/043.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR044",
+		"name": "Character #44",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/044.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR045",
+		"name": "Character #45",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/045.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR046",
+		"name": "Character #46",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/046.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR047",
+		"name": "Character #47",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/047.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR048",
+		"name": "Character #48",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/048.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR049",
+		"name": "Character #49",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/049.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR050",
+		"name": "Character #50",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/050.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR051",
+		"name": "Character #51",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/051.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR052",
+		"name": "Character #52",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/052.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR053",
+		"name": "Character #53",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/053.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR054",
+		"name": "Character #54",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/054.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR055",
+		"name": "Character #55",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/055.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR056",
+		"name": "Character #56",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/056.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR057",
+		"name": "Character #57",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/057.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR058",
+		"name": "Character #58",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/058.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR059",
+		"name": "Character #59",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/059.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR060",
+		"name": "Character #60",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/060.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR061",
+		"name": "Character #61",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/061.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR062",
+		"name": "Character #62",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/062.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR063",
+		"name": "Character #63",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/063.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR064",
+		"name": "Character #64",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/064.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR065",
+		"name": "Character #65",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/065.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR066",
+		"name": "Character #66",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/066.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR067",
+		"name": "Character #67",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/067.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR068",
+		"name": "Character #68",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/068.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR069",
+		"name": "Character #69",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/069.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR070",
+		"name": "Character #70",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/070.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR071",
+		"name": "Character #71",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/071.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR072",
+		"name": "Character #72",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/072.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR073",
+		"name": "Character #73",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/073.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR074",
+		"name": "Character #74",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/074.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR075",
+		"name": "Character #75",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/075.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR076",
+		"name": "Character #76",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/076.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR077",
+		"name": "Character #77",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/077.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR078",
+		"name": "Character #78",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/078.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR079",
+		"name": "Character #79",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/079.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR080",
+		"name": "Character #80",
+		"brief": "Rare character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/080.png",
+		"maxSupply": 15000
+	},
+	{
+		"artId": "CHAR081",
+		"name": "Character #81",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/081.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR082",
+		"name": "Character #82",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/082.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR083",
+		"name": "Character #83",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/083.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR084",
+		"name": "Character #84",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/084.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR085",
+		"name": "Character #85",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/085.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR086",
+		"name": "Character #86",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/086.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR087",
+		"name": "Character #87",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/087.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR088",
+		"name": "Character #88",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/088.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR089",
+		"name": "Character #89",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/089.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR090",
+		"name": "Character #90",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/090.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR091",
+		"name": "Character #91",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/091.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR092",
+		"name": "Character #92",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/092.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR093",
+		"name": "Character #93",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/093.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR094",
+		"name": "Character #94",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/094.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR095",
+		"name": "Character #95",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/095.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR096",
+		"name": "Character #96",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/096.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR097",
+		"name": "Character #97",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/097.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR098",
+		"name": "Character #98",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/098.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR099",
+		"name": "Character #99",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/099.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR100",
+		"name": "Character #100",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/100.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR101",
+		"name": "Character #101",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/101.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR102",
+		"name": "Character #102",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/102.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR103",
+		"name": "Character #103",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/103.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR104",
+		"name": "Character #104",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/104.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR105",
+		"name": "Character #105",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/105.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR106",
+		"name": "Character #106",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/106.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR107",
+		"name": "Character #107",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/107.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR108",
+		"name": "Character #108",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/108.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR109",
+		"name": "Character #109",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/109.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR110",
+		"name": "Character #110",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/110.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR111",
+		"name": "Character #111",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/111.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR112",
+		"name": "Character #112",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/112.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR113",
+		"name": "Character #113",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/113.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR114",
+		"name": "Character #114",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/114.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR115",
+		"name": "Character #115",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/115.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR116",
+		"name": "Character #116",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/116.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR117",
+		"name": "Character #117",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/117.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR118",
+		"name": "Character #118",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/118.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR119",
+		"name": "Character #119",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/119.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR120",
+		"name": "Character #120",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/120.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR121",
+		"name": "Character #121",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/121.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR122",
+		"name": "Character #122",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/122.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR123",
+		"name": "Character #123",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/123.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR124",
+		"name": "Character #124",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/124.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR125",
+		"name": "Character #125",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/125.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR126",
+		"name": "Character #126",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/126.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR127",
+		"name": "Character #127",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/127.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR128",
+		"name": "Character #128",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/128.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR129",
+		"name": "Character #129",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/129.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR130",
+		"name": "Character #130",
+		"brief": "Uncommon character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/130.png",
+		"maxSupply": 20000
+	},
+	{
+		"artId": "CHAR131",
+		"name": "Character #131",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/131.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR132",
+		"name": "Character #132",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/132.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR133",
+		"name": "Character #133",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/133.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR134",
+		"name": "Character #134",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/134.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR135",
+		"name": "Character #135",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/135.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR136",
+		"name": "Character #136",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/136.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR137",
+		"name": "Character #137",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/137.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR138",
+		"name": "Character #138",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/138.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR139",
+		"name": "Character #139",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/139.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR140",
+		"name": "Character #140",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/140.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR141",
+		"name": "Character #141",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/141.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR142",
+		"name": "Character #142",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/142.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR143",
+		"name": "Character #143",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/143.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR144",
+		"name": "Character #144",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/144.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR145",
+		"name": "Character #145",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/145.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR146",
+		"name": "Character #146",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/146.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR147",
+		"name": "Character #147",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/147.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR148",
+		"name": "Character #148",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/148.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR149",
+		"name": "Character #149",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/149.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR150",
+		"name": "Character #150",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/150.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR151",
+		"name": "Character #151",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/151.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR152",
+		"name": "Character #152",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/152.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR153",
+		"name": "Character #153",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/153.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR154",
+		"name": "Character #154",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/154.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR155",
+		"name": "Character #155",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/155.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR156",
+		"name": "Character #156",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/156.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR157",
+		"name": "Character #157",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/157.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR158",
+		"name": "Character #158",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/158.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR159",
+		"name": "Character #159",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/159.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR160",
+		"name": "Character #160",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/160.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR161",
+		"name": "Character #161",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/161.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR162",
+		"name": "Character #162",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/162.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR163",
+		"name": "Character #163",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/163.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR164",
+		"name": "Character #164",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/164.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR165",
+		"name": "Character #165",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/165.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR166",
+		"name": "Character #166",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/166.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR167",
+		"name": "Character #167",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/167.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR168",
+		"name": "Character #168",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/168.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR169",
+		"name": "Character #169",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/169.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR170",
+		"name": "Character #170",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/170.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR171",
+		"name": "Character #171",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/171.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR172",
+		"name": "Character #172",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/172.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR173",
+		"name": "Character #173",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/173.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR174",
+		"name": "Character #174",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/174.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR175",
+		"name": "Character #175",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/175.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR176",
+		"name": "Character #176",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/176.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR177",
+		"name": "Character #177",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/177.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR178",
+		"name": "Character #178",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/178.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR179",
+		"name": "Character #179",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/179.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR180",
+		"name": "Character #180",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/180.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR181",
+		"name": "Character #181",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/181.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR182",
+		"name": "Character #182",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/182.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR183",
+		"name": "Character #183",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/183.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR184",
+		"name": "Character #184",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/184.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR185",
+		"name": "Character #185",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/185.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR186",
+		"name": "Character #186",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/186.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR187",
+		"name": "Character #187",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/187.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR188",
+		"name": "Character #188",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/188.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR189",
+		"name": "Character #189",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/189.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR190",
+		"name": "Character #190",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/190.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR191",
+		"name": "Character #191",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/191.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR192",
+		"name": "Character #192",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/192.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR193",
+		"name": "Character #193",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/193.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR194",
+		"name": "Character #194",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/194.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR195",
+		"name": "Character #195",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/195.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR196",
+		"name": "Character #196",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/196.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR197",
+		"name": "Character #197",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/197.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR198",
+		"name": "Character #198",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/198.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR199",
+		"name": "Character #199",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/199.png",
+		"maxSupply": 16643
+	},
+	{
+		"artId": "CHAR200",
+		"name": "Character #200",
+		"brief": "Common character from the NFTLox collection",
+		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxCollection/200.png",
+		"maxSupply": 16643
+	}
+]
