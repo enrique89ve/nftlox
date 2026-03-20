@@ -1,8 +1,8 @@
-import type { Queryable } from "../../db/client.ts";
-import type { ParsedOperation } from "../../scanner/operation-parser.ts";
-import { insertCollection, collectionExists } from "../../db/queries/collections.ts";
-import { insertHistoryEvent } from "../../db/queries/history.ts";
-import { requireString, optionalString, optionalNumber, optionalBoolean, optionalObject } from "../../utils/validation.ts";
+import type { Queryable } from "@/db/client.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import { insertCollection, collectionExists } from "@/db/queries/collections.ts";
+import { insertHistoryEvent } from "@/db/queries/history.ts";
+import { requireString, optionalString, optionalNumber, optionalBoolean, optionalObject } from "@/utils/validation.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;

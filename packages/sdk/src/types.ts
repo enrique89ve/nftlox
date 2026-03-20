@@ -137,12 +137,42 @@ export interface BurnData {
 
 export interface SetDataData {
 	nftId: string;
+	instanceDna: string;
 	data: Record<string, unknown>;
 	tags?: string[];
 }
 
 export interface SetDataInput {
 	nftId: string;
+	instanceDna: string;
+	data: Record<string, unknown>;
+	tags?: string[];
+}
+
+// ============ DATA OPERATOR TYPES ============
+
+export interface DataOperatorApproveData {
+	collectionId: string;
+	operator: string;
+	approved: boolean;
+}
+
+export interface DataOperatorApproveInput {
+	collectionId: string;
+	operator: string;
+	approved: boolean;
+}
+
+export interface SetDataFromData {
+	nftId: string;
+	instanceDna: string;
+	data: Record<string, unknown>;
+	tags?: string[];
+}
+
+export interface SetDataFromInput {
+	nftId: string;
+	instanceDna: string;
 	data: Record<string, unknown>;
 	tags?: string[];
 }
@@ -225,12 +255,163 @@ export interface RejectOfferData {
 	offerId: string;
 }
 
+// ============ PACK TYPES (Semi-Fungible) ============
+
+export interface PackDropEntry {
+	seedId: string;
+	weight: number;
+}
+
+export interface PackCreateData {
+	id: string;
+	collectionId: string;
+	name: string;
+	description?: string;
+	imageUrl?: string;
+	dropTable: PackDropEntry[];
+	itemsPerPack: number;
+	price?: Price;
+	maxSupply: number;
+	createdAt: number;
+}
+
+export interface PackBuyData {
+	packId: string;
+	quantity: number;
+}
+
+export interface PackTransferData {
+	packId: string;
+	to: string;
+	quantity: number;
+}
+
+export interface PackOpenData {
+	packId: string;
+	quantity: number;
+}
+
+export interface PackCreateInput {
+	collectionId: string;
+	name: string;
+	description?: string;
+	imageUrl?: string;
+	dropTable: PackDropEntry[];
+	itemsPerPack: number;
+	price?: Price;
+	maxSupply: number;
+}
+
+export interface PackBuyInput {
+	packId: string;
+	quantity: number;
+}
+
+export interface PackTransferInput {
+	packId: string;
+	to: string;
+	quantity: number;
+}
+
+export interface PackOpenInput {
+	packId: string;
+	quantity: number;
+}
+
+// ============ APPROVE & TRANSFER_FROM TYPES ============
+
+export interface PackApproveData {
+	spender: string;
+	packId: string;
+	quantity: number;
+	approved: boolean;
+}
+
+export interface PackTransferFromData {
+	from: string;
+	to: string;
+	packId: string;
+	quantity: number;
+}
+
+export interface NftApproveData {
+	spender: string;
+	instanceId: string;
+	approved: boolean;
+}
+
+export interface NftApproveAllData {
+	spender: string;
+	collectionId: string;
+	approved: boolean;
+}
+
+export interface NftTransferFromData {
+	from: string;
+	to: string;
+	instanceId: string;
+}
+
+export interface PackApproveInput {
+	spender: string;
+	packId: string;
+	quantity: number;
+	approved: boolean;
+}
+
+export interface PackTransferFromInput {
+	from: string;
+	to: string;
+	packId: string;
+	quantity: number;
+}
+
+export interface NftApproveInput {
+	spender: string;
+	instanceId: string;
+	approved: boolean;
+}
+
+export interface NftApproveAllInput {
+	spender: string;
+	collectionId: string;
+	approved: boolean;
+}
+
+export interface NftTransferFromInput {
+	from: string;
+	to: string;
+	instanceId: string;
+}
+
+// ============ LENDING TYPES ============
+
+export interface NftLendData {
+	instanceId: string;
+	borrower: string;
+}
+
+export interface NftLendInput {
+	instanceId: string;
+	borrower: string;
+}
+
+export interface NftReturnData {
+	instanceId: string;
+}
+
+export interface NftReturnInput {
+	instanceId: string;
+}
+
 // ============ HISTORY EVENT (Indexador) ============
 
 export type HistoryEventType =
+	| "create_collection"
 	| "mint"
+	| "distribute"
 	| "transfer"
-	| "sale"
+	| "buy"
 	| "list"
 	| "unlist"
 	| "burn"
@@ -238,7 +419,20 @@ export type HistoryEventType =
 	| "offer"
 	| "offer_accepted"
 	| "offer_rejected"
-	| "set_data";
+	| "set_data"
+	| "data_operator_approve"
+	| "set_data_from"
+	| "pack_create"
+	| "pack_buy"
+	| "pack_transfer"
+	| "pack_open"
+	| "pack_approve"
+	| "pack_transfer_from"
+	| "nft_approve"
+	| "nft_approve_all"
+	| "nft_transfer_from"
+	| "nft_lend"
+	| "nft_return";
 
 export interface HistoryEvent {
 	id: string;

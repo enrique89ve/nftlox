@@ -1,6 +1,6 @@
 import { createHiveChain, type IHiveChainInterface } from "@hiveio/wax";
-import { config } from "../config.ts";
-import { createLogger } from "../utils/logger.ts";
+import { config } from "@/config.ts";
+import { createLogger } from "@/utils/logger.ts";
 
 const log = createLogger("hive-client");
 

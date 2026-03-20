@@ -1,8 +1,8 @@
-import type { Queryable } from "../../db/client.ts";
-import type { ParsedOperation } from "../../scanner/operation-parser.ts";
-import { insertNft, nftExists, getNftForProcessing } from "../../db/queries/nfts.ts";
-import { insertHistoryEvent } from "../../db/queries/history.ts";
-import { requireString, optionalString } from "../../utils/validation.ts";
+import type { Queryable } from "@/db/client.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import { insertNft, nftExists, getNftForProcessing, NFT_STATUS_BURNED, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
+import { insertHistoryEvent } from "@/db/queries/history.ts";
+import { requireString, optionalString } from "@/utils/validation.ts";
 
 export async function handleReplicate(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
@@ -13,7 +13,8 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 	if (await nftExists(id, txn)) throw new Error(`Replica already exists: ${id}`);
 	const original = await getNftForProcessing(originalId, txn);
 	if (!original) throw new Error(`Original NFT not found: ${originalId}`);
-	if (original.status === "burned") throw new Error(`Original NFT is burned: ${originalId}`);
+	if (original.status === NFT_STATUS_BURNED) throw new Error(`Original NFT is burned: ${originalId}`);
+	if (original.status === NFT_STATUS_LENT) throw new Error(`Original NFT is lent and cannot be replicated: ${originalId}`);
 
 	await insertNft({
 		id, collectionId: original.collection_id, nftType: "replica", edition: 1,

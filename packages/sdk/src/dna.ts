@@ -339,3 +339,113 @@ export function generateDeterministicInstanceId(
 	const seedSuffix = seedId.replace("seed_", "");
 	return `nft_${seedSuffix}_${instanceNumber}_${hash.slice(0, 4)}`;
 }
+
+// ============ PACK ID GENERATION ============
+
+/**
+ * Generates a deterministic pack ID from collectionId + packName.
+ * Same inputs always produce the same packId.
+ */
+export function generateDeterministicPackId(
+	collectionId: string,
+	packName: string,
+): string {
+	const input = `nftlox:pack:${collectionId}:${packName.toLowerCase()}`;
+	const hash = deterministicHash(input);
+	return `pack_${hash.slice(0, 12)}`;
+}
+
+/**
+ * Checks if an ID is a pack ID.
+ */
+export function isPackId(id: string): boolean {
+	return id.startsWith("pack_");
+}
+
+// ============ DETERMINISTIC INSTANCE DNA (for Pack Minting) ============
+
+/**
+ * Generates a deterministic instanceDna for NFTs minted from packs.
+ * Uses immutable block data to ensure all indexers produce identical results.
+ * Format: 14-char uppercase hex, matching INSTANCE_DNA_LENGTH.
+ */
+export function generateDeterministicInstanceDna(
+	seedId: string,
+	instanceNumber: number,
+	txId: string,
+	blockNum: number,
+): string {
+	const input = `nftlox:dna:${seedId}:${instanceNumber}:${txId}:${blockNum}`;
+	const hash = deterministicHash(input);
+	return hash.padStart(INSTANCE_DNA_LENGTH, "0").slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
+}
+
+/**
+ * Generates a deterministic access key for NFTs minted from packs.
+ * Same inputs always produce the same key across all indexers.
+ */
+export function generateDeterministicAccessKey(
+	instanceDna: string,
+	owner: string,
+	txId: string,
+): string {
+	const input = `nftlox:key:${instanceDna}:${owner}:${txId}`;
+	const hash = deterministicHash(input);
+	return hash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
+}
+
+// ============ DETERMINISTIC RNG ============
+
+/**
+ * Deterministic RNG using double-pass FNV-1a.
+ * Returns a number in [0, 1) normalized by dividing by 2^32.
+ * Same seed + index always produces the same result.
+ */
+export function deterministicRng(seed: string, index: number): number {
+	const input = `nftlox:rng:${seed}:${index}`;
+
+	// FNV-1a 32-bit hash (same pattern as deterministicHash)
+	let hash1 = 2166136261;
+	for (let i = 0; i < input.length; i++) {
+		hash1 ^= input.charCodeAt(i);
+		hash1 = Math.imul(hash1, 16777619);
+	}
+
+	let hash2 = 2166136261;
+	for (let i = input.length - 1; i >= 0; i--) {
+		hash2 ^= input.charCodeAt(i);
+		hash2 = Math.imul(hash2, 16777619);
+	}
+
+	// Combine and normalize to [0, 1)
+	const combined = (Math.abs(hash1) ^ Math.abs(hash2)) >>> 0;
+	return combined / 4294967296; // 2^32
+}
+
+/**
+ * Resolves a drop table using deterministic RNG.
+ * Returns an array of seedIds selected based on weighted random.
+ */
+export function resolveDropTable(
+	dropTable: Array<{ seedId: string; weight: number }>,
+	itemCount: number,
+	rngSeed: string,
+): string[] {
+	const totalWeight = dropTable.reduce((sum, entry) => sum + entry.weight, 0);
+	const results: string[] = [];
+
+	for (let i = 0; i < itemCount; i++) {
+		const roll = deterministicRng(rngSeed, i) * totalWeight;
+		let cumulative = 0;
+
+		for (const entry of dropTable) {
+			cumulative += entry.weight;
+			if (roll < cumulative) {
+				results.push(entry.seedId);
+				break;
+			}
+		}
+	}
+
+	return results;
+}

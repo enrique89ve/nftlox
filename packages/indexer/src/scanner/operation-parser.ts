@@ -1,10 +1,10 @@
-import { config } from "../config.ts";
+import { config } from "@/config.ts";
 import {
 	PROTOCOL_ID,
 	MIN_PROTOCOL_VERSION,
 	ALL_ACTIONS,
 	type ProtocolAction,
-} from "../protocol.ts";
+} from "@/protocol.ts";
 import type { BlockData } from "./hive-client.ts";
 
 export interface ParsedOperation {

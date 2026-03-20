@@ -1,9 +1,10 @@
-import { sql, type Queryable } from "../client.ts";
+import { sql, type Queryable, clampLimit } from "@/db/client.ts";
+import type { HistoryEventType } from "@/protocol.ts";
 
 export interface InsertHistoryParams {
 	nftId: string;
 	collectionId: string | null;
-	eventType: string;
+	eventType: HistoryEventType;
 	blockNum: number;
 	txId: string;
 	timestamp: string;
@@ -32,12 +33,21 @@ export async function insertHistoryEvent(params: InsertHistoryParams, txn: Query
 	`;
 }
 
-export async function getNftHistory(nftId: string, limit = 100, offset = 0) {
+export async function getNftHistory(nftId: string, limit = 100, offset = 0, cursor?: number) {
+	const safeLimit = clampLimit(limit, 100);
+	if (cursor !== undefined) {
+		return sql`
+			SELECT * FROM history_events
+			WHERE nft_id = ${nftId} AND id > ${cursor}
+			ORDER BY id ASC
+			LIMIT ${safeLimit}
+		`;
+	}
 	return sql`
 		SELECT * FROM history_events
 		WHERE nft_id = ${nftId}
 		ORDER BY block_num ASC, id ASC
-		LIMIT ${limit} OFFSET ${offset}
+		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
 }
 
@@ -52,7 +62,19 @@ export async function getNftOwnershipChain(nftId: string) {
 	`;
 }
 
-export async function getRecentSales(limit = 50, offset = 0) {
+export async function getRecentSales(limit = 50, offset = 0, cursor?: number) {
+	const safeLimit = clampLimit(limit);
+	if (cursor !== undefined) {
+		return sql`
+			SELECT h.*, n.name AS nft_name, n.image_url AS nft_image_url,
+				n.collection_id
+			FROM history_events h
+			JOIN nfts n ON n.id = h.nft_id
+			WHERE h.event_type = 'buy' AND h.id < ${cursor}
+			ORDER BY h.id DESC
+			LIMIT ${safeLimit}
+		`;
+	}
 	return sql`
 		SELECT h.*, n.name AS nft_name, n.image_url AS nft_image_url,
 			n.collection_id
@@ -60,15 +82,25 @@ export async function getRecentSales(limit = 50, offset = 0) {
 		JOIN nfts n ON n.id = h.nft_id
 		WHERE h.event_type = 'buy'
 		ORDER BY h.block_num DESC
-		LIMIT ${limit} OFFSET ${offset}
+		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
 }
 
-export async function getUserActivity(username: string, limit = 50, offset = 0) {
+export async function getUserActivity(username: string, limit = 50, offset = 0, cursor?: number) {
+	const safeLimit = clampLimit(limit);
+	if (cursor !== undefined) {
+		return sql`
+			SELECT * FROM history_events
+			WHERE (from_account = ${username} OR to_account = ${username})
+				AND id < ${cursor}
+			ORDER BY id DESC
+			LIMIT ${safeLimit}
+		`;
+	}
 	return sql`
 		SELECT * FROM history_events
 		WHERE from_account = ${username} OR to_account = ${username}
 		ORDER BY block_num DESC
-		LIMIT ${limit} OFFSET ${offset}
+		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
 }

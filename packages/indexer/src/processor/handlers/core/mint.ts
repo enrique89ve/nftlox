@@ -1,9 +1,9 @@
-import type { Queryable } from "../../db/client.ts";
-import type { ParsedOperation } from "../../scanner/operation-parser.ts";
-import { collectionExists } from "../../db/queries/collections.ts";
-import { insertNft, nftExists } from "../../db/queries/nfts.ts";
-import { insertHistoryEvent } from "../../db/queries/history.ts";
-import { requireString, optionalString, optionalNumber, optionalObject, optionalStringArray } from "../../utils/validation.ts";
+import type { Queryable } from "@/db/client.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import { collectionExists } from "@/db/queries/collections.ts";
+import { insertNft, nftExists } from "@/db/queries/nfts.ts";
+import { insertHistoryEvent } from "@/db/queries/history.ts";
+import { requireString, optionalString, optionalNumber, optionalObject, optionalStringArray } from "@/utils/validation.ts";
 
 export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;

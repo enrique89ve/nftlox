@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
-import { getNftById, getNftInstances } from "../../db/queries/nfts.ts";
-import { getNftHistory, getNftOwnershipChain } from "../../db/queries/history.ts";
-import { getOffersByNft } from "../../db/queries/offers.ts";
+import { getNftById, getNftInstances } from "@/db/queries/nfts.ts";
+import { getNftHistory, getNftOwnershipChain } from "@/db/queries/history.ts";
+import { getOffersByNft } from "@/db/queries/offers.ts";
 
 export const nftsRoutes = new Elysia({ prefix: "/api/nfts", tags: ["NFTs"] })
 	.get("/:id", async ({ params }) => {
@@ -13,14 +13,15 @@ export const nftsRoutes = new Elysia({ prefix: "/api/nfts", tags: ["NFTs"] })
 		detail: { summary: "Get NFT by ID", description: "Returns full NFT details including metadata, ownership, and listing info" },
 	})
 	.get("/:id/history", async ({ params, query }) => {
-		return getNftHistory(params.id, query.limit, query.offset);
+		return getNftHistory(params.id, query.limit, query.offset, query.cursor);
 	}, {
 		params: t.Object({ id: t.String() }),
 		query: t.Object({
 			limit: t.Number({ default: 100, minimum: 1, maximum: 500 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
+			cursor: t.Optional(t.Number({ description: "Last event ID for cursor pagination (overrides offset)" })),
 		}),
-		detail: { summary: "Get NFT event history", description: "Chronological list of all events (mint, transfer, list, burn, etc.)" },
+		detail: { summary: "Get NFT event history", description: "Chronological list of all events. Use cursor=lastId for efficient pagination." },
 	})
 	.get("/:id/ownership", async ({ params }) => {
 		return getNftOwnershipChain(params.id);

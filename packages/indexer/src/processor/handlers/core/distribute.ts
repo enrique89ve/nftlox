@@ -1,8 +1,8 @@
-import type { Queryable } from "../../db/client.ts";
-import type { ParsedOperation } from "../../scanner/operation-parser.ts";
-import { insertNft, nftExists, getNftForProcessing, incrementDistributed } from "../../db/queries/nfts.ts";
-import { insertHistoryEvent } from "../../db/queries/history.ts";
-import { requireString, optionalString, optionalNumber, optionalStringArray } from "../../utils/validation.ts";
+import type { Queryable } from "@/db/client.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import { insertNft, nftExists, getNftForProcessing, incrementDistributed, NFT_STATUS_BURNED, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
+import { insertHistoryEvent } from "@/db/queries/history.ts";
+import { requireString, optionalString, optionalNumber, optionalStringArray } from "@/utils/validation.ts";
 
 export async function handleDistribute(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
@@ -15,6 +15,8 @@ export async function handleDistribute(op: ParsedOperation, txn: Queryable): Pro
 
 	const seed = await getNftForProcessing(seedId, txn);
 	if (!seed) throw new Error(`Seed not found: ${seedId}`);
+	if (seed.status === NFT_STATUS_BURNED) throw new Error(`Seed is burned: ${seedId}`);
+	if (seed.status === NFT_STATUS_LENT) throw new Error(`Seed is lent and cannot distribute: ${seedId}`);
 	if (seed.nft_type !== "seed") throw new Error(`${seedId} is not a seed`);
 	if (seed.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of seed ${seedId}`);
 

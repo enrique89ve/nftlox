@@ -12,6 +12,11 @@ import {
 	MAX_ROYALTY_PCT,
 	SUPPORTED_CURRENCIES,
 	MIN_PRICE_AMOUNT,
+	MAX_DROP_TABLE_ENTRIES,
+	MAX_ITEMS_PER_PACK,
+	MAX_PACK_OPEN_BATCH,
+	MIN_DROP_WEIGHT,
+	MAX_DROP_WEIGHT,
 } from "./constants";
 
 import type {
@@ -22,7 +27,24 @@ import type {
 	Price,
 	ImportedNFT,
 	HiveOperation,
+	PackCreateInput,
+	PackBuyInput,
+	PackTransferInput,
+	PackOpenInput,
+	PackApproveInput,
+	PackTransferFromInput,
+	NftApproveInput,
+	NftApproveAllInput,
+	NftTransferFromInput,
+	DataOperatorApproveInput,
+	SetDataFromInput,
+	NftLendInput,
+	NftReturnInput,
 } from "./types";
+
+// ============ SHARED CONSTANTS ============
+
+const HIVE_USERNAME_REGEX = /^[a-z][a-z0-9\-\.]{2,15}$/;
 
 // ============ VALIDATION RESULT ============
 
@@ -306,4 +328,292 @@ export function calculateMaxOperationsPerTx(
 	const maxTxSize = 65000;
 	const overhead = 500;
 	return Math.floor((maxTxSize - overhead) / operationSize);
+}
+
+// ============ PACK VALIDATION ============
+
+export function validatePackCreateInput(
+	input: PackCreateInput,
+): ValidationResult {
+	if (!input.name || input.name.length === 0) {
+		return { valid: false, error: "Pack name is required" };
+	}
+	if (input.name.length > MAX_NAME_LENGTH) {
+		return {
+			valid: false,
+			error: `Pack name must be at most ${MAX_NAME_LENGTH} characters`,
+		};
+	}
+
+	if (!input.collectionId) {
+		return { valid: false, error: "Collection ID is required" };
+	}
+
+	if (!input.dropTable || input.dropTable.length === 0) {
+		return { valid: false, error: "Drop table must have at least one entry" };
+	}
+	if (input.dropTable.length > MAX_DROP_TABLE_ENTRIES) {
+		return {
+			valid: false,
+			error: `Drop table must have at most ${MAX_DROP_TABLE_ENTRIES} entries`,
+		};
+	}
+
+	for (let i = 0; i < input.dropTable.length; i++) {
+		const entry = input.dropTable[i]!;
+		if (!entry.seedId) {
+			return { valid: false, error: `Drop table entry ${i}: seedId is required` };
+		}
+		if (
+			typeof entry.weight !== "number" ||
+			entry.weight < MIN_DROP_WEIGHT ||
+			entry.weight > MAX_DROP_WEIGHT
+		) {
+			return {
+				valid: false,
+				error: `Drop table entry ${i}: weight must be between ${MIN_DROP_WEIGHT} and ${MAX_DROP_WEIGHT}`,
+			};
+		}
+	}
+
+	if (
+		typeof input.itemsPerPack !== "number" ||
+		input.itemsPerPack < 1 ||
+		input.itemsPerPack > MAX_ITEMS_PER_PACK
+	) {
+		return {
+			valid: false,
+			error: `Items per pack must be between 1 and ${MAX_ITEMS_PER_PACK}`,
+		};
+	}
+
+	if (typeof input.maxSupply !== "number" || input.maxSupply < 0) {
+		return { valid: false, error: "Max supply must be non-negative (0 = unlimited)" };
+	}
+
+	if (input.price) {
+		const priceValidation = validatePrice(input.price);
+		if (!priceValidation.valid) {
+			return priceValidation;
+		}
+	}
+
+	if (input.description && input.description.length > MAX_DESCRIPTION_LENGTH) {
+		return {
+			valid: false,
+			error: `Description must be at most ${MAX_DESCRIPTION_LENGTH} characters`,
+		};
+	}
+
+	if (input.imageUrl && input.imageUrl.length > MAX_IMAGE_URL_LENGTH) {
+		return {
+			valid: false,
+			error: `Image URL must be at most ${MAX_IMAGE_URL_LENGTH} characters`,
+		};
+	}
+
+	return { valid: true };
+}
+
+export function validatePackBuyInput(input: PackBuyInput): ValidationResult {
+	if (!input.packId) {
+		return { valid: false, error: "Pack ID is required" };
+	}
+	if (typeof input.quantity !== "number" || input.quantity < 1) {
+		return { valid: false, error: "Quantity must be a positive integer" };
+	}
+	return { valid: true };
+}
+
+export function validatePackTransferInput(
+	input: PackTransferInput,
+): ValidationResult {
+	if (!input.packId) {
+		return { valid: false, error: "Pack ID is required" };
+	}
+	if (!input.to) {
+		return { valid: false, error: "Recipient username is required" };
+	}
+	if (!HIVE_USERNAME_REGEX.test(input.to)) {
+		return { valid: false, error: "Invalid recipient username format" };
+	}
+	if (typeof input.quantity !== "number" || input.quantity < 1) {
+		return { valid: false, error: "Quantity must be a positive integer" };
+	}
+	return { valid: true };
+}
+
+export function validatePackOpenInput(input: PackOpenInput): ValidationResult {
+	if (!input.packId) {
+		return { valid: false, error: "Pack ID is required" };
+	}
+	if (typeof input.quantity !== "number" || input.quantity < 1) {
+		return { valid: false, error: "Quantity must be a positive integer" };
+	}
+	if (input.quantity > MAX_PACK_OPEN_BATCH) {
+		return {
+			valid: false,
+			error: `Cannot open more than ${MAX_PACK_OPEN_BATCH} packs at once`,
+		};
+	}
+	return { valid: true };
+}
+
+// ============ APPROVE & TRANSFER_FROM VALIDATION ============
+
+export function validatePackApproveInput(
+	input: PackApproveInput,
+): ValidationResult {
+	if (!input.spender) {
+		return { valid: false, error: "Spender is required" };
+	}
+	if (!HIVE_USERNAME_REGEX.test(input.spender)) {
+		return { valid: false, error: "Invalid spender username format" };
+	}
+	if (!input.packId) {
+		return { valid: false, error: "Pack ID is required" };
+	}
+	if (typeof input.approved !== "boolean") {
+		return { valid: false, error: "Approved must be a boolean" };
+	}
+	if (input.approved && (typeof input.quantity !== "number" || input.quantity < 1)) {
+		return { valid: false, error: "Quantity must be a positive integer when approving" };
+	}
+	return { valid: true };
+}
+
+export function validatePackTransferFromInput(
+	input: PackTransferFromInput,
+): ValidationResult {
+	if (!input.from) {
+		return { valid: false, error: "From account is required" };
+	}
+	if (!input.to) {
+		return { valid: false, error: "To account is required" };
+	}
+	if (!HIVE_USERNAME_REGEX.test(input.to)) {
+		return { valid: false, error: "Invalid recipient username format" };
+	}
+	if (!input.packId) {
+		return { valid: false, error: "Pack ID is required" };
+	}
+	if (typeof input.quantity !== "number" || input.quantity < 1) {
+		return { valid: false, error: "Quantity must be a positive integer" };
+	}
+	return { valid: true };
+}
+
+export function validateNftApproveInput(
+	input: NftApproveInput,
+): ValidationResult {
+	if (!input.spender) {
+		return { valid: false, error: "Spender is required" };
+	}
+	if (!HIVE_USERNAME_REGEX.test(input.spender)) {
+		return { valid: false, error: "Invalid spender username format" };
+	}
+	if (!input.instanceId) {
+		return { valid: false, error: "Instance ID is required" };
+	}
+	if (typeof input.approved !== "boolean") {
+		return { valid: false, error: "Approved must be a boolean" };
+	}
+	return { valid: true };
+}
+
+export function validateNftApproveAllInput(
+	input: NftApproveAllInput,
+): ValidationResult {
+	if (!input.spender) {
+		return { valid: false, error: "Spender is required" };
+	}
+	if (!HIVE_USERNAME_REGEX.test(input.spender)) {
+		return { valid: false, error: "Invalid spender username format" };
+	}
+	if (!input.collectionId) {
+		return { valid: false, error: "Collection ID is required" };
+	}
+	if (typeof input.approved !== "boolean") {
+		return { valid: false, error: "Approved must be a boolean" };
+	}
+	return { valid: true };
+}
+
+export function validateNftTransferFromInput(
+	input: NftTransferFromInput,
+): ValidationResult {
+	if (!input.from) {
+		return { valid: false, error: "From account is required" };
+	}
+	if (!input.to) {
+		return { valid: false, error: "To account is required" };
+	}
+	if (!HIVE_USERNAME_REGEX.test(input.to)) {
+		return { valid: false, error: "Invalid recipient username format" };
+	}
+	if (!input.instanceId) {
+		return { valid: false, error: "Instance ID is required" };
+	}
+	return { valid: true };
+}
+
+// ============ DATA OPERATOR VALIDATION ============
+
+export function validateDataOperatorApproveInput(
+	input: DataOperatorApproveInput,
+): ValidationResult {
+	if (!input.collectionId) {
+		return { valid: false, error: "Collection ID is required" };
+	}
+	if (!input.operator) {
+		return { valid: false, error: "Operator is required" };
+	}
+	if (!HIVE_USERNAME_REGEX.test(input.operator)) {
+		return { valid: false, error: "Invalid operator username format" };
+	}
+	if (typeof input.approved !== "boolean") {
+		return { valid: false, error: "Approved must be a boolean" };
+	}
+	return { valid: true };
+}
+
+export function validateSetDataFromInput(
+	input: SetDataFromInput,
+): ValidationResult {
+	if (!input.nftId) {
+		return { valid: false, error: "NFT ID is required" };
+	}
+	if (!input.instanceDna) {
+		return { valid: false, error: "Instance DNA is required" };
+	}
+	if (!input.data || typeof input.data !== "object" || Array.isArray(input.data)) {
+		return { valid: false, error: "Data must be an object" };
+	}
+	return { valid: true };
+}
+
+// ============ LENDING VALIDATION ============
+
+export function validateNftLendInput(
+	input: NftLendInput,
+): ValidationResult {
+	if (!input.instanceId) {
+		return { valid: false, error: "Instance ID is required" };
+	}
+	if (!input.borrower) {
+		return { valid: false, error: "Borrower is required" };
+	}
+	if (!HIVE_USERNAME_REGEX.test(input.borrower)) {
+		return { valid: false, error: "Invalid borrower username format" };
+	}
+	return { valid: true };
+}
+
+export function validateNftReturnInput(
+	input: NftReturnInput,
+): ValidationResult {
+	if (!input.instanceId) {
+		return { valid: false, error: "Instance ID is required" };
+	}
+	return { valid: true };
 }

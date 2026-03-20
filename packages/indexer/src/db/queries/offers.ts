@@ -1,4 +1,4 @@
-import { sql, type Queryable } from "../client.ts";
+import { sql, type Queryable, clampLimit } from "@/db/client.ts";
 
 export interface InsertOfferParams {
 	id: string;
@@ -46,27 +46,29 @@ export async function updateOfferStatus(
 }
 
 export async function getOffersByNft(nftId: string, status?: string, limit = 50, offset = 0) {
+	const safeLimit = clampLimit(limit);
 	if (status) {
 		return sql`
 			SELECT * FROM offers
 			WHERE nft_id = ${nftId} AND status = ${status}
 			ORDER BY created_at DESC
-			LIMIT ${limit} OFFSET ${offset}
+			LIMIT ${safeLimit} OFFSET ${offset}
 		`;
 	}
 	return sql`
 		SELECT * FROM offers
 		WHERE nft_id = ${nftId}
 		ORDER BY created_at DESC
-		LIMIT ${limit} OFFSET ${offset}
+		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
 }
 
 export async function getOffersByOfferer(offerer: string, limit = 50, offset = 0) {
+	const safeLimit = clampLimit(limit);
 	return sql`
 		SELECT * FROM offers
 		WHERE offerer = ${offerer}
 		ORDER BY created_at DESC
-		LIMIT ${limit} OFFSET ${offset}
+		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
 }

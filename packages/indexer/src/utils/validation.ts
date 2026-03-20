@@ -51,6 +51,13 @@ export function optionalStringArray(value: unknown): string[] | null {
 	return value.filter((v): v is string => typeof v === "string");
 }
 
+export function requireBoolean(value: unknown, fieldName: string): boolean {
+	if (typeof value !== "boolean") {
+		throw new Error(`Missing or invalid ${fieldName}: expected boolean`);
+	}
+	return value;
+}
+
 export function requirePrice(value: unknown, fieldName: string): { amount: string; currency: string } {
 	const obj = requireObject(value, fieldName);
 	return {

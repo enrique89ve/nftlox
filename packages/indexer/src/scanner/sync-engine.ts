@@ -1,10 +1,10 @@
-import { config } from "../config.ts";
-import { withTransaction } from "../db/client.ts";
-import { getLastBlock, updateLastBlock } from "../db/queries/sync.ts";
+import { config } from "@/config.ts";
+import { withTransaction } from "@/db/client.ts";
+import { getLastBlock, updateLastBlock } from "@/db/queries/sync.ts";
 import { getHeadBlockNum, getBlockRange } from "./hive-client.ts";
 import { parseBlockOperations } from "./operation-parser.ts";
-import { routeOperation } from "../processor/action-router.ts";
-import { createLogger } from "../utils/logger.ts";
+import { routeOperation } from "@/processor/action-router.ts";
+import { createLogger } from "@/utils/logger.ts";
 
 const log = createLogger("sync");
 

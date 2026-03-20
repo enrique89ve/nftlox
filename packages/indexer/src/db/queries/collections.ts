@@ -1,4 +1,4 @@
-import { sql, type Queryable } from "../client.ts";
+import { sql, type Queryable, clampLimit } from "@/db/client.ts";
 
 export interface InsertCollectionParams {
 	id: string;
@@ -45,23 +45,43 @@ export async function getCollectionById(id: string): Promise<Record<string, unkn
 	return row ?? null;
 }
 
+export interface CollectionRulesRow {
+	id: string;
+	creator: string;
+	transferable: boolean;
+	burnable: boolean;
+}
+
+export async function getCollectionRules(
+	id: string,
+	txn: Queryable = sql,
+): Promise<CollectionRulesRow | null> {
+	const [row] = await txn<CollectionRulesRow[]>`
+		SELECT id, creator, transferable, burnable
+		FROM collections WHERE id = ${id}
+	`;
+	return row ?? null;
+}
+
 export async function collectionExists(id: string, txn: Queryable = sql): Promise<boolean> {
 	const [row] = await txn`SELECT 1 FROM collections WHERE id = ${id}`;
 	return !!row;
 }
 
 export async function listCollections(limit = 50, offset = 0) {
+	const safeLimit = clampLimit(limit);
 	return sql`
 		SELECT c.*,
 			(SELECT COUNT(*) FROM nfts WHERE collection_id = c.id AND nft_type = 'seed') AS seed_count,
 			(SELECT COUNT(*) FROM nfts WHERE collection_id = c.id AND nft_type = 'instance') AS instance_count
 		FROM collections c
 		ORDER BY c.created_at DESC
-		LIMIT ${limit} OFFSET ${offset}
+		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
 }
 
 export async function getCollectionsByCreator(creator: string, limit = 50, offset = 0) {
+	const safeLimit = clampLimit(limit);
 	return sql`
 		SELECT c.*,
 			(SELECT COUNT(*) FROM nfts WHERE collection_id = c.id AND nft_type = 'seed') AS seed_count,
@@ -69,7 +89,7 @@ export async function getCollectionsByCreator(creator: string, limit = 50, offse
 		FROM collections c
 		WHERE c.creator = ${creator}
 		ORDER BY c.created_at DESC
-		LIMIT ${limit} OFFSET ${offset}
+		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
 }
 

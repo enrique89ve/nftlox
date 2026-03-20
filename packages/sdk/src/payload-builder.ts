@@ -5,6 +5,7 @@ import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateDeterministicInstanceId,
+	generateDeterministicPackId,
 	validateArtId,
 	validateArtIdArray,
 	generateOriginDnaSync,
@@ -27,6 +28,14 @@ import {
 	createUnlistPayload,
 	createBurnPayload,
 	createBuyPayload,
+	createPackCreatePayload,
+	createPackBuyPayload,
+	createPackTransferPayload,
+	createPackOpenPayload,
+	createPackCreateOperation,
+	createPackBuyOperation,
+	createPackTransferOperation,
+	createPackOpenOperation,
 	type DeterministicCollectionInput,
 	type DeterministicMintInput,
 } from "./payloads";
@@ -37,6 +46,10 @@ import {
 	validateMintInput,
 	validateListInput,
 	validatePrice,
+	validatePackCreateInput,
+	validatePackBuyInput,
+	validatePackTransferInput,
+	validatePackOpenInput,
 } from "./validation";
 
 import {
@@ -56,6 +69,10 @@ import {
 	ACTION_BURN,
 	ACTION_UNLIST,
 	ACTION_BUY,
+	ACTION_PACK_CREATE,
+	ACTION_PACK_BUY,
+	ACTION_PACK_TRANSFER,
+	ACTION_PACK_OPEN,
 } from "./constants";
 
 import type {
@@ -69,6 +86,14 @@ import type {
 	BuyData,
 	BurnData,
 	TransferData,
+	PackCreateData,
+	PackBuyData,
+	PackTransferData,
+	PackOpenData,
+	PackCreateInput,
+	PackBuyInput,
+	PackTransferInput,
+	PackOpenInput,
 	ProtocolPayload,
 	DistributeInput,
 	ListInput,
@@ -1045,6 +1070,202 @@ export class PayloadBuilder {
 			payload,
 			operation,
 		};
+	}
+
+	// ============ BUILD PACK CREATE ============
+
+	public buildPackCreate(input: {
+		collectionId: string;
+		name: string;
+		creator: string;
+		description?: string;
+		imageUrl?: string;
+		dropTable: Array<{ seedId: string; weight: number }>;
+		itemsPerPack: number;
+		price?: { amount: string; currency: "HIVE" | "HBD" };
+		maxSupply: number;
+	}): BuildResult<PackCreateData> {
+		const errors: ValidationError[] = [];
+
+		const sanitizedName = this.sanitize(input.name);
+		const sanitizedDescription = this.sanitizeOptional(input.description);
+
+		if (!this.isValidHiveUsername(input.creator)) {
+			errors.push({
+				field: "creator",
+				message: "Invalid Hive username format",
+				code: "INVALID_USERNAME",
+			});
+		}
+
+		const packInput: PackCreateInput = {
+			collectionId: input.collectionId,
+			name: sanitizedName,
+			description: sanitizedDescription,
+			imageUrl: input.imageUrl,
+			dropTable: input.dropTable,
+			itemsPerPack: input.itemsPerPack,
+			price: input.price,
+			maxSupply: input.maxSupply,
+		};
+
+		const validation = validatePackCreateInput(packInput);
+		if (!validation.valid) {
+			errors.push({
+				field: "input",
+				message: validation.error!,
+				code: "VALIDATION_FAILED",
+			});
+		}
+
+		if (errors.length > 0) {
+			return { success: false, errors };
+		}
+
+		const generatedId = generateDeterministicPackId(input.collectionId, sanitizedName);
+		const payload = createPackCreatePayload(packInput, input.creator);
+		const operation = createPackCreateOperation(packInput, input.creator);
+
+		return {
+			success: true,
+			payload,
+			operation,
+			generatedId,
+			generatedIds: { packId: generatedId },
+		};
+	}
+
+	// ============ BUILD PACK BUY ============
+
+	public buildPackBuy(input: {
+		packId: string;
+		buyer: string;
+		quantity: number;
+	}): BuildResult<PackBuyData> {
+		const errors: ValidationError[] = [];
+
+		if (!this.isValidHiveUsername(input.buyer)) {
+			errors.push({
+				field: "buyer",
+				message: "Invalid Hive username format",
+				code: "INVALID_USERNAME",
+			});
+		}
+
+		const buyInput: PackBuyInput = {
+			packId: input.packId,
+			quantity: input.quantity,
+		};
+
+		const validation = validatePackBuyInput(buyInput);
+		if (!validation.valid) {
+			errors.push({
+				field: "input",
+				message: validation.error!,
+				code: "VALIDATION_FAILED",
+			});
+		}
+
+		if (errors.length > 0) {
+			return { success: false, errors };
+		}
+
+		const payload = createPackBuyPayload(buyInput);
+		const operation = createPackBuyOperation(buyInput, input.buyer);
+
+		return { success: true, payload, operation };
+	}
+
+	// ============ BUILD PACK TRANSFER ============
+
+	public buildPackTransfer(input: {
+		packId: string;
+		from: string;
+		to: string;
+		quantity: number;
+	}): BuildResult<PackTransferData> {
+		const errors: ValidationError[] = [];
+
+		if (!this.isValidHiveUsername(input.from)) {
+			errors.push({
+				field: "from",
+				message: "Invalid Hive username format",
+				code: "INVALID_USERNAME",
+			});
+		}
+
+		const transferInput: PackTransferInput = {
+			packId: input.packId,
+			to: input.to,
+			quantity: input.quantity,
+		};
+
+		const validation = validatePackTransferInput(transferInput);
+		if (!validation.valid) {
+			errors.push({
+				field: "input",
+				message: validation.error!,
+				code: "VALIDATION_FAILED",
+			});
+		}
+
+		if (input.from === input.to) {
+			errors.push({
+				field: "to",
+				message: "Cannot transfer to yourself",
+				code: "TRANSFER_TO_SELF",
+			});
+		}
+
+		if (errors.length > 0) {
+			return { success: false, errors };
+		}
+
+		const payload = createPackTransferPayload(transferInput);
+		const operation = createPackTransferOperation(transferInput, input.from);
+
+		return { success: true, payload, operation };
+	}
+
+	// ============ BUILD PACK OPEN ============
+
+	public buildPackOpen(input: {
+		packId: string;
+		opener: string;
+		quantity: number;
+	}): BuildResult<PackOpenData> {
+		const errors: ValidationError[] = [];
+
+		if (!this.isValidHiveUsername(input.opener)) {
+			errors.push({
+				field: "opener",
+				message: "Invalid Hive username format",
+				code: "INVALID_USERNAME",
+			});
+		}
+
+		const openInput: PackOpenInput = {
+			packId: input.packId,
+			quantity: input.quantity,
+		};
+
+		const validation = validatePackOpenInput(openInput);
+		if (!validation.valid) {
+			errors.push({
+				field: "input",
+				message: validation.error!,
+				code: "VALIDATION_FAILED",
+			});
+		}
+
+		if (errors.length > 0) {
+			return { success: false, errors };
+		}
+
+		const payload = createPackOpenPayload(openInput);
+		const operation = createPackOpenOperation(openInput, input.opener);
+
+		return { success: true, payload, operation };
 	}
 
 	// ============ UTILITY METHODS ============

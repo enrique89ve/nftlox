@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { parseBlockOperations } from "../scanner/operation-parser.ts";
-import type { BlockData } from "../scanner/hive-client.ts";
+import { parseBlockOperations } from "@/scanner/operation-parser.ts";
+import type { BlockData } from "@/scanner/hive-client.ts";
 
 function makeBlock(overrides: Partial<BlockData> = {}): BlockData {
 	return {

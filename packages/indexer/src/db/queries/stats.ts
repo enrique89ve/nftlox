@@ -1,4 +1,4 @@
-import { sql } from "../client.ts";
+import { sql } from "@/db/client.ts";
 
 export async function getProtocolStats() {
 	const [stats] = await sql`

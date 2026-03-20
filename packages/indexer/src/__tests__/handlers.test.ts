@@ -1,14 +1,16 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
-import { sql, type Queryable } from "../db/client.ts";
-import type { ParsedOperation } from "../scanner/operation-parser.ts";
-import { handleCreateCollection } from "../processor/handlers/create-collection.ts";
-import { handleMint } from "../processor/handlers/mint.ts";
-import { handleDistribute } from "../processor/handlers/distribute.ts";
-import { handleTransfer } from "../processor/handlers/transfer.ts";
-import { handleBurn } from "../processor/handlers/burn.ts";
-import { handleList } from "../processor/handlers/list.ts";
-import { handleUnlist } from "../processor/handlers/unlist.ts";
-import { handleBuy } from "../processor/handlers/buy.ts";
+import { sql, type Queryable } from "@/db/client.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import { handleCreateCollection } from "@/processor/handlers/core/create-collection.ts";
+import { handleMint } from "@/processor/handlers/core/mint.ts";
+import { handleDistribute } from "@/processor/handlers/core/distribute.ts";
+import { handleTransfer } from "@/processor/handlers/core/transfer.ts";
+import { handleBurn } from "@/processor/handlers/core/burn.ts";
+import { handleList } from "@/processor/handlers/marketplace/list.ts";
+import { handleUnlist } from "@/processor/handlers/marketplace/unlist.ts";
+import { handleBuy } from "@/processor/handlers/marketplace/buy.ts";
+import { handleNftLend } from "@/processor/handlers/lending/nft-lend.ts";
+import { handleNftReturn } from "@/processor/handlers/lending/nft-return.ts";
 
 function makeOp(action: string, data: Record<string, unknown>, signer = "alice"): ParsedOperation {
 	return {
@@ -23,6 +25,11 @@ function makeOp(action: string, data: Record<string, unknown>, signer = "alice")
 }
 
 async function cleanDb() {
+	await sql`DELETE FROM nft_loans`;
+	await sql`DELETE FROM data_operators`;
+	await sql`DELETE FROM nft_allowances`;
+	await sql`DELETE FROM collection_allowances`;
+	await sql`DELETE FROM pack_allowances`;
 	await sql`DELETE FROM history_events`;
 	await sql`DELETE FROM offers`;
 	await sql`DELETE FROM nfts`;
@@ -328,6 +335,183 @@ describe("Handlers (integration)", () => {
 			await expect(
 				handleBuy(makeOp("buy", { nftId: "seed_test1" }, "alice"), sql),
 			).rejects.toThrow("Cannot buy own");
+		});
+	});
+
+	// ─── lending ────────────────────────────────────
+
+	describe("nft_lend / nft_return", () => {
+		test("lend sets status to lent", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await handleNftLend(makeOp("nft_lend", {
+				instanceId: "seed_test1",
+				borrower: "bob",
+			}), sql);
+
+			const [nft] = await sql`SELECT status, owner FROM nfts WHERE id = 'seed_test1'`;
+			expect(nft!.status).toBe("lent");
+			expect(nft!.owner).toBe("alice"); // owner unchanged
+		});
+
+		test("lend creates loan record", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await handleNftLend(makeOp("nft_lend", {
+				instanceId: "seed_test1",
+				borrower: "bob",
+			}), sql);
+
+			const [loan] = await sql`SELECT * FROM nft_loans WHERE nft_id = 'seed_test1'`;
+			expect(loan).toBeDefined();
+			expect(loan!.lender).toBe("alice");
+			expect(loan!.borrower).toBe("bob");
+		});
+
+		test("return restores active status", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await handleNftLend(makeOp("nft_lend", {
+				instanceId: "seed_test1",
+				borrower: "bob",
+			}), sql);
+
+			await handleNftReturn(makeOp("nft_return", {
+				instanceId: "seed_test1",
+			}), sql); // alice (lender) returns
+
+			const [nft] = await sql`SELECT status FROM nfts WHERE id = 'seed_test1'`;
+			expect(nft!.status).toBe("active");
+
+			const [loan] = await sql`SELECT * FROM nft_loans WHERE nft_id = 'seed_test1'`;
+			expect(loan).toBeUndefined();
+		});
+
+		test("borrower can return", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await handleNftLend(makeOp("nft_lend", {
+				instanceId: "seed_test1",
+				borrower: "bob",
+			}), sql);
+
+			await handleNftReturn(makeOp("nft_return", {
+				instanceId: "seed_test1",
+			}, "bob"), sql); // bob (borrower) returns
+
+			const [nft] = await sql`SELECT status FROM nfts WHERE id = 'seed_test1'`;
+			expect(nft!.status).toBe("active");
+		});
+
+		test("rejects lend to yourself", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await expect(
+				handleNftLend(makeOp("nft_lend", {
+					instanceId: "seed_test1",
+					borrower: "alice",
+				}), sql),
+			).rejects.toThrow("Cannot lend to yourself");
+		});
+
+		test("rejects lend by non-owner", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await expect(
+				handleNftLend(makeOp("nft_lend", {
+					instanceId: "seed_test1",
+					borrower: "charlie",
+				}, "eve"), sql),
+			).rejects.toThrow("not owner");
+		});
+
+		test("rejects double lend", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await handleNftLend(makeOp("nft_lend", {
+				instanceId: "seed_test1",
+				borrower: "bob",
+			}), sql);
+
+			await expect(
+				handleNftLend(makeOp("nft_lend", {
+					instanceId: "seed_test1",
+					borrower: "charlie",
+				}), sql),
+			).rejects.toThrow("must be active");
+		});
+
+		test("rejects return by stranger", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await handleNftLend(makeOp("nft_lend", {
+				instanceId: "seed_test1",
+				borrower: "bob",
+			}), sql);
+
+			await expect(
+				handleNftReturn(makeOp("nft_return", {
+					instanceId: "seed_test1",
+				}, "eve"), sql),
+			).rejects.toThrow("neither lender nor borrower");
+		});
+
+		// ─── lent guards ────────────────────────────
+
+		test("rejects transfer of lent NFT", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await handleNftLend(makeOp("nft_lend", {
+				instanceId: "seed_test1",
+				borrower: "bob",
+			}), sql);
+
+			await expect(
+				handleTransfer(makeOp("transfer", {
+					nftId: "seed_test1",
+					to: "charlie",
+				}), sql),
+			).rejects.toThrow("lent");
+		});
+
+		test("rejects burn of lent NFT", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await handleNftLend(makeOp("nft_lend", {
+				instanceId: "seed_test1",
+				borrower: "bob",
+			}), sql);
+
+			await expect(
+				handleBurn(makeOp("burn", { nftId: "seed_test1" }), sql),
+			).rejects.toThrow("lent");
+		});
+
+		test("rejects list of lent NFT", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await handleNftLend(makeOp("nft_lend", {
+				instanceId: "seed_test1",
+				borrower: "bob",
+			}), sql);
+
+			await expect(
+				handleList(makeOp("list", {
+					nftId: "seed_test1",
+					price: { amount: "10.000", currency: "HIVE" },
+				}), sql),
+			).rejects.toThrow("lent");
 		});
 	});
 });

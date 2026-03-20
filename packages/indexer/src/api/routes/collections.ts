@@ -3,8 +3,8 @@ import {
 	listCollections,
 	getCollectionById,
 	getCollectionStats,
-} from "../../db/queries/collections.ts";
-import { getNftsByCollection } from "../../db/queries/nfts.ts";
+} from "@/db/queries/collections.ts";
+import { getNftsByCollection } from "@/db/queries/nfts.ts";
 
 export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: ["Collections"] })
 	.get("/", async ({ query }) => {

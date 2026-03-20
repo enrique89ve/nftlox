@@ -17,6 +17,19 @@ import {
 	ACTION_OFFER,
 	ACTION_ACCEPT_OFFER,
 	ACTION_REJECT_OFFER,
+	ACTION_PACK_CREATE,
+	ACTION_PACK_BUY,
+	ACTION_PACK_TRANSFER,
+	ACTION_PACK_OPEN,
+	ACTION_PACK_APPROVE,
+	ACTION_PACK_TRANSFER_FROM,
+	ACTION_NFT_APPROVE,
+	ACTION_NFT_APPROVE_ALL,
+	ACTION_NFT_TRANSFER_FROM,
+	ACTION_DATA_OPERATOR_APPROVE,
+	ACTION_SET_DATA_FROM,
+	ACTION_NFT_LEND,
+	ACTION_NFT_RETURN,
 	MAX_TAGS,
 	MAX_TAG_LENGTH,
 } from "./constants";
@@ -29,6 +42,10 @@ import type {
 	BurnData,
 	SetDataData,
 	SetDataInput,
+	DataOperatorApproveData,
+	DataOperatorApproveInput,
+	SetDataFromData,
+	SetDataFromInput,
 	DistributeData,
 	DistributeInput,
 	ListingData,
@@ -37,6 +54,28 @@ import type {
 	OfferData,
 	AcceptOfferData,
 	RejectOfferData,
+	PackCreateData,
+	PackBuyData,
+	PackTransferData,
+	PackOpenData,
+	PackCreateInput,
+	PackBuyInput,
+	PackTransferInput,
+	PackOpenInput,
+	PackApproveData,
+	PackApproveInput,
+	PackTransferFromData,
+	PackTransferFromInput,
+	NftApproveData,
+	NftApproveInput,
+	NftApproveAllData,
+	NftApproveAllInput,
+	NftTransferFromData,
+	NftTransferFromInput,
+	NftLendData,
+	NftLendInput,
+	NftReturnData,
+	NftReturnInput,
 	ProtocolPayload,
 	CreateCollectionInput,
 	MintInput,
@@ -68,6 +107,7 @@ import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateDeterministicInstanceId,
+	generateDeterministicPackId,
 	deterministicHash,
 } from "./dna";
 
@@ -261,6 +301,7 @@ export function createSetDataPayload(
 		action: ACTION_SET_DATA,
 		data: {
 			nftId: input.nftId,
+			instanceDna: input.instanceDna,
 			data: input.data,
 			...(input.tags && { tags: sanitizeTags(input.tags) }),
 		},
@@ -277,6 +318,71 @@ export function createSetDataOperation(
 		{
 			required_auths: [issuer],
 			required_posting_auths: [],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+// ============ DATA OPERATOR PAYLOADS ============
+
+export function createDataOperatorApprovePayload(
+	input: DataOperatorApproveInput,
+): ProtocolPayload<DataOperatorApproveData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_DATA_OPERATOR_APPROVE,
+		data: {
+			collectionId: input.collectionId,
+			operator: input.operator,
+			approved: input.approved,
+		},
+	};
+}
+
+export function createDataOperatorApproveOperation(
+	input: DataOperatorApproveInput,
+	creator: string,
+): HiveOperation {
+	const payload = createDataOperatorApprovePayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [creator],
+			required_posting_auths: [],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+export function createSetDataFromPayload(
+	input: SetDataFromInput,
+): ProtocolPayload<SetDataFromData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_SET_DATA_FROM,
+		data: {
+			nftId: input.nftId,
+			instanceDna: input.instanceDna,
+			data: input.data,
+			...(input.tags && { tags: sanitizeTags(input.tags) }),
+		},
+	};
+}
+
+export function createSetDataFromOperation(
+	input: SetDataFromInput,
+	operator: string,
+): HiveOperation {
+	const payload = createSetDataFromPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [operator],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},
@@ -774,4 +880,362 @@ export function createDeterministicDistributePayload(
 			instanceNumber: input.instanceNumber,
 		},
 	};
+}
+
+// ============ PACK PAYLOADS ============
+
+export function createPackCreatePayload(
+	input: PackCreateInput,
+	creator: string,
+): ProtocolPayload<PackCreateData> {
+	const id = generateDeterministicPackId(input.collectionId, input.name);
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_PACK_CREATE,
+		data: {
+			id,
+			collectionId: input.collectionId,
+			name: input.name,
+			...(input.description && { description: input.description }),
+			...(input.imageUrl && { imageUrl: input.imageUrl }),
+			dropTable: input.dropTable,
+			itemsPerPack: input.itemsPerPack,
+			...(input.price && { price: input.price }),
+			maxSupply: input.maxSupply,
+			createdAt: Date.now(),
+		},
+	};
+}
+
+export function createPackBuyPayload(
+	input: PackBuyInput,
+): ProtocolPayload<PackBuyData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_PACK_BUY,
+		data: {
+			packId: input.packId,
+			quantity: input.quantity,
+		},
+	};
+}
+
+export function createPackTransferPayload(
+	input: PackTransferInput,
+): ProtocolPayload<PackTransferData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_PACK_TRANSFER,
+		data: {
+			packId: input.packId,
+			to: input.to,
+			quantity: input.quantity,
+		},
+	};
+}
+
+export function createPackOpenPayload(
+	input: PackOpenInput,
+): ProtocolPayload<PackOpenData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_PACK_OPEN,
+		data: {
+			packId: input.packId,
+			quantity: input.quantity,
+		},
+	};
+}
+
+// ============ PACK HIVE OPERATIONS ============
+
+export function createPackCreateOperation(
+	input: PackCreateInput,
+	creator: string,
+): HiveOperation {
+	const payload = createPackCreatePayload(input, creator);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [creator],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+export function createPackBuyOperation(
+	input: PackBuyInput,
+	buyer: string,
+): HiveOperation {
+	const payload = createPackBuyPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [buyer],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+export function createPackTransferOperation(
+	input: PackTransferInput,
+	from: string,
+): HiveOperation {
+	const payload = createPackTransferPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [from],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+export function createPackOpenOperation(
+	input: PackOpenInput,
+	opener: string,
+): HiveOperation {
+	const payload = createPackOpenPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [opener],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+// ============ APPROVE & TRANSFER_FROM PAYLOADS ============
+
+export function createPackApprovePayload(
+	input: PackApproveInput,
+): ProtocolPayload<PackApproveData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_PACK_APPROVE,
+		data: {
+			spender: input.spender,
+			packId: input.packId,
+			quantity: input.quantity,
+			approved: input.approved,
+		},
+	};
+}
+
+export function createPackTransferFromPayload(
+	input: PackTransferFromInput,
+): ProtocolPayload<PackTransferFromData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_PACK_TRANSFER_FROM,
+		data: {
+			from: input.from,
+			to: input.to,
+			packId: input.packId,
+			quantity: input.quantity,
+		},
+	};
+}
+
+export function createNftApprovePayload(
+	input: NftApproveInput,
+): ProtocolPayload<NftApproveData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_NFT_APPROVE,
+		data: {
+			spender: input.spender,
+			instanceId: input.instanceId,
+			approved: input.approved,
+		},
+	};
+}
+
+export function createNftApproveAllPayload(
+	input: NftApproveAllInput,
+): ProtocolPayload<NftApproveAllData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_NFT_APPROVE_ALL,
+		data: {
+			spender: input.spender,
+			collectionId: input.collectionId,
+			approved: input.approved,
+		},
+	};
+}
+
+export function createNftTransferFromPayload(
+	input: NftTransferFromInput,
+): ProtocolPayload<NftTransferFromData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_NFT_TRANSFER_FROM,
+		data: {
+			from: input.from,
+			to: input.to,
+			instanceId: input.instanceId,
+		},
+	};
+}
+
+// ============ APPROVE & TRANSFER_FROM OPERATIONS ============
+// Approve operations use required_auths (active key) for security
+
+export function createPackApproveOperation(
+	input: PackApproveInput,
+	owner: string,
+): HiveOperation {
+	const payload = createPackApprovePayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [owner],
+			required_posting_auths: [],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+export function createPackTransferFromOperation(
+	input: PackTransferFromInput,
+	spender: string,
+): HiveOperation {
+	const payload = createPackTransferFromPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [spender],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+export function createNftApproveOperation(
+	input: NftApproveInput,
+	owner: string,
+): HiveOperation {
+	const payload = createNftApprovePayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [owner],
+			required_posting_auths: [],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+export function createNftApproveAllOperation(
+	input: NftApproveAllInput,
+	owner: string,
+): HiveOperation {
+	const payload = createNftApproveAllPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [owner],
+			required_posting_auths: [],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+export function createNftTransferFromOperation(
+	input: NftTransferFromInput,
+	spender: string,
+): HiveOperation {
+	const payload = createNftTransferFromPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [spender],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+// ============ LENDING PAYLOADS & OPERATIONS ============
+
+export function createNftLendPayload(
+	input: NftLendInput,
+): ProtocolPayload<NftLendData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_NFT_LEND,
+		data: {
+			instanceId: input.instanceId,
+			borrower: input.borrower,
+		},
+	};
+}
+
+export function createNftReturnPayload(
+	input: NftReturnInput,
+): ProtocolPayload<NftReturnData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_NFT_RETURN,
+		data: {
+			instanceId: input.instanceId,
+		},
+	};
+}
+
+export function createNftLendOperation(
+	input: NftLendInput,
+	owner: string,
+): HiveOperation {
+	const payload = createNftLendPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [owner],
+			required_posting_auths: [],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+export function createNftReturnOperation(
+	input: NftReturnInput,
+	signer: string,
+): HiveOperation {
+	const payload = createNftReturnPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [signer],
+			required_posting_auths: [],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
 }

@@ -1,7 +1,7 @@
 import type postgres from "postgres";
 import pgClient from "postgres";
-import { config } from "../config.ts";
-import { createLogger } from "../utils/logger.ts";
+import { config } from "@/config.ts";
+import { createLogger } from "@/utils/logger.ts";
 
 const log = createLogger("db");
 
@@ -27,6 +27,17 @@ export type Queryable = typeof sql;
 export async function withTransaction<T>(fn: (txn: Queryable) => Promise<T>): Promise<T> {
 	const result = await sql.begin(fn as unknown as (sql: postgres.TransactionSql) => Promise<T>);
 	return result as T;
+}
+
+const MAX_QUERY_LIMIT = 1000;
+
+/**
+ * Clamps a pagination limit to a safe maximum.
+ * Even if Elysia schema validation is bypassed, this prevents unbounded SELECTs.
+ */
+export function clampLimit(limit: number, defaultVal = 50): number {
+	if (limit < 1 || !Number.isFinite(limit)) return defaultVal;
+	return Math.min(limit, MAX_QUERY_LIMIT);
 }
 
 export async function testConnection(): Promise<void> {

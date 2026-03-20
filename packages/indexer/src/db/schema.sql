@@ -32,7 +32,7 @@ CREATE TABLE collections (
 
 -- NFTs (unified: seeds, instances, replicas)
 CREATE TYPE nft_kind AS ENUM ('seed', 'instance', 'replica');
-CREATE TYPE nft_status AS ENUM ('active', 'listed', 'burned');
+CREATE TYPE nft_status AS ENUM ('active', 'listed', 'burned', 'lent');
 
 CREATE TABLE nfts (
 	id TEXT PRIMARY KEY,
@@ -58,6 +58,7 @@ CREATE TABLE nfts (
 	original_id TEXT REFERENCES nfts(id),
 	tags TEXT[],
 	custom_data JSONB,
+	operator_data JSONB,
 	listing_price NUMERIC(18,3),
 	listing_currency TEXT,
 	block_num BIGINT NOT NULL,
@@ -134,3 +135,141 @@ CREATE INDEX idx_offers_offerer ON offers(offerer);
 CREATE INDEX idx_offers_status ON offers(status);
 
 CREATE INDEX idx_invalid_block ON invalid_operations(block_num);
+
+-- ============ PACK TABLES ============
+
+CREATE TYPE pack_status AS ENUM ('active', 'paused', 'depleted');
+
+CREATE TABLE packs (
+	id TEXT PRIMARY KEY,
+	collection_id TEXT NOT NULL REFERENCES collections(id),
+	creator TEXT NOT NULL,
+	name TEXT NOT NULL,
+	description TEXT,
+	image_url TEXT,
+	drop_table JSONB NOT NULL,
+	items_per_pack INTEGER NOT NULL DEFAULT 1,
+	price_amount NUMERIC(18,3),
+	price_currency TEXT,
+	max_supply INTEGER NOT NULL DEFAULT 0,
+	current_supply INTEGER NOT NULL DEFAULT 0,
+	total_opened INTEGER NOT NULL DEFAULT 0,
+	status pack_status NOT NULL DEFAULT 'active',
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL,
+	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE user_pack_balances (
+	account TEXT NOT NULL,
+	pack_id TEXT NOT NULL REFERENCES packs(id),
+	balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
+	PRIMARY KEY (account, pack_id)
+);
+
+CREATE TABLE pack_history_events (
+	id BIGSERIAL PRIMARY KEY,
+	pack_id TEXT NOT NULL REFERENCES packs(id),
+	collection_id TEXT,
+	event_type TEXT NOT NULL,
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	timestamp TIMESTAMPTZ NOT NULL,
+	from_account TEXT,
+	to_account TEXT,
+	quantity INTEGER,
+	price_amount NUMERIC(18,3),
+	price_currency TEXT,
+	payload JSONB,
+	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	UNIQUE(block_num, tx_id, event_type, pack_id, from_account)
+);
+
+CREATE INDEX idx_packs_collection ON packs(collection_id);
+CREATE INDEX idx_packs_creator ON packs(creator);
+CREATE INDEX idx_packs_status ON packs(status);
+CREATE INDEX idx_pack_balances_account ON user_pack_balances(account);
+CREATE INDEX idx_pack_balances_pack ON user_pack_balances(pack_id);
+CREATE INDEX idx_pack_balances_positive ON user_pack_balances(account, pack_id)
+	WHERE balance > 0;
+CREATE INDEX idx_pack_history_pack ON pack_history_events(pack_id);
+CREATE INDEX idx_pack_history_block ON pack_history_events(block_num);
+CREATE INDEX idx_pack_history_type ON pack_history_events(event_type);
+
+-- ============ ALLOWANCE TABLES (Approve & TransferFrom) ============
+
+-- Pack allowances (ERC-20 style): fungible spending limits
+CREATE TABLE pack_allowances (
+	owner TEXT NOT NULL,
+	spender TEXT NOT NULL,
+	pack_id TEXT NOT NULL REFERENCES packs(id),
+	quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	PRIMARY KEY (owner, spender, pack_id)
+);
+
+-- NFT allowances (ERC-721 style): one approved spender per NFT
+CREATE TABLE nft_allowances (
+	nft_id TEXT PRIMARY KEY REFERENCES nfts(id),
+	owner TEXT NOT NULL,
+	approved_spender TEXT NOT NULL,
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Collection allowances (ERC-721 setApprovalForAll style)
+CREATE TABLE collection_allowances (
+	owner TEXT NOT NULL,
+	spender TEXT NOT NULL,
+	collection_id TEXT NOT NULL REFERENCES collections(id),
+	approved BOOLEAN NOT NULL DEFAULT TRUE,
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	PRIMARY KEY (owner, spender, collection_id)
+);
+
+CREATE INDEX idx_pack_allowances_spender ON pack_allowances(spender);
+CREATE INDEX idx_pack_allowances_pack ON pack_allowances(pack_id);
+CREATE INDEX idx_pack_allowances_positive ON pack_allowances(owner, pack_id)
+	WHERE quantity > 0;
+
+CREATE INDEX idx_nft_allowances_owner ON nft_allowances(owner);
+CREATE INDEX idx_nft_allowances_spender ON nft_allowances(approved_spender);
+
+CREATE INDEX idx_collection_allowances_spender ON collection_allowances(spender);
+CREATE INDEX idx_collection_allowances_collection ON collection_allowances(collection_id);
+CREATE INDEX idx_collection_allowances_active ON collection_allowances(owner, collection_id)
+	WHERE approved = TRUE;
+
+-- ============ DATA OPERATORS TABLE ============
+
+CREATE TABLE data_operators (
+	collection_id TEXT NOT NULL REFERENCES collections(id),
+	operator TEXT NOT NULL,
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	PRIMARY KEY (collection_id, operator)
+);
+
+CREATE INDEX idx_data_operators_operator ON data_operators(operator);
+CREATE INDEX idx_data_operators_collection ON data_operators(collection_id);
+
+-- ============ LENDING TABLE ============
+
+CREATE TABLE nft_loans (
+	nft_id TEXT PRIMARY KEY REFERENCES nfts(id),
+	lender TEXT NOT NULL,
+	borrower TEXT NOT NULL,
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_nft_loans_lender ON nft_loans(lender);
+CREATE INDEX idx_nft_loans_borrower ON nft_loans(borrower);

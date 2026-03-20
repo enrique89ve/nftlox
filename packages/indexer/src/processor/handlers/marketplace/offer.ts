@@ -1,9 +1,9 @@
-import type { Queryable } from "../../db/client.ts";
-import type { ParsedOperation } from "../../scanner/operation-parser.ts";
-import { getNftForProcessing } from "../../db/queries/nfts.ts";
-import { insertOffer } from "../../db/queries/offers.ts";
-import { insertHistoryEvent } from "../../db/queries/history.ts";
-import { requireString, requirePrice, optionalNumber } from "../../utils/validation.ts";
+import type { Queryable } from "@/db/client.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import { getNftForProcessing, NFT_STATUS_BURNED } from "@/db/queries/nfts.ts";
+import { insertOffer } from "@/db/queries/offers.ts";
+import { insertHistoryEvent } from "@/db/queries/history.ts";
+import { requireString, requirePrice, optionalNumber } from "@/utils/validation.ts";
 
 export async function handleOffer(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
@@ -12,7 +12,7 @@ export async function handleOffer(op: ParsedOperation, txn: Queryable): Promise<
 
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
-	if (nft.status === "burned") throw new Error(`NFT is burned: ${nftId}`);
+	if (nft.status === NFT_STATUS_BURNED) throw new Error(`NFT is burned: ${nftId}`);
 	if (nft.owner === op.signer) throw new Error("Cannot offer on own NFT");
 
 	const offerId = (typeof d.offerId === "string" && d.offerId) ? d.offerId : `offer_${op.txId.slice(0, 12)}`;

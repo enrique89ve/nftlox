@@ -2,6 +2,7 @@ import { testConnection, closePool } from "./db/client.ts";
 import { startSync, stopSync } from "./scanner/sync-engine.ts";
 import { startApiServer } from "./api/server.ts";
 import { createLogger } from "./utils/logger.ts";
+import { config } from "./config.ts";
 
 const log = createLogger("main");
 
@@ -23,9 +24,9 @@ async function ensurePostgres(): Promise<void> {
 	const { exitCode } = await runCmd([
 		"docker", "run", "-d",
 		"--name", "nftlox-postgres",
-		"-e", "POSTGRES_DB=nftlox_indexer",
-		"-e", "POSTGRES_USER=nftlox",
-		"-e", "POSTGRES_PASSWORD=nftlox_dev",
+		"-e", `POSTGRES_DB=${config.postgresDb}`,
+		"-e", `POSTGRES_USER=${config.postgresUser}`,
+		"-e", `POSTGRES_PASSWORD=${config.postgresPassword}`,
 		"-p", "5432:5432",
 		"-v", `${schemaPath}:/docker-entrypoint-initdb.d/001-schema.sql`,
 		"postgres:16-alpine",
