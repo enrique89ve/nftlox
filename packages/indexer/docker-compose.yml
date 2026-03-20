@@ -1,15 +1,40 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: nftlox_indexer
-      POSTGRES_USER: nftlox
-      POSTGRES_PASSWORD: nftlox_dev
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-nftlox_indexer}
+      POSTGRES_USER: ${POSTGRES_USER:-nftlox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nftlox_dev}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./src/db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nftlox} -d ${POSTGRES_DB:-nftlox_indexer}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  indexer:
+    build:
+      context: ../..
+      dockerfile: packages/indexer/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${INDEXER_PORT:-3050}:3050"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-nftlox}:${POSTGRES_PASSWORD:-nftlox_dev}@postgres:5432/${POSTGRES_DB:-nftlox_indexer}
+      INDEXER_PORT: 3050
+      GENESIS_BLOCK: ${GENESIS_BLOCK:-90000000}
+      PROTOCOL_ID: ${PROTOCOL_ID:-nftlox_testnet}
+      BATCH_SIZE: ${BATCH_SIZE:-1000}
+      SYNC_INTERVAL_MS: ${SYNC_INTERVAL_MS:-3000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: ${NODE_ENV:-production}
+      ENABLE_SWAGGER: ${ENABLE_SWAGGER:-false}
 
 volumes:
   pgdata:

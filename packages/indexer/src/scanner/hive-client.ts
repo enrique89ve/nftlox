@@ -1,10 +1,10 @@
-import { createHiveChain, type IHiveChainInterface } from "@hiveio/wax";
+// Hive L1 Client — lightweight fetch-based (no wax/WASM dependency)
+
 import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
 
 const log = createLogger("hive-client");
 
-let chain: IHiveChainInterface | null = null;
 let currentEndpointIndex = 0;
 
 function getCurrentEndpoint(): string {
@@ -18,32 +18,47 @@ function rotateEndpoint(): string {
 	return next;
 }
 
-export async function getChain(): Promise<IHiveChainInterface> {
-	if (!chain) {
-		const endpoint = getCurrentEndpoint();
-		log.info("Creating Hive chain", { endpoint });
-		chain = await createHiveChain({ apiEndpoint: endpoint, apiTimeout: 15_000 });
+// ============ JSON-RPC ============
+
+async function rpcCall<T>(endpoint: string, method: string, params: Record<string, unknown>): Promise<T> {
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), 15_000);
+
+	const response = await fetch(endpoint, {
+		method: "POST",
+		signal: controller.signal,
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
+	});
+	clearTimeout(timeoutId);
+
+	if (!response.ok) {
+		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 	}
-	return chain;
+
+	const json = await response.json() as Record<string, unknown>;
+
+	if (json.error != null && typeof json.error === "object") {
+		const errObj = json.error as Record<string, unknown>;
+		throw new Error(`RPC error: ${typeof errObj.message === "string" ? errObj.message : "unknown"}`);
+	}
+
+	return json.result as T;
 }
 
-async function callWithFailover<T>(fn: (hive: IHiveChainInterface) => Promise<T>): Promise<T> {
+async function callWithFailover<T>(method: string, params: Record<string, unknown>): Promise<T> {
 	const maxRetries = config.hiveEndpoints.length * 2;
 
 	for (let attempt = 0; attempt < maxRetries; attempt++) {
+		const endpoint = getCurrentEndpoint();
 		try {
-			const hive = await getChain();
-			return await fn(hive);
+			return await rpcCall<T>(endpoint, method, params);
 		} catch (err) {
-			const endpoint = getCurrentEndpoint();
-			log.warn(`API call failed on ${endpoint} (attempt ${attempt + 1}/${maxRetries})`, {
+			log.warn(`RPC failed: ${endpoint} (${attempt + 1}/${maxRetries})`, {
 				error: err instanceof Error ? err.message : String(err),
 			});
 
-			const next = rotateEndpoint();
-			if (chain) {
-				chain.endpointUrl = next;
-			}
+			rotateEndpoint();
 
 			if (attempt === maxRetries - 1) throw err;
 
@@ -55,6 +70,8 @@ async function callWithFailover<T>(fn: (hive: IHiveChainInterface) => Promise<T>
 	throw new Error("All Hive endpoints exhausted");
 }
 
+// ============ PUBLIC API ============
+
 export interface BlockData {
 	blockNum: number;
 	timestamp: string;
@@ -65,34 +82,39 @@ export interface BlockData {
 }
 
 export async function getHeadBlockNum(): Promise<number> {
-	return callWithFailover(async (hive) => {
-		const response = await hive.api.database_api.get_dynamic_global_properties({});
-		return response.head_block_number;
-	});
+	const result = await callWithFailover<{
+		head_block_number: number;
+	}>("database_api.get_dynamic_global_properties", {});
+	return result.head_block_number;
 }
 
-function toRecord(value: object): Record<string, unknown> {
-	if (typeof value === "object" && value !== null) return value as Record<string, unknown>;
-	return {};
+interface RpcBlock {
+	timestamp: string;
+	transactions: Array<{
+		operations: Array<{ type: string; value: object }>;
+	}>;
+	transaction_ids: string[];
 }
 
 export async function getBlockRange(startBlock: number, count: number): Promise<BlockData[]> {
-	return callWithFailover(async (hive) => {
-		const response = await hive.api.block_api.get_block_range({
-			starting_block_num: startBlock,
-			count,
-		});
-
-		return response.blocks.map((block, i) => ({
-			blockNum: startBlock + i,
-			timestamp: block.timestamp,
-			transactions: block.transactions.map((tx, txIdx) => ({
-				txId: block.transaction_ids[txIdx] ?? "",
-				operations: tx.operations.map(op => ({
-					type: op.type,
-					value: toRecord(op.value),
-				})),
-			})),
-		}));
+	const result = await callWithFailover<{
+		blocks: RpcBlock[];
+	}>("block_api.get_block_range", {
+		starting_block_num: startBlock,
+		count,
 	});
+
+	return result.blocks.map((block, i) => ({
+		blockNum: startBlock + i,
+		timestamp: block.timestamp,
+		transactions: block.transactions.map((tx, txIdx) => ({
+			txId: block.transaction_ids[txIdx] ?? "",
+			operations: tx.operations.map(op => ({
+				type: op.type,
+				value: (typeof op.value === "object" && op.value !== null
+					? op.value
+					: {}) as Record<string, unknown>,
+			})),
+		})),
+	}));
 }

@@ -10,19 +10,36 @@ import { marketplaceRoutes } from "./routes/marketplace.ts";
 import { packsRoutes } from "./routes/packs.ts";
 import { statusRoutes } from "./routes/status.ts";
 import { checkRateLimit } from "./middleware/rate-limiter.ts";
+import { isSynced, getSyncProgress } from "@/scanner/sync-state.ts";
 
 const log = createLogger("api");
 
 export function startApiServer(): void {
 	const STATS_PATHS = new Set(["/api/stats", "/api/health"]);
+	const ALLOWED_DURING_SYNC = new Set(["/api/health", "/api/status"]);
 
 	const app = new Elysia()
 		.use(cors())
 		.onBeforeHandle(({ request, set }) => {
-			const blocked = checkRateLimit(request, set.headers);
-			if (blocked) {
+			// Rate limiting
+			const rateLimited = checkRateLimit(request, set.headers);
+			if (rateLimited) {
 				set.status = 429;
-				return blocked;
+				return rateLimited;
+			}
+
+			// Block data endpoints while syncing (allow health + status)
+			const url = new URL(request.url);
+			if (!isSynced() && !ALLOWED_DURING_SYNC.has(url.pathname)) {
+				set.status = 503;
+				set.headers["Retry-After"] = "30";
+				const progress = getSyncProgress();
+				return {
+					error: "Indexer is syncing — data not yet available",
+					lastBlock: progress.lastBlock,
+					headBlock: progress.headBlock,
+					blocksBehind: progress.behind,
+				};
 			}
 		})
 		.onAfterHandle(({ request, set }) => {

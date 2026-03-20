@@ -46,11 +46,29 @@ async function ensurePostgres(): Promise<void> {
 	throw new Error("PostgreSQL failed to start within 30s");
 }
 
+async function waitForDatabase(): Promise<void> {
+	for (let i = 0; i < 30; i++) {
+		try {
+			await testConnection();
+			return;
+		} catch {
+			if (i === 0) log.info("Waiting for database...");
+			await new Promise(r => setTimeout(r, 1000));
+		}
+	}
+	throw new Error("Database not ready after 30s");
+}
+
 async function main(): Promise<void> {
 	log.info("NFTLox Indexer starting...");
 
-	await ensurePostgres();
-	await testConnection();
+	// In production (Docker), DB is provided by docker-compose.
+	// In dev, auto-launch PostgreSQL container if not running.
+	if (config.nodeEnv !== "production") {
+		await ensurePostgres();
+	}
+
+	await waitForDatabase();
 
 	startApiServer();
 

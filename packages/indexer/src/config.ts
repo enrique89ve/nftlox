@@ -19,15 +19,16 @@ const toLogLevel = (val: string | undefined, fallback: LogLevel): LogLevel => {
 export const config = {
 	port: toInt(process.env.INDEXER_PORT, 3050),
 	databaseUrl: process.env.DATABASE_URL ?? "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer",
-	genesisBlock: toInt(process.env.GENESIS_BLOCK, 90_000_000),
+	genesisBlock: toInt(process.env.GENESIS_BLOCK, 103_484_900),
 	protocolId: process.env.PROTOCOL_ID ?? "nftlox_testnet",
 	batchSize: toInt(process.env.BATCH_SIZE, 1000),
 	syncIntervalMs: toInt(process.env.SYNC_INTERVAL_MS, 3000),
 	logLevel: toLogLevel(process.env.LOG_LEVEL, "info"),
 	hiveEndpoints: [
 		"https://api.hive.blog",
-		"https://api.openhive.network",
-		"https://techcoderx.com",
+		"https://api.syncad.com",
+		"https://rpc.mahdiyari.info",
+		"https://anyx.io",
 	],
 	// Security
 	nodeEnv: process.env.NODE_ENV ?? "development",
