@@ -1279,6 +1279,57 @@
 			}
 		}
 
+		/* Data Tables */
+		.data-table {
+			width: 100%;
+			border-collapse: collapse;
+			font-size: 13px;
+		}
+
+		.data-table th {
+			text-align: left;
+			padding: 8px 12px;
+			color: var(--text-dim);
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.data-table td {
+			padding: 8px 12px;
+			border-bottom: 1px solid var(--border);
+			color: var(--text);
+		}
+
+		.data-table tr:hover td {
+			background: var(--surface-2);
+		}
+
+		/* Stat Boxes */
+		.stat-box {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 12px 16px;
+			text-align: center;
+		}
+
+		.stat-label {
+			font-size: 11px;
+			color: var(--text-dim);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin-bottom: 4px;
+		}
+
+		.stat-value {
+			font-size: 18px;
+			font-weight: 600;
+			font-family: var(--mono);
+			color: var(--text);
+		}
+
 		/* Responsive */
 		@media (max-width: 768px) {
 			.app {
@@ -1339,12 +1390,45 @@
 					Search
 				</div>
 
+				<div class="nav-section">Marketplace</div>
+				<div class="nav-item" data-page="marketplace">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+						<line x1="3" y1="6" x2="21" y2="6"/>
+						<path d="M16 10a4 4 0 01-8 0"/>
+					</svg>
+					Marketplace
+				</div>
+				<div class="nav-item" data-page="packs">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+						<polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+						<line x1="12" y1="22.08" x2="12" y2="12"/>
+					</svg>
+					Packs
+				</div>
+
 				<div class="nav-section">Tools</div>
 				<div class="nav-item" data-page="transfer">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M5 12h14M12 5l7 7-7 7"/>
 					</svg>
 					Transfer
+				</div>
+
+				<div class="nav-section">Advanced</div>
+				<div class="nav-item" data-page="permissions">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+					</svg>
+					Permissions
+				</div>
+				<div class="nav-item" data-page="spv">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+						<polyline points="22 4 12 14.01 9 11.01"/>
+					</svg>
+					SPV Verify
 				</div>
 
 				<div class="nav-section">Hive L1</div>
@@ -1377,6 +1461,9 @@
 					<h1 class="page-title">Collections</h1>
 					<p class="page-desc">Browse all NFT collections on the protocol</p>
 				</div>
+
+				<!-- Dashboard Stats -->
+				<div id="dashboard-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; margin-bottom: 24px;"></div>
 
 				<div class="btn-group" style="margin-bottom: 24px;">
 					<button class="btn btn-primary" onclick="loadCollections()">
@@ -1593,7 +1680,9 @@
 				</div>
 
 				<div class="btn-group" style="margin-bottom: 24px;">
-					<button class="btn btn-secondary" onclick="loadInventory()">Refresh</button>
+					<button class="btn btn-secondary" onclick="loadInventory()">Refresh NFTs</button>
+					<button class="btn btn-secondary" onclick="loadUserActivity()">Load Activity</button>
+					<button class="btn btn-secondary" onclick="loadUserPacks()">Load Packs</button>
 				</div>
 
 				<div id="inventory-container" class="nft-grid">
@@ -1602,6 +1691,26 @@
 							<path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
 						</svg>
 						<p class="empty-state-text">Connect wallet to view inventory</p>
+					</div>
+				</div>
+
+				<!-- User Activity -->
+				<div class="card" style="margin-top: 20px;">
+					<div class="card-header">
+						<span class="card-title">Recent Activity</span>
+					</div>
+					<div id="user-activity-container">
+						<div class="empty-state"><p class="empty-state-text">Click "Load Activity" to view</p></div>
+					</div>
+				</div>
+
+				<!-- User Packs -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">My Packs</span>
+					</div>
+					<div id="user-packs-container">
+						<div class="empty-state"><p class="empty-state-text">Click "Load Packs" to view</p></div>
 					</div>
 				</div>
 			</div>
@@ -1741,6 +1850,13 @@
 								Instances / Replicas (<span id="replicas-count">0</span>)
 							</div>
 							<div class="replicas-list" id="nft-replicas-list"></div>
+						</div>
+
+						<!-- Offers Section -->
+						<div class="detail-section" id="nft-offers-section" style="display: none;">
+							<div class="detail-section-title">Offers</div>
+							<div id="nft-offers-list"></div>
+							<button class="btn btn-sm btn-secondary" style="margin-top: 8px;" onclick="makeOffer(document.getElementById('nft-detail-id')?.textContent || '')">Make Offer</button>
 						</div>
 
 						<div class="detail-section">
@@ -2038,6 +2154,403 @@
 				<div class="card">
 					<div class="card-title">Activity Log</div>
 					<div class="log-container" id="nft-tracker-log"></div>
+				</div>
+			</div>
+
+			<!-- ============ MARKETPLACE PAGE ============ -->
+			<div class="page" id="page-marketplace">
+				<div class="page-header">
+					<h1 class="page-title">Marketplace</h1>
+					<p class="page-desc">Browse listings and recent sales</p>
+				</div>
+
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">Active Listings</span>
+						<div style="display: flex; gap: 8px; align-items: center;">
+							<select class="form-input" id="listing-sort" style="width: auto; padding: 6px 10px;">
+								<option value="recent">Recent</option>
+								<option value="price_asc">Price: Low to High</option>
+								<option value="price_desc">Price: High to Low</option>
+							</select>
+							<select class="form-input" id="listing-currency" style="width: auto; padding: 6px 10px;">
+								<option value="">All Currencies</option>
+								<option value="HIVE">HIVE</option>
+								<option value="HBD">HBD</option>
+							</select>
+							<button class="btn btn-sm btn-secondary" id="btn-load-listings">Refresh</button>
+						</div>
+					</div>
+					<div class="nft-grid" id="listings-container">
+						<div class="empty-state"><p class="empty-state-text">Click Refresh to load listings</p></div>
+					</div>
+				</div>
+
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">Recent Sales</span>
+						<button class="btn btn-sm btn-secondary" id="btn-load-sales">Load Sales</button>
+					</div>
+					<div id="sales-container">
+						<div class="empty-state"><p class="empty-state-text">Click to load recent sales</p></div>
+					</div>
+				</div>
+			</div>
+
+			<!-- ============ PACKS PAGE ============ -->
+			<div class="page" id="page-packs">
+				<div class="page-header">
+					<h1 class="page-title">Packs</h1>
+					<p class="page-desc">Browse, buy, open, and transfer packs</p>
+				</div>
+
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">Available Packs</span>
+						<button class="btn btn-sm btn-secondary" id="btn-load-packs">Refresh</button>
+					</div>
+					<div class="nft-grid" id="packs-container">
+						<div class="empty-state"><p class="empty-state-text">Loading...</p></div>
+					</div>
+				</div>
+
+				<!-- Pack Detail (hidden by default) -->
+				<div class="card" id="pack-detail-card" style="display: none;">
+					<div class="card-header">
+						<span class="card-title">Pack Detail</span>
+					</div>
+					<h3 id="pack-detail-name" style="font-size: 18px; margin-bottom: 4px;"></h3>
+					<p id="pack-detail-creator" style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;"></p>
+
+					<div class="stats-grid" id="pack-detail-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px;"></div>
+
+					<div id="pack-detail-actions" style="margin-bottom: 20px;"></div>
+
+					<div style="margin-bottom: 16px;">
+						<h4 style="font-size: 14px; color: var(--text-muted); margin-bottom: 8px;">Drop Table</h4>
+						<div id="pack-drop-table"></div>
+					</div>
+
+					<div>
+						<h4 style="font-size: 14px; color: var(--text-muted); margin-bottom: 8px;">History</h4>
+						<div id="pack-detail-history"></div>
+					</div>
+				</div>
+
+				<!-- User Packs -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">My Packs</span>
+						<button class="btn btn-sm btn-secondary" onclick="loadUserPacksOnPacksPage()">Load</button>
+					</div>
+					<div id="packs-page-user-container">
+						<div class="empty-state"><p class="empty-state-text">Connect wallet and click Load</p></div>
+					</div>
+				</div>
+			</div>
+
+			<!-- ============ PERMISSIONS PAGE ============ -->
+			<div class="page" id="page-permissions">
+				<div class="page-header">
+					<h1 class="page-title">Permissions</h1>
+					<p class="page-desc">NFT approvals, lending, and data operators</p>
+				</div>
+
+				<!-- NFT Approve -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">NFT Approve</span>
+						<span class="nft-badge replica">ACTIVE KEY</span>
+					</div>
+					<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Approve a spender to transfer a specific NFT instance on your behalf.</p>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">Instance ID</label>
+							<input class="form-input" id="perm-nft-approve-instance" placeholder="inst_abc123_1">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Spender</label>
+							<input class="form-input" id="perm-nft-approve-spender" placeholder="bob">
+						</div>
+					</div>
+					<div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+						<input type="checkbox" id="perm-nft-approve-approved" checked>
+						<label for="perm-nft-approve-approved" style="font-size: 13px;">Approved</label>
+					</div>
+					<button class="btn btn-primary" id="btn-nft-approve">Approve via Keychain</button>
+				</div>
+
+				<!-- NFT Approve All -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">NFT Approve All (Collection-wide)</span>
+						<span class="nft-badge replica">ACTIVE KEY</span>
+					</div>
+					<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Approve a spender for all your NFTs in a collection.</p>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">Collection ID</label>
+							<input class="form-input" id="perm-nft-approve-all-collection" placeholder="col_abc123">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Spender</label>
+							<input class="form-input" id="perm-nft-approve-all-spender" placeholder="bob">
+						</div>
+					</div>
+					<div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+						<input type="checkbox" id="perm-nft-approve-all-approved" checked>
+						<label for="perm-nft-approve-all-approved" style="font-size: 13px;">Approved</label>
+					</div>
+					<button class="btn btn-primary" id="btn-nft-approve-all">Approve All via Keychain</button>
+				</div>
+
+				<!-- NFT Transfer From -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">NFT Transfer From</span>
+						<span class="nft-badge replica">ACTIVE KEY</span>
+					</div>
+					<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Transfer an NFT you have approval for (as spender).</p>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">From (owner)</label>
+							<input class="form-input" id="perm-nft-xfer-from" placeholder="alice">
+						</div>
+						<div class="form-group">
+							<label class="form-label">To</label>
+							<input class="form-input" id="perm-nft-xfer-to" placeholder="charlie">
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="form-label">Instance ID</label>
+						<input class="form-input" id="perm-nft-xfer-instance" placeholder="inst_abc123_1">
+					</div>
+					<button class="btn btn-primary" id="btn-nft-transfer-from">Transfer From via Keychain</button>
+				</div>
+
+				<!-- Pack Approve -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">Pack Approve</span>
+						<span class="nft-badge replica">ACTIVE KEY</span>
+					</div>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">Spender</label>
+							<input class="form-input" id="perm-pack-approve-spender" placeholder="bob">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Pack ID</label>
+							<input class="form-input" id="perm-pack-approve-pack" placeholder="pack_abc123">
+						</div>
+					</div>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">Quantity</label>
+							<input class="form-input" type="number" id="perm-pack-approve-quantity" value="1" min="1">
+						</div>
+						<div class="form-group" style="display: flex; align-items: center; gap: 8px; padding-top: 20px;">
+							<input type="checkbox" id="perm-pack-approve-approved" checked>
+							<label for="perm-pack-approve-approved" style="font-size: 13px;">Approved</label>
+						</div>
+					</div>
+					<button class="btn btn-primary" id="btn-pack-approve">Approve via Keychain</button>
+				</div>
+
+				<!-- Pack Transfer From -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">Pack Transfer From</span>
+						<span class="nft-badge replica">ACTIVE KEY</span>
+					</div>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">From (owner)</label>
+							<input class="form-input" id="perm-pack-xfer-from" placeholder="alice">
+						</div>
+						<div class="form-group">
+							<label class="form-label">To</label>
+							<input class="form-input" id="perm-pack-xfer-to" placeholder="charlie">
+						</div>
+					</div>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">Pack ID</label>
+							<input class="form-input" id="perm-pack-xfer-pack" placeholder="pack_abc123">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Quantity</label>
+							<input class="form-input" type="number" id="perm-pack-xfer-quantity" value="1" min="1">
+						</div>
+					</div>
+					<button class="btn btn-primary" id="btn-pack-transfer-from">Transfer From via Keychain</button>
+				</div>
+
+				<!-- Lending -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">NFT Lending</span>
+						<span class="nft-badge replica">ACTIVE KEY</span>
+					</div>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">Instance ID</label>
+							<input class="form-input" id="perm-lend-instance" placeholder="inst_abc123_1">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Borrower</label>
+							<input class="form-input" id="perm-lend-borrower" placeholder="bob">
+						</div>
+					</div>
+					<div class="btn-group">
+						<button class="btn btn-primary" id="btn-nft-lend">Lend via Keychain</button>
+						<button class="btn btn-secondary" id="btn-nft-return">Return via Keychain</button>
+					</div>
+					<div class="form-group" style="margin-top: 12px;">
+						<label class="form-label">Instance ID (for Return)</label>
+						<input class="form-input" id="perm-return-instance" placeholder="inst_abc123_1">
+					</div>
+				</div>
+
+				<!-- Data Operator -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">Data Operator Approve</span>
+						<span class="nft-badge replica">ACTIVE KEY</span>
+					</div>
+					<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Allow an operator to set data on NFTs in your collection.</p>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">Collection ID</label>
+							<input class="form-input" id="perm-data-op-collection" placeholder="col_abc123">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Operator</label>
+							<input class="form-input" id="perm-data-op-operator" placeholder="operator-account">
+						</div>
+					</div>
+					<div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+						<input type="checkbox" id="perm-data-op-approved" checked>
+						<label for="perm-data-op-approved" style="font-size: 13px;">Approved</label>
+					</div>
+					<button class="btn btn-primary" id="btn-data-operator-approve">Approve via Keychain</button>
+				</div>
+
+				<!-- Set Data From (as operator) -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">Set Data From (as Operator)</span>
+						<span class="nft-badge replica">ACTIVE KEY</span>
+					</div>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">NFT ID</label>
+							<input class="form-input" id="perm-set-data-from-nft" placeholder="seed_abc123">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Instance DNA</label>
+							<input class="form-input" id="perm-set-data-from-dna" placeholder="dna_hash">
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="form-label">Data (JSON)</label>
+						<textarea class="form-input" id="perm-set-data-from-data" rows="3" placeholder='{"level": 5}'></textarea>
+					</div>
+					<div class="form-group">
+						<label class="form-label">Tags (comma-separated)</label>
+						<input class="form-input" id="perm-set-data-from-tags" placeholder="tag1, tag2">
+					</div>
+					<button class="btn btn-primary" id="btn-set-data-from">Set Data via Keychain</button>
+				</div>
+
+				<!-- Preview -->
+				<div class="card" id="permissions-preview" style="display: none;">
+					<div class="card-header">
+						<span class="card-title">Generated Operation</span>
+					</div>
+					<pre id="permissions-json" style="background: var(--bg); padding: 16px; border-radius: 6px; font-family: var(--mono); font-size: 12px; overflow-x: auto; color: var(--accent); max-height: 300px; overflow-y: auto;"></pre>
+				</div>
+			</div>
+
+			<!-- ============ SPV VERIFICATION PAGE ============ -->
+			<div class="page" id="page-spv">
+				<div class="page-header">
+					<h1 class="page-title">SPV Verification</h1>
+					<p class="page-desc">Trustless verification against Hive L1 blockchain</p>
+				</div>
+
+				<!-- Verify Ownership -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">Verify NFT Ownership</span>
+					</div>
+					<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Samples the NFT's history events and verifies against Hive L1 to confirm current ownership.</p>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">NFT ID</label>
+							<input class="form-input" id="spv-ownership-nft" placeholder="seed_abc123">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Expected Owner</label>
+							<input class="form-input" id="spv-ownership-owner" placeholder="alice">
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="form-label">Sample Size</label>
+						<input class="form-input" type="number" id="spv-ownership-samples" value="5" min="1" max="20" style="width: 100px;">
+					</div>
+					<button class="btn btn-primary" id="btn-verify-ownership">Verify Ownership</button>
+					<div id="spv-ownership-result" style="display: none; margin-top: 16px;"></div>
+				</div>
+
+				<!-- Verify On-Chain -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">Verify Operation On-Chain</span>
+					</div>
+					<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Verify that a specific NFTLox operation exists on Hive L1.</p>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">Transaction ID</label>
+							<input class="form-input" id="spv-onchain-txid" placeholder="abc123def456...">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Block Number</label>
+							<input class="form-input" type="number" id="spv-onchain-block" placeholder="12345678">
+						</div>
+					</div>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">Expected Action (optional)</label>
+							<input class="form-input" id="spv-onchain-action" placeholder="mint, transfer, etc.">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Expected Signer (optional)</label>
+							<input class="form-input" id="spv-onchain-signer" placeholder="alice">
+						</div>
+					</div>
+					<button class="btn btn-primary" id="btn-verify-on-chain">Verify On-Chain</button>
+					<div id="spv-onchain-result" style="display: none; margin-top: 16px;"></div>
+				</div>
+
+				<!-- Verify Pack Open -->
+				<div class="card">
+					<div class="card-header">
+						<span class="card-title">Verify Pack Open</span>
+					</div>
+					<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Verify that a pack_open transaction produced the correct NFTs using deterministic RNG replay.</p>
+					<div class="form-row">
+						<div class="form-group">
+							<label class="form-label">Transaction ID</label>
+							<input class="form-input" id="spv-pack-txid" placeholder="abc123def456...">
+						</div>
+						<div class="form-group">
+							<label class="form-label">Block Number</label>
+							<input class="form-input" type="number" id="spv-pack-block" placeholder="12345678">
+						</div>
+					</div>
+					<button class="btn btn-primary" id="btn-verify-pack-open">Verify Pack Open</button>
+					<div id="spv-pack-result" style="display: none; margin-top: 16px;"></div>
 				</div>
 			</div>
 

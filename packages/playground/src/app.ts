@@ -1,4 +1,3 @@
-import { getNFTsByOwner, validateTransfer } from "./api";
 import {
 	createAtomicTransferOperations,
 	getTrackingAmount,
@@ -6,6 +5,7 @@ import {
 	PROTOCOL_ID,
 	type SeedNFTWithArtId,
 	type HiveOperation,
+	IndexerError,
 } from "nftlox-sdk";
 import {
 	createSession,
@@ -15,33 +15,84 @@ import {
 	initializeSeedBatches,
 	type MintingSession,
 } from "./persistence";
+import { $, log, mintLog } from "./shared/dom";
+import { indexer } from "./shared/indexer";
+import { setConnectedUser as syncConnectedUser } from "./shared/state";
 
-const $ = (id: string) => document.getElementById(id);
 let selectedNft: { id: string; collectionId: string; edition: number; instanceDna: string } | null = null;
 let connectedUser: string | null = null;
 let _currentStep = 1;
 let uploadedSeeds: SeedNFTWithArtId[] = [];
 let previewData: any = null;
-let broadcastPhase = 0; // 0 = collection pending, 1 = seeds pending, 2 = complete
+let broadcastPhase = 0;
 let validationPassed = false;
 let currentSession: MintingSession | null = null;
 
-// ============ LOGGING ============
+// ============ INDEXER-BACKED HELPERS ============
 
-function log(msg: string, type = "info", containerId = "log") {
-	const el = $(containerId);
-	if (!el) return;
-	const entry = document.createElement("div");
-	entry.className = "log-entry";
-	entry.innerHTML = `
-		<span class="log-time">${new Date().toLocaleTimeString()}</span>
-		<span class="log-msg ${type}">${msg}</span>
-	`;
-	el.insertBefore(entry, el.firstChild);
+async function getNFTsByOwner(owner: string) {
+	const nfts = await indexer.getUserNfts(owner);
+	return nfts.filter(n => n.status !== "burned").map(n => ({
+		id: n.id,
+		collectionId: n.collection_id,
+		name: n.name,
+		imageUrl: n.image_url,
+		owner: n.owner,
+		edition: n.edition,
+		dna: n.instance_dna,
+		instanceDna: n.instance_dna,
+		mintedAt: n.created_at,
+		mintedBy: n.minted_by,
+		burned: n.status === "burned",
+		listed: n.status === "listed",
+		listingPrice: n.listing_price ? { amount: n.listing_price, currency: n.listing_currency } : undefined,
+		isSeed: n.nft_type === "seed",
+		maxSupply: n.max_replicas,
+		distributed: n.distributed,
+		isReplica: n.nft_type === "replica",
+		originalId: n.original_id,
+		seedId: n.seed_id,
+		instanceNumber: n.instance_number,
+		imageHash: n.image_hash,
+	}));
 }
 
-function mintLog(msg: string, type = "info") {
-	log(msg, type, "mint-log");
+async function validateTransfer(nftId: string, currentUser: string) {
+	try {
+		const nft = await indexer.getNft(nftId);
+
+		if (nft.status === "burned") {
+			return { valid: false as const, error: "NFT has been burned" };
+		}
+
+		if (nft.owner.toLowerCase() !== currentUser.toLowerCase()) {
+			return { valid: false as const, error: `You are not the owner (@${nft.owner})` };
+		}
+
+		const mapped = {
+			id: nft.id,
+			collectionId: nft.collection_id,
+			name: nft.name,
+			imageUrl: nft.image_url,
+			owner: nft.owner,
+			edition: nft.edition,
+			dna: nft.instance_dna,
+			instanceDna: nft.instance_dna,
+			imageHash: nft.image_hash,
+			listed: nft.status === "listed",
+		};
+
+		if (nft.status === "listed") {
+			return { valid: true as const, warning: "Warning: Transfer will unlist NFT from marketplace", nft: mapped };
+		}
+
+		return { valid: true as const, nft: mapped };
+	} catch (e) {
+		if (e instanceof IndexerError && e.status === 404) {
+			return { valid: false as const, error: "NFT not found" };
+		}
+		return { valid: false as const, error: String(e) };
+	}
 }
 
 // ============ NAVIGATION ============
@@ -110,6 +161,7 @@ $("btn-connect")?.addEventListener("click", () => {
 		const user = prompt("Enter your Hive username:");
 		if (user) {
 			connectedUser = user.toLowerCase();
+			syncConnectedUser(connectedUser);
 			const display = $("user-display");
 			const dot = $("keychain-dot");
 			if (display) display.textContent = `@${connectedUser}`;
@@ -403,6 +455,9 @@ async function loadNftDetail(nftId: string) {
 		if (mintedByEl) mintedByEl.textContent = nft.mintedBy ? `@${nft.mintedBy}` : "-";
 		if (mintedAtEl) mintedAtEl.textContent = nft.mintedAt ? new Date(nft.mintedAt).toLocaleDateString() : "-";
 
+		// Load offers
+		loadNftOffers(nftId);
+
 		log(`Loaded NFT: ${nft.name}`, "success");
 	} catch (e) {
 		log(`Error: ${(e as Error).message}`, "error");
@@ -566,11 +621,11 @@ async function transferNft() {
 		nftId: nft.id,
 		collectionId: nft.collectionId,
 		edition: nft.edition,
-		instanceDna: nft.instanceDna || nft.dna,
-		from: connectedUser,
+		instanceDna: nft.instanceDna || nft.dna || "",
+		from: connectedUser!,
 		to: to,
-		imageUrl: nft.imageUrl,
-		imageHash: nft.imageHash,
+		imageUrl: nft.imageUrl ?? undefined,
+		imageHash: nft.imageHash ?? undefined,
 	});
 
 	log(`Transferring to @${to}...`);
@@ -2220,10 +2275,202 @@ function selectBullForIssue(index: number) {
 (window as any).loadSampleBulls = loadSampleBulls;
 (window as any).selectBullForIssue = selectBullForIssue;
 
+// ============ NEW VIEW MODULES ============
+
+import { initMarketplace } from "./views/marketplace";
+import { initPacks } from "./views/packs";
+import { initPermissions } from "./views/permissions";
+import { initSpv } from "./views/spv";
+
+// ============ OFFERS IN NFT DETAIL ============
+
+async function loadNftOffers(nftId: string) {
+	const container = $("nft-offers-section");
+	if (!container) return;
+
+	try {
+		const response = await fetch(`/api/nft/${nftId}/offers?status=active`);
+		const data = await response.json();
+		const offers = data.offers || [];
+
+		if (offers.length === 0) {
+			container.style.display = "none";
+			return;
+		}
+
+		container.style.display = "block";
+		const listEl = $("nft-offers-list");
+		if (listEl) {
+			listEl.innerHTML = offers.map((o: any) => `
+				<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid var(--border); font-size: 13px;">
+					<div>
+						<span style="color: var(--accent); font-weight: 500;">${o.price_amount} ${o.price_currency}</span>
+						<span style="color: var(--text-dim);"> by @${o.offerer}</span>
+					</div>
+					<div style="display: flex; gap: 6px;">
+						${connectedUser ? `
+							<button class="btn btn-sm btn-primary" onclick="acceptOffer('${nftId}', '${o.id}')">Accept</button>
+							<button class="btn btn-sm btn-secondary" onclick="rejectOffer('${nftId}', '${o.id}')">Reject</button>
+						` : ""}
+					</div>
+				</div>
+			`).join("");
+		}
+	} catch { /* silently fail */ }
+}
+
+async function makeOffer(nftId: string) {
+	if (!connectedUser) { log("Connect wallet first", "error"); return; }
+
+	const amount = prompt("Offer amount (e.g. 10.000):");
+	if (!amount) return;
+	const currency = prompt("Currency (HIVE or HBD):") || "HIVE";
+
+	try {
+		const response = await fetch("/api/build/offer", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				nftId,
+				offerer: connectedUser,
+				price: { amount, currency: currency.toUpperCase() },
+			}),
+		});
+		const result = await response.json();
+
+		if (!result.success) {
+			log(`Error: ${result.error || result.errors?.[0]?.message}`, "error");
+			return;
+		}
+
+		(window as any).hive_keychain.requestBroadcast(
+			connectedUser,
+			[result.operation],
+			result.keyType || "Posting",
+			(res: any) => {
+				if (res.success) {
+					log("Offer placed!", "success");
+					loadNftOffers(nftId);
+				} else {
+					log(`Failed: ${res.error}`, "error");
+				}
+			},
+		);
+	} catch (e) {
+		log(`Error: ${(e as Error).message}`, "error");
+	}
+}
+
+async function acceptOffer(nftId: string, offerId: string) {
+	if (!connectedUser) return;
+	try {
+		const response = await fetch("/api/build/accept-offer", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ nftId, offerId, owner: connectedUser, paymentTxId: "pending" }),
+		});
+		const result = await response.json();
+		if (!result.success) { log(`Error: ${result.error}`, "error"); return; }
+
+		(window as any).hive_keychain.requestBroadcast(connectedUser, [result.operation], "Posting", (res: any) => {
+			if (res.success) { log("Offer accepted!", "success"); } else { log(`Failed: ${res.error}`, "error"); }
+		});
+	} catch (e) { log(`Error: ${(e as Error).message}`, "error"); }
+}
+
+async function rejectOffer(nftId: string, offerId: string) {
+	if (!connectedUser) return;
+	try {
+		const response = await fetch("/api/build/reject-offer", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ nftId, offerId, owner: connectedUser }),
+		});
+		const result = await response.json();
+		if (!result.success) { log(`Error: ${result.error}`, "error"); return; }
+
+		(window as any).hive_keychain.requestBroadcast(connectedUser, [result.operation], "Posting", (res: any) => {
+			if (res.success) { log("Offer rejected!", "success"); } else { log(`Failed: ${res.error}`, "error"); }
+		});
+	} catch (e) { log(`Error: ${(e as Error).message}`, "error"); }
+}
+
+(window as any).makeOffer = makeOffer;
+(window as any).acceptOffer = acceptOffer;
+(window as any).rejectOffer = rejectOffer;
+(window as any).loadNftOffers = loadNftOffers;
+
+// ============ DASHBOARD STATS ============
+
+async function loadDashboardStats() {
+	const container = $("dashboard-stats");
+	if (!container) return;
+
+	try {
+		const response = await fetch("/api/stats");
+		const stats = await response.json();
+
+		container.innerHTML = `
+			<div class="stat-box"><div class="stat-label">Collections</div><div class="stat-value">${stats.total_collections ?? 0}</div></div>
+			<div class="stat-box"><div class="stat-label">NFTs</div><div class="stat-value">${stats.total_nfts ?? 0}</div></div>
+			<div class="stat-box"><div class="stat-label">Seeds</div><div class="stat-value">${stats.total_seeds ?? 0}</div></div>
+			<div class="stat-box"><div class="stat-label">Instances</div><div class="stat-value">${stats.total_instances ?? 0}</div></div>
+			<div class="stat-box"><div class="stat-label">Listed</div><div class="stat-value">${stats.total_listed ?? 0}</div></div>
+			<div class="stat-box"><div class="stat-label">Sales</div><div class="stat-value">${stats.total_sales ?? 0}</div></div>
+			<div class="stat-box"><div class="stat-label">Owners</div><div class="stat-value">${stats.unique_owners ?? 0}</div></div>
+			<div class="stat-box"><div class="stat-label">Active Offers</div><div class="stat-value">${stats.active_offers ?? 0}</div></div>
+		`;
+	} catch { /* silently fail */ }
+}
+
+(window as any).loadDashboardStats = loadDashboardStats;
+
+// ============ USER ACTIVITY ============
+
+async function loadUserActivity() {
+	const container = $("user-activity-container");
+	if (!container || !connectedUser) return;
+
+	container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Loading...</p></div>';
+
+	try {
+		const response = await fetch(`/api/user/${connectedUser}/activity?limit=20`);
+		const data = await response.json();
+		const events = data.events || [];
+
+		if (events.length === 0) {
+			container.innerHTML = '<div class="empty-state"><p class="empty-state-text">No activity yet</p></div>';
+			return;
+		}
+
+		container.innerHTML = `<table class="data-table">
+			<thead><tr><th>Event</th><th>NFT</th><th>From</th><th>To</th><th>Date</th></tr></thead>
+			<tbody>${events.map((e: any) => `
+				<tr>
+					<td>${e.event_type}</td>
+					<td style="font-family: var(--mono); font-size: 11px;">${e.nft_id}</td>
+					<td>${e.from_account ? `@${e.from_account}` : "-"}</td>
+					<td>${e.to_account ? `@${e.to_account}` : "-"}</td>
+					<td style="color: var(--text-dim);">${new Date(e.timestamp).toLocaleDateString()}</td>
+				</tr>
+			`).join("")}</tbody>
+		</table>`;
+	} catch (e) {
+		container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Error loading activity</p></div>';
+	}
+}
+
+(window as any).loadUserActivity = loadUserActivity;
+
 // ============ INIT ============
 
 setTimeout(checkKeychain, 500);
 loadProtocolVersion();
 loadCollections();
+loadDashboardStats();
+initMarketplace();
+initPacks();
+initPermissions();
+initSpv();
 log("Console ready");
 

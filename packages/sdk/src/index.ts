@@ -349,3 +349,23 @@ export {
 	runAudit,
 	runSingleVerification,
 } from "./spv";
+
+// ============ INDEXER CLIENT ============
+export {
+	createIndexerClient,
+	IndexerError,
+	type IndexerClient,
+	type SyncStatus,
+	type HealthStatus,
+	type ProtocolStats,
+	type IndexerCollection,
+	type CollectionStats,
+	type IndexerNft,
+	type IndexerOffer,
+	type IndexerPack,
+	type PackBalance,
+	type IndexerHistoryEvent,
+	type SaleEvent,
+	type OwnershipRecord as IndexerOwnershipRecord,
+	type PackHistoryEvent,
+} from "./client";
