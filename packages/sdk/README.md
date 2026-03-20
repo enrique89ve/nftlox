@@ -16,7 +16,10 @@ import {
   createDeterministicMintPayload,
   createDistributePayload,
   createTransferPayload,
-  createAtomicTransferOperations,
+  createNftLendOperation,
+  createNftReturnOperation,
+  runAudit,
+  createAuditorConfig,
 } from "nftlox-sdk";
 
 // 1. Create a collection
@@ -41,22 +44,19 @@ const seed = createDeterministicMintPayload({
   maxReplicas: 100,
 });
 
-// 3. Distribute an instance
-const instance = createDistributePayload({
-  seedId: seed.data.id,
-  to: "recipient",
-  instanceNumber: 1,
-});
+// 3. Lend an NFT (protocol-level, owner keeps ownership)
+const lendOp = createNftLendOperation(
+  { instanceId: "nft_abc123", borrower: "bob" },
+  "alice", // owner signs with active key
+);
 
-// 4. Transfer with atomic notification (0.001 HIVE)
-const ops = createAtomicTransferOperations({
-  nftId: "seed_xxx",
-  collectionId: "col_xxx",
-  edition: 1,
-  instanceDna: "...",
-  from: "sender",
-  to: "recipient",
+// 4. SPV Audit — verify indexer isn't lying
+const config = createAuditorConfig({
+  indexerBaseUrl: "https://indexer.nftlox.com",
+  sampleSize: 3,
 });
+const report = await runAudit(config);
+console.log(report.verified, "of", report.samplesChecked, "verified");
 ```
 
 ## API Reference
@@ -67,10 +67,13 @@ const ops = createAtomicTransferOperations({
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
 | `PROTOCOL_VERSION` | `"0.2.1"` |
-| `MIN_PROTOCOL_VERSION` | `"0.2.0"` |
-| `ALL_ACTIONS` | All 13 protocol actions |
+| `ALL_ACTIONS` | All 29 protocol actions |
 | `CORE_ACTIONS` | 7 core actions |
 | `MARKETPLACE_ACTIONS` | 6 marketplace actions |
+| `PACK_ACTIONS` | 4 pack actions |
+| `APPROVE_ACTIONS` | 5 approve/transferFrom actions |
+| `LENDING_ACTIONS` | 2 lending actions (nft_lend, nft_return) |
+| `DATA_OPERATOR_ACTIONS` | 2 data operator actions |
 
 ### Payload Creators
 
@@ -81,7 +84,6 @@ const ops = createAtomicTransferOperations({
 | `createMintPayload()` | Mint NFT (random ID) |
 | `createDeterministicMintPayload()` | Mint NFT (deterministic ID) |
 | `createDistributePayload()` | Distribute instance from seed |
-| `createDeterministicDistributePayload()` | Distribute (deterministic ID) |
 | `createTransferPayload()` | Transfer NFT |
 | `createBurnPayload()` | Burn NFT |
 | `createReplicatePayload()` | Create replica |
@@ -92,15 +94,29 @@ const ops = createAtomicTransferOperations({
 | `createOfferPayload()` | Make offer |
 | `createAcceptOfferPayload()` | Accept offer |
 | `createRejectOfferPayload()` | Reject offer |
+| `createPackCreatePayload()` | Create pack |
+| `createPackBuyPayload()` | Buy pack |
+| `createPackTransferPayload()` | Transfer pack |
+| `createPackOpenPayload()` | Open pack |
+| `createNftApprovePayload()` | Approve spender for NFT |
+| `createNftLendPayload()` | Lend NFT to borrower |
+| `createNftReturnPayload()` | Return lent NFT |
+| `createDataOperatorApprovePayload()` | Approve data operator |
 
-### Hive Operations
+### SPV Verification ("Boleto Suizo")
+
+Trustless verification — the browser reads Hive L1 directly and replays deterministic logic to verify the indexer.
 
 | Function | Description |
 |----------|-------------|
-| `createAtomicTransferOperations()` | Build transfer + custom_json pair |
-| `buildTransferMemo()` | Build nftlox memo string |
-| `parseTransferMemo()` | Parse nftlox memo |
-| `getTrackingAmount()` | Returns "0.001 HIVE" |
+| `runAudit(config)` | Random sample audit of pack_open events |
+| `runSingleVerification(config, txId, blockNum)` | Verify a specific pack_open |
+| `verifyNftOwnership(params)` | Verify NFT ownership chain (samples up to 3 events) |
+| `verifyOperationOnChain(params)` | Verify any operation exists on L1 |
+| `fetchTransaction(config, txId)` | Fetch tx from HAFAH REST API |
+| `parseNftloxOperation(tx)` | Parse NFTLox custom_json from tx |
+| `replayDropTableResolution(params)` | Replay RNG locally (pure function) |
+| `verifyDeterministicDerivation(params)` | Verify instanceId/DNA/accessKey derivation |
 
 ### DNA & ID Generation
 
@@ -109,41 +125,41 @@ const ops = createAtomicTransferOperations({
 | `generateOriginDna()` | Collection-level DNA (async) |
 | `generateInstanceDna()` | NFT-level DNA |
 | `generateAccessKey()` | Unique access key |
-| `generateImageHash()` | Image hash from URL |
 | `generateDeterministicCollectionId()` | Deterministic collection ID |
 | `generateDeterministicSeedId()` | Deterministic seed ID |
 | `generateDeterministicInstanceId()` | Deterministic instance ID |
-| `isSeedId()` / `isInstanceId()` / `isReplicaId()` | ID type checks |
+| `generateDeterministicPackId()` | Deterministic pack ID |
+| `resolveDropTable()` | Deterministic RNG drop table resolution |
+| `isSeedId()` / `isInstanceId()` / `isPackId()` | ID type checks |
 
 ### Validation
 
 | Function | Description |
 |----------|-------------|
-| `validateCollectionInput()` | Validate collection creation input |
-| `validateMintInput()` | Validate mint input |
+| `validateCollectionInput()` | Validate collection creation |
+| `validateMintInput()` | Validate mint |
 | `validatePrice()` | Validate price object |
-| `validateSymbol()` | Validate collection symbol |
-| `estimateOperationSize()` | Estimate JSON size |
+| `validatePackCreateInput()` | Validate pack creation |
+| `validatePackOpenInput()` | Validate pack open |
+| `validateNftLendInput()` | Validate lend |
+| `validateNftReturnInput()` | Validate return |
 | `splitIntoBatches()` | Split items into TX batches |
 
 ### Types
 
-All TypeScript interfaces are exported: `CollectionData`, `NFTData`, `ProtocolPayload`, `Price`, `HiveOperation`, `AtomicTransferInput`, `HistoryEvent`, `OwnershipRecord`, and more.
+All TypeScript interfaces are exported: `CollectionData`, `NFTData`, `ProtocolPayload`, `Price`, `HiveOperation`, `PackDropEntry`, `NftLendData`, `PackOpenVerificationResult`, `AuditReport`, and more.
 
 ## Entity Hierarchy
 
 ```
 Collection
-  └── Seed (master NFT, maxReplicas = N)
-        ├── Instance #1 (distributed copy)
-        ├── Instance #2
-        └── Instance #N
+  ├── Seed (master NFT, maxReplicas = N)
+  |     ├── Instance #1 (distributed copy)
+  |     ├── Instance #2
+  |     └── Instance #N
+  └── Pack (semi-fungible, contains drop table)
+        └── pack_open → resolves RNG → mints instances
 ```
-
-## Related Projects
-
-- [nftlox-indexer](https://github.com/enrique89ve/nftlox-indexer) — Blockchain indexer + REST API
-- [nftlox-playground](https://github.com/enrique89ve/nftlox-playground) — Web UI for testing
 
 ## Testing
 
