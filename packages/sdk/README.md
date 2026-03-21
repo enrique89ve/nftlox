@@ -14,7 +14,7 @@ bun add nftlox-sdk
 import {
   createDeterministicCollectionPayload,
   createDeterministicMintPayload,
-  createDistributePayload,
+  createBulkDistributePayload,
   createTransferPayload,
   createNftLendOperation,
   createNftReturnOperation,
@@ -67,7 +67,7 @@ console.log(report.verified, "of", report.samplesChecked, "verified");
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
 | `PROTOCOL_VERSION` | `"0.2.1"` |
-| `ALL_ACTIONS` | All 29 protocol actions |
+| `ALL_ACTIONS` | All 26 protocol actions |
 | `CORE_ACTIONS` | 7 core actions |
 | `MARKETPLACE_ACTIONS` | 6 marketplace actions |
 | `PACK_ACTIONS` | 4 pack actions |
@@ -83,7 +83,7 @@ console.log(report.verified, "of", report.samplesChecked, "verified");
 | `createDeterministicCollectionPayload()` | Create collection (deterministic ID) |
 | `createMintPayload()` | Mint NFT (random ID) |
 | `createDeterministicMintPayload()` | Mint NFT (deterministic ID) |
-| `createDistributePayload()` | Distribute instance from seed |
+| `createBulkDistributePayload()` | Bulk distribute instances from seed |
 | `createTransferPayload()` | Transfer NFT |
 | `createBurnPayload()` | Burn NFT |
 | `createReplicatePayload()` | Create replica |

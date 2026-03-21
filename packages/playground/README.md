@@ -1,38 +1,43 @@
 # NFTLox Playground
 
-Web UI for testing the [NFTLox Protocol](https://github.com/enrique89ve/nftlox-sdk) on Hive blockchain. Create collections, mint NFTs, distribute instances, transfer, list on marketplace — all through a browser interface.
+Web UI for testing the NFTLox Protocol on Hive blockchain. Vanilla HTML/TypeScript frontend served by a Bun HTTP server that proxies the indexer API and builds Hive operations via the SDK.
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) v1.0+
 - [Hive Keychain](https://hive-keychain.com/) browser extension
+- NFTLox Indexer running on port 3050
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/enrique89ve/nftlox-playground.git
-cd nftlox-playground
+# From the monorepo root
 bun install
-bun run dev
+bun run dev:playground
 ```
 
 Open `http://localhost:3040` in your browser.
 
 ## Features
 
-- Create collections with metadata and rules
-- Mint seed NFTs (deterministic IDs, anti-duplication)
-- Batch minting with session persistence
-- Distribute instances from seeds
-- Transfer NFTs with atomic notifications (0.001 HIVE)
-- List/unlist on marketplace
-- View NFT history and ownership chain
-- Real-time blockchain state via HafSQL
+- **Collections**: Create collections with metadata and rules
+- **Minting**: Mint seed NFTs with deterministic IDs and anti-duplication
+- **Distribution**: Bulk distribute instances from seeds
+- **Transfers**: Transfer NFTs with atomic notifications (0.001 HIVE)
+- **Marketplace**: List, unlist, buy, make/accept/reject offers
+- **Packs**: Create, buy, open, and transfer packs
+- **Lending**: Lend/return NFTs at protocol level
+- **Permissions**: NFT approvals, collection-wide approvals, data operators
+- **SPV Verification**: Trustless verification of ownership, transactions, and pack opens against Hive L1
+- **NFT Tracker**: BlockTrades standard metadata operations
+- **Search**: Look up users and NFTs
+- **History**: Full NFT event history and ownership chain
 
-## Related Projects
+## Configuration
 
-- [nftlox-sdk](https://github.com/enrique89ve/nftlox-sdk) — Protocol core library
-- [nftlox-indexer](https://github.com/enrique89ve/nftlox-indexer) — Blockchain indexer + REST API
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `INDEXER_URL` | `http://localhost:3050` | Indexer API base URL |
 
 ## License
 
