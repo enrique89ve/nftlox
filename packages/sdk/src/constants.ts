@@ -46,8 +46,12 @@ export const ACTION_MINT = "mint";
 export const ACTION_TRANSFER = "transfer";
 export const ACTION_BURN = "burn";
 export const ACTION_REPLICATE = "replicate";
-export const ACTION_DISTRIBUTE = "distribute";
+export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
+
+// Bulk Distribute Limits
+export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
+export const MAX_BULK_DISTRIBUTE_TOTAL = 100;
 
 // Protocol Actions (Marketplace)
 export const ACTION_LIST = "list";
@@ -85,7 +89,7 @@ export const CORE_ACTIONS = [
 	ACTION_TRANSFER,
 	ACTION_BURN,
 	ACTION_REPLICATE,
-	ACTION_DISTRIBUTE,
+	ACTION_BULK_DISTRIBUTE,
 	ACTION_SET_DATA,
 ] as const;
 

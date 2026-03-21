@@ -2,7 +2,6 @@ import index from "../public/index.html";
 import {
 	PROTOCOL_VERSION,
 	MIN_PROTOCOL_VERSION,
-	HASH_VERSION,
 } from "nftlox-sdk";
 import { PayloadBuilder } from "nftlox-sdk";
 import { queryRoutes } from "./routes/query";
@@ -115,7 +114,7 @@ Query API (via Indexer):
 
 Build API (27 endpoints):
   POST /api/build/collection       POST /api/build/seeds
-  POST /api/build/distribute       POST /api/build/transfer
+  POST /api/build/bulk-distribute  POST /api/build/transfer
   POST /api/build/list             POST /api/build/unlist
   POST /api/build/burn             POST /api/build/buy
   POST /api/build/preview-ids
@@ -150,7 +149,6 @@ Legacy Batch:
   POST /api/batch/preview
   POST /api/batch/collection
   POST /api/batch/mint-seeds
-  POST /api/batch/distribute
   POST /api/batch/collection-deterministic
   POST /api/batch/mint-seeds-deterministic
 

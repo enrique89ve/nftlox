@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { getNftById, getNftInstances } from "@/db/queries/nfts.ts";
+import { getNftById, queryNfts } from "@/db/queries/nfts.ts";
 import { getNftHistory, getNftOwnershipChain } from "@/db/queries/history.ts";
 import { getOffersByNft } from "@/db/queries/offers.ts";
 
@@ -30,7 +30,7 @@ export const nftsRoutes = new Elysia({ prefix: "/api/nfts", tags: ["NFTs"] })
 		detail: { summary: "Get ownership chain", description: "Provenance chain showing all ownership transfers" },
 	})
 	.get("/:id/instances", async ({ params, query }) => {
-		return getNftInstances(params.id, query.limit, query.offset);
+		return queryNfts({ by: "seed", seedId: params.id }, { limit: query.limit, offset: query.offset });
 	}, {
 		params: t.Object({ id: t.String() }),
 		query: t.Object({

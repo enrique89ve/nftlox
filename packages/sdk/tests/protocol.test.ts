@@ -30,7 +30,7 @@ import {
 } from "../src/index";
 
 describe("Protocol Version", () => {
-	test("version should be 0.2.0", () => {
+	test("version should be 0.2.1", () => {
 		expect(PROTOCOL_VERSION).toBe("0.2.1");
 	});
 });

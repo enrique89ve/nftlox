@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import { getLastBlock, getSyncStatus } from "@/db/queries/sync.ts";
 import { getHeadBlockNum } from "@/scanner/hive-client.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
+import { getStartupTime } from "@/scanner/sync-state.ts";
 
 const STALE_THRESHOLD_MS = 60_000; // 1 minute without processing = stale
 
@@ -36,9 +37,12 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			const blocksBehind = Math.max(0, headBlock - sync.lastBlock);
 
 			const dbAlive = sync.lastBlock > 0;
-			const syncActive = secondsSinceUpdate < STALE_THRESHOLD_MS / 1000;
-			const inSync = blocksBehind < 100;
-			const healthy = dbAlive && syncActive;
+			const startupTime = getStartupTime();
+			const updatedAfterStartup = startupTime > 0 && lastUpdateMs > startupTime;
+			const syncActive = secondsSinceUpdate < STALE_THRESHOLD_MS / 1000 && updatedAfterStartup;
+			const hiveReachable = headBlock > 0;
+			const inSync = hiveReachable && blocksBehind < 100;
+			const healthy = dbAlive && (syncActive || inSync);
 
 			if (!healthy) {
 				set.status = 503;
@@ -47,6 +51,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			return {
 				status: healthy ? "healthy" : "unhealthy",
 				db: dbAlive ? "ok" : "unreachable",
+				hive: hiveReachable ? "ok" : "unreachable",
 				sync: syncActive ? "active" : "stale",
 				inSync,
 				lastBlock: sync.lastBlock,

@@ -28,11 +28,11 @@ export interface HealthStatus {
 	status: string;
 	db: string;
 	sync: string;
-	inSync: boolean;
-	lastBlock: number;
-	headBlock: number;
-	blocksBehind: number;
-	secondsSinceUpdate: number;
+	inSync?: boolean;
+	lastBlock?: number;
+	headBlock?: number;
+	blocksBehind?: number;
+	secondsSinceUpdate?: number;
 }
 
 export interface ProtocolStats {
@@ -64,6 +64,7 @@ export interface IndexerCollection {
 	burnable: boolean;
 	royalty_pct: number;
 	royalty_recipient: string | null;
+	json_id: string | null;
 	seed_count: number;
 	instance_count: number;
 	block_num: number;
@@ -81,33 +82,40 @@ export interface CollectionStats {
 	floor_price: number | null;
 }
 
-export interface IndexerNft {
+export interface IndexerNftSummary {
 	id: string;
 	collection_id: string;
 	nft_type: "seed" | "instance" | "replica";
 	status: "active" | "listed" | "burned" | "lent";
+	edition: number;
 	owner: string;
 	name: string;
-	description: string | null;
 	image_url: string | null;
-	image_hash: string | null;
 	origin_dna: string | null;
 	instance_dna: string | null;
-	unique_access_key: string | null;
-	edition: number;
 	seed_id: string | null;
 	instance_number: number | null;
-	original_id: string | null;
 	max_replicas: number;
 	distributed: number;
-	minted_by: string | null;
+	supply_exhausted: boolean;
 	listing_price: string | null;
 	listing_currency: string | null;
+	created_at: string;
+}
+
+export interface IndexerNft extends IndexerNftSummary {
+	description: string | null;
+	image_hash: string | null;
+	unique_access_key: string | null;
+	original_id: string | null;
+	minted_by: string | null;
 	tags: string[] | null;
 	custom_data: Record<string, unknown> | null;
+	operator_data: Record<string, unknown> | null;
+	birth_block: number | null;
+	birth_tx: string | null;
 	block_num: number;
 	tx_id: string;
-	created_at: string;
 }
 
 export interface IndexerOffer {
@@ -163,6 +171,7 @@ export interface IndexerHistoryEvent {
 	id: number;
 	nft_id: string;
 	event_type: string;
+	collection_id: string;
 	block_num: number;
 	tx_id: string;
 	timestamp: string;
@@ -193,11 +202,15 @@ export interface PackHistoryEvent {
 	id: number;
 	pack_id: string;
 	event_type: string;
-	account: string;
+	from_account: string | null;
+	to_account: string | null;
 	quantity: number;
 	block_num: number;
 	tx_id: string;
 	timestamp: string;
+	collection_id: string;
+	price_amount: string | null;
+	price_currency: string | null;
 }
 
 // ============ INTERNAL HELPERS ============
@@ -231,24 +244,24 @@ export interface IndexerClient {
 	// Collections
 	getCollections(params?: { limit?: number; offset?: number }): Promise<IndexerCollection[]>;
 	getCollection(id: string): Promise<IndexerCollection>;
-	getCollectionNfts(id: string, params?: { type?: string; limit?: number; offset?: number }): Promise<IndexerNft[]>;
+	getCollectionNfts(id: string, params?: { type?: string; limit?: number; offset?: number }): Promise<IndexerNftSummary[]>;
 	getCollectionStats(id: string): Promise<CollectionStats>;
 
 	// NFTs
 	getNft(id: string): Promise<IndexerNft>;
 	getNftHistory(id: string, params?: { limit?: number; offset?: number; cursor?: number }): Promise<IndexerHistoryEvent[]>;
 	getNftOwnership(id: string): Promise<OwnershipRecord[]>;
-	getNftInstances(id: string, params?: { limit?: number; offset?: number }): Promise<IndexerNft[]>;
+	getNftInstances(id: string, params?: { limit?: number; offset?: number }): Promise<IndexerNftSummary[]>;
 	getNftOffers(id: string, params?: { status?: string; limit?: number; offset?: number }): Promise<IndexerOffer[]>;
 
 	// Users
-	getUserNfts(username: string, params?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<IndexerNft[]>;
+	getUserNfts(username: string, params?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<IndexerNftSummary[]>;
 	getUserCollections(username: string, params?: { limit?: number; offset?: number }): Promise<IndexerCollection[]>;
 	getUserActivity(username: string, params?: { limit?: number; offset?: number; cursor?: number }): Promise<IndexerHistoryEvent[]>;
 	getUserPacks(username: string, params?: { limit?: number; offset?: number }): Promise<PackBalance[]>;
 
 	// Marketplace
-	getListings(params?: { sort?: string; currency?: string; limit?: number; offset?: number }): Promise<IndexerNft[]>;
+	getListings(params?: { sort?: string; currency?: string; limit?: number; offset?: number }): Promise<IndexerNftSummary[]>;
 	getRecentSales(params?: { limit?: number; offset?: number; cursor?: number }): Promise<SaleEvent[]>;
 
 	// Packs
@@ -270,7 +283,7 @@ export function createIndexerClient(baseUrl: string): IndexerClient {
 		getCollection: (id) =>
 			get<IndexerCollection>(baseUrl, `/api/collections/${encodeURIComponent(id)}`),
 		getCollectionNfts: (id, params) =>
-			get<IndexerNft[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/nfts`, params),
+			get<IndexerNftSummary[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/nfts`, params),
 		getCollectionStats: (id) =>
 			get<CollectionStats>(baseUrl, `/api/collections/${encodeURIComponent(id)}/stats`),
 
@@ -282,13 +295,13 @@ export function createIndexerClient(baseUrl: string): IndexerClient {
 		getNftOwnership: (id) =>
 			get<OwnershipRecord[]>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/ownership`),
 		getNftInstances: (id, params) =>
-			get<IndexerNft[]>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/instances`, params),
+			get<IndexerNftSummary[]>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/instances`, params),
 		getNftOffers: (id, params) =>
 			get<IndexerOffer[]>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/offers`, params),
 
 		// ---- Users ----
 		getUserNfts: (username, params) =>
-			get<IndexerNft[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts`, params),
+			get<IndexerNftSummary[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts`, params),
 		getUserCollections: (username, params) =>
 			get<IndexerCollection[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/collections`, params),
 		getUserActivity: (username, params) =>
@@ -298,7 +311,7 @@ export function createIndexerClient(baseUrl: string): IndexerClient {
 
 		// ---- Marketplace ----
 		getListings: (params) =>
-			get<IndexerNft[]>(baseUrl, "/api/marketplace/listings", params),
+			get<IndexerNftSummary[]>(baseUrl, "/api/marketplace/listings", params),
 		getRecentSales: (params) =>
 			get<SaleEvent[]>(baseUrl, "/api/marketplace/recent-sales", params),
 

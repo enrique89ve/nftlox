@@ -30,7 +30,9 @@ export {
 	ACTION_TRANSFER,
 	ACTION_BURN,
 	ACTION_REPLICATE,
-	ACTION_DISTRIBUTE,
+	ACTION_BULK_DISTRIBUTE,
+	MAX_BULK_DISTRIBUTE_ITEMS,
+	MAX_BULK_DISTRIBUTE_TOTAL,
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
@@ -83,8 +85,9 @@ export type {
 	NFTMetadata,
 	NFTData,
 	ReplicaData,
-	DistributeData,
-	DistributeInput,
+	BulkDistributeItem,
+	BulkDistributeData,
+	BulkDistributeInput,
 	TransferData,
 	BurnData,
 	SetDataData,
@@ -197,7 +200,8 @@ export {
 	createCollectionPayload,
 	createMintPayload,
 	createReplicatePayload,
-	createDistributePayload,
+	createBulkDistributePayload,
+	createBulkDistributeOperation,
 	createTransferPayload,
 	createBurnPayload,
 	createSetDataPayload,
@@ -216,7 +220,6 @@ export {
 	createCollectionOperation,
 	createMintOperation,
 	createReplicateOperation,
-	createDistributeOperation,
 	createTransferOperation,
 	createBurnOperation,
 	createSetDataOperation,
@@ -234,7 +237,6 @@ export {
 	// Deterministic payload creation (anti-duplication)
 	createDeterministicCollectionPayload,
 	createDeterministicMintPayload,
-	createDeterministicDistributePayload,
 	type DeterministicCollectionInput,
 	type DeterministicMintInput,
 	// Pack payloads & operations
@@ -288,10 +290,12 @@ export {
 	validateNftApproveInput,
 	validateNftApproveAllInput,
 	validateNftTransferFromInput,
+	validateSetDataInput,
 	validateDataOperatorApproveInput,
 	validateSetDataFromInput,
 	validateNftLendInput,
 	validateNftReturnInput,
+	validateBulkDistributeInput,
 } from "./validation";
 
 // ============ PAYLOAD BUILDER ============
@@ -304,6 +308,18 @@ export {
 	type SeedBatchInput,
 	type SeedBatchPayload,
 } from "./payload-builder";
+
+// ============ DATA OPERATIONS BUILDERS (Modular) ============
+export {
+	buildSetData,
+	buildSetDataFrom,
+	buildDataOperatorApprove,
+	type BuildSetDataInput,
+	type BuildSetDataFromInput,
+	type BuildDataOperatorApproveInput,
+	computeSeedAvailability,
+	type SeedAvailability,
+} from "./builders";
 
 // ============ SPV VERIFICATION ============
 export {
@@ -361,6 +377,7 @@ export {
 	type IndexerCollection,
 	type CollectionStats,
 	type IndexerNft,
+	type IndexerNftSummary,
 	type IndexerOffer,
 	type IndexerPack,
 	type PackBalance,

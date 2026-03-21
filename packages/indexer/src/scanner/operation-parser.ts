@@ -1,11 +1,10 @@
 import { config } from "@/config.ts";
 import {
-	PROTOCOL_ID,
 	MIN_PROTOCOL_VERSION,
 	ALL_ACTIONS,
 	type ProtocolAction,
 } from "@/protocol.ts";
-import type { BlockData } from "./hive-client.ts";
+import type { HafAHOperation } from "./hive-client.ts";
 
 export interface ParsedOperation {
 	blockNum: number;
@@ -23,7 +22,7 @@ export interface ParsedOperation {
 	};
 }
 
-const protocolId = config.protocolId ?? PROTOCOL_ID;
+const protocolId = config.protocolId;
 
 // ─── Type Guards ────────────────────────────────────
 
@@ -33,24 +32,6 @@ function isNonNullObject(value: unknown): value is Record<string, unknown> {
 
 function isProtocolAction(value: string): value is ProtocolAction {
 	return (ALL_ACTIONS as readonly string[]).includes(value);
-}
-
-interface TransferOperationValue {
-	readonly from: string;
-	readonly to: string;
-	readonly amount: { readonly amount: string; readonly nai: string; readonly precision: number };
-	readonly memo: string;
-}
-
-function isTransferValue(value: unknown): value is TransferOperationValue {
-	if (!isNonNullObject(value)) return false;
-	return (
-		typeof value.from === "string" &&
-		typeof value.to === "string" &&
-		typeof value.memo === "string" &&
-		isNonNullObject(value.amount) &&
-		typeof value.amount.amount === "string"
-	);
 }
 
 interface CustomJsonOperationValue {
@@ -102,64 +83,45 @@ function isValidPayload(payload: unknown): payload is {
 	return true;
 }
 
-// ─── Block Parser ───────────────────────────────────
+// ─── HafAH Parser ──────────────────────────────────
 
-export function parseBlockOperations(block: BlockData): ParsedOperation[] {
+/**
+ * Parse HafAH operations directly — much faster than parsing full blocks.
+ * HafAH already filters to custom_json (op_type=18), we just filter by protocol ID.
+ *
+ * NOTE: Paired transfers (atomic custom_json + HIVE transfer) are not supported
+ * via HafAH because HafAH only returns one operation type per query.
+ */
+export function parseHafAHOperations(hafOps: HafAHOperation[]): ParsedOperation[] {
 	const ops: ParsedOperation[] = [];
 
-	for (const tx of block.transactions) {
-		let pairedTransfer: ParsedOperation["pairedTransfer"] | undefined;
+	for (const hafOp of hafOps) {
+		const value = hafOp.op.value;
+		if (value.id !== protocolId) continue;
 
-		// First pass: find nftlox transfer in this tx (for atomic pairs)
-		for (const op of tx.operations) {
-			if (op.type === "transfer_operation" && isTransferValue(op.value)) {
-				const memo = op.value.memo;
-				if (memo.startsWith("nftlox:")) {
-					const amount = op.value.amount;
-					const precision = amount.precision ?? 3;
-					const numericAmount = Number(amount.amount) / Math.pow(10, precision);
-					const nai = amount.nai === "@@000000013" ? "HBD" : "HIVE";
-					pairedTransfer = {
-						from: op.value.from,
-						to: op.value.to,
-						amount: `${numericAmount.toFixed(precision)} ${nai}`,
-						memo,
-					};
-				}
-			}
+		let payload: unknown;
+		try {
+			payload = JSON.parse(value.json);
+		} catch {
+			continue;
 		}
 
-		// Second pass: find custom_json with our protocol ID
-		for (const op of tx.operations) {
-			if (op.type !== "custom_json_operation") continue;
-			if (!isCustomJsonValue(op.value)) continue;
-			if (op.value.id !== protocolId) continue;
+		if (!isValidPayload(payload)) continue;
 
-			let payload: unknown;
-			try {
-				payload = JSON.parse(op.value.json);
-			} catch {
-				continue;
-			}
+		const signer =
+			value.required_auths[0] ??
+			value.required_posting_auths[0] ??
+			"unknown";
 
-			if (!isValidPayload(payload)) continue;
-
-			const signer =
-				op.value.required_auths[0] ??
-				op.value.required_posting_auths[0] ??
-				"unknown";
-
-			ops.push({
-				blockNum: block.blockNum,
-				timestamp: block.timestamp,
-				txId: tx.txId,
-				signer,
-				action: payload.action,
-				version: payload.version,
-				data: payload.data,
-				pairedTransfer,
-			});
-		}
+		ops.push({
+			blockNum: hafOp.block,
+			timestamp: hafOp.timestamp,
+			txId: hafOp.trx_id,
+			signer,
+			action: payload.action,
+			version: payload.version,
+			data: payload.data,
+		});
 	}
 
 	return ops;

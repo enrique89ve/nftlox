@@ -1,12 +1,15 @@
 import { Elysia, t } from "elysia";
-import { getNftsByOwner } from "@/db/queries/nfts.ts";
+import { queryNfts } from "@/db/queries/nfts.ts";
 import { getCollectionsByCreator } from "@/db/queries/collections.ts";
 import { getUserActivity } from "@/db/queries/history.ts";
 import { getUserPackBalances } from "@/db/queries/packs.ts";
 
 export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 	.get("/:username/nfts", async ({ params, query }) => {
-		return getNftsByOwner(params.username, query.status, query.type, query.limit, query.offset);
+		return queryNfts(
+			{ by: "owner", owner: params.username, status: query.status as any, type: query.type as any },
+			{ limit: query.limit, offset: query.offset },
+		);
 	}, {
 		params: t.Object({ username: t.String() }),
 		query: t.Object({

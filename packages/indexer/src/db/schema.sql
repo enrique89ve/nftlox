@@ -53,6 +53,7 @@ CREATE TABLE nfts (
 	image_hash TEXT,
 	max_replicas INTEGER NOT NULL DEFAULT 1,
 	distributed INTEGER NOT NULL DEFAULT 0,
+	supply_exhausted BOOLEAN GENERATED ALWAYS AS (max_replicas > 0 AND distributed >= max_replicas) STORED,
 	seed_id TEXT REFERENCES nfts(id),
 	instance_number INTEGER,
 	original_id TEXT REFERENCES nfts(id),
@@ -119,16 +120,51 @@ CREATE TABLE invalid_operations (
 CREATE INDEX idx_collections_creator ON collections(creator);
 CREATE INDEX idx_collections_symbol ON collections(symbol);
 
+-- Base indexes
 CREATE INDEX idx_nfts_collection ON nfts(collection_id);
-CREATE INDEX idx_nfts_owner ON nfts(owner);
-CREATE INDEX idx_nfts_status ON nfts(status);
-CREATE INDEX idx_nfts_seed ON nfts(seed_id) WHERE seed_id IS NOT NULL;
-CREATE INDEX idx_nfts_type ON nfts(nft_type);
-CREATE INDEX idx_nfts_listed ON nfts(status, listing_price) WHERE status = 'listed';
+CREATE INDEX idx_nfts_owner_created ON nfts(owner, created_at DESC);
 
+-- Partial: seed children ordered by instance_number (queryNfts by:seed)
+CREATE INDEX idx_nfts_seed_instances ON nfts(seed_id, instance_number)
+	WHERE seed_id IS NOT NULL;
+
+-- Partial: active instances per owner (user inventory — hottest query)
+CREATE INDEX idx_nfts_owner_active_instances ON nfts(owner, created_at DESC)
+	WHERE nft_type = 'instance' AND status = 'active';
+
+-- Partial: active seeds per owner (seed management)
+CREATE INDEX idx_nfts_owner_active_seeds ON nfts(owner, collection_id)
+	WHERE nft_type = 'seed' AND status = 'active';
+
+-- Partial: seeds with available supply (Norse: "which seeds can still distribute?")
+CREATE INDEX idx_nfts_seeds_available ON nfts(collection_id, distributed)
+	WHERE nft_type = 'seed' AND supply_exhausted = FALSE;
+
+-- Partial: collection browsing by type (queryNfts by:collection)
+CREATE INDEX idx_nfts_collection_type ON nfts(collection_id, nft_type, created_at DESC);
+
+-- Partial: marketplace listings sorted by price
+CREATE INDEX idx_nfts_listed ON nfts(listing_price, listing_currency)
+	WHERE status = 'listed';
+
+-- Partial: marketplace listings sorted by recent (default sort)
+CREATE INDEX idx_nfts_listed_recent ON nfts(created_at DESC)
+	WHERE status = 'listed';
+
+-- History: base indexes
 CREATE INDEX idx_history_nft ON history_events(nft_id);
 CREATE INDEX idx_history_block ON history_events(block_num);
 CREATE INDEX idx_history_type ON history_events(event_type);
+
+-- History: user activity (getUserActivity — OR query needs both columns indexed)
+CREATE INDEX idx_history_from ON history_events(from_account, id DESC)
+	WHERE from_account IS NOT NULL;
+CREATE INDEX idx_history_to ON history_events(to_account, id DESC)
+	WHERE to_account IS NOT NULL;
+
+-- History: recent sales with sort (getRecentSales)
+CREATE INDEX idx_history_sales ON history_events(block_num DESC, id DESC)
+	WHERE event_type = 'buy';
 
 CREATE INDEX idx_offers_nft ON offers(nft_id);
 CREATE INDEX idx_offers_offerer ON offers(offerer);

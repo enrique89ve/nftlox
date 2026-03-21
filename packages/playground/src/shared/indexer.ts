@@ -1,7 +1,7 @@
-// Shared indexer client instance for both server and client-side use
+// Server-only — uses process.env. Do not import in browser code.
 import { createIndexerClient } from "nftlox-sdk";
 
-const INDEXER_URL = typeof process !== "undefined"
+export const INDEXER_URL = typeof process !== "undefined"
 	? (process.env?.["INDEXER_URL"] ?? "http://localhost:3050")
 	: "http://localhost:3050";
 

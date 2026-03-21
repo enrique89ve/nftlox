@@ -3,6 +3,15 @@
 let synced = false;
 let lastBlock = 0;
 let headBlock = 0;
+let startupTime = 0;
+
+export function setStartupTime(): void {
+	startupTime = Date.now();
+}
+
+export function getStartupTime(): number {
+	return startupTime;
+}
 
 export function isSynced(): boolean {
 	return synced;

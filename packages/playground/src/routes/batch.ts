@@ -10,7 +10,6 @@ import {
 	createSeedMintOperations,
 	createDeterministicCollection,
 	createDeterministicSeedMintOperations,
-	createDistributeOperations,
 	loadSampleNFTs,
 	loadSampleNFTsWithArtId,
 	previewBatchMint,
@@ -118,40 +117,6 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 				const result = createSeedMintOperations(nfts, body.collectionId, collectionOriginDna, body.owner);
 				const validation = validateOperationsVersion(result.seeds.map(s => s.operation));
 				const batches = splitOperationsIntoBatches(result.seeds.map(s => s.operation));
-
-				return json({
-					protocolVersion: PROTOCOL_VERSION,
-					...result,
-					validation,
-					batches: batches.map((batch, i) => ({
-						batchNumber: i + 1,
-						operationCount: batch.length,
-						operations: batch,
-					})),
-				});
-			} catch (e) {
-				return json({ error: String(e) }, 500);
-			}
-		},
-	},
-
-	"/api/batch/distribute": {
-		POST: async (req: Request) => {
-			try {
-				const body = await req.json() as {
-					seedId: string;
-					recipients: string[];
-					owner: string;
-					startingInstanceNumber?: number;
-				};
-
-				if (!body.seedId || !body.recipients || !body.owner) {
-					return json({ error: "Missing required fields: seedId, recipients, owner" }, 400);
-				}
-
-				const result = createDistributeOperations(body.seedId, body.recipients, body.owner, body.startingInstanceNumber || 1);
-				const validation = validateOperationsVersion(result.instances.map(i => i.operation));
-				const batches = splitOperationsIntoBatches(result.instances.map(i => i.operation));
 
 				return json({
 					protocolVersion: PROTOCOL_VERSION,

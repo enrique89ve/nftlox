@@ -58,6 +58,13 @@ export function requireBoolean(value: unknown, fieldName: string): boolean {
 	return value;
 }
 
+export function requireArray(value: unknown, fieldName: string): unknown[] {
+	if (!Array.isArray(value)) {
+		throw new Error(`Missing or invalid ${fieldName}: expected array`);
+	}
+	return value;
+}
+
 export function requirePrice(value: unknown, fieldName: string): { amount: string; currency: string } {
 	const obj = requireObject(value, fieldName);
 	return {

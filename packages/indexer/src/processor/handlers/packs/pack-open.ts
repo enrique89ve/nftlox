@@ -44,11 +44,18 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 
 	const mintedNfts: Array<{ instanceId: string; seedId: string; packIndex: number }> = [];
 
+	// Balance tracker: tracks how many instances we've minted per seed
+	// within THIS handler invocation, so the same seed appearing multiple
+	// times in the drop table gets sequential instance numbers.
+	const localMintedPerSeed = new Map<string, number>();
+
 	for (let packIndex = 0; packIndex < quantity; packIndex++) {
 		// Deterministic RNG seed using immutable block data
 		const rngSeed = `${op.txId}:${op.blockNum}:${op.signer}:${packId}:${packIndex}`;
+		const dropTable = typeof pack.drop_table === "string"
+			? JSON.parse(pack.drop_table) : pack.drop_table;
 		const selectedSeeds = resolveDropTable(
-			pack.drop_table,
+			dropTable,
 			pack.items_per_pack,
 			rngSeed,
 		);
@@ -62,14 +69,29 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 			const distributed = Number(seed.distributed) || 0;
 			const maxReplicas = Number(seed.max_replicas) || 0;
 
-			// Skip if max supply reached (defensive, should rarely happen)
-			if (maxReplicas > 0 && distributed >= maxReplicas) continue;
+			// Idempotency: recover pre-tx baseline by subtracting instances
+			// already created by this exact transaction
+			const [existingFromTx] = await txn`
+				SELECT COUNT(*)::int AS count FROM nfts
+				WHERE seed_id = ${seedId} AND birth_tx = ${op.txId}
+			`;
+			const alreadyMintedThisTx = existingFromTx?.count ?? 0;
+			const baseDistributed = distributed - alreadyMintedThisTx;
 
-			const instanceNumber = distributed + 1;
+			// Local offset for same seed appearing multiple times in this invocation
+			const localOffset = localMintedPerSeed.get(seedId) ?? 0;
+			const instanceNumber = baseDistributed + localOffset + 1;
+
+			// Skip if max supply reached
+			if (maxReplicas > 0 && instanceNumber > maxReplicas) continue;
+
 			const instanceId = generateDeterministicInstanceId(seedId, instanceNumber);
 
 			// Skip if instance already exists (idempotency)
-			if (await nftExists(instanceId, txn)) continue;
+			if (await nftExists(instanceId, txn)) {
+				localMintedPerSeed.set(seedId, localOffset + 1);
+				continue;
+			}
 
 			// DNA Lineage: deterministic from immutable block data
 			const originDna = seed.origin_dna
@@ -109,6 +131,7 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 			}, txn);
 
 			await incrementDistributed(seedId, txn);
+			localMintedPerSeed.set(seedId, localOffset + 1);
 
 			await insertHistoryEvent({
 				nftId: instanceId,
@@ -123,6 +146,23 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 				priceCurrency: null,
 				payload: { source: "pack_open", packId },
 			}, txn);
+
+			// Check if this was the last available instance
+			if (maxReplicas > 0 && instanceNumber >= maxReplicas) {
+				await insertHistoryEvent({
+					nftId: seedId,
+					collectionId: seed.collection_id,
+					eventType: "supply_exhausted",
+					blockNum: op.blockNum,
+					txId: op.txId,
+					timestamp: op.timestamp,
+					fromAccount: op.signer,
+					toAccount: null,
+					priceAmount: null,
+					priceCurrency: null,
+					payload: { maxReplicas, distributed: instanceNumber },
+				}, txn);
+			}
 
 			mintedNfts.push({ instanceId, seedId, packIndex });
 		}

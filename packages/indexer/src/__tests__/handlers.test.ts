@@ -3,7 +3,7 @@ import { sql, type Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { handleCreateCollection } from "@/processor/handlers/core/create-collection.ts";
 import { handleMint } from "@/processor/handlers/core/mint.ts";
-import { handleDistribute } from "@/processor/handlers/core/distribute.ts";
+import { handleBulkDistribute } from "@/processor/handlers/core/bulk-distribute.ts";
 import { handleTransfer } from "@/processor/handlers/core/transfer.ts";
 import { handleBurn } from "@/processor/handlers/core/burn.ts";
 import { handleList } from "@/processor/handlers/marketplace/list.ts";
@@ -11,6 +11,9 @@ import { handleUnlist } from "@/processor/handlers/marketplace/unlist.ts";
 import { handleBuy } from "@/processor/handlers/marketplace/buy.ts";
 import { handleNftLend } from "@/processor/handlers/lending/nft-lend.ts";
 import { handleNftReturn } from "@/processor/handlers/lending/nft-return.ts";
+import { handlePackCreate } from "@/processor/handlers/packs/pack-create.ts";
+import { handlePackBuy } from "@/processor/handlers/packs/pack-buy.ts";
+import { handlePackOpen } from "@/processor/handlers/packs/pack-open.ts";
 
 function makeOp(action: string, data: Record<string, unknown>, signer = "alice"): ParsedOperation {
 	return {
@@ -30,6 +33,9 @@ async function cleanDb() {
 	await sql`DELETE FROM nft_allowances`;
 	await sql`DELETE FROM collection_allowances`;
 	await sql`DELETE FROM pack_allowances`;
+	await sql`DELETE FROM pack_history_events`;
+	await sql`DELETE FROM user_pack_balances`;
+	await sql`DELETE FROM packs`;
 	await sql`DELETE FROM history_events`;
 	await sql`DELETE FROM offers`;
 	await sql`DELETE FROM nfts`;
@@ -156,73 +162,415 @@ describe("Handlers (integration)", () => {
 		});
 	});
 
-	// ─── distribute ─────────────────────────────────
+	// ─── bulk_distribute ────────────────────────────
 
-	describe("distribute", () => {
-		test("distributes instance from seed", async () => {
+	describe("bulk_distribute", () => {
+		test("distributes instances from seed", async () => {
 			await seedCollection();
 			await seedMint();
 
-			const op = makeOp("distribute", {
-				seedId: "seed_test1",
-				instanceId: "nft_test1_1_abc",
+			const op = makeOp("bulk_distribute", {
 				to: "bob",
-				instanceNumber: 1,
+				items: [{ seedId: "seed_test1", quantity: 3 }],
 			});
-			await handleDistribute(op, sql);
+			await handleBulkDistribute(op, sql);
 
-			const [inst] = await sql`SELECT * FROM nfts WHERE id = 'nft_test1_1_abc'`;
-			expect(inst).toBeDefined();
-			expect(inst!.owner).toBe("bob");
-			expect(inst!.seed_id).toBe("seed_test1");
-			expect(inst!.nft_type).toBe("instance");
+			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_test1' ORDER BY instance_number`;
+			expect(instances.length).toBe(3);
+			expect(instances[0]!.owner).toBe("bob");
+			expect(instances[0]!.nft_type).toBe("instance");
+			expect(instances[2]!.instance_number).toBe(3);
 
 			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_test1'`;
-			expect(seed!.distributed).toBe(1);
+			expect(seed!.distributed).toBe(3);
 		});
 
-		test("rejects distribute by non-owner", async () => {
+		test("rejects distribute by non-owner and non-creator", async () => {
 			await seedCollection();
 			await seedMint();
 
-			const op = makeOp("distribute", {
-				seedId: "seed_test1",
-				instanceId: "nft_test1_1_abc",
+			const op = makeOp("bulk_distribute", {
 				to: "bob",
-				instanceNumber: 1,
+				items: [{ seedId: "seed_test1", quantity: 1 }],
 			}, "eve");
-			await expect(handleDistribute(op, sql)).rejects.toThrow("not owner");
+			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("not owner");
 		});
 
 		test("rejects distribute over max supply", async () => {
 			await seedCollection();
 
-			// Mint seed with maxReplicas = 1
 			const mintOp = makeOp("mint", {
 				id: "seed_limited",
 				collectionId: "col_test",
-				maxReplicas: 1,
+				maxReplicas: 2,
 				metadata: { name: "Limited" },
 			});
 			await handleMint(mintOp, sql);
 
-			// First distribute — ok
-			const op1 = makeOp("distribute", {
-				seedId: "seed_limited",
-				instanceId: "nft_limited_1_a",
+			const op = makeOp("bulk_distribute", {
 				to: "bob",
-				instanceNumber: 1,
+				items: [{ seedId: "seed_limited", quantity: 3 }],
 			});
-			await handleDistribute(op1, sql);
+			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("insufficient supply");
+		});
 
-			// Second distribute — should fail
-			const op2 = makeOp("distribute", {
-				seedId: "seed_limited",
-				instanceId: "nft_limited_2_b",
-				to: "charlie",
-				instanceNumber: 2,
+		test("rejects duplicate seedId in items", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp("bulk_distribute", {
+				to: "bob",
+				items: [
+					{ seedId: "seed_test1", quantity: 1 },
+					{ seedId: "seed_test1", quantity: 1 },
+				],
 			});
-			await expect(handleDistribute(op2, sql)).rejects.toThrow("max supply");
+			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("Duplicate seedId");
+		});
+
+		test("idempotent on reprocess (same tx)", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp("bulk_distribute", {
+				to: "bob",
+				items: [{ seedId: "seed_test1", quantity: 2 }],
+			});
+			await handleBulkDistribute(op, sql);
+
+			// Reprocess same op — should skip existing, mint 0
+			await handleBulkDistribute(op, sql);
+
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_test1'`;
+			expect(seed!.distributed).toBe(2); // not 4
+		});
+
+		test("defaults to signer when no 'to' provided", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp("bulk_distribute", {
+				items: [{ seedId: "seed_test1", quantity: 1 }],
+			});
+			await handleBulkDistribute(op, sql);
+
+			const [inst] = await sql`SELECT owner FROM nfts WHERE seed_id = 'seed_test1'`;
+			expect(inst!.owner).toBe("alice");
+		});
+
+		test("collection creator can distribute", async () => {
+			await seedCollection(); // creator = alice
+
+			// Mint seed owned by bob
+			const mintOp = makeOp("mint", {
+				id: "seed_bob",
+				collectionId: "col_test",
+				owner: "bob",
+				maxReplicas: 10,
+				metadata: { name: "Bob Seed" },
+			}, "bob");
+			await handleMint(mintOp, sql);
+
+			// Alice (creator) distributes bob's seed
+			const op = makeOp("bulk_distribute", {
+				to: "charlie",
+				items: [{ seedId: "seed_bob", quantity: 2 }],
+			}, "alice");
+			await handleBulkDistribute(op, sql);
+
+			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_bob'`;
+			expect(instances.length).toBe(2);
+			expect(instances[0]!.owner).toBe("charlie");
+		});
+
+		// ─── idempotency tests ─────────────────────
+
+		test("idempotent on reprocess — instances unchanged", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp("bulk_distribute", {
+				to: "bob",
+				items: [{ seedId: "seed_test1", quantity: 2 }],
+			});
+			await handleBulkDistribute(op, sql);
+			await handleBulkDistribute(op, sql);
+
+			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_test1' ORDER BY instance_number`;
+			expect(instances.length).toBe(2); // not 4
+			expect(instances[0]!.instance_number).toBe(1);
+			expect(instances[1]!.instance_number).toBe(2);
+		});
+
+		test("sequential distributes produce sequential instance numbers", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op1 = makeOp("bulk_distribute", {
+				to: "bob",
+				items: [{ seedId: "seed_test1", quantity: 2 }],
+			});
+			await handleBulkDistribute(op1, sql);
+
+			const op2 = makeOp("bulk_distribute", {
+				to: "charlie",
+				items: [{ seedId: "seed_test1", quantity: 3 }],
+			});
+			await handleBulkDistribute(op2, sql);
+
+			const instances = await sql`SELECT instance_number, owner FROM nfts WHERE seed_id = 'seed_test1' ORDER BY instance_number`;
+			expect(instances.length).toBe(5);
+			expect(instances[0]!.instance_number).toBe(1);
+			expect(instances[0]!.owner).toBe("bob");
+			expect(instances[4]!.instance_number).toBe(5);
+			expect(instances[4]!.owner).toBe("charlie");
+		});
+
+		test("partial replay only creates missing instances", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp("bulk_distribute", {
+				to: "bob",
+				items: [{ seedId: "seed_test1", quantity: 3 }],
+			});
+			await handleBulkDistribute(op, sql);
+
+			// Delete one instance to simulate partial state
+			await sql`DELETE FROM nfts WHERE instance_number = 2 AND seed_id = 'seed_test1'`;
+			await sql`UPDATE nfts SET distributed = distributed - 1 WHERE id = 'seed_test1'`;
+
+			// Replay should recreate only the missing instance
+			await handleBulkDistribute(op, sql);
+
+			const instances = await sql`SELECT instance_number FROM nfts WHERE seed_id = 'seed_test1' ORDER BY instance_number`;
+			expect(instances.length).toBe(3);
+			expect(instances.map(i => i.instance_number)).toEqual([1, 2, 3]);
+		});
+
+		test("supply check uses pre-tx distributed count", async () => {
+			await seedCollection();
+
+			// Seed with max 3 replicas
+			const mintOp = makeOp("mint", {
+				id: "seed_capped",
+				collectionId: "col_test",
+				maxReplicas: 3,
+				metadata: { name: "Capped" },
+			});
+			await handleMint(mintOp, sql);
+
+			// Distribute 2
+			const op1 = makeOp("bulk_distribute", {
+				to: "bob",
+				items: [{ seedId: "seed_capped", quantity: 2 }],
+			});
+			await handleBulkDistribute(op1, sql);
+
+			// Replay of op1 should NOT throw (baseDistributed=0, quantity=2, max=3 — OK)
+			await handleBulkDistribute(op1, sql);
+
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_capped'`;
+			expect(seed!.distributed).toBe(2);
+		});
+
+		test("multi-seed bulk distribute is idempotent", async () => {
+			await seedCollection();
+			await seedMint(); // seed_test1
+
+			const mintOp2 = makeOp("mint", {
+				id: "seed_test2",
+				collectionId: "col_test",
+				maxReplicas: 10,
+				metadata: { name: "Seed 2" },
+			});
+			await handleMint(mintOp2, sql);
+
+			const op = makeOp("bulk_distribute", {
+				to: "bob",
+				items: [
+					{ seedId: "seed_test1", quantity: 2 },
+					{ seedId: "seed_test2", quantity: 3 },
+				],
+			});
+			await handleBulkDistribute(op, sql);
+			await handleBulkDistribute(op, sql);
+
+			const inst1 = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_test1'`;
+			const inst2 = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_test2'`;
+			expect(inst1.length).toBe(2);
+			expect(inst2.length).toBe(3);
+
+			const [s1] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_test1'`;
+			const [s2] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_test2'`;
+			expect(s1!.distributed).toBe(2);
+			expect(s2!.distributed).toBe(3);
+		});
+
+		test("history events not duplicated on replay", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp("bulk_distribute", {
+				to: "bob",
+				items: [{ seedId: "seed_test1", quantity: 2 }],
+			});
+			await handleBulkDistribute(op, sql);
+			await handleBulkDistribute(op, sql);
+
+			const events = await sql`SELECT * FROM history_events WHERE event_type = 'distribute' AND nft_id LIKE 'nft_%'`;
+			expect(events.length).toBe(2); // not 4
+		});
+
+		// ─── concurrency / parallel distribution tests ─
+
+		test("concurrent distributes from same seed maintain correct distributed count", async () => {
+			await seedCollection();
+
+			const mintOp = makeOp("mint", {
+				id: "seed_concurrent",
+				collectionId: "col_test",
+				maxReplicas: 20,
+				metadata: { name: "Concurrent Seed" },
+			});
+			await handleMint(mintOp, sql);
+
+			// 5 different transactions, each distributing 2 instances, run sequentially
+			// (simulates blockchain order — ops arrive one after another)
+			for (let t = 0; t < 5; t++) {
+				const op = makeOp("bulk_distribute", {
+					to: `user_${t}`,
+					items: [{ seedId: "seed_concurrent", quantity: 2 }],
+				});
+				// Override txId to make each unique
+				(op as any).txId = `tx_concurrent_${t}`;
+				await handleBulkDistribute(op, sql);
+			}
+
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_concurrent'`;
+			expect(seed!.distributed).toBe(10);
+
+			const instances = await sql`
+				SELECT instance_number, owner FROM nfts
+				WHERE seed_id = 'seed_concurrent'
+				ORDER BY instance_number
+			`;
+			expect(instances.length).toBe(10);
+			// Instance numbers should be 1 through 10 with no gaps
+			expect(instances.map(i => i.instance_number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+			// Each pair belongs to the correct user
+			expect(instances[0]!.owner).toBe("user_0");
+			expect(instances[1]!.owner).toBe("user_0");
+			expect(instances[8]!.owner).toBe("user_4");
+			expect(instances[9]!.owner).toBe("user_4");
+		});
+
+		test("concurrent distributes respect max supply cap", async () => {
+			await seedCollection();
+
+			const mintOp = makeOp("mint", {
+				id: "seed_race",
+				collectionId: "col_test",
+				maxReplicas: 5,
+				metadata: { name: "Race Seed" },
+			});
+			await handleMint(mintOp, sql);
+
+			// Distribute 3 first
+			const op1 = makeOp("bulk_distribute", {
+				to: "alice",
+				items: [{ seedId: "seed_race", quantity: 3 }],
+			});
+			(op1 as any).txId = "tx_race_1";
+			await handleBulkDistribute(op1, sql);
+
+			// Now try to distribute 3 more — should fail (only 2 remaining)
+			const op2 = makeOp("bulk_distribute", {
+				to: "bob",
+				items: [{ seedId: "seed_race", quantity: 3 }],
+			});
+			(op2 as any).txId = "tx_race_2";
+			await expect(handleBulkDistribute(op2, sql)).rejects.toThrow("insufficient supply");
+
+			// Distributed counter should still be 3
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_race'`;
+			expect(seed!.distributed).toBe(3);
+		});
+
+		test("concurrent distributes then replay — all idempotent", async () => {
+			await seedCollection();
+
+			const mintOp = makeOp("mint", {
+				id: "seed_replay_multi",
+				collectionId: "col_test",
+				maxReplicas: 10,
+				metadata: { name: "Replay Multi" },
+			});
+			await handleMint(mintOp, sql);
+
+			const ops = Array.from({ length: 3 }, (_, t) => {
+				const op = makeOp("bulk_distribute", {
+					to: `user_${t}`,
+					items: [{ seedId: "seed_replay_multi", quantity: 2 }],
+				});
+				(op as any).txId = `tx_replay_multi_${t}`;
+				return op;
+			});
+
+			// First pass — all 3 distribute normally
+			for (const op of ops) await handleBulkDistribute(op, sql);
+
+			// Replay all 3 — nothing should change
+			for (const op of ops) await handleBulkDistribute(op, sql);
+
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_replay_multi'`;
+			expect(seed!.distributed).toBe(6);
+
+			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_replay_multi'`;
+			expect(instances.length).toBe(6);
+		});
+
+		test("supply_exhausted event fires exactly once across distribute + replay", async () => {
+			await seedCollection();
+
+			const mintOp = makeOp("mint", {
+				id: "seed_exhaust",
+				collectionId: "col_test",
+				maxReplicas: 4,
+				metadata: { name: "Exhaust Seed" },
+			});
+			await handleMint(mintOp, sql);
+
+			// Two transactions that together exhaust supply
+			const op1 = makeOp("bulk_distribute", {
+				to: "bob",
+				items: [{ seedId: "seed_exhaust", quantity: 2 }],
+			});
+			(op1 as any).txId = "tx_exhaust_1";
+			await handleBulkDistribute(op1, sql);
+
+			const op2 = makeOp("bulk_distribute", {
+				to: "charlie",
+				items: [{ seedId: "seed_exhaust", quantity: 2 }],
+			});
+			(op2 as any).txId = "tx_exhaust_2";
+			await handleBulkDistribute(op2, sql);
+
+			// Replay both
+			await handleBulkDistribute(op1, sql);
+			await handleBulkDistribute(op2, sql);
+
+			const exhaustEvents = await sql`
+				SELECT * FROM history_events
+				WHERE event_type = 'supply_exhausted' AND nft_id = 'seed_exhaust'
+			`;
+			// supply_exhausted has UNIQUE(block_num, tx_id, event_type, nft_id),
+			// so it should fire once for tx_exhaust_2 (the one that hit the cap)
+			expect(exhaustEvents.length).toBe(1);
+
+			const [seed] = await sql`SELECT distributed, max_replicas FROM nfts WHERE id = 'seed_exhaust'`;
+			expect(seed!.distributed).toBe(4);
+			expect(seed!.distributed).toBeGreaterThanOrEqual(seed!.max_replicas);
 		});
 	});
 
@@ -512,6 +860,248 @@ describe("Handlers (integration)", () => {
 					price: { amount: "10.000", currency: "HIVE" },
 				}), sql),
 			).rejects.toThrow("lent");
+		});
+	});
+
+	// ─── pack_open (distributed control) ───────────
+
+	describe("pack_open", () => {
+		// Helper: create a seed with unlimited supply for pack testing
+		async function seedForPack(id: string, maxReplicas = 0) {
+			const op = makeOp("mint", {
+				id,
+				collectionId: "col_test",
+				maxReplicas,
+				metadata: { name: `Pack Seed ${id}` },
+			});
+			await handleMint(op, sql);
+		}
+
+		// Helper: create pack and give balance directly via SQL
+		async function setupPack(opts: {
+			packId: string;
+			seedIds: string[];
+			itemsPerPack?: number;
+			buyQuantity: number;
+			buyer?: string;
+		}) {
+			const dropTable = opts.seedIds.map(seedId => ({ seedId, weight: 1 }));
+			const createOp = makeOp("pack_create", {
+				id: opts.packId,
+				collectionId: "col_test",
+				name: `Pack ${opts.packId}`,
+				dropTable,
+				itemsPerPack: opts.itemsPerPack ?? 1,
+				maxSupply: 0,
+			});
+			await handlePackCreate(createOp, sql);
+
+			// Insert balance directly — avoids pack_buy payment flow in tests
+			const buyer = opts.buyer ?? "bob";
+			await sql`
+				INSERT INTO user_pack_balances (account, pack_id, balance)
+				VALUES (${buyer}, ${opts.packId}, ${opts.buyQuantity})
+				ON CONFLICT (account, pack_id)
+				DO UPDATE SET balance = user_pack_balances.balance + ${opts.buyQuantity}
+			`;
+		}
+
+		test("opens a pack and mints instances", async () => {
+			await seedCollection();
+			await seedForPack("seed_p1");
+
+			await setupPack({ packId: "pack_1", seedIds: ["seed_p1"], buyQuantity: 2 });
+
+			const openOp = makeOp("pack_open", {
+				packId: "pack_1",
+				quantity: 2,
+			}, "bob");
+			(openOp as any).txId = "tx_open_1";
+			await handlePackOpen(openOp, sql);
+
+			const instances = await sql`
+				SELECT * FROM nfts WHERE seed_id = 'seed_p1' ORDER BY instance_number
+			`;
+			expect(instances.length).toBe(2);
+			expect(instances[0]!.owner).toBe("bob");
+			expect(instances[0]!.instance_number).toBe(1);
+			expect(instances[1]!.instance_number).toBe(2);
+		});
+
+		test("pack open is idempotent on replay", async () => {
+			await seedCollection();
+			await seedForPack("seed_p2");
+
+			await setupPack({ packId: "pack_2", seedIds: ["seed_p2"], buyQuantity: 3 });
+
+			const openOp = makeOp("pack_open", {
+				packId: "pack_2",
+				quantity: 1,
+			}, "bob");
+			(openOp as any).txId = "tx_open_2";
+			await handlePackOpen(openOp, sql);
+
+			// Restore balance for replay (simulates re-indexing from scratch)
+			await sql`
+				UPDATE user_pack_balances
+				SET balance = balance + 1
+				WHERE account = 'bob' AND pack_id = 'pack_2'
+			`;
+			await sql`
+				UPDATE packs SET total_opened = total_opened - 1
+				WHERE id = 'pack_2'
+			`;
+
+			// Replay same op
+			await handlePackOpen(openOp, sql);
+
+			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_p2'`;
+			expect(instances.length).toBe(1); // not 2
+
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p2'`;
+			expect(seed!.distributed).toBe(1);
+		});
+
+		test("two different pack opens from same seed produce sequential instances", async () => {
+			await seedCollection();
+			await seedForPack("seed_p3");
+
+			await setupPack({ packId: "pack_3", seedIds: ["seed_p3"], buyQuantity: 4 });
+
+			const op1 = makeOp("pack_open", { packId: "pack_3", quantity: 2 }, "bob");
+			(op1 as any).txId = "tx_open_3a";
+			await handlePackOpen(op1, sql);
+
+			const op2 = makeOp("pack_open", { packId: "pack_3", quantity: 2 }, "bob");
+			(op2 as any).txId = "tx_open_3b";
+			await handlePackOpen(op2, sql);
+
+			const instances = await sql`
+				SELECT instance_number FROM nfts
+				WHERE seed_id = 'seed_p3'
+				ORDER BY instance_number
+			`;
+			expect(instances.length).toBe(4);
+			expect(instances.map(i => i.instance_number)).toEqual([1, 2, 3, 4]);
+
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p3'`;
+			expect(seed!.distributed).toBe(4);
+		});
+
+		test("concurrent pack opens + replays keep distributed accurate", async () => {
+			await seedCollection();
+			await seedForPack("seed_p4");
+
+			await setupPack({ packId: "pack_4", seedIds: ["seed_p4"], buyQuantity: 10 });
+
+			// 3 different pack opens
+			const ops = Array.from({ length: 3 }, (_, i) => {
+				const op = makeOp("pack_open", { packId: "pack_4", quantity: 1 }, "bob");
+				(op as any).txId = `tx_open_4_${i}`;
+				return op;
+			});
+
+			for (const op of ops) await handlePackOpen(op, sql);
+
+			// Replay all 3 — restore balances to simulate re-index
+			await sql`
+				UPDATE user_pack_balances
+				SET balance = balance + 3
+				WHERE account = 'bob' AND pack_id = 'pack_4'
+			`;
+			await sql`
+				UPDATE packs SET total_opened = total_opened - 3
+				WHERE id = 'pack_4'
+			`;
+
+			for (const op of ops) await handlePackOpen(op, sql);
+
+			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_p4'`;
+			expect(instances.length).toBe(3); // not 6
+
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p4'`;
+			expect(seed!.distributed).toBe(3);
+		});
+
+		test("pack open respects seed max supply across multiple opens", async () => {
+			await seedCollection();
+			await seedForPack("seed_p5", 3); // max 3 replicas
+
+			// Create pack with maxSupply matching seed capacity
+			const dropTable = [{ seedId: "seed_p5", weight: 1 }];
+			const createOp = makeOp("pack_create", {
+				id: "pack_5",
+				collectionId: "col_test",
+				name: "Pack 5",
+				dropTable,
+				itemsPerPack: 1,
+				maxSupply: 3,
+			});
+			await handlePackCreate(createOp, sql);
+			await sql`
+				INSERT INTO user_pack_balances (account, pack_id, balance)
+				VALUES ('bob', 'pack_5', 10)
+			`;
+
+			// Open 3 packs — should mint 3 instances (hitting cap)
+			const op1 = makeOp("pack_open", { packId: "pack_5", quantity: 3 }, "bob");
+			(op1 as any).txId = "tx_open_5a";
+			await handlePackOpen(op1, sql);
+
+			const [seedAfter3] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p5'`;
+			expect(seedAfter3!.distributed).toBe(3);
+
+			// Open 1 more — seed is exhausted, should produce 0 new instances
+			const op2 = makeOp("pack_open", { packId: "pack_5", quantity: 1 }, "bob");
+			(op2 as any).txId = "tx_open_5b";
+			await handlePackOpen(op2, sql);
+
+			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_p5'`;
+			expect(instances.length).toBe(3); // capped
+
+			const [seedFinal] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p5'`;
+			expect(seedFinal!.distributed).toBe(3);
+		});
+
+		test("multiple users opening packs simultaneously from same seed", async () => {
+			await seedCollection();
+			await seedForPack("seed_p6");
+
+			// Create pack and give packs to two users
+			await setupPack({ packId: "pack_6", seedIds: ["seed_p6"], buyQuantity: 3, buyer: "bob" });
+
+			// Also give packs to charlie
+			await sql`
+				INSERT INTO user_pack_balances (account, pack_id, balance)
+				VALUES ('charlie', 'pack_6', 3)
+			`;
+
+			// Bob opens 2 packs
+			const op1 = makeOp("pack_open", { packId: "pack_6", quantity: 2 }, "bob");
+			(op1 as any).txId = "tx_open_6_bob";
+			await handlePackOpen(op1, sql);
+
+			// Charlie opens 2 packs from same seed
+			const op2 = makeOp("pack_open", { packId: "pack_6", quantity: 2 }, "charlie");
+			(op2 as any).txId = "tx_open_6_charlie";
+			await handlePackOpen(op2, sql);
+
+			const instances = await sql`
+				SELECT instance_number, owner FROM nfts
+				WHERE seed_id = 'seed_p6'
+				ORDER BY instance_number
+			`;
+			expect(instances.length).toBe(4);
+			// Instance numbers should be sequential regardless of who opened
+			expect(instances.map(i => i.instance_number)).toEqual([1, 2, 3, 4]);
+			// First 2 belong to bob, last 2 to charlie
+			expect(instances[0]!.owner).toBe("bob");
+			expect(instances[1]!.owner).toBe("bob");
+			expect(instances[2]!.owner).toBe("charlie");
+			expect(instances[3]!.owner).toBe("charlie");
+
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p6'`;
+			expect(seed!.distributed).toBe(4);
 		});
 	});
 });

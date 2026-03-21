@@ -4,7 +4,6 @@
 import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
-	generateDeterministicInstanceId,
 	generateDeterministicPackId,
 	validateArtId,
 	validateArtIdArray,
@@ -19,10 +18,10 @@ import {
 import {
 	createDeterministicCollectionPayload,
 	createDeterministicMintPayload,
-	createDeterministicDistributePayload,
 	createCollectionOperation,
 	createMintOperation,
-	createDistributeOperation,
+	createBulkDistributePayload,
+	createBulkDistributeOperation,
 	createTransferOperation,
 	createListOperation,
 	createUnlistPayload,
@@ -50,6 +49,7 @@ import {
 	validatePackBuyInput,
 	validatePackTransferInput,
 	validatePackOpenInput,
+	validateBulkDistributeInput,
 } from "./validation";
 
 import {
@@ -65,7 +65,9 @@ import {
 	HASH_VERSION,
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
-	ACTION_DISTRIBUTE,
+	ACTION_BULK_DISTRIBUTE,
+	MAX_BULK_DISTRIBUTE_ITEMS,
+	MAX_BULK_DISTRIBUTE_TOTAL,
 	ACTION_BURN,
 	ACTION_UNLIST,
 	ACTION_BUY,
@@ -80,7 +82,8 @@ import type {
 	Price,
 	CollectionData,
 	NFTData,
-	DistributeData,
+	BulkDistributeData,
+	BulkDistributeInput,
 	ListingData,
 	UnlistData,
 	BuyData,
@@ -95,7 +98,6 @@ import type {
 	PackTransferInput,
 	PackOpenInput,
 	ProtocolPayload,
-	DistributeInput,
 	ListInput,
 } from "./types";
 
@@ -580,25 +582,27 @@ export class PayloadBuilder {
 		};
 	}
 
-	// ============ BUILD DISTRIBUTE ============
+	// ============ BUILD BULK DISTRIBUTE ============
 
-	public buildDistribute(input: {
-		seedId: string;
-		to: string;
-		instanceNumber: number;
-		owner: string;
-	}): BuildResult<DistributeData> {
+	public buildBulkDistribute(input: {
+		items: Array<{ seedId: string; quantity: number }>;
+		signer: string;
+		to?: string;
+		imageOverrides?: Record<string, { imageUrl?: string; imageHash?: string }>;
+		data?: Record<string, unknown>;
+	}): BuildResult<BulkDistributeData> {
 		const errors: ValidationError[] = [];
+		const warnings: string[] = [];
 
-		if (!this.isValidSeedId(input.seedId)) {
+		if (!this.isValidHiveUsername(input.signer)) {
 			errors.push({
-				field: "seedId",
-				message: "Invalid seed ID format (must start with 'seed_')",
-				code: "INVALID_SEED_ID",
+				field: "signer",
+				message: "Invalid Hive username format",
+				code: "INVALID_USERNAME",
 			});
 		}
 
-		if (!this.isValidHiveUsername(input.to)) {
+		if (input.to && !this.isValidHiveUsername(input.to)) {
 			errors.push({
 				field: "to",
 				message: "Invalid Hive username format",
@@ -606,43 +610,83 @@ export class PayloadBuilder {
 			});
 		}
 
-		if (!this.isValidHiveUsername(input.owner)) {
+		if (!input.items || input.items.length === 0) {
 			errors.push({
-				field: "owner",
-				message: "Invalid Hive username format",
-				code: "INVALID_USERNAME",
+				field: "items",
+				message: "At least one item is required",
+				code: "ITEMS_REQUIRED",
 			});
-		}
+		} else {
+			if (input.items.length > MAX_BULK_DISTRIBUTE_ITEMS) {
+				errors.push({
+					field: "items",
+					message: `Too many distinct seeds: max ${MAX_BULK_DISTRIBUTE_ITEMS}`,
+					code: "TOO_MANY_ITEMS",
+				});
+			}
 
-		if (input.instanceNumber <= 0) {
-			errors.push({
-				field: "instanceNumber",
-				message: "Instance number must be greater than 0",
-				code: "INVALID_INSTANCE_NUMBER",
-			});
+			const seenSeeds = new Set<string>();
+			let totalQuantity = 0;
+
+			for (let i = 0; i < input.items.length; i++) {
+				const item = input.items[i]!;
+
+				if (!this.isValidSeedId(item.seedId)) {
+					errors.push({
+						field: `items[${i}].seedId`,
+						message: "Invalid seed ID format (must start with 'seed_')",
+						code: "INVALID_SEED_ID",
+					});
+				}
+
+				if (seenSeeds.has(item.seedId)) {
+					errors.push({
+						field: `items[${i}].seedId`,
+						message: `Duplicate seedId: ${item.seedId}`,
+						code: "DUPLICATE_SEED_ID",
+					});
+				}
+				seenSeeds.add(item.seedId);
+
+				if (typeof item.quantity !== "number" || item.quantity < 1) {
+					errors.push({
+						field: `items[${i}].quantity`,
+						message: "Quantity must be a positive integer",
+						code: "INVALID_QUANTITY",
+					});
+				} else {
+					totalQuantity += item.quantity;
+				}
+			}
+
+			if (totalQuantity > MAX_BULK_DISTRIBUTE_TOTAL) {
+				errors.push({
+					field: "items",
+					message: `Total quantity ${totalQuantity} exceeds max ${MAX_BULK_DISTRIBUTE_TOTAL}`,
+					code: "TOTAL_EXCEEDS_MAX",
+				});
+			}
 		}
 
 		if (errors.length > 0) {
 			return { success: false, errors };
 		}
 
-		const generatedId = generateDeterministicInstanceId(input.seedId, input.instanceNumber);
-
-		const distributeInput: DistributeInput = {
-			seedId: input.seedId,
-			to: input.to,
-			instanceNumber: input.instanceNumber,
+		const bulkInput: BulkDistributeInput = {
+			...(input.to && { to: input.to }),
+			items: input.items,
+			...(input.imageOverrides && { imageOverrides: input.imageOverrides }),
+			...(input.data && { data: input.data }),
 		};
 
-		const payload = createDeterministicDistributePayload(distributeInput);
-		const operation = createDistributeOperation(distributeInput, input.owner);
+		const payload = createBulkDistributePayload(bulkInput);
+		const operation = createBulkDistributeOperation(bulkInput, input.signer);
 
 		return {
 			success: true,
 			payload,
 			operation,
-			generatedId,
-			generatedIds: { instanceId: generatedId },
+			warnings: warnings.length > 0 ? warnings : undefined,
 		};
 	}
 

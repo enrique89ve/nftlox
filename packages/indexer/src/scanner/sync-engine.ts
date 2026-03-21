@@ -1,17 +1,15 @@
 import { config } from "@/config.ts";
 import { withTransaction } from "@/db/client.ts";
 import { getLastBlock, updateLastBlock } from "@/db/queries/sync.ts";
-import { getHeadBlockNum, getBlockRange } from "./hive-client.ts";
-import { parseBlockOperations } from "./operation-parser.ts";
+import { getHeadBlockNum, getCustomJsonInRange, getHafAHBlockRange } from "./hive-client.ts";
+import { parseHafAHOperations } from "./operation-parser.ts";
 import { routeOperation } from "@/processor/action-router.ts";
 import { setSynced, updateSyncProgress } from "./sync-state.ts";
 import { createLogger } from "@/utils/logger.ts";
 
 const log = createLogger("sync");
 
-const MASSIVE_BATCH_SIZE = 1000;
 const MASSIVE_THRESHOLD = 100;
-const LIVE_BATCH_SIZE = 100;
 
 let running = false;
 
@@ -20,6 +18,7 @@ export function startSync(): void {
 	log.info("Sync engine started", {
 		genesisBlock: config.genesisBlock,
 		syncInterval: config.syncIntervalMs,
+		method: "HafAH",
 	});
 
 	syncLoop().catch((err) => {
@@ -67,16 +66,15 @@ async function syncCycle(): Promise<void> {
 	}
 
 	const isMassive = behind > MASSIVE_THRESHOLD;
-	const batchSize = isMassive ? MASSIVE_BATCH_SIZE : LIVE_BATCH_SIZE;
+	const blockRange = getHafAHBlockRange();
 
 	if (isMassive) {
 		setSynced(false);
-		log.info("MASSIVE SYNC started", {
+		log.info("MASSIVE SYNC started (HafAH)", {
 			lastBlock,
 			headBlock,
 			behind,
-			batchSize,
-			estimatedMinutes: Math.ceil(behind / 300 / 60),
+			blockRange,
 		});
 	}
 
@@ -86,49 +84,57 @@ async function syncCycle(): Promise<void> {
 	const startTime = Date.now();
 
 	while (current <= headBlock && running) {
-		const count = Math.min(batchSize, headBlock - current + 1);
-		const blocks = await getBlockRange(current, count);
+		const rangeEnd = Math.min(current + blockRange - 1, headBlock);
 
-		if (blocks.length === 0) break;
+		// Fetch custom_json ops in this range via HafAH (pre-filtered by protocol ID)
+		const hafOps = await getCustomJsonInRange(current, rangeEnd, config.protocolId);
 
-		let opsProcessed = 0;
-		const batchEnd = current + blocks.length - 1;
+		// Parse validated protocol operations
+		const ops = parseHafAHOperations(hafOps);
 
-		await withTransaction(async (txn) => {
-			for (const block of blocks) {
-				const ops = parseBlockOperations(block);
+		// Process operations in a transaction
+		if (ops.length > 0) {
+			await withTransaction(async (txn) => {
+				if (isMassive) {
+					await txn`SET LOCAL synchronous_commit = OFF`;
+				}
 				for (const op of ops) {
 					await routeOperation(op, txn);
-					opsProcessed++;
 				}
-			}
-			await updateLastBlock(batchEnd, txn);
-		});
+				await updateLastBlock(rangeEnd, txn);
+			});
+		} else {
+			// No ops in range — just advance the cursor
+			await updateLastBlock(rangeEnd);
+		}
 
-		totalOps += opsProcessed;
-		totalBlocks += blocks.length;
+		const blocksInRange = rangeEnd - current + 1;
+		totalOps += ops.length;
+		totalBlocks += blocksInRange;
 
-		updateSyncProgress(batchEnd, headBlock);
+		updateSyncProgress(rangeEnd, headBlock);
 
-		if (opsProcessed > 0) {
+		if (ops.length > 0) {
 			log.info("Processed ops", {
-				range: `${current}-${batchEnd}`,
-				ops: opsProcessed,
+				range: `${current}-${rangeEnd}`,
+				customJson: hafOps.length,
+				protocolOps: ops.length,
 			});
 		}
 
-		const logInterval = isMassive ? 5000 : 500;
-		if (totalBlocks % logInterval < batchSize) {
-			const pct = ((batchEnd - lastBlock) / behind * 100).toFixed(2);
+		// Progress log every ~10k blocks
+		if (isMassive && totalBlocks % 10000 < blockRange) {
+			const pct = ((rangeEnd - lastBlock) / behind * 100).toFixed(2);
 			const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 			const bps = (totalBlocks / ((Date.now() - startTime) / 1000)).toFixed(0);
-			const eta = behind > 0
-				? Math.ceil((headBlock - batchEnd) / Number(bps) / 60)
+			const remaining = headBlock - rangeEnd;
+			const eta = Number(bps) > 0
+				? Math.ceil(remaining / Number(bps) / 60)
 				: 0;
 			log.info("Progress", {
-				block: batchEnd,
+				block: rangeEnd,
 				scanned: totalBlocks,
-				ops: totalOps,
+				protocolOps: totalOps,
 				pct: `${pct}%`,
 				elapsed: `${elapsed}s`,
 				blocksPerSec: bps,
@@ -136,14 +142,14 @@ async function syncCycle(): Promise<void> {
 			});
 		}
 
-		current = batchEnd + 1;
+		current = rangeEnd + 1;
 	}
 
 	if (isMassive && totalBlocks > 0) {
 		const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 		log.info("MASSIVE SYNC complete", {
 			blocks: totalBlocks,
-			ops: totalOps,
+			protocolOps: totalOps,
 			elapsed: `${elapsed}s`,
 		});
 		setSynced(true);

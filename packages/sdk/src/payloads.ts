@@ -9,7 +9,7 @@ import {
 	ACTION_TRANSFER,
 	ACTION_BURN,
 	ACTION_REPLICATE,
-	ACTION_DISTRIBUTE,
+	ACTION_BULK_DISTRIBUTE,
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
@@ -46,8 +46,8 @@ import type {
 	DataOperatorApproveInput,
 	SetDataFromData,
 	SetDataFromInput,
-	DistributeData,
-	DistributeInput,
+	BulkDistributeData,
+	BulkDistributeInput,
 	ListingData,
 	UnlistData,
 	BuyData,
@@ -103,10 +103,8 @@ import {
 	generateImageHash,
 	generateReplicaId,
 	generateOfferId,
-	generateInstanceId,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
-	generateDeterministicInstanceId,
 	generateDeterministicPackId,
 	deterministicHash,
 } from "./dna";
@@ -211,27 +209,41 @@ export function createReplicatePayload(
 	};
 }
 
-// ============ DISTRIBUTE PAYLOADS (Seed → Instance) ============
+// ============ BULK DISTRIBUTE PAYLOADS ============
 
-export function createDistributePayload(
-	input: DistributeInput,
-): ProtocolPayload<DistributeData> {
-	const instanceId = generateInstanceId(input.seedId, input.instanceNumber);
+export function createBulkDistributePayload(
+	input: BulkDistributeInput,
+): ProtocolPayload<BulkDistributeData> {
 	return {
 		protocol: PROTOCOL_ID,
 		version: PROTOCOL_VERSION,
-		action: ACTION_DISTRIBUTE,
+		action: ACTION_BULK_DISTRIBUTE,
 		data: {
-			seedId: input.seedId,
-			instanceId,
-			to: input.to,
-			instanceNumber: input.instanceNumber,
-			...(input.imageUrl && { imageUrl: input.imageUrl }),
-			...(input.imageHash && { imageHash: input.imageHash }),
-			...(input.tags && { tags: sanitizeTags(input.tags) }),
+			...(input.to && { to: input.to }),
+			items: input.items.map(item => ({
+				seedId: item.seedId,
+				quantity: item.quantity,
+			})),
+			...(input.imageOverrides && { imageOverrides: input.imageOverrides }),
 			...(input.data && { data: input.data }),
 		},
 	};
+}
+
+export function createBulkDistributeOperation(
+	input: BulkDistributeInput,
+	signer: string,
+): HiveOperation {
+	const payload = createBulkDistributePayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [signer],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
 }
 
 // ============ TRANSFER PAYLOADS ============
@@ -290,7 +302,7 @@ export function sanitizeTags(tags: string[]): string[] {
 
 /**
  * Create a set_data payload to update an NFT's mutable data and/or tags.
- * Only the collection creator (or authorized issuer) should call this.
+ * Only the NFT owner can call this (requires active key).
  */
 export function createSetDataPayload(
 	input: SetDataInput,
@@ -517,22 +529,6 @@ export function createReplicateOperation(input: ReplicateInput): HiveOperation {
 		{
 			required_auths: [],
 			required_posting_auths: [input.currentOwner],
-			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
-		},
-	];
-}
-
-export function createDistributeOperation(
-	input: DistributeInput,
-	owner: string,
-): HiveOperation {
-	const payload = createDistributePayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},
@@ -854,30 +850,6 @@ export function createDeterministicMintPayload(
 			},
 			maxReplicas: input.maxReplicas ?? 1,
 			createdAt: Date.now(),
-		},
-	};
-}
-
-/**
- * Creates a distribute payload with a deterministic instanceId.
- * Same seedId + instanceNumber always produces the same instanceId.
- */
-export function createDeterministicDistributePayload(
-	input: DistributeInput,
-): ProtocolPayload<DistributeData> {
-	const instanceId = generateDeterministicInstanceId(
-		input.seedId,
-		input.instanceNumber,
-	);
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_DISTRIBUTE,
-		data: {
-			seedId: input.seedId,
-			instanceId,
-			to: input.to,
-			instanceNumber: input.instanceNumber,
 		},
 	};
 }

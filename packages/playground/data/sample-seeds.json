@@ -1,37 +1,37 @@
 [
 	{
-		"artId": "gen-001",
-		"name": "Genesis Seed #1",
+		"artId": "SEED-001",
+		"name": "Genesis Alpha",
 		"brief": "Ultra Rare - The first seed of the collection",
-		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxGenesis/001.png",
+		"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/2458Ywc656oqQ6dLVq9VJKbRrFocRLNuBSfanqkh9x6NdzUTTxiEZgK9PnWYUAaEfVwKP.png",
 		"maxSupply": 100
 	},
 	{
-		"artId": "gen-002",
-		"name": "Genesis Seed #2",
+		"artId": "SEED-002",
+		"name": "Genesis Beta",
 		"brief": "Legendary - A powerful seed with limited supply",
-		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxGenesis/002.png",
+		"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yJP8FwGQ1mtBAijkxqGGbPmv2fcg135VTxnxHnh2nWokHE7qcKEDjonro55wUGzkeDH.png",
 		"maxSupply": 500
 	},
 	{
-		"artId": "gen-003",
-		"name": "Genesis Seed #3",
+		"artId": "SEED-003",
+		"name": "Genesis Gamma",
 		"brief": "Epic - A versatile seed for the community",
-		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxGenesis/003.png",
+		"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/244AAyHiwU7kjGDQFM2nXiHTWnJetsGtG7okyhdg2E9oEGFjapaDkGueMePVUZb2EfY5K.png",
 		"maxSupply": 1000
 	},
 	{
-		"artId": "gen-004",
-		"name": "Genesis Seed #4",
-		"brief": "Rare - Common but valuable seed",
-		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxGenesis/004.png",
+		"artId": "SEED-004",
+		"name": "Genesis Delta",
+		"brief": "Rare - A solid seed with good supply",
+		"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yTmHF4uoo6ZRyk2trWSAgqwpG4kDjRY3VhLBnKfxLkpTp6zAQjQnS1oFyky7yQ51eRZ.png",
 		"maxSupply": 5000
 	},
 	{
-		"artId": "gen-005",
-		"name": "Genesis Seed #5",
+		"artId": "SEED-005",
+		"name": "Genesis Omega",
 		"brief": "Common - Available for everyone",
-		"imageUrl": "https://ipfs.io/ipfs/QmNFTLoxGenesis/005.png",
+		"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23zkrwARsCeyekADuopVGaSTRGokezX8uBCbMzpN9NfPauy5s295oAQnNVBHMhFTTK4pY.png",
 		"maxSupply": 10000
 	}
 ]

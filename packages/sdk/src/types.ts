@@ -94,26 +94,24 @@ export interface ReplicaData {
 	uniqueAccessKey: string;
 }
 
-// ============ DISTRIBUTE TYPES (Seed → Instance) ============
+// ============ BULK DISTRIBUTE TYPES ============
 
-export interface DistributeData {
+export interface BulkDistributeItem {
 	seedId: string;
-	instanceId: string;
-	to: string;
-	instanceNumber: number;
-	imageUrl?: string;
-	imageHash?: string;
-	tags?: string[];
+	quantity: number;
+}
+
+export interface BulkDistributeData {
+	to?: string;
+	items: BulkDistributeItem[];
+	imageOverrides?: Record<string, { imageUrl?: string; imageHash?: string }>;
 	data?: Record<string, unknown>;
 }
 
-export interface DistributeInput {
-	seedId: string;
-	to: string;
-	instanceNumber: number;
-	imageUrl?: string;
-	imageHash?: string;
-	tags?: string[];
+export interface BulkDistributeInput {
+	to?: string;
+	items: BulkDistributeItem[];
+	imageOverrides?: Record<string, { imageUrl?: string; imageHash?: string }>;
 	data?: Record<string, unknown>;
 }
 
@@ -410,6 +408,7 @@ export type HistoryEventType =
 	| "create_collection"
 	| "mint"
 	| "distribute"
+	| "supply_exhausted"
 	| "transfer"
 	| "buy"
 	| "list"

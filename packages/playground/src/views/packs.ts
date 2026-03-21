@@ -1,6 +1,6 @@
 // Packs view — browse, create, buy, open, transfer packs
-import { $, log } from "../shared/dom";
-import { connectedUser } from "../shared/state";
+import { $, log, PLACEHOLDER_SM } from "../shared/dom";
+import { getConnectedUser } from "../shared/state";
 import { broadcastOperation } from "../shared/keychain";
 
 export function initPacks() {
@@ -26,7 +26,7 @@ async function loadPacks() {
 
 		container.innerHTML = packs.map((pack: any) => `
 			<div class="nft-card pack-card" data-id="${pack.id}" onclick="loadPackDetail('${pack.id}')">
-				${pack.image_url ? `<img class="nft-image" src="${pack.image_url}" onerror="this.src='https://via.placeholder.com/150/1a1a1a/525252?text=PACK'">` : `<div class="nft-image" style="background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 32px;">📦</div>`}
+				${pack.image_url ? `<img class="nft-image" src="${pack.image_url}" onerror="this.src='${PLACEHOLDER_SM}'">` : `<div class="nft-image" style="background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 32px;">📦</div>`}
 				<div class="nft-name">${pack.name}</div>
 				<div class="nft-owner">@${pack.creator}</div>
 				<div class="nft-id" style="display: flex; justify-content: space-between; font-size: 12px;">
@@ -94,7 +94,7 @@ async function loadPackDetail(packId: string) {
 		}
 
 		// Actions
-		if (actionsEl && connectedUser) {
+		if (actionsEl && getConnectedUser()) {
 			actionsEl.innerHTML = `
 				<div style="display: flex; gap: 8px; flex-wrap: wrap;">
 					<button class="btn btn-primary btn-sm" onclick="packAction('buy', '${packId}')">Buy</button>
@@ -131,7 +131,8 @@ async function loadPackDetail(packId: string) {
 }
 
 async function packAction(action: "buy" | "open" | "transfer", packId: string) {
-	if (!connectedUser) {
+	const user = getConnectedUser();
+	if (!user) {
 		log("Connect wallet first", "error");
 		return;
 	}
@@ -143,19 +144,19 @@ async function packAction(action: "buy" | "open" | "transfer", packId: string) {
 		const quantity = parseInt(prompt("Quantity to buy:") || "1", 10);
 		if (isNaN(quantity) || quantity < 1) return;
 		endpoint = "/api/build/pack-buy";
-		body = { packId, buyer: connectedUser, quantity };
+		body = { packId, buyer: user, quantity };
 	} else if (action === "open") {
 		const quantity = parseInt(prompt("Quantity to open:") || "1", 10);
 		if (isNaN(quantity) || quantity < 1) return;
 		endpoint = "/api/build/pack-open";
-		body = { packId, opener: connectedUser, quantity };
+		body = { packId, opener: user, quantity };
 	} else if (action === "transfer") {
 		const to = prompt("Transfer to (username):");
 		if (!to) return;
 		const quantity = parseInt(prompt("Quantity:") || "1", 10);
 		if (isNaN(quantity) || quantity < 1) return;
 		endpoint = "/api/build/pack-transfer";
-		body = { packId, from: connectedUser, to: to.toLowerCase(), quantity };
+		body = { packId, from: user, to: to.toLowerCase(), quantity };
 	}
 
 	try {
@@ -172,7 +173,7 @@ async function packAction(action: "buy" | "open" | "transfer", packId: string) {
 		}
 
 		broadcastOperation(
-			connectedUser,
+			user,
 			[result.operation],
 			result.keyType || "Posting",
 			() => {
@@ -188,12 +189,12 @@ async function packAction(action: "buy" | "open" | "transfer", packId: string) {
 
 async function renderUserPacks(containerId: string) {
 	const container = $(containerId);
-	if (!container || !connectedUser) return;
+	if (!container || !getConnectedUser()) return;
 
 	container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Loading...</p></div>';
 
 	try {
-		const response = await fetch(`/api/user/${connectedUser}/packs`);
+		const response = await fetch(`/api/user/${getConnectedUser()}/packs`);
 		const data = await response.json();
 		const packs = data.packs || [];
 

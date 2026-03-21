@@ -1,6 +1,6 @@
 // Marketplace view — listings and recent sales
-import { $, log } from "../shared/dom";
-import { connectedUser } from "../shared/state";
+import { $, log, PLACEHOLDER_SM } from "../shared/dom";
+import { getConnectedUser } from "../shared/state";
 import { broadcastOperation } from "../shared/keychain";
 
 export function initMarketplace() {
@@ -34,12 +34,12 @@ async function loadListings() {
 
 		container.innerHTML = listings.map((nft: any) => `
 			<div class="nft-card" data-id="${nft.id}">
-				<img class="nft-image" src="${nft.image_url}" onerror="this.src='https://via.placeholder.com/150/1a1a1a/525252?text=NFT'">
+				<img class="nft-image" src="${nft.image_url}" onerror="this.src='${PLACEHOLDER_SM}'">
 				<div class="nft-name">${nft.name}</div>
 				<div class="nft-owner">@${nft.owner}</div>
 				<div class="nft-id" style="display: flex; justify-content: space-between; align-items: center;">
 					<span style="color: var(--accent); font-weight: 600;">${nft.listing_price} ${nft.listing_currency}</span>
-					${connectedUser && connectedUser !== nft.owner ? `<button class="btn btn-sm btn-primary" onclick="buyListing('${nft.id}')">Buy</button>` : ""}
+					${getConnectedUser() && getConnectedUser() !== nft.owner ? `<button class="btn btn-sm btn-primary" onclick="buyListing('${nft.id}')">Buy</button>` : ""}
 				</div>
 			</div>
 		`).join("");
@@ -90,7 +90,8 @@ async function loadRecentSales() {
 }
 
 async function buyListing(nftId: string) {
-	if (!connectedUser) {
+	const user = getConnectedUser();
+	if (!user) {
 		log("Connect wallet first", "error");
 		return;
 	}
@@ -103,7 +104,7 @@ async function buyListing(nftId: string) {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
 				nftId,
-				buyer: connectedUser,
+				buyer: user,
 				paymentTxId: "pending",
 			}),
 		});
@@ -115,7 +116,7 @@ async function buyListing(nftId: string) {
 		}
 
 		broadcastOperation(
-			connectedUser,
+			user,
 			[result.operation],
 			"Posting",
 			() => {

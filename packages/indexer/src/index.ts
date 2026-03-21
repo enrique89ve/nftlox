@@ -1,6 +1,7 @@
 import { testConnection, closePool } from "./db/client.ts";
 import { startSync, stopSync } from "./scanner/sync-engine.ts";
 import { startApiServer } from "./api/server.ts";
+import { setStartupTime, getSyncProgress, isSynced } from "./scanner/sync-state.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 
@@ -46,31 +47,52 @@ async function ensurePostgres(): Promise<void> {
 	throw new Error("PostgreSQL failed to start within 30s");
 }
 
-async function waitForDatabase(): Promise<void> {
-	for (let i = 0; i < 30; i++) {
+async function connectWithRetry(): Promise<void> {
+	let attempt = 0;
+	while (true) {
 		try {
+			attempt++;
+			if (config.nodeEnv !== "production") {
+				await ensurePostgres();
+			}
 			await testConnection();
 			return;
-		} catch {
-			if (i === 0) log.info("Waiting for database...");
-			await new Promise(r => setTimeout(r, 1000));
+		} catch (err) {
+			if (attempt === 1) log.info("Waiting for database...");
+			const delay = Math.min(30_000, 1000 * 2 ** (attempt - 1));
+			log.error(`Database connection failed (attempt ${attempt}), retrying in ${delay}ms`, {
+				error: err instanceof Error ? err.message : String(err),
+			});
+			await new Promise(r => setTimeout(r, delay));
 		}
 	}
-	throw new Error("Database not ready after 30s");
 }
 
 async function main(): Promise<void> {
+	setStartupTime();
 	log.info("NFTLox Indexer starting...");
 
-	// In production (Docker), DB is provided by docker-compose.
-	// In dev, auto-launch PostgreSQL container if not running.
-	if (config.nodeEnv !== "production") {
-		await ensurePostgres();
-	}
-
-	await waitForDatabase();
+	await connectWithRetry();
 
 	startApiServer();
+
+	if (config.healthPort > 0) {
+		Bun.serve({
+			port: config.healthPort,
+			fetch() {
+				const progress = getSyncProgress();
+				const synced = isSynced();
+				return new Response(
+					JSON.stringify({ status: synced ? "ok" : "syncing", ...progress }),
+					{
+						status: synced ? 200 : 503,
+						headers: { "Content-Type": "application/json" },
+					},
+				);
+			},
+		});
+		log.info(`Static health endpoint on port ${config.healthPort}`);
+	}
 
 	startSync();
 }

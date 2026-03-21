@@ -17,6 +17,8 @@ import {
 	MAX_PACK_OPEN_BATCH,
 	MIN_DROP_WEIGHT,
 	MAX_DROP_WEIGHT,
+	MAX_BULK_DISTRIBUTE_ITEMS,
+	MAX_BULK_DISTRIBUTE_TOTAL,
 } from "./constants";
 
 import type {
@@ -37,9 +39,11 @@ import type {
 	NftApproveAllInput,
 	NftTransferFromInput,
 	DataOperatorApproveInput,
+	SetDataInput,
 	SetDataFromInput,
 	NftLendInput,
 	NftReturnInput,
+	BulkDistributeInput,
 } from "./types";
 
 // ============ SHARED CONSTANTS ============
@@ -557,6 +561,23 @@ export function validateNftTransferFromInput(
 	return { valid: true };
 }
 
+// ============ SET_DATA VALIDATION ============
+
+export function validateSetDataInput(
+	input: SetDataInput,
+): ValidationResult {
+	if (!input.nftId) {
+		return { valid: false, error: "NFT ID is required" };
+	}
+	if (!input.instanceDna) {
+		return { valid: false, error: "Instance DNA is required" };
+	}
+	if (!input.data || typeof input.data !== "object" || Array.isArray(input.data)) {
+		return { valid: false, error: "Data must be an object" };
+	}
+	return { valid: true };
+}
+
 // ============ DATA OPERATOR VALIDATION ============
 
 export function validateDataOperatorApproveInput(
@@ -615,5 +636,57 @@ export function validateNftReturnInput(
 	if (!input.instanceId) {
 		return { valid: false, error: "Instance ID is required" };
 	}
+	return { valid: true };
+}
+
+// ============ BULK DISTRIBUTE VALIDATION ============
+
+export function validateBulkDistributeInput(
+	input: BulkDistributeInput,
+): ValidationResult {
+	if (!input.items || input.items.length === 0) {
+		return { valid: false, error: "Items array is required and cannot be empty" };
+	}
+
+	if (input.items.length > MAX_BULK_DISTRIBUTE_ITEMS) {
+		return {
+			valid: false,
+			error: `Items array exceeds maximum of ${MAX_BULK_DISTRIBUTE_ITEMS} distinct seeds`,
+		};
+	}
+
+	if (input.to && !HIVE_USERNAME_REGEX.test(input.to)) {
+		return { valid: false, error: "Invalid recipient username format" };
+	}
+
+	const seenSeeds = new Set<string>();
+	let totalQuantity = 0;
+
+	for (let i = 0; i < input.items.length; i++) {
+		const item = input.items[i]!;
+
+		if (!item.seedId) {
+			return { valid: false, error: `Item at index ${i}: seedId is required` };
+		}
+
+		if (seenSeeds.has(item.seedId)) {
+			return { valid: false, error: `Duplicate seedId: ${item.seedId} — aggregate quantities instead` };
+		}
+		seenSeeds.add(item.seedId);
+
+		if (typeof item.quantity !== "number" || item.quantity < 1) {
+			return { valid: false, error: `Item at index ${i}: quantity must be a positive integer` };
+		}
+
+		totalQuantity += item.quantity;
+	}
+
+	if (totalQuantity > MAX_BULK_DISTRIBUTE_TOTAL) {
+		return {
+			valid: false,
+			error: `Total quantity ${totalQuantity} exceeds maximum of ${MAX_BULK_DISTRIBUTE_TOTAL} instances per transaction`,
+		};
+	}
+
 	return { valid: true };
 }

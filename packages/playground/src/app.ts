@@ -1,11 +1,10 @@
 import {
 	createAtomicTransferOperations,
 	getTrackingAmount,
-	createDistributePayload,
+	createBulkDistributePayload,
 	PROTOCOL_ID,
 	type SeedNFTWithArtId,
 	type HiveOperation,
-	IndexerError,
 } from "nftlox-sdk";
 import {
 	createSession,
@@ -15,9 +14,29 @@ import {
 	initializeSeedBatches,
 	type MintingSession,
 } from "./persistence";
-import { $, log, mintLog } from "./shared/dom";
-import { indexer } from "./shared/indexer";
-import { setConnectedUser as syncConnectedUser } from "./shared/state";
+
+const $ = (id: string) => document.getElementById(id);
+
+// Inline SVG placeholders (no external dependencies)
+const PLACEHOLDER_SM = "data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27150%27 height=%27150%27%3E%3Crect fill=%27%231a1a1a%27 width=%27150%27 height=%27150%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%23525252%27 font-family=%27sans-serif%27 font-size=%2714%27 text-anchor=%27middle%27 dy=%27.35em%27%3ENFT%3C/text%3E%3C/svg%3E";
+const PLACEHOLDER_LG = "data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27400%27 height=%27400%27%3E%3Crect fill=%27%231a1a1a%27 width=%27400%27 height=%27400%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%23525252%27 font-family=%27sans-serif%27 font-size=%2724%27 text-anchor=%27middle%27 dy=%27.35em%27%3ENFT%3C/text%3E%3C/svg%3E";
+const PLACEHOLDER_XS = "data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27100%27 height=%27100%27%3E%3Crect fill=%27%231a1a1a%27 width=%27100%27 height=%27100%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%23525252%27 font-family=%27sans-serif%27 font-size=%2712%27 text-anchor=%27middle%27 dy=%27.35em%27%3ENFT%3C/text%3E%3C/svg%3E";
+
+function log(msg: string, type = "info", containerId = "log") {
+	const el = $(containerId);
+	if (!el) return;
+	const entry = document.createElement("div");
+	entry.className = "log-entry";
+	entry.innerHTML = `
+		<span class="log-time">${new Date().toLocaleTimeString()}</span>
+		<span class="log-msg ${type}">${msg}</span>
+	`;
+	el.insertBefore(entry, el.firstChild);
+}
+
+function mintLog(msg: string, type = "info") {
+	log(msg, type, "mint-log");
+}
 
 let selectedNft: { id: string; collectionId: string; edition: number; instanceDna: string } | null = null;
 let connectedUser: string | null = null;
@@ -28,40 +47,26 @@ let broadcastPhase = 0;
 let validationPassed = false;
 let currentSession: MintingSession | null = null;
 
-// ============ INDEXER-BACKED HELPERS ============
+// ============ FETCH-BACKED HELPERS ============
 
 async function getNFTsByOwner(owner: string) {
-	const nfts = await indexer.getUserNfts(owner);
-	return nfts.filter(n => n.status !== "burned").map(n => ({
-		id: n.id,
-		collectionId: n.collection_id,
-		name: n.name,
-		imageUrl: n.image_url,
-		owner: n.owner,
-		edition: n.edition,
-		dna: n.instance_dna,
-		instanceDna: n.instance_dna,
-		mintedAt: n.created_at,
-		mintedBy: n.minted_by,
-		burned: n.status === "burned",
-		listed: n.status === "listed",
-		listingPrice: n.listing_price ? { amount: n.listing_price, currency: n.listing_currency } : undefined,
-		isSeed: n.nft_type === "seed",
-		maxSupply: n.max_replicas,
-		distributed: n.distributed,
-		isReplica: n.nft_type === "replica",
-		originalId: n.original_id,
-		seedId: n.seed_id,
-		instanceNumber: n.instance_number,
-		imageHash: n.image_hash,
-	}));
+	const response = await fetch(`/api/user/${encodeURIComponent(owner)}`);
+	const data = await response.json();
+	return data.nfts || [];
 }
 
 async function validateTransfer(nftId: string, currentUser: string) {
 	try {
-		const nft = await indexer.getNft(nftId);
+		const response = await fetch(`/api/nft/${encodeURIComponent(nftId)}/details`);
+		const data = await response.json();
 
-		if (nft.status === "burned") {
+		if (data.error) {
+			return { valid: false as const, error: data.error };
+		}
+
+		const nft = data.nft;
+
+		if (nft.burned) {
 			return { valid: false as const, error: "NFT has been burned" };
 		}
 
@@ -69,28 +74,12 @@ async function validateTransfer(nftId: string, currentUser: string) {
 			return { valid: false as const, error: `You are not the owner (@${nft.owner})` };
 		}
 
-		const mapped = {
-			id: nft.id,
-			collectionId: nft.collection_id,
-			name: nft.name,
-			imageUrl: nft.image_url,
-			owner: nft.owner,
-			edition: nft.edition,
-			dna: nft.instance_dna,
-			instanceDna: nft.instance_dna,
-			imageHash: nft.image_hash,
-			listed: nft.status === "listed",
-		};
-
-		if (nft.status === "listed") {
-			return { valid: true as const, warning: "Warning: Transfer will unlist NFT from marketplace", nft: mapped };
+		if (nft.listed) {
+			return { valid: true as const, warning: "Warning: Transfer will unlist NFT from marketplace", nft };
 		}
 
-		return { valid: true as const, nft: mapped };
+		return { valid: true as const, nft };
 	} catch (e) {
-		if (e instanceof IndexerError && e.status === 404) {
-			return { valid: false as const, error: "NFT not found" };
-		}
 		return { valid: false as const, error: String(e) };
 	}
 }
@@ -161,7 +150,7 @@ $("btn-connect")?.addEventListener("click", () => {
 		const user = prompt("Enter your Hive username:");
 		if (user) {
 			connectedUser = user.toLowerCase();
-			syncConnectedUser(connectedUser);
+			(window as any).__connectedUser = connectedUser;
 			const display = $("user-display");
 			const dot = $("keychain-dot");
 			if (display) display.textContent = `@${connectedUser}`;
@@ -288,7 +277,7 @@ async function loadCollectionDetail(collectionId: string) {
 			} else {
 				seedsContainer.innerHTML = seeds.map((nft: any) => `
 					<div class="nft-card" data-id="${nft.id}">
-						<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='https://via.placeholder.com/150/1a1a1a/525252?text=NFT'">
+						<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='${PLACEHOLDER_SM}'">
 						<div class="nft-name">${nft.name}</div>
 						<div class="nft-owner">@${nft.owner}</div>
 						<div class="nft-id" style="display: flex; justify-content: space-between;">
@@ -316,7 +305,7 @@ async function loadCollectionDetail(collectionId: string) {
 			} else {
 				instancesContainer.innerHTML = instances.map((nft: any) => `
 					<div class="nft-card" data-id="${nft.id}">
-						<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='https://via.placeholder.com/150/1a1a1a/525252?text=NFT'">
+						<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='${PLACEHOLDER_SM}'">
 						<div class="nft-name">${nft.name}</div>
 						<div class="nft-owner">@${nft.owner}</div>
 						<div class="nft-id" style="display: flex; justify-content: space-between;">
@@ -379,7 +368,7 @@ async function loadNftDetail(nftId: string) {
 		const ownerEl = $("nft-detail-owner");
 		if (imageEl) {
 			imageEl.src = nft.imageUrl;
-			imageEl.onerror = () => { imageEl.src = "https://via.placeholder.com/400/1a1a1a/525252?text=NFT"; };
+			imageEl.onerror = () => { imageEl.src = PLACEHOLDER_LG; };
 		}
 		if (nameEl) nameEl.textContent = nft.name;
 		if (ownerEl) ownerEl.textContent = `@${nft.owner}`;
@@ -566,7 +555,7 @@ function renderNfts(nfts: any[], containerId: string, selectable = false) {
 	container.innerHTML = nfts.map(nft => `
 		<div class="nft-card" data-id="${nft.id}" data-collection="${nft.collectionId}"
 			 data-edition="${nft.edition}" data-dna="${nft.instanceDna || nft.dna}">
-			<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='https://via.placeholder.com/150/1a1a1a/525252?text=NFT'">
+			<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='${PLACEHOLDER_SM}'">
 			<div class="nft-name">${nft.name}</div>
 			<div class="nft-owner">@${nft.owner}</div>
 			<div class="nft-id">${nft.id}</div>
@@ -678,7 +667,6 @@ async function distributeFromSeed(seedId: string, to: string, quantity: number) 
 		return;
 	}
 
-	// Fetch seed info to get current distributed count
 	log(`Fetching seed info...`);
 	const response = await fetch(`/api/nft/${seedId}/details`);
 	const data = await response.json();
@@ -694,7 +682,6 @@ async function distributeFromSeed(seedId: string, to: string, quantity: number) 
 		return;
 	}
 
-	// Check ownership
 	if (nft.owner.toLowerCase() !== connectedUser.toLowerCase()) {
 		log(`You don't own this seed. Owner: @${nft.owner}`, "error");
 		return;
@@ -706,58 +693,31 @@ async function distributeFromSeed(seedId: string, to: string, quantity: number) 
 		return;
 	}
 
-	// Create atomic distribute operations (HIVE transfer + custom_json) with imageUrl
-	const startInstanceNumber = (nft.distributed || 0) + 1;
-	const operations: any[] = [];
-	const trackingAmount = "0.001 HIVE";
+	// Use bulk_distribute: 1 single custom_json instead of 2N operations
+	const payload = createBulkDistributePayload({
+		to,
+		items: [{ seedId, quantity }],
+	});
 
-	for (let i = 0; i < quantity; i++) {
-		const instanceNumber = startInstanceNumber + i;
-		const instanceId = `inst_${seedId.replace('seed_', '')}_${instanceNumber}`;
+	const operation: HiveOperation = [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [connectedUser],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
 
-		// 1. HIVE transfer with memo (so recipient sees notification)
-		const memo = `nftlox:distribute:${instanceId}:${nft.collectionId}:${nft.edition}:${nft.name}`;
-		operations.push([
-			"transfer",
-			{
-				from: connectedUser,
-				to: to,
-				amount: trackingAmount,
-				memo: memo,
-			},
-		]);
-
-		// 2. Custom JSON with distribute action
-		const payload = createDistributePayload({
-			seedId,
-			to,
-			instanceNumber,
-			imageUrl: nft.imageUrl,
-			imageHash: nft.imageHash,
-		});
-
-		operations.push([
-			"custom_json",
-			{
-				required_auths: [connectedUser],
-				required_posting_auths: [],
-				id: PROTOCOL_ID,
-				json: JSON.stringify(payload),
-			},
-		]);
-	}
-
-	const totalHive = (0.001 * quantity).toFixed(3);
-	log(`Distributing ${quantity} instance(s) to @${to} (${totalHive} HIVE)...`);
+	log(`Distributing ${quantity} instance(s) to @${to} via bulk_distribute...`);
 
 	(window as any).hive_keychain.requestBroadcast(
 		connectedUser,
-		operations,
-		"Active",
+		[operation],
+		"Posting",
 		(res: any) => {
 			if (res.success) {
 				log(`Distributed ${quantity} instance(s) to @${to}!`, "success");
-				// Reload to update counts
 				if (selectedTransferCollectionId) {
 					loadTransferCollectionNfts(selectedTransferCollectionId);
 				}
@@ -1026,7 +986,7 @@ async function loadTransferCollectionNfts(collectionId: string) {
 
 			return `
 				<div class="transfer-nft-item ${isOwned ? '' : 'not-owned'}" data-id="${nft.id}" data-is-seed="${isSeed}" data-owner="${nft.owner}" style="${!isOwned ? 'opacity: 0.7;' : ''}">
-					<img class="transfer-nft-image" src="${nft.imageUrl}" onerror="this.src='https://via.placeholder.com/100/1a1a1a/525252?text=NFT'">
+					<img class="transfer-nft-image" src="${nft.imageUrl}" onerror="this.src='${PLACEHOLDER_XS}'">
 					<div class="transfer-nft-name">${nft.name}</div>
 					<div class="transfer-nft-owner" style="font-size: 11px; color: ${isOwned ? '#22c55e' : '#f59e0b'}; margin-top: 2px;">
 						${ownerDisplay}
@@ -1099,7 +1059,7 @@ async function selectTransferNft(nftId: string) {
 
 		if (imageEl) {
 			imageEl.src = nft.imageUrl;
-			imageEl.onerror = () => { imageEl.src = "https://via.placeholder.com/100/1a1a1a/525252?text=NFT"; };
+			imageEl.onerror = () => { imageEl.src = PLACEHOLDER_XS; };
 		}
 		if (nameEl) nameEl.textContent = nft.name;
 		if (idEl) idEl.textContent = nft.id;
@@ -1347,6 +1307,33 @@ function showValidationStatus(message: string, type: "info" | "success" | "error
 	statusEl.innerHTML = message;
 }
 
+// ============ ARTID SUFFIX ============
+
+function getArtIdSuffix(): string {
+	return ($("artid-suffix") as HTMLInputElement)?.value.trim() || "";
+}
+
+function applySuffix(seeds: SeedNFTWithArtId[]): SeedNFTWithArtId[] {
+	const suffix = getArtIdSuffix();
+	if (!suffix) return seeds;
+	return seeds.map(s => ({
+		...s,
+		artId: `${s.artId}-${suffix}`,
+	}));
+}
+
+function randomizeSuffix() {
+	const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+	let result = "";
+	for (let i = 0; i < 4; i++) {
+		result += chars[Math.floor(Math.random() * chars.length)];
+	}
+	const input = $("artid-suffix") as HTMLInputElement;
+	if (input) input.value = result;
+}
+
+(window as any).randomizeSuffix = randomizeSuffix;
+
 async function validateSeeds() {
 	const colName = ($("col-name") as HTMLInputElement)?.value.trim();
 	const colSymbol = ($("col-symbol") as HTMLInputElement)?.value.trim().toUpperCase() ||
@@ -1398,6 +1385,13 @@ async function validateSeeds() {
 		return;
 	}
 
+	// Apply artId suffix if set (to avoid blockchain duplicates)
+	const seedsWithSuffix = applySuffix(seedsToValidate);
+	const suffix = getArtIdSuffix();
+	if (suffix) {
+		log(`Applying artId suffix: "-${suffix}"`, "info");
+	}
+
 	showValidationStatus("Validating seeds against blockchain...", "info");
 
 	try {
@@ -1408,7 +1402,7 @@ async function validateSeeds() {
 				creator,
 				collectionName: colName,
 				collectionSymbol: colSymbol,
-				nfts: seedsToValidate,
+				nfts: seedsWithSuffix,
 			}),
 		});
 		const result = await response.json();
@@ -1730,7 +1724,7 @@ async function createCollection() {
 		if (sampleFile && !hasArtId) {
 			mintBody.sampleFile = sampleFile;
 		} else if (uploadedSeeds.length > 0) {
-			mintBody.nfts = uploadedSeeds;
+			mintBody.nfts = applySuffix(uploadedSeeds);
 		}
 
 		const mintResponse = await fetch(mintEndpoint, {
@@ -2222,7 +2216,7 @@ async function loadSampleBulls() {
 		if (grid) {
 			grid.innerHTML = sampleBulls.map((bull: any, i: number) => `
 				<div class="nft-card" data-bull-idx="${i}" onclick="selectBullForIssue(${i})" style="cursor: pointer;">
-					<img class="nft-image" src="${bull.imageUrl}" onerror="this.src='https://via.placeholder.com/150/1a1a1a/525252?text=NFT'">
+					<img class="nft-image" src="${bull.imageUrl}" onerror="this.src='${PLACEHOLDER_SM}'">
 					<div class="nft-name">${bull.name}</div>
 					<div class="nft-owner" style="color: var(--text-muted); font-size: 11px;">${bull.brief}</div>
 					<div class="nft-id" style="display: flex; justify-content: space-between; margin-top: 6px;">

@@ -5,8 +5,7 @@ import {
 	verifyPackOpen,
 	createDefaultL1Config,
 } from "nftlox-sdk";
-
-const INDEXER_URL = process.env?.["INDEXER_URL"] ?? "http://localhost:3050";
+import { INDEXER_URL } from "../shared/indexer";
 
 const json = (data: unknown, status = 200) =>
 	new Response(JSON.stringify(data, null, 2), {

@@ -1561,11 +1561,23 @@
 						<label class="form-label">Use Sample File</label>
 						<select class="form-input" id="sample-select">
 							<option value="">Select a sample...</option>
-							<option value="playground/sample-bulls.json">sample-bulls.json (5 Bulls - NEW)</option>
-							<option value="playground/sample-seeds.json">sample-seeds.json (5 seeds with artId)</option>
-							<option value="playground/sample-nfts.json">sample-nfts.json (10 NFTs)</option>
-							<option value="playground/sample-nfts-200.json">sample-nfts-200.json (200 NFTs)</option>
+							<option value="playground/sample-bulls.json">HiveBull Warriors (5 bulls)</option>
+							<option value="playground/sample-seeds.json">Genesis Seeds (5 seeds)</option>
+							<option value="playground/sample-nfts.json">Cosmic Collection (10 NFTs)</option>
+							<option value="playground/sample-nfts-200.json">Large Collection (200 NFTs)</option>
 						</select>
+					</div>
+
+					<!-- ArtId Suffix (to avoid duplicates) -->
+					<div class="form-group" style="margin-top: 16px;">
+						<label class="form-label">ArtId Suffix (optional — appended to each artId to avoid blockchain duplicates)</label>
+						<div style="display: flex; gap: 8px; align-items: center;">
+							<input class="form-input" id="artid-suffix" placeholder="e.g. v2, test, mar26" style="flex: 1;">
+							<button class="btn btn-sm btn-secondary" onclick="randomizeSuffix()">Random</button>
+						</div>
+						<p style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">
+							Example: BULL001 + suffix "v2" = BULL001-v2
+						</p>
 					</div>
 
 					<!-- Validation Results -->
@@ -1966,7 +1978,7 @@
 											Distribute Instances
 										</button>
 										<small style="color: var(--text-dim); font-size: 11px; text-align: center;">
-											Creates instances + sends 0.001 HIVE per instance (Active key)
+											Creates instances via bulk_distribute (Posting key, no HIVE cost)
 										</small>
 
 										<div style="text-align: center; color: var(--text-dim); font-size: 11px; margin: 4px 0;">— or —</div>

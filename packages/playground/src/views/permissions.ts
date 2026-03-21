@@ -1,6 +1,6 @@
 // Permissions view — NFT approvals, pack approvals, lending, data operators
 import { $, log } from "../shared/dom";
-import { connectedUser } from "../shared/state";
+import { getConnectedUser } from "../shared/state";
 import { broadcastOperation } from "../shared/keychain";
 
 export function initPermissions() {
@@ -26,21 +26,21 @@ function getFormData(action: string): Record<string, unknown> | null {
 				instanceId: val("perm-nft-approve-instance"),
 				spender: val("perm-nft-approve-spender"),
 				approved: checked("perm-nft-approve-approved"),
-				owner: connectedUser,
+				owner: getConnectedUser(),
 			};
 		case "nft-approve-all":
 			return {
 				collectionId: val("perm-nft-approve-all-collection"),
 				spender: val("perm-nft-approve-all-spender"),
 				approved: checked("perm-nft-approve-all-approved"),
-				owner: connectedUser,
+				owner: getConnectedUser(),
 			};
 		case "nft-transfer-from":
 			return {
 				from: val("perm-nft-xfer-from"),
 				to: val("perm-nft-xfer-to"),
 				instanceId: val("perm-nft-xfer-instance"),
-				spender: connectedUser,
+				spender: getConnectedUser(),
 			};
 		case "pack-approve":
 			return {
@@ -48,7 +48,7 @@ function getFormData(action: string): Record<string, unknown> | null {
 				packId: val("perm-pack-approve-pack"),
 				quantity: parseInt(val("perm-pack-approve-quantity") || "0", 10),
 				approved: checked("perm-pack-approve-approved"),
-				owner: connectedUser,
+				owner: getConnectedUser(),
 			};
 		case "pack-transfer-from":
 			return {
@@ -56,25 +56,25 @@ function getFormData(action: string): Record<string, unknown> | null {
 				to: val("perm-pack-xfer-to"),
 				packId: val("perm-pack-xfer-pack"),
 				quantity: parseInt(val("perm-pack-xfer-quantity") || "0", 10),
-				spender: connectedUser,
+				spender: getConnectedUser(),
 			};
 		case "nft-lend":
 			return {
 				instanceId: val("perm-lend-instance"),
 				borrower: val("perm-lend-borrower"),
-				owner: connectedUser,
+				owner: getConnectedUser(),
 			};
 		case "nft-return":
 			return {
 				instanceId: val("perm-return-instance"),
-				signer: connectedUser,
+				signer: getConnectedUser(),
 			};
 		case "data-operator-approve":
 			return {
 				collectionId: val("perm-data-op-collection"),
 				operator: val("perm-data-op-operator"),
 				approved: checked("perm-data-op-approved"),
-				creator: connectedUser,
+				creator: getConnectedUser(),
 			};
 		case "set-data-from": {
 			let data: Record<string, unknown> = {};
@@ -90,7 +90,7 @@ function getFormData(action: string): Record<string, unknown> | null {
 				instanceDna: val("perm-set-data-from-dna"),
 				data,
 				tags,
-				operator: connectedUser,
+				operator: getConnectedUser(),
 			};
 		}
 		default:
@@ -99,7 +99,8 @@ function getFormData(action: string): Record<string, unknown> | null {
 }
 
 async function submitPermission(action: string) {
-	if (!connectedUser) {
+	const user = getConnectedUser();
+	if (!user) {
 		log("Connect wallet first", "error");
 		return;
 	}
@@ -131,9 +132,8 @@ async function submitPermission(action: string) {
 
 		log(`Preview generated for ${action}`, "success");
 
-		// Auto-broadcast
 		broadcastOperation(
-			connectedUser,
+			user,
 			[result.operation],
 			result.keyType || "Active",
 			() => log(`${action} broadcast successful!`, "success"),

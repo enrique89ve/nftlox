@@ -4,7 +4,7 @@ import {
 	getCollectionById,
 	getCollectionStats,
 } from "@/db/queries/collections.ts";
-import { getNftsByCollection } from "@/db/queries/nfts.ts";
+import { queryNfts } from "@/db/queries/nfts.ts";
 
 export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: ["Collections"] })
 	.get("/", async ({ query }) => {
@@ -26,8 +26,10 @@ export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: 
 		detail: { summary: "Get collection by ID" },
 	})
 	.get("/:id/nfts", async ({ params, query }) => {
-		const rows = await getNftsByCollection(params.id, query.type, query.limit, query.offset);
-		return rows;
+		return queryNfts(
+			{ by: "collection", collectionId: params.id, type: query.type as any },
+			{ limit: query.limit, offset: query.offset },
+		);
 	}, {
 		params: t.Object({ id: t.String() }),
 		query: t.Object({

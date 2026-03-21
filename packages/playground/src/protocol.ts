@@ -6,7 +6,6 @@ import {
 	PROTOCOL_VERSION,
 	createCollectionPayload,
 	createMintPayload,
-	createDistributePayload,
 	createDeterministicCollectionPayload,
 	createDeterministicMintPayload,
 	generateSeedId,
@@ -14,7 +13,6 @@ import {
 	generateDeterministicSeedId,
 	type CreateCollectionInput,
 	type MintInput,
-	type DistributeInput,
 	type HiveOperation,
 	type ImportedNFT,
 	type SeedNFTWithArtId,
@@ -40,16 +38,6 @@ export interface BatchMintResult {
 		operation: HiveOperation;
 	}>;
 	totalOperations: number;
-}
-
-export interface DistributeBatchResult {
-	seedId: string;
-	instances: Array<{
-		instanceId: string;
-		to: string;
-		instanceNumber: number;
-		operation: HiveOperation;
-	}>;
 }
 
 // ============ COLLECTION CREATION ============
@@ -156,55 +144,6 @@ export function createSeedMintOperations(
 		collectionOriginDna,
 		seeds,
 		totalOperations: seeds.length,
-	};
-}
-
-// ============ INSTANCE DISTRIBUTION ============
-
-/**
- * Genera operaciones de distribute para crear instancias desde una semilla.
- */
-export function createDistributeOperations(
-	seedId: string,
-	recipients: string[],
-	owner: string,
-	startingInstanceNumber = 1,
-): DistributeBatchResult {
-	const instances: DistributeBatchResult["instances"] = [];
-
-	for (let i = 0; i < recipients.length; i++) {
-		const instanceNumber = startingInstanceNumber + i;
-		const to = recipients[i]!;
-
-		const input: DistributeInput = {
-			seedId,
-			to,
-			instanceNumber,
-		};
-
-		const payload = createDistributePayload(input);
-
-		const operation: HiveOperation = [
-			"custom_json",
-			{
-				required_auths: [],
-				required_posting_auths: [owner],
-				id: PROTOCOL_ID,
-				json: JSON.stringify(payload),
-			},
-		];
-
-		instances.push({
-			instanceId: payload.data.instanceId,
-			to,
-			instanceNumber,
-			operation,
-		});
-	}
-
-	return {
-		seedId,
-		instances,
 	};
 }
 

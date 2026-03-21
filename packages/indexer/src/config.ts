@@ -24,18 +24,20 @@ export const config = {
 	batchSize: toInt(process.env.BATCH_SIZE, 1000),
 	syncIntervalMs: toInt(process.env.SYNC_INTERVAL_MS, 3000),
 	logLevel: toLogLevel(process.env.LOG_LEVEL, "info"),
-	hiveEndpoints: [
-		"https://api.hive.blog",
-		"https://api.syncad.com",
-		"https://rpc.mahdiyari.info",
-		"https://anyx.io",
-	],
+	// Only endpoints with HafAH support (required for sync)
+	// Order: fastest-responding first (api.hive.blog often timeouts in Docker)
+	hiveEndpoints: (process.env.HIVE_ENDPOINTS ?? "https://api.syncad.com,https://rpc.mahdiyari.info,https://api.hive.blog").split(",").map(s => s.trim()).filter(Boolean),
 	// Security
 	nodeEnv: process.env.NODE_ENV ?? "development",
 	enableSwagger: toBool(process.env.ENABLE_SWAGGER, process.env.NODE_ENV !== "production"),
+	healthPort: toInt(process.env.HEALTH_PORT, 0),
 	postgresPassword: process.env.POSTGRES_PASSWORD ?? "nftlox_dev",
 	postgresUser: process.env.POSTGRES_USER ?? "nftlox",
 	postgresDb: process.env.POSTGRES_DB ?? "nftlox_indexer",
 } as const;
+
+if (config.nodeEnv === "production" && process.env.POSTGRES_PASSWORD === undefined) {
+	throw new Error("POSTGRES_PASSWORD must be set in production");
+}
 
 export type Config = typeof config;

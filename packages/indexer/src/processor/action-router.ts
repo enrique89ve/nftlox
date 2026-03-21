@@ -6,7 +6,7 @@ import { insertInvalidOperation } from "@/db/queries/sync.ts";
 // Core
 import { handleCreateCollection } from "./handlers/core/create-collection.ts";
 import { handleMint } from "./handlers/core/mint.ts";
-import { handleDistribute } from "./handlers/core/distribute.ts";
+import { handleBulkDistribute } from "./handlers/core/bulk-distribute.ts";
 import { handleTransfer } from "./handlers/core/transfer.ts";
 import { handleBurn } from "./handlers/core/burn.ts";
 import { handleReplicate } from "./handlers/core/replicate.ts";
@@ -49,7 +49,7 @@ const handlers: Record<string, Handler> = {
 	// Core
 	create_collection: handleCreateCollection,
 	mint: handleMint,
-	distribute: handleDistribute,
+	bulk_distribute: handleBulkDistribute,
 	transfer: handleTransfer,
 	burn: handleBurn,
 	replicate: handleReplicate,

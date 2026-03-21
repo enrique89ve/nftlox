@@ -155,6 +155,12 @@ export async function incrementDistributed(seedId: string, txn: Queryable = sql)
 	await txn`UPDATE nfts SET distributed = distributed + 1 WHERE id = ${seedId}`;
 }
 
+export async function incrementDistributedBy(seedId: string, quantity: number, txn: Queryable = sql) {
+	await txn`UPDATE nfts SET distributed = distributed + ${quantity} WHERE id = ${seedId}`;
+}
+
+
+
 export async function updateNftCustomData(
 	nftId: string,
 	data: unknown | null,
@@ -183,92 +189,67 @@ export async function updateNftOperatorData(
 	`;
 }
 
-export async function getNftsByOwner(owner: string, status?: string, type?: string, limit = 50, offset = 0) {
-	const safeLimit = clampLimit(limit);
-	if (status && type) {
-		return sql`
-			SELECT * FROM nfts
-			WHERE owner = ${owner} AND status = ${status} AND nft_type = ${type}
-			ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
-		`;
-	}
-	if (status) {
-		return sql`
-			SELECT * FROM nfts
-			WHERE owner = ${owner} AND status = ${status}
-			ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
-		`;
-	}
-	if (type) {
-		return sql`
-			SELECT * FROM nfts
-			WHERE owner = ${owner} AND nft_type = ${type}
-			ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
-		`;
-	}
-	return sql`
-		SELECT * FROM nfts
-		WHERE owner = ${owner}
-		ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
-	`;
-}
+export type ListSort = "price_asc" | "price_desc" | "recent";
 
-export async function getNftsByCollection(
-	collectionId: string,
-	type?: string,
-	limit = 50,
-	offset = 0,
-) {
-	const safeLimit = clampLimit(limit);
-	if (type) {
-		return sql`
-			SELECT * FROM nfts
-			WHERE collection_id = ${collectionId} AND nft_type = ${type}
-			ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
-		`;
+export type NftListQuery =
+	| { by: "owner"; owner: string; status?: NftStatus; type?: NftKind }
+	| { by: "collection"; collectionId: string; type?: NftKind }
+	| { by: "seed"; seedId: string }
+	| { by: "listed"; sort?: ListSort; currency?: string };
+
+export type Pagination = { limit?: number; offset?: number };
+
+const LIST_COLUMNS = sql`
+	id, collection_id, nft_type, status, edition, owner,
+	name, image_url, origin_dna, instance_dna,
+	seed_id, instance_number,
+	max_replicas, distributed, supply_exhausted,
+	listing_price, listing_currency, created_at
+`;
+
+export async function queryNfts(query: NftListQuery, page?: Pagination) {
+	const safeLimit = clampLimit(page?.limit ?? 50);
+	const offset = page?.offset ?? 0;
+
+	switch (query.by) {
+		case "owner": {
+			const statusFilter = query.status ? sql`AND status = ${query.status}` : sql``;
+			const typeFilter = query.type ? sql`AND nft_type = ${query.type}` : sql``;
+			return sql`
+				SELECT ${LIST_COLUMNS} FROM nfts
+				WHERE owner = ${query.owner} ${statusFilter} ${typeFilter}
+				ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
+			`;
+		}
+		case "collection": {
+			const typeFilter = query.type ? sql`AND nft_type = ${query.type}` : sql``;
+			return sql`
+				SELECT ${LIST_COLUMNS} FROM nfts
+				WHERE collection_id = ${query.collectionId} ${typeFilter}
+				ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
+			`;
+		}
+		case "seed": {
+			return sql`
+				SELECT ${LIST_COLUMNS} FROM nfts
+				WHERE seed_id = ${query.seedId}
+				ORDER BY instance_number ASC
+				LIMIT ${safeLimit} OFFSET ${offset}
+			`;
+		}
+		case "listed": {
+			const orderClause = query.sort === "price_asc"
+				? sql`listing_price ASC`
+				: query.sort === "price_desc"
+					? sql`listing_price DESC`
+					: sql`created_at DESC`;
+			const currencyFilter = query.currency ? sql`AND listing_currency = ${query.currency}` : sql``;
+			return sql`
+				SELECT ${LIST_COLUMNS} FROM nfts
+				WHERE status = ${NFT_STATUS_LISTED} ${currencyFilter}
+				ORDER BY ${orderClause}
+				LIMIT ${safeLimit} OFFSET ${offset}
+			`;
+		}
 	}
-	return sql`
-		SELECT * FROM nfts
-		WHERE collection_id = ${collectionId}
-		ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
-	`;
-}
-
-export async function getNftInstances(seedId: string, limit = 50, offset = 0) {
-	const safeLimit = clampLimit(limit);
-	return sql`
-		SELECT * FROM nfts
-		WHERE seed_id = ${seedId}
-		ORDER BY instance_number ASC
-		LIMIT ${safeLimit} OFFSET ${offset}
-	`;
-}
-
-export async function getListedNfts(
-	sort: "price_asc" | "price_desc" | "recent" = "recent",
-	currency?: string,
-	limit = 50,
-	offset = 0,
-) {
-	const safeLimit = clampLimit(limit);
-	const orderClause = sort === "price_asc"
-		? sql`listing_price ASC`
-		: sort === "price_desc"
-			? sql`listing_price DESC`
-			: sql`created_at DESC`;
-
-	if (currency) {
-		return sql`
-			SELECT * FROM nfts
-			WHERE status = ${NFT_STATUS_LISTED} AND listing_currency = ${currency}
-			ORDER BY ${orderClause}
-			LIMIT ${safeLimit} OFFSET ${offset}
-		`;
-	}
-	return sql`
-		SELECT * FROM nfts
-		WHERE status = ${NFT_STATUS_LISTED}
-		ORDER BY ${orderClause}
-		LIMIT ${safeLimit} OFFSET ${offset}
-	`;
 }

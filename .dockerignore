@@ -1,5 +1,9 @@
-.env
-*.log
 .git
+**/.env
+*.log
 docs/
 packages/playground/
+packages/playground/node_modules
+.claude/
+**/.DS_Store
+**/Thumbs.db

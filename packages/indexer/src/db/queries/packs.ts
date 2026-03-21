@@ -102,12 +102,21 @@ export async function upsertPackBalance(
 	delta: number,
 	txn: Queryable = sql,
 ): Promise<void> {
-	await txn`
-		INSERT INTO user_pack_balances (account, pack_id, balance)
-		VALUES (${account}, ${packId}, ${delta})
-		ON CONFLICT (account, pack_id)
-		DO UPDATE SET balance = user_pack_balances.balance + ${delta}
-	`;
+	if (delta < 0) {
+		// UPDATE only — avoids CHECK constraint violation on INSERT with negative value
+		await txn`
+			UPDATE user_pack_balances
+			SET balance = balance + ${delta}
+			WHERE account = ${account} AND pack_id = ${packId}
+		`;
+	} else {
+		await txn`
+			INSERT INTO user_pack_balances (account, pack_id, balance)
+			VALUES (${account}, ${packId}, ${delta})
+			ON CONFLICT (account, pack_id)
+			DO UPDATE SET balance = user_pack_balances.balance + ${delta}
+		`;
+	}
 }
 
 export async function getPackBalance(

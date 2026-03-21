@@ -1,10 +1,13 @@
 import { Elysia, t } from "elysia";
-import { getListedNfts } from "@/db/queries/nfts.ts";
+import { queryNfts } from "@/db/queries/nfts.ts";
 import { getRecentSales } from "@/db/queries/history.ts";
 
 export const marketplaceRoutes = new Elysia({ prefix: "/api/marketplace", tags: ["Marketplace"] })
 	.get("/listings", async ({ query }) => {
-		return getListedNfts(query.sort, query.currency, query.limit, query.offset);
+		return queryNfts(
+			{ by: "listed", sort: query.sort, currency: query.currency },
+			{ limit: query.limit, offset: query.offset },
+		);
 	}, {
 		query: t.Object({
 			sort: t.Optional(t.Union([

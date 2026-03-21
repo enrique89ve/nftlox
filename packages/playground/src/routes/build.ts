@@ -118,51 +118,16 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	"/api/build/distribute": buildRoute((body) => {
-		if (!body.seedId || !body.recipients || !body.owner) {
-			return json({
-				success: false,
-				errors: [{ field: "body", message: "Missing required fields", code: "MISSING_FIELDS" }],
-			}, 400);
-		}
-
-		const startNum = body.startingInstanceNumber || 1;
-		const instances = body.recipients.map((to: string, i: number) => {
-			const result = builder.buildDistribute({
-				seedId: body.seedId,
-				to,
-				instanceNumber: startNum + i,
-				owner: body.owner,
-			});
-			return {
-				recipient: to,
-				instanceNumber: startNum + i,
-				instanceId: result.generatedId,
-				operation: result.operation,
-				errors: result.errors,
-			};
-		});
-
-		const errors = instances.filter((i: any) => i.errors).flatMap((i: any) => i.errors!);
-		if (errors.length > 0) return json({ success: false, errors }, 400);
-
-		const batches = splitOperationsIntoBatches(instances.map((i: any) => i.operation!));
-
+	"/api/build/bulk-distribute": buildRoute((body) => {
+		const result = builder.buildBulkDistribute(body);
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			hashVersion: HASH_VERSION,
-			seedId: body.seedId,
-			instances: instances.map((i: any) => ({
-				recipient: i.recipient,
-				instanceNumber: i.instanceNumber,
-				instanceId: i.instanceId,
-			})),
-			batches: batches.map((batch, i) => ({
-				batchNumber: i + 1,
-				operationCount: batch.length,
-				operations: batch,
-			})),
+			operation: result.operation,
+			payload: result.payload,
+			keyType: "Posting",
+			warnings: result.warnings,
 		});
 	}),
 

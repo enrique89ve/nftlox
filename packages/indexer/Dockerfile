@@ -1,7 +1,8 @@
-FROM oven/bun:1.3-alpine
+FROM oven/bun:1.3-debian
 WORKDIR /app
 
-# Copy everything (node_modules included via pre-installed host)
+# Copy pre-installed dependencies from host
+# Run `bun install` in monorepo root before building
 COPY package.json ./
 COPY node_modules/ node_modules/
 COPY packages/sdk/ packages/sdk/
@@ -12,8 +13,8 @@ WORKDIR /app/packages/indexer
 ENV NODE_ENV=production
 ENV ENABLE_SWAGGER=false
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-	CMD wget -qO- http://localhost:3050/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+	CMD bun -e "const r=await fetch('http://localhost:'+(Bun.env.INDEXER_PORT||'3050')+'/api/health');process.exit(r.ok?0:1)"
 
 EXPOSE 3050
 

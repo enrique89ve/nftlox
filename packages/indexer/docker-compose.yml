@@ -2,39 +2,66 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    env_file: .env
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-nftlox_indexer}
       POSTGRES_USER: ${POSTGRES_USER:-nftlox}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nftlox_dev}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./src/db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql
+      - ./src/db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nftlox} -d ${POSTGRES_DB:-nftlox_indexer}"]
       interval: 5s
       timeout: 3s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   indexer:
     build:
       context: ../..
       dockerfile: packages/indexer/Dockerfile
     restart: unless-stopped
+    env_file: .env
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "${INDEXER_PORT:-3050}:3050"
+    network_mode: host
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-nftlox}:${POSTGRES_PASSWORD:-nftlox_dev}@postgres:5432/${POSTGRES_DB:-nftlox_indexer}
-      INDEXER_PORT: 3050
-      GENESIS_BLOCK: ${GENESIS_BLOCK:-90000000}
+      DATABASE_URL: postgres://${POSTGRES_USER:-nftlox}:${POSTGRES_PASSWORD:-nftlox_dev}@127.0.0.1:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-nftlox_indexer}
+      INDEXER_PORT: ${INDEXER_PORT:-3050}
+      GENESIS_BLOCK: ${GENESIS_BLOCK:-103484900}
       PROTOCOL_ID: ${PROTOCOL_ID:-nftlox_testnet}
       BATCH_SIZE: ${BATCH_SIZE:-1000}
       SYNC_INTERVAL_MS: ${SYNC_INTERVAL_MS:-3000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      NODE_ENV: ${NODE_ENV:-production}
-      ENABLE_SWAGGER: ${ENABLE_SWAGGER:-false}
+      NODE_ENV: production
+      ENABLE_SWAGGER: "false"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET:-172.28.10.0/24}
 
 volumes:
   pgdata:
