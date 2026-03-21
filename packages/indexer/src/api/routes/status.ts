@@ -5,6 +5,7 @@ import { getProtocolStats } from "@/db/queries/stats.ts";
 import { getStartupTime } from "@/scanner/sync-state.ts";
 
 const STALE_THRESHOLD_MS = 60_000; // 1 minute without processing = stale
+const SYNC_TOLERANCE = 10; // blocks behind threshold to consider "in sync"
 
 export const statusRoutes = new Elysia({ tags: ["Status"] })
 	.get("/api/status", async () => {
@@ -12,11 +13,12 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			getLastBlock(),
 			getHeadBlockNum().catch(() => 0),
 		]);
+		const blocksBehind = Math.max(0, headBlock - lastBlock);
 		return {
 			lastBlock,
 			headBlock,
-			blocksBehind: Math.max(0, headBlock - lastBlock),
-			syncing: headBlock - lastBlock > 10,
+			blocksBehind,
+			syncing: blocksBehind > SYNC_TOLERANCE,
 		};
 	}, {
 		detail: {
@@ -41,7 +43,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			const updatedAfterStartup = startupTime > 0 && lastUpdateMs > startupTime;
 			const syncActive = secondsSinceUpdate < STALE_THRESHOLD_MS / 1000 && updatedAfterStartup;
 			const hiveReachable = headBlock > 0;
-			const inSync = hiveReachable && blocksBehind < 100;
+			const inSync = hiveReachable && blocksBehind <= SYNC_TOLERANCE;
 			const healthy = dbAlive && (syncActive || inSync);
 
 			if (!healthy) {

@@ -10,6 +10,7 @@ import { createLogger } from "@/utils/logger.ts";
 const log = createLogger("sync");
 
 const MASSIVE_THRESHOLD = 100;
+const SYNC_TOLERANCE = 10;
 
 let running = false;
 
@@ -59,10 +60,12 @@ async function syncCycle(): Promise<void> {
 
 	updateSyncProgress(lastBlock, headBlock);
 
-	if (behind <= 0) {
+	if (behind <= SYNC_TOLERANCE) {
 		setSynced(true);
-		await sleep(config.syncIntervalMs);
-		return;
+		if (behind <= 0) {
+			await sleep(config.syncIntervalMs);
+			return;
+		}
 	}
 
 	const isMassive = behind > MASSIVE_THRESHOLD;
