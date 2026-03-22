@@ -36,5 +36,11 @@ export async function requestMultisig(
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(request),
 	});
+	if (!res.ok) {
+		const body = await res.json().catch(() => ({ error: "Unknown error" }));
+		throw new Error(
+			`Multisig request failed (${res.status}): ${(body as Record<string, unknown>).error ?? "Unknown"}`,
+		);
+	}
 	return res.json() as Promise<MultisigResponse>;
 }

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { usernameSchema, seedProvenanceSchema } from "../schemas";
 import { formatZodError } from "./helpers";
 import { generateImageHash } from "../dna";
-import { PROTOCOL_ID, PROTOCOL_VERSION } from "../constants";
+import { PROTOCOL_ID, PROTOCOL_VERSION, ACTION_TRANSFER } from "../constants";
 import type { BuildResult, TransferData, ProtocolPayload, HiveOperation } from "../types";
 
 export const transferBuilderSchema = seedProvenanceSchema.extend({
@@ -36,7 +36,7 @@ export function buildTransfer(input: TransferBuilderInput): BuildResult<Transfer
 	const payload: ProtocolPayload<TransferData> = {
 		protocol: PROTOCOL_ID,
 		version: PROTOCOL_VERSION,
-		action: "transfer",
+		action: ACTION_TRANSFER,
 		data: {
 			nftId: data.nftId,
 			from: data.from,

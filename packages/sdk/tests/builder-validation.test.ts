@@ -10,9 +10,10 @@ describe("Builder username validation", () => {
 				to: "alice",
 			});
 			expect(result.success).toBe(false);
-			expect(result.errors).toBeDefined();
-			const errorFields = result.errors!.map((e) => e.field);
-			expect(errorFields).toContain("from");
+			if (!result.success) {
+				const errorFields = result.errors.map((e) => e.field);
+				expect(errorFields).toContain("from");
+			}
 		});
 
 		test("rejects trailing dot (abc.)", () => {
@@ -22,9 +23,10 @@ describe("Builder username validation", () => {
 				to: "alice",
 			});
 			expect(result.success).toBe(false);
-			expect(result.errors).toBeDefined();
-			const errorFields = result.errors!.map((e) => e.field);
-			expect(errorFields).toContain("from");
+			if (!result.success) {
+				const errorFields = result.errors.map((e) => e.field);
+				expect(errorFields).toContain("from");
+			}
 		});
 
 		test("rejects uppercase letters (ABC)", () => {
@@ -34,9 +36,10 @@ describe("Builder username validation", () => {
 				to: "alice",
 			});
 			expect(result.success).toBe(false);
-			expect(result.errors).toBeDefined();
-			const errorFields = result.errors!.map((e) => e.field);
-			expect(errorFields).toContain("from");
+			if (!result.success) {
+				const errorFields = result.errors.map((e) => e.field);
+				expect(errorFields).toContain("from");
+			}
 		});
 
 		test("valid usernames do not produce username errors", () => {
@@ -46,7 +49,7 @@ describe("Builder username validation", () => {
 				to: "bob123",
 			});
 
-			if (!result.success && result.errors) {
+			if (!result.success) {
 				const usernameErrors = result.errors.filter(
 					(e) => e.field === "from" || e.field === "to",
 				);
@@ -65,12 +68,13 @@ describe("Builder price validation", () => {
 				owner: "alice",
 			});
 			expect(result.success).toBe(false);
-			expect(result.errors).toBeDefined();
-			const errorMessages = result.errors!.map((e) => e.message);
-			const hasPriceError = errorMessages.some((msg) =>
-				msg.toLowerCase().includes("price") || msg.toLowerCase().includes("decimal"),
-			);
-			expect(hasPriceError).toBe(true);
+			if (!result.success) {
+				const errorMessages = result.errors.map((e) => e.message);
+				const hasPriceError = errorMessages.some((msg) =>
+					msg.toLowerCase().includes("price") || msg.toLowerCase().includes("decimal"),
+				);
+				expect(hasPriceError).toBe(true);
+			}
 		});
 
 		test("rejects leading zeros (001.000)", () => {
@@ -80,12 +84,13 @@ describe("Builder price validation", () => {
 				owner: "alice",
 			});
 			expect(result.success).toBe(false);
-			expect(result.errors).toBeDefined();
-			const errorMessages = result.errors!.map((e) => e.message);
-			const hasPriceError = errorMessages.some((msg) =>
-				msg.toLowerCase().includes("price") || msg.toLowerCase().includes("decimal"),
-			);
-			expect(hasPriceError).toBe(true);
+			if (!result.success) {
+				const errorMessages = result.errors.map((e) => e.message);
+				const hasPriceError = errorMessages.some((msg) =>
+					msg.toLowerCase().includes("price") || msg.toLowerCase().includes("decimal"),
+				);
+				expect(hasPriceError).toBe(true);
+			}
 		});
 
 		test("valid price (1.000) does not produce price errors", () => {
@@ -95,7 +100,7 @@ describe("Builder price validation", () => {
 				owner: "alice",
 			});
 
-			if (!result.success && result.errors) {
+			if (!result.success) {
 				const priceErrors = result.errors.filter(
 					(e) => e.field.startsWith("price"),
 				);
@@ -115,9 +120,10 @@ describe("Builder pack transfer username validation", () => {
 				from: "alice",
 			});
 			expect(result.success).toBe(false);
-			expect(result.errors).toBeDefined();
-			const errorFields = result.errors!.map((e) => e.field);
-			expect(errorFields).toContain("to");
+			if (!result.success) {
+				const errorFields = result.errors.map((e) => e.field);
+				expect(errorFields).toContain("to");
+			}
 		});
 
 		test("valid username does not produce username error on 'to'", () => {
@@ -128,7 +134,7 @@ describe("Builder pack transfer username validation", () => {
 				from: "bob123",
 			});
 
-			if (!result.success && result.errors) {
+			if (!result.success) {
 				const toErrors = result.errors.filter((e) => e.field === "to");
 				expect(toErrors.length).toBe(0);
 			}

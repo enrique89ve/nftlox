@@ -3,7 +3,7 @@ import { usernameSchema, listInputSchema, unlistInputSchema, seedProvenanceSchem
 import { formatZodError } from "./helpers";
 import { generateImageHash } from "../dna";
 import { PROTOCOL_ID, PROTOCOL_VERSION, ACTION_LIST, ACTION_BUY, ACTION_UNLIST } from "../constants";
-import type { BuildResult, ListingData, UnlistData, ProtocolPayload, HiveOperation, BuyData } from "../types";
+import type { BuildResult, ListingData, UnlistData, ProtocolPayload, HiveOperation, BuyData, HiveTransferOperation } from "../types";
 
 export const listBuilderSchema = listInputSchema.extend({
 	owner: usernameSchema,
@@ -166,7 +166,7 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 
 	const formatAmount = (amt: number) => amt.toFixed(precision) + " " + currencyExt;
 
-	const transfers: any[] = [];
+	const transfers: HiveTransferOperation[] = [];
 	if (paymentSplit.sellerAmount > 0) {
 		transfers.push([
 			"transfer",
@@ -201,20 +201,9 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 		]);
 	}
 
-	// For standard `buildBuy`, we only return the primary payload in `operation`.
-	// Multiple transfers are usually returned as an array or bundled inside a custom handler.
-	// In payload-builder.ts, buildBuy doesn't return `operation` natively because it requires multiple ops.
-	// Let's bundle them in an `extensions` or handle it specifically:
-	// Wait, in payload-builder.ts, did buildBuy return an array?
-	// `BuildResult<BuyData>` definition implies `operation` is `HiveOperation`. Which is just 1 tuple.
-	// Actually, wait, the `buildBuy` from `src/payload-builder.ts` didn't return `operation`. The developer maps it out manually.
-	// So we return `undefined` for operation, and maybe put the array in `data` extensions if needed.
-	// Let's just return success with `transfers` included, extending `BuildResult`:
-
 	return {
 		success: true,
 		payload,
-		// @ts-ignore -- allowing extra field for compatibility with possible multiple operations return
 		hiveOperations: [payloadOperation, ...transfers],
 		warnings: warnings.length > 0 ? warnings : undefined,
 	};

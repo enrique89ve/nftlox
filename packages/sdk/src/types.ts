@@ -11,16 +11,9 @@ export interface ValidationError {
 	code: string;
 }
 
-export interface BuildResult<T> {
-	success: boolean;
-	payload?: import("./types").ProtocolPayload<T>;
-	operation?: HiveOperation;
-	hiveOperations?: HiveOperation[]; // For multi-op like Buy
-	errors?: ValidationError[];
-	warnings?: string[];
-	generatedId?: string;
-	generatedIds?: Record<string, string>;
-}
+export type BuildResult<T> =
+	| { success: true; payload: ProtocolPayload<T>; operation?: HiveOperation; hiveOperations?: AtomicOperation[]; warnings?: string[]; generatedId?: string; generatedIds?: Record<string, string> }
+	| { success: false; errors: ValidationError[] };
 
 export type HiveOperation = [
 	"custom_json",

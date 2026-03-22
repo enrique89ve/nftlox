@@ -17,6 +17,10 @@ export async function generateHashAsync(input: string): Promise<string> {
 	return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * Non-deterministic hash: includes Date.now() and Math.random() for uniqueness.
+ * Use deterministicHash() when reproducibility across nodes is required.
+ */
 export function generateHashSync(input: string): string {
 	let hash = 0;
 	for (let i = 0; i < input.length; i++) {
@@ -422,19 +426,33 @@ export function resolveDropTable(
 	itemCount: number,
 	rngSeed: string,
 ): string[] {
+	if (dropTable.length === 0) {
+		throw new Error("resolveDropTable: dropTable cannot be empty");
+	}
+
 	const totalWeight = dropTable.reduce((sum, entry) => sum + entry.weight, 0);
+	if (totalWeight <= 0) {
+		throw new Error("resolveDropTable: totalWeight must be greater than 0");
+	}
+
 	const results: string[] = [];
 
 	for (let i = 0; i < itemCount; i++) {
 		const roll = deterministicRng(rngSeed, i) * totalWeight;
 		let cumulative = 0;
+		let selected = false;
 
 		for (const entry of dropTable) {
 			cumulative += entry.weight;
 			if (roll < cumulative) {
 				results.push(entry.seedId);
+				selected = true;
 				break;
 			}
+		}
+
+		if (!selected) {
+			results.push(dropTable[dropTable.length - 1]!.seedId);
 		}
 	}
 

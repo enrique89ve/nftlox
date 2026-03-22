@@ -332,8 +332,8 @@ export function createSetDataOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [issuer],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [issuer],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},
@@ -365,8 +365,8 @@ export function createDataOperatorApproveOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [creator],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [creator],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},
@@ -996,8 +996,8 @@ export function createPackApproveOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},
@@ -1028,8 +1028,8 @@ export function createNftApproveOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},
@@ -1044,8 +1044,8 @@ export function createNftApproveAllOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},
@@ -1107,8 +1107,8 @@ export function createNftLendOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},
@@ -1123,8 +1123,8 @@ export function createNftReturnOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [signer],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [signer],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},

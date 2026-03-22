@@ -71,7 +71,7 @@ export const priceSchema = z.object({
 			(val) => parseFloat(val) >= parseFloat(MIN_PRICE_AMOUNT),
 			{ message: `Price amount must be at least ${MIN_PRICE_AMOUNT}` },
 		),
-	currency: z.enum(["HIVE", "HBD"]),
+	currency: z.enum(SUPPORTED_CURRENCIES),
 });
 
 export const seedProvenanceSchema = z.object({
