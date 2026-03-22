@@ -7,6 +7,7 @@ export {
 	PROTOCOL_VERSION,
 	MIN_PROTOCOL_VERSION,
 	HASH_VERSION,
+	GENESIS_BLOCK,
 	MAX_JSON_SIZE,
 	MAX_OPERATIONS_PER_TX,
 	TX_DELAY_MS,
@@ -25,6 +26,11 @@ export {
 	SUPPORTED_CURRENCIES,
 	MAX_ROYALTY_PCT,
 	MIN_PRICE_AMOUNT,
+	PROTOCOL_FEE_PCT,
+	DEFAULT_FEE_ACCOUNT,
+	calculatePaymentSplit,
+	roundHive,
+	type PaymentSplit,
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
@@ -32,14 +38,12 @@ export {
 	ACTION_REPLICATE,
 	ACTION_BULK_DISTRIBUTE,
 	MAX_BULK_DISTRIBUTE_ITEMS,
-	MAX_BULK_DISTRIBUTE_TOTAL,
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTION_BUY,
-	ACTION_OFFER,
-	ACTION_ACCEPT_OFFER,
-	ACTION_REJECT_OFFER,
+	MULTISIG_EXPIRATION_MS,
+	MAX_MULTISIG_OPERATIONS,
 	ACTION_PACK_CREATE,
 	ACTION_PACK_BUY,
 	ACTION_PACK_TRANSFER,
@@ -84,6 +88,7 @@ export type {
 	CollectionData,
 	NFTMetadata,
 	NFTData,
+	SeedProvenance,
 	ReplicaData,
 	BulkDistributeItem,
 	BulkDistributeData,
@@ -99,29 +104,24 @@ export type {
 	ListingData,
 	UnlistData,
 	BuyData,
-	OfferData,
-	AcceptOfferData,
-	RejectOfferData,
-	HistoryEventType,
-	HistoryEvent,
+	HiveTransactionObject,
+	MultisigErrorCode,
+	MultisigResponse,
+	MultisigRequest,
+	PaymentInfo,
 	ProtocolPayload,
 	CreateCollectionInput,
 	MintInput,
 	ReplicateInput,
 	ListInput,
-	BuyInput,
 	BurnInput,
 	UnlistInput,
-	OfferInput,
-	AcceptOfferInput,
-	RejectOfferInput,
 	ImportedNFT,
 	TransferMemoAction,
 	TransferMemo,
 	AtomicTransferInput,
 	HiveTransferOperation,
 	AtomicOperation,
-	OwnershipRecord,
 	// Anti-duplication types
 	SeedNFTWithArtId,
 	PreMintValidationResult,
@@ -168,7 +168,6 @@ export {
 	generateReplicaId,
 	extractOriginalId,
 	isReplicaId,
-	generateOfferId,
 	// Seed & Instance helpers
 	generateSeedId,
 	generateInstanceId,
@@ -213,9 +212,7 @@ export {
 	createListPayload,
 	createUnlistPayload,
 	createBuyPayload,
-	createOfferPayload,
-	createAcceptOfferPayload,
-	createRejectOfferPayload,
+	createBuyOperation,
 	// Operation creators
 	createCollectionOperation,
 	createMintOperation,
@@ -225,10 +222,6 @@ export {
 	createSetDataOperation,
 	createListOperation,
 	createUnlistOperation,
-	createBuyOperation,
-	createOfferOperation,
-	createAcceptOfferOperation,
-	createRejectOfferOperation,
 	// Atomic transfer (dual-registro)
 	buildTransferMemo,
 	parseTransferMemo,
@@ -266,60 +259,18 @@ export {
 	createNftReturnOperation,
 } from "./payloads";
 
-// ============ VALIDATION ============
-export {
-	type ValidationResult,
-	validateSymbol,
-	normalizeSymbol,
-	validatePrice,
-	validateCollectionInput,
-	validateMintInput,
-	validateListInput,
-	validateOfferInput,
-	validateImportedNFTs,
-	estimateOperationSize,
-	validateOperationSize,
-	splitIntoBatches,
-	calculateMaxOperationsPerTx,
-	validatePackCreateInput,
-	validatePackBuyInput,
-	validatePackTransferInput,
-	validatePackOpenInput,
-	validatePackApproveInput,
-	validatePackTransferFromInput,
-	validateNftApproveInput,
-	validateNftApproveAllInput,
-	validateNftTransferFromInput,
-	validateSetDataInput,
-	validateDataOperatorApproveInput,
-	validateSetDataFromInput,
-	validateNftLendInput,
-	validateNftReturnInput,
-	validateBulkDistributeInput,
-} from "./validation";
+// ============ SCHEMAS ============
+export * from "./schemas";
 
-// ============ PAYLOAD BUILDER ============
-export {
-	PayloadBuilder,
-	payloadBuilder,
-	type ValidationError,
-	type BuildResult,
-	type SeedInput,
-	type SeedBatchInput,
-	type SeedBatchPayload,
-} from "./payload-builder";
+// ============ BUILDERS ============
+export * from "./builders";
 
-// ============ DATA OPERATIONS BUILDERS (Modular) ============
+// ============ MULTISIG CLIENT ============
 export {
-	buildSetData,
-	buildSetDataFrom,
-	buildDataOperatorApprove,
-	type BuildSetDataInput,
-	type BuildSetDataFromInput,
-	type BuildDataOperatorApproveInput,
-	computeSeedAvailability,
-	type SeedAvailability,
-} from "./builders";
+	fetchPaymentInfo,
+	requestMultisig,
+} from "./multisig";
+
 
 // ============ SPV VERIFICATION ============
 export {
@@ -378,11 +329,11 @@ export {
 	type CollectionStats,
 	type IndexerNft,
 	type IndexerNftSummary,
-	type IndexerOffer,
 	type IndexerPack,
 	type PackBalance,
-	type IndexerHistoryEvent,
-	type SaleEvent,
-	type OwnershipRecord as IndexerOwnershipRecord,
-	type PackHistoryEvent,
+	type UserNftCounts,
+	type UserNftsPage,
 } from "./client";
+
+// ============ UTILS ============
+export * from "./utils/tx-sizing";

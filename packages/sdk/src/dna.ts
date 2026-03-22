@@ -142,15 +142,6 @@ export function isReplicaId(id: string): boolean {
 	return id.includes("_r");
 }
 
-// ============ OFFER ID ============
-
-/**
- * Generates a unique offer ID.
- */
-export function generateOfferId(): string {
-	return generateId("offer");
-}
-
 // ============ SEED & INSTANCE IDS ============
 
 /**

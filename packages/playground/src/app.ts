@@ -15,7 +15,7 @@ import {
 	type MintingSession,
 } from "./persistence";
 import { persistUser, clearUser } from "./shared/state";
-import { $, log, mintLog, PLACEHOLDER_SM, PLACEHOLDER_LG, PLACEHOLDER_XS } from "./shared/dom";
+import { $, log, mintLog, PLACEHOLDER_SM, PLACEHOLDER_LG } from "./shared/dom";
 
 let connectedUser: string | null = null;
 let _currentStep = 1;
@@ -24,13 +24,32 @@ let previewData: any = null;
 let broadcastPhase = 0;
 let validationPassed = false;
 let currentSession: MintingSession | null = null;
+let broadcastedCount = 0;
+let totalBroadcastOps = 0;
 
 // ============ FETCH-BACKED HELPERS ============
 
-async function getNFTsByOwner(owner: string) {
-	const response = await fetch(`/api/user/${encodeURIComponent(owner)}`);
-	const data = await response.json();
-	return data.nfts || [];
+async function getNFTsByOwner(owner: string, limit = 200, offset = 0) {
+	const firstRes = await fetch(`/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${offset}`);
+	const firstData = await firstRes.json();
+	const counts = firstData.counts ?? { total: 0, seeds: 0, instances: 0, replicas: 0 };
+	const allNfts: any[] = firstData.nfts || [];
+
+	if (counts.total > limit) {
+		const totalPages = Math.ceil(counts.total / limit);
+		const fetches = [];
+		for (let page = 1; page < totalPages; page++) {
+			fetches.push(
+				fetch(`/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${page * limit}`)
+					.then(r => r.json())
+					.then(d => d.nfts || [])
+			);
+		}
+		const pages = await Promise.all(fetches);
+		for (const nfts of pages) allNfts.push(...nfts);
+	}
+
+	return { nfts: allNfts, counts };
 }
 
 async function validateTransfer(nftId: string, currentUser: string) {
@@ -292,11 +311,13 @@ async function loadCollectionDetail(collectionId: string) {
 				seedsContainer.innerHTML = seeds.map((nft: any) => `
 					<div class="nft-card" data-id="${nft.id}">
 						<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='${PLACEHOLDER_SM}'">
-						<div class="nft-name">${nft.name}</div>
-						<div class="nft-owner">@${nft.owner}</div>
-						<div class="nft-id" style="display: flex; justify-content: space-between;">
-							<span>${nft.distributed || 0}/${nft.maxSupply}</span>
-							<span style="color: var(--accent);">SEED</span>
+						<div class="nft-card-body">
+							<div class="nft-name">${nft.name}</div>
+							<div class="nft-owner">@${nft.owner}</div>
+							<div class="nft-meta">
+								<span class="nft-meta-supply">${nft.distributed || 0}/${nft.maxSupply}</span>
+								<span class="nft-type-badge seed">SEED</span>
+							</div>
 						</div>
 					</div>
 				`).join("");
@@ -320,11 +341,13 @@ async function loadCollectionDetail(collectionId: string) {
 				instancesContainer.innerHTML = instances.map((nft: any) => `
 					<div class="nft-card" data-id="${nft.id}">
 						<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='${PLACEHOLDER_SM}'">
-						<div class="nft-name">${nft.name}</div>
-						<div class="nft-owner">@${nft.owner}</div>
-						<div class="nft-id" style="display: flex; justify-content: space-between;">
-							<span>#${nft.instanceNumber || 1}</span>
-							<span style="color: #3b82f6;">INSTANCE</span>
+						<div class="nft-card-body">
+							<div class="nft-name">${nft.name}</div>
+							<div class="nft-owner">@${nft.owner}</div>
+							<div class="nft-meta">
+								<span class="nft-meta-supply">#${nft.instanceNumber || 1}</span>
+								<span class="nft-type-badge instance">INSTANCE</span>
+							</div>
 						</div>
 					</div>
 				`).join("");
@@ -466,7 +489,6 @@ async function loadNftDetail(nftId: string) {
 					const remaining = (nft.maxSupply || 0) - (nft.distributed || 0);
 					if (actionSeedButtons) actionSeedButtons.style.display = "block";
 					if (actionInstanceButtons) actionInstanceButtons.style.display = "none";
-					if (actionQuantityGroup) actionQuantityGroup.style.display = "block";
 					const quantityInput = $("nft-action-quantity") as HTMLInputElement;
 					const remainingEl = $("nft-action-remaining");
 					if (quantityInput) { quantityInput.max = String(remaining); quantityInput.value = "1"; }
@@ -474,7 +496,19 @@ async function loadNftDetail(nftId: string) {
 				} else {
 					if (actionSeedButtons) actionSeedButtons.style.display = "none";
 					if (actionInstanceButtons) actionInstanceButtons.style.display = "block";
-					if (actionQuantityGroup) actionQuantityGroup.style.display = "none";
+					const listForm = $("nft-action-list-form");
+					const unlistForm = $("nft-action-unlist-form");
+					const listingInfo = $("nft-action-listing-info");
+					if (nft.listed) {
+						if (listForm) listForm.style.display = "none";
+						if (unlistForm) unlistForm.style.display = "block";
+						if (listingInfo && nft.listingPrice) {
+							listingInfo.textContent = `Currently listed for ${nft.listingPrice.amount} ${nft.listingPrice.currency}`;
+						}
+					} else {
+						if (listForm) listForm.style.display = "block";
+						if (unlistForm) unlistForm.style.display = "none";
+					}
 				}
 			} else {
 				actionsSection.style.display = "none";
@@ -486,9 +520,6 @@ async function loadNftDetail(nftId: string) {
 		const mintedAtEl = $("nft-detail-minted-at");
 		if (mintedByEl) mintedByEl.textContent = nft.mintedBy ? `@${nft.mintedBy}` : "-";
 		if (mintedAtEl) mintedAtEl.textContent = nft.mintedAt ? new Date(nft.mintedAt).toLocaleDateString() : "-";
-
-		// Load offers
-		loadNftOffers(nftId);
 
 		log(`Loaded NFT: ${nft.name}`, "success");
 	} catch (e) {
@@ -544,9 +575,48 @@ async function loadInventory() {
 	container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Loading...</p></div>';
 
 	try {
-		const nfts = await getNFTsByOwner(connectedUser);
-		renderNfts(nfts, "inventory-container", true);
-		log(`Loaded ${nfts.length} NFTs`, "success");
+		const result = await getNFTsByOwner(connectedUser, 200);
+		const counts = result.counts;
+		const seeds = result.nfts.filter((n: any) => n.isSeed);
+		const instances = result.nfts.filter((n: any) => !n.isSeed);
+		const totalCount = counts.total;
+
+		if (totalCount === 0) {
+			container.innerHTML = '<div class="empty-state"><p class="empty-state-text">No NFTs found</p></div>';
+		} else {
+			let html = "";
+
+			if (seeds.length > 0) {
+				html += `
+					<div class="inventory-section">
+						<div class="inventory-section-header">
+							<span class="inventory-section-title" style="color: var(--accent);">Seeds</span>
+							<span class="inventory-section-count" style="background: var(--accent-dim); color: var(--accent);">${counts.seeds}</span>
+						</div>
+						<div class="nft-grid" id="inventory-seeds"></div>
+					</div>
+				`;
+			}
+
+			if (instances.length > 0) {
+				html += `
+					<div class="inventory-section">
+						<div class="inventory-section-header">
+							<span class="inventory-section-title" style="color: #3b82f6;">Instances</span>
+							<span class="inventory-section-count" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6;">${counts.instances}</span>
+						</div>
+						<div class="nft-grid" id="inventory-instances"></div>
+					</div>
+				`;
+			}
+
+			container.innerHTML = html;
+
+			if (seeds.length > 0) renderNfts(seeds, "inventory-seeds", true);
+			if (instances.length > 0) renderNfts(instances, "inventory-instances", true);
+		}
+
+		log(`Loaded ${totalCount} NFTs (${counts.seeds} seeds, ${counts.instances} instances)`, "success");
 	} catch (e) {
 		log(`Error: ${(e as Error).message}`, "error");
 	}
@@ -570,9 +640,9 @@ async function searchUser() {
 	container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Searching...</p></div>';
 
 	try {
-		const nfts = await getNFTsByOwner(user);
-		renderNfts(nfts, "search-results");
-		log(`Found ${nfts.length} NFTs for @${user}`, "success");
+		const result = await getNFTsByOwner(user);
+		renderNfts(result.nfts, "search-results");
+		log(`Found ${result.nfts.length} NFTs for @${user}`, "success");
 	} catch (e) {
 		log(`Error: ${(e as Error).message}`, "error");
 	}
@@ -595,15 +665,29 @@ function renderNfts(nfts: any[], containerId: string, selectable = false) {
 		return;
 	}
 
-	container.innerHTML = nfts.map(nft => `
-		<div class="nft-card" data-id="${nft.id}" data-collection="${nft.collectionId}"
-			 data-edition="${nft.edition}" data-dna="${nft.instanceDna || nft.dna}">
-			<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='${PLACEHOLDER_SM}'">
-			<div class="nft-name">${nft.name}</div>
-			<div class="nft-owner">@${nft.owner}</div>
-			<div class="nft-id">${nft.id}</div>
-		</div>
-	`).join("");
+	container.innerHTML = nfts.map(nft => {
+		const isSeed = nft.isSeed;
+		const typeLabel = isSeed ? "SEED" : "INSTANCE";
+		const typeCls = isSeed ? "seed" : "instance";
+		const supplyText = isSeed
+			? `${nft.distributed || 0}/${nft.maxSupply || 0}`
+			: `#${nft.instanceNumber || 1}`;
+
+		return `
+			<div class="nft-card" data-id="${nft.id}" data-collection="${nft.collectionId}"
+				 data-edition="${nft.edition}" data-dna="${nft.instanceDna || ""}">
+				<img class="nft-image" src="${nft.imageUrl || ""}" onerror="this.src='${PLACEHOLDER_SM}'">
+				<div class="nft-card-body">
+					<div class="nft-name">${nft.name}</div>
+					<div class="nft-owner">@${nft.owner}</div>
+					<div class="nft-meta">
+						<span class="nft-meta-supply">${supplyText}</span>
+						<span class="nft-type-badge ${typeCls}">${typeLabel}</span>
+					</div>
+				</div>
+			</div>
+		`;
+	}).join("");
 
 	if (selectable) {
 		container.querySelectorAll(".nft-card").forEach(card => {
@@ -667,19 +751,23 @@ async function distributeFromSeed(seedId: string, to: string, quantity: number) 
 
 	log(`Distributing ${quantity} instance(s) to @${to} via bulk_distribute...`);
 
-	(window as any).hive_keychain.requestBroadcast(
-		connectedUser,
-		[operation],
-		"Posting",
-		(res: any) => {
-			if (res.success) {
-				log(`Distributed ${quantity} instance(s) to @${to}!`, "success");
-			} else {
-				const err = typeof res.error === "object" ? JSON.stringify(res.error) : res.error;
-				log(`Distribution failed: ${err}`, "error");
+	return new Promise<boolean>((resolve) => {
+		(window as any).hive_keychain.requestBroadcast(
+			connectedUser,
+			[operation],
+			"Posting",
+			(res: any) => {
+				if (res.success) {
+					log(`Distributed ${quantity} instance(s) to @${to}!`, "success");
+					resolve(true);
+				} else {
+					const err = typeof res.error === "object" ? JSON.stringify(res.error) : res.error;
+					log(`Distribution failed: ${err}`, "error");
+					resolve(false);
+				}
 			}
-		}
-	);
+		);
+	});
 }
 
 (window as any).distributeFromSeed = distributeFromSeed;
@@ -697,8 +785,8 @@ function goToStep(step: number) {
 		if (i + 1 === step) s.classList.add("active");
 	});
 
-	// Show/hide content
-	[$("step-1-content"), $("step-2-content"), $("step-3-content")].forEach((el, i) => {
+	// Show/hide content (step 4 = minting-progress card)
+	[$("step-1-content"), $("step-2-content"), $("step-3-content"), $("minting-progress")].forEach((el, i) => {
 		if (el) el.style.display = i + 1 === step ? "block" : "none";
 	});
 }
@@ -748,8 +836,11 @@ async function handleFileUpload(file: File) {
 
 		// Reset validation state
 		validationPassed = false;
-		const previewBtn = $("btn-preview-seeds") as HTMLButtonElement;
-		if (previewBtn) previewBtn.disabled = true;
+		const validateBtn = $("btn-validate") as HTMLButtonElement;
+		if (validateBtn) {
+			validateBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg> Validate Seeds`;
+			validateBtn.onclick = () => validateSeeds();
+		}
 		hideValidationResults();
 	} catch (e) {
 		log(`Error parsing JSON: ${(e as Error).message}`, "error");
@@ -821,9 +912,12 @@ async function validateSeeds() {
 	const creator = ($("col-creator") as HTMLInputElement)?.value.trim().toLowerCase() || connectedUser;
 	const sampleFile = ($("sample-select") as HTMLSelectElement)?.value;
 
-	// Hide preview button initially
-	const previewBtn = $("btn-preview-seeds") as HTMLButtonElement;
-	if (previewBtn) previewBtn.style.display = "none";
+	// Reset validate button to default state
+	const validateBtn = $("btn-validate") as HTMLButtonElement;
+	if (validateBtn) {
+		validateBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg> Validate Seeds`;
+		validateBtn.onclick = () => validateSeeds();
+	}
 
 	if (!colName) {
 		showValidationStatus("Please enter a collection name first", "error");
@@ -909,8 +1003,12 @@ async function validateSeeds() {
 
 		if (result.canProceed) {
 			validationPassed = true;
-			const previewBtn = $("btn-preview-seeds") as HTMLButtonElement;
-			if (previewBtn) previewBtn.style.display = "";
+			// Transform validate button into "Next" action
+			const validateBtn = $("btn-validate") as HTMLButtonElement;
+			if (validateBtn) {
+				validateBtn.textContent = "Next: Review Collection";
+				validateBtn.onclick = () => previewSeeds();
+			}
 			showValidationStatus(
 				`<strong>Validation passed!</strong> ${result.summary.new} new seeds ready to mint` +
 				(result.summary.existing > 0 ? ` (${result.summary.existing} already exist)` : ""),
@@ -1049,7 +1147,6 @@ async function previewSeeds() {
 	const colName = ($("col-name") as HTMLInputElement)?.value.trim();
 	const colSymbol = ($("col-symbol") as HTMLInputElement)?.value.trim().toUpperCase() ||
 		colName?.slice(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, "");
-	const sampleFile = ($("sample-select") as HTMLSelectElement)?.value;
 
 	if (!colName) {
 		log("Enter collection name first", "error");
@@ -1062,48 +1159,29 @@ async function previewSeeds() {
 		return;
 	}
 
-	let seedsToPreview = uploadedSeeds;
-
-	if (sampleFile && seedsToPreview.length === 0) {
-		// Use sample file via API
-		try {
-			const response = await fetch("/api/batch/preview", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ sampleFile, collectionName: colName })
-			});
-			const data = await response.json();
-			if (data.error) throw new Error(data.error);
-
-			previewData = data.preview;
-			seedsToPreview = previewData.seeds;
-		} catch (e) {
-			log(`Error: ${(e as Error).message}`, "error");
-			return;
-		}
-	} else if (seedsToPreview.length > 0) {
-		// Calculate preview from uploaded data (with artId)
-		const totalSupply = seedsToPreview.reduce((sum: number, s: any) => sum + (s.maxSupply || s.maxReplicas || 1), 0);
-		previewData = {
-			collection: {
-				name: colName,
-				symbol: colSymbol.length >= 3 ? colSymbol : colSymbol.padEnd(3, "X"),
-				totalPotential: totalSupply
-			},
-			seeds: seedsToPreview.map((s: any) => ({
-				artId: s.artId,
-				name: s.name,
-				maxSupply: s.maxSupply || s.maxReplicas || 1
-			})),
-			summary: {
-				totalSeeds: seedsToPreview.length,
-				totalPotentialInstances: totalSupply
-			}
-		};
-	} else {
+	if (uploadedSeeds.length === 0) {
 		log("Upload a JSON file or select a sample", "error");
 		return;
 	}
+
+	// Calculate preview from uploaded data
+	const totalSupply = uploadedSeeds.reduce((sum: number, s: any) => sum + (s.maxSupply || s.maxReplicas || 1), 0);
+	previewData = {
+		collection: {
+			name: colName,
+			symbol: colSymbol.length >= 3 ? colSymbol : colSymbol.padEnd(3, "X"),
+			totalPotential: totalSupply
+		},
+		seeds: uploadedSeeds.map((s: any) => ({
+			artId: s.artId,
+			name: s.name,
+			maxSupply: s.maxSupply || s.maxReplicas || 1
+		})),
+		summary: {
+			totalSeeds: uploadedSeeds.length,
+			totalPotentialInstances: totalSupply
+		}
+	};
 
 	// Render preview
 	const statsContainer = $("preview-stats");
@@ -1145,12 +1223,16 @@ async function previewSeeds() {
 // ============ CREATE COLLECTION ============
 
 async function createCollection() {
+	if (!(window as any).hive_keychain) {
+		log("Install Hive Keychain extension to broadcast operations", "error");
+		return;
+	}
+
 	const colName = ($("col-name") as HTMLInputElement)?.value.trim();
 	const colSymbol = ($("col-symbol") as HTMLInputElement)?.value.trim().toUpperCase() || previewData?.collection?.symbol;
 	const creator = ($("col-creator") as HTMLInputElement)?.value.trim().toLowerCase() || connectedUser;
 	const colImage = ($("col-image") as HTMLInputElement)?.value.trim();
 	const colDescription = ($("col-description") as HTMLTextAreaElement)?.value.trim();
-	const sampleFile = ($("sample-select") as HTMLSelectElement)?.value;
 
 	if (!creator) {
 		log("Enter creator username or connect wallet", "error");
@@ -1162,72 +1244,79 @@ async function createCollection() {
 		return;
 	}
 
-	// Check if seeds have artId (deterministic mode)
-	const hasArtId = uploadedSeeds.length > 0 && uploadedSeeds[0]?.artId;
+	if (!colImage) {
+		log("Collection image URL is required", "error");
+		return;
+	}
 
-	// Show progress
-	const progressCard = $("minting-progress");
-	if (progressCard) progressCard.style.display = "block";
+	const description = colDescription || `${colName} collection`;
 
-	mintLog(`Creating collection "${colName}"${hasArtId ? " (deterministic)" : ""}...`);
+	// Show progress via step 4
+	goToStep(4);
+
+	mintLog(`Creating collection "${colName}"...`);
 
 	try {
-		// Step 1: Create collection (use deterministic endpoint if artId present)
-		const colEndpoint = hasArtId ? "/api/batch/collection-deterministic" : "/api/batch/collection";
-		const colResponse = await fetch(colEndpoint, {
+		// Step 1: Build collection operation
+		const colResponse = await fetch("/api/build/collection", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
-				creator,
+				jsonId: `json_${Date.now()}`,
 				name: colName,
 				symbol: colSymbol,
+				creator,
 				totalPotential: previewData?.summary?.totalPotentialInstances || 1000000,
-				image: colImage || undefined,
-				description: colDescription || undefined,
+				metadata: {
+					description,
+					image: colImage,
+				},
+				rules: {
+					transferable: true,
+					burnable: true,
+					royaltyPct: 5,
+					royaltyRecipient: creator,
+				},
 			})
 		});
 		const colData = await colResponse.json();
-		if (colData.error) throw new Error(colData.error);
+		if (colData.success === false) {
+			const errMsg = colData.errors?.map((e: any) => e.message || e).join(", ") || "Unknown error";
+			throw new Error(errMsg);
+		}
 
 		mintLog(`Collection ID: ${colData.collectionId}`, "success");
-		mintLog(`Origin DNA: ${colData.originDna}`);
+		mintLog(`Origin DNA: ${colData.generatedIds?.originDna}`);
 
-		// Step 2: Generate seed operations
+		// Step 2: Build seed operations
 		mintLog("Generating seed mint operations...");
 
-		const mintEndpoint = hasArtId ? "/api/batch/mint-seeds-deterministic" : "/api/batch/mint-seeds";
-		const mintBody: any = {
-			collectionId: colData.collectionId,
-			owner: creator
-		};
-
-		if (sampleFile && !hasArtId) {
-			mintBody.sampleFile = sampleFile;
-		} else if (uploadedSeeds.length > 0) {
-			mintBody.nfts = applySuffix(uploadedSeeds);
-		}
-
-		const mintResponse = await fetch(mintEndpoint, {
+		const seedsResponse = await fetch("/api/build/seeds", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(mintBody)
+			body: JSON.stringify({
+				collectionId: colData.collectionId,
+				owner: creator,
+				seeds: applySuffix(uploadedSeeds),
+			})
 		});
-		const mintData = await mintResponse.json();
-		if (mintData.error) throw new Error(mintData.error);
-
-		mintLog(`Generated ${mintData.totalOperations} seed operations in ${mintData.batches.length} batches`);
-
-		// Create session for persistence (if deterministic)
-		if (hasArtId) {
-			currentSession = createSession(creator, colName, colSymbol, uploadedSeeds);
-			const seedIds = mintData.seeds.map((s: any) => s.seedId);
-			initializeSeedBatches(currentSession.id, mintData.batches.map((_: any, i: number) => ({
-				batchNumber: i + 1,
-				seedIds: seedIds.slice(i * 5, (i + 1) * 5),
-			})));
-			saveSession(currentSession);
-			mintLog(`Session saved: ${currentSession.id}`);
+		const mintData = await seedsResponse.json();
+		if (mintData.success === false) {
+			const errMsg = mintData.errors?.map((e: any) => e.message || e).join(", ") || "Unknown error";
+			throw new Error(errMsg);
 		}
+
+		mintLog(`Generated ${mintData.seeds.length} seed operations in ${mintData.batches.length} batches`);
+
+		// Create session for persistence
+		currentSession = createSession(creator, colName, colSymbol, applySuffix(uploadedSeeds));
+		saveSession(currentSession);
+		const seedIds = mintData.seeds.map((s: any) => s.seedId);
+		initializeSeedBatches(currentSession.id, mintData.batches.map((_: any, i: number) => ({
+			batchNumber: i + 1,
+			seedIds: seedIds.slice(i * 5, (i + 1) * 5),
+		})));
+		mintLog(`Session saved: ${currentSession.id}`);
 
 		// Store data globally
 		(window as any).__pendingBatches = mintData.batches;
@@ -1235,7 +1324,7 @@ async function createCollection() {
 		(window as any).__batchCreator = creator;
 		(window as any).__collectionOp = colData.operation;
 		(window as any).__collectionName = colName;
-		(window as any).__totalSeeds = mintData.totalOperations;
+		(window as any).__totalSeeds = mintData.seeds.length;
 		(window as any).__totalSupply = previewData?.summary?.totalPotentialInstances || 0;
 		(window as any).__sessionId = currentSession?.id;
 
@@ -1247,11 +1336,16 @@ async function createCollection() {
 		const summaryDetails = $("summary-details");
 		const summaryCreator = $("summary-creator");
 		if (summaryName) summaryName.textContent = colName;
-		if (summaryDetails) summaryDetails.textContent = `${mintData.totalOperations} seeds · ${(window as any).__totalSupply.toLocaleString()} total supply`;
+		if (summaryDetails) summaryDetails.textContent = `${mintData.seeds.length} seeds · ${(window as any).__totalSupply.toLocaleString()} total supply`;
 		if (summaryCreator) summaryCreator.textContent = `@${creator}`;
 
 		// Render batch list
 		renderBatchList(mintData.batches);
+
+		// Initialize progress counter (1 collection op + N batch ops)
+		broadcastedCount = 0;
+		totalBroadcastOps = 1 + mintData.batches.length;
+		updateBroadcastProgress();
 
 		mintLog("Ready! Click 'Broadcast' on each item", "success");
 
@@ -1276,6 +1370,11 @@ async function loadProtocolVersion() {
 }
 
 // ============ BATCH BROADCASTING ============
+
+function updateBroadcastProgress() {
+	const el = $("broadcast-progress");
+	if (el) el.textContent = `${broadcastedCount} of ${totalBroadcastOps} operations broadcast`;
+}
 
 function renderBatchList(batches: any[]) {
 	const container = $("seed-batches-list");
@@ -1315,7 +1414,7 @@ function setOpStatus(opId: string, status: "pending" | "active" | "complete" | "
 	// Update button visibility
 	const btn = el.querySelector(".btn") as HTMLButtonElement;
 	if (btn) {
-		if (status === "complete" || status === "error") {
+		if (status === "complete") {
 			btn.style.display = "none";
 		} else if (status === "active") {
 			btn.disabled = true;
@@ -1351,6 +1450,8 @@ function broadcastCollection() {
 			if (res.success) {
 				setOpStatus("op-collection", "complete");
 				broadcastPhase = 1;
+				broadcastedCount++;
+				updateBroadcastProgress();
 				mintLog("Collection created!", "success");
 
 				// Update session persistence
@@ -1368,6 +1469,13 @@ function broadcastCollection() {
 			} else {
 				setOpStatus("op-collection", "error");
 				mintLog(`Failed: ${res.message || res.error}`, "error");
+				// Show retry button
+				const retryBtn = $("btn-op-collection") as HTMLButtonElement;
+				if (retryBtn) {
+					retryBtn.textContent = "Retry";
+					retryBtn.style.display = "";
+					retryBtn.disabled = false;
+				}
 			}
 		}
 	);
@@ -1414,6 +1522,8 @@ function broadcastBatch(index: number) {
 			console.log(`Batch ${index + 1} response:`, res);
 			if (res.success) {
 				setOpStatus(`op-batch-${index}`, "complete");
+				broadcastedCount++;
+				updateBroadcastProgress();
 				mintLog(`Batch ${index + 1} complete!`, "success");
 
 				// Update session persistence
@@ -1437,17 +1547,29 @@ function broadcastBatch(index: number) {
 			} else {
 				setOpStatus(`op-batch-${index}`, "error");
 				mintLog(`Batch ${index + 1} failed: ${res.message || res.error}`, "error");
+				// Show retry button
+				const retryBtn = $(`op-batch-${index}`)?.querySelector(".btn") as HTMLButtonElement;
+				if (retryBtn) {
+					retryBtn.textContent = "Retry";
+					retryBtn.style.display = "";
+					retryBtn.disabled = false;
+				}
 			}
 		}
 	);
 }
 
 function resetMinting() {
+	const confirmed = confirm("Reset the form? Already-broadcast operations are permanent on the blockchain.");
+	if (!confirmed) return;
+
 	// Reset global state
 	(window as any).__pendingBatches = null;
 	(window as any).__currentBatchIndex = 0;
 	(window as any).__collectionOp = null;
 	broadcastPhase = 0;
+	broadcastedCount = 0;
+	totalBroadcastOps = 0;
 
 	// Hide progress, show step 1
 	const progressCard = $("minting-progress");
@@ -1752,7 +1874,7 @@ function selectBullForIssue(index: number) {
 // ============ NFT DETAIL ACTIONS ============
 
 async function nftDetailTransfer() {
-	const to = ($("nft-action-to") as HTMLInputElement)?.value.trim().toLowerCase();
+	const to = ($("nft-action-instance-to") as HTMLInputElement)?.value.trim().toLowerCase();
 	if (!to || !connectedUser || !currentNftId) {
 		log("Fill recipient and ensure you're connected", "error");
 		return;
@@ -1800,12 +1922,18 @@ async function nftDetailDistribute() {
 		log("Fill recipient and ensure you're connected", "error");
 		return;
 	}
-	await distributeFromSeed(currentNftId, to, quantity);
-	loadNftDetail(currentNftId);
+	const success = await distributeFromSeed(currentNftId, to, quantity);
+	if (success) {
+		// Wait for indexer to process the transaction
+		setTimeout(() => {
+			loadNftDetail(currentNftId!);
+			loadInventory();
+		}, 5000);
+	}
 }
 
 async function nftDetailTransferSeed() {
-	const to = ($("nft-action-to") as HTMLInputElement)?.value.trim().toLowerCase();
+	const to = ($("nft-action-seed-transfer-to") as HTMLInputElement)?.value.trim().toLowerCase();
 	if (!to || !connectedUser || !currentNftId) {
 		log("Fill recipient and ensure you're connected", "error");
 		return;
@@ -1853,6 +1981,94 @@ async function nftDetailTransferSeed() {
 (window as any).nftDetailDistribute = nftDetailDistribute;
 (window as any).nftDetailTransferSeed = nftDetailTransferSeed;
 
+async function nftDetailList() {
+	const price = ($("nft-action-price") as HTMLInputElement)?.value.trim();
+	const currency = ($("nft-action-currency") as HTMLSelectElement)?.value as "HIVE" | "HBD";
+	if (!price || !connectedUser || !currentNftId) {
+		log("Fill price and ensure you're connected", "error");
+		return;
+	}
+
+	try {
+		const response = await fetch("/api/build/list", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				nftId: currentNftId,
+				owner: connectedUser,
+				price: { amount: price, currency },
+			}),
+		});
+		const result = await response.json();
+		if (!result.success) {
+			log(`Error: ${result.errors?.[0]?.message || result.error}`, "error");
+			return;
+		}
+
+		log(`Listing ${currentNftId} for ${price} ${currency}...`);
+		(window as any).hive_keychain.requestBroadcast(
+			connectedUser,
+			[result.operation],
+			"Posting",
+			(res: any) => {
+				if (res.success) {
+					log(`Listed for ${price} ${currency}!`, "success");
+					setTimeout(() => loadNftDetail(currentNftId!), 5000);
+				} else {
+					const err = typeof res.error === "object" ? JSON.stringify(res.error) : res.error;
+					log(`Listing failed: ${err}`, "error");
+				}
+			}
+		);
+	} catch (e) {
+		log(`Error: ${(e as Error).message}`, "error");
+	}
+}
+
+async function nftDetailUnlist() {
+	if (!connectedUser || !currentNftId) {
+		log("Connect wallet first", "error");
+		return;
+	}
+
+	try {
+		const response = await fetch("/api/build/unlist", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				nftId: currentNftId,
+				owner: connectedUser,
+			}),
+		});
+		const result = await response.json();
+		if (!result.success) {
+			log(`Error: ${result.errors?.[0]?.message || result.error}`, "error");
+			return;
+		}
+
+		log(`Unlisting ${currentNftId}...`);
+		(window as any).hive_keychain.requestBroadcast(
+			connectedUser,
+			[result.operation],
+			"Posting",
+			(res: any) => {
+				if (res.success) {
+					log("Unlisted!", "success");
+					setTimeout(() => loadNftDetail(currentNftId!), 5000);
+				} else {
+					const err = typeof res.error === "object" ? JSON.stringify(res.error) : res.error;
+					log(`Unlist failed: ${err}`, "error");
+				}
+			}
+		);
+	} catch (e) {
+		log(`Error: ${(e as Error).message}`, "error");
+	}
+}
+
+(window as any).nftDetailList = nftDetailList;
+(window as any).nftDetailUnlist = nftDetailUnlist;
+
 // ============ ADVANCED TABS ============
 
 document.querySelectorAll(".advanced-tab").forEach(tab => {
@@ -1873,125 +2089,9 @@ document.querySelectorAll(".advanced-tab").forEach(tab => {
 import { initMarketplace } from "./views/marketplace";
 import { initPacks } from "./views/packs";
 import { initPermissions } from "./views/permissions";
+import { initDebug } from "./views/debug";
 import { initSpv } from "./views/spv";
 
-// ============ OFFERS IN NFT DETAIL ============
-
-async function loadNftOffers(nftId: string) {
-	const container = $("nft-offers-section");
-	if (!container) return;
-
-	try {
-		const response = await fetch(`/api/nft/${nftId}/offers?status=active`);
-		const data = await response.json();
-		const offers = data.offers || [];
-
-		if (offers.length === 0) {
-			container.style.display = "none";
-			return;
-		}
-
-		container.style.display = "block";
-		const listEl = $("nft-offers-list");
-		if (listEl) {
-			listEl.innerHTML = offers.map((o: any) => `
-				<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid var(--border); font-size: 13px;">
-					<div>
-						<span style="color: var(--accent); font-weight: 500;">${o.price_amount} ${o.price_currency}</span>
-						<span style="color: var(--text-dim);"> by @${o.offerer}</span>
-					</div>
-					<div style="display: flex; gap: 6px;">
-						${connectedUser ? `
-							<button class="btn btn-sm btn-primary" onclick="acceptOffer('${nftId}', '${o.id}')">Accept</button>
-							<button class="btn btn-sm btn-secondary" onclick="rejectOffer('${nftId}', '${o.id}')">Reject</button>
-						` : ""}
-					</div>
-				</div>
-			`).join("");
-		}
-	} catch { /* silently fail */ }
-}
-
-async function makeOffer(nftId: string) {
-	if (!connectedUser) { log("Connect wallet first", "error"); return; }
-
-	const amount = prompt("Offer amount (e.g. 10.000):");
-	if (!amount) return;
-	const currency = prompt("Currency (HIVE or HBD):") || "HIVE";
-
-	try {
-		const response = await fetch("/api/build/offer", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				nftId,
-				offerer: connectedUser,
-				price: { amount, currency: currency.toUpperCase() },
-			}),
-		});
-		const result = await response.json();
-
-		if (!result.success) {
-			log(`Error: ${result.error || result.errors?.[0]?.message}`, "error");
-			return;
-		}
-
-		(window as any).hive_keychain.requestBroadcast(
-			connectedUser,
-			[result.operation],
-			result.keyType || "Posting",
-			(res: any) => {
-				if (res.success) {
-					log("Offer placed!", "success");
-					loadNftOffers(nftId);
-				} else {
-					log(`Failed: ${res.error}`, "error");
-				}
-			},
-		);
-	} catch (e) {
-		log(`Error: ${(e as Error).message}`, "error");
-	}
-}
-
-async function acceptOffer(nftId: string, offerId: string) {
-	if (!connectedUser) return;
-	try {
-		const response = await fetch("/api/build/accept-offer", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ nftId, offerId, owner: connectedUser, paymentTxId: "pending" }),
-		});
-		const result = await response.json();
-		if (!result.success) { log(`Error: ${result.error}`, "error"); return; }
-
-		(window as any).hive_keychain.requestBroadcast(connectedUser, [result.operation], "Posting", (res: any) => {
-			if (res.success) { log("Offer accepted!", "success"); } else { log(`Failed: ${res.error}`, "error"); }
-		});
-	} catch (e) { log(`Error: ${(e as Error).message}`, "error"); }
-}
-
-async function rejectOffer(nftId: string, offerId: string) {
-	if (!connectedUser) return;
-	try {
-		const response = await fetch("/api/build/reject-offer", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ nftId, offerId, owner: connectedUser }),
-		});
-		const result = await response.json();
-		if (!result.success) { log(`Error: ${result.error}`, "error"); return; }
-
-		(window as any).hive_keychain.requestBroadcast(connectedUser, [result.operation], "Posting", (res: any) => {
-			if (res.success) { log("Offer rejected!", "success"); } else { log(`Failed: ${res.error}`, "error"); }
-		});
-	} catch (e) { log(`Error: ${(e as Error).message}`, "error"); }
-}
-
-(window as any).makeOffer = makeOffer;
-(window as any).acceptOffer = acceptOffer;
-(window as any).rejectOffer = rejectOffer;
-(window as any).loadNftOffers = loadNftOffers;
 
 // ============ DASHBOARD STATS ============
 
@@ -2011,7 +2111,6 @@ async function loadDashboardStats() {
 			<div class="stat-box"><div class="stat-label">Listed</div><div class="stat-value">${stats.total_listed ?? 0}</div></div>
 			<div class="stat-box"><div class="stat-label">Sales</div><div class="stat-value">${stats.total_sales ?? 0}</div></div>
 			<div class="stat-box"><div class="stat-label">Owners</div><div class="stat-value">${stats.unique_owners ?? 0}</div></div>
-			<div class="stat-box"><div class="stat-label">Active Offers</div><div class="stat-value">${stats.active_offers ?? 0}</div></div>
 		`;
 	} catch { /* silently fail */ }
 }
@@ -2055,6 +2154,36 @@ async function loadUserActivity() {
 
 (window as any).loadUserActivity = loadUserActivity;
 
+// ============ STEP 1 INLINE VALIDATION ============
+
+function validateField(inputId: string, validator: (value: string) => string | null) {
+	const input = $(inputId) as HTMLInputElement;
+	const errorEl = $(`${inputId}-error`);
+	if (!input) return;
+
+	input.addEventListener("blur", () => {
+		const error = validator(input.value.trim());
+		if (errorEl) {
+			errorEl.textContent = error || "";
+			errorEl.style.display = error ? "block" : "none";
+		}
+		input.style.borderColor = error ? "var(--error)" : "";
+	});
+}
+
+validateField("col-name", (v) => v.length < 1 ? "Collection name is required" : null);
+validateField("col-symbol", (v) => {
+	if (v.length < 3) return "Symbol must be at least 3 characters";
+	if (v.length > 8) return "Symbol must be at most 8 characters";
+	if (!/^[A-Z0-9]+$/.test(v.toUpperCase())) return "Only letters and numbers";
+	return null;
+});
+validateField("col-creator", (v) => v.length < 3 ? "Username must be at least 3 characters" : null);
+validateField("col-image", (v) => {
+	if (!v) return "Image URL is required for the collection";
+	try { new URL(v); return null; } catch { return "Must be a valid URL"; }
+});
+
 // ============ INIT ============
 
 setTimeout(checkKeychain, 500);
@@ -2064,6 +2193,7 @@ loadDashboardStats();
 initMarketplace();
 initPacks();
 initPermissions();
+initDebug();
 initSpv();
 log("Console ready");
 

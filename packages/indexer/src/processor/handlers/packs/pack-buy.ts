@@ -4,21 +4,8 @@ import {
 	getPackForProcessing,
 	upsertPackBalance,
 	incrementPackSupply,
-	insertPackHistoryEvent,
 } from "@/db/queries/packs.ts";
 import { requireString, requireNumber } from "@/utils/validation.ts";
-
-function parseTransferAmount(amount: string): { value: number; currency: string } {
-	const parts = amount.split(" ");
-	if (parts.length < 2) {
-		throw new Error(`Malformed transfer amount: ${amount}`);
-	}
-	const value = parseFloat(parts[0]!);
-	if (isNaN(value) || value <= 0) {
-		throw new Error(`Invalid transfer amount value: ${parts[0]}`);
-	}
-	return { value, currency: parts[1]! };
-}
 
 export async function handlePackBuy(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const packId = requireString(op.data.packId, "packId");
@@ -40,7 +27,7 @@ export async function handlePackBuy(op: ParsedOperation, txn: Queryable): Promis
 
 	// Payment verification for paid packs
 	if (pack.price_amount !== null) {
-		if (!op.pairedTransfer) {
+		if (!op.pairedTransfers || op.pairedTransfers.length === 0) {
 			throw new Error("Payment transfer required for paid pack");
 		}
 
@@ -50,36 +37,21 @@ export async function handlePackBuy(op: ParsedOperation, txn: Queryable): Promis
 		}
 
 		const expectedTotal = pricePerUnit * quantity;
-		const received = parseTransferAmount(op.pairedTransfer.amount);
 
-		if (received.value < expectedTotal) {
-			throw new Error(
-				`Insufficient payment: expected ${expectedTotal} ${pack.price_currency}, received ${received.value} ${received.currency}`,
-			);
-		}
+		const payment = op.pairedTransfers.find(t =>
+			t.from === op.signer &&
+			t.to === pack.creator &&
+			t.currency === pack.price_currency &&
+			t.amount >= expectedTotal
+		);
 
-		if (op.pairedTransfer.to !== pack.creator) {
+		if (!payment) {
 			throw new Error(
-				`Payment must be sent to pack creator ${pack.creator}, was sent to ${op.pairedTransfer.to}`,
+				`Invalid payment: expected >= ${expectedTotal} ${pack.price_currency} from @${op.signer} to @${pack.creator}`,
 			);
 		}
 	}
 
 	await upsertPackBalance(op.signer, packId, quantity, txn);
 	await incrementPackSupply(packId, quantity, txn);
-
-	await insertPackHistoryEvent({
-		packId,
-		collectionId: pack.collection_id,
-		eventType: "pack_buy",
-		blockNum: op.blockNum,
-		txId: op.txId,
-		timestamp: op.timestamp,
-		fromAccount: pack.creator,
-		toAccount: op.signer,
-		quantity,
-		priceAmount: pack.price_amount ? parseFloat(pack.price_amount) * quantity : null,
-		priceCurrency: pack.price_currency,
-		payload: op.data,
-	}, txn);
 }

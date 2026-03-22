@@ -2,7 +2,6 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftBurned, NFT_STATUS_BURNED, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
 import { requireString } from "@/utils/validation.ts";
 
 export async function handleBurn(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -15,10 +14,4 @@ export async function handleBurn(op: ParsedOperation, txn: Queryable): Promise<v
 
 	await updateNftBurned(nftId, txn);
 	await deleteNftAllowance(nftId, txn);
-	await insertHistoryEvent({
-		nftId, collectionId: nft.collection_id, eventType: "burn",
-		blockNum: op.blockNum, txId: op.txId, timestamp: op.timestamp,
-		fromAccount: op.signer, toAccount: null,
-		priceAmount: null, priceCurrency: null, payload: op.data,
-	}, txn);
 }

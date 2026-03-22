@@ -1,3 +1,5 @@
+import { GENESIS_BLOCK, DEFAULT_FEE_ACCOUNT } from "nftlox-sdk";
+
 const toInt = (val: string | undefined, fallback: number): number => {
 	const parsed = Number(val);
 	return Number.isNaN(parsed) ? fallback : parsed;
@@ -19,7 +21,7 @@ const toLogLevel = (val: string | undefined, fallback: LogLevel): LogLevel => {
 export const config = {
 	port: toInt(process.env.INDEXER_PORT, 3050),
 	databaseUrl: process.env.DATABASE_URL ?? "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer",
-	genesisBlock: toInt(process.env.GENESIS_BLOCK, 103_484_900),
+	genesisBlock: toInt(process.env.GENESIS_BLOCK, GENESIS_BLOCK),
 	protocolId: process.env.PROTOCOL_ID ?? "nftlox_testnet",
 	batchSize: toInt(process.env.BATCH_SIZE, 1000),
 	syncIntervalMs: toInt(process.env.SYNC_INTERVAL_MS, 3000),
@@ -34,6 +36,15 @@ export const config = {
 	postgresPassword: process.env.POSTGRES_PASSWORD ?? "nftlox_dev",
 	postgresUser: process.env.POSTGRES_USER ?? "nftlox",
 	postgresDb: process.env.POSTGRES_DB ?? "nftlox_indexer",
+	// Cuenta del nodo: firma operaciones y recibe el fee 2.5% en ventas.
+	hiveAccount: process.env.HIVE_ACCOUNT ?? DEFAULT_FEE_ACCOUNT,
+	indexerRole: (process.env.INDEXER_ROLE ?? "both") as "sync" | "api" | "both",
+	// Node public info
+	nodeUrl: process.env.NODE_URL ?? "",
+	// Multisig (buy transaction signing)
+	activeKey: process.env.ACTIVE_KEY ?? "",
+	multisigRateLimitMax: toInt(process.env.MULTISIG_RATE_LIMIT_MAX, 10),
+	multisigRateLimitWindowMs: toInt(process.env.MULTISIG_RATE_LIMIT_WINDOW_MS, 60_000),
 } as const;
 
 if (config.nodeEnv === "production" && process.env.POSTGRES_PASSWORD === undefined) {

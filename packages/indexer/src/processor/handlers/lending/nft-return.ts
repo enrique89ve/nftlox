@@ -2,7 +2,6 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftStatus, NFT_STATUS_ACTIVE, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
 import { getLoan, deleteLoan } from "@/db/queries/loans.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
 import { requireString } from "@/utils/validation.ts";
 
 export async function handleNftReturn(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -24,18 +23,4 @@ export async function handleNftReturn(op: ParsedOperation, txn: Queryable): Prom
 
 	await updateNftStatus(instanceId, NFT_STATUS_ACTIVE, txn);
 	await deleteLoan(instanceId, txn);
-
-	await insertHistoryEvent({
-		nftId: instanceId,
-		collectionId: nft.collection_id,
-		eventType: "nft_return",
-		blockNum: op.blockNum,
-		txId: op.txId,
-		timestamp: op.timestamp,
-		fromAccount: op.signer,
-		toAccount: loan.lender,
-		priceAmount: null,
-		priceCurrency: null,
-		payload: { ...op.data, returnedBy: isLender ? "lender" : "borrower" },
-	}, txn);
 }

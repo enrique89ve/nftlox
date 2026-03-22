@@ -1,18 +1,17 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, updateNftOwner, NFT_STATUS_BURNED, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
+import { getNftForProcessing, updateNftOwner, NFT_STATUS_BURNED, NFT_STATUS_LENT, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import {
 	getNftAllowance,
 	hasCollectionAllowance,
 	deleteNftAllowance,
 } from "@/db/queries/allowances.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
-import { requireString } from "@/utils/validation.ts";
+import { requireString, requireUsername } from "@/utils/validation.ts";
 
 export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable): Promise<void> {
-	const from = requireString(op.data.from, "from");
-	const to = requireString(op.data.to, "to");
+	const from = requireUsername(op.data.from, "from");
+	const to = requireUsername(op.data.to, "to");
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 
 	if (from === to) throw new Error("Cannot transfer to yourself");
@@ -21,6 +20,7 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
 	if (nft.status === NFT_STATUS_BURNED) throw new Error(`NFT is burned: ${instanceId}`);
 	if (nft.status === NFT_STATUS_LENT) throw new Error(`NFT is lent and cannot be transferred: ${instanceId}`);
+	if (nft.status === NFT_STATUS_LISTED) throw new Error(`NFT is listed for sale and must be unlisted first: ${instanceId}`);
 	if (nft.owner !== from) throw new Error(`Account ${from} is not owner of ${instanceId}`);
 
 	const rules = await getCollectionRules(nft.collection_id, txn);
@@ -41,18 +41,4 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 
 	await updateNftOwner(instanceId, to, txn);
 	await deleteNftAllowance(instanceId, txn);
-
-	await insertHistoryEvent({
-		nftId: instanceId,
-		collectionId: nft.collection_id,
-		eventType: "nft_transfer_from",
-		blockNum: op.blockNum,
-		txId: op.txId,
-		timestamp: op.timestamp,
-		fromAccount: from,
-		toAccount: to,
-		priceAmount: null,
-		priceCurrency: null,
-		payload: { ...op.data, spender: op.signer },
-	}, txn);
 }

@@ -1,5 +1,4 @@
 import { sql, type Queryable, clampLimit } from "@/db/client.ts";
-import type { HistoryEventType } from "@/protocol.ts";
 
 // ============ TYPES ============
 
@@ -33,21 +32,6 @@ export interface PackProcessingRow {
 	current_supply: number;
 	total_opened: number;
 	status: string;
-}
-
-export interface InsertPackHistoryParams {
-	packId: string;
-	collectionId: string | null;
-	eventType: HistoryEventType;
-	blockNum: number;
-	txId: string;
-	timestamp: string;
-	fromAccount: string | null;
-	toAccount: string | null;
-	quantity: number | null;
-	priceAmount: number | null;
-	priceCurrency: string | null;
-	payload: unknown | null;
 }
 
 // ============ CORE QUERIES ============
@@ -157,29 +141,6 @@ export async function incrementPackOpened(
 	`;
 }
 
-// ============ HISTORY QUERIES ============
-
-export async function insertPackHistoryEvent(
-	params: InsertPackHistoryParams,
-	txn: Queryable = sql,
-): Promise<void> {
-	await txn`
-		INSERT INTO pack_history_events (
-			pack_id, collection_id, event_type,
-			block_num, tx_id, timestamp,
-			from_account, to_account, quantity,
-			price_amount, price_currency, payload
-		) VALUES (
-			${params.packId}, ${params.collectionId}, ${params.eventType},
-			${params.blockNum}, ${params.txId}, ${params.timestamp},
-			${params.fromAccount}, ${params.toAccount}, ${params.quantity},
-			${params.priceAmount}, ${params.priceCurrency},
-			${params.payload ? JSON.stringify(params.payload) : null}
-		)
-		ON CONFLICT (block_num, tx_id, event_type, pack_id, from_account) DO NOTHING
-	`;
-}
-
 // ============ API QUERIES ============
 
 export async function listPacks(collectionId?: string, limit = 50, offset = 0) {
@@ -224,20 +185,3 @@ export async function getUserPackBalances(account: string, limit = 50, offset = 
 	`;
 }
 
-export async function getPackHistory(packId: string, limit = 100, offset = 0, cursor?: number) {
-	const safeLimit = clampLimit(limit, 100);
-	if (cursor !== undefined) {
-		return sql`
-			SELECT * FROM pack_history_events
-			WHERE pack_id = ${packId} AND id > ${cursor}
-			ORDER BY id ASC
-			LIMIT ${safeLimit}
-		`;
-	}
-	return sql`
-		SELECT * FROM pack_history_events
-		WHERE pack_id = ${packId}
-		ORDER BY block_num ASC, id ASC
-		LIMIT ${safeLimit} OFFSET ${offset}
-	`;
-}

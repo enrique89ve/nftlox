@@ -1,7 +1,8 @@
 import { config } from "@/config.ts";
 import { withTransaction } from "@/db/client.ts";
 import { getLastBlock, updateLastBlock } from "@/db/queries/sync.ts";
-import { getHeadBlockNum, getCustomJsonInRange, getHafAHBlockRange } from "./hive-client.ts";
+import { getHeadBlockNum, getCustomJsonInRange, getHafAHBlockRange, getTransfersInTransaction } from "./hive-client.ts";
+import { ACTION_BUY, ACTION_PACK_BUY } from "nftlox-sdk";
 import { parseHafAHOperations } from "./operation-parser.ts";
 import { routeOperation } from "@/processor/action-router.ts";
 import { setSynced, updateSyncProgress } from "./sync-state.ts";
@@ -13,6 +14,11 @@ const MASSIVE_THRESHOLD = 100;
 const SYNC_TOLERANCE = 10;
 
 let running = false;
+
+/** @internal — exposed for unit tests only */
+export function setRunning(value: boolean): void {
+	running = value;
+}
 
 export function startSync(): void {
 	running = true;
@@ -47,7 +53,7 @@ async function syncLoop(): Promise<void> {
 	}
 }
 
-async function syncCycle(): Promise<void> {
+export async function syncCycle(): Promise<void> {
 	let lastBlock = await getLastBlock();
 	if (lastBlock === 0) {
 		lastBlock = config.genesisBlock - 1;
@@ -90,10 +96,18 @@ async function syncCycle(): Promise<void> {
 		const rangeEnd = Math.min(current + blockRange - 1, headBlock);
 
 		// Fetch custom_json ops in this range via HafAH (pre-filtered by protocol ID)
-		const hafOps = await getCustomJsonInRange(current, rangeEnd, config.protocolId);
+		const hafOps = await getCustomJsonInRange(current, rangeEnd, config.protocolId, behind);
 
 		// Parse validated protocol operations
 		const ops = parseHafAHOperations(hafOps);
+
+		// Enrich buy and pack_buy ops with paired transfers for payment verification
+		const buyOps = ops.filter(op =>
+			op.action === ACTION_BUY || op.action === ACTION_PACK_BUY
+		);
+		for (const op of buyOps) {
+			op.pairedTransfers = await getTransfersInTransaction(op.txId);
+		}
 
 		// Process operations in a transaction
 		if (ops.length > 0) {

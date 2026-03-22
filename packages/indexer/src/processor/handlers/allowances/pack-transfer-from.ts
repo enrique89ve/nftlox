@@ -4,14 +4,13 @@ import {
 	getPackForProcessing,
 	upsertPackBalance,
 	getPackBalance,
-	insertPackHistoryEvent,
 } from "@/db/queries/packs.ts";
 import { getPackAllowance, deductPackAllowance } from "@/db/queries/allowances.ts";
-import { requireString, requireNumber } from "@/utils/validation.ts";
+import { requireString, requireNumber, requireUsername } from "@/utils/validation.ts";
 
 export async function handlePackTransferFrom(op: ParsedOperation, txn: Queryable): Promise<void> {
-	const from = requireString(op.data.from, "from");
-	const to = requireString(op.data.to, "to");
+	const from = requireUsername(op.data.from, "from");
+	const to = requireUsername(op.data.to, "to");
 	const packId = requireString(op.data.packId, "packId");
 	const quantity = requireNumber(op.data.quantity, "quantity");
 
@@ -43,19 +42,4 @@ export async function handlePackTransferFrom(op: ParsedOperation, txn: Queryable
 	// Execute transfer
 	await upsertPackBalance(from, packId, -quantity, txn);
 	await upsertPackBalance(to, packId, quantity, txn);
-
-	await insertPackHistoryEvent({
-		packId,
-		collectionId: pack.collection_id,
-		eventType: "pack_transfer_from",
-		blockNum: op.blockNum,
-		txId: op.txId,
-		timestamp: op.timestamp,
-		fromAccount: from,
-		toAccount: to,
-		quantity,
-		priceAmount: null,
-		priceCurrency: null,
-		payload: { ...op.data, spender: op.signer },
-	}, txn);
 }

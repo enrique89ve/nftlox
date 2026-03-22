@@ -4,12 +4,11 @@ import { getNftForProcessing, updateNftStatus, NFT_STATUS_ACTIVE, NFT_STATUS_LEN
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { insertLoan, getLoan } from "@/db/queries/loans.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
-import { requireString } from "@/utils/validation.ts";
+import { requireString, requireUsername } from "@/utils/validation.ts";
 
 export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const instanceId = requireString(op.data.instanceId, "instanceId");
-	const borrower = requireString(op.data.borrower, "borrower");
+	const borrower = requireUsername(op.data.borrower, "borrower");
 
 	if (borrower === op.signer) throw new Error("Cannot lend to yourself");
 
@@ -37,18 +36,4 @@ export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promis
 
 	// Clear any existing approvals — lent NFTs cannot be transferred
 	await deleteNftAllowance(instanceId, txn);
-
-	await insertHistoryEvent({
-		nftId: instanceId,
-		collectionId: nft.collection_id,
-		eventType: "nft_lend",
-		blockNum: op.blockNum,
-		txId: op.txId,
-		timestamp: op.timestamp,
-		fromAccount: op.signer,
-		toAccount: borrower,
-		priceAmount: null,
-		priceCurrency: null,
-		payload: op.data,
-	}, txn);
 }

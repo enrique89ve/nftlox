@@ -2,7 +2,6 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { collectionExists } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
 import { requireString, optionalString, optionalNumber, optionalObject, optionalStringArray } from "@/utils/validation.ts";
 
 export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -34,12 +33,5 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		seedId: null, instanceNumber: null, originalId: null,
 		tags: optionalStringArray(d.tags), customData: d.data ?? null,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
-	}, txn);
-
-	await insertHistoryEvent({
-		nftId: id, collectionId, eventType: "mint",
-		blockNum: op.blockNum, txId: op.txId, timestamp: op.timestamp,
-		fromAccount: null, toAccount: optionalString(d.owner) ?? op.signer,
-		priceAmount: null, priceCurrency: null, payload: op.data,
 	}, txn);
 }

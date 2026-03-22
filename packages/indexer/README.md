@@ -2,6 +2,14 @@
 
 Blockchain indexer for the [NFTLox Protocol](https://github.com/enrique89ve/nftlox). Scans Hive blockchain block by block, validates protocol transactions, and maintains queryable state in PostgreSQL with a REST API + OpenAPI docs.
 
+## Core Principles
+
+- **0 Fees (Hive as Base Layer):** Eliminates the biggest friction in Web3 adoption. Users don't need to buy cryptocurrency just to pay to "move" their character or change its name.
+- **Infinite & Dynamic Metadata (Custom JSONs + Memos):** While Ethereum struggles to store a simple string on-chain, nftlox uses Hive JSONs to store the complete state of a game, a weapon's history, or an identity's reputation.
+- **Native Security (Multisig):** The node co-signs buy transactions so the buyer's HIVE transfer and the NFT ownership change happen atomically. If the node rejects the transaction, the funds never leave the buyer's account.
+- **Zero Smart Contracts (Web2 Development):** Allows game studios to build using TypeScript SDKs and traditional databases (PostgreSQL) for the Indexer, accelerating development x100.
+- **Trustless Verification (Light Clients via SDK):** A user doesn't have to blindly trust a game server. Thanks to the SDKs, anyone can connect to a public Hive node, read the immutable history of `custom_json`, and mathematically calculate the exact same state of the NFT (level, owner, attributes) without needing to run a full Indexer themselves.
+
 ## How It Works
 
 ```
@@ -24,6 +32,21 @@ data_operator_approve { operator: "chess_game", collectionId: "col_abc" }
 set_data_from { instanceId: "sword_42", data: { wins: 12, elo: 1450 } }
   -> chess_game writes to sword_42
   -> Alice still owns it, can sell it with the stats attached
+```
+
+**Multisig Buy** -- Marketplace purchases use a multisig flow. The buyer builds a transaction with HIVE transfers (seller + royalty + fee) and a `buy` custom_json. The indexer node validates the payment split and co-signs with its active key. The buyer then signs with Hive Keychain and broadcasts. Both signatures are required, so funds only move if the NFT transfer also happens.
+
+```
+Buyer                          Indexer Node
+  |--- GET /api/payment-info --->|  (split: seller + royalty + fee)
+  |<-- PaymentInfo --------------|
+  |                              |
+  [build unsigned tx]            |
+  |--- POST /api/multisig ------>|  (validate + sign)
+  |<-- nodeSignature ------------|
+  |                              |
+  [sign with Keychain]           |
+  [broadcast to Hive L1]        |
 ```
 
 **Scalability** -- The indexer reads Hive L1 and projects state into PostgreSQL. This means SQL joins, sorting, filtering, and pagination over millions of NFTs -- things that are impossible querying raw blockchain JSON.
@@ -72,9 +95,9 @@ Interactive documentation available at `http://localhost:3050/swagger` (disabled
 ### Status & Health
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/status` | Sync progress (lastBlock, headBlock, blocksBehind) |
+| `GET /api/status` | Sync progress (lastBlock, headBlock, blocksBehind, multisigEnabled) |
 | `GET /api/health` | Sync-aware health check (200 healthy, 503 unhealthy) |
-| `GET /api/stats` | Protocol totals (collections, NFTs, sales, etc.) |
+| `GET /api/stats` | Protocol totals (collections, NFTs, listed, burned, etc.) |
 
 ### Collections
 | Endpoint | Description |
@@ -88,35 +111,36 @@ Interactive documentation available at `http://localhost:3050/swagger` (disabled
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/nfts/:id` | NFT details |
-| `GET /api/nfts/:id/history` | Event history (?cursor=lastId for efficient pagination) |
-| `GET /api/nfts/:id/ownership` | Ownership chain (provenance) |
-| `GET /api/nfts/:id/instances` | Instances (if seed) |
-| `GET /api/nfts/:id/offers` | Offers on this NFT |
+| `GET /api/nfts/:id/instances` | Instances distributed from this seed |
 
 ### Users
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/users/:username/nfts` | User's NFTs (?status=active&type=seed) |
+| `GET /api/users/:username/nfts` | User's NFTs with counts (?status=active&type=seed) |
+| `GET /api/users/:username/nfts/count` | NFT counts by type (seeds, instances, replicas) |
 | `GET /api/users/:username/collections` | User's collections |
-| `GET /api/users/:username/activity` | User's activity feed (?cursor=lastId) |
 | `GET /api/users/:username/packs` | User's pack balances |
 
 ### Marketplace
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/marketplace/listings` | Active listings (?sort=price_asc&currency=HIVE) |
-| `GET /api/marketplace/recent-sales` | Recent sales (?cursor=lastId) |
+
+### Multisig
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/payment-info/:nftId` | Payment split for building a buy transaction |
+| `POST /api/multisig` | Validate and co-sign a buy transaction |
 
 ### Packs
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/packs` | List packs (?collectionId=xxx) |
 | `GET /api/packs/:id` | Pack details |
-| `GET /api/packs/:id/history` | Pack history (?cursor=lastId) |
 
 ### Pagination
 
-All list endpoints support `?limit=N&offset=N`. History endpoints also support cursor-based pagination with `?cursor=lastId` for O(1) performance on large tables.
+All list endpoints support `?limit=N&offset=N`.
 
 ## Configuration
 
@@ -125,7 +149,7 @@ Copy `.env.example` to `.env` to customize (defaults work out of the box):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `INDEXER_PORT` | 3050 | REST API port |
-| `GENESIS_BLOCK` | 103484900 | First block to scan |
+| `GENESIS_BLOCK` | 104838076 | First block to scan |
 | `PROTOCOL_ID` | nftlox_testnet | Protocol ID to filter |
 | `BATCH_SIZE` | 1000 | Blocks per API request |
 | `SYNC_INTERVAL_MS` | 3000 | Polling interval when caught up |
@@ -134,13 +158,20 @@ Copy `.env.example` to `.env` to customize (defaults work out of the box):
 | `ENABLE_SWAGGER` | true | Disabled automatically in production |
 | `POSTGRES_DB` | nftlox_indexer | PostgreSQL database name |
 | `POSTGRES_USER` | nftlox | PostgreSQL user |
-| `POSTGRES_PASSWORD` | nftlox_dev | PostgreSQL password |
-| `POSTGRES_PORT` | 5432 | PostgreSQL port |
+| `POSTGRES_PASSWORD` | nftlox_dev | PostgreSQL password (required in production) |
 | `HIVE_ENDPOINTS` | (multiple) | Comma-separated Hive API endpoints |
+| `HIVE_ACCOUNT` | nftlox | Node account (signs buy ops, receives protocol fee) |
+| `ACTIVE_KEY` | (empty) | Node's active key for multisig signing (enables multisig) |
+| `NODE_URL` | (empty) | Public URL of this node |
+| `INDEXER_ROLE` | both | `sync`, `api`, or `both` |
+| `MULTISIG_RATE_LIMIT_MAX` | 10 | Max multisig requests per window |
+| `MULTISIG_RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window in milliseconds |
+| `HEALTH_PORT` | 0 | Separate health check port (0 = disabled) |
 
 ## Security
 
 - **Rate limiting**: 1000 requests/min per IP (CF-Connecting-IP > X-Real-IP > X-Forwarded-For)
+- **Multisig rate limiting**: Configurable per-buyer rate limit for `/api/multisig`
 - **Security headers**: X-Content-Type-Options, Referrer-Policy, Cache-Control
 - **Query hard caps**: Max 1000 rows per query regardless of client input
 - **Swagger**: Disabled when `NODE_ENV=production`
@@ -154,7 +185,7 @@ Hive Blockchain
     |
     v
 +------------------+
-|  Scanner         |  Fetches blocks via @hiveio/wax
+|  Scanner         |  Fetches blocks via custom fetch client
 |  (hive-client)   |  Failover across multiple endpoints
 |  (op-parser)     |  Filters custom_json + atomic transfers
 |  (sync-engine)   |  Batch loop with PostgreSQL transactions
@@ -163,24 +194,27 @@ Hive Blockchain
          v
 +------------------+
 |  Processor       |  Validates operations
-|  (action-router) |  Routes to 26 handlers
+|  (action-router) |  Routes to 23 handlers
 |  handlers/       |  core/ marketplace/ packs/ allowances/ lending/
 +--------+---------+
          |
          v
 +------------------+
-|  PostgreSQL      |  collections, nfts, history_events, offers,
-|  (Docker)        |  packs, allowances, nft_loans
+|  PostgreSQL      |  collections, nfts, packs, user_pack_balances,
+|  (Docker)        |  pack_allowances, nft_allowances, collection_allowances,
+|                  |  data_operators, nft_loans, owner_nft_counts,
+|                  |  invalid_operations, sync_state
 +--------+---------+
          |
          v
 +------------------+
 |  REST API        |  Elysia + OpenAPI/Swagger
 |  (routes/)       |  Rate limiting, cache headers, health check
+|  (multisig)      |  Co-signs buy transactions with node active key
 +------------------+
 ```
 
-## Protocol Actions (26)
+## Protocol Actions (23)
 
 ### Core (7)
 | Action | Description |
@@ -193,15 +227,12 @@ Hive Blockchain
 | `replicate` | Create replica |
 | `set_data` | Update custom data/tags |
 
-### Marketplace (6)
+### Marketplace (3)
 | Action | Description |
 |--------|-------------|
 | `list` | List on marketplace |
 | `unlist` | Remove listing |
-| `buy` | Purchase listed NFT |
-| `offer` | Make offer |
-| `accept_offer` | Accept offer |
-| `reject_offer` | Reject offer |
+| `buy` | Purchase listed NFT (multisig with node co-signature) |
 
 ### Packs (4)
 | Action | Description |

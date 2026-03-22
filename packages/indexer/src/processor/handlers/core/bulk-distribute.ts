@@ -8,7 +8,6 @@ import {
 	NFT_STATUS_BURNED,
 	NFT_STATUS_LENT,
 } from "@/db/queries/nfts.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireNumber, requireArray, optionalString } from "@/utils/validation.ts";
 import {
@@ -17,11 +16,16 @@ import {
 	generateDeterministicInstanceDna,
 	generateDeterministicAccessKey,
 	MAX_BULK_DISTRIBUTE_ITEMS,
-	MAX_BULK_DISTRIBUTE_TOTAL,
+	validateHiveUsername,
 } from "nftlox-sdk";
 
 export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable): Promise<void> {
-	const to = optionalString(op.data.to) ?? op.signer;
+	const toRaw = optionalString(op.data.to);
+	if (toRaw) {
+		const error = validateHiveUsername(toRaw);
+		if (error) throw new Error(`Invalid Hive username for to ("${toRaw}"): ${error}`);
+	}
+	const to = toRaw ?? op.signer;
 	const items = requireArray(op.data.items, "items");
 	const imageOverrides = (op.data.imageOverrides as Record<string, { imageUrl?: string; imageHash?: string }>) ?? {};
 	const customData = (op.data.data as Record<string, unknown>) ?? null;
@@ -44,10 +48,6 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		seenSeeds.add(seedId);
 		totalQuantity += quantity;
 		parsedItems.push({ seedId, quantity });
-	}
-
-	if (totalQuantity > MAX_BULK_DISTRIBUTE_TOTAL) {
-		throw new Error(`Total quantity ${totalQuantity} exceeds max ${MAX_BULK_DISTRIBUTE_TOTAL}`);
 	}
 
 	// Cache collection creators to avoid repeated queries
@@ -141,41 +141,10 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 			}, txn);
 
 			minted++;
-
-			await insertHistoryEvent({
-				nftId: instanceId,
-				collectionId: seed.collection_id,
-				eventType: "distribute",
-				blockNum: op.blockNum,
-				txId: op.txId,
-				timestamp: op.timestamp,
-				fromAccount: op.signer,
-				toAccount: to,
-				priceAmount: null,
-				priceCurrency: null,
-				payload: { source: "bulk_distribute", seedId, instanceNumber },
-			}, txn);
 		}
 
 		if (minted > 0) {
 			await incrementDistributedBy(seedId, minted, txn);
-
-			const newDistributed = distributed + minted;
-			if (maxReplicas > 0 && newDistributed >= maxReplicas) {
-				await insertHistoryEvent({
-					nftId: seedId,
-					collectionId: seed.collection_id,
-					eventType: "supply_exhausted",
-					blockNum: op.blockNum,
-					txId: op.txId,
-					timestamp: op.timestamp,
-					fromAccount: op.signer,
-					toAccount: null,
-					priceAmount: null,
-					priceCurrency: null,
-					payload: { maxReplicas, distributed: newDistributed },
-				}, txn);
-			}
 		}
 	}
 }

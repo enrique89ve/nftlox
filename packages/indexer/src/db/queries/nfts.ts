@@ -3,6 +3,15 @@ import { sql, type Queryable, clampLimit } from "@/db/client.ts";
 export type NftKind = "seed" | "instance" | "replica";
 export type NftStatus = "active" | "listed" | "burned" | "lent";
 
+export const VALID_NFT_KINDS = new Set<NftKind>(["seed", "instance", "replica"]);
+export const VALID_NFT_STATUSES = new Set<NftStatus>(["active", "listed", "burned", "lent"]);
+
+export const parseNftKind = (value: string | undefined): NftKind | undefined =>
+	value !== undefined && VALID_NFT_KINDS.has(value as NftKind) ? value as NftKind : undefined;
+
+export const parseNftStatus = (value: string | undefined): NftStatus | undefined =>
+	value !== undefined && VALID_NFT_STATUSES.has(value as NftStatus) ? value as NftStatus : undefined;
+
 export const NFT_STATUS_ACTIVE: NftStatus = "active";
 export const NFT_STATUS_LISTED: NftStatus = "listed";
 export const NFT_STATUS_BURNED: NftStatus = "burned";
@@ -85,12 +94,42 @@ export interface NftProcessingRow {
 	distributed: number;
 	collection_id: string;
 	instance_dna: string | null;
+	listing_price: string | null;
+	listing_currency: string | null;
+	listing_expires_at: string | null;
+	listing_marketplace: string | null;
 }
 
 export async function getNftForProcessing(id: string, txn: Queryable = sql): Promise<NftProcessingRow | null> {
 	const [row] = await txn<NftProcessingRow[]>`
-		SELECT id, owner, status, nft_type, name, seed_id, max_replicas, distributed, collection_id, instance_dna
+		SELECT id, owner, status, nft_type, name, seed_id, max_replicas, distributed, collection_id, instance_dna,
+		       listing_price, listing_currency, listing_expires_at, listing_marketplace
 		FROM nfts WHERE id = ${id}
+	`;
+	return row ?? null;
+}
+
+export interface NftWithRulesRow extends NftProcessingRow {
+	creator: string;
+	transferable: boolean;
+	burnable: boolean;
+	royalty_pct: number;
+	royalty_recipient: string | null;
+}
+
+export async function getNftWithCollectionRules(
+	id: string,
+	txn: Queryable = sql,
+): Promise<NftWithRulesRow | null> {
+	const [row] = await txn<NftWithRulesRow[]>`
+		SELECT
+			n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			n.collection_id, n.instance_dna, n.listing_price, n.listing_currency,
+			n.listing_expires_at, n.listing_marketplace,
+			c.creator, c.transferable, c.burnable, c.royalty_pct, c.royalty_recipient
+		FROM nfts n
+		JOIN collections c ON c.id = n.collection_id
+		WHERE n.id = ${id}
 	`;
 	return row ?? null;
 }
@@ -113,7 +152,8 @@ export async function getSeedWithDna(id: string, txn: Queryable = sql): Promise<
 export async function updateNftOwner(nftId: string, newOwner: string, txn: Queryable = sql) {
 	await txn`
 		UPDATE nfts
-		SET owner = ${newOwner}, status = ${NFT_STATUS_ACTIVE}, listing_price = NULL, listing_currency = NULL
+		SET owner = ${newOwner}, status = ${NFT_STATUS_ACTIVE},
+		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
 	`;
 }
@@ -125,7 +165,8 @@ export async function updateNftStatus(nftId: string, status: NftStatus, txn: Que
 export async function updateNftBurned(nftId: string, txn: Queryable = sql) {
 	await txn`
 		UPDATE nfts
-		SET status = ${NFT_STATUS_BURNED}, listing_price = NULL, listing_currency = NULL
+		SET status = ${NFT_STATUS_BURNED},
+		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
 	`;
 }
@@ -134,18 +175,22 @@ export async function updateNftListing(
 	nftId: string,
 	price: number | null,
 	currency: string | null,
+	expiresAt: number | null,
+	marketplace: string | null,
 	txn: Queryable = sql,
 ) {
 	if (price === null) {
 		await txn`
 			UPDATE nfts
-			SET status = ${NFT_STATUS_ACTIVE}, listing_price = NULL, listing_currency = NULL
+			SET status = ${NFT_STATUS_ACTIVE}, listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 			WHERE id = ${nftId}
 		`;
 	} else {
+		const expiresIso = expiresAt ? new Date(expiresAt).toISOString() : null;
 		await txn`
 			UPDATE nfts
-			SET status = ${NFT_STATUS_LISTED}, listing_price = ${price}, listing_currency = ${currency}
+			SET status = ${NFT_STATUS_LISTED}, listing_price = ${price}, listing_currency = ${currency},
+			    listing_expires_at = ${expiresIso}, listing_marketplace = ${marketplace}
 			WHERE id = ${nftId}
 		`;
 	}
@@ -189,6 +234,51 @@ export async function updateNftOperatorData(
 	`;
 }
 
+export interface UserNftCounts {
+	total: number;
+	seeds: number;
+	instances: number;
+	replicas: number;
+}
+
+export async function getUserNftCounts(owner: string, txn: Queryable = sql): Promise<UserNftCounts> {
+	const [row] = await txn`
+		SELECT total, seeds, instances, replicas
+		FROM owner_nft_counts
+		WHERE owner = ${owner}
+	`;
+	return {
+		total: row?.total ?? 0,
+		seeds: row?.seeds ?? 0,
+		instances: row?.instances ?? 0,
+		replicas: row?.replicas ?? 0,
+	};
+}
+
+export async function repairOwnerNftCounts(txn: Queryable = sql): Promise<number> {
+	const result = await txn`
+		WITH expected AS (
+			SELECT owner,
+				COUNT(*)::int AS total,
+				COUNT(*) FILTER (WHERE nft_type = 'seed')::int AS seeds,
+				COUNT(*) FILTER (WHERE nft_type = 'instance')::int AS instances,
+				COUNT(*) FILTER (WHERE nft_type = 'replica')::int AS replicas
+			FROM nfts WHERE status != 'burned'
+			GROUP BY owner
+		)
+		INSERT INTO owner_nft_counts (owner, total, seeds, instances, replicas)
+		SELECT * FROM expected
+		ON CONFLICT (owner) DO UPDATE SET
+			total = EXCLUDED.total, seeds = EXCLUDED.seeds,
+			instances = EXCLUDED.instances, replicas = EXCLUDED.replicas
+		WHERE owner_nft_counts.total != EXCLUDED.total
+			OR owner_nft_counts.seeds != EXCLUDED.seeds
+			OR owner_nft_counts.instances != EXCLUDED.instances
+			OR owner_nft_counts.replicas != EXCLUDED.replicas
+	`;
+	return result.count;
+}
+
 export type ListSort = "price_asc" | "price_desc" | "recent";
 
 export type NftListQuery =
@@ -204,8 +294,58 @@ const LIST_COLUMNS = sql`
 	name, image_url, origin_dna, instance_dna,
 	seed_id, instance_number,
 	max_replicas, distributed, supply_exhausted,
-	listing_price, listing_currency, created_at
+	listing_price, listing_currency, listing_expires_at, created_at
 `;
+
+export interface NftListRow {
+	id: string;
+	collection_id: string;
+	nft_type: NftKind;
+	status: NftStatus;
+	edition: number;
+	owner: string;
+	name: string;
+	image_url: string | null;
+	origin_dna: string | null;
+	instance_dna: string | null;
+	seed_id: string | null;
+	instance_number: number | null;
+	max_replicas: number;
+	distributed: number;
+	supply_exhausted: boolean;
+	listing_price: string | null;
+	listing_currency: string | null;
+	listing_expires_at: string | null;
+	created_at: string;
+}
+
+export interface NftPageResult {
+	nfts: ReadonlyArray<NftListRow>;
+	counts: UserNftCounts;
+}
+
+export async function queryNftsWithCounts(
+	owner: string,
+	status?: NftStatus,
+	type?: NftKind,
+	page?: Pagination,
+): Promise<NftPageResult> {
+	const safeLimit = clampLimit(page?.limit ?? 50);
+	const offset = page?.offset ?? 0;
+	const statusFilter = status ? sql`AND status = ${status}` : sql``;
+	const typeFilter = type ? sql`AND nft_type = ${type}` : sql``;
+
+	const [nfts, counts] = await Promise.all([
+		sql<NftListRow[]>`
+			SELECT ${LIST_COLUMNS} FROM nfts
+			WHERE owner = ${owner} ${statusFilter} ${typeFilter}
+			ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
+		`,
+		getUserNftCounts(owner),
+	]);
+
+	return { nfts, counts };
+}
 
 export async function queryNfts(query: NftListQuery, page?: Pagination) {
 	const safeLimit = clampLimit(page?.limit ?? 50);
@@ -246,7 +386,7 @@ export async function queryNfts(query: NftListQuery, page?: Pagination) {
 			const currencyFilter = query.currency ? sql`AND listing_currency = ${query.currency}` : sql``;
 			return sql`
 				SELECT ${LIST_COLUMNS} FROM nfts
-				WHERE status = ${NFT_STATUS_LISTED} ${currencyFilter}
+				WHERE status = ${NFT_STATUS_LISTED} ${currencyFilter} AND (listing_expires_at IS NULL OR listing_expires_at > NOW())
 				ORDER BY ${orderClause}
 				LIMIT ${safeLimit} OFFSET ${offset}
 			`;

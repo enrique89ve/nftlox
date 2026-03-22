@@ -5,7 +5,6 @@ import {
 	upsertPackBalance,
 	getPackBalance,
 	incrementPackOpened,
-	insertPackHistoryEvent,
 } from "@/db/queries/packs.ts";
 import {
 	insertNft,
@@ -13,7 +12,6 @@ import {
 	nftExists,
 	incrementDistributed,
 } from "@/db/queries/nfts.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
 import { requireString, requireNumber } from "@/utils/validation.ts";
 import {
 	resolveDropTable,
@@ -41,8 +39,6 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 	}
 
 	await upsertPackBalance(op.signer, packId, -quantity, txn);
-
-	const mintedNfts: Array<{ instanceId: string; seedId: string; packIndex: number }> = [];
 
 	// Balance tracker: tracks how many instances we've minted per seed
 	// within THIS handler invocation, so the same seed appearing multiple
@@ -132,56 +128,8 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 
 			await incrementDistributed(seedId, txn);
 			localMintedPerSeed.set(seedId, localOffset + 1);
-
-			await insertHistoryEvent({
-				nftId: instanceId,
-				collectionId: seed.collection_id,
-				eventType: "distribute",
-				blockNum: op.blockNum,
-				txId: op.txId,
-				timestamp: op.timestamp,
-				fromAccount: op.signer,
-				toAccount: op.signer,
-				priceAmount: null,
-				priceCurrency: null,
-				payload: { source: "pack_open", packId },
-			}, txn);
-
-			// Check if this was the last available instance
-			if (maxReplicas > 0 && instanceNumber >= maxReplicas) {
-				await insertHistoryEvent({
-					nftId: seedId,
-					collectionId: seed.collection_id,
-					eventType: "supply_exhausted",
-					blockNum: op.blockNum,
-					txId: op.txId,
-					timestamp: op.timestamp,
-					fromAccount: op.signer,
-					toAccount: null,
-					priceAmount: null,
-					priceCurrency: null,
-					payload: { maxReplicas, distributed: instanceNumber },
-				}, txn);
-			}
-
-			mintedNfts.push({ instanceId, seedId, packIndex });
 		}
 	}
 
 	await incrementPackOpened(packId, quantity, txn);
-
-	await insertPackHistoryEvent({
-		packId,
-		collectionId: pack.collection_id,
-		eventType: "pack_open",
-		blockNum: op.blockNum,
-		txId: op.txId,
-		timestamp: op.timestamp,
-		fromAccount: op.signer,
-		toAccount: null,
-		quantity,
-		priceAmount: null,
-		priceCurrency: null,
-		payload: { mintedNfts },
-	}, txn);
 }

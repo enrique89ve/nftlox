@@ -15,10 +15,8 @@ import { handleSetData } from "./handlers/core/set-data.ts";
 // Marketplace
 import { handleList } from "./handlers/marketplace/list.ts";
 import { handleUnlist } from "./handlers/marketplace/unlist.ts";
+
 import { handleBuy } from "./handlers/marketplace/buy.ts";
-import { handleOffer } from "./handlers/marketplace/offer.ts";
-import { handleAcceptOffer } from "./handlers/marketplace/accept-offer.ts";
-import { handleRejectOffer } from "./handlers/marketplace/reject-offer.ts";
 
 // Packs
 import { handlePackCreate } from "./handlers/packs/pack-create.ts";
@@ -59,9 +57,6 @@ const handlers: Record<string, Handler> = {
 	list: handleList,
 	unlist: handleUnlist,
 	buy: handleBuy,
-	offer: handleOffer,
-	accept_offer: handleAcceptOffer,
-	reject_offer: handleRejectOffer,
 
 	// Packs
 	pack_create: handlePackCreate,

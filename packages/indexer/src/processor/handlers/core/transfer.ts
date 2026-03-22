@@ -2,12 +2,11 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftOwner, NFT_STATUS_BURNED, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
-import { requireString } from "@/utils/validation.ts";
+import { requireString, requireUsername } from "@/utils/validation.ts";
 
 export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");
-	const to = requireString(op.data.to, "to");
+	const to = requireUsername(op.data.to, "to");
 
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
@@ -17,10 +16,4 @@ export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promi
 
 	await updateNftOwner(nftId, to, txn);
 	await deleteNftAllowance(nftId, txn);
-	await insertHistoryEvent({
-		nftId, collectionId: nft.collection_id, eventType: "transfer",
-		blockNum: op.blockNum, txId: op.txId, timestamp: op.timestamp,
-		fromAccount: op.signer, toAccount: to,
-		priceAmount: null, priceCurrency: null, payload: op.data,
-	}, txn);
 }

@@ -1,8 +1,26 @@
 // NFTLox Protocol Types - v0.2.1
 
 import type { ProtocolAction, SupportedCurrency } from "./constants";
+export type * from "./schemas";
 
 // ============ HIVE OPERATION TYPES ============
+
+export interface ValidationError {
+	field: string;
+	message: string;
+	code: string;
+}
+
+export interface BuildResult<T> {
+	success: boolean;
+	payload?: import("./types").ProtocolPayload<T>;
+	operation?: HiveOperation;
+	hiveOperations?: HiveOperation[]; // For multi-op like Buy
+	errors?: ValidationError[];
+	warnings?: string[];
+	generatedId?: string;
+	generatedIds?: Record<string, string>;
+}
 
 export type HiveOperation = [
 	"custom_json",
@@ -85,7 +103,7 @@ export interface NFTData {
 
 // ============ REPLICA TYPES ============
 
-export interface ReplicaData {
+export interface ReplicaData extends SeedProvenance {
 	id: string;
 	originalId: string;
 	newOwner: string;
@@ -108,16 +126,16 @@ export interface BulkDistributeData {
 	data?: Record<string, unknown>;
 }
 
-export interface BulkDistributeInput {
-	to?: string;
-	items: BulkDistributeItem[];
-	imageOverrides?: Record<string, { imageUrl?: string; imageHash?: string }>;
-	data?: Record<string, unknown>;
+// ============ SEED PROVENANCE (for on-chain traceability without indexer) ============
+
+export interface SeedProvenance {
+	seedId?: string;
+	birthTx?: string;
 }
 
 // ============ TRANSFER & BURN TYPES ============
 
-export interface TransferData {
+export interface TransferData extends SeedProvenance {
 	nftId: string;
 	from: string;
 	to: string;
@@ -125,7 +143,7 @@ export interface TransferData {
 	imageHash?: string;
 }
 
-export interface BurnData {
+export interface BurnData extends SeedProvenance {
 	nftId: string;
 	imageUrl?: string;
 	imageHash?: string;
@@ -140,13 +158,6 @@ export interface SetDataData {
 	tags?: string[];
 }
 
-export interface SetDataInput {
-	nftId: string;
-	instanceDna: string;
-	data: Record<string, unknown>;
-	tags?: string[];
-}
-
 // ============ DATA OPERATOR TYPES ============
 
 export interface DataOperatorApproveData {
@@ -155,20 +166,7 @@ export interface DataOperatorApproveData {
 	approved: boolean;
 }
 
-export interface DataOperatorApproveInput {
-	collectionId: string;
-	operator: string;
-	approved: boolean;
-}
-
-export interface SetDataFromData {
-	nftId: string;
-	instanceDna: string;
-	data: Record<string, unknown>;
-	tags?: string[];
-}
-
-export interface SetDataFromInput {
+export interface SetDataFromData extends SeedProvenance {
 	nftId: string;
 	instanceDna: string;
 	data: Record<string, unknown>;
@@ -187,18 +185,6 @@ export interface TransferMemo {
 	instanceDna: string;
 }
 
-export interface AtomicTransferInput {
-	nftId: string;
-	collectionId: string;
-	edition: number;
-	instanceDna: string;
-	from: string;
-	to: string;
-	memo?: string;
-	imageUrl?: string;
-	imageHash?: string;
-}
-
 // ============ HIVE TRANSFER OPERATION TYPE ============
 
 export type HiveTransferOperation = [
@@ -215,12 +201,13 @@ export type AtomicOperation = HiveTransferOperation | HiveOperation;
 
 // ============ MARKETPLACE TYPES ============
 
-export interface ListingData {
+export interface ListingData extends SeedProvenance {
 	nftId: string;
 	price: Price;
 	expiresAt?: number;
 	imageUrl?: string;
 	imageHash?: string;
+	marketplace?: string;
 }
 
 export interface UnlistData {
@@ -229,29 +216,9 @@ export interface UnlistData {
 	imageHash?: string;
 }
 
-export interface BuyData {
-	nftId: string;
-	paymentTxId: string;
-	imageUrl?: string;
-	imageHash?: string;
-}
-
-export interface OfferData {
-	nftId: string;
-	price: Price;
-	expiresAt?: number;
-}
-
-export interface AcceptOfferData {
-	nftId: string;
-	offerId: string;
-	paymentTxId: string;
-}
-
-export interface RejectOfferData {
-	nftId: string;
-	offerId: string;
-}
+export type BuyData = {
+	readonly nftId: string;
+};
 
 // ============ PACK TYPES (Semi-Fungible) ============
 
@@ -289,33 +256,6 @@ export interface PackOpenData {
 	quantity: number;
 }
 
-export interface PackCreateInput {
-	collectionId: string;
-	name: string;
-	description?: string;
-	imageUrl?: string;
-	dropTable: PackDropEntry[];
-	itemsPerPack: number;
-	price?: Price;
-	maxSupply: number;
-}
-
-export interface PackBuyInput {
-	packId: string;
-	quantity: number;
-}
-
-export interface PackTransferInput {
-	packId: string;
-	to: string;
-	quantity: number;
-}
-
-export interface PackOpenInput {
-	packId: string;
-	quantity: number;
-}
-
 // ============ APPROVE & TRANSFER_FROM TYPES ============
 
 export interface PackApproveData {
@@ -344,39 +284,7 @@ export interface NftApproveAllData {
 	approved: boolean;
 }
 
-export interface NftTransferFromData {
-	from: string;
-	to: string;
-	instanceId: string;
-}
-
-export interface PackApproveInput {
-	spender: string;
-	packId: string;
-	quantity: number;
-	approved: boolean;
-}
-
-export interface PackTransferFromInput {
-	from: string;
-	to: string;
-	packId: string;
-	quantity: number;
-}
-
-export interface NftApproveInput {
-	spender: string;
-	instanceId: string;
-	approved: boolean;
-}
-
-export interface NftApproveAllInput {
-	spender: string;
-	collectionId: string;
-	approved: boolean;
-}
-
-export interface NftTransferFromInput {
+export interface NftTransferFromData extends SeedProvenance {
 	from: string;
 	to: string;
 	instanceId: string;
@@ -384,65 +292,13 @@ export interface NftTransferFromInput {
 
 // ============ LENDING TYPES ============
 
-export interface NftLendData {
+export interface NftLendData extends SeedProvenance {
 	instanceId: string;
 	borrower: string;
 }
 
-export interface NftLendInput {
+export interface NftReturnData extends SeedProvenance {
 	instanceId: string;
-	borrower: string;
-}
-
-export interface NftReturnData {
-	instanceId: string;
-}
-
-export interface NftReturnInput {
-	instanceId: string;
-}
-
-// ============ HISTORY EVENT (Indexador) ============
-
-export type HistoryEventType =
-	| "create_collection"
-	| "mint"
-	| "distribute"
-	| "supply_exhausted"
-	| "transfer"
-	| "buy"
-	| "list"
-	| "unlist"
-	| "burn"
-	| "replicate"
-	| "offer"
-	| "offer_accepted"
-	| "offer_rejected"
-	| "set_data"
-	| "data_operator_approve"
-	| "set_data_from"
-	| "pack_create"
-	| "pack_buy"
-	| "pack_transfer"
-	| "pack_open"
-	| "pack_approve"
-	| "pack_transfer_from"
-	| "nft_approve"
-	| "nft_approve_all"
-	| "nft_transfer_from"
-	| "nft_lend"
-	| "nft_return";
-
-export interface HistoryEvent {
-	id: string;
-	nftId: string;
-	eventType: HistoryEventType;
-	block: number;
-	txId: string;
-	timestamp: number;
-	from?: string;
-	to?: string;
-	price?: Price;
 }
 
 // ============ PROTOCOL PAYLOAD ============
@@ -452,108 +308,6 @@ export interface ProtocolPayload<T = unknown> {
 	version: string;
 	action: ProtocolAction;
 	data: T;
-}
-
-// ============ INPUT TYPES (for payload creation) ============
-
-export interface CreateCollectionInput {
-	jsonId: string;
-	name: string;
-	symbol: string;
-	creator: string;
-	totalPotential: number;
-	metadata: CollectionMetadata;
-	rules: CollectionRules;
-}
-
-export interface MintInput {
-	collectionId: string;
-	collectionOriginDna: string;
-	edition: number;
-	owner: string;
-	name: string;
-	description?: string;
-	imageUrl: string;
-	imageHash?: string;
-	maxReplicas?: number;
-	birthBlock?: number;
-	birthTx?: string;
-	tags?: string[];
-	data?: Record<string, unknown>;
-}
-
-export interface ReplicateInput {
-	originalId: string;
-	originDna: string;
-	originalInstanceDna: string;
-	newOwner: string;
-	currentOwner: string;
-}
-
-export interface ListInput {
-	nftId: string;
-	price: Price;
-	expiresAt?: number;
-	imageUrl?: string;
-	imageHash?: string;
-}
-
-export interface BuyInput {
-	nftId: string;
-	paymentTxId: string;
-	imageUrl?: string;
-	imageHash?: string;
-}
-
-export interface BurnInput {
-	nftId: string;
-	imageUrl?: string;
-	imageHash?: string;
-}
-
-export interface UnlistInput {
-	nftId: string;
-	imageUrl?: string;
-	imageHash?: string;
-}
-
-export interface OfferInput {
-	nftId: string;
-	price: Price;
-	expiresAt?: number;
-}
-
-export interface AcceptOfferInput {
-	nftId: string;
-	offerId: string;
-	paymentTxId: string;
-}
-
-export interface RejectOfferInput {
-	nftId: string;
-	offerId: string;
-}
-
-// ============ IMPORTED NFT (Batch Import) ============
-
-export interface ImportedNFT {
-	nftId: string;
-	name: string;
-	brief?: string;
-	imageUrl: string;
-	imageHash?: string;
-	maxReplicas?: number;
-}
-
-// ============ OWNERSHIP RECORD (Procedencia) ============
-
-export interface OwnershipRecord {
-	owner: string;
-	acquiredAt: number;
-	acquiredFrom: string | null;
-	price?: Price;
-	txHash: string;
-	block: number;
 }
 
 // ============ SEED NFT WITH ART ID (Anti-Duplication) ============
@@ -628,3 +382,51 @@ export interface MintingSession {
 	validatedAt?: number;
 	completedAt?: number;
 }
+
+// ============ MULTISIG TYPES ============
+
+export type HiveTransactionObject = Readonly<{
+	ref_block_num: number;
+	ref_block_prefix: number;
+	expiration: string;
+	operations: ReadonlyArray<readonly [string, Record<string, unknown>]>;
+	extensions: ReadonlyArray<unknown>;
+	signatures: ReadonlyArray<string>;
+}>;
+
+export type MultisigErrorCode =
+	| "RATE_LIMITED"
+	| "INVALID_TX_STRUCTURE"
+	| "NFT_NOT_FOUND"
+	| "NFT_NOT_LISTED"
+	| "NFT_EXPIRED_LISTING"
+	| "CANNOT_BUY_OWN"
+	| "INVALID_PAYMENT_SPLIT"
+	| "INVALID_PROTOCOL_PAYLOAD"
+	| "NODE_ACCOUNT_MISMATCH"
+	| "MISSING_BUYER_AUTH"
+	| "MULTISIG_DISABLED"
+	| "INTERNAL_ERROR";
+
+export type MultisigResponse =
+	| Readonly<{ ok: true; signature: string; digest: string; expiration: string }>
+	| Readonly<{ ok: false; code: MultisigErrorCode; message: string }>;
+
+export type MultisigRequest = Readonly<{
+	buyer: string;
+	nftId: string;
+	transaction: HiveTransactionObject;
+}>;
+
+export type PaymentInfo = Readonly<{
+	nftId: string;
+	seller: string;
+	totalPrice: number;
+	currency: string;
+	sellerAmount: number;
+	royaltyAmount: number;
+	royaltyRecipient: string | null;
+	feeAmount: number;
+	feeAccount: string;
+	nodeAccount: string;
+}>;

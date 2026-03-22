@@ -2,9 +2,10 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getCollectionById } from "@/db/queries/collections.ts";
 import { getNftForProcessing } from "@/db/queries/nfts.ts";
-import { insertPack, packExists, insertPackHistoryEvent } from "@/db/queries/packs.ts";
+import { insertPack, packExists } from "@/db/queries/packs.ts";
 import {
 	requireString,
+	requireHiveAmount,
 	optionalString,
 	optionalNumber,
 } from "@/utils/validation.ts";
@@ -31,17 +32,14 @@ function parseDropTable(raw: unknown): DropEntry[] {
 	});
 }
 
-function extractPrice(raw: unknown): { amount: number | null; currency: string | null } {
+function extractOptionalPrice(raw: unknown): { amount: number | null; currency: string | null } {
 	if (!raw || typeof raw !== "object") return { amount: null, currency: null };
 	const p = raw as Record<string, unknown>;
-	const amountStr = typeof p.amount === "string" ? p.amount : null;
-	const currency = typeof p.currency === "string" ? p.currency : null;
-	if (!amountStr) return { amount: null, currency: null };
-	const amount = parseFloat(amountStr);
-	if (isNaN(amount) || amount <= 0) {
-		throw new Error(`Invalid price amount: ${amountStr}`);
-	}
-	return { amount, currency };
+	if (p.amount === undefined || p.amount === null) return { amount: null, currency: null };
+	const validated = requireHiveAmount(raw, "price");
+	const amount = parseFloat(validated.amount);
+	if (amount <= 0) throw new Error(`Price amount must be positive, got ${validated.amount}`);
+	return { amount, currency: validated.currency };
 }
 
 async function validateSeedSupply(
@@ -103,7 +101,7 @@ export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Pro
 		await validateSeedSupply(entry, collectionId, maxSupply, itemsPerPack, totalWeight, txn);
 	}
 
-	const { amount: priceAmount, currency: priceCurrency } = extractPrice(d.price);
+	const { amount: priceAmount, currency: priceCurrency } = extractOptionalPrice(d.price);
 
 	await insertPack({
 		id,
@@ -120,20 +118,5 @@ export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Pro
 		blockNum: op.blockNum,
 		txId: op.txId,
 		createdAt: op.timestamp,
-	}, txn);
-
-	await insertPackHistoryEvent({
-		packId: id,
-		collectionId,
-		eventType: "pack_create",
-		blockNum: op.blockNum,
-		txId: op.txId,
-		timestamp: op.timestamp,
-		fromAccount: op.signer,
-		toAccount: null,
-		quantity: null,
-		priceAmount,
-		priceCurrency,
-		payload: op.data,
 	}, txn);
 }

@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { listPacks, getPackById, getPackHistory } from "@/db/queries/packs.ts";
+import { listPacks, getPackById } from "@/db/queries/packs.ts";
 
 export const packsRoutes = new Elysia({ prefix: "/api/packs", tags: ["Packs"] })
 	.get("/", async ({ query }) => {
@@ -22,15 +22,4 @@ export const packsRoutes = new Elysia({ prefix: "/api/packs", tags: ["Packs"] })
 	}, {
 		params: t.Object({ id: t.String() }),
 		detail: { summary: "Get pack by ID" },
-	})
-	.get("/:id/history", async ({ params, query }) => {
-		return getPackHistory(params.id, query.limit, query.offset, query.cursor);
-	}, {
-		params: t.Object({ id: t.String() }),
-		query: t.Object({
-			limit: t.Number({ default: 100, minimum: 1, maximum: 500 }),
-			offset: t.Number({ default: 0, minimum: 0 }),
-			cursor: t.Optional(t.Number({ description: "Last event ID for cursor pagination (overrides offset)" })),
-		}),
-		detail: { summary: "Get pack history", description: "Event history for a specific pack. Use cursor=lastId for efficient pagination." },
 	});

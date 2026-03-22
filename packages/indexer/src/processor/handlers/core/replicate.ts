@@ -1,14 +1,13 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { insertNft, nftExists, getNftForProcessing, NFT_STATUS_BURNED, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
-import { requireString, optionalString } from "@/utils/validation.ts";
+import { requireString, requireUsername, optionalString } from "@/utils/validation.ts";
 
 export async function handleReplicate(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
 	const id = requireString(d.id, "id");
 	const originalId = requireString(d.originalId, "originalId");
-	const newOwner = requireString(d.newOwner, "newOwner");
+	const newOwner = requireUsername(d.newOwner, "newOwner");
 
 	if (await nftExists(id, txn)) throw new Error(`Replica already exists: ${id}`);
 	const original = await getNftForProcessing(originalId, txn);
@@ -26,12 +25,5 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 		maxReplicas: 0, seedId: null, instanceNumber: null, originalId,
 		tags: null, customData: null,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
-	}, txn);
-
-	await insertHistoryEvent({
-		nftId: id, collectionId: original.collection_id, eventType: "replicate",
-		blockNum: op.blockNum, txId: op.txId, timestamp: op.timestamp,
-		fromAccount: op.signer, toAccount: newOwner,
-		priceAmount: null, priceCurrency: null, payload: op.data,
 	}, txn);
 }

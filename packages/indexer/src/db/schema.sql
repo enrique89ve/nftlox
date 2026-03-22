@@ -62,45 +62,11 @@ CREATE TABLE nfts (
 	operator_data JSONB,
 	listing_price NUMERIC(18,3),
 	listing_currency TEXT,
+	listing_expires_at TIMESTAMPTZ,
+	listing_marketplace TEXT,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
-	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- History events
-CREATE TABLE history_events (
-	id BIGSERIAL PRIMARY KEY,
-	nft_id TEXT NOT NULL,
-	collection_id TEXT,
-	event_type TEXT NOT NULL,
-	block_num BIGINT NOT NULL,
-	tx_id TEXT NOT NULL,
-	timestamp TIMESTAMPTZ NOT NULL,
-	from_account TEXT,
-	to_account TEXT,
-	price_amount NUMERIC(18,3),
-	price_currency TEXT,
-	payload JSONB,
-	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	UNIQUE(block_num, tx_id, event_type, nft_id)
-);
-
--- Offers
-CREATE TYPE offer_status AS ENUM ('active', 'accepted', 'rejected', 'expired');
-
-CREATE TABLE offers (
-	id TEXT PRIMARY KEY,
-	nft_id TEXT NOT NULL REFERENCES nfts(id),
-	offerer TEXT NOT NULL,
-	price_amount NUMERIC(18,3) NOT NULL,
-	price_currency TEXT NOT NULL,
-	status offer_status NOT NULL DEFAULT 'active',
-	expires_at TIMESTAMPTZ,
-	block_num BIGINT NOT NULL,
-	tx_id TEXT NOT NULL,
-	created_at TIMESTAMPTZ NOT NULL,
-	resolved_at TIMESTAMPTZ,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -151,24 +117,9 @@ CREATE INDEX idx_nfts_listed ON nfts(listing_price, listing_currency)
 CREATE INDEX idx_nfts_listed_recent ON nfts(created_at DESC)
 	WHERE status = 'listed';
 
--- History: base indexes
-CREATE INDEX idx_history_nft ON history_events(nft_id);
-CREATE INDEX idx_history_block ON history_events(block_num);
-CREATE INDEX idx_history_type ON history_events(event_type);
-
--- History: user activity (getUserActivity — OR query needs both columns indexed)
-CREATE INDEX idx_history_from ON history_events(from_account, id DESC)
-	WHERE from_account IS NOT NULL;
-CREATE INDEX idx_history_to ON history_events(to_account, id DESC)
-	WHERE to_account IS NOT NULL;
-
--- History: recent sales with sort (getRecentSales)
-CREATE INDEX idx_history_sales ON history_events(block_num DESC, id DESC)
-	WHERE event_type = 'buy';
-
-CREATE INDEX idx_offers_nft ON offers(nft_id);
-CREATE INDEX idx_offers_offerer ON offers(offerer);
-CREATE INDEX idx_offers_status ON offers(status);
+-- Partial: listings filtered by marketplace node
+CREATE INDEX idx_nfts_listed_marketplace ON nfts(listing_marketplace)
+	WHERE status = 'listed' AND listing_marketplace IS NOT NULL;
 
 CREATE INDEX idx_invalid_block ON invalid_operations(block_num);
 
@@ -204,24 +155,6 @@ CREATE TABLE user_pack_balances (
 	PRIMARY KEY (account, pack_id)
 );
 
-CREATE TABLE pack_history_events (
-	id BIGSERIAL PRIMARY KEY,
-	pack_id TEXT NOT NULL REFERENCES packs(id),
-	collection_id TEXT,
-	event_type TEXT NOT NULL,
-	block_num BIGINT NOT NULL,
-	tx_id TEXT NOT NULL,
-	timestamp TIMESTAMPTZ NOT NULL,
-	from_account TEXT,
-	to_account TEXT,
-	quantity INTEGER,
-	price_amount NUMERIC(18,3),
-	price_currency TEXT,
-	payload JSONB,
-	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	UNIQUE(block_num, tx_id, event_type, pack_id, from_account)
-);
-
 CREATE INDEX idx_packs_collection ON packs(collection_id);
 CREATE INDEX idx_packs_creator ON packs(creator);
 CREATE INDEX idx_packs_status ON packs(status);
@@ -229,9 +162,6 @@ CREATE INDEX idx_pack_balances_account ON user_pack_balances(account);
 CREATE INDEX idx_pack_balances_pack ON user_pack_balances(pack_id);
 CREATE INDEX idx_pack_balances_positive ON user_pack_balances(account, pack_id)
 	WHERE balance > 0;
-CREATE INDEX idx_pack_history_pack ON pack_history_events(pack_id);
-CREATE INDEX idx_pack_history_block ON pack_history_events(block_num);
-CREATE INDEX idx_pack_history_type ON pack_history_events(event_type);
 
 -- ============ ALLOWANCE TABLES (Approve & TransferFrom) ============
 
@@ -309,3 +239,90 @@ CREATE TABLE nft_loans (
 
 CREATE INDEX idx_nft_loans_lender ON nft_loans(lender);
 CREATE INDEX idx_nft_loans_borrower ON nft_loans(borrower);
+
+-- ============ OWNER NFT COUNTS (trigger-maintained) ============
+
+CREATE TABLE owner_nft_counts (
+	owner TEXT PRIMARY KEY,
+	total INT NOT NULL DEFAULT 0,
+	seeds INT NOT NULL DEFAULT 0,
+	instances INT NOT NULL DEFAULT 0,
+	replicas INT NOT NULL DEFAULT 0
+);
+
+CREATE OR REPLACE FUNCTION update_owner_nft_counts() RETURNS TRIGGER AS $$
+DECLARE
+	old_counted BOOLEAN;
+	new_counted BOOLEAN;
+BEGIN
+	IF TG_OP = 'INSERT' THEN
+		IF NEW.status != 'burned' THEN
+			INSERT INTO owner_nft_counts (owner, total, seeds, instances, replicas)
+			VALUES (
+				NEW.owner, 1,
+				(NEW.nft_type = 'seed')::int,
+				(NEW.nft_type = 'instance')::int,
+				(NEW.nft_type = 'replica')::int
+			)
+			ON CONFLICT (owner) DO UPDATE SET
+				total = owner_nft_counts.total + 1,
+				seeds = owner_nft_counts.seeds + (NEW.nft_type = 'seed')::int,
+				instances = owner_nft_counts.instances + (NEW.nft_type = 'instance')::int,
+				replicas = owner_nft_counts.replicas + (NEW.nft_type = 'replica')::int;
+		END IF;
+		RETURN NEW;
+
+	ELSIF TG_OP = 'UPDATE' THEN
+		old_counted := (OLD.status != 'burned');
+		new_counted := (NEW.status != 'burned');
+
+		IF OLD.owner = NEW.owner AND OLD.nft_type = NEW.nft_type AND old_counted = new_counted THEN
+			RETURN NEW;
+		END IF;
+
+		IF old_counted THEN
+			UPDATE owner_nft_counts SET
+				total = total - 1,
+				seeds = seeds - (OLD.nft_type = 'seed')::int,
+				instances = instances - (OLD.nft_type = 'instance')::int,
+				replicas = replicas - (OLD.nft_type = 'replica')::int
+			WHERE owner = OLD.owner;
+		END IF;
+
+		IF new_counted THEN
+			INSERT INTO owner_nft_counts (owner, total, seeds, instances, replicas)
+			VALUES (
+				NEW.owner, 1,
+				(NEW.nft_type = 'seed')::int,
+				(NEW.nft_type = 'instance')::int,
+				(NEW.nft_type = 'replica')::int
+			)
+			ON CONFLICT (owner) DO UPDATE SET
+				total = owner_nft_counts.total + 1,
+				seeds = owner_nft_counts.seeds + (NEW.nft_type = 'seed')::int,
+				instances = owner_nft_counts.instances + (NEW.nft_type = 'instance')::int,
+				replicas = owner_nft_counts.replicas + (NEW.nft_type = 'replica')::int;
+		END IF;
+		RETURN NEW;
+
+	ELSIF TG_OP = 'DELETE' THEN
+		IF OLD.status != 'burned' THEN
+			UPDATE owner_nft_counts SET
+				total = total - 1,
+				seeds = seeds - (OLD.nft_type = 'seed')::int,
+				instances = instances - (OLD.nft_type = 'instance')::int,
+				replicas = replicas - (OLD.nft_type = 'replica')::int
+			WHERE owner = OLD.owner;
+		END IF;
+		RETURN OLD;
+	END IF;
+
+	RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_owner_nft_counts
+	AFTER INSERT OR UPDATE OF owner, status, nft_type OR DELETE
+	ON nfts
+	FOR EACH ROW
+	EXECUTE FUNCTION update_owner_nft_counts();

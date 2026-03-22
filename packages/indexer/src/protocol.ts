@@ -17,5 +17,4 @@ export {
 	type PackAction,
 	type ApproveAction,
 	type DataOperatorAction,
-	type HistoryEventType,
 } from "nftlox-sdk";

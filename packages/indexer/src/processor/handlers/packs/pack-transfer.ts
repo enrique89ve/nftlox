@@ -4,13 +4,12 @@ import {
 	getPackForProcessing,
 	upsertPackBalance,
 	getPackBalance,
-	insertPackHistoryEvent,
 } from "@/db/queries/packs.ts";
-import { requireString, requireNumber } from "@/utils/validation.ts";
+import { requireString, requireNumber, requireUsername } from "@/utils/validation.ts";
 
 export async function handlePackTransfer(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const packId = requireString(op.data.packId, "packId");
-	const to = requireString(op.data.to, "to");
+	const to = requireUsername(op.data.to, "to");
 	const quantity = requireNumber(op.data.quantity, "quantity");
 
 	if (quantity < 1) throw new Error("Quantity must be positive");
@@ -30,19 +29,4 @@ export async function handlePackTransfer(op: ParsedOperation, txn: Queryable): P
 	await upsertPackBalance(op.signer, packId, -quantity, txn);
 	// Credit to receiver
 	await upsertPackBalance(to, packId, quantity, txn);
-
-	await insertPackHistoryEvent({
-		packId,
-		collectionId: pack.collection_id,
-		eventType: "pack_transfer",
-		blockNum: op.blockNum,
-		txId: op.txId,
-		timestamp: op.timestamp,
-		fromAccount: op.signer,
-		toAccount: to,
-		quantity,
-		priceAmount: null,
-		priceCurrency: null,
-		payload: op.data,
-	}, txn);
 }

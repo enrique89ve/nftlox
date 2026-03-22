@@ -2,16 +2,15 @@ import index from "../public/index.html";
 import {
 	PROTOCOL_VERSION,
 	MIN_PROTOCOL_VERSION,
+	HASH_VERSION,
 } from "nftlox-sdk";
-import { PayloadBuilder } from "nftlox-sdk";
 import { queryRoutes } from "./routes/query";
 import { buildRoutes } from "./routes/build";
 import { batchRoutes } from "./routes/batch";
 import { nftTrackerRoutes } from "./routes/nft-tracker";
 import { validationRoutes } from "./routes/validation";
 import { spvRoutes } from "./routes/spv";
-
-const builderInfo = new PayloadBuilder();
+import { debugRoutes } from "./routes/debug";
 
 const json = (data: unknown, status = 200) =>
 	new Response(JSON.stringify(data, null, 2), {
@@ -24,6 +23,7 @@ const ALLOWED_SAMPLE_FILES = new Set([
 	"sample-seeds.json",
 	"sample-nfts.json",
 	"sample-nfts-200.json",
+	"template-seeds.json",
 ]);
 
 const server = Bun.serve({
@@ -49,7 +49,7 @@ const server = Bun.serve({
 		// ============ QUERY ROUTES (Indexer API proxy) ============
 		...queryRoutes,
 
-		// ============ BUILD ROUTES (PayloadBuilder + SDK operations) ============
+		// ============ BUILD ROUTES (SDK builders) ============
 		...buildRoutes,
 
 		// ============ BATCH MINTING ROUTES (Legacy) ============
@@ -64,6 +64,9 @@ const server = Bun.serve({
 		// ============ SPV VERIFICATION ROUTES ============
 		...spvRoutes,
 
+		// ============ DEBUG ROUTES ============
+		...debugRoutes,
+
 		// ============ PROTOCOL INFO ============
 
 		"/api/protocol/version": async () => {
@@ -74,9 +77,9 @@ const server = Bun.serve({
 		},
 
 		"/api/protocol/info": async () => {
-			const versionInfo = builderInfo.getVersionInfo();
 			return json({
-				...versionInfo,
+				protocolVersion: PROTOCOL_VERSION,
+				hashVersion: HASH_VERSION,
 				minProtocolVersion: MIN_PROTOCOL_VERSION,
 			});
 		},
@@ -90,12 +93,9 @@ NFTLox Test Console - http://localhost:${server.port}
 Query API (via Indexer):
   GET  /api/user/:username
   GET  /api/user/:username/collections
-  GET  /api/user/:username/activity
   GET  /api/user/:username/packs
   GET  /api/nft/:nftId
-  GET  /api/nft/:nftId/history
   GET  /api/nft/:nftId/details
-  GET  /api/nft/:nftId/offers
   GET  /api/collections
   GET  /api/collection/:id
   GET  /api/collection/:id/nfts
@@ -104,22 +104,19 @@ Query API (via Indexer):
   GET  /api/seed/:seedId/instances
   GET  /api/seed/:id/exists
   GET  /api/marketplace/listings
-  GET  /api/marketplace/recent-sales
   GET  /api/packs
   GET  /api/pack/:id
-  GET  /api/pack/:id/history
   GET  /api/stats
   GET  /api/status
   GET  /api/health
 
-Build API (27 endpoints):
+Build API (24 endpoints):
   POST /api/build/collection       POST /api/build/seeds
   POST /api/build/bulk-distribute  POST /api/build/transfer
   POST /api/build/list             POST /api/build/unlist
   POST /api/build/burn             POST /api/build/buy
   POST /api/build/preview-ids
-  POST /api/build/offer            POST /api/build/accept-offer
-  POST /api/build/reject-offer     POST /api/build/replicate
+  POST /api/build/replicate
   POST /api/build/set-data         POST /api/build/pack-create
   POST /api/build/pack-buy         POST /api/build/pack-open
   POST /api/build/pack-transfer    POST /api/build/nft-approve

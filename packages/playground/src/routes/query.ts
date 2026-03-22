@@ -22,9 +22,39 @@ async function safeHandler(fn: () => Promise<Response>): Promise<Response> {
 export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) | { [method: string]: (req: Request) => Promise<Response> }> = {
 	"/api/user/:username": (req: Request) =>
 		safeHandler(async () => {
-			const username = new URL(req.url).pathname.split("/api/user/")[1]!.split("/")[0]!.toLowerCase();
-			const nfts = await indexer.getUserNfts(username);
-			return json({ user: username, count: nfts.length, nfts });
+			const url = new URL(req.url);
+			const username = url.pathname.split("/api/user/")[1]!.split("/")[0]!.toLowerCase();
+			const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10), 200);
+			const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+			const result = await indexer.getUserNfts(username, { limit, offset });
+			const nfts = result.nfts || [];
+			const hasMore = nfts.length >= limit;
+			return json({
+				user: username,
+				count: nfts.length,
+				hasMore,
+				offset,
+				counts: result.counts,
+				nfts: nfts.map((nft: any) => ({
+					id: nft.id,
+					collectionId: nft.collection_id,
+					nftType: nft.nft_type,
+					status: nft.status,
+					edition: nft.edition,
+					owner: nft.owner,
+					name: nft.name,
+					imageUrl: nft.image_url,
+					originDna: nft.origin_dna,
+					instanceDna: nft.instance_dna,
+					seedId: nft.seed_id,
+					instanceNumber: nft.instance_number,
+					maxSupply: nft.max_replicas,
+					distributed: nft.distributed,
+					listingPrice: nft.listing_price,
+					listingCurrency: nft.listing_currency,
+					isSeed: nft.nft_type === "seed",
+				})),
+			});
 		}),
 
 	"/api/user/:username/collections": (req: Request) =>
@@ -45,16 +75,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			});
 		}),
 
-	"/api/user/:username/activity": (req: Request) =>
-		safeHandler(async () => {
-			const url = new URL(req.url);
-			const username = url.pathname.split("/api/user/")[1]!.split("/")[0]!.toLowerCase();
-			const limit = Number(url.searchParams.get("limit")) || 50;
-			const cursor = url.searchParams.get("cursor") ? Number(url.searchParams.get("cursor")) : undefined;
-			const events = await indexer.getUserActivity(username, { limit, cursor });
-			return json({ user: username, count: events.length, events });
-		}),
-
 	"/api/user/:username/packs": (req: Request) =>
 		safeHandler(async () => {
 			const username = new URL(req.url).pathname.split("/api/user/")[1]!.split("/")[0]!.toLowerCase();
@@ -69,28 +89,13 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			return json(nft);
 		}),
 
-	"/api/nft/:nftId/history": (req: Request) =>
-		safeHandler(async () => {
-			const url = new URL(req.url);
-			const nftId = url.pathname.split("/api/nft/")[1]!.split("/")[0]!;
-			const limit = Number(url.searchParams.get("limit")) || 100;
-			const cursor = url.searchParams.get("cursor") ? Number(url.searchParams.get("cursor")) : undefined;
-			const [history, ownership] = await Promise.all([
-				indexer.getNftHistory(nftId, { limit, cursor }),
-				indexer.getNftOwnership(nftId),
-			]);
-			return json({ nftId, events: history, ownershipChain: ownership });
-		}),
-
 	"/api/nft/:nftId/details": (req: Request) =>
 		safeHandler(async () => {
 			const nftId = new URL(req.url).pathname.split("/api/nft/")[1]!.split("/")[0]!;
 			const nft = await indexer.getNft(nftId);
 
 			// Fetch related data in parallel
-			const [history, ownership, instances] = await Promise.all([
-				indexer.getNftHistory(nftId, { limit: 20 }),
-				indexer.getNftOwnership(nftId),
+			const [instances] = await Promise.all([
 				nft.nft_type === "seed"
 					? indexer.getNftInstances(nftId, { limit: 50 })
 					: Promise.resolve([]),
@@ -147,27 +152,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 						instanceNumber: r.instance_number,
 					})),
 				},
-				history: history.slice(0, 20).map(h => ({
-					id: h.id,
-					eventType: h.event_type,
-					from: h.from_account,
-					to: h.to_account,
-					timestamp: h.timestamp,
-					blockNum: h.block_num,
-					txId: h.tx_id,
-					price: h.price_amount ? { amount: h.price_amount, currency: h.price_currency } : undefined,
-				})),
-				ownershipChain: ownership,
 			});
-		}),
-
-	"/api/nft/:nftId/offers": (req: Request) =>
-		safeHandler(async () => {
-			const url = new URL(req.url);
-			const nftId = url.pathname.split("/api/nft/")[1]!.split("/")[0]!;
-			const status = url.searchParams.get("status") || undefined;
-			const offers = await indexer.getNftOffers(nftId, { status });
-			return json({ nftId, count: offers.length, offers });
 		}),
 
 	"/api/collections": () =>
@@ -286,15 +271,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			return json({ count: listings.length, listings });
 		}),
 
-	"/api/marketplace/recent-sales": (req: Request) =>
-		safeHandler(async () => {
-			const url = new URL(req.url);
-			const limit = Number(url.searchParams.get("limit")) || 50;
-			const cursor = url.searchParams.get("cursor") ? Number(url.searchParams.get("cursor")) : undefined;
-			const sales = await indexer.getRecentSales({ limit, cursor });
-			return json({ count: sales.length, sales });
-		}),
-
 	// Packs
 	"/api/packs": (req: Request) =>
 		safeHandler(async () => {
@@ -310,16 +286,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			const id = new URL(req.url).pathname.split("/api/pack/")[1]!.split("/")[0]!;
 			const pack = await indexer.getPack(id);
 			return json(pack);
-		}),
-
-	"/api/pack/:id/history": (req: Request) =>
-		safeHandler(async () => {
-			const url = new URL(req.url);
-			const id = url.pathname.split("/api/pack/")[1]!.split("/")[0]!;
-			const limit = Number(url.searchParams.get("limit")) || 100;
-			const cursor = url.searchParams.get("cursor") ? Number(url.searchParams.get("cursor")) : undefined;
-			const history = await indexer.getPackHistory(id, { limit, cursor });
-			return json({ packId: id, count: history.length, history });
 		}),
 
 	// Status/Stats

@@ -1,15 +1,17 @@
 import { Elysia, t } from "elysia";
-import { queryNfts } from "@/db/queries/nfts.ts";
+import { queryNfts, getUserNftCounts, queryNftsWithCounts, parseNftStatus, parseNftKind } from "@/db/queries/nfts.ts";
 import { getCollectionsByCreator } from "@/db/queries/collections.ts";
-import { getUserActivity } from "@/db/queries/history.ts";
 import { getUserPackBalances } from "@/db/queries/packs.ts";
 
 export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 	.get("/:username/nfts", async ({ params, query }) => {
-		return queryNfts(
-			{ by: "owner", owner: params.username, status: query.status as any, type: query.type as any },
+		const result = await queryNftsWithCounts(
+			params.username,
+			parseNftStatus(query.status),
+			parseNftKind(query.type),
 			{ limit: query.limit, offset: query.offset },
 		);
+		return { ...result, offset: query.offset, limit: query.limit };
 	}, {
 		params: t.Object({ username: t.String() }),
 		query: t.Object({
@@ -18,7 +20,13 @@ export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
-		detail: { summary: "Get user's NFTs" },
+		detail: { summary: "Get user's NFTs with counts" },
+	})
+	.get("/:username/nfts/count", async ({ params }) => {
+		return getUserNftCounts(params.username);
+	}, {
+		params: t.Object({ username: t.String() }),
+		detail: { summary: "Get user's NFT counts", description: "Total counts by type (seeds, instances, replicas) excluding burned" },
 	})
 	.get("/:username/collections", async ({ params, query }) => {
 		return getCollectionsByCreator(params.username, query.limit, query.offset);
@@ -29,17 +37,6 @@ export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
 		detail: { summary: "Get user's collections" },
-	})
-	.get("/:username/activity", async ({ params, query }) => {
-		return getUserActivity(params.username, query.limit, query.offset, query.cursor);
-	}, {
-		params: t.Object({ username: t.String() }),
-		query: t.Object({
-			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
-			offset: t.Number({ default: 0, minimum: 0 }),
-			cursor: t.Optional(t.Number({ description: "Last event ID for cursor pagination (overrides offset)" })),
-		}),
-		detail: { summary: "Get user activity", description: "All events where user is sender or receiver. Use cursor=lastId for efficient pagination." },
 	})
 	.get("/:username/packs", async ({ params, query }) => {
 		return getUserPackBalances(params.username, query.limit, query.offset);

@@ -3,6 +3,8 @@ import { getLastBlock, getSyncStatus } from "@/db/queries/sync.ts";
 import { getHeadBlockNum } from "@/scanner/hive-client.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
 import { getStartupTime } from "@/scanner/sync-state.ts";
+import { config } from "@/config.ts";
+import { PROTOCOL_VERSION } from "nftlox-sdk";
 
 const STALE_THRESHOLD_MS = 60_000; // 1 minute without processing = stale
 const SYNC_TOLERANCE = 10; // blocks behind threshold to consider "in sync"
@@ -14,11 +16,17 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			getHeadBlockNum().catch(() => 0),
 		]);
 		const blocksBehind = Math.max(0, headBlock - lastBlock);
+		const inSync = blocksBehind <= SYNC_TOLERANCE;
 		return {
+			protocolVersion: PROTOCOL_VERSION,
+			protocolId: config.protocolId,
+			nodeAccount: config.hiveAccount,
+			nodeUrl: config.nodeUrl || null,
+			multisigEnabled: !!config.activeKey,
 			lastBlock,
 			headBlock,
 			blocksBehind,
-			syncing: blocksBehind > SYNC_TOLERANCE,
+			inSync,
 		};
 	}, {
 		detail: {
@@ -40,7 +48,8 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 
 			const dbAlive = sync.lastBlock > 0;
 			const startupTime = getStartupTime();
-			const updatedAfterStartup = startupTime > 0 && lastUpdateMs > startupTime;
+			const isApiRole = config.indexerRole === "api";
+			const updatedAfterStartup = isApiRole ? true : (startupTime > 0 && lastUpdateMs > startupTime);
 			const syncActive = secondsSinceUpdate < STALE_THRESHOLD_MS / 1000 && updatedAfterStartup;
 			const hiveReachable = headBlock > 0;
 			const inSync = hiveReachable && blocksBehind <= SYNC_TOLERANCE;
@@ -76,6 +85,6 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 	}, {
 		detail: {
 			summary: "Protocol statistics",
-			description: "Aggregate counts: collections, NFTs, sales, offers, etc.",
+			description: "Aggregate counts: collections, NFTs, sales, etc.",
 		},
 	});

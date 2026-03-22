@@ -2,7 +2,6 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftOperatorData, NFT_STATUS_BURNED } from "@/db/queries/nfts.ts";
 import { hasDataOperatorApproval } from "@/db/queries/allowances.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
 import { requireString, optionalStringArray } from "@/utils/validation.ts";
 
 export async function handleSetDataFrom(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -23,17 +22,4 @@ export async function handleSetDataFrom(op: ParsedOperation, txn: Queryable): Pr
 	}
 
 	await updateNftOperatorData(nftId, op.data.data ?? null, optionalStringArray(op.data.tags), txn);
-	await insertHistoryEvent({
-		nftId,
-		collectionId: nft.collection_id,
-		eventType: "set_data_from",
-		blockNum: op.blockNum,
-		txId: op.txId,
-		timestamp: op.timestamp,
-		fromAccount: op.signer,
-		toAccount: null,
-		priceAmount: null,
-		priceCurrency: null,
-		payload: op.data,
-	}, txn);
 }

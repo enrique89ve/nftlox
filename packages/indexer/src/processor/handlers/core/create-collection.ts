@@ -1,7 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { insertCollection, collectionExists } from "@/db/queries/collections.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
 import { requireString, optionalString, optionalNumber, optionalBoolean, optionalObject } from "@/utils/validation.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -33,12 +32,5 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		blockNum: op.blockNum,
 		txId: op.txId,
 		createdAt: op.timestamp,
-	}, txn);
-
-	await insertHistoryEvent({
-		nftId: id, collectionId: id, eventType: "create_collection",
-		blockNum: op.blockNum, txId: op.txId, timestamp: op.timestamp,
-		fromAccount: op.signer, toAccount: null,
-		priceAmount: null, priceCurrency: null, payload: op.data,
 	}, txn);
 }

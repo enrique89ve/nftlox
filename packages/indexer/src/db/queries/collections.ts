@@ -50,6 +50,8 @@ export interface CollectionRulesRow {
 	creator: string;
 	transferable: boolean;
 	burnable: boolean;
+	royalty_pct: number;
+	royalty_recipient: string | null;
 }
 
 export async function getCollectionRules(
@@ -57,7 +59,7 @@ export async function getCollectionRules(
 	txn: Queryable = sql,
 ): Promise<CollectionRulesRow | null> {
 	const [row] = await txn<CollectionRulesRow[]>`
-		SELECT id, creator, transferable, burnable
+		SELECT id, creator, transferable, burnable, royalty_pct, royalty_recipient
 		FROM collections WHERE id = ${id}
 	`;
 	return row ?? null;
@@ -72,9 +74,11 @@ export async function listCollections(limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
 	return sql`
 		SELECT c.*,
-			(SELECT COUNT(*) FROM nfts WHERE collection_id = c.id AND nft_type = 'seed') AS seed_count,
-			(SELECT COUNT(*) FROM nfts WHERE collection_id = c.id AND nft_type = 'instance') AS instance_count
+			COALESCE(COUNT(*) FILTER (WHERE n.nft_type = 'seed'), 0) AS seed_count,
+			COALESCE(COUNT(*) FILTER (WHERE n.nft_type = 'instance'), 0) AS instance_count
 		FROM collections c
+		LEFT JOIN nfts n ON n.collection_id = c.id
+		GROUP BY c.id
 		ORDER BY c.created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
@@ -84,10 +88,12 @@ export async function getCollectionsByCreator(creator: string, limit = 50, offse
 	const safeLimit = clampLimit(limit);
 	return sql`
 		SELECT c.*,
-			(SELECT COUNT(*) FROM nfts WHERE collection_id = c.id AND nft_type = 'seed') AS seed_count,
-			(SELECT COUNT(*) FROM nfts WHERE collection_id = c.id AND nft_type = 'instance') AS instance_count
+			COALESCE(COUNT(*) FILTER (WHERE n.nft_type = 'seed'), 0) AS seed_count,
+			COALESCE(COUNT(*) FILTER (WHERE n.nft_type = 'instance'), 0) AS instance_count
 		FROM collections c
+		LEFT JOIN nfts n ON n.collection_id = c.id
 		WHERE c.creator = ${creator}
+		GROUP BY c.id
 		ORDER BY c.created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
 	`;

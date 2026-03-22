@@ -387,7 +387,7 @@ export async function verifyOperationOnChain(
 // Actions where the signer is the "from" (sender/actor)
 const SIGNER_IS_FROM_ACTIONS = new Set([
 	"transfer", "list", "unlist", "burn", "replicate",
-	"offer", "nft_transfer_from", "set_data",
+	"nft_transfer_from", "set_data",
 ]);
 
 /**

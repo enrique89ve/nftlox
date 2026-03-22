@@ -1,43 +1,40 @@
-// Build routes — construct Hive operations via PayloadBuilder and SDK payloads
+// Build routes — construct Hive operations via SDK builders
 import {
 	PROTOCOL_VERSION,
 	HASH_VERSION,
-	PayloadBuilder,
-	// Direct operation creators for endpoints not covered by PayloadBuilder
-	createOfferOperation,
-	createOfferPayload,
-	createAcceptOfferOperation,
-	createAcceptOfferPayload,
-	createRejectOfferOperation,
-	createRejectOfferPayload,
+	// Direct operation creators for replicate (no builder exists)
 	createReplicateOperation,
 	createReplicatePayload,
-	createSetDataOperation,
-	createSetDataPayload,
-	createNftApproveOperation,
-	createNftApproveAllOperation,
-	createNftTransferFromOperation,
-	createPackApproveOperation,
-	createPackTransferFromOperation,
-	createNftLendOperation,
-	createNftReturnOperation,
-	createDataOperatorApproveOperation,
-	createSetDataFromOperation,
-	// Validation
-	validateOfferInput,
-	validateNftApproveInput,
-	validateNftApproveAllInput,
-	validateNftTransferFromInput,
-	validatePackApproveInput,
-	validatePackTransferFromInput,
-	validateNftLendInput,
-	validateNftReturnInput,
-	validateDataOperatorApproveInput,
-	validateSetDataFromInput,
+	// Builders
+	buildCollection,
+	buildSeedBatch,
+	buildSeed,
+	buildBulkDistribute,
+	buildTransfer,
+	buildList,
+	buildUnlist,
+	buildBurn,
+	buildBuy,
+	buildSetData,
+	buildPackCreate,
+	buildPackBuy,
+	buildPackOpen,
+	buildPackTransfer,
+	buildNftApprove,
+	buildNftApproveAll,
+	buildNftTransferFrom,
+	buildPackApprove,
+	buildPackTransferFrom,
+	buildDataOperatorApprove,
+	buildSetDataFrom,
+	buildNftLend,
+	buildNftReturn,
+	// For preview-ids (inline replacement)
+	generateDeterministicCollectionId,
+	generateOriginDnaSync,
+	generateDeterministicSeedId,
 } from "nftlox-sdk";
 import { splitOperationsIntoBatches } from "../protocol";
-
-const builder = new PayloadBuilder();
 
 const json = (data: unknown, status = 200) =>
 	new Response(JSON.stringify(data, null, 2), {
@@ -64,7 +61,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	// ============ EXISTING BUILD ENDPOINTS ============
 
 	"/api/build/collection": buildRoute((body) => {
-		const result = builder.buildCollection(body);
+		const result = buildCollection(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -79,11 +76,11 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/seeds": buildRoute((body) => {
-		const result = builder.buildSeedBatch(body);
+		const result = buildSeedBatch(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 
 		const operations = body.seeds.map((seed: any) => {
-			const seedResult = builder.buildSeed({
+			const seedResult = buildSeed({
 				artId: seed.artId,
 				collectionId: body.collectionId,
 				name: seed.name,
@@ -119,7 +116,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/bulk-distribute": buildRoute((body) => {
-		const result = builder.buildBulkDistribute(body);
+		const result = buildBulkDistribute(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -132,7 +129,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/transfer": buildRoute((body) => {
-		const result = builder.buildTransfer(body);
+		const result = buildTransfer(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -143,7 +140,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/list": buildRoute((body) => {
-		const result = builder.buildList(body);
+		const result = buildList(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -154,7 +151,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/unlist": buildRoute((body) => {
-		const result = builder.buildUnlist(body);
+		const result = buildUnlist(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -165,7 +162,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/burn": buildRoute((body) => {
-		const result = builder.buildBurn(body);
+		const result = buildBurn(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -176,104 +173,47 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/buy": buildRoute((body) => {
-		const result = builder.buildBuy(body);
+		const result = buildBuy(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
+			hiveOperations: (result as any).hiveOperations,
 			payload: result.payload,
 		});
 	}),
 
 	"/api/build/preview-ids": buildRoute((body) => {
-		const preview = builder.previewIds(body);
+		const collectionId = generateDeterministicCollectionId(
+			body.creator,
+			body.name,
+			body.symbol,
+		);
+		const originDna = generateOriginDnaSync(collectionId);
+
 		const seedIds: Record<string, string> = {};
-		preview.seedIds.forEach((v, k) => seedIds[k] = v);
+		if (body.artIds && Array.isArray(body.artIds)) {
+			for (const artId of body.artIds) {
+				seedIds[artId] = generateDeterministicSeedId(collectionId, artId);
+			}
+		}
+
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			hashVersion: HASH_VERSION,
-			collectionId: preview.collectionId,
-			originDna: preview.originDna,
+			collectionId,
+			originDna,
 			seedIds,
 		});
 	}),
 
 	// ============ NEW BUILD ENDPOINTS ============
 
-	// --- Offers (3) ---
-
-	"/api/build/offer": buildRoute((body) => {
-		const validation = validateOfferInput({
-			nftId: body.nftId,
-			price: body.price,
-			expiresAt: body.expiresAt,
-		});
-		if (!validation.valid) return json({ success: false, error: validation.error }, 400);
-
-		const operation = createOfferOperation(
-			{ nftId: body.nftId, price: body.price, expiresAt: body.expiresAt },
-			body.offerer,
-		);
-		const payload = createOfferPayload({
-			nftId: body.nftId,
-			price: body.price,
-			expiresAt: body.expiresAt,
-		});
-
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation,
-			payload,
-			keyType: "Posting",
-		});
-	}),
-
-	"/api/build/accept-offer": buildRoute((body) => {
-		const operation = createAcceptOfferOperation(
-			{ nftId: body.nftId, offerId: body.offerId, paymentTxId: body.paymentTxId },
-			body.owner,
-		);
-		const payload = createAcceptOfferPayload({
-			nftId: body.nftId,
-			offerId: body.offerId,
-			paymentTxId: body.paymentTxId,
-		});
-
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation,
-			payload,
-			keyType: "Posting",
-		});
-	}),
-
-	"/api/build/reject-offer": buildRoute((body) => {
-		const operation = createRejectOfferOperation(
-			{ nftId: body.nftId, offerId: body.offerId },
-			body.owner,
-		);
-		const payload = createRejectOfferPayload({
-			nftId: body.nftId,
-			offerId: body.offerId,
-		});
-
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation,
-			payload,
-			keyType: "Posting",
-		});
-	}),
-
 	// --- Packs (4) ---
 
 	"/api/build/pack-create": buildRoute((body) => {
-		const result = builder.buildPackCreate(body);
+		const result = buildPackCreate(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -286,7 +226,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/pack-buy": buildRoute((body) => {
-		const result = builder.buildPackBuy(body);
+		const result = buildPackBuy(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -298,7 +238,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/pack-open": buildRoute((body) => {
-		const result = builder.buildPackOpen(body);
+		const result = buildPackOpen(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -310,7 +250,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/pack-transfer": buildRoute((body) => {
-		const result = builder.buildPackTransfer(body);
+		const result = buildPackTransfer(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -344,22 +284,13 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/set-data": buildRoute((body) => {
-		const operation = createSetDataOperation(
-			{ nftId: body.nftId, instanceDna: body.instanceDna, data: body.data, tags: body.tags },
-			body.issuer,
-		);
-		const payload = createSetDataPayload({
-			nftId: body.nftId,
-			instanceDna: body.instanceDna,
-			data: body.data,
-			tags: body.tags,
-		});
-
+		const result = buildSetData({ ...body, owner: body.issuer });
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation,
-			payload,
+			operation: result.operation,
+			payload: result.payload,
 			keyType: "Active",
 		});
 	}),
@@ -367,61 +298,56 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	// --- Allowances (5) ---
 
 	"/api/build/nft-approve": buildRoute((body) => {
-		const validation = validateNftApproveInput(body);
-		if (!validation.valid) return json({ success: false, error: validation.error }, 400);
-		const operation = createNftApproveOperation(body, body.owner);
+		const result = buildNftApprove(body);
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation,
+			operation: result.operation,
 			keyType: "Active",
 		});
 	}),
 
 	"/api/build/nft-approve-all": buildRoute((body) => {
-		const validation = validateNftApproveAllInput(body);
-		if (!validation.valid) return json({ success: false, error: validation.error }, 400);
-		const operation = createNftApproveAllOperation(body, body.owner);
+		const result = buildNftApproveAll(body);
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation,
+			operation: result.operation,
 			keyType: "Active",
 		});
 	}),
 
 	"/api/build/nft-transfer-from": buildRoute((body) => {
-		const validation = validateNftTransferFromInput(body);
-		if (!validation.valid) return json({ success: false, error: validation.error }, 400);
-		const operation = createNftTransferFromOperation(body, body.spender);
+		const result = buildNftTransferFrom({ ...body, operator: body.spender });
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation,
+			operation: result.operation,
 			keyType: "Active",
 		});
 	}),
 
 	"/api/build/pack-approve": buildRoute((body) => {
-		const validation = validatePackApproveInput(body);
-		if (!validation.valid) return json({ success: false, error: validation.error }, 400);
-		const operation = createPackApproveOperation(body, body.owner);
+		const result = buildPackApprove(body);
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation,
+			operation: result.operation,
 			keyType: "Active",
 		});
 	}),
 
 	"/api/build/pack-transfer-from": buildRoute((body) => {
-		const validation = validatePackTransferFromInput(body);
-		if (!validation.valid) return json({ success: false, error: validation.error }, 400);
-		const operation = createPackTransferFromOperation(body, body.spender);
+		const result = buildPackTransferFrom({ ...body, operator: body.spender });
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation,
+			operation: result.operation,
 			keyType: "Active",
 		});
 	}),
@@ -429,25 +355,23 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	// --- Lending (2) ---
 
 	"/api/build/nft-lend": buildRoute((body) => {
-		const validation = validateNftLendInput(body);
-		if (!validation.valid) return json({ success: false, error: validation.error }, 400);
-		const operation = createNftLendOperation(body, body.owner);
+		const result = buildNftLend(body);
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation,
+			operation: result.operation,
 			keyType: "Active",
 		});
 	}),
 
 	"/api/build/nft-return": buildRoute((body) => {
-		const validation = validateNftReturnInput(body);
-		if (!validation.valid) return json({ success: false, error: validation.error }, 400);
-		const operation = createNftReturnOperation(body, body.signer);
+		const result = buildNftReturn({ ...body, owner: body.signer });
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation,
+			operation: result.operation,
 			keyType: "Active",
 		});
 	}),
@@ -455,25 +379,23 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	// --- Data Operators (2) ---
 
 	"/api/build/data-operator-approve": buildRoute((body) => {
-		const validation = validateDataOperatorApproveInput(body);
-		if (!validation.valid) return json({ success: false, error: validation.error }, 400);
-		const operation = createDataOperatorApproveOperation(body, body.creator);
+		const result = buildDataOperatorApprove({ ...body, owner: body.creator });
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation,
+			operation: result.operation,
 			keyType: "Active",
 		});
 	}),
 
 	"/api/build/set-data-from": buildRoute((body) => {
-		const validation = validateSetDataFromInput(body);
-		if (!validation.valid) return json({ success: false, error: validation.error }, 400);
-		const operation = createSetDataFromOperation(body, body.operator);
+		const result = buildSetDataFrom(body);
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation,
+			operation: result.operation,
 			keyType: "Active",
 		});
 	}),

@@ -9,10 +9,37 @@ import { usersRoutes } from "./routes/users.ts";
 import { marketplaceRoutes } from "./routes/marketplace.ts";
 import { packsRoutes } from "./routes/packs.ts";
 import { statusRoutes } from "./routes/status.ts";
+import { multisigRoutes } from "./routes/multisig.ts";
 import { checkRateLimit } from "./middleware/rate-limiter.ts";
-import { isSynced, getSyncProgress } from "@/scanner/sync-state.ts";
+import { getSyncStatus } from "@/db/queries/sync.ts";
+import { isSynced as _isSynced, getSyncProgress } from "@/scanner/sync-state.ts";
 
 const log = createLogger("api");
+
+const isApiRole = config.indexerRole === "api";
+
+let apiSynced = isApiRole ? false : _isSynced();
+let apiLastBlock = 0;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+if (isApiRole) {
+	pollTimer = setInterval(async () => {
+		try {
+			const st = await getSyncStatus();
+			apiLastBlock = st.lastBlock;
+			apiSynced = st.updatedAt !== null && Date.now() - st.updatedAt.getTime() < 15_000;
+		} catch (err) {
+			log.warn("Sync polling failed", { error: err instanceof Error ? err.message : String(err) });
+		}
+	}, 2000);
+}
+
+export function stopPolling(): void {
+	if (pollTimer !== null) {
+		clearInterval(pollTimer);
+		pollTimer = null;
+	}
+}
 
 export function startApiServer(): void {
 	const STATS_PATHS = new Set(["/api/stats", "/api/health"]);
@@ -30,15 +57,17 @@ export function startApiServer(): void {
 
 			// Block data endpoints while syncing (allow health + status)
 			const url = new URL(request.url);
-			if (!isSynced() && !ALLOWED_DURING_SYNC.has(url.pathname)) {
+			const currentSynced = isApiRole ? apiSynced : _isSynced();
+
+			if (!currentSynced && !ALLOWED_DURING_SYNC.has(url.pathname)) {
 				set.status = 503;
 				set.headers["Retry-After"] = "30";
 				const progress = getSyncProgress();
 				return {
 					error: "Indexer is syncing — data not yet available",
-					lastBlock: progress.lastBlock,
+					lastBlock: isApiRole ? apiLastBlock : progress.lastBlock,
 					headBlock: progress.headBlock,
-					blocksBehind: progress.behind,
+					blocksBehind: isApiRole ? "unknown" : progress.behind,
 				};
 			}
 		})
@@ -87,6 +116,7 @@ export function startApiServer(): void {
 		.use(marketplaceRoutes)
 		.use(packsRoutes)
 		.use(statusRoutes)
+		.use(multisigRoutes)
 		.listen(config.port);
 
 	log.info(`API server listening on port ${config.port}`);

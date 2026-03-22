@@ -14,12 +14,13 @@ export interface ParsedOperation {
 	action: ProtocolAction;
 	version: string;
 	data: Record<string, unknown>;
-	pairedTransfer?: {
+	pairedTransfers?: Array<{
 		from: string;
 		to: string;
-		amount: string;
+		amount: number;
+		currency: string;
 		memo: string;
-	};
+	}>;
 }
 
 const protocolId = config.protocolId;
@@ -89,8 +90,8 @@ function isValidPayload(payload: unknown): payload is {
  * Parse HafAH operations directly — much faster than parsing full blocks.
  * HafAH already filters to custom_json (op_type=18), we just filter by protocol ID.
  *
- * NOTE: Paired transfers (atomic custom_json + HIVE transfer) are not supported
- * via HafAH because HafAH only returns one operation type per query.
+ * NOTE: Paired transfers are enriched separately by the sync engine via
+ * getTransfersInBlock() for actions that require payment verification.
  */
 export function parseHafAHOperations(hafOps: HafAHOperation[]): ParsedOperation[] {
 	const ops: ParsedOperation[] = [];

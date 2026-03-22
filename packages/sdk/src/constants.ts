@@ -4,6 +4,7 @@ export const PROTOCOL_ID = "nftlox_testnet";
 export const PROTOCOL_VERSION = "0.2.1";
 export const MIN_PROTOCOL_VERSION = "0.2.0";
 export const HASH_VERSION = "v1";
+export const GENESIS_BLOCK = 104_838_076;
 
 // Transaction Limits
 export const MAX_JSON_SIZE = 8000;
@@ -32,6 +33,74 @@ export const ACCESS_KEY_LENGTH = 8;
 export const SUPPORTED_CURRENCIES = ["HIVE", "HBD"] as const;
 export const MAX_ROYALTY_PCT = 50;
 export const MIN_PRICE_AMOUNT = "0.001";
+export const PROTOCOL_FEE_PCT = 2.5;
+export const DEFAULT_FEE_ACCOUNT = "nftlox";
+
+// ============ PAYMENT SPLIT ============
+
+export interface PaymentSplit {
+	sellerAmount: number;
+	royaltyAmount: number;
+	royaltyRecipient: string | null;
+	feeAmount: number;
+	feeAccount: string;
+	totalPrice: number;
+	currency: string;
+}
+
+/** Round to 3 decimal places (Hive precision) */
+export function roundHive(n: number): number {
+	return Math.round(n * 1000) / 1000;
+}
+
+/**
+ * Calculate the payment split for an NFT sale.
+ * Fee is always charged. Royalty only if royaltyRecipient is set and royaltyPct > 0.
+ * If royaltyRecipient === seller, royalty merges into sellerAmount.
+ * If feeAccount === seller, fee merges into sellerAmount.
+ */
+export function calculatePaymentSplit(
+	totalPrice: number,
+	currency: string,
+	royaltyPct: number,
+	royaltyRecipient: string | null,
+	seller: string,
+	feeAccount: string,
+): PaymentSplit {
+	const feeAmount = roundHive(totalPrice * PROTOCOL_FEE_PCT / 100);
+
+	let royaltyAmount = 0;
+	let effectiveRoyaltyRecipient: string | null = null;
+
+	if (royaltyRecipient && royaltyPct > 0) {
+		if (royaltyRecipient === seller) {
+			// Royalty merges into seller — no separate transfer
+			royaltyAmount = 0;
+			effectiveRoyaltyRecipient = null;
+		} else {
+			royaltyAmount = roundHive(totalPrice * royaltyPct / 100);
+			effectiveRoyaltyRecipient = royaltyRecipient;
+		}
+	}
+
+	let effectiveFee = feeAmount;
+	if (feeAccount === seller) {
+		// Fee merges into seller — no separate transfer
+		effectiveFee = 0;
+	}
+
+	const sellerAmount = roundHive(totalPrice - royaltyAmount - effectiveFee);
+
+	return {
+		sellerAmount,
+		royaltyAmount,
+		royaltyRecipient: effectiveRoyaltyRecipient,
+		feeAmount: effectiveFee,
+		feeAccount: feeAccount,
+		totalPrice,
+		currency,
+	};
+}
 
 // Pack Constants
 export const MAX_DROP_TABLE_ENTRIES = 50;
@@ -51,15 +120,15 @@ export const ACTION_SET_DATA = "set_data";
 
 // Bulk Distribute Limits
 export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
-export const MAX_BULK_DISTRIBUTE_TOTAL = 100;
 
 // Protocol Actions (Marketplace)
 export const ACTION_LIST = "list";
 export const ACTION_UNLIST = "unlist";
-export const ACTION_BUY = "buy";
-export const ACTION_OFFER = "offer";
-export const ACTION_ACCEPT_OFFER = "accept_offer";
-export const ACTION_REJECT_OFFER = "reject_offer";
+export const ACTION_BUY = "buy" as const;
+
+// Multisig Constants
+export const MULTISIG_EXPIRATION_MS = 60_000;
+export const MAX_MULTISIG_OPERATIONS = 4; // seller + royalty + fee + custom_json
 
 // Protocol Actions (Packs)
 export const ACTION_PACK_CREATE = "pack_create";
@@ -97,9 +166,6 @@ export const MARKETPLACE_ACTIONS = [
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTION_BUY,
-	ACTION_OFFER,
-	ACTION_ACCEPT_OFFER,
-	ACTION_REJECT_OFFER,
 ] as const;
 
 export const PACK_ACTIONS = [

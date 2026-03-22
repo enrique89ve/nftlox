@@ -13,10 +13,6 @@ import {
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
-	ACTION_BUY,
-	ACTION_OFFER,
-	ACTION_ACCEPT_OFFER,
-	ACTION_REJECT_OFFER,
 	ACTION_PACK_CREATE,
 	ACTION_PACK_BUY,
 	ACTION_PACK_TRANSFER,
@@ -30,6 +26,7 @@ import {
 	ACTION_SET_DATA_FROM,
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
+	ACTION_BUY,
 	MAX_TAGS,
 	MAX_TAG_LENGTH,
 } from "./constants";
@@ -38,6 +35,7 @@ import type {
 	CollectionData,
 	NFTData,
 	ReplicaData,
+	SeedProvenance,
 	TransferData,
 	BurnData,
 	SetDataData,
@@ -51,9 +49,6 @@ import type {
 	ListingData,
 	UnlistData,
 	BuyData,
-	OfferData,
-	AcceptOfferData,
-	RejectOfferData,
 	PackCreateData,
 	PackBuyData,
 	PackTransferData,
@@ -81,12 +76,8 @@ import type {
 	MintInput,
 	ReplicateInput,
 	ListInput,
-	BuyInput,
 	BurnInput,
 	UnlistInput,
-	OfferInput,
-	AcceptOfferInput,
-	RejectOfferInput,
 	HiveOperation,
 	TransferMemo,
 	AtomicTransferInput,
@@ -102,12 +93,20 @@ import {
 	generateAccessKey,
 	generateImageHash,
 	generateReplicaId,
-	generateOfferId,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateDeterministicPackId,
 	deterministicHash,
 } from "./dna";
+
+/** Spread seed provenance fields only when present */
+function spreadProvenance(p?: SeedProvenance): Record<string, string> {
+	if (!p) return {};
+	return {
+		...(p.seedId && { seedId: p.seedId }),
+		...(p.birthTx && { birthTx: p.birthTx }),
+	};
+}
 
 // ============ COLLECTION PAYLOADS ============
 
@@ -205,6 +204,7 @@ export function createReplicatePayload(
 			originDna: input.originDna,
 			instanceDna,
 			uniqueAccessKey,
+			...spreadProvenance(input),
 		},
 	};
 }
@@ -254,6 +254,7 @@ export function createTransferPayload(
 	to: string,
 	imageUrl?: string,
 	imageHash?: string,
+	provenance?: SeedProvenance,
 ): ProtocolPayload<TransferData> {
 	return {
 		protocol: PROTOCOL_ID,
@@ -265,6 +266,7 @@ export function createTransferPayload(
 			to,
 			...(imageUrl && { imageUrl }),
 			...(imageHash && { imageHash }),
+			...spreadProvenance(provenance),
 		},
 	};
 }
@@ -275,6 +277,7 @@ export function createBurnPayload(
 	nftId: string,
 	imageUrl?: string,
 	imageHash?: string,
+	provenance?: SeedProvenance,
 ): ProtocolPayload<BurnData> {
 	return {
 		protocol: PROTOCOL_ID,
@@ -284,6 +287,7 @@ export function createBurnPayload(
 			nftId,
 			...(imageUrl && { imageUrl }),
 			...(imageHash && { imageHash }),
+			...spreadProvenance(provenance),
 		},
 	};
 }
@@ -381,6 +385,7 @@ export function createSetDataFromPayload(
 			instanceDna: input.instanceDna,
 			data: input.data,
 			...(input.tags && { tags: sanitizeTags(input.tags) }),
+			...spreadProvenance(input),
 		},
 	};
 }
@@ -411,9 +416,11 @@ export function createListPayload(input: ListInput): ProtocolPayload<ListingData
 		data: {
 			nftId: input.nftId,
 			price: input.price,
-			expiresAt: input.expiresAt,
+			...(input.expiresAt && { expiresAt: input.expiresAt }),
 			...(input.imageUrl && { imageUrl: input.imageUrl }),
 			...(input.imageHash && { imageHash: input.imageHash }),
+			...(input.marketplace && { marketplace: input.marketplace }),
+			...spreadProvenance(input),
 		},
 	};
 }
@@ -435,61 +442,25 @@ export function createUnlistPayload(
 	};
 }
 
-export function createBuyPayload(input: BuyInput): ProtocolPayload<BuyData> {
+export function createBuyPayload(data: BuyData): ProtocolPayload {
 	return {
 		protocol: PROTOCOL_ID,
 		version: PROTOCOL_VERSION,
 		action: ACTION_BUY,
-		data: {
-			nftId: input.nftId,
-			paymentTxId: input.paymentTxId,
-			...(input.imageUrl && { imageUrl: input.imageUrl }),
-			...(input.imageHash && { imageHash: input.imageHash }),
-		},
+		data,
 	};
 }
 
-export function createOfferPayload(input: OfferInput): ProtocolPayload<OfferData & { offerId: string }> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_OFFER,
-		data: {
-			offerId: generateOfferId(),
-			nftId: input.nftId,
-			price: input.price,
-			expiresAt: input.expiresAt,
+export function createBuyOperation(data: BuyData, nodeAccount: string): HiveOperation {
+	return [
+		"custom_json",
+		{
+			required_auths: [nodeAccount],
+			required_posting_auths: [],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(createBuyPayload(data)),
 		},
-	};
-}
-
-export function createAcceptOfferPayload(
-	input: AcceptOfferInput,
-): ProtocolPayload<AcceptOfferData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_ACCEPT_OFFER,
-		data: {
-			nftId: input.nftId,
-			offerId: input.offerId,
-			paymentTxId: input.paymentTxId,
-		},
-	};
-}
-
-export function createRejectOfferPayload(
-	input: RejectOfferInput,
-): ProtocolPayload<RejectOfferData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_REJECT_OFFER,
-		data: {
-			nftId: input.nftId,
-			offerId: input.offerId,
-		},
-	};
+	];
 }
 
 // ============ HIVE OPERATION CREATION ============
@@ -541,8 +512,9 @@ export function createTransferOperation(
 	to: string,
 	imageUrl?: string,
 	imageHash?: string,
+	provenance?: SeedProvenance,
 ): HiveOperation {
-	const payload = createTransferPayload(nftId, from, to, imageUrl, imageHash);
+	const payload = createTransferPayload(nftId, from, to, imageUrl, imageHash, provenance);
 	return [
 		"custom_json",
 		{
@@ -559,8 +531,9 @@ export function createBurnOperation(
 	owner: string,
 	imageUrl?: string,
 	imageHash?: string,
+	provenance?: SeedProvenance,
 ): HiveOperation {
-	const payload = createBurnPayload(nftId, imageUrl, imageHash);
+	const payload = createBurnPayload(nftId, imageUrl, imageHash, provenance);
 	return [
 		"custom_json",
 		{
@@ -592,64 +565,6 @@ export function createUnlistOperation(
 	imageHash?: string,
 ): HiveOperation {
 	const payload = createUnlistPayload(nftId, imageUrl, imageHash);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
-		},
-	];
-}
-
-export function createBuyOperation(input: BuyInput, buyer: string): HiveOperation {
-	const payload = createBuyPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [buyer],
-			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
-		},
-	];
-}
-
-export function createOfferOperation(input: OfferInput, offerer: string): HiveOperation {
-	const payload = createOfferPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [offerer],
-			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
-		},
-	];
-}
-
-export function createAcceptOfferOperation(
-	input: AcceptOfferInput,
-	owner: string,
-): HiveOperation {
-	const payload = createAcceptOfferPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
-		},
-	];
-}
-
-export function createRejectOfferOperation(
-	input: RejectOfferInput,
-	owner: string,
-): HiveOperation {
-	const payload = createRejectOfferPayload(input);
 	return [
 		"custom_json",
 		{
@@ -724,6 +639,7 @@ export function createAtomicTransferOperations(
 		input.to,
 		input.imageUrl,
 		input.imageHash,
+		input,
 	);
 	const customJson: HiveOperation = [
 		"custom_json",
@@ -1064,6 +980,7 @@ export function createNftTransferFromPayload(
 			from: input.from,
 			to: input.to,
 			instanceId: input.instanceId,
+			...spreadProvenance(input),
 		},
 	};
 }
@@ -1163,6 +1080,7 @@ export function createNftLendPayload(
 		data: {
 			instanceId: input.instanceId,
 			borrower: input.borrower,
+			...spreadProvenance(input),
 		},
 	};
 }
@@ -1176,6 +1094,7 @@ export function createNftReturnPayload(
 		action: ACTION_NFT_RETURN,
 		data: {
 			instanceId: input.instanceId,
+			...spreadProvenance(input),
 		},
 	};
 }

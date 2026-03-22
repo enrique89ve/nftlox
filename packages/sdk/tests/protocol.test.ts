@@ -5,6 +5,9 @@ import {
 	MAX_JSON_SIZE,
 	ORIGIN_DNA_LENGTH,
 	INSTANCE_DNA_LENGTH,
+	ACTION_BUY,
+	MULTISIG_EXPIRATION_MS,
+	MAX_MULTISIG_OPERATIONS,
 	generateOriginDna,
 	generateOriginDnaSync,
 	generateInstanceDna,
@@ -18,15 +21,16 @@ import {
 	createMintPayload,
 	createListPayload,
 	createBuyPayload,
-	createOfferPayload,
-	validateSymbol,
-	validatePrice,
-	validateCollectionInput,
-	validateMintInput,
+	createBuyOperation,
+	symbolSchema,
+	priceSchema,
+	createCollectionInputSchema,
+	mintInputSchema,
 	estimateOperationSize,
 	createMintOperation,
 	type CreateCollectionInput,
 	type MintInput,
+	type BuyData,
 } from "../src/index";
 
 describe("Protocol Version", () => {
@@ -241,51 +245,32 @@ describe("Marketplace Payloads", () => {
 		expect(payload.data.price.currency).toBe("HIVE");
 	});
 
-	test("buy payload should include payment tx", () => {
-		const payload = createBuyPayload({
-			nftId: "nft_test123",
-			paymentTxId: "payment_tx_abc",
-		});
-
-		expect(payload.action).toBe("buy");
-		expect(payload.data.paymentTxId).toBe("payment_tx_abc");
-	});
-
-	test("offer payload should generate offer ID", () => {
-		const payload = createOfferPayload({
-			nftId: "nft_test123",
-			price: { amount: "5.000", currency: "HBD" },
-		});
-
-		expect(payload.action).toBe("offer");
-		expect(payload.data.offerId.startsWith("offer_")).toBe(true);
-	});
 });
 
 describe("Validation", () => {
 	describe("Symbol validation", () => {
 		test("valid symbols should pass", () => {
-			expect(validateSymbol("TEST").valid).toBe(true);
-			expect(validateSymbol("ABC123").valid).toBe(true);
-			expect(validateSymbol("XYZ").valid).toBe(true);
+			expect(symbolSchema.safeParse("TEST").success).toBe(true);
+			expect(symbolSchema.safeParse("ABC123").success).toBe(true);
+			expect(symbolSchema.safeParse("XYZ").success).toBe(true);
 		});
 
 		test("invalid symbols should fail", () => {
-			expect(validateSymbol("AB").valid).toBe(false);
-			expect(validateSymbol("TOOLONGSYMBOL").valid).toBe(false);
-			expect(validateSymbol("test!").valid).toBe(false);
+			expect(symbolSchema.safeParse("AB").success).toBe(false);
+			expect(symbolSchema.safeParse("TOOLONGSYMBOL").success).toBe(false);
+			expect(symbolSchema.safeParse("test!").success).toBe(false);
 		});
 	});
 
 	describe("Price validation", () => {
 		test("valid prices should pass", () => {
-			expect(validatePrice({ amount: "10.000", currency: "HIVE" }).valid).toBe(true);
-			expect(validatePrice({ amount: "1.000", currency: "HBD" }).valid).toBe(true);
+			expect(priceSchema.safeParse({ amount: "10.000", currency: "HIVE" }).success).toBe(true);
+			expect(priceSchema.safeParse({ amount: "1.000", currency: "HBD" }).success).toBe(true);
 		});
 
 		test("invalid prices should fail", () => {
-			expect(validatePrice({ amount: "0", currency: "HIVE" }).valid).toBe(false);
-			expect(validatePrice({ amount: "10", currency: "BTC" as any }).valid).toBe(false);
+			expect(priceSchema.safeParse({ amount: "0", currency: "HIVE" }).success).toBe(false);
+			expect(priceSchema.safeParse({ amount: "10", currency: "BTC" as any }).success).toBe(false);
 		});
 	});
 
@@ -308,12 +293,12 @@ describe("Validation", () => {
 		};
 
 		test("valid input should pass", () => {
-			expect(validateCollectionInput(validInput).valid).toBe(true);
+			expect(createCollectionInputSchema.safeParse(validInput).success).toBe(true);
 		});
 
 		test("missing jsonId should fail", () => {
 			const invalid = { ...validInput, jsonId: "" };
-			expect(validateCollectionInput(invalid).valid).toBe(false);
+			expect(createCollectionInputSchema.safeParse(invalid).success).toBe(false);
 		});
 
 		test("excessive royalty should fail", () => {
@@ -321,7 +306,7 @@ describe("Validation", () => {
 				...validInput,
 				rules: { ...validInput.rules, royaltyPct: 60 },
 			};
-			expect(validateCollectionInput(invalid).valid).toBe(false);
+			expect(createCollectionInputSchema.safeParse(invalid).success).toBe(false);
 		});
 	});
 
@@ -336,17 +321,17 @@ describe("Validation", () => {
 		};
 
 		test("valid input should pass", () => {
-			expect(validateMintInput(validInput).valid).toBe(true);
+			expect(mintInputSchema.safeParse(validInput).success).toBe(true);
 		});
 
 		test("missing origin DNA should fail", () => {
 			const invalid = { ...validInput, collectionOriginDna: "" };
-			expect(validateMintInput(invalid).valid).toBe(false);
+			expect(mintInputSchema.safeParse(invalid).success).toBe(false);
 		});
 
 		test("invalid edition should fail", () => {
 			const invalid = { ...validInput, edition: 0 };
-			expect(validateMintInput(invalid).valid).toBe(false);
+			expect(mintInputSchema.safeParse(invalid).success).toBe(false);
 		});
 	});
 });
@@ -386,5 +371,51 @@ describe("NFT DNA Inheritance", () => {
 		const origin2 = generateOriginDnaSync("col_beta");
 
 		expect(origin1).not.toBe(origin2);
+	});
+});
+
+describe("Buy Action (Multisig)", () => {
+	test("ACTION_BUY should equal 'buy'", () => {
+		expect(ACTION_BUY).toBe("buy");
+	});
+
+	test("MULTISIG_EXPIRATION_MS should be 60 seconds", () => {
+		expect(MULTISIG_EXPIRATION_MS).toBe(60_000);
+	});
+
+	test("MAX_MULTISIG_OPERATIONS should be 4", () => {
+		expect(MAX_MULTISIG_OPERATIONS).toBe(4);
+	});
+
+	test("createBuyPayload should produce valid payload", () => {
+		const data: BuyData = { nftId: "nft_test123" };
+		const payload = createBuyPayload(data);
+
+		expect(payload.protocol).toBe("nftlox_testnet");
+		expect(payload.version).toBe("0.2.1");
+		expect(payload.action).toBe("buy");
+		expect(payload.data).toEqual({ nftId: "nft_test123" });
+	});
+
+	test("createBuyOperation should use nodeAccount in required_auths", () => {
+		const data: BuyData = { nftId: "nft_test123" };
+		const operation = createBuyOperation(data, "indexer-node");
+
+		expect(operation[0]).toBe("custom_json");
+		expect(operation[1].required_auths).toEqual(["indexer-node"]);
+		expect(operation[1].required_posting_auths).toEqual([]);
+		expect(operation[1].id).toBe("nftlox_testnet");
+
+		const parsed = JSON.parse(operation[1].json);
+		expect(parsed.action).toBe("buy");
+		expect(parsed.data.nftId).toBe("nft_test123");
+	});
+
+	test("buy operation payload should be under 8KB", () => {
+		const data: BuyData = { nftId: "nft_test123" };
+		const operation = createBuyOperation(data, "indexer-node");
+		const size = estimateOperationSize(operation);
+
+		expect(size).toBeLessThan(MAX_JSON_SIZE);
 	});
 });

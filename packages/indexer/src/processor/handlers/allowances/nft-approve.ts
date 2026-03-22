@@ -2,11 +2,10 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, NFT_STATUS_BURNED, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
 import { upsertNftAllowance, deleteNftAllowance } from "@/db/queries/allowances.ts";
-import { insertHistoryEvent } from "@/db/queries/history.ts";
-import { requireString, requireBoolean } from "@/utils/validation.ts";
+import { requireString, requireBoolean, requireUsername } from "@/utils/validation.ts";
 
 export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Promise<void> {
-	const spender = requireString(op.data.spender, "spender");
+	const spender = requireUsername(op.data.spender, "spender");
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 	const approved = requireBoolean(op.data.approved, "approved");
 
@@ -23,18 +22,4 @@ export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Pro
 	} else {
 		await deleteNftAllowance(instanceId, txn);
 	}
-
-	await insertHistoryEvent({
-		nftId: instanceId,
-		collectionId: nft.collection_id,
-		eventType: "nft_approve",
-		blockNum: op.blockNum,
-		txId: op.txId,
-		timestamp: op.timestamp,
-		fromAccount: op.signer,
-		toAccount: approved ? spender : null,
-		priceAmount: null,
-		priceCurrency: null,
-		payload: op.data,
-	}, txn);
 }
