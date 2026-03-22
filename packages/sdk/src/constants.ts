@@ -4,8 +4,6 @@ export const PROTOCOL_ID = "nftlox_testnet";
 export const PROTOCOL_VERSION = "0.2.1";
 export const MIN_PROTOCOL_VERSION = "0.2.0";
 export const HASH_VERSION = "v1";
-export const GENESIS_BLOCK = 104_838_076;
-
 // Transaction Limits
 export const MAX_JSON_SIZE = 8000;
 export const MAX_OPERATIONS_PER_TX = 5;

@@ -20,6 +20,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 		return {
 			protocolVersion: PROTOCOL_VERSION,
 			protocolId: config.protocolId,
+			genesisBlock: config.genesisBlock,
 			nodeAccount: config.hiveAccount,
 			nodeUrl: config.nodeUrl || null,
 			multisigEnabled: !!config.activeKey,

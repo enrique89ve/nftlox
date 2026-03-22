@@ -1,4 +1,4 @@
-import { GENESIS_BLOCK, DEFAULT_FEE_ACCOUNT } from "nftlox-sdk";
+import { DEFAULT_FEE_ACCOUNT } from "nftlox-sdk";
 
 const toInt = (val: string | undefined, fallback: number): number => {
 	const parsed = Number(val);
@@ -21,7 +21,7 @@ const toLogLevel = (val: string | undefined, fallback: LogLevel): LogLevel => {
 export const config = {
 	port: toInt(process.env.INDEXER_PORT, 3050),
 	databaseUrl: process.env.DATABASE_URL ?? "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer",
-	genesisBlock: toInt(process.env.GENESIS_BLOCK, GENESIS_BLOCK),
+	genesisBlock: toInt(process.env.GENESIS_BLOCK, 0),
 	protocolId: process.env.PROTOCOL_ID ?? "nftlox_testnet",
 	batchSize: toInt(process.env.BATCH_SIZE, 1000),
 	syncIntervalMs: toInt(process.env.SYNC_INTERVAL_MS, 3000),
@@ -46,6 +46,10 @@ export const config = {
 	multisigRateLimitMax: toInt(process.env.MULTISIG_RATE_LIMIT_MAX, 10),
 	multisigRateLimitWindowMs: toInt(process.env.MULTISIG_RATE_LIMIT_WINDOW_MS, 60_000),
 } as const;
+
+if (!config.genesisBlock) {
+	throw new Error("GENESIS_BLOCK env var is required");
+}
 
 if (config.nodeEnv === "production" && process.env.POSTGRES_PASSWORD === undefined) {
 	throw new Error("POSTGRES_PASSWORD must be set in production");
