@@ -1,7 +1,6 @@
 node_modules/
 *.log
 .env
-bun.lock
 docs/
 docs/**
 OPERATIONS.md
