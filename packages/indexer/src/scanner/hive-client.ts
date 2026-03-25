@@ -21,7 +21,7 @@ function rotateEndpoint(): string {
 
 // ============ JSON-RPC (for head block only) ============
 
-async function rpcCall<T>(endpoint: string, method: string, params: Record<string, unknown>): Promise<T> {
+async function rpcCall<T>(endpoint: string, method: string, params: Record<string, unknown> | unknown[]): Promise<T> {
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), 15_000);
 
@@ -47,7 +47,7 @@ async function rpcCall<T>(endpoint: string, method: string, params: Record<strin
 	return json.result as T;
 }
 
-async function callWithFailover<T>(method: string, params: Record<string, unknown>): Promise<T> {
+async function callWithFailover<T>(method: string, params: Record<string, unknown> | unknown[]): Promise<T> {
 	const maxRetries = config.hiveEndpoints.length * 2;
 
 	for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -166,7 +166,7 @@ export async function getBlockchainHead(): Promise<BlockchainHead> {
 	const result = await callWithFailover<{
 		head_block_number: number;
 		last_irreversible_block_num: number;
-	}>("condenser_api.get_dynamic_global_properties", {});
+	}>("condenser_api.get_dynamic_global_properties", []);
 
 	return {
 		headBlock: result.head_block_number,
