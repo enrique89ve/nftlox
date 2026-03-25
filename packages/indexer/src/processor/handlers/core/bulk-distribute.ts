@@ -17,6 +17,7 @@ import {
 	generateDeterministicAccessKey,
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	validateHiveUsername,
+	ACTION_BULK_DISTRIBUTE,
 } from "nftlox-sdk";
 
 export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -134,7 +135,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				instanceNumber,
 				originalId: null,
 				tags: null,
-				customData: { source: "bulk_distribute", ...(customData ?? {}) },
+				customData: { source: ACTION_BULK_DISTRIBUTE, ...(customData ?? {}) },
 				blockNum: op.blockNum,
 				txId: op.txId,
 				createdAt: op.timestamp,

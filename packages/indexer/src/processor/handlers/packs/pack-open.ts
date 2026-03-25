@@ -30,6 +30,18 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 	const pack = await getPackForProcessing(packId, txn);
 	if (!pack) throw new Error(`Pack not found: ${packId}`);
 
+	// Parse drop_table BEFORE any state mutations to fail fast on corrupted data
+	let dropTable: unknown;
+	try {
+		dropTable = typeof pack.drop_table === "string"
+			? JSON.parse(pack.drop_table) : pack.drop_table;
+	} catch {
+		throw new Error(`Pack ${packId} has corrupted drop_table`);
+	}
+	if (!Array.isArray(dropTable) || dropTable.length === 0) {
+		throw new Error(`Pack ${packId} has empty or invalid drop_table`);
+	}
+
 	// Pre-check balance before deduction (prevents raw Postgres CHECK violation)
 	const currentBalance = await getPackBalance(op.signer, packId, txn);
 	if (currentBalance < quantity) {
@@ -48,10 +60,8 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 	for (let packIndex = 0; packIndex < quantity; packIndex++) {
 		// Deterministic RNG seed using immutable block data
 		const rngSeed = `${op.txId}:${op.blockNum}:${op.signer}:${packId}:${packIndex}`;
-		const dropTable = typeof pack.drop_table === "string"
-			? JSON.parse(pack.drop_table) : pack.drop_table;
 		const selectedSeeds = resolveDropTable(
-			dropTable,
+			dropTable as Array<{ seedId: string; weight: number }>,
 			pack.items_per_pack,
 			rngSeed,
 		);
@@ -60,7 +70,7 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 			const seedId = selectedSeeds[itemIndex]!;
 
 			const seed = await getSeedWithDna(seedId, txn);
-			if (!seed) continue; // Defensive: skip if seed disappeared
+			if (!seed) throw new Error(`Seed ${seedId} not found during pack opening (pack: ${packId})`);
 
 			const distributed = Number(seed.distributed) || 0;
 			const maxReplicas = Number(seed.max_replicas) || 0;

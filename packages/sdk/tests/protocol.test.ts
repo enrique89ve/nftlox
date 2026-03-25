@@ -6,6 +6,10 @@ import {
 	ORIGIN_DNA_LENGTH,
 	INSTANCE_DNA_LENGTH,
 	ACTION_BUY,
+	ACTION_CREATE_COLLECTION,
+	ACTION_MINT,
+	ACTION_LIST,
+	ACTION_BULK_DISTRIBUTE,
 	MULTISIG_EXPIRATION_MS,
 	MAX_MULTISIG_OPERATIONS,
 	generateOriginDna,
@@ -28,6 +32,7 @@ import {
 	mintInputSchema,
 	estimateOperationSize,
 	createMintOperation,
+	createBulkDistributePayload,
 	type CreateCollectionInput,
 	type MintInput,
 	type BuyData,
@@ -170,7 +175,7 @@ describe("Collection Payload", () => {
 
 		expect(payload.protocol).toBe("nftlox_testnet");
 		expect(payload.version).toBe("0.2.1");
-		expect(payload.action).toBe("create_collection");
+		expect(payload.action).toBe(ACTION_CREATE_COLLECTION);
 		expect(payload.data.id.startsWith("col_")).toBe(true);
 		expect(payload.data.originDna.length).toBe(ORIGIN_DNA_LENGTH);
 		expect(payload.data.jsonId).toBe("test_collection_2024");
@@ -193,6 +198,7 @@ describe("Mint Payload", () => {
 		name: "Test NFT #1",
 		description: "A test NFT",
 		imageUrl: "https://example.com/nft1.png",
+		collectionBlock: 90000000,
 	};
 
 	test("should create valid mint payload", () => {
@@ -200,7 +206,7 @@ describe("Mint Payload", () => {
 
 		expect(payload.protocol).toBe("nftlox_testnet");
 		expect(payload.version).toBe("0.2.1");
-		expect(payload.action).toBe("mint");
+		expect(payload.action).toBe(ACTION_MINT);
 		expect(payload.data.id.startsWith("nft_")).toBe(true);
 		expect(payload.data.originDna).toBe("ABCD1234EFGH5678");
 		expect(payload.data.instanceDna.length).toBe(INSTANCE_DNA_LENGTH);
@@ -216,6 +222,15 @@ describe("Mint Payload", () => {
 
 		expect(payload.data.birthBlock).toBe(12345);
 		expect(payload.data.birthTx).toBe("tx_abc123");
+	});
+
+	test("mint payload should include collectionBlock", () => {
+		const payload = createMintPayload({
+			...validInput,
+			collectionBlock: 90000050,
+		});
+
+		expect(payload.data.collectionBlock).toBe(90000050);
 	});
 
 	test("mint payload should be under 8KB", () => {
@@ -240,7 +255,7 @@ describe("Marketplace Payloads", () => {
 			price: { amount: "10.000", currency: "HIVE" },
 		});
 
-		expect(payload.action).toBe("list");
+		expect(payload.action).toBe(ACTION_LIST);
 		expect(payload.data.price.amount).toBe("10.000");
 		expect(payload.data.price.currency).toBe("HIVE");
 	});
@@ -318,6 +333,7 @@ describe("Validation", () => {
 			owner: "user",
 			name: "NFT #1",
 			imageUrl: "https://example.com/nft.png",
+			collectionBlock: 90000000,
 		};
 
 		test("valid input should pass", () => {
@@ -348,6 +364,7 @@ describe("NFT DNA Inheritance", () => {
 			owner: "user1",
 			name: "NFT #1",
 			imageUrl: "https://example.com/1.png",
+			collectionBlock: 90000000,
 		};
 
 		const mint2: MintInput = {
@@ -357,6 +374,7 @@ describe("NFT DNA Inheritance", () => {
 			owner: "user2",
 			name: "NFT #2",
 			imageUrl: "https://example.com/2.png",
+			collectionBlock: 90000000,
 		};
 
 		const payload1 = createMintPayload(mint1);
@@ -371,6 +389,34 @@ describe("NFT DNA Inheritance", () => {
 		const origin2 = generateOriginDnaSync("col_beta");
 
 		expect(origin1).not.toBe(origin2);
+	});
+});
+
+describe("Bulk Distribute Payload", () => {
+	test("should include originBlock per item", () => {
+		const payload = createBulkDistributePayload({
+			to: "bob",
+			items: [
+				{ seedId: "seed_abc", quantity: 3, originBlock: 90000100 },
+				{ seedId: "seed_def", quantity: 1, originBlock: 90000200 },
+			],
+		});
+
+		expect(payload.action).toBe(ACTION_BULK_DISTRIBUTE);
+		expect(payload.data.items[0].originBlock).toBe(90000100);
+		expect(payload.data.items[1].originBlock).toBe(90000200);
+	});
+
+	test("should preserve all item fields", () => {
+		const payload = createBulkDistributePayload({
+			items: [
+				{ seedId: "seed_xyz", quantity: 5, originBlock: 0 },
+			],
+		});
+
+		expect(payload.data.items[0].seedId).toBe("seed_xyz");
+		expect(payload.data.items[0].quantity).toBe(5);
+		expect(payload.data.items[0].originBlock).toBe(0);
 	});
 });
 
@@ -393,7 +439,7 @@ describe("Buy Action (Multisig)", () => {
 
 		expect(payload.protocol).toBe("nftlox_testnet");
 		expect(payload.version).toBe("0.2.1");
-		expect(payload.action).toBe("buy");
+		expect(payload.action).toBe(ACTION_BUY);
 		expect(payload.data).toEqual({ nftId: "nft_test123" });
 	});
 
@@ -407,7 +453,7 @@ describe("Buy Action (Multisig)", () => {
 		expect(operation[1].id).toBe("nftlox_testnet");
 
 		const parsed = JSON.parse(operation[1].json);
-		expect(parsed.action).toBe("buy");
+		expect(parsed.action).toBe(ACTION_BUY);
 		expect(parsed.data.nftId).toBe("nft_test123");
 	});
 

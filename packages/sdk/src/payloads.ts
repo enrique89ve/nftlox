@@ -165,6 +165,7 @@ export function createMintPayload(input: MintInput): ProtocolPayload<NFTData> {
 			birthBlock: input.birthBlock ?? 0,
 			birthTx: input.birthTx ?? "",
 			mintedBy: input.owner,
+			collectionBlock: input.collectionBlock,
 
 			metadata: {
 				name: input.name,
@@ -223,6 +224,7 @@ export function createBulkDistributePayload(
 			items: input.items.map(item => ({
 				seedId: item.seedId,
 				quantity: item.quantity,
+				originBlock: item.originBlock,
 			})),
 			...(input.imageOverrides && { imageOverrides: input.imageOverrides }),
 			...(input.data && { data: input.data }),
@@ -725,6 +727,7 @@ export interface DeterministicMintInput {
 	maxReplicas?: number;
 	birthBlock?: number;
 	birthTx?: string;
+	collectionBlock?: number;
 }
 
 /**
@@ -758,6 +761,7 @@ export function createDeterministicMintPayload(
 			birthBlock: input.birthBlock ?? 0,
 			birthTx: input.birthTx ?? "",
 			mintedBy: input.owner,
+			...(input.collectionBlock !== undefined && { collectionBlock: input.collectionBlock }),
 			metadata: {
 				name: input.name,
 				description: input.description,

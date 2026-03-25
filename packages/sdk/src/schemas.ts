@@ -115,6 +115,7 @@ export const mintInputSchema = z.object({
 	birthTx: z.string().optional(),
 	tags: z.array(z.string()).optional(),
 	data: z.record(z.string(), z.unknown()).optional(),
+	collectionBlock: z.number().int().nonnegative("collectionBlock must be a non-negative integer"),
 });
 export type MintInput = z.infer<typeof mintInputSchema>;
 
@@ -178,6 +179,7 @@ export type PackOpenInput = z.infer<typeof packOpenInputSchema>;
 export const bulkDistributeItemSchema = z.object({
 	seedId: z.string().min(1, "seedId is required"),
 	quantity: z.number().int().min(1, "Quantity must be positive"),
+	originBlock: z.number().int().nonnegative("originBlock must be a non-negative integer"),
 });
 
 export const bulkDistributeInputSchema = z.object({

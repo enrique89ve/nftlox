@@ -25,8 +25,8 @@ function parseDropTable(raw: unknown): DropEntry[] {
 		if (typeof e.seedId !== "string" || e.seedId === "") {
 			throw new Error(`Drop table entry ${i}: seedId is required`);
 		}
-		if (typeof e.weight !== "number" || e.weight < 1) {
-			throw new Error(`Drop table entry ${i}: weight must be >= 1`);
+		if (typeof e.weight !== "number" || !Number.isFinite(e.weight) || e.weight < 1 || e.weight > 1_000_000) {
+			throw new Error(`Drop table entry ${i}: weight must be between 1 and 1,000,000`);
 		}
 		return { seedId: e.seedId, weight: e.weight };
 	});

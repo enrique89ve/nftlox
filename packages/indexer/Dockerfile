@@ -1,12 +1,17 @@
 FROM oven/bun:1.3-debian
 WORKDIR /app
 
-# Copy pre-installed dependencies from host
-# Run `bun install` in monorepo root before building
-COPY package.json ./
-COPY node_modules/ node_modules/
-COPY packages/sdk/ packages/sdk/
-COPY packages/indexer/ packages/indexer/
+# Copy lockfile and package.json files first to cache dependencies
+COPY package.json bun.lock ./
+COPY packages/sdk/package.json ./packages/sdk/
+COPY packages/indexer/package.json ./packages/indexer/
+
+# Install dependencies
+RUN bun install --frozen-lockfile
+
+# Copy the rest of the source code
+COPY packages/sdk/ ./packages/sdk/
+COPY packages/indexer/ ./packages/indexer/
 
 WORKDIR /app/packages/indexer
 

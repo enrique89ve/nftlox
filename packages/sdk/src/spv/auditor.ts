@@ -6,6 +6,7 @@ import {
 	DEFAULT_HIVE_TIMEOUT_MS,
 	DEFAULT_AUDIT_SAMPLE_SIZE,
 } from "./constants.ts";
+import { ACTION_PACK_OPEN } from "../constants.ts";
 import { createDefaultL1Config } from "./hive-l1-client.ts";
 import { verifyPackOpen } from "./verifiers.ts";
 import type {
@@ -78,7 +79,7 @@ export async function fetchRecentPackOpenEvents(
 		}>;
 
 		for (const entry of history) {
-			if (entry.event_type === "pack_open") {
+			if (entry.event_type === ACTION_PACK_OPEN) {
 				events.push({
 					txId: entry.tx_id,
 					blockNum: entry.block_num,

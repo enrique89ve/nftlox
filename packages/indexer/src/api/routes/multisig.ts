@@ -3,13 +3,16 @@ import { sql } from "@/db/client.ts";
 import { config } from "@/config.ts";
 import { processMultisigRequest } from "@/api/services/multisig-service.ts";
 import { createMultisigRateLimiter } from "@/api/services/multisig-rate-limiter.ts";
+import { createMultisigNftLock } from "@/api/services/multisig-nft-lock.ts";
 import { getNftWithCollectionRules, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
-import { calculatePaymentSplit } from "nftlox-sdk";
+import { calculatePaymentSplit, MULTISIG_EXPIRATION_MS } from "nftlox-sdk";
 
 const rateLimiter = createMultisigRateLimiter(
 	config.multisigRateLimitMax,
 	config.multisigRateLimitWindowMs,
 );
+
+const nftLock = createMultisigNftLock();
 
 export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 
@@ -75,7 +78,26 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			}
 		}
 
+		// Acquire per-NFT lock to prevent two buyers co-signing the same NFT
+		const nftId = extractNftIdFromBody(body);
+		if (nftId && buyer) {
+			const lockResult = nftLock.acquire(nftId, buyer, MULTISIG_EXPIRATION_MS);
+			if (!lockResult.acquired) {
+				set.status = 409;
+				return {
+					ok: false,
+					code: "NFT_LOCKED",
+					message: `NFT is being purchased by another buyer. Retry after ${lockResult.retryAfterMs}ms`,
+				};
+			}
+		}
+
 		const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId, config.activeKey);
+
+		// Release lock on validation failure so the NFT is available again
+		if (!result.ok && nftId) {
+			nftLock.release(nftId);
+		}
 
 		if (!result.ok) {
 			set.status = 400;
@@ -83,6 +105,18 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		}
 		return result;
 	}, {
+		body: t.Object({
+			buyer: t.String({ description: "Hive username of the buyer" }),
+			nftId: t.String({ description: "ID of the NFT being purchased" }),
+			transaction: t.Object({
+				ref_block_num: t.Number(),
+				ref_block_prefix: t.Number(),
+				expiration: t.String(),
+				operations: t.Array(t.Any()),
+				extensions: t.Optional(t.Array(t.Any())),
+				signatures: t.Array(t.String()),
+			}, { description: "Unsigned Hive transaction object" }),
+		}),
 		detail: {
 			summary: "Multisig-sign a buy transaction",
 			description: "Validates NFT state, payment split, and signs the transaction with the node's active key",
@@ -94,4 +128,11 @@ function extractBuyerFromBody(body: unknown): string {
 	if (!body || typeof body !== "object" || Array.isArray(body)) return "";
 	const record = body as Record<string, unknown>;
 	return typeof record.buyer === "string" ? record.buyer : "";
+}
+
+/** Safely extract `nftId` string from an unvalidated request body. */
+function extractNftIdFromBody(body: unknown): string {
+	if (!body || typeof body !== "object" || Array.isArray(body)) return "";
+	const record = body as Record<string, unknown>;
+	return typeof record.nftId === "string" ? record.nftId : "";
 }

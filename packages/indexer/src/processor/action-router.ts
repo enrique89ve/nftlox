@@ -1,7 +1,32 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { createLogger } from "@/utils/logger.ts";
-import { insertInvalidOperation } from "@/db/queries/sync.ts";
+import { insertInvalidOperation, insertOrphanedBuy } from "@/db/queries/sync.ts";
+import {
+	ACTION_BUY,
+	ACTION_PACK_BUY,
+	ACTION_CREATE_COLLECTION,
+	ACTION_MINT,
+	ACTION_BULK_DISTRIBUTE,
+	ACTION_TRANSFER,
+	ACTION_BURN,
+	ACTION_REPLICATE,
+	ACTION_SET_DATA,
+	ACTION_LIST,
+	ACTION_UNLIST,
+	ACTION_PACK_CREATE,
+	ACTION_PACK_TRANSFER,
+	ACTION_PACK_OPEN,
+	ACTION_NFT_APPROVE,
+	ACTION_NFT_APPROVE_ALL,
+	ACTION_NFT_TRANSFER_FROM,
+	ACTION_PACK_APPROVE,
+	ACTION_PACK_TRANSFER_FROM,
+	ACTION_DATA_OPERATOR_APPROVE,
+	ACTION_SET_DATA_FROM,
+	ACTION_NFT_LEND,
+	ACTION_NFT_RETURN,
+} from "nftlox-sdk";
 
 // Core
 import { handleCreateCollection } from "./handlers/core/create-collection.ts";
@@ -45,69 +70,107 @@ type Handler = (op: ParsedOperation, txn: Queryable) => Promise<void>;
 
 const handlers: Record<string, Handler> = {
 	// Core
-	create_collection: handleCreateCollection,
-	mint: handleMint,
-	bulk_distribute: handleBulkDistribute,
-	transfer: handleTransfer,
-	burn: handleBurn,
-	replicate: handleReplicate,
-	set_data: handleSetData,
+	[ACTION_CREATE_COLLECTION]: handleCreateCollection,
+	[ACTION_MINT]: handleMint,
+	[ACTION_BULK_DISTRIBUTE]: handleBulkDistribute,
+	[ACTION_TRANSFER]: handleTransfer,
+	[ACTION_BURN]: handleBurn,
+	[ACTION_REPLICATE]: handleReplicate,
+	[ACTION_SET_DATA]: handleSetData,
 
 	// Marketplace
-	list: handleList,
-	unlist: handleUnlist,
-	buy: handleBuy,
+	[ACTION_LIST]: handleList,
+	[ACTION_UNLIST]: handleUnlist,
+	[ACTION_BUY]: handleBuy,
 
 	// Packs
-	pack_create: handlePackCreate,
-	pack_buy: handlePackBuy,
-	pack_transfer: handlePackTransfer,
-	pack_open: handlePackOpen,
+	[ACTION_PACK_CREATE]: handlePackCreate,
+	[ACTION_PACK_BUY]: handlePackBuy,
+	[ACTION_PACK_TRANSFER]: handlePackTransfer,
+	[ACTION_PACK_OPEN]: handlePackOpen,
 
 	// Allowances
-	nft_approve: handleNftApprove,
-	nft_approve_all: handleNftApproveAll,
-	nft_transfer_from: handleNftTransferFrom,
-	pack_approve: handlePackApprove,
-	pack_transfer_from: handlePackTransferFrom,
+	[ACTION_NFT_APPROVE]: handleNftApprove,
+	[ACTION_NFT_APPROVE_ALL]: handleNftApproveAll,
+	[ACTION_NFT_TRANSFER_FROM]: handleNftTransferFrom,
+	[ACTION_PACK_APPROVE]: handlePackApprove,
+	[ACTION_PACK_TRANSFER_FROM]: handlePackTransferFrom,
 
 	// Data Operators
-	data_operator_approve: handleDataOperatorApprove,
-	set_data_from: handleSetDataFrom,
+	[ACTION_DATA_OPERATOR_APPROVE]: handleDataOperatorApprove,
+	[ACTION_SET_DATA_FROM]: handleSetDataFrom,
 
 	// Lending
-	nft_lend: handleNftLend,
-	nft_return: handleNftReturn,
+	[ACTION_NFT_LEND]: handleNftLend,
+	[ACTION_NFT_RETURN]: handleNftReturn,
 };
 
+/**
+ * Routes an operation to its handler. This function is INFALLIBLE — it never throws.
+ * If a handler fails, the error is recorded in invalid_operations and processing continues.
+ * This guarantees that a single bad operation can never stall the sync loop or cause block gaps.
+ * Pattern inspired by nft-tracker's `process_action` EXCEPTION WHEN OTHERS handler.
+ */
 export async function routeOperation(op: ParsedOperation, txn: Queryable): Promise<void> {
-	const handler = handlers[op.action];
-
-	if (!handler) {
-		await insertInvalidOperation({
-			blockNum: op.blockNum,
-			txId: op.txId,
-			signer: op.signer,
-			action: op.action,
-			reason: `Unknown action: ${op.action}`,
-			rawPayload: op.data,
-		}, txn);
-		return;
-	}
-
 	try {
-		await handler(op, txn);
-	} catch (err) {
-		const reason = err instanceof Error ? err.message : String(err);
-		log.warn(`Handler failed: ${op.action}`, { blockNum: op.blockNum, txId: op.txId, reason });
+		const handler = handlers[op.action];
 
-		await insertInvalidOperation({
+		if (!handler) {
+			await insertInvalidOperation({
+				blockNum: op.blockNum,
+				txId: op.txId,
+				signer: op.signer,
+				action: op.action,
+				reason: `Unknown action: ${op.action}`,
+				rawPayload: op.data,
+			}, txn);
+			return;
+		}
+
+		try {
+			await handler(op, txn);
+		} catch (err) {
+			const reason = err instanceof Error ? err.message : String(err);
+			log.warn(`Handler failed: ${op.action}`, { blockNum: op.blockNum, txId: op.txId, reason });
+
+			await insertInvalidOperation({
+				blockNum: op.blockNum,
+				txId: op.txId,
+				signer: op.signer,
+				action: op.action,
+				reason,
+				rawPayload: op.data,
+			}, txn);
+
+			// Flag failed buy/pack_buy operations that had HIVE transfers as orphaned buys.
+			// These represent cases where funds moved on-chain but NFT ownership was NOT updated.
+			const isBuyAction = op.action === ACTION_BUY || op.action === ACTION_PACK_BUY;
+			const transfers = op.pairedTransfers;
+			const firstTransfer = transfers?.[0];
+			if (isBuyAction && transfers && transfers.length > 0 && firstTransfer) {
+				log.error("ORPHANED BUY DETECTED — funds transferred but ownership NOT updated", {
+					blockNum: op.blockNum,
+					txId: op.txId,
+					transfers,
+				});
+				await insertOrphanedBuy({
+					blockNum: op.blockNum,
+					txId: op.txId,
+					buyer: firstTransfer.from,
+					nftId: typeof op.data.nftId === "string" ? op.data.nftId : null,
+					reason,
+					transfers,
+				}, txn);
+			}
+		}
+	} catch (fatal) {
+		// Last-resort catch: even insertInvalidOperation/insertOrphanedBuy failed.
+		// Log and continue — never let a single operation abort the entire batch.
+		log.error("FATAL: routeOperation could not record error — operation skipped silently", {
 			blockNum: op.blockNum,
 			txId: op.txId,
-			signer: op.signer,
 			action: op.action,
-			reason,
-			rawPayload: op.data,
-		}, txn);
+			error: fatal instanceof Error ? fatal.message : String(fatal),
+		});
 	}
 }

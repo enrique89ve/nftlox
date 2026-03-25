@@ -19,7 +19,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		jsonId: optionalString(d.jsonId),
 		name: requireString(d.name, "name"),
 		symbol: requireString(d.symbol, "symbol"),
-		creator: optionalString(d.creator) ?? op.signer,
+		creator: op.signer,
 		totalPotential: optionalNumber(d.totalPotential) ?? 0,
 		originDna: optionalString(d.originDna),
 		description: optionalString(metadata.description),

@@ -51,6 +51,14 @@ if (!config.genesisBlock) {
 	throw new Error("GENESIS_BLOCK env var is required");
 }
 
+if (config.hiveEndpoints.length === 0) {
+	throw new Error("HIVE_ENDPOINTS must contain at least one valid URL");
+}
+
+if (!config.hiveAccount) {
+	throw new Error("HIVE_ACCOUNT must be a valid non-empty account name");
+}
+
 if (config.nodeEnv === "production" && process.env.POSTGRES_PASSWORD === undefined) {
 	throw new Error("POSTGRES_PASSWORD must be set in production");
 }

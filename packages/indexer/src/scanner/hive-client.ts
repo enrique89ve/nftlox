@@ -8,7 +8,8 @@ const log = createLogger("hive-client");
 let currentEndpointIndex = 0;
 
 function getCurrentEndpoint(): string {
-	return config.hiveEndpoints[currentEndpointIndex] ?? config.hiveEndpoints[0]!;
+	// config.ts validates hiveEndpoints is non-empty at startup
+	return config.hiveEndpoints[currentEndpointIndex] ?? config.hiveEndpoints[0] ?? "";
 }
 
 function rotateEndpoint(): string {
@@ -156,6 +157,23 @@ async function hafahWithFailover(fromBlock: number, toBlock: number, operationBe
 
 // ============ PUBLIC API ============
 
+export interface BlockchainHead {
+	readonly headBlock: number;
+	readonly irreversibleBlock: number;
+}
+
+export async function getBlockchainHead(): Promise<BlockchainHead> {
+	const result = await callWithFailover<{
+		head_block_number: number;
+		last_irreversible_block_num: number;
+	}>("condenser_api.get_dynamic_global_properties", {});
+
+	return {
+		headBlock: result.head_block_number,
+		irreversibleBlock: result.last_irreversible_block_num,
+	};
+}
+
 export async function getHeadBlockNum(): Promise<number> {
 	// Use HafAH headblock endpoint (faster + more reliable than JSON-RPC)
 	const maxRetries = config.hiveEndpoints.length;
@@ -274,7 +292,7 @@ function parseTransferAmount(raw: unknown): { amount: number; currency: string }
 export async function getTransfersInTransaction(txId: string): Promise<TransferDetail[]> {
 	const result = await callWithFailover<{
 		operations: Array<{ type: string; value: Record<string, unknown> }>;
-	}>("account_history_api.get_transaction", { id: txId, include_reversible: true });
+	}>("account_history_api.get_transaction", { id: txId, include_reversible: false });
 
 	const transfers: TransferDetail[] = [];
 	for (const op of result.operations) {

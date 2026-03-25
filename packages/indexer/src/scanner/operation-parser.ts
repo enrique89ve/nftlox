@@ -111,8 +111,10 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParsedOperation[
 
 		const signer =
 			value.required_auths[0] ??
-			value.required_posting_auths[0] ??
-			"unknown";
+			value.required_posting_auths[0];
+
+		// Reject operations without a valid signer — cannot authorize anything
+		if (!signer) continue;
 
 		ops.push({
 			blockNum: hafOp.block,

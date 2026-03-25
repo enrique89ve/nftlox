@@ -84,6 +84,7 @@ export interface NFTData {
 	birthBlock: number;
 	birthTx: string;
 	mintedBy: string;
+	collectionBlock?: number;
 
 	metadata: NFTMetadata;
 	maxReplicas: number;
@@ -110,6 +111,7 @@ export interface ReplicaData extends SeedProvenance {
 export interface BulkDistributeItem {
 	seedId: string;
 	quantity: number;
+	originBlock: number;
 }
 
 export interface BulkDistributeData {

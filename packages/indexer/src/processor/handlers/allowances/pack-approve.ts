@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getPackForProcessing } from "@/db/queries/packs.ts";
+import { getPackForProcessing, getPackBalance } from "@/db/queries/packs.ts";
 import { upsertPackAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireNumber, requireBoolean, requireUsername } from "@/utils/validation.ts";
 
@@ -16,6 +16,11 @@ export async function handlePackApprove(op: ParsedOperation, txn: Queryable): Pr
 
 	const quantity = approved ? requireNumber(op.data.quantity, "quantity") : 0;
 	if (approved && quantity < 1) throw new Error("Quantity must be positive when approving");
+
+	if (approved) {
+		const balance = await getPackBalance(op.signer, packId, txn);
+		if (balance < 1) throw new Error(`Signer ${op.signer} has no balance for pack ${packId}`);
+	}
 
 	await upsertPackAllowance(
 		op.signer, spender, packId, quantity,

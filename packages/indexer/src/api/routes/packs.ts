@@ -17,7 +17,12 @@ export const packsRoutes = new Elysia({ prefix: "/api/packs", tags: ["Packs"] })
 	})
 	.get("/:id", async ({ params }) => {
 		const pack = await getPackById(params.id);
-		if (!pack) return new Response("Pack not found", { status: 404 });
+		if (!pack) {
+			return new Response(JSON.stringify({ error: "Pack not found" }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
 		return pack;
 	}, {
 		params: t.Object({ id: t.String() }),

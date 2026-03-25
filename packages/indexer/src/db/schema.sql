@@ -123,6 +123,22 @@ CREATE INDEX idx_nfts_listed_marketplace ON nfts(listing_marketplace)
 
 CREATE INDEX idx_invalid_block ON invalid_operations(block_num);
 
+-- Orphaned buys: failed buy operations where HIVE transfers executed but NFT ownership was NOT updated.
+-- Operator reviews via direct SQL: SELECT * FROM orphaned_buys ORDER BY created_at DESC;
+CREATE TABLE orphaned_buys (
+	id BIGSERIAL PRIMARY KEY,
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	buyer TEXT NOT NULL,
+	nft_id TEXT,
+	reason TEXT NOT NULL,
+	transfers JSONB NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_orphaned_buys_buyer ON orphaned_buys(buyer);
+CREATE INDEX idx_orphaned_buys_tx ON orphaned_buys(tx_id);
+
 -- ============ PACK TABLES ============
 
 CREATE TYPE pack_status AS ENUM ('active', 'paused', 'depleted');

@@ -4,3 +4,4 @@ node_modules/
 bun.lock
 docs/
 docs/**
+OPERATIONS.md

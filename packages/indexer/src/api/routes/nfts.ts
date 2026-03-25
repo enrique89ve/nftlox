@@ -4,7 +4,12 @@ import { getNftById, queryNfts } from "@/db/queries/nfts.ts";
 export const nftsRoutes = new Elysia({ prefix: "/api/nfts", tags: ["NFTs"] })
 	.get("/:id", async ({ params }) => {
 		const row = await getNftById(params.id);
-		if (!row) return new Response(JSON.stringify({ error: "NFT not found" }), { status: 404 });
+		if (!row) {
+			return new Response(JSON.stringify({ error: "NFT not found" }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
 		return row;
 	}, {
 		params: t.Object({ id: t.String() }),

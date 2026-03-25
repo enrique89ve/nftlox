@@ -1,7 +1,7 @@
 import { config } from "@/config.ts";
 import { withTransaction } from "@/db/client.ts";
 import { getLastBlock, updateLastBlock } from "@/db/queries/sync.ts";
-import { getHeadBlockNum, getCustomJsonInRange, getHafAHBlockRange, getTransfersInTransaction } from "./hive-client.ts";
+import { getBlockchainHead, getCustomJsonInRange, getHafAHBlockRange, getTransfersInTransaction } from "./hive-client.ts";
 import { ACTION_BUY, ACTION_PACK_BUY } from "nftlox-sdk";
 import { parseHafAHOperations } from "./operation-parser.ts";
 import { routeOperation } from "@/processor/action-router.ts";
@@ -12,6 +12,7 @@ const log = createLogger("sync");
 
 const MASSIVE_THRESHOLD = 100;
 const SYNC_TOLERANCE = 10;
+const MAX_CONTINUITY_FAILURES = 3;
 
 let running = false;
 
@@ -61,10 +62,15 @@ export async function syncCycle(): Promise<void> {
 		log.info("Initialized from genesis block", { genesisBlock: config.genesisBlock });
 	}
 
-	const headBlock = await getHeadBlockNum();
+	const chain = await getBlockchainHead();
+
+	// Process only up to the last irreversible block to prevent reorg-induced state divergence.
+	// This adds ~45s delay (Hive finality = ~15 blocks × 3s) but guarantees all processed
+	// operations are final and cannot be reverted by a chain reorganization.
+	const headBlock = chain.irreversibleBlock;
 	const behind = headBlock - lastBlock;
 
-	updateSyncProgress(lastBlock, headBlock);
+	updateSyncProgress(lastBlock, chain.headBlock);
 
 	if (behind <= SYNC_TOLERANCE) {
 		setSynced(true);
@@ -90,10 +96,32 @@ export async function syncCycle(): Promise<void> {
 	let current = lastBlock + 1;
 	let totalOps = 0;
 	let totalBlocks = 0;
+	let continuityFailures = 0;
 	const startTime = Date.now();
 
 	while (current <= headBlock && running) {
 		const rangeEnd = Math.min(current + blockRange - 1, headBlock);
+
+		// --- Block continuity assertion ---
+		// Verify the DB cursor matches our in-memory cursor before each batch.
+		// Catches any divergence between memory and persisted state.
+		const dbLastBlock = await getLastBlock();
+		const expectedStart = dbLastBlock + 1;
+		if (current !== expectedStart) {
+			continuityFailures++;
+			log.error("BLOCK CONTINUITY VIOLATION — resetting cursor from DB", {
+				expected: expectedStart,
+				actual: current,
+				dbLastBlock,
+				attempt: continuityFailures,
+			});
+			if (continuityFailures >= MAX_CONTINUITY_FAILURES) {
+				throw new Error(`Block continuity failed ${continuityFailures} times — aborting cycle`);
+			}
+			current = expectedStart;
+			continue;
+		}
+		continuityFailures = 0;
 
 		// Fetch custom_json ops in this range via HafAH (pre-filtered by protocol ID)
 		const hafOps = await getCustomJsonInRange(current, rangeEnd, config.protocolId, behind);
@@ -109,7 +137,9 @@ export async function syncCycle(): Promise<void> {
 			op.pairedTransfers = await getTransfersInTransaction(op.txId);
 		}
 
-		// Process operations in a transaction
+		// Process operations in a transaction.
+		// routeOperation is infallible — individual handler errors are caught and recorded
+		// as invalid_operations, so a single bad op never aborts the batch.
 		if (ops.length > 0) {
 			await withTransaction(async (txn) => {
 				if (isMassive) {
@@ -141,19 +171,17 @@ export async function syncCycle(): Promise<void> {
 
 		// Progress log every ~10k blocks
 		if (isMassive && totalBlocks % 10000 < blockRange) {
+			const elapsedSec = Math.max((Date.now() - startTime) / 1000, 0.001);
 			const pct = ((rangeEnd - lastBlock) / behind * 100).toFixed(2);
-			const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-			const bps = (totalBlocks / ((Date.now() - startTime) / 1000)).toFixed(0);
+			const bps = Math.round(totalBlocks / elapsedSec);
 			const remaining = headBlock - rangeEnd;
-			const eta = Number(bps) > 0
-				? Math.ceil(remaining / Number(bps) / 60)
-				: 0;
+			const eta = bps > 0 ? Math.ceil(remaining / bps / 60) : 0;
 			log.info("Progress", {
 				block: rangeEnd,
 				scanned: totalBlocks,
 				protocolOps: totalOps,
 				pct: `${pct}%`,
-				elapsed: `${elapsed}s`,
+				elapsed: `${elapsedSec.toFixed(1)}s`,
 				blocksPerSec: bps,
 				etaMinutes: eta,
 			});

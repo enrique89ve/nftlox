@@ -8,6 +8,16 @@ import {
 	generateDeterministicAccessKey,
 	extractInstanceNumber,
 } from "../dna.ts";
+import {
+	ACTION_PACK_OPEN,
+	ACTION_TRANSFER,
+	ACTION_LIST,
+	ACTION_UNLIST,
+	ACTION_BURN,
+	ACTION_REPLICATE,
+	ACTION_NFT_TRANSFER_FROM,
+	ACTION_SET_DATA,
+} from "../constants.ts";
 import { buildRngSeed } from "./constants.ts";
 import {
 	fetchTransaction,
@@ -130,7 +140,7 @@ export async function verifyPackOpen(
 			});
 		}
 
-		if (l1Op.action !== "pack_open") {
+		if (l1Op.action !== ACTION_PACK_OPEN) {
 			return buildResult("mismatch", startTime, {
 				txId: params.txId,
 				blockNum: params.blockNum,
@@ -212,7 +222,7 @@ export async function verifyPackOpen(
 		}>;
 
 		const packOpenEvent = historyData.find(
-			(e) => e.event_type === "pack_open" && e.tx_id === params.txId,
+			(e) => e.event_type === ACTION_PACK_OPEN && e.tx_id === params.txId,
 		);
 
 		const reportedNfts = packOpenEvent?.payload?.mintedNfts ?? [];
@@ -386,8 +396,8 @@ export async function verifyOperationOnChain(
 
 // Actions where the signer is the "from" (sender/actor)
 const SIGNER_IS_FROM_ACTIONS = new Set([
-	"transfer", "list", "unlist", "burn", "replicate",
-	"nft_transfer_from", "set_data",
+	ACTION_TRANSFER, ACTION_LIST, ACTION_UNLIST, ACTION_BURN, ACTION_REPLICATE,
+	ACTION_NFT_TRANSFER_FROM, ACTION_SET_DATA,
 ]);
 
 /**

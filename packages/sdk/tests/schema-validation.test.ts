@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test";
-import { priceSchema, txIdSchema, listInputSchema } from "../src/schemas";
+import { priceSchema, txIdSchema, listInputSchema, mintInputSchema, bulkDistributeItemSchema } from "../src/schemas";
 
 // ============ priceSchema ============
 
@@ -199,5 +199,81 @@ describe("listInputSchema expiresAt", () => {
 	test("accepts listing without expiresAt (optional)", () => {
 		const result = listInputSchema.safeParse(validBaseInput);
 		expect(result.success).toBe(true);
+	});
+});
+
+// ============ mintInputSchema.collectionBlock ============
+
+describe("mintInputSchema collectionBlock", () => {
+	const validMintInput = {
+		collectionId: "col_test",
+		collectionOriginDna: "ORIGIN1234567890",
+		edition: 1,
+		owner: "testuser",
+		name: "NFT #1",
+		imageUrl: "https://example.com/nft.png",
+		collectionBlock: 90000000,
+	};
+
+	test("accepts valid collectionBlock", () => {
+		const result = mintInputSchema.safeParse(validMintInput);
+		expect(result.success).toBe(true);
+	});
+
+	test("accepts collectionBlock of 0", () => {
+		const result = mintInputSchema.safeParse({ ...validMintInput, collectionBlock: 0 });
+		expect(result.success).toBe(true);
+	});
+
+	test("rejects negative collectionBlock", () => {
+		const result = mintInputSchema.safeParse({ ...validMintInput, collectionBlock: -1 });
+		expect(result.success).toBe(false);
+	});
+
+	test("rejects float collectionBlock", () => {
+		const result = mintInputSchema.safeParse({ ...validMintInput, collectionBlock: 1.5 });
+		expect(result.success).toBe(false);
+	});
+
+	test("rejects missing collectionBlock", () => {
+		const { collectionBlock, ...withoutBlock } = validMintInput;
+		const result = mintInputSchema.safeParse(withoutBlock);
+		expect(result.success).toBe(false);
+	});
+});
+
+// ============ bulkDistributeItemSchema.originBlock ============
+
+describe("bulkDistributeItemSchema originBlock", () => {
+	const validItem = {
+		seedId: "seed_abc",
+		quantity: 3,
+		originBlock: 90000100,
+	};
+
+	test("accepts valid originBlock", () => {
+		const result = bulkDistributeItemSchema.safeParse(validItem);
+		expect(result.success).toBe(true);
+	});
+
+	test("accepts originBlock of 0", () => {
+		const result = bulkDistributeItemSchema.safeParse({ ...validItem, originBlock: 0 });
+		expect(result.success).toBe(true);
+	});
+
+	test("rejects negative originBlock", () => {
+		const result = bulkDistributeItemSchema.safeParse({ ...validItem, originBlock: -1 });
+		expect(result.success).toBe(false);
+	});
+
+	test("rejects float originBlock", () => {
+		const result = bulkDistributeItemSchema.safeParse({ ...validItem, originBlock: 1.5 });
+		expect(result.success).toBe(false);
+	});
+
+	test("rejects missing originBlock", () => {
+		const { originBlock, ...withoutBlock } = validItem;
+		const result = bulkDistributeItemSchema.safeParse(withoutBlock);
+		expect(result.success).toBe(false);
 	});
 });

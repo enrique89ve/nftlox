@@ -19,7 +19,12 @@ export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: 
 	})
 	.get("/:id", async ({ params }) => {
 		const row = await getCollectionById(params.id);
-		if (!row) return new Response(JSON.stringify({ error: "Collection not found" }), { status: 404 });
+		if (!row) {
+			return new Response(JSON.stringify({ error: "Collection not found" }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
 		return row;
 	}, {
 		params: t.Object({ id: t.String() }),

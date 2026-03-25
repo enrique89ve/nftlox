@@ -32,7 +32,7 @@ export async function handlePackBuy(op: ParsedOperation, txn: Queryable): Promis
 		}
 
 		const pricePerUnit = parseFloat(pack.price_amount);
-		if (isNaN(pricePerUnit)) {
+		if (Number.isNaN(pricePerUnit) || pricePerUnit <= 0 || !Number.isFinite(pricePerUnit)) {
 			throw new Error(`Pack has invalid price: ${pack.price_amount}`);
 		}
 

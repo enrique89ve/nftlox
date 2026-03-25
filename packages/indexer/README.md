@@ -168,6 +168,63 @@ Copy `.env.example` to `.env` to customize (defaults work out of the box):
 | `MULTISIG_RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window in milliseconds |
 | `HEALTH_PORT` | 0 | Separate health check port (0 = disabled) |
 
+## Production Deployment
+
+Two deployment modes are available. Both use the same base `docker-compose.yml`.
+
+### Option A: PaaS (Dokploy / Coolify / Traefik)
+
+For platforms that provide their own reverse proxy with automatic TLS:
+
+```bash
+docker compose up -d
+```
+
+The platform's Traefik/Caddy handles SSL certificates, routing, and HTTPS redirection. The indexer exposes port `3050` directly and the platform proxies traffic to it.
+
+### Option B: Standalone with Nginx
+
+For bare-metal or VPS deployments without a PaaS proxy:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
+```
+
+This adds an Nginx reverse proxy container that provides:
+- **Gzip compression** for JSON responses
+- **Rate limiting** at infrastructure level (30 req/s API, 2 req/s multisig)
+- **Request buffering** to protect the indexer from slow clients
+- **Security headers** (X-Frame-Options, X-Content-Type-Options, Referrer-Policy)
+- **Health endpoint** on port `8081` (separate from public traffic)
+
+#### Enabling TLS
+
+1. Place your certificates in `nginx/ssl/` (or set `SSL_CERT_PATH` in `.env`):
+   ```
+   nginx/ssl/fullchain.pem
+   nginx/ssl/privkey.pem
+   ```
+2. Uncomment the HTTPS server block in `nginx/nginx.conf`
+3. Uncomment the SSL port in `docker-compose.nginx.yml`
+4. Restart: `docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d`
+
+#### Nginx environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROXY_PORT` | 80 | HTTP port |
+| `PROXY_SSL_PORT` | 443 | HTTPS port (when TLS enabled) |
+| `SSL_CERT_PATH` | ./nginx/ssl | Path to SSL certificates |
+
+### Development
+
+For local development, only PostgreSQL runs in Docker:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+bun run dev
+```
+
 ## Security
 
 - **Rate limiting**: 1000 requests/min per IP (CF-Connecting-IP > X-Real-IP > X-Forwarded-For)

@@ -36,10 +36,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    network_mode: host
+    ports:
+      - "${INDEXER_PORT:-3050}:3050"
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-nftlox}:${POSTGRES_PASSWORD:-nftlox_dev}@127.0.0.1:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-nftlox_indexer}
-      INDEXER_PORT: ${INDEXER_PORT:-3050}
+      DATABASE_URL: postgres://${POSTGRES_USER:-nftlox}:${POSTGRES_PASSWORD:-nftlox_dev}@postgres:5432/${POSTGRES_DB:-nftlox_indexer}
+      INDEXER_PORT: 3050
       GENESIS_BLOCK: ${GENESIS_BLOCK:-103484900}
       PROTOCOL_ID: ${PROTOCOL_ID:-nftlox_testnet}
       BATCH_SIZE: ${BATCH_SIZE:-1000}

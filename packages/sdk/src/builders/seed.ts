@@ -29,6 +29,7 @@ export const seedBuilderInputSchema = seedInputSchema.extend({
 	collectionId: z.string().min(1, "Collection ID is required"),
 	owner: usernameSchema,
 	edition: z.number().int().min(1, "Edition must be at least 1"),
+	collectionBlock: z.number().int().nonnegative().optional(),
 });
 
 export function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): BuildResult<NFTData> {
@@ -61,6 +62,7 @@ export function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): BuildR
 		description: data.brief,
 		imageUrl: data.imageUrl,
 		maxReplicas: data.maxSupply,
+		...(data.collectionBlock !== undefined && { collectionBlock: data.collectionBlock }),
 	};
 
 	const payload = createDeterministicMintPayload(mintInput);
@@ -73,6 +75,7 @@ export function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): BuildR
 		description: data.brief,
 		imageUrl: data.imageUrl,
 		maxReplicas: data.maxSupply,
+		collectionBlock: data.collectionBlock ?? 0,
 	});
 
 	return {

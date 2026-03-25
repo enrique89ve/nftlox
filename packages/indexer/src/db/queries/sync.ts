@@ -49,3 +49,37 @@ export async function insertInvalidOperation(
 		)
 	`;
 }
+
+// ============ ORPHANED BUYS ============
+
+export interface OrphanedBuyTransfer {
+	from: string;
+	to: string;
+	amount: number;
+	currency: string;
+	memo: string;
+}
+
+export async function insertOrphanedBuy(
+	op: {
+		blockNum: number;
+		txId: string;
+		buyer: string;
+		nftId: string | null;
+		reason: string;
+		transfers: ReadonlyArray<OrphanedBuyTransfer>;
+	},
+	txn: Queryable = sql,
+): Promise<void> {
+	await txn`
+		INSERT INTO orphaned_buys (block_num, tx_id, buyer, nft_id, reason, transfers)
+		VALUES (
+			${op.blockNum},
+			${op.txId},
+			${op.buyer},
+			${op.nftId},
+			${op.reason},
+			${JSON.stringify(op.transfers)}
+		)
+	`;
+}
