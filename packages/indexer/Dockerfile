@@ -1,4 +1,4 @@
-FROM oven/bun:1.3-debian
+FROM oven/bun:1.3.11-debian
 WORKDIR /app
 
 # Copy lockfile and package.json files first to cache dependencies
