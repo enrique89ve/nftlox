@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.11-debian
+FROM oven/bun:1.3-debian
 WORKDIR /app
 
 # Copy lockfile and package.json files first to cache dependencies
@@ -7,7 +7,7 @@ COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/indexer/package.json ./packages/indexer/
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy the rest of the source code
 COPY packages/sdk/ ./packages/sdk/
