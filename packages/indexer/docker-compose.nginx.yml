@@ -1,0 +1,31 @@
+# Override: agrega Nginx como reverse proxy
+# Uso: docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
+services:
+  nginx:
+    image: nginx:1-alpine
+    restart: unless-stopped
+    depends_on:
+      indexer:
+        condition: service_healthy
+    ports:
+      - "${PROXY_PORT:-80}:80"
+      # Descomentar para TLS:
+      # - "${PROXY_SSL_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Descomentar para TLS (montar certificados):
+      # - ${SSL_CERT_PATH:-./nginx/ssl}:/etc/nginx/ssl:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
