@@ -44,6 +44,22 @@ async function ensurePostgres(): Promise<void> {
 	throw new Error("PostgreSQL failed to start within 30s");
 }
 
+async function runMigrations(): Promise<void> {
+	const [row] = await sql`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.tables
+			WHERE table_schema = 'public' AND table_name = 'sync_state'
+		) as exists
+	`;
+	if (row?.exists) return;
+
+	log.info("Running schema migration...");
+	const schemaPath = import.meta.dir + "/db/schema.sql";
+	const schemaSql = await Bun.file(schemaPath).text();
+	await sql.unsafe(schemaSql);
+	log.info("Schema migration completed");
+}
+
 export async function connectWithRetry(): Promise<void> {
 	let attempt = 0;
 	while (true) {
@@ -53,6 +69,7 @@ export async function connectWithRetry(): Promise<void> {
 				await ensurePostgres();
 			}
 			await testConnection();
+			await runMigrations();
 			return;
 		} catch (err) {
 			if (attempt === 1) log.info("Waiting for database...");
