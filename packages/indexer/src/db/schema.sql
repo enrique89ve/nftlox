@@ -1,15 +1,34 @@
--- NFTLox Indexer Schema
+-- NFTLox Indexer Schema (idempotent — safe to re-run)
+
+-- ============ ENUMS ============
+
+DO $$ BEGIN
+	CREATE TYPE nft_kind AS ENUM ('seed', 'instance', 'replica');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+	CREATE TYPE nft_status AS ENUM ('active', 'listed', 'burned', 'lent');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+	CREATE TYPE pack_status AS ENUM ('active', 'paused', 'depleted');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ============ TABLES ============
 
 -- Sync state (singleton row)
-CREATE TABLE sync_state (
+CREATE TABLE IF NOT EXISTS sync_state (
 	id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
 	last_block BIGINT NOT NULL DEFAULT 0,
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-INSERT INTO sync_state (last_block) VALUES (0);
+INSERT INTO sync_state (last_block) VALUES (0) ON CONFLICT (id) DO NOTHING;
 
 -- Collections
-CREATE TABLE collections (
+CREATE TABLE IF NOT EXISTS collections (
 	id TEXT PRIMARY KEY,
 	json_id TEXT,
 	name TEXT NOT NULL,
@@ -31,10 +50,7 @@ CREATE TABLE collections (
 );
 
 -- NFTs (unified: seeds, instances, replicas)
-CREATE TYPE nft_kind AS ENUM ('seed', 'instance', 'replica');
-CREATE TYPE nft_status AS ENUM ('active', 'listed', 'burned', 'lent');
-
-CREATE TABLE nfts (
+CREATE TABLE IF NOT EXISTS nfts (
 	id TEXT PRIMARY KEY,
 	collection_id TEXT NOT NULL REFERENCES collections(id),
 	nft_type nft_kind NOT NULL,
@@ -71,7 +87,7 @@ CREATE TABLE nfts (
 );
 
 -- Invalid operations (audit trail)
-CREATE TABLE invalid_operations (
+CREATE TABLE IF NOT EXISTS invalid_operations (
 	id BIGSERIAL PRIMARY KEY,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT,
@@ -82,50 +98,8 @@ CREATE TABLE invalid_operations (
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Indices
-CREATE INDEX idx_collections_creator ON collections(creator);
-CREATE INDEX idx_collections_symbol ON collections(symbol);
-
--- Base indexes
-CREATE INDEX idx_nfts_collection ON nfts(collection_id);
-CREATE INDEX idx_nfts_owner_created ON nfts(owner, created_at DESC);
-
--- Partial: seed children ordered by instance_number (queryNfts by:seed)
-CREATE INDEX idx_nfts_seed_instances ON nfts(seed_id, instance_number)
-	WHERE seed_id IS NOT NULL;
-
--- Partial: active instances per owner (user inventory — hottest query)
-CREATE INDEX idx_nfts_owner_active_instances ON nfts(owner, created_at DESC)
-	WHERE nft_type = 'instance' AND status = 'active';
-
--- Partial: active seeds per owner (seed management)
-CREATE INDEX idx_nfts_owner_active_seeds ON nfts(owner, collection_id)
-	WHERE nft_type = 'seed' AND status = 'active';
-
--- Partial: seeds with available supply (Norse: "which seeds can still distribute?")
-CREATE INDEX idx_nfts_seeds_available ON nfts(collection_id, distributed)
-	WHERE nft_type = 'seed' AND supply_exhausted = FALSE;
-
--- Partial: collection browsing by type (queryNfts by:collection)
-CREATE INDEX idx_nfts_collection_type ON nfts(collection_id, nft_type, created_at DESC);
-
--- Partial: marketplace listings sorted by price
-CREATE INDEX idx_nfts_listed ON nfts(listing_price, listing_currency)
-	WHERE status = 'listed';
-
--- Partial: marketplace listings sorted by recent (default sort)
-CREATE INDEX idx_nfts_listed_recent ON nfts(created_at DESC)
-	WHERE status = 'listed';
-
--- Partial: listings filtered by marketplace node
-CREATE INDEX idx_nfts_listed_marketplace ON nfts(listing_marketplace)
-	WHERE status = 'listed' AND listing_marketplace IS NOT NULL;
-
-CREATE INDEX idx_invalid_block ON invalid_operations(block_num);
-
--- Orphaned buys: failed buy operations where HIVE transfers executed but NFT ownership was NOT updated.
--- Operator reviews via direct SQL: SELECT * FROM orphaned_buys ORDER BY created_at DESC;
-CREATE TABLE orphaned_buys (
+-- Orphaned buys
+CREATE TABLE IF NOT EXISTS orphaned_buys (
 	id BIGSERIAL PRIMARY KEY,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
@@ -136,14 +110,8 @@ CREATE TABLE orphaned_buys (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_orphaned_buys_buyer ON orphaned_buys(buyer);
-CREATE INDEX idx_orphaned_buys_tx ON orphaned_buys(tx_id);
-
--- ============ PACK TABLES ============
-
-CREATE TYPE pack_status AS ENUM ('active', 'paused', 'depleted');
-
-CREATE TABLE packs (
+-- Packs
+CREATE TABLE IF NOT EXISTS packs (
 	id TEXT PRIMARY KEY,
 	collection_id TEXT NOT NULL REFERENCES collections(id),
 	creator TEXT NOT NULL,
@@ -164,25 +132,17 @@ CREATE TABLE packs (
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE user_pack_balances (
+CREATE TABLE IF NOT EXISTS user_pack_balances (
 	account TEXT NOT NULL,
 	pack_id TEXT NOT NULL REFERENCES packs(id),
 	balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
 	PRIMARY KEY (account, pack_id)
 );
 
-CREATE INDEX idx_packs_collection ON packs(collection_id);
-CREATE INDEX idx_packs_creator ON packs(creator);
-CREATE INDEX idx_packs_status ON packs(status);
-CREATE INDEX idx_pack_balances_account ON user_pack_balances(account);
-CREATE INDEX idx_pack_balances_pack ON user_pack_balances(pack_id);
-CREATE INDEX idx_pack_balances_positive ON user_pack_balances(account, pack_id)
-	WHERE balance > 0;
+-- ============ ALLOWANCE TABLES ============
 
--- ============ ALLOWANCE TABLES (Approve & TransferFrom) ============
-
--- Pack allowances (ERC-20 style): fungible spending limits
-CREATE TABLE pack_allowances (
+-- Pack allowances (ERC-20 style)
+CREATE TABLE IF NOT EXISTS pack_allowances (
 	owner TEXT NOT NULL,
 	spender TEXT NOT NULL,
 	pack_id TEXT NOT NULL REFERENCES packs(id),
@@ -193,8 +153,8 @@ CREATE TABLE pack_allowances (
 	PRIMARY KEY (owner, spender, pack_id)
 );
 
--- NFT allowances (ERC-721 style): one approved spender per NFT
-CREATE TABLE nft_allowances (
+-- NFT allowances (ERC-721 style)
+CREATE TABLE IF NOT EXISTS nft_allowances (
 	nft_id TEXT PRIMARY KEY REFERENCES nfts(id),
 	owner TEXT NOT NULL,
 	approved_spender TEXT NOT NULL,
@@ -203,8 +163,8 @@ CREATE TABLE nft_allowances (
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Collection allowances (ERC-721 setApprovalForAll style)
-CREATE TABLE collection_allowances (
+-- Collection allowances (setApprovalForAll style)
+CREATE TABLE IF NOT EXISTS collection_allowances (
 	owner TEXT NOT NULL,
 	spender TEXT NOT NULL,
 	collection_id TEXT NOT NULL REFERENCES collections(id),
@@ -215,22 +175,9 @@ CREATE TABLE collection_allowances (
 	PRIMARY KEY (owner, spender, collection_id)
 );
 
-CREATE INDEX idx_pack_allowances_spender ON pack_allowances(spender);
-CREATE INDEX idx_pack_allowances_pack ON pack_allowances(pack_id);
-CREATE INDEX idx_pack_allowances_positive ON pack_allowances(owner, pack_id)
-	WHERE quantity > 0;
+-- ============ DATA OPERATORS ============
 
-CREATE INDEX idx_nft_allowances_owner ON nft_allowances(owner);
-CREATE INDEX idx_nft_allowances_spender ON nft_allowances(approved_spender);
-
-CREATE INDEX idx_collection_allowances_spender ON collection_allowances(spender);
-CREATE INDEX idx_collection_allowances_collection ON collection_allowances(collection_id);
-CREATE INDEX idx_collection_allowances_active ON collection_allowances(owner, collection_id)
-	WHERE approved = TRUE;
-
--- ============ DATA OPERATORS TABLE ============
-
-CREATE TABLE data_operators (
+CREATE TABLE IF NOT EXISTS data_operators (
 	collection_id TEXT NOT NULL REFERENCES collections(id),
 	operator TEXT NOT NULL,
 	block_num BIGINT NOT NULL,
@@ -239,12 +186,9 @@ CREATE TABLE data_operators (
 	PRIMARY KEY (collection_id, operator)
 );
 
-CREATE INDEX idx_data_operators_operator ON data_operators(operator);
-CREATE INDEX idx_data_operators_collection ON data_operators(collection_id);
+-- ============ LENDING ============
 
--- ============ LENDING TABLE ============
-
-CREATE TABLE nft_loans (
+CREATE TABLE IF NOT EXISTS nft_loans (
 	nft_id TEXT PRIMARY KEY REFERENCES nfts(id),
 	lender TEXT NOT NULL,
 	borrower TEXT NOT NULL,
@@ -253,18 +197,60 @@ CREATE TABLE nft_loans (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_nft_loans_lender ON nft_loans(lender);
-CREATE INDEX idx_nft_loans_borrower ON nft_loans(borrower);
+-- ============ OWNER NFT COUNTS ============
 
--- ============ OWNER NFT COUNTS (trigger-maintained) ============
-
-CREATE TABLE owner_nft_counts (
+CREATE TABLE IF NOT EXISTS owner_nft_counts (
 	owner TEXT PRIMARY KEY,
 	total INT NOT NULL DEFAULT 0,
 	seeds INT NOT NULL DEFAULT 0,
 	instances INT NOT NULL DEFAULT 0,
 	replicas INT NOT NULL DEFAULT 0
 );
+
+-- ============ INDEXES (IF NOT EXISTS) ============
+
+CREATE INDEX IF NOT EXISTS idx_collections_creator ON collections(creator);
+CREATE INDEX IF NOT EXISTS idx_collections_symbol ON collections(symbol);
+
+CREATE INDEX IF NOT EXISTS idx_nfts_collection ON nfts(collection_id);
+CREATE INDEX IF NOT EXISTS idx_nfts_owner_created ON nfts(owner, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_nfts_seed_instances ON nfts(seed_id, instance_number) WHERE seed_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nfts_owner_active_instances ON nfts(owner, created_at DESC) WHERE nft_type = 'instance' AND status = 'active';
+CREATE INDEX IF NOT EXISTS idx_nfts_owner_active_seeds ON nfts(owner, collection_id) WHERE nft_type = 'seed' AND status = 'active';
+CREATE INDEX IF NOT EXISTS idx_nfts_seeds_available ON nfts(collection_id, distributed) WHERE nft_type = 'seed' AND supply_exhausted = FALSE;
+CREATE INDEX IF NOT EXISTS idx_nfts_collection_type ON nfts(collection_id, nft_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_nfts_listed ON nfts(listing_price, listing_currency) WHERE status = 'listed';
+CREATE INDEX IF NOT EXISTS idx_nfts_listed_recent ON nfts(created_at DESC) WHERE status = 'listed';
+CREATE INDEX IF NOT EXISTS idx_nfts_listed_marketplace ON nfts(listing_marketplace) WHERE status = 'listed' AND listing_marketplace IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_invalid_block ON invalid_operations(block_num);
+
+CREATE INDEX IF NOT EXISTS idx_orphaned_buys_buyer ON orphaned_buys(buyer);
+CREATE INDEX IF NOT EXISTS idx_orphaned_buys_tx ON orphaned_buys(tx_id);
+
+CREATE INDEX IF NOT EXISTS idx_packs_collection ON packs(collection_id);
+CREATE INDEX IF NOT EXISTS idx_packs_creator ON packs(creator);
+CREATE INDEX IF NOT EXISTS idx_packs_status ON packs(status);
+CREATE INDEX IF NOT EXISTS idx_pack_balances_account ON user_pack_balances(account);
+CREATE INDEX IF NOT EXISTS idx_pack_balances_pack ON user_pack_balances(pack_id);
+CREATE INDEX IF NOT EXISTS idx_pack_balances_positive ON user_pack_balances(account, pack_id) WHERE balance > 0;
+
+CREATE INDEX IF NOT EXISTS idx_pack_allowances_spender ON pack_allowances(spender);
+CREATE INDEX IF NOT EXISTS idx_pack_allowances_pack ON pack_allowances(pack_id);
+CREATE INDEX IF NOT EXISTS idx_pack_allowances_positive ON pack_allowances(owner, pack_id) WHERE quantity > 0;
+CREATE INDEX IF NOT EXISTS idx_nft_allowances_owner ON nft_allowances(owner);
+CREATE INDEX IF NOT EXISTS idx_nft_allowances_spender ON nft_allowances(approved_spender);
+CREATE INDEX IF NOT EXISTS idx_collection_allowances_spender ON collection_allowances(spender);
+CREATE INDEX IF NOT EXISTS idx_collection_allowances_collection ON collection_allowances(collection_id);
+CREATE INDEX IF NOT EXISTS idx_collection_allowances_active ON collection_allowances(owner, collection_id) WHERE approved = TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_data_operators_operator ON data_operators(operator);
+CREATE INDEX IF NOT EXISTS idx_data_operators_collection ON data_operators(collection_id);
+
+CREATE INDEX IF NOT EXISTS idx_nft_loans_lender ON nft_loans(lender);
+CREATE INDEX IF NOT EXISTS idx_nft_loans_borrower ON nft_loans(borrower);
+
+-- ============ TRIGGER FUNCTION ============
 
 CREATE OR REPLACE FUNCTION update_owner_nft_counts() RETURNS TRIGGER AS $$
 DECLARE
@@ -337,6 +323,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Drop and recreate trigger to ensure it's up to date
+DROP TRIGGER IF EXISTS trg_owner_nft_counts ON nfts;
 CREATE TRIGGER trg_owner_nft_counts
 	AFTER INSERT OR UPDATE OF owner, status, nft_type OR DELETE
 	ON nfts

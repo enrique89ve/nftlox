@@ -45,19 +45,11 @@ async function ensurePostgres(): Promise<void> {
 }
 
 async function runMigrations(): Promise<void> {
-	const [row] = await sql`
-		SELECT EXISTS (
-			SELECT 1 FROM information_schema.tables
-			WHERE table_schema = 'public' AND table_name = 'sync_state'
-		) as exists
-	`;
-	if (row?.exists) return;
-
-	log.info("Running schema migration...");
+	log.info("Running schema migrations...");
 	const schemaPath = import.meta.dir + "/db/schema.sql";
 	const schemaSql = await Bun.file(schemaPath).text();
 	await sql.unsafe(schemaSql);
-	log.info("Schema migration completed");
+	log.info("Schema migrations completed");
 }
 
 export async function connectWithRetry(): Promise<void> {
