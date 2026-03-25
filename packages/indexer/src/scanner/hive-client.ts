@@ -163,15 +163,20 @@ export interface BlockchainHead {
 }
 
 export async function getBlockchainHead(): Promise<BlockchainHead> {
-	const result = await callWithFailover<{
-		head_block_number: number;
-		last_irreversible_block_num: number;
-	}>("condenser_api.get_dynamic_global_properties", []);
+	const result = await callWithFailover<Record<string, unknown>>(
+		"condenser_api.get_dynamic_global_properties", [],
+	);
 
-	return {
-		headBlock: result.head_block_number,
-		irreversibleBlock: result.last_irreversible_block_num,
-	};
+	const headBlock = Number(result.head_block_number);
+	const irreversibleBlock = Number(result.last_irreversible_block_num);
+
+	if (Number.isNaN(headBlock) || Number.isNaN(irreversibleBlock)) {
+		throw new Error("Invalid blockchain head response", {
+			cause: { head_block_number: result.head_block_number, last_irreversible_block_num: result.last_irreversible_block_num },
+		});
+	}
+
+	return { headBlock, irreversibleBlock };
 }
 
 export async function getHeadBlockNum(): Promise<number> {

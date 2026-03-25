@@ -23,9 +23,12 @@ END $$;
 CREATE TABLE IF NOT EXISTS sync_state (
 	id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
 	last_block BIGINT NOT NULL DEFAULT 0,
+	genesis_block BIGINT NOT NULL DEFAULT 0,
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 INSERT INTO sync_state (last_block) VALUES (0) ON CONFLICT (id) DO NOTHING;
+-- Add genesis_block column if upgrading from older schema
+ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS genesis_block BIGINT NOT NULL DEFAULT 0;
 
 -- Collections
 CREATE TABLE IF NOT EXISTS collections (

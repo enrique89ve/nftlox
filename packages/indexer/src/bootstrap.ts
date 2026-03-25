@@ -46,10 +46,52 @@ async function ensurePostgres(): Promise<void> {
 
 async function runMigrations(): Promise<void> {
 	log.info("Running schema migrations...");
-	const schemaPath = import.meta.dir + "/db/schema.sql";
-	const schemaSql = await Bun.file(schemaPath).text();
-	await sql.unsafe(schemaSql);
+	const schemaFile = Bun.file(import.meta.dir + "/db/schema.sql");
+	if (!await schemaFile.exists()) {
+		throw new Error("Schema file not found — cannot initialize database", {
+			cause: { path: schemaFile.name },
+		});
+	}
+	await sql.unsafe(await schemaFile.text());
 	log.info("Schema migrations completed");
+}
+
+// Ordered by foreign key dependencies (children first)
+const DATA_TABLES = [
+	"nft_loans", "nft_allowances", "collection_allowances",
+	"pack_allowances", "user_pack_balances", "data_operators",
+	"orphaned_buys", "invalid_operations", "owner_nft_counts",
+	"nfts", "packs", "collections",
+] as const;
+
+async function checkGenesisReset(): Promise<void> {
+	const [row] = await sql`SELECT genesis_block FROM sync_state WHERE id = 1`;
+	const storedGenesis = Number(row?.genesis_block ?? 0);
+
+	if (storedGenesis === config.genesisBlock) return;
+
+	if (storedGenesis === 0) {
+		await sql`UPDATE sync_state SET genesis_block = ${config.genesisBlock}`;
+		log.info("Genesis block stored", { genesisBlock: config.genesisBlock });
+		return;
+	}
+
+	log.warn("GENESIS BLOCK CHANGED — resetting all data", {
+		previous: storedGenesis,
+		current: config.genesisBlock,
+	});
+
+	await sql.begin(async (txn) => {
+		for (const table of DATA_TABLES) {
+			await txn.unsafe(`TRUNCATE TABLE ${table} CASCADE`);
+		}
+		await txn`
+			UPDATE sync_state
+			SET last_block = 0, genesis_block = ${config.genesisBlock}, updated_at = NOW()
+		`;
+	});
+
+	log.info("Database reset completed — syncing from new genesis block");
 }
 
 export async function connectWithRetry(): Promise<void> {
@@ -62,6 +104,7 @@ export async function connectWithRetry(): Promise<void> {
 			}
 			await testConnection();
 			await runMigrations();
+			await checkGenesisReset();
 			return;
 		} catch (err) {
 			if (attempt === 1) log.info("Waiting for database...");
