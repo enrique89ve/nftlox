@@ -1,4 +1,4 @@
-import { testConnection } from "./db/client.ts";
+import { testConnection, sql } from "./db/client.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 
