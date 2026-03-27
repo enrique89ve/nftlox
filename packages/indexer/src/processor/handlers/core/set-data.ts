@@ -1,7 +1,14 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, updateNftCustomData, NFT_STATUS_BURNED } from "@/db/queries/nfts.ts";
-import { requireString, optionalStringArray } from "@/utils/validation.ts";
+import {
+	getNftForProcessing,
+	updateNftCustomData,
+	updateNftMutableData,
+	NFT_STATUS_BURNED,
+} from "@/db/queries/nfts.ts";
+import { getCollectionRules } from "@/db/queries/collections.ts";
+import { requireString, optionalObject, optionalStringArray } from "@/utils/validation.ts";
+import { validateMutableUpdate, computeDataHashSync, type CollectionSchema } from "nftlox-sdk";
 
 export async function handleSetData(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");
@@ -10,8 +17,44 @@ export async function handleSetData(op: ParsedOperation, txn: Queryable): Promis
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 	if (nft.status === NFT_STATUS_BURNED) throw new Error(`NFT is burned: ${nftId}`);
-	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 	if (nft.instance_dna !== instanceDna) throw new Error(`Instance DNA mismatch for ${nftId}`);
 
-	await updateNftCustomData(nftId, op.data.data ?? null, optionalStringArray(op.data.tags), txn);
+	const collection = await getCollectionRules(nft.collection_id, txn);
+	const schema = collection?.schema as CollectionSchema | null;
+
+	if (schema) {
+		// Schema-based: only creator can write mutable_data
+		if (!collection || collection.creator !== op.signer) {
+			throw new Error(`Signer ${op.signer} is not the creator of collection ${nft.collection_id}`);
+		}
+
+		const mutableData = optionalObject(op.data.mutableData) as Record<string, unknown> | null;
+		if (!mutableData || Object.keys(mutableData).length === 0) {
+			throw new Error("mutableData is required for schema-based collections");
+		}
+
+		const errors = validateMutableUpdate(schema, mutableData);
+		if (errors.length > 0) {
+			const messages = errors.map((e) => `${e.field}: ${e.message}`).join("; ");
+			throw new Error(`Schema validation failed: ${messages}`);
+		}
+
+		// Merge in JS and write the FULL merged result (hash must match stored value)
+		const existingMutable = (nft.mutable_data ?? {}) as Record<string, unknown>;
+		const merged = { ...existingMutable, ...mutableData };
+		const dataHash = computeDataHashSync(merged);
+
+		await updateNftMutableData(
+			nftId, merged, dataHash,
+			op.txId, op.blockNum,
+			optionalStringArray(op.data.tags),
+			txn,
+		);
+	} else {
+		// Legacy: owner can write custom_data (backwards compatible)
+		if (nft.owner !== op.signer) {
+			throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
+		}
+		await updateNftCustomData(nftId, op.data.data ?? null, optionalStringArray(op.data.tags), txn);
+	}
 }

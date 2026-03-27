@@ -11,6 +11,8 @@ export {
 	DATA_OPERATOR_ACTIONS,
 	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_SET_DATA_FROM,
+	ACTION_SET_OWNER_DATA,
+	ACTION_EXTEND_SCHEMA,
 	type ProtocolAction,
 	type CoreAction,
 	type MarketplaceAction,

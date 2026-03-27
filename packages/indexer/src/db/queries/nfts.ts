@@ -41,6 +41,9 @@ export interface InsertNftParams {
 	originalId: string | null;
 	tags: string[] | null;
 	customData: unknown | null;
+	immutableData: unknown | null;
+	mutableData: unknown | null;
+	mutableDataHash: string | null;
 	blockNum: number;
 	txId: string;
 	createdAt: string;
@@ -56,6 +59,7 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			max_replicas, distributed,
 			seed_id, instance_number, original_id,
 			tags, custom_data,
+			immutable_data, mutable_data, mutable_data_hash, mutable_data_tx, mutable_data_block,
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.collectionId}, ${params.nftType},
@@ -66,6 +70,11 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			${params.maxReplicas}, ${params.distributed ?? 0},
 			${params.seedId}, ${params.instanceNumber}, ${params.originalId},
 			${params.tags}, ${params.customData ? JSON.stringify(params.customData) : null},
+			${params.immutableData ? JSON.stringify(params.immutableData) : null},
+			${params.mutableData ? JSON.stringify(params.mutableData) : null},
+			${params.mutableDataHash},
+			${params.mutableData ? params.txId : null},
+			${params.mutableData ? params.blockNum : null},
 			${params.blockNum}, ${params.txId}, ${params.createdAt}
 		)
 		ON CONFLICT (id) DO NOTHING
@@ -98,12 +107,13 @@ export interface NftProcessingRow {
 	listing_currency: string | null;
 	listing_expires_at: string | null;
 	listing_marketplace: string | null;
+	mutable_data: unknown | null;
 }
 
 export async function getNftForProcessing(id: string, txn: Queryable = sql): Promise<NftProcessingRow | null> {
 	const [row] = await txn<NftProcessingRow[]>`
 		SELECT id, owner, status, nft_type, name, seed_id, max_replicas, distributed, collection_id, instance_dna,
-		       listing_price, listing_currency, listing_expires_at, listing_marketplace
+		       listing_price, listing_currency, listing_expires_at, listing_marketplace, mutable_data
 		FROM nfts WHERE id = ${id}
 	`;
 	return row ?? null;
@@ -139,12 +149,13 @@ export interface SeedWithDnaRow extends NftProcessingRow {
 	origin_dna: string | null;
 	image_url: string | null;
 	image_hash: string | null;
+	immutable_data: unknown | null;
 }
 
 export async function getSeedWithDna(id: string, txn: Queryable = sql): Promise<SeedWithDnaRow | null> {
 	const [row] = await txn<SeedWithDnaRow[]>`
 		SELECT id, owner, status, nft_type, name, seed_id, max_replicas, distributed,
-			collection_id, instance_dna, origin_dna, image_url, image_hash
+			collection_id, instance_dna, origin_dna, image_url, image_hash, immutable_data
 		FROM nfts WHERE id = ${id}
 	`;
 	return row ?? null;
@@ -231,6 +242,45 @@ export async function updateNftOperatorData(
 		UPDATE nfts
 		SET operator_data = ${data ? JSON.stringify(data) : null},
 			tags = ${tags}
+		WHERE id = ${nftId}
+	`;
+}
+
+export async function updateNftMutableData(
+	nftId: string,
+	mergedData: Record<string, unknown>,
+	dataHash: string,
+	txId: string,
+	blockNum: number,
+	tags: string[] | null,
+	txn: Queryable = sql,
+) {
+	// Write the FULL merged object (not partial merge) to guarantee hash matches stored value
+	await txn`
+		UPDATE nfts
+		SET mutable_data = ${JSON.stringify(mergedData)}::jsonb,
+			mutable_data_hash = ${dataHash},
+			mutable_data_tx = ${txId},
+			mutable_data_block = ${blockNum},
+			tags = COALESCE(${tags}, tags)
+		WHERE id = ${nftId}
+	`;
+}
+
+export async function updateNftOwnerData(
+	nftId: string,
+	ownerData: Record<string, unknown>,
+	dataHash: string,
+	txId: string,
+	blockNum: number,
+	txn: Queryable = sql,
+) {
+	await txn`
+		UPDATE nfts
+		SET owner_data = ${JSON.stringify(ownerData)},
+			owner_data_hash = ${dataHash},
+			owner_data_tx = ${txId},
+			owner_data_block = ${blockNum}
 		WHERE id = ${nftId}
 	`;
 }

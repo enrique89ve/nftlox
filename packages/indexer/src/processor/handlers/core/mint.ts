@@ -3,6 +3,7 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
 import { requireString, optionalString, optionalNumber, optionalObject, optionalStringArray } from "@/utils/validation.ts";
+import { validateMintData, computeDataHashSync, type CollectionSchema } from "nftlox-sdk";
 
 export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
@@ -23,6 +24,21 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		);
 	}
 
+	// Schema-based validation
+	const schema = collection.schema as CollectionSchema | null;
+	const immutableData = optionalObject(d.immutableData) as Record<string, unknown> | null;
+	const mutableData = optionalObject(d.mutableData) as Record<string, unknown> | null;
+
+	if (schema) {
+		const errors = validateMintData(schema, immutableData ?? undefined, mutableData ?? undefined);
+		if (errors.length > 0) {
+			const messages = errors.map((e) => `${e.field}: ${e.message}`).join("; ");
+			throw new Error(`Schema validation failed: ${messages}`);
+		}
+	}
+
+	const mutableDataHash = mutableData ? computeDataHashSync(mutableData) : null;
+
 	await insertNft({
 		id, collectionId, nftType: isSeed ? "seed" : "instance",
 		edition: optionalNumber(d.edition) ?? 1,
@@ -39,7 +55,11 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		imageHash: optionalString(metadata.imageHash),
 		maxReplicas: optionalNumber(d.maxReplicas) ?? 1,
 		seedId: null, instanceNumber: null, originalId: null,
-		tags: optionalStringArray(d.tags), customData: d.data ?? null,
+		tags: optionalStringArray(d.tags),
+		customData: schema ? null : (d.data ?? null),
+		immutableData,
+		mutableData,
+		mutableDataHash,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
 	}, txn);
 }

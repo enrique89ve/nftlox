@@ -18,6 +18,9 @@ import {
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	validateHiveUsername,
 	ACTION_BULK_DISTRIBUTE,
+	computeDataHashSync,
+	validateMutableUpdate,
+	type CollectionSchema,
 } from "nftlox-sdk";
 
 export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -30,6 +33,14 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	const items = requireArray(op.data.items, "items");
 	const imageOverrides = (op.data.imageOverrides as Record<string, { imageUrl?: string; imageHash?: string }>) ?? {};
 	const customData = (op.data.data as Record<string, unknown>) ?? null;
+	const mutableData = (op.data.mutableData as Record<string, unknown>) ?? null;
+
+	// Validate mutableData against schema if collection has one
+	if (mutableData) {
+		// We need to check at least one seed's collection for schema
+		// Validation happens per-seed below after collection is fetched
+	}
+	const mutableDataHash = mutableData ? computeDataHashSync(mutableData) : null;
 
 	if (items.length === 0) throw new Error("Items array is empty");
 	if (items.length > MAX_BULK_DISTRIBUTE_ITEMS) {
@@ -63,13 +74,22 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 		// Permission: seed owner OR collection creator
 		const isOwner = seed.owner === op.signer;
-		if (!isOwner) {
-			let creator = collectionCreators.get(seed.collection_id);
-			if (creator === undefined) {
-				const collection = await getCollectionRules(seed.collection_id, txn);
-				creator = collection?.creator ?? "";
-				collectionCreators.set(seed.collection_id, creator);
+		let collectionRules = collectionCreators.get(seed.collection_id);
+		if (collectionRules === undefined) {
+			const rules = await getCollectionRules(seed.collection_id, txn);
+			collectionCreators.set(seed.collection_id, rules?.creator ?? "");
+			// Validate mutableData against schema (once per collection)
+			const schema = rules?.schema as CollectionSchema | null;
+			if (schema && mutableData) {
+				const errors = validateMutableUpdate(schema, mutableData);
+				if (errors.length > 0) {
+					const messages = errors.map((e) => `${e.field}: ${e.message}`).join("; ");
+					throw new Error(`Schema validation failed for bulk_distribute mutableData: ${messages}`);
+				}
 			}
+		}
+		if (!isOwner) {
+			const creator = collectionCreators.get(seed.collection_id);
 			if (creator !== op.signer) {
 				throw new Error(`Signer ${op.signer} is not owner of seed ${seedId} nor creator of collection ${seed.collection_id}`);
 			}
@@ -114,6 +134,9 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				instanceDna, op.signer, op.txId,
 			);
 
+			// Inherit immutable_data from seed
+			const seedImmutableData = seed.immutable_data as Record<string, unknown> | null;
+
 			await insertNft({
 				id: instanceId,
 				collectionId: seed.collection_id,
@@ -135,7 +158,10 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				instanceNumber,
 				originalId: null,
 				tags: null,
-				customData: { source: ACTION_BULK_DISTRIBUTE, ...(customData ?? {}) },
+				customData: mutableData ? null : { source: ACTION_BULK_DISTRIBUTE, ...(customData ?? {}) },
+				immutableData: seedImmutableData,
+				mutableData,
+				mutableDataHash,
 				blockNum: op.blockNum,
 				txId: op.txId,
 				createdAt: op.timestamp,

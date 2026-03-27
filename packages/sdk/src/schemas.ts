@@ -79,6 +79,43 @@ export const seedProvenanceSchema = z.object({
 	birthTx: z.string().optional(),
 });
 
+// ============ SCHEMA FIELD SCHEMAS ============
+
+const SCHEMA_FIELD_TYPES = [
+	"string", "bool",
+	"uint8", "uint16", "uint32", "uint64",
+	"int8", "int16", "int32", "int64",
+	"float", "double",
+	"string[]", "bool[]",
+	"uint8[]", "uint16[]", "uint32[]", "uint64[]",
+	"int8[]", "int16[]", "int32[]", "int64[]",
+	"float[]", "double[]",
+] as const;
+
+export const schemaFieldSchema = z.object({
+	name: z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/, "Field name must be lowercase with underscores"),
+	type: z.enum(SCHEMA_FIELD_TYPES),
+});
+
+export const collectionSchemaSchema = z.object({
+	immutable: z.array(schemaFieldSchema).default([]),
+	mutable: z.array(schemaFieldSchema).min(1, "Schema must have at least one mutable field"),
+});
+
+export const extendSchemaInputSchema = z.object({
+	collectionId: z.string().min(1, "Collection ID is required"),
+	newImmutableFields: z.array(schemaFieldSchema).optional(),
+	newMutableFields: z.array(schemaFieldSchema).optional(),
+});
+export type ExtendSchemaInput = z.infer<typeof extendSchemaInputSchema>;
+
+export const setOwnerDataInputSchema = z.object({
+	nftId: z.string().min(1),
+	instanceDna: z.string().min(1),
+	data: z.record(z.string(), z.unknown()),
+});
+export type SetOwnerDataInput = z.infer<typeof setOwnerDataInputSchema>;
+
 // ============ INPUT SCHEMAS ============
 
 export const createCollectionInputSchema = z.object({
@@ -99,6 +136,7 @@ export const createCollectionInputSchema = z.object({
 		royaltyPct: z.number().min(0).max(MAX_ROYALTY_PCT, `Royalty percentage must be between 0 and ${MAX_ROYALTY_PCT}`),
 		royaltyRecipient: z.string().optional(),
 	}),
+	schema: collectionSchemaSchema.optional(),
 });
 export type CreateCollectionInput = z.infer<typeof createCollectionInputSchema>;
 
@@ -116,6 +154,8 @@ export const mintInputSchema = z.object({
 	birthTx: z.string().optional(),
 	tags: z.array(z.string()).optional(),
 	data: z.record(z.string(), z.unknown()).optional(),
+	immutableData: z.record(z.string(), z.unknown()).optional(),
+	mutableData: z.record(z.string(), z.unknown()).optional(),
 	collectionBlock: z.number().int().nonnegative("collectionBlock must be a non-negative integer"),
 });
 export type MintInput = z.infer<typeof mintInputSchema>;
@@ -197,6 +237,7 @@ export const bulkDistributeInputSchema = z.object({
 		),
 	imageOverrides: z.record(z.string(), z.object({ imageUrl: z.string().optional(), imageHash: z.string().optional() })).optional(),
 	data: z.record(z.string(), z.unknown()).optional(),
+	mutableData: z.record(z.string(), z.unknown()).optional(),
 });
 export type BulkDistributeInput = z.infer<typeof bulkDistributeInputSchema>;
 
@@ -265,7 +306,8 @@ export type NftTransferFromInput = z.infer<typeof nftTransferFromInputSchema>;
 export const setDataInputSchema = z.object({
 	nftId: z.string().min(1),
 	instanceDna: z.string().min(1),
-	data: z.record(z.string(), z.unknown()),
+	data: z.record(z.string(), z.unknown()).optional(),
+	mutableData: z.record(z.string(), z.unknown()).optional(),
 	tags: z.array(z.string()).optional(),
 });
 export type SetDataInput = z.infer<typeof setDataInputSchema>;
@@ -280,7 +322,8 @@ export type DataOperatorApproveInput = z.infer<typeof dataOperatorApproveInputSc
 export const setDataFromInputSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1),
 	instanceDna: z.string().min(1),
-	data: z.record(z.string(), z.unknown()),
+	data: z.record(z.string(), z.unknown()).optional(),
+	mutableData: z.record(z.string(), z.unknown()).optional(),
 	tags: z.array(z.string()).optional(),
 });
 export type SetDataFromInput = z.infer<typeof setDataFromInputSchema>;

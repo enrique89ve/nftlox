@@ -26,6 +26,8 @@ import {
 	ACTION_SET_DATA_FROM,
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
+	ACTION_SET_OWNER_DATA,
+	ACTION_EXTEND_SCHEMA,
 } from "nftlox-sdk";
 
 // Core
@@ -36,6 +38,8 @@ import { handleTransfer } from "./handlers/core/transfer.ts";
 import { handleBurn } from "./handlers/core/burn.ts";
 import { handleReplicate } from "./handlers/core/replicate.ts";
 import { handleSetData } from "./handlers/core/set-data.ts";
+import { handleSetOwnerData } from "./handlers/core/set-owner-data.ts";
+import { handleExtendSchema } from "./handlers/core/extend-schema.ts";
 
 // Marketplace
 import { handleList } from "./handlers/marketplace/list.ts";
@@ -77,6 +81,8 @@ const handlers: Record<string, Handler> = {
 	[ACTION_BURN]: handleBurn,
 	[ACTION_REPLICATE]: handleReplicate,
 	[ACTION_SET_DATA]: handleSetData,
+	[ACTION_SET_OWNER_DATA]: handleSetOwnerData,
+	[ACTION_EXTEND_SCHEMA]: handleExtendSchema,
 
 	// Marketplace
 	[ACTION_LIST]: handleList,

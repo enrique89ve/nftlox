@@ -24,6 +24,8 @@ import {
 	ACTION_NFT_TRANSFER_FROM,
 	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_SET_DATA_FROM,
+	ACTION_SET_OWNER_DATA,
+	ACTION_EXTEND_SCHEMA,
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
 	ACTION_BUY,
@@ -44,6 +46,10 @@ import type {
 	DataOperatorApproveInput,
 	SetDataFromData,
 	SetDataFromInput,
+	SetOwnerDataData,
+	SetOwnerDataInput,
+	ExtendSchemaData,
+	ExtendSchemaInput,
 	BulkDistributeData,
 	BulkDistributeInput,
 	ListingData,
@@ -130,6 +136,7 @@ export function createCollectionPayload(
 			originDna,
 			metadata: input.metadata,
 			rules: input.rules,
+			...(input.schema && { schema: input.schema }),
 			createdAt: Date.now(),
 		},
 	};
@@ -408,6 +415,72 @@ export function createSetDataFromOperation(
 	];
 }
 
+// ============ SET_OWNER_DATA PAYLOADS ============
+
+export function createSetOwnerDataPayload(
+	input: SetOwnerDataInput,
+): ProtocolPayload<SetOwnerDataData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_SET_OWNER_DATA,
+		data: {
+			nftId: input.nftId,
+			instanceDna: input.instanceDna,
+			data: input.data,
+		},
+	};
+}
+
+export function createSetOwnerDataOperation(
+	input: SetOwnerDataInput,
+	owner: string,
+): HiveOperation {
+	const payload = createSetOwnerDataPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [owner],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
+// ============ EXTEND_SCHEMA PAYLOADS ============
+
+export function createExtendSchemaPayload(
+	input: ExtendSchemaInput,
+): ProtocolPayload<ExtendSchemaData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_EXTEND_SCHEMA,
+		data: {
+			collectionId: input.collectionId,
+			...(input.newImmutableFields && { newImmutableFields: input.newImmutableFields }),
+			...(input.newMutableFields && { newMutableFields: input.newMutableFields }),
+		},
+	};
+}
+
+export function createExtendSchemaOperation(
+	input: ExtendSchemaInput,
+	creator: string,
+): HiveOperation {
+	const payload = createExtendSchemaPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [creator],
+			id: PROTOCOL_ID,
+			json: JSON.stringify(payload),
+		},
+	];
+}
+
 // ============ MARKETPLACE PAYLOADS ============
 
 export function createListPayload(input: ListInput): ProtocolPayload<ListingData> {
@@ -679,6 +752,10 @@ export interface DeterministicCollectionInput {
 		royaltyPct: number;
 		royaltyRecipient?: string;
 	};
+	schema?: {
+		immutable: Array<{ name: string; type: string }>;
+		mutable: Array<{ name: string; type: string }>;
+	};
 }
 
 /**
@@ -710,6 +787,7 @@ export function createDeterministicCollectionPayload(
 			originDna,
 			metadata: input.metadata,
 			rules: input.rules,
+			...(input.schema && { schema: input.schema }),
 			createdAt: Date.now(),
 		},
 	};

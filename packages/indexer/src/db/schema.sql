@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS collections (
 	replicable BOOLEAN NOT NULL DEFAULT TRUE,
 	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
 	royalty_recipient TEXT,
+	schema JSONB,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
@@ -54,6 +55,8 @@ CREATE TABLE IF NOT EXISTS collections (
 );
 -- Add replicable column if upgrading from older schema
 ALTER TABLE collections ADD COLUMN IF NOT EXISTS replicable BOOLEAN NOT NULL DEFAULT TRUE;
+-- Add schema column if upgrading from older schema
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS schema JSONB;
 
 -- NFTs (unified: seeds, instances, replicas)
 CREATE TABLE IF NOT EXISTS nfts (
@@ -82,6 +85,15 @@ CREATE TABLE IF NOT EXISTS nfts (
 	tags TEXT[],
 	custom_data JSONB,
 	operator_data JSONB,
+	immutable_data JSONB,
+	mutable_data JSONB,
+	mutable_data_hash TEXT,
+	mutable_data_tx TEXT,
+	mutable_data_block BIGINT,
+	owner_data JSONB,
+	owner_data_hash TEXT,
+	owner_data_tx TEXT,
+	owner_data_block BIGINT,
 	listing_price NUMERIC(18,3),
 	listing_currency TEXT,
 	listing_expires_at TIMESTAMPTZ,
@@ -91,6 +103,17 @@ CREATE TABLE IF NOT EXISTS nfts (
 	created_at TIMESTAMPTZ NOT NULL,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Add structured data columns if upgrading from older schema
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS immutable_data JSONB;
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS mutable_data JSONB;
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS mutable_data_hash TEXT;
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS mutable_data_tx TEXT;
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS mutable_data_block BIGINT;
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data JSONB;
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data_hash TEXT;
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data_tx TEXT;
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data_block BIGINT;
 
 -- Invalid operations (audit trail)
 CREATE TABLE IF NOT EXISTS invalid_operations (
@@ -228,6 +251,9 @@ CREATE INDEX IF NOT EXISTS idx_nfts_collection_type ON nfts(collection_id, nft_t
 CREATE INDEX IF NOT EXISTS idx_nfts_listed ON nfts(listing_price, listing_currency) WHERE status = 'listed';
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_recent ON nfts(created_at DESC) WHERE status = 'listed';
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_marketplace ON nfts(listing_marketplace) WHERE status = 'listed' AND listing_marketplace IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_nfts_immutable_data ON nfts USING GIN (immutable_data) WHERE immutable_data IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nfts_mutable_data ON nfts USING GIN (mutable_data) WHERE mutable_data IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_invalid_block ON invalid_operations(block_num);
 

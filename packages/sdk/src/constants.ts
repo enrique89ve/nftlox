@@ -1,7 +1,7 @@
-// NFTLox Protocol Constants - v0.2.1
+// NFTLox Protocol Constants - v0.3.0
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.2.1";
+export const PROTOCOL_VERSION = "0.3.0";
 export const MIN_PROTOCOL_VERSION = "0.2.0";
 export const HASH_VERSION = "v1";
 // Transaction Limits
@@ -107,6 +107,10 @@ export const MAX_PACK_OPEN_BATCH = 10;
 export const MIN_DROP_WEIGHT = 1;
 export const MAX_DROP_WEIGHT = 10000;
 
+// Schema Constants
+export const MAX_SCHEMA_FIELDS = 64;
+export const MAX_FIELD_NAME_LENGTH = 64;
+
 // Protocol Actions (Core)
 export const ACTION_CREATE_COLLECTION = "create_collection";
 export const ACTION_MINT = "mint";
@@ -115,6 +119,8 @@ export const ACTION_BURN = "burn";
 export const ACTION_REPLICATE = "replicate";
 export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
+export const ACTION_SET_OWNER_DATA = "set_owner_data";
+export const ACTION_EXTEND_SCHEMA = "extend_schema";
 
 // Bulk Distribute Limits
 export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
@@ -158,6 +164,8 @@ export const CORE_ACTIONS = [
 	ACTION_REPLICATE,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_SET_DATA,
+	ACTION_SET_OWNER_DATA,
+	ACTION_EXTEND_SCHEMA,
 ] as const;
 
 export const MARKETPLACE_ACTIONS = [

@@ -32,6 +32,7 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 		description: null, imageUrl: null, imageHash: null,
 		maxReplicas: 0, seedId: null, instanceNumber: null, originalId,
 		tags: null, customData: null,
+		immutableData: null, mutableData: null, mutableDataHash: null,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
 	}, txn);
 }

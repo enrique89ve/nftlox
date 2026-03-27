@@ -1,5 +1,5 @@
 // NFTLox Protocol - Public API
-// v0.2.1 - Tags + Data + SetData
+// v0.3.0 - Typed Schemas + Data Tracking
 
 // ============ CONSTANTS ============
 export {
@@ -38,6 +38,10 @@ export {
 	ACTION_BULK_DISTRIBUTE,
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	ACTION_SET_DATA,
+	ACTION_SET_OWNER_DATA,
+	ACTION_EXTEND_SCHEMA,
+	MAX_SCHEMA_FIELDS,
+	MAX_FIELD_NAME_LENGTH,
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTION_BUY,
@@ -80,6 +84,14 @@ export {
 
 // ============ TYPES ============
 export type {
+	// Schema types
+	SchemaFieldType,
+	SchemaField,
+	CollectionSchema,
+	ExtendSchemaData,
+	SetOwnerDataData,
+	DataProof,
+	// Core types
 	HiveOperation,
 	Price,
 	CollectionMetadata,
@@ -207,6 +219,10 @@ export {
 	createDataOperatorApproveOperation,
 	createSetDataFromPayload,
 	createSetDataFromOperation,
+	createSetOwnerDataPayload,
+	createSetOwnerDataOperation,
+	createExtendSchemaPayload,
+	createExtendSchemaOperation,
 	sanitizeTags,
 	createListPayload,
 	createUnlistPayload,
@@ -260,6 +276,34 @@ export {
 
 // ============ SCHEMAS ============
 export * from "./schemas";
+
+// ============ SCHEMA VALIDATION ============
+export {
+	VALID_SCHEMA_TYPES,
+	canonicalJson,
+	computeDataHash,
+	computeDataHashSync,
+	validateValueAgainstType,
+	validateSchemaDefinition,
+	validateMintData,
+	validateMutableUpdate,
+	mergeSchemas,
+} from "./schema-validation";
+
+// ============ SCHEMA TEMPLATES ============
+export {
+	GAMING_SCHEMA,
+	ART_SCHEMA,
+	COLLECTIBLE_SCHEMA,
+	MUSIC_SCHEMA,
+	RAGNAROK_MINION_SCHEMA,
+	RAGNAROK_SPELL_SCHEMA,
+	RAGNAROK_WEAPON_SCHEMA,
+	RAGNAROK_PET_SCHEMA,
+	RAGNAROK_ARMOR_SCHEMA,
+	RAGNAROK_HERO_SCHEMA,
+	createSchemaBuilder,
+} from "./schema-templates";
 
 // ============ BUILDERS ============
 export * from "./builders";

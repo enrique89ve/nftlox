@@ -1,4 +1,4 @@
-// NFTLox Protocol Types - v0.2.1
+// NFTLox Protocol Types - v0.3.0
 
 import type { ProtocolAction, SupportedCurrency } from "./constants";
 export type * from "./schemas";
@@ -32,6 +32,28 @@ export interface Price {
 	currency: SupportedCurrency;
 }
 
+// ============ SCHEMA TYPES ============
+
+export type SchemaFieldType =
+	| "string" | "bool"
+	| "uint8" | "uint16" | "uint32" | "uint64"
+	| "int8" | "int16" | "int32" | "int64"
+	| "float" | "double"
+	| "string[]" | "bool[]"
+	| "uint8[]" | "uint16[]" | "uint32[]" | "uint64[]"
+	| "int8[]" | "int16[]" | "int32[]" | "int64[]"
+	| "float[]" | "double[]";
+
+export type SchemaField = {
+	readonly name: string;
+	readonly type: SchemaFieldType;
+};
+
+export type CollectionSchema = {
+	readonly immutable: readonly SchemaField[];
+	readonly mutable: readonly SchemaField[];
+};
+
 // ============ COLLECTION TYPES (Arquetipo) ============
 
 export interface CollectionMetadata {
@@ -58,8 +80,17 @@ export interface CollectionData {
 	originDna: string;
 	metadata: CollectionMetadata;
 	rules: CollectionRules;
+	schema?: CollectionSchema;
 	createdAt: number;
 }
+
+// ============ EXTEND SCHEMA TYPES ============
+
+export type ExtendSchemaData = {
+	readonly collectionId: string;
+	readonly newImmutableFields?: readonly SchemaField[];
+	readonly newMutableFields?: readonly SchemaField[];
+};
 
 // ============ NFT TYPES (Copia Despertada) ============
 
@@ -91,6 +122,11 @@ export interface NFTData {
 	maxReplicas: number;
 	createdAt: number;
 
+	// Structured data (schema-based collections)
+	immutableData?: Record<string, unknown>;
+	mutableData?: Record<string, unknown>;
+	ownerData?: Record<string, unknown>;
+
 	// Discovery (optional)
 	tags?: string[];
 	data?: Record<string, unknown>;
@@ -120,6 +156,7 @@ export interface BulkDistributeData {
 	items: BulkDistributeItem[];
 	imageOverrides?: Record<string, { imageUrl?: string; imageHash?: string }>;
 	data?: Record<string, unknown>;
+	mutableData?: Record<string, unknown>;
 }
 
 // ============ SEED PROVENANCE (for on-chain traceability without indexer) ============
@@ -150,8 +187,17 @@ export interface BurnData extends SeedProvenance {
 export interface SetDataData {
 	nftId: string;
 	instanceDna: string;
-	data: Record<string, unknown>;
+	data?: Record<string, unknown>;
+	mutableData?: Record<string, unknown>;
 	tags?: string[];
+}
+
+// ============ SET_OWNER_DATA TYPES ============
+
+export interface SetOwnerDataData {
+	nftId: string;
+	instanceDna: string;
+	data: Record<string, unknown>;
 }
 
 // ============ DATA OPERATOR TYPES ============
@@ -165,7 +211,8 @@ export interface DataOperatorApproveData {
 export interface SetDataFromData extends SeedProvenance {
 	nftId: string;
 	instanceDna: string;
-	data: Record<string, unknown>;
+	data?: Record<string, unknown>;
+	mutableData?: Record<string, unknown>;
 	tags?: string[];
 }
 
@@ -296,6 +343,14 @@ export interface NftLendData extends SeedProvenance {
 export interface NftReturnData extends SeedProvenance {
 	instanceId: string;
 }
+
+// ============ DATA TRACKING (blockchain provenance) ============
+
+export type DataProof = {
+	readonly hash: string;
+	readonly txId: string;
+	readonly blockNum: number;
+};
 
 // ============ PROTOCOL PAYLOAD ============
 
