@@ -40,7 +40,7 @@ import {
 
 describe("Protocol Version", () => {
 	test("version should be 0.2.1", () => {
-		expect(PROTOCOL_VERSION).toBe("0.2.1");
+		expect(PROTOCOL_VERSION).toBe("0.3.0");
 	});
 });
 
@@ -175,7 +175,7 @@ describe("Collection Payload", () => {
 		const payload = createCollectionPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.2.1");
+		expect(payload.version).toBe("0.3.0");
 		expect(payload.action).toBe(ACTION_CREATE_COLLECTION);
 		expect(payload.data.id.startsWith("col_")).toBe(true);
 		expect(payload.data.originDna.length).toBe(ORIGIN_DNA_LENGTH);
@@ -206,7 +206,7 @@ describe("Mint Payload", () => {
 		const payload = createMintPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.2.1");
+		expect(payload.version).toBe("0.3.0");
 		expect(payload.action).toBe(ACTION_MINT);
 		expect(payload.data.id.startsWith("nft_")).toBe(true);
 		expect(payload.data.originDna).toBe("ABCD1234EFGH5678");
@@ -440,7 +440,7 @@ describe("Buy Action (Multisig)", () => {
 		const payload = createBuyPayload(data);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.2.1");
+		expect(payload.version).toBe("0.3.0");
 		expect(payload.action).toBe(ACTION_BUY);
 		expect(payload.data).toEqual({ nftId: "nft_test123" });
 	});
