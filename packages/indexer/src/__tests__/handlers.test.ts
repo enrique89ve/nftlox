@@ -586,8 +586,9 @@ describe("Handlers (integration)", () => {
 		test("allows transfer of NFT with expired listing", async () => {
 			await seedCollection();
 			await seedMint();
-			// Set listing with already-expired timestamp
-			const pastExpiry = Date.now() - 60_000;
+			// Set listing that expires before the block timestamp used in makeOp
+			const blockTime = new Date("2024-01-01T00:00:00").getTime();
+			const pastExpiry = blockTime - 60_000;
 			await handleList(makeOp(ACTION_LIST, {
 				nftId: "seed_test1",
 				price: { amount: "10.000", currency: "HIVE" },

@@ -1,4 +1,4 @@
-import { testConnection, sql } from "./db/client.ts";
+import { testConnection, sql, withTransaction } from "./db/client.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 
@@ -81,7 +81,7 @@ async function checkGenesisReset(): Promise<void> {
 		current: config.genesisBlock,
 	});
 
-	await sql.begin(async (txn) => {
+	await withTransaction(async (txn) => {
 		for (const table of DATA_TABLES) {
 			await txn.unsafe(`TRUNCATE TABLE ${table} CASCADE`);
 		}

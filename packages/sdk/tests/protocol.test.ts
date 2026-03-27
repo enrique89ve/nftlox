@@ -405,8 +405,8 @@ describe("Bulk Distribute Payload", () => {
 		});
 
 		expect(payload.action).toBe(ACTION_BULK_DISTRIBUTE);
-		expect(payload.data.items[0].originBlock).toBe(90000100);
-		expect(payload.data.items[1].originBlock).toBe(90000200);
+		expect(payload.data.items[0]!.originBlock).toBe(90000100);
+		expect(payload.data.items[1]!.originBlock).toBe(90000200);
 	});
 
 	test("should preserve all item fields", () => {
@@ -416,9 +416,9 @@ describe("Bulk Distribute Payload", () => {
 			],
 		});
 
-		expect(payload.data.items[0].seedId).toBe("seed_xyz");
-		expect(payload.data.items[0].quantity).toBe(5);
-		expect(payload.data.items[0].originBlock).toBe(0);
+		expect(payload.data.items[0]!.seedId).toBe("seed_xyz");
+		expect(payload.data.items[0]!.quantity).toBe(5);
+		expect(payload.data.items[0]!.originBlock).toBe(0);
 	});
 });
 

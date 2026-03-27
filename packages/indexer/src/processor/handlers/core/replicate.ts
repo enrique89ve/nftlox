@@ -16,7 +16,7 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 	if (!original) throw new Error(`Original NFT not found: ${originalId}`);
 	if (original.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${originalId}`);
 
-	const { hadExpiredListing } = assertTransferable(original, originalId);
+	const { hadExpiredListing } = assertTransferable(original, originalId, op.timestamp);
 
 	const rules = await getCollectionRules(original.collection_id, txn);
 	if (rules && !rules.replicable) {

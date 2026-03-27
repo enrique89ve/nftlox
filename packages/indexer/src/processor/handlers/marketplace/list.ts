@@ -16,7 +16,7 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<v
 	assertNotBurned(nft, nftId);
 	assertNotLent(nft, nftId);
 
-	if (nft.status === NFT_STATUS_LISTED && !isListingExpired(nft.listing_expires_at)) {
+	if (nft.status === NFT_STATUS_LISTED && !isListingExpired(nft.listing_expires_at, op.timestamp)) {
 		throw new Error(`NFT is already listed. Unlist first: ${nftId}`);
 	}
 

@@ -89,6 +89,7 @@ import type {
 	AtomicTransferInput,
 	HiveTransferOperation,
 	AtomicOperation,
+	SchemaFieldType,
 } from "./types";
 
 import {
@@ -753,8 +754,8 @@ export interface DeterministicCollectionInput {
 		royaltyRecipient?: string;
 	};
 	schema?: {
-		immutable: Array<{ name: string; type: string }>;
-		mutable: Array<{ name: string; type: string }>;
+		immutable: Array<{ name: string; type: SchemaFieldType }>;
+		mutable: Array<{ name: string; type: SchemaFieldType }>;
 	};
 }
 
