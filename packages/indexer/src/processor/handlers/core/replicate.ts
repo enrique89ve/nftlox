@@ -1,8 +1,9 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { insertNft, nftExists, getNftForProcessing, NFT_STATUS_BURNED, NFT_STATUS_LENT, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { insertNft, nftExists, getNftForProcessing, updateNftListing } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireUsername, optionalString } from "@/utils/validation.ts";
+import { assertTransferable } from "@/utils/status-checks.ts";
 
 export async function handleReplicate(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
@@ -14,9 +15,8 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 	const original = await getNftForProcessing(originalId, txn);
 	if (!original) throw new Error(`Original NFT not found: ${originalId}`);
 	if (original.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${originalId}`);
-	if (original.status === NFT_STATUS_BURNED) throw new Error(`Original NFT is burned: ${originalId}`);
-	if (original.status === NFT_STATUS_LENT) throw new Error(`Original NFT is lent and cannot be replicated: ${originalId}`);
-	if (original.status === NFT_STATUS_LISTED) throw new Error(`Original NFT is listed and must be unlisted before replicating: ${originalId}`);
+
+	const { hadExpiredListing } = assertTransferable(original, originalId);
 
 	const rules = await getCollectionRules(original.collection_id, txn);
 	if (rules && !rules.replicable) {
@@ -35,4 +35,8 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 		immutableData: null, mutableData: null, mutableDataHash: null,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
 	}, txn);
+
+	if (hadExpiredListing) {
+		await updateNftListing(originalId, null, null, null, null, txn);
+	}
 }

@@ -1,8 +1,9 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, NFT_STATUS_BURNED, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
+import { getNftForProcessing } from "@/db/queries/nfts.ts";
 import { upsertNftAllowance, deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireBoolean, requireUsername } from "@/utils/validation.ts";
+import { assertNotBurned, assertNotLent } from "@/utils/status-checks.ts";
 
 export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const spender = requireUsername(op.data.spender, "spender");
@@ -13,8 +14,10 @@ export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Pro
 
 	const nft = await getNftForProcessing(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
-	if (nft.status === NFT_STATUS_BURNED) throw new Error(`NFT is burned: ${instanceId}`);
-	if (nft.status === NFT_STATUS_LENT) throw new Error(`NFT is lent and cannot be approved: ${instanceId}`);
+
+	assertNotBurned(nft, instanceId);
+	assertNotLent(nft, instanceId);
+
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${instanceId}`);
 
 	if (approved) {

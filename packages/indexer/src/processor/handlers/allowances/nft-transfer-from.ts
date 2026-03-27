@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, updateNftOwner, NFT_STATUS_BURNED, NFT_STATUS_LENT, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { getNftForProcessing, updateNftOwner, updateNftListing } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import {
 	getNftAllowance,
@@ -8,6 +8,7 @@ import {
 	deleteNftAllowance,
 } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
+import { assertTransferable } from "@/utils/status-checks.ts";
 
 export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const from = requireUsername(op.data.from, "from");
@@ -18,9 +19,9 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 
 	const nft = await getNftForProcessing(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
-	if (nft.status === NFT_STATUS_BURNED) throw new Error(`NFT is burned: ${instanceId}`);
-	if (nft.status === NFT_STATUS_LENT) throw new Error(`NFT is lent and cannot be transferred: ${instanceId}`);
-	if (nft.status === NFT_STATUS_LISTED) throw new Error(`NFT is listed for sale and must be unlisted first: ${instanceId}`);
+
+	const { hadExpiredListing } = assertTransferable(nft, instanceId);
+
 	if (nft.owner !== from) throw new Error(`Account ${from} is not owner of ${instanceId}`);
 
 	const rules = await getCollectionRules(nft.collection_id, txn);
@@ -41,4 +42,8 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 
 	await updateNftOwner(instanceId, to, txn);
 	await deleteNftAllowance(instanceId, txn);
+
+	if (hadExpiredListing) {
+		await updateNftListing(instanceId, null, null, null, null, txn);
+	}
 }
