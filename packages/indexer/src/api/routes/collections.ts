@@ -2,20 +2,24 @@ import { Elysia, t } from "elysia";
 import {
 	listCollections,
 	getCollectionById,
+	getCollectionsByCreator,
 	getCollectionStats,
 } from "@/db/queries/collections.ts";
 import { queryNfts, parseNftKind } from "@/db/queries/nfts.ts";
 
 export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: ["Collections"] })
 	.get("/", async ({ query }) => {
-		const rows = await listCollections(query.limit, query.offset);
+		const rows = query.creator
+			? await getCollectionsByCreator(query.creator, query.limit, query.offset)
+			: await listCollections(query.limit, query.offset);
 		return rows;
 	}, {
 		query: t.Object({
+			creator: t.Optional(t.String({ description: "Filter by creator Hive username" })),
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
-		detail: { summary: "List collections", description: "Returns paginated list of all collections with seed/instance counts" },
+		detail: { summary: "List collections", description: "Returns paginated list of collections. Optionally filter by creator." },
 	})
 	.get("/:id", async ({ params }) => {
 		const row = await getCollectionById(params.id);

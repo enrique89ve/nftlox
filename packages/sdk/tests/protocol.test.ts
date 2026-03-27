@@ -166,6 +166,7 @@ describe("Collection Payload", () => {
 		rules: {
 			transferable: true,
 			burnable: true,
+			replicable: true,
 			royaltyPct: 5,
 		},
 	};
@@ -303,6 +304,7 @@ describe("Validation", () => {
 			rules: {
 				transferable: true,
 				burnable: true,
+				replicable: true,
 				royaltyPct: 5,
 			},
 		};

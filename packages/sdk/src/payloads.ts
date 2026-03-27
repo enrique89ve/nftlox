@@ -675,6 +675,7 @@ export interface DeterministicCollectionInput {
 	rules: {
 		transferable: boolean;
 		burnable: boolean;
+		replicable: boolean;
 		royaltyPct: number;
 		royaltyRecipient?: string;
 	};

@@ -113,6 +113,7 @@ export interface NftWithRulesRow extends NftProcessingRow {
 	creator: string;
 	transferable: boolean;
 	burnable: boolean;
+	replicable: boolean;
 	royalty_pct: number;
 	royalty_recipient: string | null;
 }
@@ -126,7 +127,7 @@ export async function getNftWithCollectionRules(
 			n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
 			n.collection_id, n.instance_dna, n.listing_price, n.listing_currency,
 			n.listing_expires_at, n.listing_marketplace,
-			c.creator, c.transferable, c.burnable, c.royalty_pct, c.royalty_recipient
+			c.creator, c.transferable, c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient
 		FROM nfts n
 		JOIN collections c ON c.id = n.collection_id
 		WHERE n.id = ${id}

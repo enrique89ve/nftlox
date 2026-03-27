@@ -9,7 +9,6 @@
 		"typecheck": "bunx tsc --noEmit"
 	},
 	"dependencies": {
-		"@hiveio/wax": "^1.28.4-rc0",
 		"hive-tx": "^7.0.1",
 		"nftlox-sdk": "workspace:*"
 	},

@@ -17,6 +17,12 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 	const metadata = optionalObject(d.metadata) ?? {};
 	const isSeed = id.startsWith("seed_");
 
+	if (isSeed && collection.total_potential > 0 && collection.seed_count >= collection.total_potential) {
+		throw new Error(
+			`Collection ${collectionId} reached its seed cap: ${collection.seed_count}/${collection.total_potential}`,
+		);
+	}
+
 	await insertNft({
 		id, collectionId, nftType: isSeed ? "seed" : "instance",
 		edition: optionalNumber(d.edition) ?? 1,

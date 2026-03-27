@@ -1274,6 +1274,7 @@ async function createCollection() {
 				rules: {
 					transferable: true,
 					burnable: true,
+					replicable: true,
 					royaltyPct: 5,
 					royaltyRecipient: creator,
 				},

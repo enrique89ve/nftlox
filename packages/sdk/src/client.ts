@@ -80,6 +80,7 @@ export interface IndexerCollection {
 	external_url: string | null;
 	transferable: boolean;
 	burnable: boolean;
+	replicable: boolean;
 	royalty_pct: number;
 	royalty_recipient: string | null;
 	json_id: string | null;

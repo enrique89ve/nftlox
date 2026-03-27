@@ -13,6 +13,7 @@ export interface InsertCollectionParams {
 	externalUrl: string | null;
 	transferable: boolean;
 	burnable: boolean;
+	replicable: boolean;
 	royaltyPct: number;
 	royaltyRecipient: string | null;
 	blockNum: number;
@@ -25,13 +26,13 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 		INSERT INTO collections (
 			id, json_id, name, symbol, creator, total_potential,
 			origin_dna, description, image_url, external_url,
-			transferable, burnable, royalty_pct, royalty_recipient,
+			transferable, burnable, replicable, royalty_pct, royalty_recipient,
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.jsonId}, ${params.name}, ${params.symbol},
 			${params.creator}, ${params.totalPotential}, ${params.originDna},
 			${params.description}, ${params.imageUrl}, ${params.externalUrl},
-			${params.transferable}, ${params.burnable}, ${params.royaltyPct},
+			${params.transferable}, ${params.burnable}, ${params.replicable}, ${params.royaltyPct},
 			${params.royaltyRecipient}, ${params.blockNum}, ${params.txId},
 			${params.createdAt}
 		)
@@ -48,8 +49,11 @@ export async function getCollectionById(id: string): Promise<Record<string, unkn
 export interface CollectionRulesRow {
 	id: string;
 	creator: string;
+	total_potential: number;
+	seed_count: number;
 	transferable: boolean;
 	burnable: boolean;
+	replicable: boolean;
 	royalty_pct: number;
 	royalty_recipient: string | null;
 }
@@ -59,8 +63,13 @@ export async function getCollectionRules(
 	txn: Queryable = sql,
 ): Promise<CollectionRulesRow | null> {
 	const [row] = await txn<CollectionRulesRow[]>`
-		SELECT id, creator, transferable, burnable, royalty_pct, royalty_recipient
-		FROM collections WHERE id = ${id}
+		SELECT c.id, c.creator, c.total_potential, c.transferable,
+			c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient,
+			COALESCE(COUNT(n.id) FILTER (WHERE n.nft_type = 'seed'), 0)::int AS seed_count
+		FROM collections c
+		LEFT JOIN nfts n ON n.collection_id = c.id
+		WHERE c.id = ${id}
+		GROUP BY c.id
 	`;
 	return row ?? null;
 }

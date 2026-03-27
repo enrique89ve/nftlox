@@ -95,6 +95,7 @@ export const createCollectionInputSchema = z.object({
 	rules: z.object({
 		transferable: z.boolean(),
 		burnable: z.boolean(),
+		replicable: z.boolean(),
 		royaltyPct: z.number().min(0).max(MAX_ROYALTY_PCT, `Royalty percentage must be between 0 and ${MAX_ROYALTY_PCT}`),
 		royaltyRecipient: z.string().optional(),
 	}),

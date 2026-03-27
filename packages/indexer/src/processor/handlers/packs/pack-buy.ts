@@ -4,6 +4,7 @@ import {
 	getPackForProcessing,
 	upsertPackBalance,
 	incrementPackSupply,
+	updatePackStatus,
 } from "@/db/queries/packs.ts";
 import { requireString, requireNumber } from "@/utils/validation.ts";
 
@@ -54,4 +55,8 @@ export async function handlePackBuy(op: ParsedOperation, txn: Queryable): Promis
 
 	await upsertPackBalance(op.signer, packId, quantity, txn);
 	await incrementPackSupply(packId, quantity, txn);
+
+	if (pack.max_supply > 0 && (pack.current_supply + quantity) >= pack.max_supply) {
+		await updatePackStatus(packId, "depleted", txn);
+	}
 }

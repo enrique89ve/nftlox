@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS collections (
 	external_url TEXT,
 	transferable BOOLEAN NOT NULL DEFAULT TRUE,
 	burnable BOOLEAN NOT NULL DEFAULT TRUE,
+	replicable BOOLEAN NOT NULL DEFAULT TRUE,
 	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
 	royalty_recipient TEXT,
 	block_num BIGINT NOT NULL,
@@ -51,6 +52,8 @@ CREATE TABLE IF NOT EXISTS collections (
 	created_at TIMESTAMPTZ NOT NULL,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Add replicable column if upgrading from older schema
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS replicable BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- NFTs (unified: seeds, instances, replicas)
 CREATE TABLE IF NOT EXISTS nfts (

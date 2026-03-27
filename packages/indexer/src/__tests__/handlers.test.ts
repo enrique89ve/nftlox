@@ -78,7 +78,7 @@ async function seedCollection(txn: Queryable = sql) {
 		totalPotential: 1000,
 		originDna: "dna_col_test_1234",
 		metadata: { description: "A test collection", image: "https://example.com/img.png" },
-		rules: { transferable: true, burnable: true, royaltyPct: 5 },
+		rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 5 },
 	});
 	await handleCreateCollection(op, txn);
 }
@@ -611,7 +611,7 @@ describe("Handlers (integration)", () => {
 				totalPotential: 100,
 				originDna: "dna_col_locked",
 				metadata: { description: "Non-transferable" },
-				rules: { transferable: false, burnable: true, royaltyPct: 0 },
+				rules: { transferable: false, burnable: true, replicable: true, royaltyPct: 0 },
 			});
 			await handleCreateCollection(colOp, sql);
 

@@ -27,6 +27,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		externalUrl: optionalString(metadata.externalUrl),
 		transferable: optionalBoolean(rules.transferable, true),
 		burnable: optionalBoolean(rules.burnable, true),
+		replicable: optionalBoolean(rules.replicable, true),
 		royaltyPct: optionalNumber(rules.royaltyPct) ?? 0,
 		royaltyRecipient: optionalString(rules.royaltyRecipient),
 		blockNum: op.blockNum,

@@ -40,9 +40,11 @@ interface ParsedAmount {
 	readonly currency: string;
 }
 
+type MultisigRules = Pick<CollectionRulesRow, "id" | "creator" | "transferable" | "burnable" | "replicable" | "royalty_pct" | "royalty_recipient">;
+
 interface NftStateResult {
 	readonly nft: NftProcessingRow;
-	readonly rules: CollectionRulesRow;
+	readonly rules: MultisigRules;
 }
 
 // ============ PUBLIC API ============
@@ -356,14 +358,15 @@ async function validateNftState(
 	}
 
 	const nft: NftProcessingRow = nftWithRules;
-	const rules: CollectionRulesRow = {
+	const rules = {
 		id: nftWithRules.collection_id,
 		creator: nftWithRules.creator,
 		transferable: nftWithRules.transferable,
 		burnable: nftWithRules.burnable,
+		replicable: nftWithRules.replicable,
 		royalty_pct: nftWithRules.royalty_pct,
 		royalty_recipient: nftWithRules.royalty_recipient,
-	};
+	} satisfies MultisigRules;
 
 	return { nft, rules };
 }
@@ -373,7 +376,7 @@ async function validateNftState(
 function validatePaymentSplit(
 	transfers: ReadonlyArray<TransferRecord>,
 	nft: NftProcessingRow,
-	rules: CollectionRulesRow,
+	rules: MultisigRules,
 	feeAccount: string,
 ): void {
 	if (!nft.listing_price || !nft.listing_currency) {

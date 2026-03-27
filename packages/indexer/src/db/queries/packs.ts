@@ -141,6 +141,16 @@ export async function incrementPackOpened(
 	`;
 }
 
+export async function updatePackStatus(
+	packId: string,
+	status: string,
+	txn: Queryable = sql,
+): Promise<void> {
+	await txn`
+		UPDATE packs SET status = ${status} WHERE id = ${packId}
+	`;
+}
+
 // ============ API QUERIES ============
 
 export async function listPacks(collectionId?: string, limit = 50, offset = 0) {

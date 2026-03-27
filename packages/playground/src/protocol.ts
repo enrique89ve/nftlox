@@ -67,6 +67,7 @@ export function createTestCollection(
 		rules: {
 			transferable: true,
 			burnable: true,
+			replicable: true,
 			royaltyPct: 5,
 			royaltyRecipient: creator,
 		},
@@ -285,6 +286,7 @@ export function createDeterministicCollection(
 		rules: {
 			transferable: true,
 			burnable: true,
+			replicable: true,
 			royaltyPct: 5,
 			royaltyRecipient: creator,
 		},
