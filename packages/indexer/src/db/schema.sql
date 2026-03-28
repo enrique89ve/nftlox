@@ -115,6 +115,10 @@ ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data_hash TEXT;
 ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data_tx TEXT;
 ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data_block BIGINT;
 
+-- Burn traceability
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS burned_by TEXT;
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS burned_at_block BIGINT;
+
 -- Invalid operations (audit trail)
 CREATE TABLE IF NOT EXISTS invalid_operations (
 	id BIGSERIAL PRIMARY KEY,

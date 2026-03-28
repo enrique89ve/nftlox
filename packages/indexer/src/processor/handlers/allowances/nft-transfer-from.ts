@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, updateNftOwner, updateNftListing } from "@/db/queries/nfts.ts";
+import { getNftForProcessing, updateNftOwner } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import {
 	getNftAllowance,
@@ -42,8 +42,4 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 
 	await updateNftOwner(instanceId, to, txn);
 	await deleteNftAllowance(instanceId, txn);
-
-	if (hadExpiredListing) {
-		await updateNftListing(instanceId, null, null, null, null, txn);
-	}
 }

@@ -3,6 +3,7 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftWithCollectionRules, updateNftOwner, NFT_STATUS_LISTED, NFT_STATUS_BURNED, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername, verifyTransfers } from "@/utils/validation.ts";
+import { isListingExpired } from "@/utils/status-checks.ts";
 import { config } from "@/config.ts";
 
 /**
@@ -23,6 +24,9 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	if (nft.status === NFT_STATUS_BURNED) throw new Error(`NFT is burned: ${nftId}`);
 	if (nft.status === NFT_STATUS_LENT) throw new Error(`NFT is lent: ${nftId}`);
 	if (nft.status !== NFT_STATUS_LISTED) throw new Error(`NFT not listed: ${nftId}`);
+	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
+		throw new Error(`Listing has expired for NFT: ${nftId}`);
+	}
 	if (nft.owner === buyer) throw new Error(`Cannot buy own NFT: ${nftId}`);
 
 	const totalPrice = Number(nft.listing_price);

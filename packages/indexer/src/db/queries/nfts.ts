@@ -174,10 +174,11 @@ export async function updateNftStatus(nftId: string, status: NftStatus, txn: Que
 	await txn`UPDATE nfts SET status = ${status} WHERE id = ${nftId}`;
 }
 
-export async function updateNftBurned(nftId: string, txn: Queryable = sql) {
+export async function updateNftBurned(nftId: string, burnedBy: string, blockNum: number, txn: Queryable = sql) {
 	await txn`
 		UPDATE nfts
 		SET status = ${NFT_STATUS_BURNED},
+		    burned_by = ${burnedBy}, burned_at_block = ${blockNum},
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
 	`;

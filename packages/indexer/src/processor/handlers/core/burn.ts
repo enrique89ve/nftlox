@@ -16,6 +16,6 @@ export async function handleBurn(op: ParsedOperation, txn: Queryable): Promise<v
 
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 
-	await updateNftBurned(nftId, txn);
+	await updateNftBurned(nftId, op.signer, op.blockNum, txn);
 	await deleteNftAllowance(nftId, txn);
 }
