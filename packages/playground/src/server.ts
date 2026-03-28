@@ -19,6 +19,14 @@ const json = (data: unknown, status = 200) =>
 		headers: { "Content-Type": "application/json" },
 	});
 
+const MIME_TYPES: Record<string, string> = {
+	".html": "text/html; charset=utf-8",
+	".md": "text/plain; charset=utf-8",
+	".json": "application/json",
+	".css": "text/css",
+	".js": "application/javascript",
+};
+
 const ALLOWED_SAMPLE_FILES = new Set([
 	"sample-bulls.json",
 	"sample-seeds.json",
@@ -46,6 +54,23 @@ const server = Bun.serve({
 			return new Response(file, {
 				headers: { "Content-Type": "application/json" },
 			});
+		},
+
+		// ============ DOCUMENTATION (docsify) ============
+		"/docs": () => Response.redirect("/docs/", 301),
+		"/docs/": async () => {
+			const file = Bun.file("./docs/index.html");
+			if (!await file.exists()) return new Response("Not Found", { status: 404 });
+			return new Response(file, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+		},
+		"/docs/*": async (req) => {
+			const path = new URL(req.url).pathname.slice("/docs/".length);
+			if (!path || path.includes("..")) return new Response("Not Found", { status: 404 });
+			const file = Bun.file(`./docs/${path}`);
+			if (!await file.exists()) return new Response("Not Found", { status: 404 });
+			const ext = `.${path.split(".").pop()}`;
+			const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
+			return new Response(file, { headers: { "Content-Type": contentType } });
 		},
 
 		// ============ QUERY ROUTES (Indexer API proxy) ============

@@ -4,6 +4,10 @@
 		"name": "My First NFT",
 		"brief": "Description of this NFT seed",
 		"imageUrl": "https://example.com/image.png",
-		"maxSupply": 100
+		"maxSupply": 100,
+		"immutableData": {
+			"rarity": "common",
+			"category": "item"
+		}
 	}
 ]

@@ -23,7 +23,7 @@
 	},
 	"seeds": [
 		{
-			"artId": "FIRE-DRAGON-001",
+			"artId": "FIRE-DRG-001",
 			"name": "Inferno Drake",
 			"brief": "Legendary fire dragon with devastating flame attacks",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/2458Ywc656oqQ6dLVq9VJKbRrFocRLNuBSfanqkh9x6NdzUTTxiEZgK9PnWYUAaEfVwKP.png",
@@ -65,7 +65,7 @@
 			}
 		},
 		{
-			"artId": "EARTH-SHIELD-001",
+			"artId": "ERTH-SHLD-001",
 			"name": "Stone Barrier",
 			"brief": "Common earth trap that blocks one attack",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yTmHF4uoo6ZRyk2trWSAgqwpG4kDjRY3VhLBnKfxLkpTp6zAQjQnS1oFyky7yQ51eRZ.png",
@@ -79,7 +79,7 @@
 			}
 		},
 		{
-			"artId": "STARTER-WOLF-001",
+			"artId": "STRT-WOLF-001",
 			"name": "Shadow Wolf",
 			"brief": "Free starter card given to all new players",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23zkrwARsCeyekADuopVGaSTRGokezX8uBCbMzpN9NfPauy5s295oAQnNVBHMhFTTK4pY.png",
