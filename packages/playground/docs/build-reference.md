@@ -6,7 +6,7 @@ The Build API constructs unsigned Hive `custom_json` operations for the NFTLox p
 
 Each endpoint validates input, generates deterministic IDs where applicable, and returns a ready-to-sign Hive operation payload.
 
-**Base URL:** `http://localhost:3040` (playground server). This is not the production indexer.
+**Base URL:** `https://nftloxtest.hivecreators.co` (playground server). This is not the production indexer.
 
 **Protocol version:** `0.3.0`
 
@@ -116,7 +116,7 @@ Schema field types: `string`, `bool`, `uint8`, `uint16`, `uint32`, `uint64`, `in
 **curl example:**
 
 ```bash
-curl -X POST http://localhost:3040/api/build/collection \
+curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 	-H "Content-Type: application/json" \
 	-d '{
 		"jsonId": "json_abc123",
@@ -173,7 +173,7 @@ Mint seed NFTs for a collection. Returns operations batched into groups of up to
 **curl example:**
 
 ```bash
-curl -X POST http://localhost:3040/api/build/seeds \
+curl -X POST https://nftloxtest.hivecreators.co/api/build/seeds \
 	-H "Content-Type: application/json" \
 	-d '{
 		"collectionId": "col_abc123",
@@ -220,7 +220,7 @@ Distribute instances from seeds to a recipient. Creates NFT instances from exist
 **curl example:**
 
 ```bash
-curl -X POST http://localhost:3040/api/build/bulk-distribute \
+curl -X POST https://nftloxtest.hivecreators.co/api/build/bulk-distribute \
 	-H "Content-Type: application/json" \
 	-d '{
 		"signer": "alice",
@@ -292,7 +292,7 @@ Create a replica of an existing NFT instance (if the collection allows replicati
 **curl example:**
 
 ```bash
-curl -X POST http://localhost:3040/api/build/replicate \
+curl -X POST https://nftloxtest.hivecreators.co/api/build/replicate \
 	-H "Content-Type: application/json" \
 	-d '{
 		"originalId": "nft_abc123",
@@ -422,7 +422,7 @@ List an NFT for sale on the marketplace.
 **curl example:**
 
 ```bash
-curl -X POST http://localhost:3040/api/build/list \
+curl -X POST https://nftloxtest.hivecreators.co/api/build/list \
 	-H "Content-Type: application/json" \
 	-d '{
 		"nftId": "nft_abc123",
@@ -526,7 +526,7 @@ Create a new pack definition for a collection.
 **curl example:**
 
 ```bash
-curl -X POST http://localhost:3040/api/build/pack-create \
+curl -X POST https://nftloxtest.hivecreators.co/api/build/pack-create \
 	-H "Content-Type: application/json" \
 	-d '{
 		"collectionId": "col_abc123",

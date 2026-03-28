@@ -93,7 +93,7 @@ Working code for common workflows:
 | Environment | URL |
 |---|---|
 | Testnet API | `https://api-nftlox.hivecreators.co/api/` |
-| Playground | `http://localhost:3040/api/` |
+| Playground | `https://nftloxtest.hivecreators.co/api/` |
 
 ---
 

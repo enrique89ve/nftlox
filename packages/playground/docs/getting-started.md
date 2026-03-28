@@ -101,7 +101,7 @@ The build API constructs unsigned Hive `custom_json` operations. It validates yo
 ### Example: Create a collection
 
 ```bash
-curl -X POST http://localhost:3040/api/build/collection \
+curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 	-H "Content-Type: application/json" \
 	-d '{
 		"jsonId": "json_mycol_001",
@@ -201,7 +201,7 @@ async function signAndBroadcast(
 }
 
 // Usage with a build API response:
-const buildResponse = await fetch("http://localhost:3040/api/build/transfer", {
+const buildResponse = await fetch("https://nftloxtest.hivecreators.co/api/build/transfer", {
 	method: "POST",
 	headers: { "Content-Type": "application/json" },
 	body: JSON.stringify({

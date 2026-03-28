@@ -387,7 +387,7 @@ const items = Array.from(counts.entries()).map(([seedId, quantity]) => ({
 }));
 
 // Step 3: Build the operation via playground API
-const response = await fetch("http://localhost:3040/api/build/bulk-distribute", {
+const response = await fetch("https://nftloxtest.hivecreators.co/api/build/bulk-distribute", {
 	method: "POST",
 	headers: { "Content-Type": "application/json" },
 	body: JSON.stringify({

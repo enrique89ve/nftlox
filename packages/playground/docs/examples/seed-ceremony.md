@@ -443,7 +443,7 @@ If you prefer not to manage Hive signing directly, you can use the playground's 
 
 ```typescript
 // Build seeds via the playground API
-const response = await fetch("http://localhost:3040/api/build/seeds", {
+const response = await fetch("https://nftloxtest.hivecreators.co/api/build/seeds", {
 	method: "POST",
 	headers: { "Content-Type": "application/json" },
 	body: JSON.stringify({
