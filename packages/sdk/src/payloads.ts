@@ -4,6 +4,7 @@
 import {
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
+	SAFE_PAYLOAD_MAX_BYTES,
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
@@ -29,8 +30,6 @@ import {
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
 	ACTION_BUY,
-	MAX_TAGS,
-	MAX_TAG_LENGTH,
 } from "./constants";
 
 import type {
@@ -105,6 +104,35 @@ import {
 	generateDeterministicPackId,
 	deterministicHash,
 } from "./dna";
+
+export class PayloadTooLargeError extends Error {
+	readonly payloadBytes: number;
+	readonly maxBytes: number;
+	readonly suggestedMaxItems: number;
+
+	constructor(payloadBytes: number, maxBytes: number, itemCount: number) {
+		const ratio = maxBytes / payloadBytes;
+		const suggestedMaxItems = Math.max(1, Math.floor(itemCount * ratio));
+
+		super(
+			`Payload too large: ${payloadBytes} bytes (limit: ${maxBytes}). ` +
+			`Try reducing to ~${suggestedMaxItems} items per batch, or remove imageOverrides/optional fields.`,
+		);
+
+		this.name = "PayloadTooLargeError";
+		this.payloadBytes = payloadBytes;
+		this.maxBytes = maxBytes;
+		this.suggestedMaxItems = suggestedMaxItems;
+	}
+}
+
+function safeStringify(payload: unknown, itemCount = 0): string {
+	const json = JSON.stringify(payload);
+	if (json.length > SAFE_PAYLOAD_MAX_BYTES) {
+		throw new PayloadTooLargeError(json.length, SAFE_PAYLOAD_MAX_BYTES, itemCount);
+	}
+	return json;
+}
 
 /** Spread seed provenance fields only when present */
 function spreadProvenance(p?: SeedProvenance): Record<string, string> {
@@ -184,8 +212,6 @@ export function createMintPayload(input: MintInput): ProtocolPayload<NFTData> {
 			maxReplicas: input.maxReplicas ?? 1,
 			createdAt: Date.now(),
 
-			// Discovery (optional)
-			...(input.tags && { tags: sanitizeTags(input.tags) }),
 			...(input.data && { data: input.data }),
 		},
 	};
@@ -251,7 +277,7 @@ export function createBulkDistributeOperation(
 			required_auths: [],
 			required_posting_auths: [signer],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload, input.items.length),
 		},
 	];
 }
@@ -305,17 +331,7 @@ export function createBurnPayload(
 // ============ SET_DATA PAYLOADS ============
 
 /**
- * Sanitize tags: lowercase, trim, max 4 tags, max 8 chars each.
- */
-export function sanitizeTags(tags: string[]): string[] {
-	return tags
-		.map((t) => t.trim().toLowerCase().slice(0, MAX_TAG_LENGTH))
-		.filter(Boolean)
-		.slice(0, MAX_TAGS);
-}
-
-/**
- * Create a set_data payload to update an NFT's mutable data and/or tags.
+ * Create a set_data payload to update an NFT's mutable data.
  * Only the NFT owner can call this (requires active key).
  */
 export function createSetDataPayload(
@@ -329,7 +345,6 @@ export function createSetDataPayload(
 			nftId: input.nftId,
 			instanceDna: input.instanceDna,
 			data: input.data,
-			...(input.tags && { tags: sanitizeTags(input.tags) }),
 		},
 	};
 }
@@ -345,7 +360,7 @@ export function createSetDataOperation(
 			required_auths: [],
 			required_posting_auths: [issuer],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -378,7 +393,7 @@ export function createDataOperatorApproveOperation(
 			required_auths: [],
 			required_posting_auths: [creator],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -394,7 +409,6 @@ export function createSetDataFromPayload(
 			nftId: input.nftId,
 			instanceDna: input.instanceDna,
 			data: input.data,
-			...(input.tags && { tags: sanitizeTags(input.tags) }),
 			...spreadProvenance(input),
 		},
 	};
@@ -411,7 +425,7 @@ export function createSetDataFromOperation(
 			required_auths: [],
 			required_posting_auths: [operator],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -444,7 +458,7 @@ export function createSetOwnerDataOperation(
 			required_auths: [],
 			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -477,7 +491,7 @@ export function createExtendSchemaOperation(
 			required_auths: [],
 			required_posting_auths: [creator],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -551,7 +565,7 @@ export function createCollectionOperation(
 			required_auths: [],
 			required_posting_auths: [input.creator],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -564,7 +578,7 @@ export function createMintOperation(input: MintInput): HiveOperation {
 			required_auths: [],
 			required_posting_auths: [input.owner],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -577,7 +591,7 @@ export function createReplicateOperation(input: ReplicateInput): HiveOperation {
 			required_auths: [],
 			required_posting_auths: [input.currentOwner],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -597,7 +611,7 @@ export function createTransferOperation(
 			required_auths: [],
 			required_posting_auths: [from],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -616,7 +630,7 @@ export function createBurnOperation(
 			required_auths: [],
 			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -629,7 +643,7 @@ export function createListOperation(input: ListInput, owner: string): HiveOperat
 			required_auths: [],
 			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -647,7 +661,7 @@ export function createUnlistOperation(
 			required_auths: [],
 			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -723,7 +737,7 @@ export function createAtomicTransferOperations(
 			required_auths: [input.from],
 			required_posting_auths: [],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 
@@ -808,6 +822,8 @@ export interface DeterministicMintInput {
 	birthBlock?: number;
 	birthTx?: string;
 	collectionBlock?: number;
+	immutableData?: Record<string, unknown>;
+	mutableData?: Record<string, unknown>;
 }
 
 /**
@@ -850,6 +866,8 @@ export function createDeterministicMintPayload(
 			},
 			maxReplicas: input.maxReplicas ?? 1,
 			createdAt: Date.now(),
+			...(input.immutableData && { immutableData: input.immutableData }),
+			...(input.mutableData && { mutableData: input.mutableData }),
 		},
 	};
 }
@@ -936,7 +954,7 @@ export function createPackCreateOperation(
 			required_auths: [],
 			required_posting_auths: [creator],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -952,7 +970,7 @@ export function createPackBuyOperation(
 			required_auths: [],
 			required_posting_auths: [buyer],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -968,7 +986,7 @@ export function createPackTransferOperation(
 			required_auths: [],
 			required_posting_auths: [from],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -984,7 +1002,7 @@ export function createPackOpenOperation(
 			required_auths: [],
 			required_posting_auths: [opener],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -1083,7 +1101,7 @@ export function createPackApproveOperation(
 			required_auths: [],
 			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -1099,7 +1117,7 @@ export function createPackTransferFromOperation(
 			required_auths: [],
 			required_posting_auths: [spender],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -1115,7 +1133,7 @@ export function createNftApproveOperation(
 			required_auths: [],
 			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -1131,7 +1149,7 @@ export function createNftApproveAllOperation(
 			required_auths: [],
 			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -1147,7 +1165,7 @@ export function createNftTransferFromOperation(
 			required_auths: [],
 			required_posting_auths: [spender],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -1194,7 +1212,7 @@ export function createNftLendOperation(
 			required_auths: [],
 			required_posting_auths: [owner],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }
@@ -1210,7 +1228,7 @@ export function createNftReturnOperation(
 			required_auths: [],
 			required_posting_auths: [signer],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
+			json: safeStringify(payload),
 		},
 	];
 }

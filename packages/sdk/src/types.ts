@@ -127,8 +127,7 @@ export interface NFTData {
 	mutableData?: Record<string, unknown>;
 	ownerData?: Record<string, unknown>;
 
-	// Discovery (optional)
-	tags?: string[];
+	// Legacy (optional)
 	data?: Record<string, unknown>;
 }
 
@@ -189,7 +188,6 @@ export interface SetDataData {
 	instanceDna: string;
 	data?: Record<string, unknown>;
 	mutableData?: Record<string, unknown>;
-	tags?: string[];
 }
 
 // ============ SET_OWNER_DATA TYPES ============
@@ -213,7 +211,6 @@ export interface SetDataFromData extends SeedProvenance {
 	instanceDna: string;
 	data?: Record<string, unknown>;
 	mutableData?: Record<string, unknown>;
-	tags?: string[];
 }
 
 // ============ ATOMIC TRANSFER TYPES (Dual-registro) ============

@@ -17,7 +17,6 @@ import {
 	generateDeterministicAccessKey,
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	validateHiveUsername,
-	ACTION_BULK_DISTRIBUTE,
 	computeDataHashSync,
 	validateMutableUpdate,
 	type CollectionSchema,
@@ -32,7 +31,6 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	const to = toRaw ?? op.signer;
 	const items = requireArray(op.data.items, "items");
 	const imageOverrides = (op.data.imageOverrides as Record<string, { imageUrl?: string; imageHash?: string }>) ?? {};
-	const customData = (op.data.data as Record<string, unknown>) ?? null;
 	const mutableData = (op.data.mutableData as Record<string, unknown>) ?? null;
 
 	// Validate mutableData against schema if collection has one
@@ -136,6 +134,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 			// Inherit immutable_data from seed
 			const seedImmutableData = seed.immutable_data as Record<string, unknown> | null;
+			const seedImmutableDataHash = seedImmutableData ? computeDataHashSync(seedImmutableData) : null;
 
 			await insertNft({
 				id: instanceId,
@@ -157,9 +156,8 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				seedId,
 				instanceNumber,
 				originalId: null,
-				tags: null,
-				customData: mutableData ? null : { source: ACTION_BULK_DISTRIBUTE, ...(customData ?? {}) },
 				immutableData: seedImmutableData,
+				immutableDataHash: seedImmutableDataHash,
 				mutableData,
 				mutableDataHash,
 				blockNum: op.blockNum,

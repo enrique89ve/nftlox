@@ -2,13 +2,12 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import {
 	getNftForProcessing,
-	updateNftOperatorData,
 	updateNftMutableData,
 	NFT_STATUS_BURNED,
 } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { hasDataOperatorApproval } from "@/db/queries/allowances.ts";
-import { requireString, optionalObject, optionalStringArray } from "@/utils/validation.ts";
+import { requireString, optionalObject } from "@/utils/validation.ts";
 import { validateMutableUpdate, computeDataHashSync, type CollectionSchema } from "nftlox-sdk";
 
 export async function handleSetDataFrom(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -49,11 +48,9 @@ export async function handleSetDataFrom(op: ParsedOperation, txn: Queryable): Pr
 		await updateNftMutableData(
 			nftId, merged, dataHash,
 			op.txId, op.blockNum,
-			optionalStringArray(op.data.tags),
 			txn,
 		);
 	} else {
-		// Legacy: operator writes to operator_data
-		await updateNftOperatorData(nftId, op.data.data ?? null, optionalStringArray(op.data.tags), txn);
+		throw new Error(`Collection ${nft.collection_id} requires a schema for set_data_from`);
 	}
 }

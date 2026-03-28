@@ -83,13 +83,10 @@ function getFormData(action: string): Record<string, unknown> | null {
 				try { data = JSON.parse(dataStr); }
 				catch { log("Invalid JSON in data field", "error"); return null; }
 			}
-			const tagsStr = val("perm-set-data-from-tags");
-			const tags = tagsStr ? tagsStr.split(",").map(t => t.trim()).filter(Boolean) : undefined;
 			return {
 				nftId: val("perm-set-data-from-nft"),
 				instanceDna: val("perm-set-data-from-dna"),
 				data,
-				tags,
 				operator: getConnectedUser(),
 			};
 		}

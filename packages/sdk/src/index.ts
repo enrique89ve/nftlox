@@ -16,9 +16,6 @@ export {
 	MIN_SYMBOL_LENGTH,
 	MAX_SYMBOL_LENGTH,
 	SYMBOL_REGEX,
-	MAX_TAGS,
-	MAX_TAG_LENGTH,
-	TAG_REGEX,
 	ORIGIN_DNA_LENGTH,
 	INSTANCE_DNA_LENGTH,
 	ACCESS_KEY_LENGTH,
@@ -30,6 +27,8 @@ export {
 	calculatePaymentSplit,
 	roundHive,
 	type PaymentSplit,
+	HIVE_CUSTOM_JSON_MAX_BYTES,
+	SAFE_PAYLOAD_MAX_BYTES,
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
@@ -223,7 +222,6 @@ export {
 	createSetOwnerDataOperation,
 	createExtendSchemaPayload,
 	createExtendSchemaOperation,
-	sanitizeTags,
 	createListPayload,
 	createUnlistPayload,
 	createBuyPayload,
@@ -272,6 +270,7 @@ export {
 	createNftLendOperation,
 	createNftReturnPayload,
 	createNftReturnOperation,
+	PayloadTooLargeError,
 } from "./payloads";
 
 // ============ SCHEMAS ============

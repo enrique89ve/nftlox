@@ -14,7 +14,7 @@ export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promi
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
-	const { hadExpiredListing } = assertTransferable(nft, nftId, op.timestamp);
+	assertTransferable(nft, nftId, op.timestamp);
 
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 

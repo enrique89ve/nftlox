@@ -7,12 +7,16 @@ import {
 	updatePackStatus,
 } from "@/db/queries/packs.ts";
 import { requireString, requireNumber } from "@/utils/validation.ts";
+import { MAX_PACK_OPEN_BATCH } from "nftlox-sdk";
 
 export async function handlePackBuy(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const packId = requireString(op.data.packId, "packId");
 	const quantity = requireNumber(op.data.quantity, "quantity");
 
 	if (quantity < 1) throw new Error("Quantity must be positive");
+	if (quantity > MAX_PACK_OPEN_BATCH) {
+		throw new Error(`Cannot buy more than ${MAX_PACK_OPEN_BATCH} packs at once, got ${quantity}`);
+	}
 
 	const pack = await getPackForProcessing(packId, txn);
 	if (!pack) throw new Error(`Pack not found: ${packId}`);

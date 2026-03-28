@@ -132,8 +132,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					originalId: nft.original_id,
 					seedId: nft.seed_id,
 					instanceNumber: nft.instance_number,
-					tags: nft.tags,
-					customData: nft.custom_data,
 					imageHash: nft.image_hash,
 					dna: nft.instance_dna,
 				},

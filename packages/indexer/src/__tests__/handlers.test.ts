@@ -100,7 +100,16 @@ async function seedMint(txn: Queryable = sql) {
 
 describe("Handlers (integration)", () => {
 	beforeAll(async () => {
-		await sql`SELECT 1`;
+		// Drop all tables to ensure clean schema (testnet only)
+		await sql.unsafe(`
+			DROP TABLE IF EXISTS nft_loans, nft_allowances, collection_allowances,
+				pack_allowances, user_pack_balances, data_operators,
+				orphaned_buys, invalid_operations, owner_nft_counts,
+				nfts, packs, collections, sync_state CASCADE
+		`);
+		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status, pack_status CASCADE");
+		const schemaFile = Bun.file(import.meta.dir + "/../db/schema.sql");
+		await sql.unsafe(await schemaFile.text());
 	});
 
 	afterAll(async () => {
@@ -282,14 +291,14 @@ describe("Handlers (integration)", () => {
 		test("collection creator can distribute", async () => {
 			await seedCollection(); // creator = alice
 
-			// Mint seed owned by bob
+			// Mint seed owned by bob (alice is creator, mints for bob)
 			const mintOp = makeOp(ACTION_MINT, {
 				id: "seed_bob",
 				collectionId: "col_test",
 				owner: "bob",
 				maxReplicas: 10,
 				metadata: { name: "Bob Seed" },
-			}, "bob");
+			}, "alice");
 			await handleMint(mintOp, sql);
 
 			// Alice (creator) distributes bob's seed
@@ -647,7 +656,7 @@ describe("Handlers (integration)", () => {
 			await handleBurn(makeOp(ACTION_BURN, { nftId: "seed_test1" }), sql);
 			await expect(
 				handleBurn(makeOp(ACTION_BURN, { nftId: "seed_test1" }), sql),
-			).rejects.toThrow("already burned");
+			).rejects.toThrow("NFT is burned");
 		});
 	});
 
@@ -1314,7 +1323,7 @@ describe("Handlers (integration)", () => {
 				name: "Test Pack",
 				dropTable: [{ seedId: "seed_test1", weight: 1 }],
 				itemsPerPack: 1,
-				maxSupply: 100,
+				maxSupply: 5,
 			});
 			await handlePackCreate(packOp, sql);
 

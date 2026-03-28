@@ -39,9 +39,8 @@ export interface InsertNftParams {
 	seedId: string | null;
 	instanceNumber: number | null;
 	originalId: string | null;
-	tags: string[] | null;
-	customData: unknown | null;
 	immutableData: unknown | null;
+	immutableDataHash: string | null;
 	mutableData: unknown | null;
 	mutableDataHash: string | null;
 	blockNum: number;
@@ -58,8 +57,8 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			name, description, image_url, image_hash,
 			max_replicas, distributed,
 			seed_id, instance_number, original_id,
-			tags, custom_data,
-			immutable_data, mutable_data, mutable_data_hash, mutable_data_tx, mutable_data_block,
+			immutable_data, immutable_data_hash,
+			mutable_data, mutable_data_hash, mutable_data_tx, mutable_data_block,
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.collectionId}, ${params.nftType},
@@ -69,8 +68,8 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			${params.name}, ${params.description}, ${params.imageUrl}, ${params.imageHash},
 			${params.maxReplicas}, ${params.distributed ?? 0},
 			${params.seedId}, ${params.instanceNumber}, ${params.originalId},
-			${params.tags}, ${params.customData ? JSON.stringify(params.customData) : null},
 			${params.immutableData ? JSON.stringify(params.immutableData) : null},
+			${params.immutableDataHash},
 			${params.mutableData ? JSON.stringify(params.mutableData) : null},
 			${params.mutableDataHash},
 			${params.mutableData ? params.txId : null},
@@ -219,41 +218,12 @@ export async function incrementDistributedBy(seedId: string, quantity: number, t
 
 
 
-export async function updateNftCustomData(
-	nftId: string,
-	data: unknown | null,
-	tags: string[] | null,
-	txn: Queryable = sql,
-) {
-	await txn`
-		UPDATE nfts
-		SET custom_data = ${data ? JSON.stringify(data) : null},
-			tags = ${tags}
-		WHERE id = ${nftId}
-	`;
-}
-
-export async function updateNftOperatorData(
-	nftId: string,
-	data: unknown | null,
-	tags: string[] | null,
-	txn: Queryable = sql,
-) {
-	await txn`
-		UPDATE nfts
-		SET operator_data = ${data ? JSON.stringify(data) : null},
-			tags = ${tags}
-		WHERE id = ${nftId}
-	`;
-}
-
 export async function updateNftMutableData(
 	nftId: string,
 	mergedData: Record<string, unknown>,
 	dataHash: string,
 	txId: string,
 	blockNum: number,
-	tags: string[] | null,
 	txn: Queryable = sql,
 ) {
 	// Write the FULL merged object (not partial merge) to guarantee hash matches stored value
@@ -262,8 +232,7 @@ export async function updateNftMutableData(
 		SET mutable_data = ${JSON.stringify(mergedData)}::jsonb,
 			mutable_data_hash = ${dataHash},
 			mutable_data_tx = ${txId},
-			mutable_data_block = ${blockNum},
-			tags = COALESCE(${tags}, tags)
+			mutable_data_block = ${blockNum}
 		WHERE id = ${nftId}
 	`;
 }

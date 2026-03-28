@@ -11,6 +11,7 @@ import { nftTrackerRoutes } from "./routes/nft-tracker";
 import { validationRoutes } from "./routes/validation";
 import { spvRoutes } from "./routes/spv";
 import { debugRoutes } from "./routes/debug";
+import { scenarioRoutes } from "./routes/scenarios";
 
 const json = (data: unknown, status = 200) =>
 	new Response(JSON.stringify(data, null, 2), {
@@ -24,6 +25,7 @@ const ALLOWED_SAMPLE_FILES = new Set([
 	"sample-nfts.json",
 	"sample-nfts-200.json",
 	"template-seeds.json",
+	"sample-game-cards.json",
 ]);
 
 const server = Bun.serve({
@@ -66,6 +68,9 @@ const server = Bun.serve({
 
 		// ============ DEBUG ROUTES ============
 		...debugRoutes,
+
+		// ============ GAME SCENARIO ROUTES ============
+		...scenarioRoutes,
 
 		// ============ PROTOCOL INFO ============
 
@@ -148,6 +153,18 @@ Legacy Batch:
   POST /api/batch/mint-seeds
   POST /api/batch/collection-deterministic
   POST /api/batch/mint-seeds-deterministic
+
+Game Scenarios (custodial examples):
+  GET  /api/scenarios                    (index)
+  GET  /api/scenarios/setup              (create collection + mint + distribute)
+  GET  /api/scenarios/assign-cards       (assign cards to players via mutableData)
+  GET  /api/scenarios/lend-cards         (lend starter cards to trial players)
+  GET  /api/scenarios/in-game-trade      (players trade cards)
+  GET  /api/scenarios/level-up           (update stats after matches)
+  GET  /api/scenarios/graduation         (player gets real Web3 ownership)
+
+Sample Data:
+  GET  /playground/sample-game-cards.json
 
 Protocol Info:
   GET  /api/protocol/version

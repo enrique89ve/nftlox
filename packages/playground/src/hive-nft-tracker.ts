@@ -22,7 +22,6 @@ export interface HiveNftIssueInput {
 	symbol: string;
 	holder: string;
 	data?: Record<string, unknown>;
-	tags?: string[];
 	soulbound?: boolean;
 }
 
@@ -113,7 +112,6 @@ export function buildIssueOp(input: HiveNftIssueInput): {
 		symbol: input.symbol,
 		holder: input.holder,
 		data: input.data ?? {},
-		tags: (input.tags ?? []).slice(0, 4).map((t) => t.slice(0, 8)),
 		soulbound: input.soulbound ?? false,
 	};
 

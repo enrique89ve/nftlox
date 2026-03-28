@@ -128,9 +128,6 @@ export interface IndexerNft extends IndexerNftSummary {
 	unique_access_key: string | null;
 	original_id: string | null;
 	minted_by: string | null;
-	tags: string[] | null;
-	custom_data: Record<string, unknown> | null;
-	operator_data: Record<string, unknown> | null;
 	birth_block: number | null;
 	birth_tx: string | null;
 	block_num: number;

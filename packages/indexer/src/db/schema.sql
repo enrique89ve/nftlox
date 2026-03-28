@@ -27,8 +27,6 @@ CREATE TABLE IF NOT EXISTS sync_state (
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 INSERT INTO sync_state (last_block) VALUES (0) ON CONFLICT (id) DO NOTHING;
--- Add genesis_block column if upgrading from older schema
-ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS genesis_block BIGINT NOT NULL DEFAULT 0;
 
 -- Collections
 CREATE TABLE IF NOT EXISTS collections (
@@ -53,10 +51,6 @@ CREATE TABLE IF NOT EXISTS collections (
 	created_at TIMESTAMPTZ NOT NULL,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
--- Add replicable column if upgrading from older schema
-ALTER TABLE collections ADD COLUMN IF NOT EXISTS replicable BOOLEAN NOT NULL DEFAULT TRUE;
--- Add schema column if upgrading from older schema
-ALTER TABLE collections ADD COLUMN IF NOT EXISTS schema JSONB;
 
 -- NFTs (unified: seeds, instances, replicas)
 CREATE TABLE IF NOT EXISTS nfts (
@@ -82,10 +76,8 @@ CREATE TABLE IF NOT EXISTS nfts (
 	seed_id TEXT REFERENCES nfts(id),
 	instance_number INTEGER,
 	original_id TEXT REFERENCES nfts(id),
-	tags TEXT[],
-	custom_data JSONB,
-	operator_data JSONB,
 	immutable_data JSONB,
+	immutable_data_hash TEXT,
 	mutable_data JSONB,
 	mutable_data_hash TEXT,
 	mutable_data_tx TEXT,
@@ -94,6 +86,8 @@ CREATE TABLE IF NOT EXISTS nfts (
 	owner_data_hash TEXT,
 	owner_data_tx TEXT,
 	owner_data_block BIGINT,
+	burned_by TEXT,
+	burned_at_block BIGINT,
 	listing_price NUMERIC(18,3),
 	listing_currency TEXT,
 	listing_expires_at TIMESTAMPTZ,
@@ -103,21 +97,6 @@ CREATE TABLE IF NOT EXISTS nfts (
 	created_at TIMESTAMPTZ NOT NULL,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
--- Add structured data columns if upgrading from older schema
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS immutable_data JSONB;
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS mutable_data JSONB;
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS mutable_data_hash TEXT;
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS mutable_data_tx TEXT;
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS mutable_data_block BIGINT;
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data JSONB;
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data_hash TEXT;
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data_tx TEXT;
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS owner_data_block BIGINT;
-
--- Burn traceability
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS burned_by TEXT;
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS burned_at_block BIGINT;
 
 -- Invalid operations (audit trail)
 CREATE TABLE IF NOT EXISTS invalid_operations (
@@ -240,7 +219,7 @@ CREATE TABLE IF NOT EXISTS owner_nft_counts (
 	replicas INT NOT NULL DEFAULT 0
 );
 
--- ============ INDEXES (IF NOT EXISTS) ============
+-- ============ INDEXES ============
 
 CREATE INDEX IF NOT EXISTS idx_collections_creator ON collections(creator);
 CREATE INDEX IF NOT EXISTS idx_collections_symbol ON collections(symbol);
@@ -359,7 +338,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Drop and recreate trigger to ensure it's up to date
 DROP TRIGGER IF EXISTS trg_owner_nft_counts ON nfts;
 CREATE TRIGGER trg_owner_nft_counts
 	AFTER INSERT OR UPDATE OF owner, status, nft_type OR DELETE

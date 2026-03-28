@@ -20,7 +20,7 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 	const nft = await getNftForProcessing(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
 
-	const { hadExpiredListing } = assertTransferable(nft, instanceId, op.timestamp);
+	assertTransferable(nft, instanceId, op.timestamp);
 
 	if (nft.owner !== from) throw new Error(`Account ${from} is not owner of ${instanceId}`);
 

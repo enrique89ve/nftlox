@@ -19,6 +19,8 @@ import {
 	generateOriginDnaSync,
 	generateDeterministicInstanceDna,
 	generateDeterministicAccessKey,
+	computeDataHashSync,
+	MAX_PACK_OPEN_BATCH,
 } from "nftlox-sdk";
 
 export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -26,6 +28,9 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 	const quantity = requireNumber(op.data.quantity, "quantity");
 
 	if (quantity < 1) throw new Error("Quantity must be positive");
+	if (quantity > MAX_PACK_OPEN_BATCH) {
+		throw new Error(`Cannot open more than ${MAX_PACK_OPEN_BATCH} packs at once, got ${quantity}`);
+	}
 
 	const pack = await getPackForProcessing(packId, txn);
 	if (!pack) throw new Error(`Pack not found: ${packId}`);
@@ -129,9 +134,8 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 				seedId,
 				instanceNumber,
 				originalId: null,
-				tags: null,
-				customData: { source: "pack", packId },
 				immutableData: seed.immutable_data ?? null,
+				immutableDataHash: seed.immutable_data ? computeDataHashSync(seed.immutable_data as Record<string, unknown>) : null,
 				mutableData: null,
 				mutableDataHash: null,
 				blockNum: op.blockNum,

@@ -1,0 +1,102 @@
+{
+	"_description": "Sample data for a custodial game scenario. The game server owns all NFTs on-chain and tracks in-game ownership via mutableData.",
+	"gameAccount": "game-server",
+	"collectionName": "Dragon Masters TCG",
+	"collectionSymbol": "DMTCG",
+	"schema": {
+		"immutable": [
+			{ "name": "cardType", "type": "string" },
+			{ "name": "element", "type": "string" },
+			{ "name": "rarity", "type": "string" },
+			{ "name": "baseAttack", "type": "uint16" },
+			{ "name": "baseDefense", "type": "uint16" }
+		],
+		"mutable": [
+			{ "name": "gameOwner", "type": "string" },
+			{ "name": "level", "type": "uint8" },
+			{ "name": "xp", "type": "uint32" },
+			{ "name": "wins", "type": "uint32" },
+			{ "name": "lentTo", "type": "string" },
+			{ "name": "equipped", "type": "bool" },
+			{ "name": "customName", "type": "string" }
+		]
+	},
+	"seeds": [
+		{
+			"artId": "FIRE-DRAGON-001",
+			"name": "Inferno Drake",
+			"brief": "Legendary fire dragon with devastating flame attacks",
+			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/2458Ywc656oqQ6dLVq9VJKbRrFocRLNuBSfanqkh9x6NdzUTTxiEZgK9PnWYUAaEfVwKP.png",
+			"maxSupply": 50,
+			"immutableData": {
+				"cardType": "monster",
+				"element": "fire",
+				"rarity": "legendary",
+				"baseAttack": 3200,
+				"baseDefense": 2800
+			}
+		},
+		{
+			"artId": "ICE-GOLEM-001",
+			"name": "Frost Sentinel",
+			"brief": "Epic ice golem that freezes enemies on contact",
+			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yJP8FwGQ1mtBAijkxqGGbPmv2fcg135VTxnxHnh2nWokHE7qcKEDjonro55wUGzkeDH.png",
+			"maxSupply": 200,
+			"immutableData": {
+				"cardType": "monster",
+				"element": "ice",
+				"rarity": "epic",
+				"baseAttack": 2400,
+				"baseDefense": 3000
+			}
+		},
+		{
+			"artId": "WIND-SPELL-001",
+			"name": "Gale Force",
+			"brief": "Rare wind spell that boosts allied speed",
+			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/244AAyHiwU7kjGDQFM2nXiHTWnJetsGtG7okyhdg2E9oEGFjapaDkGueMePVUZb2EfY5K.png",
+			"maxSupply": 500,
+			"immutableData": {
+				"cardType": "spell",
+				"element": "wind",
+				"rarity": "rare",
+				"baseAttack": 0,
+				"baseDefense": 0
+			}
+		},
+		{
+			"artId": "EARTH-SHIELD-001",
+			"name": "Stone Barrier",
+			"brief": "Common earth trap that blocks one attack",
+			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yTmHF4uoo6ZRyk2trWSAgqwpG4kDjRY3VhLBnKfxLkpTp6zAQjQnS1oFyky7yQ51eRZ.png",
+			"maxSupply": 2000,
+			"immutableData": {
+				"cardType": "trap",
+				"element": "earth",
+				"rarity": "common",
+				"baseAttack": 0,
+				"baseDefense": 1500
+			}
+		},
+		{
+			"artId": "STARTER-WOLF-001",
+			"name": "Shadow Wolf",
+			"brief": "Free starter card given to all new players",
+			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23zkrwARsCeyekADuopVGaSTRGokezX8uBCbMzpN9NfPauy5s295oAQnNVBHMhFTTK4pY.png",
+			"maxSupply": 50000,
+			"immutableData": {
+				"cardType": "monster",
+				"element": "dark",
+				"rarity": "starter",
+				"baseAttack": 1200,
+				"baseDefense": 1000
+			}
+		}
+	],
+	"samplePlayers": {
+		"_note": "These are in-game player IDs (hashes), NOT Hive accounts",
+		"player1": "p_a1b2c3d4e5f6",
+		"player2": "p_f6e5d4c3b2a1",
+		"player3": "p_x7y8z9w0v1u2"
+	}
+}

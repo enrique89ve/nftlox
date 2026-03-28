@@ -22,15 +22,10 @@ export async function generateHashAsync(input: string): Promise<string> {
  * Use deterministicHash() when reproducibility across nodes is required.
  */
 export function generateHashSync(input: string): string {
-	let hash = 0;
-	for (let i = 0; i < input.length; i++) {
-		const char = input.charCodeAt(i);
-		hash = (hash << 5) - hash + char;
-		hash = hash & hash;
-	}
+	const hex = Bun.CryptoHasher.hash("sha256", input, "hex");
 	const timestamp = Date.now().toString(16);
 	const random = Math.random().toString(16).slice(2, 10);
-	return `${Math.abs(hash).toString(16).padStart(8, "0")}${timestamp}${random}`;
+	return `${hex.slice(0, 8)}${timestamp}${random}`;
 }
 
 // ============ ORIGIN DNA (Collection Level) ============
@@ -51,12 +46,9 @@ export async function generateOriginDna(collectionId: string): Promise<string> {
  * Uses a deterministic seed based on collectionId.
  */
 export function generateOriginDnaSync(collectionId: string): string {
-	let hash = 5381;
 	const input = `nftlox:origin:${collectionId}`;
-	for (let i = 0; i < input.length; i++) {
-		hash = (hash * 33) ^ input.charCodeAt(i);
-	}
-	return Math.abs(hash).toString(16).padStart(ORIGIN_DNA_LENGTH, "0").slice(0, ORIGIN_DNA_LENGTH).toUpperCase();
+	const hex = Bun.CryptoHasher.hash("sha256", input, "hex");
+	return hex.slice(0, ORIGIN_DNA_LENGTH).toUpperCase();
 }
 
 // ============ INSTANCE DNA (NFT Level) ============

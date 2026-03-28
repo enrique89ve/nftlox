@@ -17,11 +17,6 @@ export const MIN_SYMBOL_LENGTH = 3;
 export const MAX_SYMBOL_LENGTH = 8;
 export const SYMBOL_REGEX = /^[A-Z0-9]{3,8}$/;
 
-// Tag Limits
-export const MAX_TAGS = 4;
-export const MAX_TAG_LENGTH = 8;
-export const TAG_REGEX = /^[a-z0-9_-]{1,8}$/;
-
 // DNA Constants
 export const ORIGIN_DNA_LENGTH = 16;
 export const INSTANCE_DNA_LENGTH = 14;
@@ -100,16 +95,23 @@ export function calculatePaymentSplit(
 	};
 }
 
+// Hive custom_json payload limit (8KB) with 10% safety margin
+export const HIVE_CUSTOM_JSON_MAX_BYTES = 8192;
+export const SAFE_PAYLOAD_MAX_BYTES = Math.floor(HIVE_CUSTOM_JSON_MAX_BYTES * 0.90);
+
 // Pack Constants
 export const MAX_DROP_TABLE_ENTRIES = 50;
-export const MAX_ITEMS_PER_PACK = 10;
-export const MAX_PACK_OPEN_BATCH = 10;
+export const MAX_ITEMS_PER_PACK = 20;
+export const MAX_PACK_OPEN_BATCH = 50;
 export const MIN_DROP_WEIGHT = 1;
 export const MAX_DROP_WEIGHT = 10000;
 
 // Schema Constants
 export const MAX_SCHEMA_FIELDS = 64;
 export const MAX_FIELD_NAME_LENGTH = 64;
+
+// Bulk Distribute Limits
+export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
 
 // Protocol Actions (Core)
 export const ACTION_CREATE_COLLECTION = "create_collection";
@@ -121,9 +123,6 @@ export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
 export const ACTION_SET_OWNER_DATA = "set_owner_data";
 export const ACTION_EXTEND_SCHEMA = "extend_schema";
-
-// Bulk Distribute Limits
-export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
 
 // Protocol Actions (Marketplace)
 export const ACTION_LIST = "list";

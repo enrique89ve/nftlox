@@ -2,12 +2,11 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import {
 	getNftForProcessing,
-	updateNftCustomData,
 	updateNftMutableData,
 	NFT_STATUS_BURNED,
 } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
-import { requireString, optionalObject, optionalStringArray } from "@/utils/validation.ts";
+import { requireString, optionalObject } from "@/utils/validation.ts";
 import { validateMutableUpdate, computeDataHashSync, type CollectionSchema } from "nftlox-sdk";
 
 export async function handleSetData(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -47,14 +46,9 @@ export async function handleSetData(op: ParsedOperation, txn: Queryable): Promis
 		await updateNftMutableData(
 			nftId, merged, dataHash,
 			op.txId, op.blockNum,
-			optionalStringArray(op.data.tags),
 			txn,
 		);
 	} else {
-		// Legacy: owner can write custom_data (backwards compatible)
-		if (nft.owner !== op.signer) {
-			throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
-		}
-		await updateNftCustomData(nftId, op.data.data ?? null, optionalStringArray(op.data.tags), txn);
+		throw new Error(`Collection ${nft.collection_id} requires a schema for set_data`);
 	}
 }

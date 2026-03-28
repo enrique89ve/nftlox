@@ -63,6 +63,14 @@ describe("Origin DNA Generation", () => {
 		expect(dna1.length).toBe(ORIGIN_DNA_LENGTH);
 	});
 
+	test("async and sync should produce identical output", async () => {
+		const collectionId = "col_equivalence_test";
+		const syncDna = generateOriginDnaSync(collectionId);
+		const asyncDna = await generateOriginDna(collectionId);
+
+		expect(syncDna).toBe(asyncDna);
+	});
+
 	test("different collections should have different origin DNA", () => {
 		const dna1 = generateOriginDnaSync("col_abc");
 		const dna2 = generateOriginDnaSync("col_xyz");

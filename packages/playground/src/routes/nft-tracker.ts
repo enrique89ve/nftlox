@@ -46,7 +46,6 @@ export const nftTrackerRoutes: Record<string, { POST: RouteHandler }> = {
 					symbol: string;
 					holder: string;
 					data?: Record<string, unknown>;
-					tags?: string[];
 					soulbound?: boolean;
 				};
 				if (!body.issuer || !body.symbol || !body.holder) {

@@ -152,7 +152,6 @@ export const mintInputSchema = z.object({
 	maxReplicas: z.number().int().min(1, "Max replicas must be at least 1").optional(),
 	birthBlock: z.number().optional(),
 	birthTx: z.string().optional(),
-	tags: z.array(z.string()).optional(),
 	data: z.record(z.string(), z.unknown()).optional(),
 	immutableData: z.record(z.string(), z.unknown()).optional(),
 	mutableData: z.record(z.string(), z.unknown()).optional(),
@@ -200,7 +199,7 @@ export type PackCreateInput = z.infer<typeof packCreateInputSchema>;
 
 export const packBuyInputSchema = z.object({
 	packId: z.string().min(1, "Pack ID is required"),
-	quantity: z.number().int().min(1, "Quantity must be a positive integer"),
+	quantity: z.number().int().min(1, "Quantity must be a positive integer").max(MAX_PACK_OPEN_BATCH, `Cannot buy more than ${MAX_PACK_OPEN_BATCH} packs at once`),
 });
 export type PackBuyInput = z.infer<typeof packBuyInputSchema>;
 
@@ -308,7 +307,6 @@ export const setDataInputSchema = z.object({
 	instanceDna: z.string().min(1),
 	data: z.record(z.string(), z.unknown()).optional(),
 	mutableData: z.record(z.string(), z.unknown()).optional(),
-	tags: z.array(z.string()).optional(),
 });
 export type SetDataInput = z.infer<typeof setDataInputSchema>;
 
@@ -324,7 +322,6 @@ export const setDataFromInputSchema = seedProvenanceSchema.extend({
 	instanceDna: z.string().min(1),
 	data: z.record(z.string(), z.unknown()).optional(),
 	mutableData: z.record(z.string(), z.unknown()).optional(),
-	tags: z.array(z.string()).optional(),
 });
 export type SetDataFromInput = z.infer<typeof setDataFromInputSchema>;
 

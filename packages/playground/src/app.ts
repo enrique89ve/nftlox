@@ -1641,7 +1641,6 @@ function getNftTrackerFormData(action: string): Record<string, unknown> | null {
 		const issuer = ($("nft-issue-issuer") as HTMLInputElement)?.value.trim().toLowerCase();
 		const symbol = ($("nft-issue-symbol") as HTMLInputElement)?.value.trim();
 		const holder = ($("nft-issue-holder") as HTMLInputElement)?.value.trim().toLowerCase();
-		const tagsRaw = ($("nft-issue-tags") as HTMLInputElement)?.value.trim();
 		const dataRaw = ($("nft-issue-data") as HTMLTextAreaElement)?.value.trim();
 		const soulbound = ($("nft-issue-soulbound") as HTMLInputElement)?.checked || false;
 
@@ -1656,11 +1655,7 @@ function getNftTrackerFormData(action: string): Record<string, unknown> | null {
 			catch { nftTrackerLog("Invalid JSON in data field", "error"); return null; }
 		}
 
-		const tags = tagsRaw
-			? tagsRaw.split(",").map(s => s.trim()).filter(Boolean).slice(0, 4)
-			: [];
-
-		return { issuer, symbol, holder, data, tags, soulbound };
+		return { issuer, symbol, holder, data, soulbound };
 	}
 
 	if (action === "transfer") {
@@ -1849,7 +1844,6 @@ function selectBullForIssue(index: number) {
 	setVal("nft-issue-issuer", creator);
 	setVal("nft-issue-symbol", `${creator}/BULLS`);
 	setVal("nft-issue-holder", creator);
-	setVal("nft-issue-tags", `bull, ${bull.artId.toLowerCase()}`);
 	setVal("nft-issue-data", JSON.stringify({
 		artId: bull.artId,
 		name: bull.name,

@@ -2,7 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
-import { requireString, optionalString, optionalNumber, optionalObject, optionalStringArray } from "@/utils/validation.ts";
+import { requireString, optionalString, optionalNumber, optionalObject } from "@/utils/validation.ts";
 import { validateMintData, computeDataHashSync, type CollectionSchema } from "nftlox-sdk";
 
 export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -37,6 +37,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		}
 	}
 
+	const immutableDataHash = immutableData ? computeDataHashSync(immutableData) : null;
 	const mutableDataHash = mutableData ? computeDataHashSync(mutableData) : null;
 
 	await insertNft({
@@ -55,11 +56,8 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		imageHash: optionalString(metadata.imageHash),
 		maxReplicas: optionalNumber(d.maxReplicas) ?? 1,
 		seedId: null, instanceNumber: null, originalId: null,
-		tags: optionalStringArray(d.tags),
-		customData: schema ? null : (d.data ?? null),
-		immutableData,
-		mutableData,
-		mutableDataHash,
+		immutableData, immutableDataHash,
+		mutableData, mutableDataHash,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
 	}, txn);
 }
