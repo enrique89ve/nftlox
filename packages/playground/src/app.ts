@@ -15,7 +15,7 @@ import {
 	type MintingSession,
 } from "./persistence";
 import { persistUser, clearUser } from "./shared/state";
-import { $, log, mintLog, PLACEHOLDER_SM, PLACEHOLDER_LG } from "./shared/dom";
+import { $, log, mintLog, escapeHtml, PLACEHOLDER_SM, PLACEHOLDER_LG } from "./shared/dom";
 
 let connectedUser: string | null = null;
 let _currentStep = 1;
@@ -309,11 +309,11 @@ async function loadCollectionDetail(collectionId: string) {
 				seedsContainer.innerHTML = '<div class="empty-state"><p class="empty-state-text">No seeds in this collection</p></div>';
 			} else {
 				seedsContainer.innerHTML = seeds.map((nft: any) => `
-					<div class="nft-card" data-id="${nft.id}">
-						<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='${PLACEHOLDER_SM}'">
+					<div class="nft-card" data-id="${escapeHtml(nft.id)}">
+						<img class="nft-image" src="${escapeHtml(nft.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
 						<div class="nft-card-body">
-							<div class="nft-name">${nft.name}</div>
-							<div class="nft-owner">@${nft.owner}</div>
+							<div class="nft-name">${escapeHtml(nft.name)}</div>
+							<div class="nft-owner">@${escapeHtml(nft.owner)}</div>
 							<div class="nft-meta">
 								<span class="nft-meta-supply">${nft.distributed || 0}/${nft.maxSupply}</span>
 								<span class="nft-type-badge seed">SEED</span>
@@ -339,11 +339,11 @@ async function loadCollectionDetail(collectionId: string) {
 				instancesContainer.innerHTML = '<div class="empty-state"><p class="empty-state-text">No instances yet</p></div>';
 			} else {
 				instancesContainer.innerHTML = instances.map((nft: any) => `
-					<div class="nft-card" data-id="${nft.id}">
-						<img class="nft-image" src="${nft.imageUrl}" onerror="this.src='${PLACEHOLDER_SM}'">
+					<div class="nft-card" data-id="${escapeHtml(nft.id)}">
+						<img class="nft-image" src="${escapeHtml(nft.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
 						<div class="nft-card-body">
-							<div class="nft-name">${nft.name}</div>
-							<div class="nft-owner">@${nft.owner}</div>
+							<div class="nft-name">${escapeHtml(nft.name)}</div>
+							<div class="nft-owner">@${escapeHtml(nft.owner)}</div>
 							<div class="nft-meta">
 								<span class="nft-meta-supply">#${nft.instanceNumber || 1}</span>
 								<span class="nft-type-badge instance">INSTANCE</span>
@@ -404,7 +404,7 @@ async function loadNftDetail(nftId: string) {
 		const nameEl = $("nft-detail-name");
 		const ownerEl = $("nft-detail-owner");
 		if (imageEl) {
-			imageEl.src = nft.imageUrl;
+			imageEl.src = escapeHtml(nft.imageUrl);
 			imageEl.onerror = () => { imageEl.src = PLACEHOLDER_LG; };
 		}
 		if (nameEl) nameEl.textContent = nft.name;
@@ -674,12 +674,12 @@ function renderNfts(nfts: any[], containerId: string, selectable = false) {
 			: `#${nft.instanceNumber || 1}`;
 
 		return `
-			<div class="nft-card" data-id="${nft.id}" data-collection="${nft.collectionId}"
-				 data-edition="${nft.edition}" data-dna="${nft.instanceDna || ""}">
-				<img class="nft-image" src="${nft.imageUrl || ""}" onerror="this.src='${PLACEHOLDER_SM}'">
+			<div class="nft-card" data-id="${escapeHtml(nft.id)}" data-collection="${escapeHtml(nft.collectionId)}"
+				 data-edition="${escapeHtml(String(nft.edition))}" data-dna="${escapeHtml(nft.instanceDna)}">
+				<img class="nft-image" src="${escapeHtml(nft.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
 				<div class="nft-card-body">
-					<div class="nft-name">${nft.name}</div>
-					<div class="nft-owner">@${nft.owner}</div>
+					<div class="nft-name">${escapeHtml(nft.name)}</div>
+					<div class="nft-owner">@${escapeHtml(nft.owner)}</div>
 					<div class="nft-meta">
 						<span class="nft-meta-supply">${supplyText}</span>
 						<span class="nft-type-badge ${typeCls}">${typeLabel}</span>
@@ -1814,11 +1814,11 @@ async function loadSampleBulls() {
 		if (grid) {
 			grid.innerHTML = sampleBulls.map((bull: any, i: number) => `
 				<div class="nft-card" data-bull-idx="${i}" onclick="selectBullForIssue(${i})" style="cursor: pointer;">
-					<img class="nft-image" src="${bull.imageUrl}" onerror="this.src='${PLACEHOLDER_SM}'">
-					<div class="nft-name">${bull.name}</div>
-					<div class="nft-owner" style="color: var(--text-muted); font-size: 11px;">${bull.brief}</div>
+					<img class="nft-image" src="${escapeHtml(bull.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
+					<div class="nft-name">${escapeHtml(bull.name)}</div>
+					<div class="nft-owner" style="color: var(--text-muted); font-size: 11px;">${escapeHtml(bull.brief)}</div>
 					<div class="nft-id" style="display: flex; justify-content: space-between; margin-top: 6px;">
-						<span style="color: var(--accent);">${bull.artId}</span>
+						<span style="color: var(--accent);">${escapeHtml(bull.artId)}</span>
 						<span>Supply: ${bull.maxSupply}</span>
 					</div>
 				</div>

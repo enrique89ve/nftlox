@@ -13,7 +13,6 @@ import {
 	MULTISIG_EXPIRATION_MS,
 	MAX_MULTISIG_OPERATIONS,
 	generateOriginDna,
-	generateOriginDnaSync,
 	generateInstanceDna,
 	generateReplicaInstanceDna,
 	generateAccessKey,
@@ -45,16 +44,7 @@ describe("Protocol Version", () => {
 });
 
 describe("Origin DNA Generation", () => {
-	test("generateOriginDnaSync should be deterministic", () => {
-		const collectionId = "col_test123";
-		const dna1 = generateOriginDnaSync(collectionId);
-		const dna2 = generateOriginDnaSync(collectionId);
-
-		expect(dna1).toBe(dna2);
-		expect(dna1.length).toBe(ORIGIN_DNA_LENGTH);
-	});
-
-	test("generateOriginDna (async) should be deterministic", async () => {
+	test("generateOriginDna should be deterministic", async () => {
 		const collectionId = "col_test123";
 		const dna1 = await generateOriginDna(collectionId);
 		const dna2 = await generateOriginDna(collectionId);
@@ -63,48 +53,40 @@ describe("Origin DNA Generation", () => {
 		expect(dna1.length).toBe(ORIGIN_DNA_LENGTH);
 	});
 
-	test("async and sync should produce identical output", async () => {
-		const collectionId = "col_equivalence_test";
-		const syncDna = generateOriginDnaSync(collectionId);
-		const asyncDna = await generateOriginDna(collectionId);
-
-		expect(syncDna).toBe(asyncDna);
-	});
-
-	test("different collections should have different origin DNA", () => {
-		const dna1 = generateOriginDnaSync("col_abc");
-		const dna2 = generateOriginDnaSync("col_xyz");
+	test("different collections should have different origin DNA", async () => {
+		const dna1 = await generateOriginDna("col_abc");
+		const dna2 = await generateOriginDna("col_xyz");
 
 		expect(dna1).not.toBe(dna2);
 	});
 
-	test("origin DNA should be uppercase", () => {
-		const dna = generateOriginDnaSync("col_test");
+	test("origin DNA should be uppercase", async () => {
+		const dna = await generateOriginDna("col_test");
 		expect(dna).toBe(dna.toUpperCase());
 	});
 });
 
 describe("Instance DNA Generation", () => {
-	test("generateInstanceDna should produce unique values", () => {
+	test("generateInstanceDna should produce unique values", async () => {
 		const originDna = "ABCD1234EFGH5678";
-		const dna1 = generateInstanceDna(originDna, 1, "hash1");
-		const dna2 = generateInstanceDna(originDna, 1, "hash1");
+		const dna1 = await generateInstanceDna(originDna, 1, "hash1");
+		const dna2 = await generateInstanceDna(originDna, 1, "hash1");
 
 		expect(dna1).not.toBe(dna2);
 		expect(dna1.length).toBe(INSTANCE_DNA_LENGTH);
 	});
 
-	test("generateInstanceDna should have correct length", () => {
-		const dna = generateInstanceDna("ORIGIN123456", 1, "imagehash");
+	test("generateInstanceDna should have correct length", async () => {
+		const dna = await generateInstanceDna("ORIGIN123456", 1, "imagehash");
 		expect(dna.length).toBe(INSTANCE_DNA_LENGTH);
 	});
 
-	test("replica instance DNA should be unique", () => {
+	test("replica instance DNA should be unique", async () => {
 		const originDna = "ORIGIN123456";
 		const originalInstanceDna = "INSTANCE123456";
 
-		const replica1 = generateReplicaInstanceDna(originDna, originalInstanceDna);
-		const replica2 = generateReplicaInstanceDna(originDna, originalInstanceDna);
+		const replica1 = await generateReplicaInstanceDna(originDna, originalInstanceDna);
+		const replica2 = await generateReplicaInstanceDna(originDna, originalInstanceDna);
 
 		expect(replica1).not.toBe(replica2);
 		expect(replica1.length).toBe(INSTANCE_DNA_LENGTH);
@@ -112,16 +94,16 @@ describe("Instance DNA Generation", () => {
 });
 
 describe("Access Key Generation", () => {
-	test("access keys should be unique", () => {
+	test("access keys should be unique", async () => {
 		const instanceDna = "INSTANCE123456";
-		const key1 = generateAccessKey(instanceDna, "user1");
-		const key2 = generateAccessKey(instanceDna, "user1");
+		const key1 = await generateAccessKey(instanceDna, "user1");
+		const key2 = await generateAccessKey(instanceDna, "user1");
 
 		expect(key1).not.toBe(key2);
 	});
 
-	test("access key should have length 8", () => {
-		const key = generateAccessKey("DNA123", "owner");
+	test("access key should have length 8", async () => {
+		const key = await generateAccessKey("DNA123", "owner");
 		expect(key.length).toBe(8);
 	});
 });
@@ -179,8 +161,8 @@ describe("Collection Payload", () => {
 		},
 	};
 
-	test("should create valid collection payload", () => {
-		const payload = createCollectionPayload(validInput);
+	test("should create valid collection payload", async () => {
+		const payload = await createCollectionPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
 		expect(payload.version).toBe("0.3.0");
@@ -190,8 +172,8 @@ describe("Collection Payload", () => {
 		expect(payload.data.jsonId).toBe("test_collection_2024");
 	});
 
-	test("collection payload should be under 8KB", () => {
-		const payload = createCollectionPayload(validInput);
+	test("collection payload should be under 8KB", async () => {
+		const payload = await createCollectionPayload(validInput);
 		const size = new TextEncoder().encode(JSON.stringify(payload)).length;
 
 		expect(size).toBeLessThan(MAX_JSON_SIZE);
@@ -210,8 +192,8 @@ describe("Mint Payload", () => {
 		collectionBlock: 90000000,
 	};
 
-	test("should create valid mint payload", () => {
-		const payload = createMintPayload(validInput);
+	test("should create valid mint payload", async () => {
+		const payload = await createMintPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
 		expect(payload.version).toBe("0.3.0");
@@ -222,8 +204,8 @@ describe("Mint Payload", () => {
 		expect(payload.data.mintedBy).toBe("testuser");
 	});
 
-	test("mint payload should include procedencia fields", () => {
-		const payload = createMintPayload({
+	test("mint payload should include procedencia fields", async () => {
+		const payload = await createMintPayload({
 			...validInput,
 			birthBlock: 12345,
 			birthTx: "tx_abc123",
@@ -233,8 +215,8 @@ describe("Mint Payload", () => {
 		expect(payload.data.birthTx).toBe("tx_abc123");
 	});
 
-	test("mint payload should include collectionBlock", () => {
-		const payload = createMintPayload({
+	test("mint payload should include collectionBlock", async () => {
+		const payload = await createMintPayload({
 			...validInput,
 			collectionBlock: 90000050,
 		});
@@ -242,15 +224,15 @@ describe("Mint Payload", () => {
 		expect(payload.data.collectionBlock).toBe(90000050);
 	});
 
-	test("mint payload should be under 8KB", () => {
-		const payload = createMintPayload(validInput);
+	test("mint payload should be under 8KB", async () => {
+		const payload = await createMintPayload(validInput);
 		const size = new TextEncoder().encode(JSON.stringify(payload)).length;
 
 		expect(size).toBeLessThan(MAX_JSON_SIZE);
 	});
 
-	test("mint operation should be under 8KB", () => {
-		const operation = createMintOperation(validInput);
+	test("mint operation should be under 8KB", async () => {
+		const operation = await createMintOperation(validInput);
 		const size = estimateOperationSize(operation);
 
 		expect(size).toBeLessThan(MAX_JSON_SIZE);
@@ -363,9 +345,9 @@ describe("Validation", () => {
 });
 
 describe("NFT DNA Inheritance", () => {
-	test("NFTs from same collection should share originDna", () => {
+	test("NFTs from same collection should share originDna", async () => {
 		const collectionId = "col_shared";
-		const originDna = generateOriginDnaSync(collectionId);
+		const originDna = await generateOriginDna(collectionId);
 
 		const mint1: MintInput = {
 			collectionId,
@@ -387,16 +369,16 @@ describe("NFT DNA Inheritance", () => {
 			collectionBlock: 90000000,
 		};
 
-		const payload1 = createMintPayload(mint1);
-		const payload2 = createMintPayload(mint2);
+		const payload1 = await createMintPayload(mint1);
+		const payload2 = await createMintPayload(mint2);
 
 		expect(payload1.data.originDna).toBe(payload2.data.originDna);
 		expect(payload1.data.instanceDna).not.toBe(payload2.data.instanceDna);
 	});
 
-	test("NFTs from different collections should have different originDna", () => {
-		const origin1 = generateOriginDnaSync("col_alpha");
-		const origin2 = generateOriginDnaSync("col_beta");
+	test("NFTs from different collections should have different originDna", async () => {
+		const origin1 = await generateOriginDna("col_alpha");
+		const origin2 = await generateOriginDna("col_beta");
 
 		expect(origin1).not.toBe(origin2);
 	});

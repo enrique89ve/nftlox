@@ -5,20 +5,20 @@
 	"collectionSymbol": "DMTCG",
 	"schema": {
 		"immutable": [
-			{ "name": "cardType", "type": "string" },
+			{ "name": "card_type", "type": "string" },
 			{ "name": "element", "type": "string" },
 			{ "name": "rarity", "type": "string" },
-			{ "name": "baseAttack", "type": "uint16" },
-			{ "name": "baseDefense", "type": "uint16" }
+			{ "name": "base_attack", "type": "uint16" },
+			{ "name": "base_defense", "type": "uint16" }
 		],
 		"mutable": [
-			{ "name": "gameOwner", "type": "string" },
+			{ "name": "game_owner", "type": "string" },
 			{ "name": "level", "type": "uint8" },
 			{ "name": "xp", "type": "uint32" },
 			{ "name": "wins", "type": "uint32" },
-			{ "name": "lentTo", "type": "string" },
+			{ "name": "lent_to", "type": "string" },
 			{ "name": "equipped", "type": "bool" },
-			{ "name": "customName", "type": "string" }
+			{ "name": "custom_name", "type": "string" }
 		]
 	},
 	"seeds": [
@@ -29,11 +29,11 @@
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/2458Ywc656oqQ6dLVq9VJKbRrFocRLNuBSfanqkh9x6NdzUTTxiEZgK9PnWYUAaEfVwKP.png",
 			"maxSupply": 50,
 			"immutableData": {
-				"cardType": "monster",
+				"card_type": "monster",
 				"element": "fire",
 				"rarity": "legendary",
-				"baseAttack": 3200,
-				"baseDefense": 2800
+				"base_attack": 3200,
+				"base_defense": 2800
 			}
 		},
 		{
@@ -43,11 +43,11 @@
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yJP8FwGQ1mtBAijkxqGGbPmv2fcg135VTxnxHnh2nWokHE7qcKEDjonro55wUGzkeDH.png",
 			"maxSupply": 200,
 			"immutableData": {
-				"cardType": "monster",
+				"card_type": "monster",
 				"element": "ice",
 				"rarity": "epic",
-				"baseAttack": 2400,
-				"baseDefense": 3000
+				"base_attack": 2400,
+				"base_defense": 3000
 			}
 		},
 		{
@@ -57,11 +57,11 @@
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/244AAyHiwU7kjGDQFM2nXiHTWnJetsGtG7okyhdg2E9oEGFjapaDkGueMePVUZb2EfY5K.png",
 			"maxSupply": 500,
 			"immutableData": {
-				"cardType": "spell",
+				"card_type": "spell",
 				"element": "wind",
 				"rarity": "rare",
-				"baseAttack": 0,
-				"baseDefense": 0
+				"base_attack": 0,
+				"base_defense": 0
 			}
 		},
 		{
@@ -71,11 +71,11 @@
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yTmHF4uoo6ZRyk2trWSAgqwpG4kDjRY3VhLBnKfxLkpTp6zAQjQnS1oFyky7yQ51eRZ.png",
 			"maxSupply": 2000,
 			"immutableData": {
-				"cardType": "trap",
+				"card_type": "trap",
 				"element": "earth",
 				"rarity": "common",
-				"baseAttack": 0,
-				"baseDefense": 1500
+				"base_attack": 0,
+				"base_defense": 1500
 			}
 		},
 		{
@@ -85,11 +85,11 @@
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23zkrwARsCeyekADuopVGaSTRGokezX8uBCbMzpN9NfPauy5s295oAQnNVBHMhFTTK4pY.png",
 			"maxSupply": 50000,
 			"immutableData": {
-				"cardType": "monster",
+				"card_type": "monster",
 				"element": "dark",
 				"rarity": "starter",
-				"baseAttack": 1200,
-				"baseDefense": 1000
+				"base_attack": 1200,
+				"base_defense": 1000
 			}
 		}
 	],

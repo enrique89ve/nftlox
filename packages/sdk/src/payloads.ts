@@ -93,7 +93,7 @@ import type {
 
 import {
 	generateId,
-	generateOriginDnaSync,
+	generateOriginDna,
 	generateInstanceDna,
 	generateReplicaInstanceDna,
 	generateAccessKey,
@@ -145,11 +145,11 @@ function spreadProvenance(p?: SeedProvenance): Record<string, string> {
 
 // ============ COLLECTION PAYLOADS ============
 
-export function createCollectionPayload(
+export async function createCollectionPayload(
 	input: CreateCollectionInput,
-): ProtocolPayload<CollectionData> {
+): Promise<ProtocolPayload<CollectionData>> {
 	const id = generateId("col");
-	const originDna = generateOriginDnaSync(id);
+	const originDna = await generateOriginDna(id);
 
 	return {
 		protocol: PROTOCOL_ID,
@@ -173,14 +173,14 @@ export function createCollectionPayload(
 
 // ============ MINT PAYLOADS ============
 
-export function createMintPayload(input: MintInput): ProtocolPayload<NFTData> {
-	const imageHash = input.imageHash || generateImageHash(input.imageUrl);
-	const instanceDna = generateInstanceDna(
+export async function createMintPayload(input: MintInput): Promise<ProtocolPayload<NFTData>> {
+	const imageHash = input.imageHash || await generateImageHash(input.imageUrl);
+	const instanceDna = await generateInstanceDna(
 		input.collectionOriginDna,
 		input.edition,
 		imageHash,
 	);
-	const uniqueAccessKey = generateAccessKey(instanceDna, input.owner);
+	const uniqueAccessKey = await generateAccessKey(instanceDna, input.owner);
 
 	return {
 		protocol: PROTOCOL_ID,
@@ -219,14 +219,14 @@ export function createMintPayload(input: MintInput): ProtocolPayload<NFTData> {
 
 // ============ REPLICATE PAYLOADS ============
 
-export function createReplicatePayload(
+export async function createReplicatePayload(
 	input: ReplicateInput,
-): ProtocolPayload<ReplicaData> {
-	const instanceDna = generateReplicaInstanceDna(
+): Promise<ProtocolPayload<ReplicaData>> {
+	const instanceDna = await generateReplicaInstanceDna(
 		input.originDna,
 		input.originalInstanceDna,
 	);
-	const uniqueAccessKey = generateAccessKey(instanceDna, input.newOwner);
+	const uniqueAccessKey = await generateAccessKey(instanceDna, input.newOwner);
 
 	return {
 		protocol: PROTOCOL_ID,
@@ -262,6 +262,7 @@ export function createBulkDistributePayload(
 			})),
 			...(input.imageOverrides && { imageOverrides: input.imageOverrides }),
 			...(input.data && { data: input.data }),
+			...(input.mutableData && { mutableData: input.mutableData }),
 		},
 	};
 }
@@ -344,7 +345,8 @@ export function createSetDataPayload(
 		data: {
 			nftId: input.nftId,
 			instanceDna: input.instanceDna,
-			data: input.data,
+			...(input.data && { data: input.data }),
+			...(input.mutableData && { mutableData: input.mutableData }),
 		},
 	};
 }
@@ -408,7 +410,8 @@ export function createSetDataFromPayload(
 		data: {
 			nftId: input.nftId,
 			instanceDna: input.instanceDna,
-			data: input.data,
+			...(input.data && { data: input.data }),
+			...(input.mutableData && { mutableData: input.mutableData }),
 			...spreadProvenance(input),
 		},
 	};
@@ -548,17 +551,17 @@ export function createBuyOperation(data: BuyData, nodeAccount: string): HiveOper
 			required_auths: [nodeAccount],
 			required_posting_auths: [],
 			id: PROTOCOL_ID,
-			json: JSON.stringify(createBuyPayload(data)),
+			json: safeStringify(createBuyPayload(data)),
 		},
 	];
 }
 
 // ============ HIVE OPERATION CREATION ============
 
-export function createCollectionOperation(
+export async function createCollectionOperation(
 	input: CreateCollectionInput,
-): HiveOperation {
-	const payload = createCollectionPayload(input);
+): Promise<HiveOperation> {
+	const payload = await createCollectionPayload(input);
 	return [
 		"custom_json",
 		{
@@ -570,8 +573,8 @@ export function createCollectionOperation(
 	];
 }
 
-export function createMintOperation(input: MintInput): HiveOperation {
-	const payload = createMintPayload(input);
+export async function createMintOperation(input: MintInput): Promise<HiveOperation> {
+	const payload = await createMintPayload(input);
 	return [
 		"custom_json",
 		{
@@ -583,8 +586,8 @@ export function createMintOperation(input: MintInput): HiveOperation {
 	];
 }
 
-export function createReplicateOperation(input: ReplicateInput): HiveOperation {
-	const payload = createReplicatePayload(input);
+export async function createReplicateOperation(input: ReplicateInput): Promise<HiveOperation> {
+	const payload = await createReplicatePayload(input);
 	return [
 		"custom_json",
 		{
@@ -777,15 +780,15 @@ export interface DeterministicCollectionInput {
  * Creates a collection payload with a deterministic ID.
  * Same creator + name + symbol always produces the same collectionId.
  */
-export function createDeterministicCollectionPayload(
+export async function createDeterministicCollectionPayload(
 	input: DeterministicCollectionInput,
-): ProtocolPayload<CollectionData> {
+): Promise<ProtocolPayload<CollectionData>> {
 	const id = generateDeterministicCollectionId(
 		input.creator,
 		input.name,
 		input.symbol,
 	);
-	const originDna = generateOriginDnaSync(id);
+	const originDna = await generateOriginDna(id);
 	const jsonId = `json_${deterministicHash(`${input.creator}:${input.name}:${Date.now()}`).slice(0, 8)}`;
 
 	return {
@@ -830,17 +833,17 @@ export interface DeterministicMintInput {
  * Creates a seed mint payload with a deterministic seedId.
  * Same collectionId + artId always produces the same seedId.
  */
-export function createDeterministicMintPayload(
+export async function createDeterministicMintPayload(
 	input: DeterministicMintInput,
-): ProtocolPayload<NFTData> {
+): Promise<ProtocolPayload<NFTData>> {
 	const seedId = generateDeterministicSeedId(input.collectionId, input.artId);
-	const imageHash = input.imageHash || generateImageHash(input.imageUrl);
-	const instanceDna = generateInstanceDna(
+	const imageHash = input.imageHash || await generateImageHash(input.imageUrl);
+	const instanceDna = await generateInstanceDna(
 		input.collectionOriginDna,
 		input.edition,
 		imageHash,
 	);
-	const uniqueAccessKey = generateAccessKey(instanceDna, input.owner);
+	const uniqueAccessKey = await generateAccessKey(instanceDna, input.owner);
 
 	return {
 		protocol: PROTOCOL_ID,

@@ -7,7 +7,7 @@ import {
 } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, optionalObject } from "@/utils/validation.ts";
-import { validateMutableUpdate, computeDataHashSync, type CollectionSchema } from "nftlox-sdk";
+import { validateMutableUpdate, computeDataHash, type CollectionSchema } from "nftlox-sdk";
 
 export async function handleSetData(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");
@@ -41,7 +41,7 @@ export async function handleSetData(op: ParsedOperation, txn: Queryable): Promis
 		// Merge in JS and write the FULL merged result (hash must match stored value)
 		const existingMutable = (nft.mutable_data ?? {}) as Record<string, unknown>;
 		const merged = { ...existingMutable, ...mutableData };
-		const dataHash = computeDataHashSync(merged);
+		const dataHash = await computeDataHash(merged);
 
 		await updateNftMutableData(
 			nftId, merged, dataHash,

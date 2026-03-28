@@ -18,7 +18,7 @@ export const burnBuilderSchema = burnInputSchema.extend({
 });
 export type BurnBuilderInput = z.infer<typeof burnBuilderSchema>;
 
-export function buildBurn(input: BurnBuilderInput): BuildResult<BurnData> {
+export async function buildBurn(input: BurnBuilderInput): Promise<BuildResult<BurnData>> {
 	const parsed = burnBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -30,7 +30,7 @@ export function buildBurn(input: BurnBuilderInput): BuildResult<BurnData> {
 		warnings.push("imageUrl not provided - recommended for indexer verification");
 	}
 
-	const imageHash = data.imageHash || (data.imageUrl ? generateImageHash(data.imageUrl) : undefined);
+	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
 
 	const payloadData: BurnData = {
 		nftId: data.nftId,

@@ -18,7 +18,7 @@ export const transferBuilderSchema = seedProvenanceSchema.extend({
 
 export type TransferBuilderInput = z.infer<typeof transferBuilderSchema>;
 
-export function buildTransfer(input: TransferBuilderInput): BuildResult<TransferData> {
+export async function buildTransfer(input: TransferBuilderInput): Promise<BuildResult<TransferData>> {
 	const parsed = transferBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -31,7 +31,7 @@ export function buildTransfer(input: TransferBuilderInput): BuildResult<Transfer
 		warnings.push("imageUrl not provided - recommended for indexer verification");
 	}
 
-	const imageHash = data.imageHash || (data.imageUrl ? generateImageHash(data.imageUrl) : undefined);
+	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
 
 	const payload: ProtocolPayload<TransferData> = {
 		protocol: PROTOCOL_ID,

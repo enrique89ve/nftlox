@@ -16,10 +16,10 @@ import { requireString, requireNumber } from "@/utils/validation.ts";
 import {
 	resolveDropTable,
 	generateDeterministicInstanceId,
-	generateOriginDnaSync,
+	generateOriginDna,
 	generateDeterministicInstanceDna,
 	generateDeterministicAccessKey,
-	computeDataHashSync,
+	computeDataHash,
 	MAX_PACK_OPEN_BATCH,
 } from "nftlox-sdk";
 
@@ -106,7 +106,7 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 
 			// DNA Lineage: deterministic from immutable block data
 			const originDna = seed.origin_dna
-				?? generateOriginDnaSync(seed.collection_id);
+				?? await generateOriginDna(seed.collection_id);
 			const instanceDna = generateDeterministicInstanceDna(
 				seedId, instanceNumber, op.txId, op.blockNum,
 			);
@@ -135,7 +135,7 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 				instanceNumber,
 				originalId: null,
 				immutableData: seed.immutable_data ?? null,
-				immutableDataHash: seed.immutable_data ? computeDataHashSync(seed.immutable_data as Record<string, unknown>) : null,
+				immutableDataHash: seed.immutable_data ? await computeDataHash(seed.immutable_data as Record<string, unknown>) : null,
 				mutableData: null,
 				mutableDataHash: null,
 				blockNum: op.blockNum,

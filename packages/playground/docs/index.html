@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>NFTLox Protocol Documentation</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="NFTLox Protocol -- Polymorphic ownership infrastructure on Hive blockchain. No smart contracts required.">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple-dark.css">
+	<style>
+		/* =============================================
+		   NFTLox Docs -- Custom Theme Layer
+		   ============================================= */
+
+		html {
+			scroll-behavior: smooth;
+		}
+
+		:root {
+			/* Primary Colors */
+			--bg: #0c0c0c;
+			--surface: #141414;
+			--surface-2: #1a1a1a;
+			--surface-3: #222222;
+			--border: #262626;
+			--border-hover: #404040;
+			--text: #e5e5e5;
+			--text-muted: #737373;
+			--text-dim: #525252;
+			--accent: #22c55e;
+			--accent-hover: #4ade80;
+			--accent-dim: rgba(34, 197, 94, 0.15);
+			--accent-border: rgba(34, 197, 94, 0.3);
+
+			/* Fonts */
+			--mono: 'JetBrains Mono', monospace;
+			--sans: 'Space Grotesk', system-ui, sans-serif;
+
+			/* Docsify Themeable Properties */
+			--base-font-family: var(--sans);
+			--base-font-size: 16px;
+			--base-line-height: 1.7;
+			--base-background-color: var(--bg);
+			--base-color: var(--text);
+			--theme-color: var(--accent);
+			--heading-color: #ffffff;
+
+			/* Sidebar */
+			--sidebar-width: 280px;
+			--sidebar-background: var(--surface);
+			--sidebar-border-color: var(--border);
+			--sidebar-border-width: 1px;
+			--sidebar-name-color: var(--accent);
+			--sidebar-name-margin: 1.5rem 0;
+			--sidebar-nav-link-color: var(--text-muted);
+			--sidebar-nav-link-color--active: var(--accent);
+			--sidebar-nav-link-color--hover: var(--text);
+			--sidebar-nav-link-background-color--active: var(--accent-dim);
+			--sidebar-nav-link-font-weight: 500;
+			--sidebar-nav-link-font-weight--active: 600;
+			--sidebar-nav-link-padding: 6px 16px;
+			--sidebar-nav-link-border-width: 0;
+			--sidebar-nav-link-border-color: transparent;
+			--sidebar-nav-link-border-color--active: var(--accent);
+			--sidebar-nav-link-border-style: solid;
+			--sidebar-nav-strong-color: var(--text);
+			--sidebar-nav-strong-margin: 20px 0 6px 0;
+
+			/* Code Blocks */
+			--code-font-family: var(--mono);
+			--code-font-size: 0.85em;
+			--code-theme-background: var(--surface-2);
+			--code-inline-background: var(--surface-2);
+			--code-inline-color: var(--accent);
+			--code-inline-border-radius: 4px;
+			--code-inline-padding: 2px 6px;
+
+			/* Links & Elements */
+			--link-color: var(--accent);
+			--link-color--hover: var(--accent-hover);
+			--blockquote-border-color: var(--accent);
+			--blockquote-background: var(--surface-2);
+			--blockquote-color: var(--text-muted);
+			--hr-border: 1px solid var(--border);
+
+			/* Search */
+			--search-background: var(--surface-2);
+			--search-input-color: var(--text);
+			--search-input-placeholder-color: var(--text-dim);
+			--search-input-border-color: var(--border);
+			--search-input-border-color--focus: var(--accent);
+
+			/* Cover */
+			--cover-background-color: var(--bg);
+
+			/* Notices / Alerts */
+			--notice-tip-border-color: var(--accent);
+		}
+
+		body {
+			font-family: var(--sans);
+			background: var(--bg);
+			color: var(--text);
+		}
+
+		/* ---- Scrollbar ---- */
+		::-webkit-scrollbar {
+			width: 6px;
+			height: 6px;
+		}
+
+		::-webkit-scrollbar-track {
+			background: var(--bg);
+		}
+
+		::-webkit-scrollbar-thumb {
+			background: var(--border-hover);
+			border-radius: 3px;
+		}
+
+		::-webkit-scrollbar-thumb:hover {
+			background: var(--text-dim);
+		}
+
+		/* ---- Sidebar ---- */
+		.sidebar .app-name-link {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 12px;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: -0.02em;
+			font-size: 18px;
+			color: var(--text);
+			text-decoration: none;
+		}
+
+		.sidebar .app-name-link::before {
+			content: "N";
+			width: 32px;
+			height: 32px;
+			background: var(--accent);
+			border-radius: 6px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-family: var(--mono);
+			font-weight: 600;
+			font-size: 14px;
+			color: var(--bg);
+			flex-shrink: 0;
+		}
+
+		/* Sidebar section headings (the bold text) */
+		.sidebar-nav > ul > li > strong,
+		.sidebar-nav > ul > li > p > strong {
+			display: block;
+			padding: 0 16px;
+			font-size: 0.7em;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+			color: var(--text-dim);
+			margin-top: 24px;
+			margin-bottom: 4px;
+		}
+
+		/* First section heading doesn't need extra top spacing */
+		.sidebar-nav > ul > li:first-child > strong,
+		.sidebar-nav > ul > li:first-child > p > strong {
+			margin-top: 8px;
+		}
+
+		/* ---- Code Blocks ---- */
+		.markdown-section code {
+			font-family: var(--mono);
+			font-size: 0.85em;
+		}
+
+		/* Inline code -- visually distinct from text */
+		.markdown-section :not(pre) > code {
+			background: var(--surface-2);
+			color: var(--accent);
+			padding: 2px 6px;
+			border-radius: 4px;
+			border: 1px solid var(--border);
+			font-size: 0.85em;
+			white-space: nowrap;
+		}
+
+		/* Fenced code blocks */
+		pre[data-lang] {
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			position: relative;
+		}
+
+		/* Language label on code blocks */
+		pre[data-lang]::after {
+			content: attr(data-lang);
+			position: absolute;
+			top: 8px;
+			right: 12px;
+			font-family: var(--mono);
+			font-size: 0.65em;
+			font-weight: 500;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: var(--text-dim);
+			pointer-events: none;
+		}
+
+		/* ---- Headings ---- */
+		.markdown-section h1 {
+			margin-bottom: 2rem;
+			font-weight: 600;
+			letter-spacing: -0.02em;
+		}
+
+		.markdown-section h2 {
+			margin-top: 3rem;
+			padding-top: 1.5rem;
+			border-top: 1px solid var(--border);
+			font-weight: 600;
+			letter-spacing: -0.01em;
+		}
+
+		/* First h2 after h1 doesn't need a top border */
+		.markdown-section h1 + h2 {
+			border-top: none;
+			padding-top: 0;
+		}
+
+		.markdown-section h3 {
+			margin-top: 2rem;
+			font-weight: 500;
+		}
+
+		/* ---- Tables ---- */
+		.markdown-section table {
+			width: 100%;
+			border-collapse: separate;
+			border-spacing: 0;
+			border-radius: 8px;
+			overflow: hidden;
+			border: 1px solid var(--border);
+			margin: 1.5rem 0;
+		}
+
+		.markdown-section table thead {
+			background: var(--surface-2);
+		}
+
+		.markdown-section table th {
+			font-weight: 600;
+			font-size: 0.8em;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--text-muted);
+			padding: 12px 16px;
+			text-align: left;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.markdown-section table td {
+			padding: 10px 16px;
+			border-bottom: 1px solid var(--border);
+			color: var(--text);
+			font-size: 0.9em;
+		}
+
+		.markdown-section table tbody tr:last-child td {
+			border-bottom: none;
+		}
+
+		.markdown-section table tbody tr:hover {
+			background: var(--accent-dim);
+		}
+
+		/* ---- Blockquotes / Callouts ---- */
+		.markdown-section blockquote {
+			border-left: 4px solid var(--accent);
+			background: var(--surface-2);
+			border-radius: 0 8px 8px 0;
+			padding: 16px 20px;
+			margin: 1.5rem 0;
+			color: var(--text);
+		}
+
+		.markdown-section blockquote > p:first-child {
+			margin-top: 0;
+		}
+
+		.markdown-section blockquote > p:last-child {
+			margin-bottom: 0;
+		}
+
+		/* Tip callouts: blockquotes starting with **Tip** or **Note** */
+		.markdown-section blockquote strong {
+			color: var(--accent);
+		}
+
+		/* ---- Horizontal Rules ---- */
+		.markdown-section hr {
+			border: none;
+			border-top: 1px solid var(--border);
+			margin: 2.5rem 0;
+		}
+
+		/* ---- Lists ---- */
+		.markdown-section ul,
+		.markdown-section ol {
+			line-height: 1.8;
+		}
+
+		.markdown-section li + li {
+			margin-top: 4px;
+		}
+
+		/* ---- Links ---- */
+		.markdown-section a {
+			text-decoration: none;
+			border-bottom: 1px solid transparent;
+			transition: border-color 0.2s ease, color 0.2s ease;
+		}
+
+		.markdown-section a:hover {
+			border-bottom-color: var(--accent-hover);
+		}
+
+		/* ---- Tabs Plugin ---- */
+		.docsify-tabs {
+			margin: 1.5rem 0;
+		}
+
+		.docsify-tabs__tab {
+			font-family: var(--sans);
+			font-size: 0.85em;
+			font-weight: 500;
+			padding: 8px 16px;
+			color: var(--text-muted);
+			border: none;
+			border-bottom: 2px solid transparent;
+			background: none;
+			cursor: pointer;
+			transition: color 0.2s ease, border-color 0.2s ease;
+		}
+
+		.docsify-tabs__tab--active {
+			color: var(--accent);
+			border-bottom-color: var(--accent);
+		}
+
+		.docsify-tabs__tab:hover:not(.docsify-tabs__tab--active) {
+			color: var(--text);
+		}
+
+		.docsify-tabs__content {
+			border: 1px solid var(--border);
+			border-radius: 0 0 8px 8px;
+			background: var(--surface);
+			padding: 16px;
+		}
+
+		/* ---- Copy to Clipboard Button ---- */
+		.docsify-copy-code-button {
+			font-family: var(--mono);
+			font-size: 0.7em;
+			color: var(--text-dim);
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 4px;
+			padding: 3px 8px;
+			transition: color 0.2s ease, border-color 0.2s ease;
+		}
+
+		.docsify-copy-code-button:hover {
+			color: var(--text);
+			border-color: var(--border-hover);
+		}
+
+		/* ---- Footer / Version Badge ---- */
+		.nftlox-footer {
+			margin-top: 4rem;
+			padding-top: 2rem;
+			border-top: 1px solid var(--border);
+			text-align: center;
+			font-size: 0.78em;
+			color: var(--text-dim);
+			line-height: 1.8;
+		}
+
+		.nftlox-footer .version-badge {
+			display: inline-block;
+			background: var(--surface-2);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 2px 10px;
+			font-family: var(--mono);
+			font-size: 0.9em;
+			color: var(--accent);
+			margin-bottom: 4px;
+		}
+
+		/* ---- Responsive ---- */
+		@media screen and (max-width: 768px) {
+			.markdown-section {
+				padding: 16px 20px;
+			}
+
+			.markdown-section table {
+				font-size: 0.85em;
+			}
+
+			.markdown-section table th,
+			.markdown-section table td {
+				padding: 8px 10px;
+			}
+
+			pre[data-lang]::after {
+				display: none;
+			}
+		}
+
+		/* ---- Reduced Motion ---- */
+		@media (prefers-reduced-motion: reduce) {
+			html {
+				scroll-behavior: auto;
+			}
+
+			.markdown-section a,
+			.docsify-tabs__tab,
+			.docsify-copy-code-button {
+				transition: none;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div id="app"></div>
+	<script>
+		window.$docsify = {
+			name: 'NFTLox',
+			repo: '',
+			loadSidebar: true,
+			subMaxLevel: 3,
+			auto2top: true,
+			tabs: {
+				persist: true,
+				sync: true,
+				theme: 'classic',
+				tabComments: true,
+				tabHeadings: true,
+			},
+			search: {
+				placeholder: 'Search docs...',
+				noData: 'No results.',
+				depth: 3,
+			},
+		};
+	</script>
+	<!-- Docsify Core -->
+	<script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+	<!-- Plugins -->
+	<script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/docsify-copy-code@2/dist/docsify-copy-code.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/docsify-tabs@1/dist/docsify-tabs.min.js"></script>
+	<!-- Syntax Highlighting -->
+	<script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-typescript.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-sql.min.js"></script>
+</body>
+</html>

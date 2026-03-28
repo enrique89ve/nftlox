@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getCollectionById } from "@/db/queries/collections.ts";
+import { getCollectionRules } from "@/db/queries/collections.ts";
 import { getNftForProcessing } from "@/db/queries/nfts.ts";
 import { insertPack, packExists } from "@/db/queries/packs.ts";
 import {
@@ -84,7 +84,7 @@ export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Pro
 
 	if (await packExists(id, txn)) return;
 
-	const collection = await getCollectionById(collectionId);
+	const collection = await getCollectionRules(collectionId, txn);
 	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
 	if (collection.creator !== op.signer) {
 		throw new Error(`Signer ${op.signer} is not creator of collection ${collectionId}`);

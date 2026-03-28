@@ -3,4 +3,9 @@ node_modules/
 .env
 docs/
 docs/**
+
+# Permit playground docs
+!packages/playground/docs/
+!packages/playground/docs/**
+
 OPERATIONS.md

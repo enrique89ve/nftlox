@@ -9,15 +9,15 @@ import {
 	NFT_STATUS_LENT,
 } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
-import { requireString, requireNumber, requireArray, optionalString } from "@/utils/validation.ts";
+import { requireString, requireNumber, requireArray, optionalString, optionalObject } from "@/utils/validation.ts";
 import {
 	generateDeterministicInstanceId,
-	generateOriginDnaSync,
+	generateOriginDna,
 	generateDeterministicInstanceDna,
 	generateDeterministicAccessKey,
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	validateHiveUsername,
-	computeDataHashSync,
+	computeDataHash,
 	validateMutableUpdate,
 	type CollectionSchema,
 } from "nftlox-sdk";
@@ -30,15 +30,15 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	}
 	const to = toRaw ?? op.signer;
 	const items = requireArray(op.data.items, "items");
-	const imageOverrides = (op.data.imageOverrides as Record<string, { imageUrl?: string; imageHash?: string }>) ?? {};
-	const mutableData = (op.data.mutableData as Record<string, unknown>) ?? null;
+	const imageOverrides = (optionalObject(op.data.imageOverrides) ?? {}) as Record<string, { imageUrl?: string; imageHash?: string }>;
+	const mutableData = optionalObject(op.data.mutableData) as Record<string, unknown> | null;
 
 	// Validate mutableData against schema if collection has one
 	if (mutableData) {
 		// We need to check at least one seed's collection for schema
 		// Validation happens per-seed below after collection is fetched
 	}
-	const mutableDataHash = mutableData ? computeDataHashSync(mutableData) : null;
+	const mutableDataHash = mutableData ? await computeDataHash(mutableData) : null;
 
 	if (items.length === 0) throw new Error("Items array is empty");
 	if (items.length > MAX_BULK_DISTRIBUTE_ITEMS) {
@@ -114,7 +114,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		}
 
 		const originDna = seed.origin_dna
-			?? generateOriginDnaSync(seed.collection_id);
+			?? await generateOriginDna(seed.collection_id);
 		const override = imageOverrides[seedId];
 
 		let minted = 0;
@@ -134,7 +134,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 			// Inherit immutable_data from seed
 			const seedImmutableData = seed.immutable_data as Record<string, unknown> | null;
-			const seedImmutableDataHash = seedImmutableData ? computeDataHashSync(seedImmutableData) : null;
+			const seedImmutableDataHash = seedImmutableData ? await computeDataHash(seedImmutableData) : null;
 
 			await insertNft({
 				id: instanceId,

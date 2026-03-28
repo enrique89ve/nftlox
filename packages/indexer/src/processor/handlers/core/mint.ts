@@ -3,7 +3,7 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
 import { requireString, optionalString, optionalNumber, optionalObject } from "@/utils/validation.ts";
-import { validateMintData, computeDataHashSync, type CollectionSchema } from "nftlox-sdk";
+import { validateMintData, computeDataHash, type CollectionSchema } from "nftlox-sdk";
 
 export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
@@ -37,8 +37,8 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		}
 	}
 
-	const immutableDataHash = immutableData ? computeDataHashSync(immutableData) : null;
-	const mutableDataHash = mutableData ? computeDataHashSync(mutableData) : null;
+	const immutableDataHash = immutableData ? await computeDataHash(immutableData) : null;
+	const mutableDataHash = mutableData ? await computeDataHash(mutableData) : null;
 
 	await insertNft({
 		id, collectionId, nftType: isSeed ? "seed" : "instance",

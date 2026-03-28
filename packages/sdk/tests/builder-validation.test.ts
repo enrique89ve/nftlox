@@ -3,8 +3,8 @@ import { buildTransfer, buildList, buildPackTransfer } from "../src/builders";
 
 describe("Builder username validation", () => {
 	describe("buildTransfer rejects invalid Hive usernames", () => {
-		test("rejects segment too short (a.b)", () => {
-			const result = buildTransfer({
+		test("rejects segment too short (a.b)", async () => {
+			const result = await buildTransfer({
 				nftId: "nft_test123",
 				from: "a.b",
 				to: "alice",
@@ -16,8 +16,8 @@ describe("Builder username validation", () => {
 			}
 		});
 
-		test("rejects trailing dot (abc.)", () => {
-			const result = buildTransfer({
+		test("rejects trailing dot (abc.)", async () => {
+			const result = await buildTransfer({
 				nftId: "nft_test123",
 				from: "abc.",
 				to: "alice",
@@ -29,8 +29,8 @@ describe("Builder username validation", () => {
 			}
 		});
 
-		test("rejects uppercase letters (ABC)", () => {
-			const result = buildTransfer({
+		test("rejects uppercase letters (ABC)", async () => {
+			const result = await buildTransfer({
 				nftId: "nft_test123",
 				from: "ABC",
 				to: "alice",
@@ -42,8 +42,8 @@ describe("Builder username validation", () => {
 			}
 		});
 
-		test("valid usernames do not produce username errors", () => {
-			const result = buildTransfer({
+		test("valid usernames do not produce username errors", async () => {
+			const result = await buildTransfer({
 				nftId: "nft_test123",
 				from: "alice",
 				to: "bob123",
@@ -61,8 +61,8 @@ describe("Builder username validation", () => {
 
 describe("Builder price validation", () => {
 	describe("buildList rejects invalid price formats", () => {
-		test("rejects 2 decimal places (1.00)", () => {
-			const result = buildList({
+		test("rejects 2 decimal places (1.00)", async () => {
+			const result = await buildList({
 				nftId: "nft_test123",
 				price: { amount: "1.00", currency: "HIVE" },
 				owner: "alice",
@@ -77,8 +77,8 @@ describe("Builder price validation", () => {
 			}
 		});
 
-		test("rejects leading zeros (001.000)", () => {
-			const result = buildList({
+		test("rejects leading zeros (001.000)", async () => {
+			const result = await buildList({
 				nftId: "nft_test123",
 				price: { amount: "001.000", currency: "HIVE" },
 				owner: "alice",
@@ -93,8 +93,8 @@ describe("Builder price validation", () => {
 			}
 		});
 
-		test("valid price (1.000) does not produce price errors", () => {
-			const result = buildList({
+		test("valid price (1.000) does not produce price errors", async () => {
+			const result = await buildList({
 				nftId: "nft_test123",
 				price: { amount: "1.000", currency: "HIVE" },
 				owner: "alice",

@@ -1,5 +1,5 @@
 // Packs view — browse, create, buy, open, transfer packs
-import { $, log, PLACEHOLDER_SM } from "../shared/dom";
+import { $, log, escapeHtml, PLACEHOLDER_SM } from "../shared/dom";
 import { getConnectedUser } from "../shared/state";
 import { broadcastOperation } from "../shared/keychain";
 
@@ -25,13 +25,13 @@ async function loadPacks() {
 		}
 
 		container.innerHTML = packs.map((pack: any) => `
-			<div class="nft-card pack-card" data-id="${pack.id}" onclick="loadPackDetail('${pack.id}')">
-				${pack.image_url ? `<img class="nft-image" src="${pack.image_url}" onerror="this.src='${PLACEHOLDER_SM}'">` : `<div class="nft-image" style="background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 32px;">📦</div>`}
-				<div class="nft-name">${pack.name}</div>
-				<div class="nft-owner">@${pack.creator}</div>
+			<div class="nft-card pack-card" data-id="${escapeHtml(pack.id)}" onclick="loadPackDetail('${escapeHtml(pack.id)}')">
+				${pack.image_url ? `<img class="nft-image" src="${escapeHtml(pack.image_url)}" onerror="this.src='${PLACEHOLDER_SM}'">` : `<div class="nft-image" style="background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 32px;">📦</div>`}
+				<div class="nft-name">${escapeHtml(pack.name)}</div>
+				<div class="nft-owner">@${escapeHtml(pack.creator)}</div>
 				<div class="nft-id" style="display: flex; justify-content: space-between; font-size: 12px;">
 					<span>${pack.current_supply}/${pack.max_supply} minted</span>
-					${pack.price_amount ? `<span style="color: var(--accent);">${pack.price_amount} ${pack.price_currency}</span>` : '<span style="color: var(--text-dim);">Free</span>'}
+					${pack.price_amount ? `<span style="color: var(--accent);">${escapeHtml(pack.price_amount)} ${escapeHtml(pack.price_currency)}</span>` : '<span style="color: var(--text-dim);">Free</span>'}
 				</div>
 				<div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">${pack.items_per_pack} items/pack</div>
 			</div>
@@ -85,7 +85,7 @@ async function loadPackDetail(packId: string) {
 				<thead><tr><th>Seed ID</th><th>Weight</th><th>Probability</th></tr></thead>
 				<tbody>${pack.drop_table.map((entry: any) => `
 					<tr>
-						<td style="font-family: var(--mono); font-size: 12px;">${entry.seedId}</td>
+						<td style="font-family: var(--mono); font-size: 12px;">${escapeHtml(entry.seedId)}</td>
 						<td>${entry.weight}</td>
 						<td style="color: var(--accent);">${((entry.weight / totalWeight) * 100).toFixed(1)}%</td>
 					</tr>
@@ -112,8 +112,8 @@ async function loadPackDetail(packId: string) {
 					<thead><tr><th>Event</th><th>Account</th><th>Qty</th><th>Date</th></tr></thead>
 					<tbody>${history.map((h: any) => `
 						<tr>
-							<td>${h.event_type}</td>
-							<td>@${h.account}</td>
+							<td>${escapeHtml(h.event_type)}</td>
+							<td>@${escapeHtml(h.account)}</td>
 							<td>${h.quantity}</td>
 							<td style="color: var(--text-dim);">${new Date(h.timestamp).toLocaleDateString()}</td>
 						</tr>
@@ -204,8 +204,8 @@ async function renderUserPacks(containerId: string) {
 		}
 
 		container.innerHTML = packs.map((p: any) => `
-			<div class="nft-card" onclick="loadPackDetail('${p.pack_id}')">
-				<div class="nft-name">${p.name}</div>
+			<div class="nft-card" onclick="loadPackDetail('${escapeHtml(p.pack_id)}')">
+				<div class="nft-name">${escapeHtml(p.name)}</div>
 				<div class="nft-id" style="display: flex; justify-content: space-between;">
 					<span>Balance: <strong>${p.balance}</strong></span>
 					<span style="color: var(--accent);">${p.items_per_pack} items/pack</span>

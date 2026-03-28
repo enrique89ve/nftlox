@@ -2,7 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftOwnerData, NFT_STATUS_BURNED } from "@/db/queries/nfts.ts";
 import { requireString, requireObject } from "@/utils/validation.ts";
-import { computeDataHashSync } from "nftlox-sdk";
+import { computeDataHash } from "nftlox-sdk";
 
 export async function handleSetOwnerData(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");
@@ -15,7 +15,7 @@ export async function handleSetOwnerData(op: ParsedOperation, txn: Queryable): P
 	if (nft.instance_dna !== instanceDna) throw new Error(`Instance DNA mismatch for ${nftId}`);
 
 	const ownerData = requireObject(op.data.data, "data") as Record<string, unknown>;
-	const dataHash = computeDataHashSync(ownerData);
+	const dataHash = await computeDataHash(ownerData);
 
 	await updateNftOwnerData(nftId, ownerData, dataHash, op.txId, op.blockNum, txn);
 }

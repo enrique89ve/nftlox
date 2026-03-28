@@ -144,7 +144,17 @@ export async function getNftWithCollectionRules(
 	return row ?? null;
 }
 
-export interface SeedWithDnaRow extends NftProcessingRow {
+export interface SeedWithDnaRow {
+	id: string;
+	owner: string;
+	status: NftStatus;
+	nft_type: NftKind;
+	name: string;
+	seed_id: string | null;
+	max_replicas: number;
+	distributed: number;
+	collection_id: string;
+	instance_dna: string | null;
 	origin_dna: string | null;
 	image_url: string | null;
 	image_hash: string | null;

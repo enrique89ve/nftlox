@@ -10,7 +10,7 @@ export const listBuilderSchema = listInputSchema.extend({
 });
 export type ListBuilderInput = z.infer<typeof listBuilderSchema>;
 
-export function buildList(input: ListBuilderInput): BuildResult<ListingData> {
+export async function buildList(input: ListBuilderInput): Promise<BuildResult<ListingData>> {
 	const parsed = listBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -23,7 +23,7 @@ export function buildList(input: ListBuilderInput): BuildResult<ListingData> {
 		warnings.push("imageUrl not provided - recommended for indexer verification");
 	}
 
-	const imageHash = data.imageHash || (data.imageUrl ? generateImageHash(data.imageUrl) : undefined);
+	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
 
 	const payloadData: ListingData = {
 		nftId: data.nftId,
@@ -66,7 +66,7 @@ export const unlistBuilderSchema = unlistInputSchema.extend({
 });
 export type UnlistBuilderInput = z.infer<typeof unlistBuilderSchema>;
 
-export function buildUnlist(input: UnlistBuilderInput): BuildResult<UnlistData> {
+export async function buildUnlist(input: UnlistBuilderInput): Promise<BuildResult<UnlistData>> {
 	const parsed = unlistBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -79,7 +79,7 @@ export function buildUnlist(input: UnlistBuilderInput): BuildResult<UnlistData> 
 		warnings.push("imageUrl not provided - recommended for indexer verification");
 	}
 
-	const imageHash = data.imageHash || (data.imageUrl ? generateImageHash(data.imageUrl) : undefined);
+	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
 
 	const payloadData: UnlistData = {
 		nftId: data.nftId,

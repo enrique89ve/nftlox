@@ -31,7 +31,7 @@ import {
 	buildNftReturn,
 	// For preview-ids (inline replacement)
 	generateDeterministicCollectionId,
-	generateOriginDnaSync,
+	generateOriginDna,
 	generateDeterministicSeedId,
 } from "nftlox-sdk";
 import { splitOperationsIntoBatches } from "../protocol";
@@ -60,8 +60,8 @@ function buildRoute(handler: (body: any) => Response | Promise<Response>): { POS
 export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	// ============ EXISTING BUILD ENDPOINTS ============
 
-	"/api/build/collection": buildRoute((body) => {
-		const result = buildCollection(body);
+	"/api/build/collection": buildRoute(async (body) => {
+		const result = await buildCollection(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -75,12 +75,12 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	"/api/build/seeds": buildRoute((body) => {
+	"/api/build/seeds": buildRoute(async (body) => {
 		const result = buildSeedBatch(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 
-		const operations = body.seeds.map((seed: any) => {
-			const seedResult = buildSeed({
+		const operations = await Promise.all(body.seeds.map(async (seed: any) => {
+			const seedResult = await buildSeed({
 				artId: seed.artId,
 				collectionId: body.collectionId,
 				name: seed.name,
@@ -95,7 +95,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 				seedId: seedResult.generatedId,
 				operation: seedResult.operation,
 			};
-		});
+		}));
 
 		const batches = splitOperationsIntoBatches(operations.map((o: any) => o.operation!));
 
@@ -183,13 +183,13 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	"/api/build/preview-ids": buildRoute((body) => {
+	"/api/build/preview-ids": buildRoute(async (body) => {
 		const collectionId = generateDeterministicCollectionId(
 			body.creator,
 			body.name,
 			body.symbol,
 		);
-		const originDna = generateOriginDnaSync(collectionId);
+		const originDna = await generateOriginDna(collectionId);
 
 		const seedIds: Record<string, string> = {};
 		if (body.artIds && Array.isArray(body.artIds)) {
@@ -263,7 +263,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 
 	// --- Core faltante (2) ---
 
-	"/api/build/replicate": buildRoute((body) => {
+	"/api/build/replicate": buildRoute(async (body) => {
 		const input = {
 			originalId: body.originalId,
 			originDna: body.originDna,
@@ -271,8 +271,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			newOwner: body.newOwner,
 			currentOwner: body.currentOwner,
 		};
-		const operation = createReplicateOperation(input);
-		const payload = createReplicatePayload(input);
+		const operation = await createReplicateOperation(input);
+		const payload = await createReplicatePayload(input);
 
 		return json({
 			success: true,

@@ -1,5 +1,5 @@
 // Marketplace view — active listings
-import { $, log, PLACEHOLDER_SM } from "../shared/dom";
+import { $, log, escapeHtml, PLACEHOLDER_SM } from "../shared/dom";
 import { getConnectedUser } from "../shared/state";
 
 export function initMarketplace() {
@@ -40,13 +40,13 @@ async function loadListings() {
 			}
 
 			return `
-				<div class="nft-card" data-id="${nft.id}" onclick="loadNftDetail('${nft.id}')">
-					<img class="nft-image" src="${nft.image_url}" onerror="this.src='${PLACEHOLDER_SM}'">
+				<div class="nft-card" data-id="${escapeHtml(nft.id as string)}" onclick="loadNftDetail('${escapeHtml(nft.id as string)}')">
+					<img class="nft-image" src="${escapeHtml(nft.image_url as string)}" onerror="this.src='${PLACEHOLDER_SM}'">
 					<div class="nft-card-body">
-						<div class="nft-name">${nft.name}</div>
-						<div class="nft-owner">@${nft.owner}</div>
+						<div class="nft-name">${escapeHtml(nft.name as string)}</div>
+						<div class="nft-owner">@${escapeHtml(nft.owner as string)}</div>
 						<div class="nft-meta">
-							<span style="color: var(--accent); font-weight: 600; font-size: 13px;">${nft.listing_price} ${nft.listing_currency}</span>
+							<span style="color: var(--accent); font-weight: 600; font-size: 13px;">${escapeHtml(nft.listing_price as string)} ${escapeHtml(nft.listing_currency as string)}</span>
 							${actionHtml}
 						</div>
 					</div>

@@ -71,12 +71,6 @@ export async function computeDataHash(data: Record<string, unknown>): Promise<st
 	return `sha256:${hex}`;
 }
 
-export function computeDataHashSync(data: Record<string, unknown>): string {
-	const json = canonicalJson(data);
-	const hash = Bun.CryptoHasher.hash("sha256", json, "hex");
-	return `sha256:${hash}`;
-}
-
 // ============ SINGLE VALUE VALIDATION ============
 
 export function validateValueAgainstType(value: unknown, type: SchemaFieldType): boolean {

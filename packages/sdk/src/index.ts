@@ -166,10 +166,9 @@ export type {
 
 // ============ DNA GENERATION ============
 export {
+	generateHash,
 	generateHashAsync,
-	generateHashSync,
 	generateOriginDna,
-	generateOriginDnaSync,
 	generateInstanceDna,
 	generateReplicaInstanceDna,
 	generateAccessKey,
@@ -281,7 +280,6 @@ export {
 	VALID_SCHEMA_TYPES,
 	canonicalJson,
 	computeDataHash,
-	computeDataHashSync,
 	validateValueAgainstType,
 	validateSchemaDefinition,
 	validateMintData,

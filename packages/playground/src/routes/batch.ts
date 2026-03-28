@@ -1,7 +1,7 @@
 // Legacy batch minting routes
 import {
 	PROTOCOL_VERSION,
-	generateOriginDnaSync,
+	generateOriginDna,
 	validateArtIdArray,
 	type SeedNFTWithArtId,
 } from "nftlox-sdk";
@@ -113,7 +113,7 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 					return json({ error: "Provide 'nfts' array or 'sampleFile' path" }, 400);
 				}
 
-				const collectionOriginDna = generateOriginDnaSync(body.collectionId);
+				const collectionOriginDna = await generateOriginDna(body.collectionId);
 				const result = createSeedMintOperations(nfts, body.collectionId, collectionOriginDna, body.owner);
 				const validation = validateOperationsVersion(result.seeds.map(s => s.operation));
 				const batches = splitOperationsIntoBatches(result.seeds.map(s => s.operation));
@@ -204,7 +204,7 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 					}, 400);
 				}
 
-				const collectionOriginDna = generateOriginDnaSync(body.collectionId);
+				const collectionOriginDna = await generateOriginDna(body.collectionId);
 				const result = createDeterministicSeedMintOperations(nfts, body.collectionId, collectionOriginDna, body.owner);
 				const opValidation = validateOperationsVersion(result.seeds.map(s => s.operation));
 				const batches = splitOperationsIntoBatches(result.seeds.map(s => s.operation));

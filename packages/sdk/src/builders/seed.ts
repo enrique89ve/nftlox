@@ -3,7 +3,7 @@ import { usernameSchema } from "../schemas";
 import { formatZodError } from "./helpers";
 import {
 	generateDeterministicSeedId,
-	generateOriginDnaSync,
+	generateOriginDna,
 	validateArtId,
 	validateArtIdArray,
 } from "../dna";
@@ -32,7 +32,7 @@ export const seedBuilderInputSchema = seedInputSchema.extend({
 	collectionBlock: z.number().int().nonnegative().optional(),
 });
 
-export function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): BuildResult<NFTData> {
+export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): Promise<BuildResult<NFTData>> {
 	const parsed = seedBuilderInputSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -50,7 +50,7 @@ export function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): BuildR
 	}
 
 	const generatedId = generateDeterministicSeedId(data.collectionId, data.artId);
-	const originDna = generateOriginDnaSync(data.collectionId);
+	const originDna = await generateOriginDna(data.collectionId);
 
 	const mintInput: DeterministicMintInput = {
 		artId: data.artId,
@@ -65,8 +65,8 @@ export function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): BuildR
 		...(data.collectionBlock !== undefined && { collectionBlock: data.collectionBlock }),
 	};
 
-	const payload = createDeterministicMintPayload(mintInput);
-	const operation = createMintOperation({
+	const payload = await createDeterministicMintPayload(mintInput);
+	const operation = await createMintOperation({
 		collectionId: data.collectionId,
 		collectionOriginDna: originDna,
 		edition: data.edition,

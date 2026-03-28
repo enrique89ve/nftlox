@@ -9,7 +9,11 @@ import {
 
 // ============ HASH FUNCTIONS ============
 
-export async function generateHashAsync(input: string): Promise<string> {
+/**
+ * SHA-256 hash using Web Crypto (crypto.subtle).
+ * Works in all modern runtimes: browsers, Node 18+, Deno, Bun, Cloudflare Workers.
+ */
+export async function generateHash(input: string): Promise<string> {
 	const encoder = new TextEncoder();
 	const data = encoder.encode(input);
 	const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -17,16 +21,8 @@ export async function generateHashAsync(input: string): Promise<string> {
 	return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/**
- * Non-deterministic hash: includes Date.now() and Math.random() for uniqueness.
- * Use deterministicHash() when reproducibility across nodes is required.
- */
-export function generateHashSync(input: string): string {
-	const hex = Bun.CryptoHasher.hash("sha256", input, "hex");
-	const timestamp = Date.now().toString(16);
-	const random = Math.random().toString(16).slice(2, 10);
-	return `${hex.slice(0, 8)}${timestamp}${random}`;
-}
+/** @deprecated Use `generateHash` instead. Will be removed in a future version. */
+export const generateHashAsync = generateHash;
 
 // ============ ORIGIN DNA (Collection Level) ============
 
@@ -37,18 +33,8 @@ export function generateHashSync(input: string): string {
  */
 export async function generateOriginDna(collectionId: string): Promise<string> {
 	const input = `nftlox:origin:${collectionId}`;
-	const fullHash = await generateHashAsync(input);
+	const fullHash = await generateHash(input);
 	return fullHash.slice(0, ORIGIN_DNA_LENGTH).toUpperCase();
-}
-
-/**
- * Synchronous version for contexts where async is not available.
- * Uses a deterministic seed based on collectionId.
- */
-export function generateOriginDnaSync(collectionId: string): string {
-	const input = `nftlox:origin:${collectionId}`;
-	const hex = Bun.CryptoHasher.hash("sha256", input, "hex");
-	return hex.slice(0, ORIGIN_DNA_LENGTH).toUpperCase();
 }
 
 // ============ INSTANCE DNA (NFT Level) ============
@@ -58,13 +44,16 @@ export function generateOriginDnaSync(collectionId: string): string {
  * Each NFT has a unique instanceDna while sharing originDna with siblings.
  * NOT deterministic: includes randomness for uniqueness.
  */
-export function generateInstanceDna(
+export async function generateInstanceDna(
 	originDna: string,
 	edition: number,
 	imageHash: string,
-): string {
+): Promise<string> {
 	const input = `${originDna}:${edition}:${imageHash}:${Date.now()}:${Math.random()}`;
-	const hash = generateHashSync(input);
+	const fullHash = await generateHash(input);
+	const timestamp = Date.now().toString(16);
+	const random = Math.random().toString(16).slice(2, 10);
+	const hash = `${fullHash.slice(0, 8)}${timestamp}${random}`;
 	return hash.slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
 }
 
@@ -72,12 +61,15 @@ export function generateInstanceDna(
  * Generates instance DNA for a replica.
  * Derived from the original's instanceDna to maintain lineage.
  */
-export function generateReplicaInstanceDna(
+export async function generateReplicaInstanceDna(
 	originDna: string,
 	originalInstanceDna: string,
-): string {
+): Promise<string> {
 	const input = `${originDna}:replica:${originalInstanceDna}:${Date.now()}:${Math.random()}`;
-	const hash = generateHashSync(input);
+	const fullHash = await generateHash(input);
+	const timestamp = Date.now().toString(16);
+	const random = Math.random().toString(16).slice(2, 10);
+	const hash = `${fullHash.slice(0, 8)}${timestamp}${random}`;
 	return hash.slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
 }
 
@@ -87,9 +79,12 @@ export function generateReplicaInstanceDna(
  * Generates a unique access key for an NFT.
  * Used for software activation, membership access, etc.
  */
-export function generateAccessKey(instanceDna: string, owner: string): string {
+export async function generateAccessKey(instanceDna: string, owner: string): Promise<string> {
 	const input = `${instanceDna}:${owner}:${Date.now()}:${Math.random()}`;
-	const hash = generateHashSync(input);
+	const fullHash = await generateHash(input);
+	const timestamp = Date.now().toString(16);
+	const random = Math.random().toString(16).slice(2, 10);
+	const hash = `${fullHash.slice(0, 8)}${timestamp}${random}`;
 	return hash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
 }
 
@@ -99,8 +94,13 @@ export function generateAccessKey(instanceDna: string, owner: string): string {
  * Generates a hash for an image URL.
  * Used when no external hash is provided.
  */
-export function generateImageHash(imageUrl: string): string {
-	return `img_${generateHashSync(imageUrl + Date.now())}`;
+export async function generateImageHash(imageUrl: string): Promise<string> {
+	const input = imageUrl + Date.now();
+	const fullHash = await generateHash(input);
+	const timestamp = Date.now().toString(16);
+	const random = Math.random().toString(16).slice(2, 10);
+	const hash = `${fullHash.slice(0, 8)}${timestamp}${random}`;
+	return `img_${hash}`;
 }
 
 // ============ ID GENERATION ============

@@ -12,7 +12,7 @@ export const TX_DELAY_MS = 4000;
 // Field Limits
 export const MAX_NAME_LENGTH = 100;
 export const MAX_DESCRIPTION_LENGTH = 250;
-export const MAX_IMAGE_URL_LENGTH = 200;
+export const MAX_IMAGE_URL_LENGTH = 500;
 export const MIN_SYMBOL_LENGTH = 3;
 export const MAX_SYMBOL_LENGTH = 8;
 export const SYMBOL_REGEX = /^[A-Z0-9]{3,8}$/;

@@ -710,7 +710,7 @@ import {
 	createDataOperatorApproveOperation,
 	// DNA & RNG
 	generateDeterministicSeedId,
-	generateOriginDnaSync,
+	generateOriginDna,
 	resolveDropTable,
 	// Schema
 	createSchemaBuilder,

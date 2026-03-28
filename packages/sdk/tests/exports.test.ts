@@ -10,7 +10,7 @@ import {
 	PROTOCOL_ID,
 	buildCollection,
 	createCollectionPayload,
-	generateOriginDnaSync,
+	generateOriginDna,
 } from "../src/index";
 
 // ============ 1. New exports exist and are the correct type ============
@@ -110,7 +110,7 @@ describe("Existing exports still work (no regressions)", () => {
 		expect(typeof createCollectionPayload).toBe("function");
 	});
 
-	test("generateOriginDnaSync is a function", () => {
-		expect(typeof generateOriginDnaSync).toBe("function");
+	test("generateOriginDna is a function", () => {
+		expect(typeof generateOriginDna).toBe("function");
 	});
 });

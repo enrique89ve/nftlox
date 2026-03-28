@@ -2,7 +2,7 @@ import { createCollectionInputSchema, type CreateCollectionInput } from "../sche
 import { formatZodError } from "./helpers";
 import {
 	generateDeterministicCollectionId,
-	generateOriginDnaSync,
+	generateOriginDna,
 } from "../dna";
 import {
 	createDeterministicCollectionPayload,
@@ -12,7 +12,7 @@ import {
 import type { BuildResult, CollectionData } from "../types";
 import { MAX_NAME_LENGTH } from "../constants";
 
-export function buildCollection(input: CreateCollectionInput): BuildResult<CollectionData> {
+export async function buildCollection(input: CreateCollectionInput): Promise<BuildResult<CollectionData>> {
 	const parsed = createCollectionInputSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -33,7 +33,7 @@ export function buildCollection(input: CreateCollectionInput): BuildResult<Colle
 		data.name,
 		data.symbol,
 	);
-	const originDna = generateOriginDnaSync(generatedId);
+	const originDna = await generateOriginDna(generatedId);
 
 	const collectionInput: DeterministicCollectionInput = {
 		creator: data.creator,
@@ -44,8 +44,8 @@ export function buildCollection(input: CreateCollectionInput): BuildResult<Colle
 		rules: data.rules,
 	};
 
-	const payload = createDeterministicCollectionPayload(collectionInput);
-	const operation = createCollectionOperation({
+	const payload = await createDeterministicCollectionPayload(collectionInput);
+	const operation = await createCollectionOperation({
 		...collectionInput,
 		jsonId: data.jsonId, // using original non-deterministic jsonId
 	});

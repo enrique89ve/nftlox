@@ -21,6 +21,12 @@ const TX_ID_REGEX = /^[0-9a-f]{40}$/;
 // Hive asset precision: exactly 3 decimal places, no leading zeros (except "0.xxx")
 const HIVE_DECIMAL_REGEX = /^(0|[1-9]\d*)\.\d{3}$/;
 
+// Safe URL: only http:// and https:// protocols (blocks javascript:, data:, etc.)
+const httpUrlSchema = z.string().url().refine(
+	(val) => /^https?:\/\//i.test(val),
+	{ message: "URL must use http or https protocol" },
+);
+
 // ============ HIVE USERNAME VALIDATION ============
 // Mirrors hive-tx validateUsername() rules exactly:
 // - 3-16 chars total
@@ -126,8 +132,8 @@ export const createCollectionInputSchema = z.object({
 	totalPotential: z.number().nonnegative("Total potential must be non-negative"),
 	metadata: z.object({
 		description: z.string().min(1, "Description is required").max(MAX_DESCRIPTION_LENGTH, `Description must be at most ${MAX_DESCRIPTION_LENGTH} characters`),
-		image: z.string().url("Valid Image URL is required").max(MAX_IMAGE_URL_LENGTH, `Image URL must be at most ${MAX_IMAGE_URL_LENGTH} characters`),
-		externalUrl: z.string().url().optional(),
+		image: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH, `Image URL must be at most ${MAX_IMAGE_URL_LENGTH} characters`),
+		externalUrl: httpUrlSchema.optional(),
 	}),
 	rules: z.object({
 		transferable: z.boolean(),
@@ -147,7 +153,7 @@ export const mintInputSchema = z.object({
 	owner: usernameSchema,
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH),
 	description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
-	imageUrl: z.string().url("Valid Image URL is required").max(MAX_IMAGE_URL_LENGTH),
+	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH),
 	imageHash: z.string().optional(),
 	maxReplicas: z.number().int().min(1, "Max replicas must be at least 1").optional(),
 	birthBlock: z.number().optional(),
@@ -163,7 +169,7 @@ export const listInputSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1, "NFT ID is required"),
 	price: priceSchema,
 	expiresAt: z.number().refine((v) => v > Date.now(), { message: "Expiration date must be in the future" }).optional(),
-	imageUrl: z.string().url().optional(),
+	imageUrl: httpUrlSchema.optional(),
 	imageHash: z.string().optional(),
 	marketplace: z.string().optional(),
 });
@@ -173,7 +179,7 @@ export const importedNftSchema = z.object({
 	nftId: z.string().min(1, "NFT ID is required"),
 	name: z.string().min(1, "Name is required"),
 	brief: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
-	imageUrl: z.string().url("Valid Image URL is required"),
+	imageUrl: httpUrlSchema,
 	imageHash: z.string().optional(),
 	maxReplicas: z.number().int().min(1).default(1),
 });
@@ -189,7 +195,7 @@ export const packCreateInputSchema = z.object({
 	collectionId: z.string().min(1, "Collection ID is required"),
 	name: z.string().min(1, "Pack name is required").max(MAX_NAME_LENGTH),
 	description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
-	imageUrl: z.string().url().max(MAX_IMAGE_URL_LENGTH).optional(),
+	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH).optional(),
 	dropTable: z.array(packDropEntrySchema).min(1).max(MAX_DROP_TABLE_ENTRIES),
 	itemsPerPack: z.number().int().min(1).max(MAX_ITEMS_PER_PACK),
 	price: priceSchema.optional(),
@@ -253,14 +259,14 @@ export type ReplicateInput = z.infer<typeof replicateInputSchema>;
 
 export const burnInputSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1),
-	imageUrl: z.string().url().optional(),
+	imageUrl: httpUrlSchema.optional(),
 	imageHash: z.string().optional(),
 });
 export type BurnInput = z.infer<typeof burnInputSchema>;
 
 export const unlistInputSchema = z.object({
 	nftId: z.string().min(1),
-	imageUrl: z.string().url().optional(),
+	imageUrl: httpUrlSchema.optional(),
 	imageHash: z.string().optional(),
 });
 export type UnlistInput = z.infer<typeof unlistInputSchema>;
@@ -344,7 +350,7 @@ export const atomicTransferInputSchema = seedProvenanceSchema.extend({
 	from: usernameSchema,
 	to: usernameSchema,
 	memo: z.string().optional(),
-	imageUrl: z.string().url().optional(),
+	imageUrl: httpUrlSchema.optional(),
 	imageHash: z.string().optional(),
 });
 export type AtomicTransferInput = z.infer<typeof atomicTransferInputSchema>;

@@ -6,7 +6,7 @@ import {
 	validateMutableUpdate,
 	mergeSchemas,
 	canonicalJson,
-	computeDataHashSync,
+	computeDataHash,
 	VALID_SCHEMA_TYPES,
 } from "../src/schema-validation";
 import {
@@ -406,31 +406,31 @@ describe("canonicalJson", () => {
 	});
 });
 
-// ============ computeDataHashSync ============
+// ============ computeDataHash ============
 
-describe("computeDataHashSync", () => {
-	test("produces sha256 prefixed hash", () => {
-		const hash = computeDataHashSync({ level: 5 });
+describe("computeDataHash", () => {
+	test("produces sha256 prefixed hash", async () => {
+		const hash = await computeDataHash({ level: 5 });
 		expect(hash.startsWith("sha256:")).toBe(true);
 		expect(hash.length).toBe(7 + 64); // "sha256:" + 64 hex chars
 	});
 
-	test("same data different key order produces same hash", () => {
-		const hash1 = computeDataHashSync({ level: 5, xp: 100 });
-		const hash2 = computeDataHashSync({ xp: 100, level: 5 });
+	test("same data different key order produces same hash", async () => {
+		const hash1 = await computeDataHash({ level: 5, xp: 100 });
+		const hash2 = await computeDataHash({ xp: 100, level: 5 });
 		expect(hash1).toBe(hash2);
 	});
 
-	test("different data produces different hash", () => {
-		const hash1 = computeDataHashSync({ level: 5 });
-		const hash2 = computeDataHashSync({ level: 6 });
+	test("different data produces different hash", async () => {
+		const hash1 = await computeDataHash({ level: 5 });
+		const hash2 = await computeDataHash({ level: 6 });
 		expect(hash1).not.toBe(hash2);
 	});
 
-	test("deterministic across calls", () => {
+	test("deterministic across calls", async () => {
 		const data = { rarity: "legendary", power: 500, equipped: ["sword", "shield"] };
-		const hash1 = computeDataHashSync(data);
-		const hash2 = computeDataHashSync(data);
+		const hash1 = await computeDataHash(data);
+		const hash2 = await computeDataHash(data);
 		expect(hash1).toBe(hash2);
 	});
 });

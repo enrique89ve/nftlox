@@ -9,7 +9,7 @@ import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateDeterministicInstanceId,
-	generateOriginDnaSync,
+	generateOriginDna,
 } from "nftlox-sdk";
 
 const json = (data: unknown, status = 200) =>
@@ -25,7 +25,7 @@ const COLLECTION_NAME = "Dragon Masters TCG";
 const COLLECTION_SYMBOL = "DMTCG";
 
 const COLLECTION_ID = generateDeterministicCollectionId(GAME_ACCOUNT, COLLECTION_NAME, COLLECTION_SYMBOL);
-const ORIGIN_DNA = generateOriginDnaSync(COLLECTION_ID);
+const ORIGIN_DNA = await generateOriginDna(COLLECTION_ID);
 
 const SEED_IDS = {
 	fireDragon: generateDeterministicSeedId(COLLECTION_ID, "FIRE-DRAGON-001"),
@@ -53,20 +53,20 @@ const PLAYERS = {
 
 const GAME_SCHEMA = {
 	immutable: [
-		{ name: "cardType", type: "string" },
+		{ name: "card_type", type: "string" },
 		{ name: "element", type: "string" },
 		{ name: "rarity", type: "string" },
-		{ name: "baseAttack", type: "uint16" },
-		{ name: "baseDefense", type: "uint16" },
+		{ name: "base_attack", type: "uint16" },
+		{ name: "base_defense", type: "uint16" },
 	],
 	mutable: [
-		{ name: "gameOwner", type: "string" },
+		{ name: "game_owner", type: "string" },
 		{ name: "level", type: "uint8" },
 		{ name: "xp", type: "uint32" },
 		{ name: "wins", type: "uint32" },
-		{ name: "lentTo", type: "string" },
+		{ name: "lent_to", type: "string" },
 		{ name: "equipped", type: "bool" },
-		{ name: "customName", type: "string" },
+		{ name: "custom_name", type: "string" },
 	],
 };
 
@@ -112,7 +112,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 			{
 				id: "assign-cards",
 				name: "Assign Cards to Players",
-				description: "Game assigns cards to players by updating mutableData.gameOwner with their in-game hash ID",
+				description: "Game assigns cards to players by updating mutableData.game_owner with their in-game hash ID",
 				endpoint: "/api/scenarios/assign-cards",
 			},
 			{
@@ -218,20 +218,20 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						{ seedId: SEED_IDS.fireDragon, quantity: 10 },
 					],
 					mutableData: {
-						gameOwner: "",
+						game_owner: "",
 						level: 1,
 						xp: 0,
 						wins: 0,
-						lentTo: "",
+						lent_to: "",
 						equipped: false,
-						customName: "",
+						custom_name: "",
 					},
 				},
 				notes: [
 					"NO 'to' field = owner defaults to the signer (game-server)",
 					"All 110 instances are owned by game-server on-chain",
 					"mutableData initializes every card at level 1 with no in-game owner",
-					"gameOwner is empty — cards sit in the game's 'vault' until assigned",
+					"game_owner is empty — cards sit in the game's 'vault' until assigned",
 				],
 			},
 		],
@@ -240,7 +240,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 	// ── Scenario 2: Assign Cards to Players ───────────────────────
 	"/api/scenarios/assign-cards": () => json({
 		scenario: "Assign Cards to Players",
-		description: "When a player earns or buys a card in-game, the game server updates mutableData.gameOwner to their player hash. The on-chain owner is still the game server.",
+		description: "When a player earns or buys a card in-game, the game server updates mutableData.game_owner to their player hash. The on-chain owner is still the game server.",
 		steps: [
 			{
 				step: 1,
@@ -252,11 +252,11 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					nftId: INSTANCE_IDS.fireDragon1,
 					instanceDna: "will-be-filled-by-indexer",
 					mutableData: {
-						gameOwner: PLAYERS.player1,
+						game_owner: PLAYERS.player1,
 					},
 				},
 				notes: [
-					"Only mutableData.gameOwner changes — other fields (level, xp) stay as-is",
+					"Only mutableData.game_owner changes — other fields (level, xp) stay as-is",
 					"The game server signs this as the collection creator",
 					"Player 1 never touches blockchain — they just see 'You earned Inferno Drake!' in the game UI",
 				],
@@ -271,11 +271,11 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					nftId: INSTANCE_IDS.starterWolf1,
 					instanceDna: "will-be-filled-by-indexer",
 					mutableData: {
-						gameOwner: PLAYERS.player2,
+						game_owner: PLAYERS.player2,
 					},
 				},
 				notes: [
-					"The game server just flips gameOwner from '' to the player's hash ID",
+					"The game server just flips game_owner from '' to the player's hash ID",
 					"Player thinks they 'got a free card' — they don't know it's an NFT on Hive",
 				],
 			},
@@ -289,19 +289,19 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf1,
 						instanceDna: "will-be-filled-by-indexer",
-						mutableData: { gameOwner: PLAYERS.player3 },
+						mutableData: { game_owner: PLAYERS.player3 },
 					},
 					{
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf2,
 						instanceDna: "will-be-filled-by-indexer",
-						mutableData: { gameOwner: PLAYERS.player3 },
+						mutableData: { game_owner: PLAYERS.player3 },
 					},
 					{
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf3,
 						instanceDna: "will-be-filled-by-indexer",
-						mutableData: { gameOwner: PLAYERS.player3 },
+						mutableData: { game_owner: PLAYERS.player3 },
 					},
 				],
 				notes: [
@@ -329,8 +329,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						nftId: INSTANCE_IDS.starterWolf1,
 						instanceDna: "will-be-filled-by-indexer",
 						mutableData: {
-							gameOwner: "",
-							lentTo: PLAYERS.player1,
+							game_owner: "",
+							lent_to: PLAYERS.player1,
 						},
 					},
 					{
@@ -338,14 +338,14 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						nftId: INSTANCE_IDS.starterWolf2,
 						instanceDna: "will-be-filled-by-indexer",
 						mutableData: {
-							gameOwner: "",
-							lentTo: PLAYERS.player1,
+							game_owner: "",
+							lent_to: PLAYERS.player1,
 						},
 					},
 				],
 				notes: [
-					"gameOwner stays empty — the player does NOT own the card",
-					"lentTo marks who is currently using the card",
+					"game_owner stays empty — the player does NOT own the card",
+					"lent_to marks who is currently using the card",
 					"The game UI shows these cards in the player's 'Borrowed' section",
 					"The game server enforces: borrowed cards cannot be traded",
 				],
@@ -361,7 +361,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						nftId: INSTANCE_IDS.starterWolf1,
 						instanceDna: "will-be-filled-by-indexer",
 						mutableData: {
-							lentTo: "",
+							lent_to: "",
 						},
 					},
 					{
@@ -369,12 +369,12 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						nftId: INSTANCE_IDS.starterWolf2,
 						instanceDna: "will-be-filled-by-indexer",
 						mutableData: {
-							lentTo: "",
+							lent_to: "",
 						},
 					},
 				],
 				notes: [
-					"Clearing lentTo returns the cards to the game's vault",
+					"Clearing lent_to returns the cards to the game's vault",
 					"Cards are now available to lend to another player",
 					"All of this is a single on-chain operation — instant and cheap",
 				],
@@ -390,14 +390,14 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						nftId: INSTANCE_IDS.starterWolf3,
 						instanceDna: "will-be-filled-by-indexer",
 						mutableData: {
-							gameOwner: PLAYERS.player1,
-							lentTo: "",
+							game_owner: PLAYERS.player1,
+							lent_to: "",
 						},
 					},
 				],
 				notes: [
-					"Now player1 OWNS the card (gameOwner = their hash)",
-					"lentTo is empty — this is their card, not borrowed",
+					"Now player1 OWNS the card (game_owner = their hash)",
+					"lent_to is empty — this is their card, not borrowed",
 					"Player sees 'You received Shadow Wolf!' in the game UI",
 				],
 			},
@@ -405,10 +405,10 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 		gameLogic: {
 			description: "The game server enforces these rules in its own code — NOT in the NFTLox protocol:",
 			rules: [
-				"Cards with lentTo != '' cannot be traded by the borrower",
-				"Cards with lentTo != '' can be reclaimed at any time by the game",
+				"Cards with lent_to != '' cannot be traded by the borrower",
+				"Cards with lent_to != '' can be reclaimed at any time by the game",
 				"Lent cards don't count toward the borrower's collection stats",
-				"Only cards with gameOwner == player hash can be traded or customized",
+				"Only cards with game_owner == player hash can be traded or customized",
 			],
 		},
 	}),
@@ -430,7 +430,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						nftId: INSTANCE_IDS.fireDragon1,
 						instanceDna: "will-be-filled-by-indexer",
 						mutableData: {
-							gameOwner: PLAYERS.player2,
+							game_owner: PLAYERS.player2,
 						},
 					},
 					{
@@ -439,14 +439,14 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						nftId: INSTANCE_IDS.iceGolem1,
 						instanceDna: "will-be-filled-by-indexer",
 						mutableData: {
-							gameOwner: PLAYERS.player1,
+							game_owner: PLAYERS.player1,
 						},
 					},
 				],
 				notes: [
 					"Both set_data operations go in the SAME Hive transaction",
 					"Since both update mutableData on NFTs owned by the game server, both will succeed or the game server has a bug in its own payload construction",
-					"On-chain owner (game-server) never changes — only mutableData.gameOwner changes",
+					"On-chain owner (game-server) never changes — only mutableData.game_owner changes",
 					"Players just see 'Trade complete!' in the game UI",
 					"Note: Hive transactions are NOT atomic at the NFTLox protocol level — if the second operation has invalid data, the first may still be applied. The game server should validate payloads before broadcasting.",
 				],
@@ -462,7 +462,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					nftId: INSTANCE_IDS.starterWolf1,
 					instanceDna: "will-be-filled-by-indexer",
 					mutableData: {
-						gameOwner: PLAYERS.player3,
+						game_owner: PLAYERS.player3,
 					},
 				},
 				notes: [
@@ -477,7 +477,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 			example: buildCustomJson(GAME_ACCOUNT, "set_data", {
 				nftId: "<instance_id>",
 				instanceDna: "<dna>",
-				mutableData: { gameOwner: "<new_player_hash>" },
+				mutableData: { game_owner: "<new_player_hash>" },
 			}),
 		},
 	}),
@@ -504,7 +504,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				},
 				notes: [
 					"Only the changed fields are included in mutableData",
-					"gameOwner, lentTo, equipped are NOT included — they stay as-is",
+					"game_owner, lent_to, equipped are NOT included — they stay as-is",
 					"Each update is recorded on-chain with block number and tx hash",
 				],
 			},
@@ -519,7 +519,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					instanceDna: "will-be-filled-by-indexer",
 					mutableData: {
 						equipped: true,
-						customName: "Blaze King",
+						custom_name: "Blaze King",
 					},
 				},
 			},
