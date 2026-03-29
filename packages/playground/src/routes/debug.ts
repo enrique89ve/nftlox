@@ -7,6 +7,7 @@ import {
 	type PaymentInfo,
 	type MultisigResponse,
 } from "nftlox-sdk";
+import { playgroundConfig } from "../config";
 import { INDEXER_URL } from "../shared/indexer";
 
 const json = (data: unknown, status = 200) =>
@@ -29,6 +30,10 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 	"/api/debug/server-transfer": {
 		POST: async (req: Request) => {
 			try {
+				if (!playgroundConfig.debugRoutesEnabled) {
+					return json({ error: "Not Found" }, 404);
+				}
+
 				if (!SERVER_ACCOUNT || !ACTIVE_KEY) {
 					return json({ error: "HIVE_ACCOUNT or ACTIVE_KEY not configured in .env" }, 500);
 				}
@@ -65,6 +70,10 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 	"/api/debug/multisig-buy": {
 		POST: async (req: Request) => {
 			try {
+				if (!playgroundConfig.debugRoutesEnabled) {
+					return json({ error: "Not Found" }, 404);
+				}
+
 				const body = await req.json() as { buyer: string; nftId: string };
 				if (!body.buyer || !body.nftId) {
 					return json({ success: false, error: "buyer and nftId are required" }, 400);

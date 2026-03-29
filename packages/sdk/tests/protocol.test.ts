@@ -240,15 +240,17 @@ describe("Mint Payload", () => {
 });
 
 describe("Marketplace Payloads", () => {
-	test("list payload should include price", () => {
+	test("list payload should include price and listingId", () => {
 		const payload = createListPayload({
 			nftId: "nft_test123",
 			price: { amount: "10.000", currency: "HIVE" },
-		});
+		}, "list_abc123", "nonce123");
 
 		expect(payload.action).toBe(ACTION_LIST);
 		expect(payload.data.price.amount).toBe("10.000");
 		expect(payload.data.price.currency).toBe("HIVE");
+		expect(payload.data.listingId).toBe("list_abc123");
+		expect(payload.data.listingNonce).toBe("nonce123");
 	});
 
 });
@@ -425,18 +427,20 @@ describe("Buy Action (Multisig)", () => {
 		expect(MAX_MULTISIG_OPERATIONS).toBe(4);
 	});
 
-	test("createBuyPayload should produce valid payload", () => {
-		const data: BuyData = { nftId: "nft_test123" };
+	test("createBuyPayload should produce valid payload with listingId and listTxId", () => {
+		const data: BuyData = { nftId: "nft_test123", listingId: "list_abc123", listTxId: "a".repeat(40) };
 		const payload = createBuyPayload(data);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
 		expect(payload.version).toBe("0.3.0");
 		expect(payload.action).toBe(ACTION_BUY);
-		expect(payload.data).toEqual({ nftId: "nft_test123" });
+		expect(payload.data.nftId).toBe("nft_test123");
+		expect(payload.data.listingId).toBe("list_abc123");
+		expect(payload.data.listTxId).toBe("a".repeat(40));
 	});
 
 	test("createBuyOperation should use nodeAccount in required_auths", () => {
-		const data: BuyData = { nftId: "nft_test123" };
+		const data: BuyData = { nftId: "nft_test123", listingId: "list_abc123", listTxId: "a".repeat(40) };
 		const operation = createBuyOperation(data, "indexer-node");
 
 		expect(operation[0]).toBe("custom_json");
@@ -447,10 +451,11 @@ describe("Buy Action (Multisig)", () => {
 		const parsed = JSON.parse(operation[1].json);
 		expect(parsed.action).toBe(ACTION_BUY);
 		expect(parsed.data.nftId).toBe("nft_test123");
+		expect(parsed.data.listingId).toBe("list_abc123");
 	});
 
 	test("buy operation payload should be under 8KB", () => {
-		const data: BuyData = { nftId: "nft_test123" };
+		const data: BuyData = { nftId: "nft_test123", listingId: "list_abc123", listTxId: "a".repeat(40) };
 		const operation = createBuyOperation(data, "indexer-node");
 		const size = estimateOperationSize(operation);
 

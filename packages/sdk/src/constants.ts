@@ -29,6 +29,11 @@ export const MIN_PRICE_AMOUNT = "0.001";
 export const PROTOCOL_FEE_PCT = 2.5;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 
+// Listing Constants
+export const LISTING_ID_PREFIX = "list_";
+export const LISTING_NONCE_LENGTH = 12;
+export const LISTING_HASH_LENGTH = 32;
+
 // ============ PAYMENT SPLIT ============
 
 export interface PaymentSplit {

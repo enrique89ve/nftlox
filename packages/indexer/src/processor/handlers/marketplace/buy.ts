@@ -14,6 +14,8 @@ import { config } from "@/config.ts";
  *
  * Security: the router enforces active key auth; this handler enforces the signer
  * is the configured node account — matching multisig-service.ts validation.
+ *
+ * v0.3.0: Now validates listingId + listTxId to prevent stale listing replays.
  */
 export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<void> {
 	if (op.signer !== config.hiveAccount) {
@@ -23,6 +25,8 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	}
 
 	const nftId = requireString(op.data.nftId, "nftId");
+	const listingId = requireString(op.data.listingId, "listingId");
+	const listTxId = requireString(op.data.listTxId, "listTxId");
 
 	const rawBuyer = op.pairedTransfers?.[0]?.from;
 	if (!rawBuyer) throw new Error("No payment transfers found for buy action");
@@ -37,6 +41,23 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 		throw new Error(`Listing has expired for NFT: ${nftId}`);
 	}
 	if (nft.owner === buyer) throw new Error(`Cannot buy own NFT: ${nftId}`);
+
+	// Validate listingId matches the active listing
+	if (nft.listing_id !== listingId) {
+		throw new Error(`listingId mismatch: expected '${nft.listing_id}', got '${listingId}'`);
+	}
+
+	// Validate listTxId matches the listing transaction
+	if (nft.listing_tx_id !== listTxId) {
+		throw new Error(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
+	}
+
+	// Validate marketplace signer (when listing specifies a marketplace)
+	if (nft.listing_marketplace && op.signer !== nft.listing_marketplace) {
+		throw new Error(
+			`Buy signer '${op.signer}' does not match listing marketplace '${nft.listing_marketplace}'`,
+		);
+	}
 
 	const totalPrice = Number(nft.listing_price);
 	if (Number.isNaN(totalPrice) || totalPrice <= 0 || !nft.listing_currency) {

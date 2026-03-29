@@ -175,6 +175,13 @@ export const listInputSchema = seedProvenanceSchema.extend({
 });
 export type ListInput = z.infer<typeof listInputSchema>;
 
+export const buyInputSchema = z.object({
+	nftId: z.string().min(1, "NFT ID is required"),
+	listingId: z.string().min(1, "Listing ID is required"),
+	listTxId: txIdSchema,
+});
+export type BuyInput = z.infer<typeof buyInputSchema>;
+
 export const importedNftSchema = z.object({
 	nftId: z.string().min(1, "NFT ID is required"),
 	name: z.string().min(1, "Name is required"),

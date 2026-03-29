@@ -502,13 +502,19 @@ export function createExtendSchemaOperation(
 
 // ============ MARKETPLACE PAYLOADS ============
 
-export function createListPayload(input: ListInput): ProtocolPayload<ListingData> {
+export function createListPayload(
+	input: ListInput,
+	listingId: string,
+	listingNonce: string,
+): ProtocolPayload<ListingData> {
 	return {
 		protocol: PROTOCOL_ID,
 		version: PROTOCOL_VERSION,
 		action: ACTION_LIST,
 		data: {
 			nftId: input.nftId,
+			listingId,
+			listingNonce,
 			price: input.price,
 			...(input.expiresAt && { expiresAt: input.expiresAt }),
 			...(input.imageUrl && { imageUrl: input.imageUrl }),
@@ -536,7 +542,7 @@ export function createUnlistPayload(
 	};
 }
 
-export function createBuyPayload(data: BuyData): ProtocolPayload {
+export function createBuyPayload(data: BuyData): ProtocolPayload<BuyData> {
 	return {
 		protocol: PROTOCOL_ID,
 		version: PROTOCOL_VERSION,
@@ -639,8 +645,13 @@ export function createBurnOperation(
 	];
 }
 
-export function createListOperation(input: ListInput, owner: string): HiveOperation {
-	const payload = createListPayload(input);
+export function createListOperation(
+	input: ListInput,
+	owner: string,
+	listingId: string,
+	listingNonce: string,
+): HiveOperation {
+	const payload = createListPayload(input, listingId, listingNonce);
 	return [
 		"custom_json",
 		{

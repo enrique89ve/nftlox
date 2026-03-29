@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { usernameSchema, listInputSchema, unlistInputSchema, seedProvenanceSchema, type ListInput, type UnlistInput } from "../schemas";
+import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema, seedProvenanceSchema, type ListInput, type UnlistInput } from "../schemas";
 import { formatZodError } from "./helpers";
-import { generateImageHash } from "../dna";
+import { generateImageHash, generateListingNonce, generateListingId } from "../dna";
 import { PROTOCOL_ID, PROTOCOL_VERSION, ACTION_LIST, ACTION_BUY, ACTION_UNLIST } from "../constants";
 import type { BuildResult, ListingData, UnlistData, ProtocolPayload, HiveOperation, BuyData, HiveTransferOperation } from "../types";
 
@@ -25,8 +25,21 @@ export async function buildList(input: ListBuilderInput): Promise<BuildResult<Li
 
 	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
 
+	const listingNonce = generateListingNonce();
+	const listingId = await generateListingId({
+		nftId: data.nftId,
+		owner: data.owner,
+		marketplace: data.marketplace ?? "",
+		priceAmount: data.price.amount,
+		priceCurrency: data.price.currency,
+		expiresAt: data.expiresAt ?? 0,
+		nonce: listingNonce,
+	});
+
 	const payloadData: ListingData = {
 		nftId: data.nftId,
+		listingId,
+		listingNonce,
 		price: data.price,
 		...(data.expiresAt && { expiresAt: data.expiresAt }),
 		...(data.imageUrl && { imageUrl: data.imageUrl }),
@@ -122,10 +135,10 @@ export const paymentSplitSchema = z.object({
 	currency: z.enum(["HIVE", "HBD"]),
 });
 
-export const buyBuilderSchema = seedProvenanceSchema.extend({
-	nftId: z.string().min(1),
+export const buyBuilderSchema = buyInputSchema.extend({
 	buyer: usernameSchema,
 	seller: usernameSchema,
+	nodeAccount: usernameSchema,
 	paymentSplit: paymentSplitSchema,
 });
 export type BuyBuilderInput = z.infer<typeof buyBuilderSchema>;
@@ -147,14 +160,18 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 		protocol: PROTOCOL_ID,
 		version: PROTOCOL_VERSION,
 		action: ACTION_BUY,
-		data: { nftId: data.nftId },
+		data: {
+			nftId: data.nftId,
+			listingId: data.listingId,
+			listTxId: data.listTxId,
+		},
 	};
 
 	const payloadOperation: HiveOperation = [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [data.buyer],
+			required_auths: [data.nodeAccount],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},

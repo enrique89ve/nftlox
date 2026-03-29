@@ -37,6 +37,6 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 	}, txn);
 
 	if (hadExpiredListing) {
-		await updateNftListing(originalId, null, null, null, null, txn);
+		await updateNftListing(originalId, null, null, null, null, null, null, txn);
 	}
 }

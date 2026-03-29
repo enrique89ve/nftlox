@@ -43,6 +43,8 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 
 		return {
 			nftId: params.nftId,
+			listingId: nft.listing_id ?? "",
+			listTxId: nft.listing_tx_id ?? "",
 			seller: nft.owner,
 			totalPrice,
 			currency,
@@ -108,6 +110,8 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		body: t.Object({
 			buyer: t.String({ description: "Hive username of the buyer" }),
 			nftId: t.String({ description: "ID of the NFT being purchased" }),
+			listingId: t.String({ description: "Deterministic listing ID from the list operation" }),
+			listTxId: t.String({ description: "Transaction ID of the list operation on Hive" }),
 			transaction: t.Object({
 				ref_block_num: t.Number(),
 				ref_block_prefix: t.Number(),

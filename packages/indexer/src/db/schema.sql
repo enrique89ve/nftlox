@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS nfts (
 	owner_data_block BIGINT,
 	burned_by TEXT,
 	burned_at_block BIGINT,
+	listing_id TEXT,
+	listing_tx_id TEXT,
 	listing_price NUMERIC(18,3),
 	listing_currency TEXT,
 	listing_expires_at TIMESTAMPTZ,
@@ -234,6 +236,7 @@ CREATE INDEX IF NOT EXISTS idx_nfts_collection_type ON nfts(collection_id, nft_t
 CREATE INDEX IF NOT EXISTS idx_nfts_listed ON nfts(listing_price, listing_currency) WHERE status = 'listed';
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_recent ON nfts(created_at DESC) WHERE status = 'listed';
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_marketplace ON nfts(listing_marketplace) WHERE status = 'listed' AND listing_marketplace IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nfts_listing_id ON nfts(listing_id) WHERE listing_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_nfts_immutable_data ON nfts USING GIN (immutable_data) WHERE immutable_data IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_mutable_data ON nfts USING GIN (mutable_data) WHERE mutable_data IS NOT NULL;

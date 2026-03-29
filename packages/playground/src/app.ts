@@ -26,6 +26,7 @@ let validationPassed = false;
 let currentSession: MintingSession | null = null;
 let broadcastedCount = 0;
 let totalBroadcastOps = 0;
+let debugRoutesEnabled = false;
 
 // ============ FETCH-BACKED HELPERS ============
 
@@ -1359,12 +1360,29 @@ async function createCollection() {
 
 // ============ LOAD PROTOCOL VERSION ============
 
+function syncDebugUi() {
+	const debugTab = document.querySelector('.advanced-tab[data-tab="tab-debug"]') as HTMLElement | null;
+	const debugPanel = $("tab-debug");
+
+	if (debugTab) {
+		debugTab.style.display = debugRoutesEnabled ? "" : "none";
+		debugTab.classList.toggle("active", false);
+	}
+
+	if (debugPanel) {
+		debugPanel.style.display = debugRoutesEnabled ? "" : "none";
+		debugPanel.classList.toggle("active", false);
+	}
+}
+
 async function loadProtocolVersion() {
 	try {
-		const response = await fetch("/api/protocol/version");
+		const response = await fetch("/api/protocol/info");
 		const data = await response.json();
 		const versionEl = $("protocol-version");
 		if (versionEl) versionEl.textContent = `v${data.protocolVersion}`;
+		debugRoutesEnabled = data.debugRoutesEnabled === true;
+		syncDebugUi();
 	} catch (e) {
 		console.error("Failed to load protocol version", e);
 	}
@@ -2182,6 +2200,7 @@ validateField("col-image", (v) => {
 // ============ INIT ============
 
 setTimeout(checkKeychain, 500);
+syncDebugUi();
 loadProtocolVersion();
 loadCollections();
 loadDashboardStats();
@@ -2191,4 +2210,3 @@ initPermissions();
 initDebug();
 initSpv();
 log("Console ready");
-

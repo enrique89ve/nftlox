@@ -31,11 +31,13 @@ async function loadListings() {
 		}
 
 		const currentUser = getConnectedUser();
+		const debugTab = document.querySelector('.advanced-tab[data-tab="tab-debug"]') as HTMLElement | null;
+		const debugUiEnabled = debugTab?.style.display !== "none";
 		container.innerHTML = listings.map((nft: Record<string, unknown>) => {
 			const isOwn = currentUser && currentUser === nft.owner;
 
 			let actionHtml = "";
-			if (!isOwn && currentUser) {
+			if (!isOwn && currentUser && debugUiEnabled) {
 				actionHtml = `<span style="color: var(--text-dim); font-size: 11px;">Buy via multisig (see Debug tab)</span>`;
 			}
 

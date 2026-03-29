@@ -32,6 +32,8 @@ const MIN_TRANSFER_OPS = 2; // seller transfer + custom_json
 interface ValidatedRequest {
 	readonly buyer: string;
 	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
 	readonly transaction: HiveTransactionObject;
 }
 
@@ -61,6 +63,23 @@ export async function processMultisigRequest(
 		validateTransactionStructure(request.transaction, request.buyer, nodeAccount, protocolId);
 
 		const { nft, rules } = await validateNftState(request.nftId, request.buyer, db);
+
+		// Validate listingId and listTxId match the active listing
+		if (nft.listing_id !== request.listingId) {
+			throw createMultisigError(
+				"INVALID_PROTOCOL_PAYLOAD",
+				`listingId mismatch: expected '${nft.listing_id}', got '${request.listingId}'`,
+			);
+		}
+		if (nft.listing_tx_id !== request.listTxId) {
+			throw createMultisigError(
+				"INVALID_PROTOCOL_PAYLOAD",
+				`listTxId mismatch: expected '${nft.listing_tx_id}', got '${request.listTxId}'`,
+			);
+		}
+
+		// Validate the custom_json payload contains matching listingId and listTxId
+		validateBuyPayloadData(request.transaction.operations, request.listingId, request.listTxId);
 
 		const transfers = extractTransfers(request.transaction.operations, request.buyer);
 		validatePaymentSplit(transfers, nft, rules, nodeAccount);
@@ -99,6 +118,14 @@ function validateRequestShape(raw: unknown): ValidatedRequest {
 		throw createMultisigError("INVALID_TX_STRUCTURE", "Field 'nftId' must be a non-empty string");
 	}
 
+	if (typeof body.listingId !== "string" || body.listingId === "") {
+		throw createMultisigError("INVALID_TX_STRUCTURE", "Field 'listingId' must be a non-empty string");
+	}
+
+	if (typeof body.listTxId !== "string" || body.listTxId === "") {
+		throw createMultisigError("INVALID_TX_STRUCTURE", "Field 'listTxId' must be a non-empty string");
+	}
+
 	if (!body.transaction || typeof body.transaction !== "object" || Array.isArray(body.transaction)) {
 		throw createMultisigError("INVALID_TX_STRUCTURE", "Field 'transaction' must be an object");
 	}
@@ -106,6 +133,8 @@ function validateRequestShape(raw: unknown): ValidatedRequest {
 	return {
 		buyer: body.buyer,
 		nftId: body.nftId,
+		listingId: body.listingId,
+		listTxId: body.listTxId,
 		transaction: body.transaction as HiveTransactionObject,
 	};
 }
@@ -286,6 +315,31 @@ function validateCustomJsonProtocol(cj: Record<string, unknown>, protocolId: str
 	const data = payload.data as Record<string, unknown> | undefined;
 	if (!data || typeof data !== "object") {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "Payload must have a 'data' object");
+	}
+}
+
+function validateBuyPayloadData(
+	ops: ReadonlyArray<readonly [string, Record<string, unknown>]>,
+	expectedListingId: string,
+	expectedListTxId: string,
+): void {
+	const lastOp = ops[ops.length - 1];
+	const cj = lastOp![1] as Record<string, unknown>;
+	const parsed = JSON.parse(cj.json as string) as Record<string, unknown>;
+	const data = parsed.data as Record<string, unknown>;
+
+	if (data.listingId !== expectedListingId) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload listingId mismatch: expected '${expectedListingId}', got '${String(data.listingId)}'`,
+		);
+	}
+
+	if (data.listTxId !== expectedListTxId) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload listTxId mismatch: expected '${expectedListTxId}', got '${String(data.listTxId)}'`,
+		);
 	}
 }
 

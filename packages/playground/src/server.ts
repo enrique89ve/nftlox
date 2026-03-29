@@ -4,6 +4,7 @@ import {
 	MIN_PROTOCOL_VERSION,
 	HASH_VERSION,
 } from "nftlox-sdk";
+import { playgroundConfig } from "./config";
 import { queryRoutes } from "./routes/query";
 import { buildRoutes } from "./routes/build";
 import { batchRoutes } from "./routes/batch";
@@ -92,7 +93,7 @@ const server = Bun.serve({
 		...spvRoutes,
 
 		// ============ DEBUG ROUTES ============
-		...debugRoutes,
+		...(playgroundConfig.debugRoutesEnabled ? debugRoutes : {}),
 
 		// ============ GAME SCENARIO ROUTES ============
 		...scenarioRoutes,
@@ -103,6 +104,7 @@ const server = Bun.serve({
 			return json({
 				protocolVersion: PROTOCOL_VERSION,
 				minProtocolVersion: MIN_PROTOCOL_VERSION,
+				debugRoutesEnabled: playgroundConfig.debugRoutesEnabled,
 			});
 		},
 
@@ -111,6 +113,7 @@ const server = Bun.serve({
 				protocolVersion: PROTOCOL_VERSION,
 				hashVersion: HASH_VERSION,
 				minProtocolVersion: MIN_PROTOCOL_VERSION,
+				debugRoutesEnabled: playgroundConfig.debugRoutesEnabled,
 			});
 		},
 	},
@@ -119,6 +122,7 @@ const server = Bun.serve({
 
 console.log(`
 NFTLox Test Console - http://localhost:${server.port}
+Debug Routes: ${playgroundConfig.debugRoutesEnabled ? "enabled" : "disabled"}
 
 Query API (via Indexer):
   GET  /api/user/:username

@@ -5,6 +5,9 @@ import {
 	ORIGIN_DNA_LENGTH,
 	INSTANCE_DNA_LENGTH,
 	ACCESS_KEY_LENGTH,
+	LISTING_ID_PREFIX,
+	LISTING_NONCE_LENGTH,
+	LISTING_HASH_LENGTH,
 } from "./constants";
 
 // ============ HASH FUNCTIONS ============
@@ -340,6 +343,37 @@ export function generateDeterministicPackId(
 	const input = `nftlox:pack:${collectionId}:${packName.toLowerCase()}`;
 	const hash = deterministicHash(input);
 	return `pack_${hash.slice(0, 12)}`;
+}
+
+// ============ LISTING ID GENERATION ============
+
+/**
+ * Generates a random nonce for listing ID generation.
+ * Uses crypto.randomUUID() for universal runtime support.
+ */
+export function generateListingNonce(): string {
+	return crypto.randomUUID().replace(/-/g, "").slice(0, LISTING_NONCE_LENGTH);
+}
+
+/**
+ * Generates a deterministic listing ID from listing parameters + nonce.
+ * Formula: "list_" + sha256("nftlox:listing:v1:{nftId}:{owner}:{marketplace}:{amount}:{currency}:{expiresAt}:{nonce}").slice(0, 32)
+ *
+ * The nonce ensures uniqueness even for re-listings with identical parameters.
+ * Any party can recompute this ID from the on-chain list payload.
+ */
+export async function generateListingId(params: {
+	nftId: string;
+	owner: string;
+	marketplace: string;
+	priceAmount: string;
+	priceCurrency: string;
+	expiresAt: number;
+	nonce: string;
+}): Promise<string> {
+	const input = `nftlox:listing:v1:${params.nftId}:${params.owner}:${params.marketplace}:${params.priceAmount}:${params.priceCurrency}:${params.expiresAt}:${params.nonce}`;
+	const hash = await generateHash(input);
+	return LISTING_ID_PREFIX + hash.slice(0, LISTING_HASH_LENGTH);
 }
 
 /**

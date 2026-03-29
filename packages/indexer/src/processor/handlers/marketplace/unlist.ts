@@ -10,5 +10,5 @@ export async function handleUnlist(op: ParsedOperation, txn: Queryable): Promise
 	if (nft.status !== NFT_STATUS_LISTED) throw new Error(`NFT not listed: ${nftId}`);
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 
-	await updateNftListing(nftId, null, null, null, null, txn);
+	await updateNftListing(nftId, null, null, null, null, null, null, txn);
 }

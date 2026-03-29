@@ -40,16 +40,18 @@ export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 
 	const split = calculatePaymentSplit(totalPrice, currency, royaltyPct, royaltyRecipient, seller, feeAccount);
 
+	const AMOUNT_TOLERANCE = 0.0005;
+
 	function expectTransfer(to: string, expectedAmount: number, label: string): void {
 		const found = transfers.find(t =>
 			t.from === buyer &&
 			t.to === to &&
 			t.currency === currency &&
-			t.amount >= expectedAmount
+			Math.abs(t.amount - expectedAmount) < AMOUNT_TOLERANCE
 		);
 		if (!found) {
 			throw new Error(
-				`Missing ${label}: expected >= ${expectedAmount} ${currency} from @${buyer} to @${to}`
+				`Missing ${label}: expected ${expectedAmount} ${currency} from @${buyer} to @${to}`
 			);
 		}
 	}

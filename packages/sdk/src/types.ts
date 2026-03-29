@@ -243,6 +243,8 @@ export type AtomicOperation = HiveTransferOperation | HiveOperation;
 
 export interface ListingData extends SeedProvenance {
 	nftId: string;
+	listingId: string;
+	listingNonce: string;
 	price: Price;
 	expiresAt?: number;
 	imageUrl?: string;
@@ -258,6 +260,8 @@ export interface UnlistData {
 
 export type BuyData = {
 	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
 };
 
 // ============ PACK TYPES (Semi-Fungible) ============
@@ -463,11 +467,15 @@ export type MultisigResponse =
 export type MultisigRequest = Readonly<{
 	buyer: string;
 	nftId: string;
+	listingId: string;
+	listTxId: string;
 	transaction: HiveTransactionObject;
 }>;
 
 export type PaymentInfo = Readonly<{
 	nftId: string;
+	listingId: string;
+	listTxId: string;
 	seller: string;
 	totalPrice: number;
 	currency: string;

@@ -102,6 +102,8 @@ export interface NftProcessingRow {
 	distributed: number;
 	collection_id: string;
 	instance_dna: string | null;
+	listing_id: string | null;
+	listing_tx_id: string | null;
 	listing_price: string | null;
 	listing_currency: string | null;
 	listing_expires_at: string | null;
@@ -112,7 +114,7 @@ export interface NftProcessingRow {
 export async function getNftForProcessing(id: string, txn: Queryable = sql): Promise<NftProcessingRow | null> {
 	const [row] = await txn<NftProcessingRow[]>`
 		SELECT id, owner, status, nft_type, name, seed_id, max_replicas, distributed, collection_id, instance_dna,
-		       listing_price, listing_currency, listing_expires_at, listing_marketplace, mutable_data
+		       listing_id, listing_tx_id, listing_price, listing_currency, listing_expires_at, listing_marketplace, mutable_data
 		FROM nfts WHERE id = ${id}
 	`;
 	return row ?? null;
@@ -134,7 +136,7 @@ export async function getNftWithCollectionRules(
 	const [row] = await txn<NftWithRulesRow[]>`
 		SELECT
 			n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
-			n.collection_id, n.instance_dna, n.listing_price, n.listing_currency,
+			n.collection_id, n.instance_dna, n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
 			n.listing_expires_at, n.listing_marketplace,
 			c.creator, c.transferable, c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient
 		FROM nfts n
@@ -174,6 +176,7 @@ export async function updateNftOwner(nftId: string, newOwner: string, txn: Query
 	await txn`
 		UPDATE nfts
 		SET owner = ${newOwner}, status = ${NFT_STATUS_ACTIVE},
+		    listing_id = NULL, listing_tx_id = NULL,
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
 	`;
@@ -188,6 +191,7 @@ export async function updateNftBurned(nftId: string, burnedBy: string, blockNum:
 		UPDATE nfts
 		SET status = ${NFT_STATUS_BURNED},
 		    burned_by = ${burnedBy}, burned_at_block = ${blockNum},
+		    listing_id = NULL, listing_tx_id = NULL,
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
 	`;
@@ -199,19 +203,25 @@ export async function updateNftListing(
 	currency: string | null,
 	expiresAt: number | null,
 	marketplace: string | null,
+	listingId: string | null,
+	listingTxId: string | null,
 	txn: Queryable = sql,
 ) {
 	if (price === null) {
 		await txn`
 			UPDATE nfts
-			SET status = ${NFT_STATUS_ACTIVE}, listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
+			SET status = ${NFT_STATUS_ACTIVE},
+			    listing_id = NULL, listing_tx_id = NULL,
+			    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 			WHERE id = ${nftId}
 		`;
 	} else {
 		const expiresIso = expiresAt ? new Date(expiresAt).toISOString() : null;
 		await txn`
 			UPDATE nfts
-			SET status = ${NFT_STATUS_LISTED}, listing_price = ${price}, listing_currency = ${currency},
+			SET status = ${NFT_STATUS_LISTED},
+			    listing_id = ${listingId}, listing_tx_id = ${listingTxId},
+			    listing_price = ${price}, listing_currency = ${currency},
 			    listing_expires_at = ${expiresIso}, listing_marketplace = ${marketplace}
 			WHERE id = ${nftId}
 		`;
@@ -325,7 +335,7 @@ const LIST_COLUMNS = sql`
 	name, image_url, origin_dna, instance_dna,
 	seed_id, instance_number,
 	max_replicas, distributed, supply_exhausted,
-	listing_price, listing_currency, listing_expires_at, created_at
+	listing_id, listing_tx_id, listing_price, listing_currency, listing_expires_at, created_at
 `;
 
 export interface NftListRow {
@@ -344,6 +354,8 @@ export interface NftListRow {
 	max_replicas: number;
 	distributed: number;
 	supply_exhausted: boolean;
+	listing_id: string | null;
+	listing_tx_id: string | null;
 	listing_price: string | null;
 	listing_currency: string | null;
 	listing_expires_at: string | null;
