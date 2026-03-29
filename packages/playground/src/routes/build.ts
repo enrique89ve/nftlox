@@ -90,14 +90,16 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 				edition: 1,
 				brief: seed.brief,
 			});
+			if (!seedResult.success) return null;
 			return {
 				artId: seed.artId,
 				seedId: seedResult.generatedId,
 				operation: seedResult.operation,
 			};
 		}));
+		const validOps = operations.filter(Boolean);
 
-		const batches = splitOperationsIntoBatches(operations.map((o: any) => o.operation!));
+		const batches = splitOperationsIntoBatches(validOps.map((o: any) => o.operation!));
 
 		return json({
 			success: true,
@@ -105,7 +107,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			hashVersion: HASH_VERSION,
 			collectionId: body.collectionId,
 			generatedIds: result.generatedIds,
-			seeds: operations,
+			seeds: validOps,
 			batches: batches.map((batch, i) => ({
 				batchNumber: i + 1,
 				operationCount: batch.length,
@@ -128,8 +130,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	"/api/build/transfer": buildRoute((body) => {
-		const result = buildTransfer(body);
+	"/api/build/transfer": buildRoute(async (body) => {
+		const result = await buildTransfer(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -139,8 +141,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	"/api/build/list": buildRoute((body) => {
-		const result = buildList(body);
+	"/api/build/list": buildRoute(async (body) => {
+		const result = await buildList(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -150,8 +152,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	"/api/build/unlist": buildRoute((body) => {
-		const result = buildUnlist(body);
+	"/api/build/unlist": buildRoute(async (body) => {
+		const result = await buildUnlist(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -161,8 +163,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	"/api/build/burn": buildRoute((body) => {
-		const result = buildBurn(body);
+	"/api/build/burn": buildRoute(async (body) => {
+		const result = await buildBurn(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
