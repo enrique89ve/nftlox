@@ -1,4 +1,4 @@
-// Legacy batch minting routes
+// Batch minting routes — all routes use deterministic ID generation
 import {
 	PROTOCOL_VERSION,
 	generateOriginDna,
@@ -7,15 +7,12 @@ import {
 } from "nftlox-sdk";
 import {
 	createTestCollection,
-	createSeedMintOperations,
 	createDeterministicCollection,
 	createDeterministicSeedMintOperations,
-	loadSampleNFTs,
 	loadSampleNFTsWithArtId,
 	previewBatchMint,
 	splitOperationsIntoBatches,
 	validateOperationsVersion,
-	type SeedNFT,
 } from "../protocol";
 
 const json = (data: unknown, status = 200) =>
@@ -31,14 +28,14 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 		POST: async (req: Request) => {
 			try {
 				const body = await req.json() as {
-					nfts?: SeedNFT[];
+					nfts?: SeedNFTWithArtId[];
 					sampleFile?: string;
 					collectionName: string;
 				};
 
-				let nfts: SeedNFT[];
+				let nfts: SeedNFTWithArtId[];
 				if (body.sampleFile) {
-					nfts = await loadSampleNFTs(body.sampleFile);
+					nfts = await loadSampleNFTsWithArtId(body.sampleFile);
 				} else if (body.nfts) {
 					nfts = body.nfts;
 				} else {
@@ -69,7 +66,7 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 					return json({ error: "Missing required fields: creator, name, symbol" }, 400);
 				}
 
-				const { payload, operation } = createTestCollection(
+				const { payload, operation } = await createTestCollection(
 					body.creator,
 					body.name,
 					body.symbol,
@@ -91,87 +88,6 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 	},
 
 	"/api/batch/mint-seeds": {
-		POST: async (req: Request) => {
-			try {
-				const body = await req.json() as {
-					nfts?: SeedNFT[];
-					sampleFile?: string;
-					collectionId: string;
-					owner: string;
-				};
-
-				if (!body.collectionId || !body.owner) {
-					return json({ error: "Missing required fields: collectionId, owner" }, 400);
-				}
-
-				let nfts: SeedNFT[];
-				if (body.sampleFile) {
-					nfts = await loadSampleNFTs(body.sampleFile);
-				} else if (body.nfts) {
-					nfts = body.nfts;
-				} else {
-					return json({ error: "Provide 'nfts' array or 'sampleFile' path" }, 400);
-				}
-
-				const collectionOriginDna = await generateOriginDna(body.collectionId);
-				const result = createSeedMintOperations(nfts, body.collectionId, collectionOriginDna, body.owner);
-				const validation = validateOperationsVersion(result.seeds.map(s => s.operation));
-				const batches = splitOperationsIntoBatches(result.seeds.map(s => s.operation));
-
-				return json({
-					protocolVersion: PROTOCOL_VERSION,
-					...result,
-					validation,
-					batches: batches.map((batch, i) => ({
-						batchNumber: i + 1,
-						operationCount: batch.length,
-						operations: batch,
-					})),
-				});
-			} catch (e) {
-				return json({ error: String(e) }, 500);
-			}
-		},
-	},
-
-	"/api/batch/collection-deterministic": {
-		POST: async (req: Request) => {
-			try {
-				const body = await req.json() as {
-					creator: string;
-					name: string;
-					symbol: string;
-					totalPotential: number;
-					image?: string;
-					description?: string;
-				};
-
-				if (!body.creator || !body.name || !body.symbol) {
-					return json({ error: "Missing required fields: creator, name, symbol" }, 400);
-				}
-
-				const { payload, operation, collectionId } = createDeterministicCollection(
-					body.creator,
-					body.name,
-					body.symbol,
-					body.totalPotential || 1000000,
-					{ image: body.image, description: body.description },
-				);
-
-				return json({
-					protocolVersion: PROTOCOL_VERSION,
-					collectionId,
-					originDna: payload.data.originDna,
-					operation,
-					payload,
-				});
-			} catch (e) {
-				return json({ error: String(e) }, 500);
-			}
-		},
-	},
-
-	"/api/batch/mint-seeds-deterministic": {
 		POST: async (req: Request) => {
 			try {
 				const body = await req.json() as {
@@ -223,5 +139,14 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 				return json({ error: String(e) }, 500);
 			}
 		},
+	},
+
+	// Aliases for backwards compatibility
+	"/api/batch/collection-deterministic": {
+		POST: async (req: Request) => batchRoutes["/api/batch/collection"]!.POST(req),
+	},
+
+	"/api/batch/mint-seeds-deterministic": {
+		POST: async (req: Request) => batchRoutes["/api/batch/mint-seeds"]!.POST(req),
 	},
 };

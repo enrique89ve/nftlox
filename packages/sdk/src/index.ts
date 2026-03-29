@@ -178,12 +178,10 @@ export {
 	generateReplicaInstanceDna,
 	generateAccessKey,
 	generateImageHash,
-	generateId,
 	generateReplicaId,
 	extractOriginalId,
 	isReplicaId,
 	// Seed & Instance helpers
-	generateSeedId,
 	generateInstanceId,
 	extractSeedId,
 	extractInstanceNumber,
@@ -213,8 +211,6 @@ export {
 // ============ PAYLOAD CREATION ============
 export {
 	// Payload creators
-	createCollectionPayload,
-	createMintPayload,
 	createReplicatePayload,
 	createBulkDistributePayload,
 	createBulkDistributeOperation,
@@ -234,8 +230,6 @@ export {
 	createBuyPayload,
 	createBuyOperation,
 	// Operation creators
-	createCollectionOperation,
-	createMintOperation,
 	createReplicateOperation,
 	createTransferOperation,
 	createBurnOperation,
@@ -247,9 +241,12 @@ export {
 	parseTransferMemo,
 	createAtomicTransferOperations,
 	getTrackingAmount,
-	// Deterministic payload creation (anti-duplication)
+	// Deterministic payload & operation creation (anti-duplication)
 	createDeterministicCollectionPayload,
+	createDeterministicCollectionOperation,
 	createDeterministicMintPayload,
+	createDeterministicMintOperation,
+	toHiveOperation,
 	type DeterministicCollectionInput,
 	type DeterministicMintInput,
 	// Pack payloads & operations

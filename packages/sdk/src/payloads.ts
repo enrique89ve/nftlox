@@ -78,8 +78,6 @@ import type {
 	NftReturnData,
 	NftReturnInput,
 	ProtocolPayload,
-	CreateCollectionInput,
-	MintInput,
 	ReplicateInput,
 	ListInput,
 	BurnInput,
@@ -93,7 +91,6 @@ import type {
 } from "./types";
 
 import {
-	generateId,
 	generateOriginDna,
 	generateInstanceDna,
 	generateReplicaInstanceDna,
@@ -103,7 +100,6 @@ import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateDeterministicPackId,
-	deterministicHash,
 } from "./dna";
 
 export class PayloadTooLargeError extends Error {
@@ -135,6 +131,21 @@ function safeStringify(payload: unknown, itemCount = 0): string {
 	return json;
 }
 
+export function toHiveOperation(
+	payload: ProtocolPayload<unknown>,
+	signer: string,
+): HiveOperation {
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [signer],
+			id: PROTOCOL_ID,
+			json: safeStringify(payload),
+		},
+	];
+}
+
 /** Spread seed provenance fields only when present */
 function spreadProvenance(p?: SeedProvenance): Record<string, string> {
 	if (!p) return {};
@@ -146,77 +157,7 @@ function spreadProvenance(p?: SeedProvenance): Record<string, string> {
 
 // ============ COLLECTION PAYLOADS ============
 
-export async function createCollectionPayload(
-	input: CreateCollectionInput,
-): Promise<ProtocolPayload<CollectionData>> {
-	const id = generateId("col");
-	const originDna = await generateOriginDna(id);
-
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_CREATE_COLLECTION,
-		data: {
-			id,
-			jsonId: input.jsonId,
-			name: input.name,
-			symbol: input.symbol.toUpperCase(),
-			creator: input.creator,
-			totalPotential: input.totalPotential,
-			originDna,
-			metadata: input.metadata,
-			rules: input.rules,
-			...(input.schema && { schema: input.schema }),
-			createdAt: Date.now(),
-		},
-	};
-}
-
 // ============ MINT PAYLOADS ============
-
-export async function createMintPayload(input: MintInput): Promise<ProtocolPayload<NFTData>> {
-	const imageHash = input.imageHash || await generateImageHash(input.imageUrl);
-	const instanceDna = await generateInstanceDna(
-		input.collectionOriginDna,
-		input.edition,
-		imageHash,
-	);
-	const uniqueAccessKey = await generateAccessKey(instanceDna, input.owner);
-
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_MINT,
-		data: {
-			id: generateId("nft"),
-			collectionId: input.collectionId,
-			edition: input.edition,
-			owner: input.owner,
-
-			// Identidad
-			originDna: input.collectionOriginDna,
-			instanceDna,
-			uniqueAccessKey,
-
-			// Procedencia
-			birthBlock: input.birthBlock ?? 0,
-			birthTx: input.birthTx ?? "",
-			mintedBy: input.owner,
-			collectionBlock: input.collectionBlock,
-
-			metadata: {
-				name: input.name,
-				description: input.description,
-				imageUrl: input.imageUrl,
-				imageHash,
-			},
-			maxReplicas: input.maxReplicas ?? 1,
-			createdAt: Date.now(),
-
-			...(input.data && { data: input.data }),
-		},
-	};
-}
 
 // ============ REPLICATE PAYLOADS ============
 
@@ -565,34 +506,6 @@ export function createBuyOperation(data: BuyData, nodeAccount: string): HiveOper
 
 // ============ HIVE OPERATION CREATION ============
 
-export async function createCollectionOperation(
-	input: CreateCollectionInput,
-): Promise<HiveOperation> {
-	const payload = await createCollectionPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [input.creator],
-			id: PROTOCOL_ID,
-			json: safeStringify(payload),
-		},
-	];
-}
-
-export async function createMintOperation(input: MintInput): Promise<HiveOperation> {
-	const payload = await createMintPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [input.owner],
-			id: PROTOCOL_ID,
-			json: safeStringify(payload),
-		},
-	];
-}
-
 export async function createReplicateOperation(input: ReplicateInput): Promise<HiveOperation> {
 	const payload = await createReplicatePayload(input);
 	return [
@@ -687,25 +600,39 @@ export function buildTransferMemo(data: TransferMemo): string {
 	return `nftlox:${data.action}:${data.nftId}:${data.collectionId}:${data.edition}:${data.instanceDna}`;
 }
 
+const VALID_MEMO_ACTIONS = new Set<TransferMemo["action"]>(["transfer", "mint", "sale", "burn", "replicate"]);
+
 export function parseTransferMemo(memo: string): TransferMemo | null {
 	const parts = memo.split(":");
 	if (parts.length < 6 || parts[0] !== "nftlox") {
 		return null;
 	}
 
-	const [, action, nftId, collectionId, editionStr, instanceDna] = parts;
-	const edition = parseInt(editionStr!, 10);
+	const action = parts[1];
+	const nftId = parts[2];
+	const collectionId = parts[3];
+	const editionStr = parts[4];
+	const instanceDna = parts[5];
 
+	if (!action || !nftId || !collectionId || !editionStr || !instanceDna) {
+		return null;
+	}
+
+	if (!VALID_MEMO_ACTIONS.has(action as TransferMemo["action"])) {
+		return null;
+	}
+
+	const edition = parseInt(editionStr, 10);
 	if (isNaN(edition)) {
 		return null;
 	}
 
 	return {
 		action: action as TransferMemo["action"],
-		nftId: nftId!,
-		collectionId: collectionId!,
+		nftId,
+		collectionId,
 		edition,
-		instanceDna: instanceDna!,
+		instanceDna,
 	};
 }
 
@@ -722,7 +649,6 @@ export function createAtomicTransferOperations(
 			instanceDna: input.instanceDna,
 		});
 
-	// Operación 1: HIVE transfer (requiere Active key)
 	const hiveTransfer: HiveTransferOperation = [
 		"transfer",
 		{
@@ -733,9 +659,7 @@ export function createAtomicTransferOperations(
 		},
 	];
 
-	// Operación 2: Custom JSON con Active key (para atomicidad con transfer)
-	// Usamos required_auths en lugar de required_posting_auths
-	// para que ambas operaciones usen Active key y puedan ejecutarse atómicamente
+	// Active key required for atomicity with the transfer above
 	const payload = createTransferPayload(
 		input.nftId,
 		input.from,
@@ -799,7 +723,6 @@ export async function createDeterministicCollectionPayload(
 		input.symbol,
 	);
 	const originDna = await generateOriginDna(id);
-	const jsonId = `json_${deterministicHash(`${input.creator}:${input.name}:${Date.now()}`).slice(0, 8)}`;
 
 	return {
 		protocol: PROTOCOL_ID,
@@ -807,7 +730,6 @@ export async function createDeterministicCollectionPayload(
 		action: ACTION_CREATE_COLLECTION,
 		data: {
 			id,
-			jsonId,
 			name: input.name,
 			symbol: input.symbol.toUpperCase(),
 			creator: input.creator,
@@ -816,9 +738,15 @@ export async function createDeterministicCollectionPayload(
 			metadata: input.metadata,
 			rules: input.rules,
 			...(input.schema && { schema: input.schema }),
-			createdAt: Date.now(),
 		},
 	};
+}
+
+export async function createDeterministicCollectionOperation(
+	input: DeterministicCollectionInput,
+): Promise<HiveOperation> {
+	const payload = await createDeterministicCollectionPayload(input);
+	return toHiveOperation(payload, input.creator);
 }
 
 export interface DeterministicMintInput {
@@ -827,6 +755,7 @@ export interface DeterministicMintInput {
 	collectionOriginDna: string;
 	edition: number;
 	owner: string;
+	nftType?: "seed" | "instance";
 	name: string;
 	description?: string;
 	imageUrl: string;
@@ -849,6 +778,7 @@ export async function createDeterministicMintPayload(
 	const seedId = generateDeterministicSeedId(input.collectionId, input.artId);
 	const imageHash = input.imageHash || await generateImageHash(input.imageUrl);
 	const instanceDna = await generateInstanceDna(
+		seedId,
 		input.collectionOriginDna,
 		input.edition,
 		imageHash,
@@ -878,11 +808,18 @@ export async function createDeterministicMintPayload(
 				imageHash,
 			},
 			maxReplicas: input.maxReplicas ?? 1,
-			createdAt: Date.now(),
+			...(input.nftType && { nftType: input.nftType }),
 			...(input.immutableData && { immutableData: input.immutableData }),
 			...(input.mutableData && { mutableData: input.mutableData }),
 		},
 	};
+}
+
+export async function createDeterministicMintOperation(
+	input: DeterministicMintInput,
+): Promise<HiveOperation> {
+	const payload = await createDeterministicMintPayload(input);
+	return toHiveOperation(payload, input.owner);
 }
 
 // ============ PACK PAYLOADS ============
@@ -906,7 +843,6 @@ export function createPackCreatePayload(
 			itemsPerPack: input.itemsPerPack,
 			...(input.price && { price: input.price }),
 			maxSupply: input.maxSupply,
-			createdAt: Date.now(),
 		},
 	};
 }

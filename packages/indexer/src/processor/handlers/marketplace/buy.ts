@@ -52,13 +52,6 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 		throw new Error(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
 	}
 
-	// Validate marketplace signer (when listing specifies a marketplace)
-	if (nft.listing_marketplace && op.signer !== nft.listing_marketplace) {
-		throw new Error(
-			`Buy signer '${op.signer}' does not match listing marketplace '${nft.listing_marketplace}'`,
-		);
-	}
-
 	const totalPrice = Number(nft.listing_price);
 	if (Number.isNaN(totalPrice) || totalPrice <= 0 || !nft.listing_currency) {
 		throw new Error("NFT has no valid listing price");
@@ -66,19 +59,31 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 
 	const royaltyPct = Number(nft.royalty_pct ?? 0);
 	const royaltyRecipient = nft.royalty_recipient ?? null;
-	const feeAccount = nft.listing_marketplace || config.hiveAccount;
 
-	// Verify payment split from paired transfers
-	verifyTransfers({
-		transfers: op.pairedTransfers ?? [],
+	// Protocol fee always goes to the co-signing node
+	const transfers = op.pairedTransfers ?? [];
+	const split = verifyTransfers({
+		transfers,
 		buyer,
 		seller: nft.owner,
 		totalPrice,
 		currency: nft.listing_currency,
 		royaltyPct,
 		royaltyRecipient,
-		feeAccount,
+		feeAccount: config.hiveAccount,
 	});
+
+	// Validate exact transfer count — reject extra transfers
+	let expectedCount = 0;
+	if (split.sellerAmount > 0) expectedCount++;
+	if (split.royaltyAmount > 0 && split.royaltyRecipient) expectedCount++;
+	if (split.feeAmount > 0) expectedCount++;
+
+	if (transfers.length !== expectedCount) {
+		throw new Error(
+			`Expected exactly ${expectedCount} transfers, got ${transfers.length}`,
+		);
+	}
 
 	await updateNftOwner(nftId, buyer, txn);
 	await deleteNftAllowance(nftId, txn);

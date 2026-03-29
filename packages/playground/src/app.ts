@@ -1263,7 +1263,6 @@ async function createCollection() {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
-				jsonId: `json_${Date.now()}`,
 				name: colName,
 				symbol: colSymbol,
 				creator,

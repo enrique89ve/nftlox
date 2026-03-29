@@ -14,9 +14,8 @@ import {
 	MIN_DROP_WEIGHT,
 	MAX_DROP_WEIGHT,
 	MAX_BULK_DISTRIBUTE_ITEMS,
+	SYMBOL_REGEX,
 } from "./constants";
-
-const SYMBOL_REGEX = /^[A-Z0-9]+$/;
 const TX_ID_REGEX = /^[0-9a-f]{40}$/;
 // Hive asset precision: exactly 3 decimal places, no leading zeros (except "0.xxx")
 const HIVE_DECIMAL_REGEX = /^(0|[1-9]\d*)\.\d{3}$/;
@@ -125,7 +124,6 @@ export type SetOwnerDataInput = z.infer<typeof setOwnerDataInputSchema>;
 // ============ INPUT SCHEMAS ============
 
 export const createCollectionInputSchema = z.object({
-	jsonId: z.string().min(1, "jsonId is required for indexing"),
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH, `Name must be at most ${MAX_NAME_LENGTH} characters`),
 	symbol: symbolSchema,
 	creator: usernameSchema,
@@ -151,6 +149,7 @@ export const mintInputSchema = z.object({
 	collectionOriginDna: z.string().min(1, "Collection origin DNA is required"),
 	edition: z.number().int().min(1, "Edition must be at least 1"),
 	owner: usernameSchema,
+	nftType: z.enum(["seed", "instance"]).optional(),
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH),
 	description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
 	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH),
@@ -161,7 +160,7 @@ export const mintInputSchema = z.object({
 	data: z.record(z.string(), z.unknown()).optional(),
 	immutableData: z.record(z.string(), z.unknown()).optional(),
 	mutableData: z.record(z.string(), z.unknown()).optional(),
-	collectionBlock: z.number().int().nonnegative("collectionBlock must be a non-negative integer"),
+	collectionBlock: z.number().int().nonnegative("collectionBlock must be a non-negative integer").optional(),
 });
 export type MintInput = z.infer<typeof mintInputSchema>;
 

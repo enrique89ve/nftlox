@@ -4,29 +4,18 @@
 import {
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
-	createCollectionPayload,
-	createMintPayload,
 	createDeterministicCollectionPayload,
 	createDeterministicMintPayload,
-	generateSeedId,
+	toHiveOperation,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
-	type CreateCollectionInput,
-	type MintInput,
+	type DeterministicCollectionInput,
 	type HiveOperation,
 	type ImportedNFT,
 	type SeedNFTWithArtId,
 } from "nftlox-sdk";
 
 // ============ TYPES ============
-
-export interface SeedNFT {
-	nftId?: string;
-	name: string;
-	brief?: string;
-	imageUrl: string;
-	maxSupply: number;
-}
 
 export interface BatchMintResult {
 	collectionId: string;
@@ -47,15 +36,14 @@ export interface CollectionOptions {
 	description?: string;
 }
 
-export function createTestCollection(
+export async function createTestCollection(
 	creator: string,
 	name: string,
 	symbol: string,
 	totalPotential: number,
 	options?: CollectionOptions,
-): { payload: ReturnType<typeof createCollectionPayload>; operation: HiveOperation } {
-	const input: CreateCollectionInput = {
-		jsonId: `json_${Date.now()}`,
+) {
+	const input: DeterministicCollectionInput = {
 		name,
 		symbol,
 		creator,
@@ -73,80 +61,13 @@ export function createTestCollection(
 		},
 	};
 
-	const payload = createCollectionPayload(input);
-
-	const operation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [creator],
-			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
-		},
-	];
+	const payload = await createDeterministicCollectionPayload(input);
+	const operation = toHiveOperation(payload, creator);
 
 	return { payload, operation };
 }
 
 // ============ SEED MINTING ============
-
-/**
- * Genera operaciones de mint para semillas desde un array de NFTs.
- * Cada semilla tiene un maxSupply que define cuántas instancias puede generar.
- */
-export function createSeedMintOperations(
-	nfts: SeedNFT[],
-	collectionId: string,
-	collectionOriginDna: string,
-	owner: string,
-): BatchMintResult {
-	const seeds: BatchMintResult["seeds"] = [];
-
-	for (let i = 0; i < nfts.length; i++) {
-		const nft = nfts[i]!;
-		const seedId = generateSeedId();
-
-		const input: MintInput = {
-			collectionId,
-			collectionOriginDna,
-			edition: i + 1,
-			owner,
-			name: nft.name,
-			description: nft.brief,
-			imageUrl: nft.imageUrl,
-			maxReplicas: nft.maxSupply, // maxReplicas se interpreta como maxSupply para seeds
-		};
-
-		const payload = createMintPayload(input);
-
-		// Override el ID generado con nuestro seedId
-		payload.data.id = seedId;
-
-		const operation: HiveOperation = [
-			"custom_json",
-			{
-				required_auths: [],
-				required_posting_auths: [owner],
-				id: PROTOCOL_ID,
-				json: JSON.stringify(payload),
-			},
-		];
-
-		seeds.push({
-			seedId,
-			name: nft.name,
-			maxSupply: nft.maxSupply,
-			operation,
-		});
-	}
-
-	return {
-		collectionId,
-		collectionOriginDna,
-		seeds,
-		totalOperations: seeds.length,
-	};
-}
 
 // ============ BATCH HELPERS ============
 
@@ -208,7 +129,7 @@ export function validateOperationsVersion(
 /**
  * Carga y parsea un archivo JSON de NFTs de muestra.
  */
-export async function loadSampleNFTs(filePath: string): Promise<SeedNFT[]> {
+export async function loadSampleNFTs(filePath: string): Promise<SeedNFTWithArtId[]> {
 	const file = Bun.file(filePath);
 	const data = await file.json();
 
@@ -228,7 +149,7 @@ export async function loadSampleNFTs(filePath: string): Promise<SeedNFT[]> {
  * Genera un preview de las operaciones sin ejecutarlas.
  */
 export function previewBatchMint(
-	nfts: SeedNFT[],
+	nfts: SeedNFTWithArtId[],
 	collectionName: string,
 ): {
 	collection: { name: string; symbol: string; totalPotential: number };

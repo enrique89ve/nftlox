@@ -67,7 +67,7 @@ Error response (400):
 | `MAX_ITEMS_PER_PACK`         | 20       | Max items revealed per pack open.          |
 | `MAX_PACK_OPEN_BATCH`        | 50       | Max packs opened/bought in one call.       |
 | `MAX_ROYALTY_PCT`            | 50       | Maximum royalty percentage.                |
-| `PROTOCOL_FEE_PCT`           | 2.5      | Protocol fee on marketplace sales.         |
+| `PROTOCOL_FEE_PCT`           | 1.0      | Protocol fee (1%) on sales, paid to the co-signing node. |
 | `SUPPORTED_CURRENCIES`       | `HIVE`, `HBD` | Accepted payment currencies.          |
 | `MIN_PRICE_AMOUNT`           | `0.001`  | Minimum listing price.                     |
 | `SAFE_PAYLOAD_MAX_BYTES`     | 7372     | Max payload size (8KB with 10% margin).    |
@@ -85,11 +85,10 @@ Create a new NFT collection with optional typed schema.
 
 | Field                        | Type      | Required | Description                                           |
 |------------------------------|-----------|----------|-------------------------------------------------------|
-| `jsonId`                     | `string`  | Yes      | Unique JSON identifier for indexing.                  |
 | `name`                       | `string`  | Yes      | Collection name (1-100 chars).                        |
 | `symbol`                     | `string`  | Yes      | Collection symbol (3-8 chars, A-Z0-9).                |
 | `creator`                    | `string`  | Yes      | Hive username of the creator.                         |
-| `totalPotential`             | `number`  | Yes      | Total potential instances across all seeds (>= 0).    |
+| `totalPotential`             | `number`  | Yes      | Max number of seeds in the collection (0 = unlimited). Cap on seed count, not instance supply. |
 | `metadata.description`       | `string`  | Yes      | Collection description (1-250 chars).                 |
 | `metadata.image`             | `string`  | Yes      | Collection image URL (valid URL, max 500 chars).      |
 | `metadata.externalUrl`       | `string`  | No       | External website URL.                                 |
@@ -119,7 +118,6 @@ Schema field types: `string`, `bool`, `uint8`, `uint16`, `uint32`, `uint64`, `in
 curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 	-H "Content-Type: application/json" \
 	-d '{
-		"jsonId": "json_abc123",
 		"name": "Dragon Cards",
 		"symbol": "DRGN",
 		"creator": "alice",
@@ -150,7 +148,7 @@ Mint seed NFTs for a collection. Returns operations batched into groups of up to
 | Field                  | Type     | Required | Description                                     |
 |------------------------|----------|----------|-------------------------------------------------|
 | `collectionId`         | `string` | Yes      | Target collection ID.                           |
-| `owner`                | `string` | Yes      | Hive username of the seed owner.                |
+| `owner`                | `string` | Yes      | Hive username of the collection creator. Signs the transaction and receives the seeds. Must be the account that created the collection. |
 | `seeds`                | `array`  | Yes      | Array of seed definitions (at least 1).         |
 | `seeds[].artId`        | `string` | Yes      | Unique art identifier within the collection.    |
 | `seeds[].name`         | `string` | Yes      | Seed name (1-100 chars).                        |
@@ -321,7 +319,7 @@ Update the mutable data of an NFT instance. Only the collection creator can call
 
 Note: The `issuer` field in the request body maps to `owner` internally (used as the signer for auth).
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -341,7 +339,7 @@ Update mutable data as an approved data operator.
 | `seedId`      | `string` | No       | Seed provenance ID.                           |
 | `birthTx`     | `string` | No       | Birth transaction ID.                         |
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -360,7 +358,7 @@ Approve or revoke a data operator for a collection. Only the collection creator 
 
 Note: The `creator` field in the request body maps to `owner` internally.
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -413,7 +411,7 @@ List an NFT for sale on the marketplace.
 | `expiresAt`  | `number` | No       | Unix timestamp (ms) for listing expiration. Must be in future.  |
 | `imageUrl`   | `string` | No       | Image URL for indexer verification.                             |
 | `imageHash`  | `string` | No       | Pre-computed image hash.                                        |
-| `marketplace`| `string` | No       | Marketplace identifier for filtering.                           |
+| `marketplace`| `string` | No       | Marketplace identifier (metadata only, not used for fee routing). |
 | `seedId`     | `string` | No       | Seed provenance ID.                                             |
 | `birthTx`    | `string` | No       | Birth transaction ID.                                           |
 
@@ -452,25 +450,26 @@ Remove an NFT listing from the marketplace.
 
 ### POST /api/build/buy
 
-Buy a listed NFT. Returns multiple Hive operations: a `custom_json` payload plus HIVE/HBD transfer operations for seller, royalty recipient, and protocol fee.
+Buy a listed NFT. Returns multiple Hive operations: a `custom_json` payload plus HIVE/HBD transfer operations for seller, royalty recipient, and protocol fee (1%).
 
 **Request Body:**
 
 | Field                               | Type      | Required | Description                              |
 |-------------------------------------|-----------|----------|------------------------------------------|
 | `nftId`                             | `string`  | Yes      | NFT instance ID.                         |
+| `listingId`                         | `string`  | Yes      | Deterministic listing ID from the list operation. |
+| `listTxId`                          | `string`  | Yes      | Hive tx hash (40-char hex) of the list operation. |
 | `buyer`                             | `string`  | Yes      | Hive username of the buyer.              |
 | `seller`                            | `string`  | Yes      | Hive username of the seller.             |
+| `nodeAccount`                       | `string`  | Yes      | Hive username of the co-signing node.    |
 | `paymentSplit`                      | `object`  | Yes      | Pre-computed payment breakdown.          |
 | `paymentSplit.sellerAmount`         | `number`  | Yes      | Amount going to seller (>= 0).           |
 | `paymentSplit.royaltyAmount`        | `number`  | Yes      | Amount going to royalty recipient (>= 0).|
 | `paymentSplit.royaltyRecipient`     | `string\|null` | Yes | Royalty recipient account or null.       |
-| `paymentSplit.feeAmount`            | `number`  | Yes      | Protocol fee amount (>= 0).             |
-| `paymentSplit.feeAccount`           | `string`  | Yes      | Protocol fee account.                    |
+| `paymentSplit.feeAmount`            | `number`  | Yes      | Protocol fee amount (1%, >= 0).          |
+| `paymentSplit.feeAccount`           | `string`  | Yes      | Protocol fee account (co-signing node).  |
 | `paymentSplit.totalPrice`           | `number`  | Yes      | Total price (> 0).                       |
 | `paymentSplit.currency`             | `string`  | Yes      | `"HIVE"` or `"HBD"`.                    |
-| `seedId`                            | `string`  | No       | Seed provenance ID.                      |
-| `birthTx`                           | `string`  | No       | Birth transaction ID.                    |
 
 **Response** (note: uses `hiveOperations` instead of `operation`):
 
@@ -479,9 +478,9 @@ Buy a listed NFT. Returns multiple Hive operations: a `custom_json` payload plus
 	"success": true,
 	"protocolVersion": "0.3.0",
 	"hiveOperations": [
-		["custom_json", { ... }],
-		["transfer", { "from": "buyer", "to": "seller", "amount": "9.750 HIVE", "memo": "NFTLox BUY:nft_abc" }],
-		["transfer", { "from": "buyer", "to": "nftlox", "amount": "0.250 HIVE", "memo": "NFTLox FEE:nft_abc" }]
+		["transfer", { "from": "buyer", "to": "seller", "amount": "9.900 HIVE", "memo": "NFTLox BUY:nft_abc" }],
+		["transfer", { "from": "buyer", "to": "nftlox", "amount": "0.100 HIVE", "memo": "NFTLox FEE:nft_abc" }],
+		["custom_json", { "required_auths": ["nftlox"], "json": "{...listingId, listTxId...}" }]
 	],
 	"payload": { ... }
 }
@@ -608,7 +607,7 @@ Approve or revoke a spender for a specific NFT instance.
 | `instanceId` | `string`  | Yes      | NFT instance ID.                               |
 | `approved`   | `boolean` | Yes      | `true` to approve, `false` to revoke.          |
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -625,7 +624,7 @@ Approve or revoke a spender for all NFTs in a collection owned by the signer.
 | `collectionId` | `string`  | Yes      | Collection ID scope.                           |
 | `approved`     | `boolean` | Yes      | `true` to approve, `false` to revoke.          |
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -646,7 +645,7 @@ Transfer an NFT as an approved spender (operator).
 
 Note: The `spender` field in the request body maps to `operator` internally.
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -664,7 +663,7 @@ Approve or revoke a spender for packs.
 | `quantity` | `number`  | Yes      | Number of packs approved (>= 1).               |
 | `approved` | `boolean` | Yes      | `true` to approve, `false` to revoke.          |
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -684,7 +683,7 @@ Transfer packs as an approved spender (operator).
 
 Note: The `spender` field in the request body maps to `operator` internally.
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -704,7 +703,7 @@ Lend an NFT to another account. The borrower gets temporary custody but cannot t
 | `seedId`     | `string` | No       | Seed provenance ID.                               |
 | `birthTx`    | `string` | No       | Birth transaction ID.                             |
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -723,4 +722,4 @@ Return a lent NFT to its owner. Can be called by the borrower or the owner.
 
 Note: The `signer` field in the request body maps to `owner` internally.
 
-**Key type:** Active
+**Key type:** Posting

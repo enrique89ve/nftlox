@@ -110,7 +110,7 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 					});
 				}
 
-				// Transfer fee
+				// Protocol fee (always to co-signing node)
 				if (info.feeAmount > 0) {
 					await tx.addOperation("transfer", {
 						from: body.buyer,
@@ -129,7 +129,7 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 						protocol: PROTOCOL_ID,
 						version: PROTOCOL_VERSION,
 						action: ACTION_BUY,
-						data: { nftId: body.nftId },
+						data: { nftId: body.nftId, listingId: info.listingId, listTxId: info.listTxId },
 					}),
 				});
 
@@ -140,6 +140,8 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 					body: JSON.stringify({
 						buyer: body.buyer,
 						nftId: body.nftId,
+						listingId: info.listingId,
+						listTxId: info.listTxId,
 						transaction: tx.transaction,
 					}),
 				});

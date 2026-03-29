@@ -9,7 +9,7 @@ import {
 } from "../dna";
 import {
 	createDeterministicMintPayload,
-	createMintOperation,
+	toHiveOperation,
 	type DeterministicMintInput,
 } from "../payloads";
 import type { BuildResult, NFTData, ProtocolPayload, ValidationError } from "../types";
@@ -58,6 +58,7 @@ export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): 
 		collectionOriginDna: originDna,
 		edition: data.edition,
 		owner: data.owner,
+		nftType: "seed",
 		name: data.name,
 		description: data.brief,
 		imageUrl: data.imageUrl,
@@ -66,17 +67,7 @@ export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): 
 	};
 
 	const payload = await createDeterministicMintPayload(mintInput);
-	const operation = await createMintOperation({
-		collectionId: data.collectionId,
-		collectionOriginDna: originDna,
-		edition: data.edition,
-		owner: data.owner,
-		name: data.name,
-		description: data.brief,
-		imageUrl: data.imageUrl,
-		maxReplicas: data.maxSupply,
-		collectionBlock: data.collectionBlock ?? 0,
-	});
+	const operation = toHiveOperation(payload, data.owner);
 
 	return {
 		success: true,

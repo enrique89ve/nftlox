@@ -70,6 +70,7 @@ async function broadcastSingleOperation() {
 	const tx = new Transaction();
 
 	// 2. Add the custom_json operation
+	//    Note: seed IDs MUST start with "seed_" or include nftType: "seed"
 	await tx.addOperation("custom_json", {
 		required_auths: [],
 		required_posting_auths: ["myaccount"],
@@ -79,8 +80,9 @@ async function broadcastSingleOperation() {
 			version: "0.3.0",
 			action: "mint",
 			data: {
-				id: "nft_abc123",
+				id: "seed_abc123",
 				collectionId: "col_xyz",
+				nftType: "seed",
 				edition: 1,
 				owner: "myaccount",
 				// ... remaining mint fields
@@ -197,8 +199,9 @@ const operation = ["custom_json", {
 		version: "0.3.0",
 		action: "mint",
 		data: {
-			id: "nft_abc123",
+			id: "seed_abc123",
 			collectionId: "col_xyz",
+			nftType: "seed",
 			edition: 1,
 			owner: "myaccount",
 		},
@@ -373,8 +376,9 @@ async function broadcastSingleOperation() {
 				version: "0.3.0",
 				action: "mint",
 				data: {
-					id: "nft_abc123",
+					id: "seed_abc123",
 					collectionId: "col_xyz",
+					nftType: "seed",
 					edition: 1,
 					owner: "myaccount",
 				},
@@ -421,8 +425,9 @@ async function broadcastWithManualSigning() {
 				version: "0.3.0",
 				action: "mint",
 				data: {
-					id: "nft_abc123",
+					id: "seed_abc123",
 					collectionId: "col_xyz",
+					nftType: "seed",
 					edition: 1,
 					owner: "myaccount",
 				},
@@ -655,8 +660,9 @@ This example uses `hive-tx` and the NFTLox SDK to create a collection and then m
 ```typescript
 import { Transaction, config } from "hive-tx";
 import {
-	createCollectionOperation,
-	createMintOperation,
+	createDeterministicCollectionPayload,
+	createDeterministicMintOperation,
+	toHiveOperation,
 } from "@nftlox/sdk";
 
 config.node = "https://api.hive.blog";
@@ -667,12 +673,11 @@ const TX_DELAY_MS = 4000;
 
 async function mintCollectionAndSeeds() {
 	// Step 1: Broadcast the collection creation
-	const collectionOp = createCollectionOperation({
+	const collectionPayload = await createDeterministicCollectionPayload({
 		creator: "myaccount",
 		name: "My Game Cards",
 		symbol: "CARDS",
 		totalPotential: 1000,
-		jsonId: "json_abc123",
 		metadata: {
 			description: "A trading card game collection",
 			image: "https://example.com/collection.png",
@@ -685,6 +690,7 @@ async function mintCollectionAndSeeds() {
 			royaltyRecipient: "myaccount",
 		},
 	});
+	const collectionOp = toHiveOperation(collectionPayload, "myaccount");
 
 	const collectionTx = new Transaction();
 	await collectionTx.create([collectionOp]);
@@ -696,17 +702,20 @@ async function mintCollectionAndSeeds() {
 	await new Promise((resolve) => setTimeout(resolve, TX_DELAY_MS));
 
 	// Step 2: Mint 5 seeds in a single transaction (within the 5-op limit)
+	// Use createDeterministicMintOperation to get seed_* IDs and nftType: "seed"
 	const mintOps = [];
 	for (let edition = 1; edition <= 5; edition++) {
-		const mintOp = createMintOperation({
+		const mintOp = createDeterministicMintOperation({
+			artId: `card${String(edition).padStart(3, "0")}`,
 			collectionId: "col_xyz",
 			collectionOriginDna: "abcdef1234567890",
 			edition,
 			owner: "myaccount",
+			nftType: "seed",
 			name: `Card #${edition}`,
 			description: `Game card edition ${edition}`,
 			imageUrl: `https://example.com/cards/${edition}.png`,
-			maxReplicas: 1,
+			maxReplicas: 100,
 		});
 		mintOps.push(mintOp);
 	}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema, seedProvenanceSchema, type ListInput, type UnlistInput } from "../schemas";
+import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema } from "../schemas";
 import { formatZodError } from "./helpers";
 import { generateImageHash, generateListingNonce, generateListingId } from "../dna";
 import { PROTOCOL_ID, PROTOCOL_VERSION, ACTION_LIST, ACTION_BUY, ACTION_UNLIST } from "../constants";
@@ -206,7 +206,7 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 			},
 		]);
 	}
-	if (paymentSplit.feeAmount > 0 && paymentSplit.feeAccount) {
+	if (paymentSplit.feeAmount > 0) {
 		transfers.push([
 			"transfer",
 			{
@@ -221,7 +221,7 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 	return {
 		success: true,
 		payload,
-		hiveOperations: [payloadOperation, ...transfers],
+		hiveOperations: [...transfers, payloadOperation],
 		warnings: warnings.length > 0 ? warnings : undefined,
 	};
 }

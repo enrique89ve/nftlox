@@ -293,7 +293,7 @@ Used for marketplace listings and pack pricing.
 | Max artId length | 14 chars |
 | Symbol length | 3-8 chars |
 | Max royalty | 50% |
-| Protocol fee | 2.5% (marketplace only) |
+| Protocol fee | 1.0% (paid to co-signing node on every sale) |
 | Max drop table entries | 50 (pack_create only) |
 | Max items per pack | 20 |
 | Max pack open batch | 50 |

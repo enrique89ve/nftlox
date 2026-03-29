@@ -10,13 +10,14 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 	const id = requireString(d.id, "id");
 	const collectionId = requireString(d.collectionId, "collectionId");
 
-	if (await nftExists(id, txn)) throw new Error(`NFT already exists: ${id}`);
+	if (await nftExists(id, txn)) return;
 	const collection = await getCollectionRules(collectionId, txn);
 	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
 	if (collection.creator !== op.signer) throw new Error(`Only the collection creator can mint in ${collectionId}`);
 
 	const metadata = optionalObject(d.metadata) ?? {};
-	const isSeed = id.startsWith("seed_");
+	const explicitType = optionalString(d.nftType);
+	const isSeed = explicitType === "seed" || (!explicitType && id.startsWith("seed_"));
 
 	if (isSeed && collection.total_potential > 0 && collection.seed_count >= collection.total_potential) {
 		throw new Error(

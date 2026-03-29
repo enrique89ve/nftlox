@@ -6,7 +6,7 @@ import {
 } from "../dna";
 import {
 	createDeterministicCollectionPayload,
-	createCollectionOperation,
+	toHiveOperation,
 	type DeterministicCollectionInput,
 } from "../payloads";
 import type { BuildResult, CollectionData } from "../types";
@@ -42,13 +42,11 @@ export async function buildCollection(input: CreateCollectionInput): Promise<Bui
 		totalPotential: data.totalPotential,
 		metadata: data.metadata,
 		rules: data.rules,
+		...(data.schema && { schema: data.schema }),
 	};
 
 	const payload = await createDeterministicCollectionPayload(collectionInput);
-	const operation = await createCollectionOperation({
-		...collectionInput,
-		jsonId: data.jsonId, // using original non-deterministic jsonId
-	});
+	const operation = toHiveOperation(payload, data.creator);
 
 	return {
 		success: true,

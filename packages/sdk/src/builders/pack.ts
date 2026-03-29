@@ -7,10 +7,10 @@ import {
 	createPackBuyPayload,
 	createPackTransferPayload,
 	createPackOpenPayload,
-	createPackCreateOperation,
 	createPackBuyOperation,
 	createPackTransferOperation,
 	createPackOpenOperation,
+	toHiveOperation,
 } from "../payloads";
 import type { BuildResult, PackCreateData, PackBuyData, PackTransferData, PackOpenData } from "../types";
 
@@ -35,7 +35,7 @@ export function buildPackCreate(input: PackCreateBuilderInput): BuildResult<Pack
 	const generatedId = generateDeterministicPackId(data.collectionId, data.name);
 
 	const payload = createPackCreatePayload(data, data.creator);
-	const operation = createPackCreateOperation(data, data.creator);
+	const operation = toHiveOperation(payload, data.creator);
 
 	return {
 		success: true,

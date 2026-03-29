@@ -135,9 +135,9 @@ describe("Handlers (integration)", () => {
 			expect(row!.creator).toBe("alice");
 		});
 
-		test("rejects duplicate collection", async () => {
+		test("duplicate collection is idempotent no-op", async () => {
 			await seedCollection();
-			await expect(seedCollection()).rejects.toThrow("already exists");
+			await expect(seedCollection()).resolves.toBeUndefined();
 		});
 
 	});
@@ -164,10 +164,10 @@ describe("Handlers (integration)", () => {
 			await expect(handleMint(op, sql)).rejects.toThrow("Collection not found");
 		});
 
-		test("rejects duplicate mint", async () => {
+		test("duplicate mint is idempotent no-op", async () => {
 			await seedCollection();
 			await seedMint();
-			await expect(seedMint()).rejects.toThrow("already exists");
+			await expect(seedMint()).resolves.toBeUndefined();
 		});
 
 		test("detects seed vs instance by ID prefix", async () => {
@@ -1139,7 +1139,7 @@ describe("Handlers (integration)", () => {
 			).rejects.toThrow("listed for sale");
 		});
 
-		// Escenario A continuación: después de unlist, el juego puede mover
+		// After unlist, approved spender can transfer
 		test("transferFrom succeeds after unlist", async () => {
 			await seedCollection();
 			await seedMint();
@@ -1175,7 +1175,7 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 
-			// Alice aprueba a "marketbot" para toda la colección
+			// Approve "marketbot" for the entire collection
 			await handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
 				spender: "marketbot",
 				collectionId: "col_test",
@@ -1219,7 +1219,7 @@ describe("Handlers (integration)", () => {
 			expect(nft!.owner).toBe("buyer3");
 			expect(nft!.status).toBe("active");
 
-			// Allowance limpiada después de transferFrom
+			// Allowance cleared after transferFrom
 			const [allowance] = await sql`SELECT * FROM nft_allowances WHERE nft_id = 'seed_test1'`;
 			expect(allowance).toBeUndefined();
 		});

@@ -26,7 +26,7 @@ export const ACCESS_KEY_LENGTH = 8;
 export const SUPPORTED_CURRENCIES = ["HIVE", "HBD"] as const;
 export const MAX_ROYALTY_PCT = 50;
 export const MIN_PRICE_AMOUNT = "0.001";
-export const PROTOCOL_FEE_PCT = 2.5;
+export const PROTOCOL_FEE_PCT = 1.0;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 
 // Listing Constants
@@ -53,9 +53,12 @@ export function roundHive(n: number): number {
 
 /**
  * Calculate the payment split for an NFT sale.
- * Fee is always charged. Royalty only if royaltyRecipient is set and royaltyPct > 0.
- * If royaltyRecipient === seller, royalty merges into sellerAmount.
- * If feeAccount === seller, fee merges into sellerAmount.
+ *
+ * Protocol fee (1.0%) always goes to the co-signing node.
+ * Marketplace fees are handled off-chain by the marketplace frontend.
+ *
+ * If royaltyRecipient === seller → royalty merges into seller amount.
+ * If feeAccount === seller → fee merges into seller amount.
  */
 export function calculatePaymentSplit(
 	totalPrice: number,
@@ -69,10 +72,8 @@ export function calculatePaymentSplit(
 
 	let royaltyAmount = 0;
 	let effectiveRoyaltyRecipient: string | null = null;
-
 	if (royaltyRecipient && royaltyPct > 0) {
 		if (royaltyRecipient === seller) {
-			// Royalty merges into seller — no separate transfer
 			royaltyAmount = 0;
 			effectiveRoyaltyRecipient = null;
 		} else {
@@ -83,18 +84,17 @@ export function calculatePaymentSplit(
 
 	let effectiveFee = feeAmount;
 	if (feeAccount === seller) {
-		// Fee merges into seller — no separate transfer
 		effectiveFee = 0;
 	}
 
-	const sellerAmount = roundHive(totalPrice - royaltyAmount - effectiveFee);
+	const sellerAmount = totalPrice - royaltyAmount - effectiveFee;
 
 	return {
 		sellerAmount,
 		royaltyAmount,
 		royaltyRecipient: effectiveRoyaltyRecipient,
 		feeAmount: effectiveFee,
-		feeAccount: feeAccount,
+		feeAccount,
 		totalPrice,
 		currency,
 	};

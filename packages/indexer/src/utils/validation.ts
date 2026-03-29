@@ -65,7 +65,7 @@ export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 	}
 
 	if (split.feeAmount > 0) {
-		expectTransfer(split.feeAccount, split.feeAmount, "marketplace fee");
+		expectTransfer(split.feeAccount, split.feeAmount, "protocol fee");
 	}
 
 	return split;

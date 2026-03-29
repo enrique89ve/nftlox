@@ -44,78 +44,59 @@ export async function generateOriginDna(collectionId: string): Promise<string> {
 
 /**
  * Generates the instance DNA for an individual NFT.
- * Each NFT has a unique instanceDna while sharing originDna with siblings.
- * NOT deterministic: includes randomness for uniqueness.
+ * DETERMINISTIC: SHA-256 of nftId + originDna + edition + imageHash.
+ * The nftId (seed_xxx or nft_xxx) guarantees uniqueness across NFTs.
  */
 export async function generateInstanceDna(
+	nftId: string,
 	originDna: string,
 	edition: number,
 	imageHash: string,
 ): Promise<string> {
-	const input = `${originDna}:${edition}:${imageHash}:${Date.now()}:${Math.random()}`;
+	const input = `nftlox:instance:${nftId}:${originDna}:${edition}:${imageHash}`;
 	const fullHash = await generateHash(input);
-	const timestamp = Date.now().toString(16);
-	const random = Math.random().toString(16).slice(2, 10);
-	const hash = `${fullHash.slice(0, 8)}${timestamp}${random}`;
-	return hash.slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
+	return fullHash.slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
 }
 
 /**
  * Generates instance DNA for a replica.
- * Derived from the original's instanceDna to maintain lineage.
+ * DETERMINISTIC: SHA-256 derived from original's DNA to maintain lineage.
  */
 export async function generateReplicaInstanceDna(
 	originDna: string,
 	originalInstanceDna: string,
 ): Promise<string> {
-	const input = `${originDna}:replica:${originalInstanceDna}:${Date.now()}:${Math.random()}`;
+	const input = `nftlox:replica:${originDna}:${originalInstanceDna}`;
 	const fullHash = await generateHash(input);
-	const timestamp = Date.now().toString(16);
-	const random = Math.random().toString(16).slice(2, 10);
-	const hash = `${fullHash.slice(0, 8)}${timestamp}${random}`;
-	return hash.slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
+	return fullHash.slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
 }
 
 // ============ ACCESS KEY ============
 
 /**
  * Generates a unique access key for an NFT.
+ * DETERMINISTIC: SHA-256 of instanceDna + owner.
  * Used for software activation, membership access, etc.
  */
 export async function generateAccessKey(instanceDna: string, owner: string): Promise<string> {
-	const input = `${instanceDna}:${owner}:${Date.now()}:${Math.random()}`;
+	const input = `nftlox:accesskey:${instanceDna}:${owner}`;
 	const fullHash = await generateHash(input);
-	const timestamp = Date.now().toString(16);
-	const random = Math.random().toString(16).slice(2, 10);
-	const hash = `${fullHash.slice(0, 8)}${timestamp}${random}`;
-	return hash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
+	return fullHash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
 }
 
 // ============ IMAGE HASH ============
 
 /**
  * Generates a hash for an image URL.
- * Used when no external hash is provided.
+ * DETERMINISTIC: SHA-256 of the URL. Same URL always produces the same hash.
  */
 export async function generateImageHash(imageUrl: string): Promise<string> {
-	const input = imageUrl + Date.now();
+	const input = `nftlox:img:${imageUrl}`;
 	const fullHash = await generateHash(input);
-	const timestamp = Date.now().toString(16);
-	const random = Math.random().toString(16).slice(2, 10);
-	const hash = `${fullHash.slice(0, 8)}${timestamp}${random}`;
-	return `img_${hash}`;
+	return `img_${fullHash.slice(0, 16)}`;
 }
 
 // ============ ID GENERATION ============
-
-/**
- * Generates a unique ID with a prefix.
- */
-export function generateId(prefix: string): string {
-	const timestamp = Date.now().toString(36);
-	const random = Math.random().toString(36).slice(2, 8);
-	return `${prefix}_${timestamp}${random}`;
-}
 
 /**
  * Generates a replica ID from an original NFT ID.
@@ -142,15 +123,6 @@ export function isReplicaId(id: string): boolean {
 }
 
 // ============ SEED & INSTANCE IDS ============
-
-/**
- * Generates a unique seed ID.
- * Seeds are non-transferable NFTs that can spawn instances.
- */
-export function generateSeedId(): string {
-	const suffix = Math.random().toString(36).slice(2, 10);
-	return `seed_${suffix}`;
-}
 
 /**
  * Generates an instance ID from a seed.

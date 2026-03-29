@@ -72,7 +72,6 @@ export interface CollectionRules {
 
 export interface CollectionData {
 	id: string;
-	jsonId: string;
 	name: string;
 	symbol: string;
 	creator: string;
@@ -81,7 +80,6 @@ export interface CollectionData {
 	metadata: CollectionMetadata;
 	rules: CollectionRules;
 	schema?: CollectionSchema;
-	createdAt: number;
 }
 
 // ============ EXTEND SCHEMA TYPES ============
@@ -120,7 +118,6 @@ export interface NFTData {
 
 	metadata: NFTMetadata;
 	maxReplicas: number;
-	createdAt: number;
 
 	// Structured data (schema-based collections)
 	immutableData?: Record<string, unknown>;
@@ -281,7 +278,6 @@ export interface PackCreateData {
 	itemsPerPack: number;
 	price?: Price;
 	maxSupply: number;
-	createdAt: number;
 }
 
 export interface PackBuyData {

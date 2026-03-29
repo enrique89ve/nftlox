@@ -132,10 +132,8 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				instanceDna, op.signer, op.txId,
 			);
 
-			// Inherit immutable_data from seed
-			const seedImmutableData = seed.immutable_data as Record<string, unknown> | null;
-			const seedImmutableDataHash = seedImmutableData ? await computeDataHash(seedImmutableData) : null;
-
+			// Instance stores only its own data; name, image, immutable_data
+			// are inherited from seed via JOIN at query time.
 			await insertNft({
 				id: instanceId,
 				collectionId: seed.collection_id,
@@ -148,16 +146,16 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				birthBlock: op.blockNum,
 				birthTx: op.txId,
 				mintedBy: op.signer,
-				name: seed.name ?? "",
+				name: "",
 				description: null,
-				imageUrl: override?.imageUrl ?? seed.image_url ?? null,
-				imageHash: override?.imageHash ?? seed.image_hash ?? null,
+				imageUrl: override?.imageUrl ?? null,
+				imageHash: override?.imageHash ?? null,
 				maxReplicas: 0,
 				seedId,
 				instanceNumber,
 				originalId: null,
-				immutableData: seedImmutableData,
-				immutableDataHash: seedImmutableDataHash,
+				immutableData: null,
+				immutableDataHash: null,
 				mutableData,
 				mutableDataHash,
 				blockNum: op.blockNum,

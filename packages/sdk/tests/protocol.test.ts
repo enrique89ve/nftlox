@@ -1,6 +1,7 @@
 import { test, expect, describe } from "bun:test";
 
 import {
+	PROTOCOL_ID,
 	PROTOCOL_VERSION,
 	MAX_JSON_SIZE,
 	ORIGIN_DNA_LENGTH,
@@ -16,25 +17,28 @@ import {
 	generateInstanceDna,
 	generateReplicaInstanceDna,
 	generateAccessKey,
-	generateId,
 	generateReplicaId,
 	extractOriginalId,
 	isReplicaId,
-	createCollectionPayload,
-	createMintPayload,
+	generateDeterministicCollectionId,
+	generateDeterministicSeedId,
 	createListPayload,
 	createBuyPayload,
 	createBuyOperation,
+	buildBuy,
 	symbolSchema,
 	priceSchema,
 	createCollectionInputSchema,
 	mintInputSchema,
 	estimateOperationSize,
-	createMintOperation,
 	createBulkDistributePayload,
-	type CreateCollectionInput,
-	type MintInput,
+	toHiveOperation,
+	createDeterministicCollectionPayload,
+	createDeterministicMintPayload,
+	createDeterministicMintOperation,
 	type BuyData,
+	type DeterministicCollectionInput,
+	type DeterministicMintInput,
 } from "../src/index";
 
 describe("Protocol Version", () => {
@@ -67,37 +71,58 @@ describe("Origin DNA Generation", () => {
 });
 
 describe("Instance DNA Generation", () => {
-	test("generateInstanceDna should produce unique values", async () => {
-		const originDna = "ABCD1234EFGH5678";
-		const dna1 = await generateInstanceDna(originDna, 1, "hash1");
-		const dna2 = await generateInstanceDna(originDna, 1, "hash1");
+	test("generateInstanceDna should be deterministic", async () => {
+		const dna1 = await generateInstanceDna("seed_abc", "ABCD1234EFGH5678", 1, "hash1");
+		const dna2 = await generateInstanceDna("seed_abc", "ABCD1234EFGH5678", 1, "hash1");
 
-		expect(dna1).not.toBe(dna2);
+		expect(dna1).toBe(dna2);
 		expect(dna1.length).toBe(INSTANCE_DNA_LENGTH);
 	});
 
+	test("generateInstanceDna should differ with different nftId", async () => {
+		const dna1 = await generateInstanceDna("seed_abc", "ABCD1234EFGH5678", 1, "hash1");
+		const dna2 = await generateInstanceDna("seed_def", "ABCD1234EFGH5678", 1, "hash1");
+
+		expect(dna1).not.toBe(dna2);
+	});
+
+	test("generateInstanceDna should differ with different edition", async () => {
+		const dna1 = await generateInstanceDna("seed_abc", "ABCD1234EFGH5678", 1, "hash1");
+		const dna2 = await generateInstanceDna("seed_abc", "ABCD1234EFGH5678", 2, "hash1");
+
+		expect(dna1).not.toBe(dna2);
+	});
+
 	test("generateInstanceDna should have correct length", async () => {
-		const dna = await generateInstanceDna("ORIGIN123456", 1, "imagehash");
+		const dna = await generateInstanceDna("seed_test", "ORIGIN123456", 1, "imagehash");
 		expect(dna.length).toBe(INSTANCE_DNA_LENGTH);
 	});
 
-	test("replica instance DNA should be unique", async () => {
+	test("replica instance DNA should be deterministic", async () => {
 		const originDna = "ORIGIN123456";
 		const originalInstanceDna = "INSTANCE123456";
 
 		const replica1 = await generateReplicaInstanceDna(originDna, originalInstanceDna);
 		const replica2 = await generateReplicaInstanceDna(originDna, originalInstanceDna);
 
-		expect(replica1).not.toBe(replica2);
+		expect(replica1).toBe(replica2);
 		expect(replica1.length).toBe(INSTANCE_DNA_LENGTH);
 	});
 });
 
 describe("Access Key Generation", () => {
-	test("access keys should be unique", async () => {
+	test("access keys should be deterministic", async () => {
 		const instanceDna = "INSTANCE123456";
 		const key1 = await generateAccessKey(instanceDna, "user1");
 		const key2 = await generateAccessKey(instanceDna, "user1");
+
+		expect(key1).toBe(key2);
+	});
+
+	test("access keys should differ with different owners", async () => {
+		const instanceDna = "INSTANCE123456";
+		const key1 = await generateAccessKey(instanceDna, "user1");
+		const key2 = await generateAccessKey(instanceDna, "user2");
 
 		expect(key1).not.toBe(key2);
 	});
@@ -109,12 +134,42 @@ describe("Access Key Generation", () => {
 });
 
 describe("ID Generation", () => {
-	test("generateId should create IDs with correct prefix", () => {
-		const colId = generateId("col");
-		const nftId = generateId("nft");
+	test("generateDeterministicCollectionId should create IDs with col_ prefix", () => {
+		const colId = generateDeterministicCollectionId("creator", "My Collection", "MYCOL");
 
 		expect(colId.startsWith("col_")).toBe(true);
-		expect(nftId.startsWith("nft_")).toBe(true);
+	});
+
+	test("generateDeterministicCollectionId should be deterministic", () => {
+		const id1 = generateDeterministicCollectionId("creator", "My Collection", "MYCOL");
+		const id2 = generateDeterministicCollectionId("creator", "My Collection", "MYCOL");
+
+		expect(id1).toBe(id2);
+	});
+
+	test("generateDeterministicSeedId should create IDs with seed_ prefix", () => {
+		const seedId = generateDeterministicSeedId("col_test123", "art-01");
+
+		expect(seedId.startsWith("seed_")).toBe(true);
+	});
+
+	test("generateDeterministicSeedId should be deterministic", () => {
+		const id1 = generateDeterministicSeedId("col_test123", "art-01");
+		const id2 = generateDeterministicSeedId("col_test123", "art-01");
+
+		expect(id1).toBe(id2);
+	});
+
+	test("different inputs should produce different deterministic IDs", () => {
+		const col1 = generateDeterministicCollectionId("creator", "Collection A", "COLA");
+		const col2 = generateDeterministicCollectionId("creator", "Collection B", "COLB");
+
+		expect(col1).not.toBe(col2);
+
+		const seed1 = generateDeterministicSeedId("col_test123", "art-01");
+		const seed2 = generateDeterministicSeedId("col_test123", "art-02");
+
+		expect(seed1).not.toBe(seed2);
 	});
 
 	test("replica ID should contain original ID", () => {
@@ -143,8 +198,7 @@ describe("ID Generation", () => {
 });
 
 describe("Collection Payload", () => {
-	const validInput: CreateCollectionInput = {
-		jsonId: "test_collection_2024",
+	const validInput: DeterministicCollectionInput = {
 		name: "Test Collection",
 		symbol: "TEST",
 		creator: "testuser",
@@ -162,18 +216,17 @@ describe("Collection Payload", () => {
 	};
 
 	test("should create valid collection payload", async () => {
-		const payload = await createCollectionPayload(validInput);
+		const payload = await createDeterministicCollectionPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
 		expect(payload.version).toBe("0.3.0");
 		expect(payload.action).toBe(ACTION_CREATE_COLLECTION);
 		expect(payload.data.id.startsWith("col_")).toBe(true);
 		expect(payload.data.originDna.length).toBe(ORIGIN_DNA_LENGTH);
-		expect(payload.data.jsonId).toBe("test_collection_2024");
 	});
 
 	test("collection payload should be under 8KB", async () => {
-		const payload = await createCollectionPayload(validInput);
+		const payload = await createDeterministicCollectionPayload(validInput);
 		const size = new TextEncoder().encode(JSON.stringify(payload)).length;
 
 		expect(size).toBeLessThan(MAX_JSON_SIZE);
@@ -181,7 +234,8 @@ describe("Collection Payload", () => {
 });
 
 describe("Mint Payload", () => {
-	const validInput: MintInput = {
+	const validInput: DeterministicMintInput = {
+		artId: "test-art-01",
 		collectionId: "col_test123",
 		collectionOriginDna: "ABCD1234EFGH5678",
 		edition: 1,
@@ -193,19 +247,19 @@ describe("Mint Payload", () => {
 	};
 
 	test("should create valid mint payload", async () => {
-		const payload = await createMintPayload(validInput);
+		const payload = await createDeterministicMintPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
 		expect(payload.version).toBe("0.3.0");
 		expect(payload.action).toBe(ACTION_MINT);
-		expect(payload.data.id.startsWith("nft_")).toBe(true);
+		expect(payload.data.id.startsWith("seed_")).toBe(true);
 		expect(payload.data.originDna).toBe("ABCD1234EFGH5678");
 		expect(payload.data.instanceDna.length).toBe(INSTANCE_DNA_LENGTH);
 		expect(payload.data.mintedBy).toBe("testuser");
 	});
 
 	test("mint payload should include procedencia fields", async () => {
-		const payload = await createMintPayload({
+		const payload = await createDeterministicMintPayload({
 			...validInput,
 			birthBlock: 12345,
 			birthTx: "tx_abc123",
@@ -216,7 +270,7 @@ describe("Mint Payload", () => {
 	});
 
 	test("mint payload should include collectionBlock", async () => {
-		const payload = await createMintPayload({
+		const payload = await createDeterministicMintPayload({
 			...validInput,
 			collectionBlock: 90000050,
 		});
@@ -225,14 +279,14 @@ describe("Mint Payload", () => {
 	});
 
 	test("mint payload should be under 8KB", async () => {
-		const payload = await createMintPayload(validInput);
+		const payload = await createDeterministicMintPayload(validInput);
 		const size = new TextEncoder().encode(JSON.stringify(payload)).length;
 
 		expect(size).toBeLessThan(MAX_JSON_SIZE);
 	});
 
 	test("mint operation should be under 8KB", async () => {
-		const operation = await createMintOperation(validInput);
+		const operation = await createDeterministicMintOperation(validInput);
 		const size = estimateOperationSize(operation);
 
 		expect(size).toBeLessThan(MAX_JSON_SIZE);
@@ -283,8 +337,7 @@ describe("Validation", () => {
 	});
 
 	describe("Collection input validation", () => {
-		const validInput: CreateCollectionInput = {
-			jsonId: "test_2024",
+		const validInput = {
 			name: "Test",
 			symbol: "TEST",
 			creator: "user",
@@ -305,11 +358,6 @@ describe("Validation", () => {
 			expect(createCollectionInputSchema.safeParse(validInput).success).toBe(true);
 		});
 
-		test("missing jsonId should fail", () => {
-			const invalid = { ...validInput, jsonId: "" };
-			expect(createCollectionInputSchema.safeParse(invalid).success).toBe(false);
-		});
-
 		test("excessive royalty should fail", () => {
 			const invalid = {
 				...validInput,
@@ -320,7 +368,7 @@ describe("Validation", () => {
 	});
 
 	describe("Mint input validation", () => {
-		const validInput: MintInput = {
+		const validInput = {
 			collectionId: "col_test",
 			collectionOriginDna: "ORIGIN1234567890",
 			edition: 1,
@@ -351,7 +399,8 @@ describe("NFT DNA Inheritance", () => {
 		const collectionId = "col_shared";
 		const originDna = await generateOriginDna(collectionId);
 
-		const mint1: MintInput = {
+		const mint1: DeterministicMintInput = {
+			artId: "art-01",
 			collectionId,
 			collectionOriginDna: originDna,
 			edition: 1,
@@ -361,7 +410,8 @@ describe("NFT DNA Inheritance", () => {
 			collectionBlock: 90000000,
 		};
 
-		const mint2: MintInput = {
+		const mint2: DeterministicMintInput = {
+			artId: "art-02",
 			collectionId,
 			collectionOriginDna: originDna,
 			edition: 2,
@@ -371,8 +421,8 @@ describe("NFT DNA Inheritance", () => {
 			collectionBlock: 90000000,
 		};
 
-		const payload1 = await createMintPayload(mint1);
-		const payload2 = await createMintPayload(mint2);
+		const payload1 = await createDeterministicMintPayload(mint1);
+		const payload2 = await createDeterministicMintPayload(mint2);
 
 		expect(payload1.data.originDna).toBe(payload2.data.originDna);
 		expect(payload1.data.instanceDna).not.toBe(payload2.data.instanceDna);
@@ -460,5 +510,332 @@ describe("Buy Action (Multisig)", () => {
 		const size = estimateOperationSize(operation);
 
 		expect(size).toBeLessThan(MAX_JSON_SIZE);
+	});
+});
+
+describe("buildBuy Transfer Generation", () => {
+	const NFT_ID = "nft_buy_test_001";
+	const LISTING_ID = "list_buy_test_001";
+	const LIST_TX_ID = "b".repeat(40);
+	const BUYER = "buyeraccount";
+	const SELLER = "selleraccount";
+	const NODE_ACCOUNT = "indexernode";
+	const FEE_ACCOUNT = "nftloxfees";
+
+	const basePaymentSplit = {
+		sellerAmount: 8.9,
+		royaltyAmount: 0,
+		royaltyRecipient: null,
+		feeAmount: 0.1,
+		feeAccount: FEE_ACCOUNT,
+		totalPrice: 9,
+		currency: "HIVE" as const,
+	};
+
+	const baseInput = {
+		nftId: NFT_ID,
+		listingId: LISTING_ID,
+		listTxId: LIST_TX_ID,
+		buyer: BUYER,
+		seller: SELLER,
+		nodeAccount: NODE_ACCOUNT,
+		paymentSplit: basePaymentSplit,
+	};
+
+	test("generates seller + fee transfers when no royalty is present", () => {
+		const result = buildBuy(baseInput);
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const ops = result.hiveOperations!;
+		expect(ops).toHaveLength(3);
+		expect(ops[0]![0]).toBe("transfer");
+		expect(ops[1]![0]).toBe("transfer");
+		expect(ops[2]![0]).toBe("custom_json");
+	});
+
+	test("generates seller + royalty + fee transfers (full split)", () => {
+		const result = buildBuy({
+			...baseInput,
+			paymentSplit: {
+				sellerAmount: 7.9,
+				royaltyAmount: 1.0,
+				royaltyRecipient: "royaltyuser",
+				feeAmount: 0.1,
+				feeAccount: FEE_ACCOUNT,
+				totalPrice: 9,
+				currency: "HIVE",
+			},
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const ops = result.hiveOperations!;
+		expect(ops).toHaveLength(4);
+
+		const transferOps = ops.slice(0, -1);
+		expect(transferOps.every((op) => op[0] === "transfer")).toBe(true);
+		expect(ops[ops.length - 1]![0]).toBe("custom_json");
+	});
+
+	test("skips royalty transfer when royaltyAmount is 0", () => {
+		const result = buildBuy({
+			...baseInput,
+			paymentSplit: {
+				sellerAmount: 8.9,
+				royaltyAmount: 0,
+				royaltyRecipient: "royaltyuser",
+				feeAmount: 0.1,
+				feeAccount: FEE_ACCOUNT,
+				totalPrice: 9,
+				currency: "HIVE",
+			},
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const ops = result.hiveOperations!;
+		const transferMemos = ops
+			.filter((op): op is typeof op & { 0: "transfer" } => op[0] === "transfer")
+			.map((op) => op[1].memo);
+
+		expect(transferMemos).not.toContain(expect.stringContaining("NFTLox ROY:"));
+		expect(ops).toHaveLength(3);
+	});
+
+	test("skips fee transfer when feeAmount is 0", () => {
+		const result = buildBuy({
+			...baseInput,
+			paymentSplit: {
+				sellerAmount: 9.0,
+				royaltyAmount: 0,
+				royaltyRecipient: null,
+				feeAmount: 0,
+				feeAccount: FEE_ACCOUNT,
+				totalPrice: 9,
+				currency: "HIVE",
+			},
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const ops = result.hiveOperations!;
+		const transferMemos = ops
+			.filter((op): op is typeof op & { 0: "transfer" } => op[0] === "transfer")
+			.map((op) => op[1].memo);
+
+		expect(transferMemos).not.toContain(expect.stringContaining("NFTLox FEE:"));
+		expect(ops).toHaveLength(2);
+	});
+
+	test("transfer memos use correct NFTLox BUY/ROY/FEE prefixes", () => {
+		const result = buildBuy({
+			...baseInput,
+			paymentSplit: {
+				sellerAmount: 7.9,
+				royaltyAmount: 1.0,
+				royaltyRecipient: "royaltyuser",
+				feeAmount: 0.1,
+				feeAccount: FEE_ACCOUNT,
+				totalPrice: 9,
+				currency: "HIVE",
+			},
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const ops = result.hiveOperations!;
+		const transfers = ops.filter((op): op is typeof op & { 0: "transfer" } => op[0] === "transfer");
+
+		expect(transfers[0]![1].memo).toBe(`NFTLox BUY:${NFT_ID}`);
+		expect(transfers[0]![1].to).toBe(SELLER);
+
+		expect(transfers[1]![1].memo).toBe(`NFTLox ROY:${NFT_ID}`);
+		expect(transfers[1]![1].to).toBe("royaltyuser");
+
+		expect(transfers[2]![1].memo).toBe(`NFTLox FEE:${NFT_ID}`);
+		expect(transfers[2]![1].to).toBe(FEE_ACCOUNT);
+	});
+
+	test("all transfers come from buyer", () => {
+		const result = buildBuy({
+			...baseInput,
+			paymentSplit: {
+				sellerAmount: 7.9,
+				royaltyAmount: 0.5,
+				royaltyRecipient: "royaltyuser",
+				feeAmount: 0.6,
+				feeAccount: FEE_ACCOUNT,
+				totalPrice: 9,
+				currency: "HIVE",
+			},
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const ops = result.hiveOperations!;
+		const transfers = ops.filter((op): op is typeof op & { 0: "transfer" } => op[0] === "transfer");
+
+		expect(transfers.length).toBeGreaterThan(0);
+		for (const transfer of transfers) {
+			expect(transfer[1].from).toBe(BUYER);
+		}
+	});
+});
+
+describe("toHiveOperation", () => {
+	const mintInput: DeterministicMintInput = {
+		artId: "test-art-01",
+		collectionId: "col_test123",
+		collectionOriginDna: "ABCD1234EFGH5678",
+		edition: 1,
+		owner: "testuser",
+		name: "Test NFT",
+		imageUrl: "https://example.com/nft.png",
+		collectionBlock: 90000000,
+	};
+
+	test("converts payload to custom_json operation tuple", async () => {
+		const payload = await createDeterministicMintPayload(mintInput);
+
+		const operation = toHiveOperation(payload, "testuser");
+
+		expect(operation[0]).toBe("custom_json");
+		expect(operation[1].id).toBe(PROTOCOL_ID);
+		expect(operation[1].required_auths).toEqual([]);
+	});
+
+	test("sets correct signer in required_posting_auths", async () => {
+		const payload = await createDeterministicMintPayload(mintInput);
+
+		const signer = "mysigner";
+		const operation = toHiveOperation(payload, signer);
+
+		expect(operation[1].required_posting_auths).toEqual([signer]);
+	});
+
+	test("serialized JSON matches original payload", async () => {
+		const payload = await createDeterministicMintPayload(mintInput);
+
+		const operation = toHiveOperation(payload, "testuser");
+		const parsed = JSON.parse(operation[1].json);
+
+		expect(parsed.protocol).toBe(payload.protocol);
+		expect(parsed.version).toBe(payload.version);
+		expect(parsed.action).toBe(payload.action);
+		expect(parsed.data.id).toBe(payload.data.id);
+		expect(parsed.data.collectionId).toBe(payload.data.collectionId);
+	});
+});
+
+describe("Mint Payload (extended)", () => {
+	const baseMintInput: DeterministicMintInput = {
+		artId: "ext-art-01",
+		collectionId: "col_test123",
+		collectionOriginDna: "ABCD1234EFGH5678",
+		edition: 1,
+		owner: "testuser",
+		name: "Test NFT #1",
+		description: "A test NFT",
+		imageUrl: "https://example.com/nft1.png",
+		collectionBlock: 90000000,
+	};
+
+	test("immutableData is included when provided", async () => {
+		const payload = await createDeterministicMintPayload({
+			...baseMintInput,
+			immutableData: { rarity: "legendary", power: 42 },
+		});
+
+		expect(payload.data.immutableData).toEqual({ rarity: "legendary", power: 42 });
+	});
+
+	test("mutableData is included when provided", async () => {
+		const payload = await createDeterministicMintPayload({
+			...baseMintInput,
+			mutableData: { level: 1, experience: 0 },
+		});
+
+		expect(payload.data.mutableData).toEqual({ level: 1, experience: 0 });
+	});
+
+	test("immutableData and mutableData are omitted when not provided", async () => {
+		const payload = await createDeterministicMintPayload(baseMintInput);
+
+		expect(payload.data.immutableData).toBeUndefined();
+		expect(payload.data.mutableData).toBeUndefined();
+	});
+
+	test("nftType is included when provided", async () => {
+		const payload = await createDeterministicMintPayload({
+			...baseMintInput,
+			nftType: "seed",
+		});
+
+		expect((payload.data as Record<string, unknown>).nftType).toBe("seed");
+	});
+
+	test("nftType is omitted when not provided", async () => {
+		const payload = await createDeterministicMintPayload(baseMintInput);
+
+		expect((payload.data as Record<string, unknown>).nftType).toBeUndefined();
+	});
+
+	test("createdAt is NOT present in payload", async () => {
+		const payload = await createDeterministicMintPayload(baseMintInput);
+
+		expect((payload.data as Record<string, unknown>).createdAt).toBeUndefined();
+	});
+});
+
+describe("Deterministic Collection Payloads", () => {
+	const baseCollectionInput: DeterministicCollectionInput = {
+		creator: "testcreator",
+		name: "Deterministic Col",
+		symbol: "DETCOL",
+		totalPotential: 500,
+		metadata: {
+			description: "A deterministic collection",
+			image: "https://example.com/col.png",
+		},
+		rules: {
+			transferable: true,
+			burnable: true,
+			replicable: false,
+			royaltyPct: 10,
+		},
+	};
+
+	test("same inputs produce same ID (deterministic)", async () => {
+		const payload1 = await createDeterministicCollectionPayload(baseCollectionInput);
+		const payload2 = await createDeterministicCollectionPayload(baseCollectionInput);
+
+		expect(payload1.data.id).toBe(payload2.data.id);
+	});
+
+	test("createdAt is NOT present", async () => {
+		const payload = await createDeterministicCollectionPayload(baseCollectionInput);
+
+		expect((payload.data as Record<string, unknown>).createdAt).toBeUndefined();
+	});
+
+	test("schema is included when provided", async () => {
+		const schema = {
+			immutable: [{ name: "rarity", type: "string" as const }],
+			mutable: [{ name: "level", type: "uint32" as const }],
+		};
+
+		const payload = await createDeterministicCollectionPayload({
+			...baseCollectionInput,
+			schema,
+		});
+
+		expect(payload.data.schema).toEqual(schema);
 	});
 });

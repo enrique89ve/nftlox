@@ -36,10 +36,9 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 
 		const royaltyPct = Number(nft.royalty_pct ?? 0);
 		const royaltyRecipient = nft.royalty_recipient ?? null;
-		const feeAccount = nft.listing_marketplace || config.hiveAccount;
 		const currency = nft.listing_currency;
 
-		const split = calculatePaymentSplit(totalPrice, currency, royaltyPct, royaltyRecipient, nft.owner, feeAccount);
+		const split = calculatePaymentSplit(totalPrice, currency, royaltyPct, royaltyRecipient, nft.owner, config.hiveAccount);
 
 		return {
 			nftId: params.nftId,

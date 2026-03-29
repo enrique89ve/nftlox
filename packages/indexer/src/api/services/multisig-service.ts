@@ -7,14 +7,12 @@
 
 import { Transaction, PrivateKey, type TransactionType, type OperationName, type OperationBody } from "hive-tx";
 import type { Queryable } from "@/db/client.ts";
-import { getNftWithCollectionRules, type NftProcessingRow, type NftWithRulesRow } from "@/db/queries/nfts.ts";
+import { getNftWithCollectionRules, type NftProcessingRow } from "@/db/queries/nfts.ts";
 import type { CollectionRulesRow } from "@/db/queries/collections.ts";
 import { verifyTransfers, type TransferRecord } from "@/utils/validation.ts";
 import {
-	calculatePaymentSplit,
 	validateHiveUsername,
 	ACTION_BUY,
-	MULTISIG_EXPIRATION_MS,
 	MAX_MULTISIG_OPERATIONS,
 	type MultisigResponse,
 	type MultisigErrorCode,
@@ -25,7 +23,7 @@ import {
 
 const MIN_EXPIRATION_MS = 30_000;
 const MAX_EXPIRATION_MS = 120_000;
-const MIN_TRANSFER_OPS = 2; // seller transfer + custom_json
+const MIN_OPERATIONS = 2; // minimum: 1 transfer (seller) + 1 custom_json
 
 // ============ TYPES (internal) ============
 
@@ -196,10 +194,10 @@ function validateSignaturesEmpty(tx: HiveTransactionObject): void {
 }
 
 function validateOperationCount(ops: ReadonlyArray<unknown>): void {
-	if (ops.length < MIN_TRANSFER_OPS || ops.length > MAX_MULTISIG_OPERATIONS) {
+	if (ops.length < MIN_OPERATIONS || ops.length > MAX_MULTISIG_OPERATIONS) {
 		throw createMultisigError(
 			"INVALID_TX_STRUCTURE",
-			`Expected ${MIN_TRANSFER_OPS}-${MAX_MULTISIG_OPERATIONS} operations, got ${ops.length}`,
+			`Expected ${MIN_OPERATIONS}-${MAX_MULTISIG_OPERATIONS} operations, got ${ops.length}`,
 		);
 	}
 }
@@ -318,13 +316,21 @@ function validateCustomJsonProtocol(cj: Record<string, unknown>, protocolId: str
 	}
 }
 
+/**
+ * Validates that the custom_json buy payload contains matching listingId and listTxId.
+ * SAFETY: This function MUST only be called after validateCustomJsonOperation(),
+ * which guarantees: lastOp exists, is custom_json, has valid JSON, has data object.
+ */
 function validateBuyPayloadData(
 	ops: ReadonlyArray<readonly [string, Record<string, unknown>]>,
 	expectedListingId: string,
 	expectedListTxId: string,
 ): void {
 	const lastOp = ops[ops.length - 1];
-	const cj = lastOp![1] as Record<string, unknown>;
+	if (!lastOp) {
+		throw createMultisigError("INVALID_TX_STRUCTURE", "No operations found");
+	}
+	const cj = lastOp[1] as Record<string, unknown>;
 	const parsed = JSON.parse(cj.json as string) as Record<string, unknown>;
 	const data = parsed.data as Record<string, unknown>;
 
@@ -431,7 +437,7 @@ function validatePaymentSplit(
 	transfers: ReadonlyArray<TransferRecord>,
 	nft: NftProcessingRow,
 	rules: MultisigRules,
-	feeAccount: string,
+	nodeAccount: string,
 ): void {
 	if (!nft.listing_price || !nft.listing_currency) {
 		throw createMultisigError("NFT_NOT_LISTED", "NFT has no listing price or currency");
@@ -443,7 +449,7 @@ function validatePaymentSplit(
 	}
 
 	try {
-		verifyTransfers({
+		const split = verifyTransfers({
 			transfers: transfers as TransferRecord[],
 			buyer: transfers[0]?.from ?? "",
 			seller: nft.owner,
@@ -451,8 +457,20 @@ function validatePaymentSplit(
 			currency: nft.listing_currency,
 			royaltyPct: rules.royalty_pct,
 			royaltyRecipient: rules.royalty_recipient,
-			feeAccount,
+			feeAccount: nodeAccount,
 		});
+
+		// Validate exact transfer count — reject extra transfers
+		let expectedCount = 0;
+		if (split.sellerAmount > 0) expectedCount++;
+		if (split.royaltyAmount > 0 && split.royaltyRecipient) expectedCount++;
+		if (split.feeAmount > 0) expectedCount++;
+
+		if (transfers.length !== expectedCount) {
+			throw new Error(
+				`Expected exactly ${expectedCount} transfers, got ${transfers.length}`,
+			);
+		}
 	} catch (err) {
 		throw createMultisigError(
 			"INVALID_PAYMENT_SPLIT",

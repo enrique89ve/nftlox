@@ -1,28 +1,12 @@
 // NFTLox Seed & Instance ID Tests
 import { test, expect, describe } from "bun:test";
 import {
-	generateSeedId,
 	generateInstanceId,
 	extractSeedId,
 	extractInstanceNumber,
 	isSeedId,
 	isInstanceId,
 } from "../src/dna";
-
-describe("Seed ID Generation", () => {
-	test("generateSeedId returns format seed_[8chars]", () => {
-		const seedId = generateSeedId();
-		expect(seedId).toMatch(/^seed_[a-z0-9]{8}$/);
-	});
-
-	test("generateSeedId generates unique IDs", () => {
-		const ids = new Set<string>();
-		for (let i = 0; i < 100; i++) {
-			ids.add(generateSeedId());
-		}
-		expect(ids.size).toBe(100);
-	});
-});
 
 describe("Instance ID Generation", () => {
 	test("generateInstanceId returns format nft_[seedSuffix]_[N]_[4chars]", () => {

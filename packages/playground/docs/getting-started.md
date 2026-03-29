@@ -158,20 +158,20 @@ All build endpoints accept `POST` with a JSON body:
 | `/api/build/burn` | Burn an NFT | Posting |
 | `/api/build/buy` | Buy a listed NFT | Active |
 | `/api/build/replicate` | Replicate a seed | Posting |
-| `/api/build/set-data` | Update mutable data | Active |
+| `/api/build/set-data` | Update mutable data | Posting |
 | `/api/build/pack-create` | Create a pack | Posting |
 | `/api/build/pack-buy` | Buy packs | Posting |
 | `/api/build/pack-open` | Open packs | Posting |
 | `/api/build/pack-transfer` | Transfer packs | Posting |
-| `/api/build/nft-approve` | Approve NFT operator | Active |
-| `/api/build/nft-approve-all` | Approve operator for collection | Active |
-| `/api/build/nft-transfer-from` | Operator transfers NFT | Active |
-| `/api/build/pack-approve` | Approve pack operator | Active |
-| `/api/build/pack-transfer-from` | Operator transfers packs | Active |
-| `/api/build/nft-lend` | Lend an NFT | Active |
-| `/api/build/nft-return` | Return a lent NFT | Active |
-| `/api/build/data-operator-approve` | Approve data operator | Active |
-| `/api/build/set-data-from` | Operator updates data | Active |
+| `/api/build/nft-approve` | Approve NFT operator | Posting |
+| `/api/build/nft-approve-all` | Approve operator for collection | Posting |
+| `/api/build/nft-transfer-from` | Operator transfers NFT | Posting |
+| `/api/build/pack-approve` | Approve pack operator | Posting |
+| `/api/build/pack-transfer-from` | Operator transfers packs | Posting |
+| `/api/build/nft-lend` | Lend an NFT | Posting |
+| `/api/build/nft-return` | Return a lent NFT | Posting |
+| `/api/build/data-operator-approve` | Approve data operator | Posting |
+| `/api/build/set-data-from` | Operator updates data | Posting |
 | `/api/build/preview-ids` | Preview deterministic IDs | -- |
 
 ## Signing and Broadcasting

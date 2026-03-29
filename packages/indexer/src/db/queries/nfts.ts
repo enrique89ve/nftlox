@@ -331,11 +331,14 @@ export type NftListQuery =
 export type Pagination = { limit?: number; offset?: number };
 
 const LIST_COLUMNS = sql`
-	id, collection_id, nft_type, status, edition, owner,
-	name, image_url, origin_dna, instance_dna,
-	seed_id, instance_number,
-	max_replicas, distributed, supply_exhausted,
-	listing_id, listing_tx_id, listing_price, listing_currency, listing_expires_at, created_at
+	n.id, n.collection_id, n.nft_type, n.status, n.edition, n.owner,
+	COALESCE(NULLIF(n.name, ''), s.name) AS name,
+	COALESCE(n.image_url, s.image_url) AS image_url,
+	COALESCE(n.origin_dna, s.origin_dna) AS origin_dna,
+	n.instance_dna,
+	n.seed_id, n.instance_number,
+	n.max_replicas, n.distributed, n.supply_exhausted,
+	n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency, n.listing_expires_at, n.created_at
 `;
 
 export interface NftListRow {
@@ -375,14 +378,14 @@ export async function queryNftsWithCounts(
 ): Promise<NftPageResult> {
 	const safeLimit = clampLimit(page?.limit ?? 50);
 	const offset = page?.offset ?? 0;
-	const statusFilter = status ? sql`AND status = ${status}` : sql``;
-	const typeFilter = type ? sql`AND nft_type = ${type}` : sql``;
+	const statusFilter = status ? sql`AND n.status = ${status}` : sql``;
+	const typeFilter = type ? sql`AND n.nft_type = ${type}` : sql``;
 
 	const [nfts, counts] = await Promise.all([
 		sql<NftListRow[]>`
-			SELECT ${LIST_COLUMNS} FROM nfts
-			WHERE owner = ${owner} ${statusFilter} ${typeFilter}
-			ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
+			SELECT ${LIST_COLUMNS} FROM nfts n LEFT JOIN nfts s ON s.id = n.seed_id
+			WHERE n.owner = ${owner} ${statusFilter} ${typeFilter}
+			ORDER BY n.created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
 		`,
 		getUserNftCounts(owner),
 	]);
@@ -396,40 +399,40 @@ export async function queryNfts(query: NftListQuery, page?: Pagination) {
 
 	switch (query.by) {
 		case "owner": {
-			const statusFilter = query.status ? sql`AND status = ${query.status}` : sql``;
-			const typeFilter = query.type ? sql`AND nft_type = ${query.type}` : sql``;
+			const statusFilter = query.status ? sql`AND n.status = ${query.status}` : sql``;
+			const typeFilter = query.type ? sql`AND n.nft_type = ${query.type}` : sql``;
 			return sql`
-				SELECT ${LIST_COLUMNS} FROM nfts
-				WHERE owner = ${query.owner} ${statusFilter} ${typeFilter}
-				ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
+				SELECT ${LIST_COLUMNS} FROM nfts n LEFT JOIN nfts s ON s.id = n.seed_id
+				WHERE n.owner = ${query.owner} ${statusFilter} ${typeFilter}
+				ORDER BY n.created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
 			`;
 		}
 		case "collection": {
-			const typeFilter = query.type ? sql`AND nft_type = ${query.type}` : sql``;
+			const typeFilter = query.type ? sql`AND n.nft_type = ${query.type}` : sql``;
 			return sql`
-				SELECT ${LIST_COLUMNS} FROM nfts
-				WHERE collection_id = ${query.collectionId} ${typeFilter}
-				ORDER BY created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
+				SELECT ${LIST_COLUMNS} FROM nfts n LEFT JOIN nfts s ON s.id = n.seed_id
+				WHERE n.collection_id = ${query.collectionId} ${typeFilter}
+				ORDER BY n.created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
 			`;
 		}
 		case "seed": {
 			return sql`
-				SELECT ${LIST_COLUMNS} FROM nfts
-				WHERE seed_id = ${query.seedId}
-				ORDER BY instance_number ASC
+				SELECT ${LIST_COLUMNS} FROM nfts n LEFT JOIN nfts s ON s.id = n.seed_id
+				WHERE n.seed_id = ${query.seedId}
+				ORDER BY n.instance_number ASC
 				LIMIT ${safeLimit} OFFSET ${offset}
 			`;
 		}
 		case "listed": {
 			const orderClause = query.sort === "price_asc"
-				? sql`listing_price ASC`
+				? sql`n.listing_price ASC`
 				: query.sort === "price_desc"
-					? sql`listing_price DESC`
-					: sql`created_at DESC`;
-			const currencyFilter = query.currency ? sql`AND listing_currency = ${query.currency}` : sql``;
+					? sql`n.listing_price DESC`
+					: sql`n.created_at DESC`;
+			const currencyFilter = query.currency ? sql`AND n.listing_currency = ${query.currency}` : sql``;
 			return sql`
-				SELECT ${LIST_COLUMNS} FROM nfts
-				WHERE status = ${NFT_STATUS_LISTED} ${currencyFilter} AND (listing_expires_at IS NULL OR listing_expires_at > NOW())
+				SELECT ${LIST_COLUMNS} FROM nfts n LEFT JOIN nfts s ON s.id = n.seed_id
+				WHERE n.status = ${NFT_STATUS_LISTED} ${currencyFilter} AND (n.listing_expires_at IS NULL OR n.listing_expires_at > NOW())
 				ORDER BY ${orderClause}
 				LIMIT ${safeLimit} OFFSET ${offset}
 			`;

@@ -10,8 +10,8 @@ NFTLox collections with a typed schema can have **mutable fields** that change d
 
 | Operation | Who can use it | Key type |
 |-----------|---------------|----------|
-| `set_data` | Collection creator | Active |
-| `set_data_from` | Authorized data operator | Active |
+| `set_data` | Collection creator | Posting |
+| `set_data_from` | Authorized data operator | Posting |
 
 If your game server Hive account is the same as the collection creator, use `set_data`. If it is a separate account, authorize it as a data operator first, then use `set_data_from`.
 
@@ -47,11 +47,11 @@ The collection creator can update mutable data on any NFT in their collection.
 	"protocolVersion": "0.3.0",
 	"operation": ["custom_json", { "..." }],
 	"payload": { "..." },
-	"keyType": "Active"
+	"keyType": "Posting"
 }
 ```
 
-Sign the `operation` with the creator's **active key** (not posting key) and broadcast to Hive.
+Sign the `operation` with the creator's **posting key** and broadcast to Hive.
 
 ### SDK Usage
 
@@ -70,7 +70,7 @@ const input: SetDataInput = {
 };
 
 const operation = createSetDataOperation(input, "ragnarok-game");
-// Sign with active key and broadcast
+// Sign with posting key and broadcast
 ```
 
 ---
@@ -132,7 +132,7 @@ const input: SetDataFromInput = {
 };
 
 const operation = createSetDataFromOperation(input, "ragnarok-server");
-// Sign with ragnarok-server's active key and broadcast
+// Sign with ragnarok-server's posting key and broadcast
 ```
 
 ---
@@ -299,7 +299,7 @@ After this operation is processed, `set_data_from` calls from `ragnarok-server` 
 
 ## Important Notes
 
-- **Key type:** Both `set_data` and `set_data_from` require the **active key** (not posting key). This is because data modifications are a higher-privilege operation.
+- **Key type:** Both `set_data` and `set_data_from` use the **posting key**.
 - **Schema enforcement:** Only fields declared in the schema's `mutable` section can be updated. Attempting to set an undeclared field or an `immutable` field will be rejected.
 - **Partial updates:** You only need to include the fields you want to change. Omitted fields retain their current values.
 - **No schema, no updates:** If the collection was created without a schema, `set_data` and `set_data_from` will be rejected. The schema must exist at collection creation time.

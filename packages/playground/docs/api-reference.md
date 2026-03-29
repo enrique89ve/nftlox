@@ -451,17 +451,21 @@ Get the payment split needed to build a buy transaction. This returns the exact 
 ```json
 {
 	"nftId": "abc123",
+	"listingId": "list_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+	"listTxId": "abcdef1234567890abcdef1234567890abcdef12",
 	"seller": "alice",
 	"totalPrice": 10.0,
 	"currency": "HIVE",
-	"sellerAmount": 9.25,
-	"royaltyAmount": 0.5,
-	"royaltyRecipient": "creator-account",
-	"feeAmount": 0.25,
+	"sellerAmount": 9.9,
+	"royaltyAmount": 0,
+	"royaltyRecipient": null,
+	"feeAmount": 0.1,
 	"feeAccount": "nftlox",
 	"nodeAccount": "nftlox"
 }
 ```
+
+> **Fee model**: Protocol fee is 1.0%, always paid to the co-signing node. Marketplace fees are handled off-chain by marketplace frontends.
 
 **Errors:**
 - `404` -- NFT not found
@@ -485,15 +489,19 @@ Submit a buy transaction for multisig co-signing by the node. The node validates
 {
 	"buyer": "bob",
 	"nftId": "abc123",
+	"listingId": "list_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+	"listTxId": "abcdef1234567890abcdef1234567890abcdef12",
 	"transaction": {
 		"ref_block_num": 12345,
 		"ref_block_prefix": 67890,
-		"expiration": "2026-03-28T12:00:00",
+		"expiration": "2026-03-29T12:00:00",
 		"operations": [],
-		"signatures": ["buyer-signature-hex"]
+		"signatures": []
 	}
 }
 ```
+
+> The `listingId` and `listTxId` must match the active listing. The `signatures` array must be empty — the node adds its signature and returns it.
 
 **Response (success):**
 

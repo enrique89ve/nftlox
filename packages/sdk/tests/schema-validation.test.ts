@@ -235,10 +235,10 @@ describe("mintInputSchema collectionBlock", () => {
 		expect(result.success).toBe(false);
 	});
 
-	test("rejects missing collectionBlock", () => {
+	test("accepts missing collectionBlock (optional)", () => {
 		const { collectionBlock, ...withoutBlock } = validMintInput;
 		const result = mintInputSchema.safeParse(withoutBlock);
-		expect(result.success).toBe(false);
+		expect(result.success).toBe(true);
 	});
 });
 

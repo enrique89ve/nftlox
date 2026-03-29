@@ -8,9 +8,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const d = op.data;
 	const id = requireString(d.id, "id");
 
-	if (await collectionExists(id, txn)) {
-		throw new Error(`Collection already exists: ${id}`);
-	}
+	if (await collectionExists(id, txn)) return;
 
 	const metadata = optionalObject(d.metadata) ?? {};
 	const rules = optionalObject(d.rules) ?? {};
@@ -27,7 +25,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 
 	await insertCollection({
 		id,
-		jsonId: optionalString(d.jsonId),
+		jsonId: null,
 		name: requireString(d.name, "name"),
 		symbol: requireString(d.symbol, "symbol"),
 		creator: op.signer,
