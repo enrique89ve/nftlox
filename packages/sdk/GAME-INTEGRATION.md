@@ -771,7 +771,7 @@ const collectionPayload = createDeterministicCollectionPayload(collectionInput);
 const COLLECTION_ID = collectionPayload.data.id;
 const ORIGIN_DNA = collectionPayload.data.originDna;
 
-// Broadcast: createCollectionOperation(collectionInput)
+// Broadcast: toHiveOperation(collectionPayload, creator)
 
 // ---------------------------------------------------------------
 // STEP 2: Authorize game server as data operator

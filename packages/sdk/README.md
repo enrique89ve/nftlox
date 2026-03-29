@@ -77,7 +77,7 @@ console.log(report.verified, "of", report.samplesChecked, "verified");
 | Export | Description |
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
-| `PROTOCOL_VERSION` | `"0.2.1"` |
+| `PROTOCOL_VERSION` | `"0.3.0"` |
 | `ALL_ACTIONS` | All 23 protocol actions |
 | `CORE_ACTIONS` | 7 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |
@@ -93,10 +93,8 @@ console.log(report.verified, "of", report.samplesChecked, "verified");
 
 | Function | Description |
 |----------|-------------|
-| `createCollectionPayload()` | Create collection (random ID) |
 | `createDeterministicCollectionPayload()` | Create collection (deterministic ID) |
-| `createMintPayload()` | Mint NFT (random ID) |
-| `createDeterministicMintPayload()` | Mint NFT (deterministic ID) |
+| `createDeterministicMintPayload()` | Mint seed/NFT (deterministic ID) |
 | `createBulkDistributePayload()` | Bulk distribute instances from seed |
 | `createTransferPayload()` | Transfer NFT |
 | `createBurnPayload()` | Burn NFT |

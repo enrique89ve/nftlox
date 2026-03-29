@@ -104,7 +104,6 @@ The build API constructs unsigned Hive `custom_json` operations. It validates yo
 curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 	-H "Content-Type: application/json" \
 	-d '{
-		"jsonId": "json_mycol_001",
 		"creator": "your-hive-user",
 		"name": "My Collection",
 		"symbol": "MYCOL",

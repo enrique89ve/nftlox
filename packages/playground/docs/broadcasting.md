@@ -27,8 +27,7 @@ You are responsible for wrapping them in a transaction, signing, and broadcastin
 
 | Operation type | Key required |
 |---|---|
-| Core operations (mint, transfer, burn, list, distribute, packs, replicate) | **Posting key** |
-| `set_data`, `set_data_from`, allowances, lending, data operator approve | **Active key** |
+| All operations except buy | **Posting key** |
 | Marketplace `buy` (involves HIVE/HBD transfer) | **Active key** |
 
 ### RPC nodes
