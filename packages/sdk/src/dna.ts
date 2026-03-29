@@ -99,11 +99,12 @@ export async function generateImageHash(imageUrl: string): Promise<string> {
 // ============ ID GENERATION ============
 
 /**
- * Generates a replica ID from an original NFT ID.
+ * Generates a deterministic replica ID from an original NFT ID.
+ * Same originalId always produces the same replicaId.
  */
 export function generateReplicaId(originalId: string): string {
-	const suffix = Math.random().toString(36).slice(2, 10);
-	return `${originalId}_r${suffix}`;
+	const hash = deterministicHash(`nftlox:replica:${originalId}`);
+	return `${originalId}_r${hash.slice(0, 8)}`;
 }
 
 /**
@@ -125,13 +126,12 @@ export function isReplicaId(id: string): boolean {
 // ============ SEED & INSTANCE IDS ============
 
 /**
- * Generates an instance ID from a seed.
- * Format: nft_[seedSuffix]_[instanceNumber]_[random]
+ * Generates a deterministic instance ID from a seed.
+ * Format: nft_[seedSuffix]_[instanceNumber]_[hash]
+ * Same seedId + instanceNumber always produces the same ID.
  */
 export function generateInstanceId(seedId: string, instanceNumber: number): string {
-	const seedSuffix = seedId.replace("seed_", "");
-	const randomSuffix = Math.random().toString(36).slice(2, 6);
-	return `nft_${seedSuffix}_${instanceNumber}_${randomSuffix}`;
+	return generateDeterministicInstanceId(seedId, instanceNumber);
 }
 
 /**

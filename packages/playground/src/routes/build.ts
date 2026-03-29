@@ -180,6 +180,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			hiveOperations: (result as any).hiveOperations,
 			payload: result.payload,
+			keyType: "Active",
 		});
 	}),
 

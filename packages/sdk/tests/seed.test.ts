@@ -24,10 +24,16 @@ describe("Instance ID Generation", () => {
 		expect(id99).toContain("_99_");
 	});
 
-	test("generateInstanceId generates unique random suffixes", () => {
+	test("generateInstanceId is deterministic", () => {
+		const id1 = generateInstanceId("seed_test1234", 1);
+		const id2 = generateInstanceId("seed_test1234", 1);
+		expect(id1).toBe(id2);
+	});
+
+	test("generateInstanceId differs by instance number", () => {
 		const ids = new Set<string>();
-		for (let i = 0; i < 50; i++) {
-			ids.add(generateInstanceId("seed_test1234", 1));
+		for (let i = 1; i <= 50; i++) {
+			ids.add(generateInstanceId("seed_test1234", i));
 		}
 		expect(ids.size).toBe(50);
 	});
