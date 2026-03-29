@@ -31,14 +31,14 @@ async function loadListings() {
 		}
 
 		const currentUser = getConnectedUser();
-		const debugTab = document.querySelector('.advanced-tab[data-tab="tab-debug"]') as HTMLElement | null;
-		const debugUiEnabled = debugTab?.style.display !== "none";
 		container.innerHTML = listings.map((nft: Record<string, unknown>) => {
 			const isOwn = currentUser && currentUser === nft.owner;
 
 			let actionHtml = "";
-			if (!isOwn && currentUser && debugUiEnabled) {
-				actionHtml = `<span style="color: var(--text-dim); font-size: 11px;">Buy via multisig (see Debug tab)</span>`;
+			if (!isOwn && currentUser) {
+				actionHtml = `<button class="btn btn-primary" style="font-size: 11px; padding: 4px 12px; margin-top: 4px;" onclick="event.stopPropagation(); buyFromMarketplace('${escapeHtml(nft.id as string)}', '${escapeHtml(nft.listing_id as string)}', '${escapeHtml(nft.listing_tx_id as string)}')">Buy ${escapeHtml(nft.listing_price as string)} ${escapeHtml(nft.listing_currency as string)}</button>`;
+			} else if (isOwn) {
+				actionHtml = `<span style="color: var(--text-dim); font-size: 11px;">Your listing</span>`;
 			}
 
 			return `
@@ -63,5 +63,79 @@ async function loadListings() {
 	}
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buyFromMarketplace(nftId: string, listingId: string, listTxId: string) {
+	const user = getConnectedUser();
+	if (!user) {
+		log("Connect wallet first", "error");
+		return;
+	}
+
+	const keychain = (window as any).hive_keychain;
+	if (!keychain || !keychain.requestSignTx) {
+		log("Hive Keychain 3.x+ required for buying", "error");
+		return;
+	}
+
+	log(`Requesting multisig for ${nftId}...`);
+
+	try {
+		const res = await fetch("/api/debug/multisig-buy", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ buyer: user, nftId }),
+		});
+		const data = await res.json();
+
+		if (!data.success) {
+			log(`Buy failed: ${data.error}${data.code ? ` [${data.code}]` : ""}`, "error");
+			return;
+		}
+
+		const transaction = data.transaction;
+		transaction.signatures = [data.nodeSignature];
+
+		log(`Payment: ${data.paymentInfo.totalPrice} ${data.paymentInfo.currency}`, "info");
+
+		keychain.requestSignTx(
+			user,
+			transaction,
+			"Active",
+			async (res: any) => {
+				if (!res.success) {
+					log(`Keychain rejected: ${typeof res.error === "object" ? JSON.stringify(res.error) : res.error}`, "error");
+					return;
+				}
+
+				log("Broadcasting...");
+				try {
+					const rpcRes = await fetch("https://api.hive.blog", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							jsonrpc: "2.0",
+							method: "condenser_api.broadcast_transaction_synchronous",
+							params: [res.result],
+							id: 1,
+						}),
+					});
+					const rpcData = await rpcRes.json();
+
+					if (rpcData.error) {
+						log(`Broadcast failed: ${rpcData.error.message ?? JSON.stringify(rpcData.error)}`, "error");
+						return;
+					}
+
+					log(`Bought! TX: ${rpcData.result?.id ?? rpcData.result?.tx_id}`, "success");
+					setTimeout(loadListings, 5000);
+				} catch (err) {
+					log(`Broadcast error: ${(err as Error).message}`, "error");
+				}
+			},
+		);
+	} catch (err) {
+		log(`Error: ${(err as Error).message}`, "error");
+	}
+}
+
 (window as any).loadListings = loadListings;
+(window as any).buyFromMarketplace = buyFromMarketplace;

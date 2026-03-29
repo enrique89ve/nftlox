@@ -31,32 +31,45 @@ describe("priceSchema", () => {
 		});
 	});
 
-	describe("invalid amounts", () => {
-		test("rejects leading zeros: 001.000", () => {
+	describe("normalizes valid amounts to 3 decimal places", () => {
+		test("normalizes leading zeros: 001.000 → 1.000", () => {
 			const result = priceSchema.safeParse({ amount: "001.000", currency: "HIVE" });
-			expect(result.success).toBe(false);
+			expect(result.success).toBe(true);
+			if (result.success) expect(result.data.amount).toBe("1.000");
 		});
 
-		test("rejects 2 decimal places: 1.00", () => {
+		test("normalizes 2 decimal places: 1.00 → 1.000", () => {
 			const result = priceSchema.safeParse({ amount: "1.00", currency: "HIVE" });
-			expect(result.success).toBe(false);
+			expect(result.success).toBe(true);
+			if (result.success) expect(result.data.amount).toBe("1.000");
 		});
 
-		test("rejects 4 decimal places: 1.0000", () => {
+		test("normalizes 4 decimal places: 1.0000 → 1.000", () => {
 			const result = priceSchema.safeParse({ amount: "1.0000", currency: "HIVE" });
-			expect(result.success).toBe(false);
+			expect(result.success).toBe(true);
+			if (result.success) expect(result.data.amount).toBe("1.000");
 		});
 
-		test("rejects no decimal places: 1", () => {
+		test("normalizes no decimal places: 1 → 1.000", () => {
 			const result = priceSchema.safeParse({ amount: "1", currency: "HIVE" });
-			expect(result.success).toBe(false);
+			expect(result.success).toBe(true);
+			if (result.success) expect(result.data.amount).toBe("1.000");
 		});
 
-		test("rejects scientific notation: 1e3", () => {
+		test("normalizes scientific notation: 1e3 → 1000.000", () => {
 			const result = priceSchema.safeParse({ amount: "1e3", currency: "HIVE" });
-			expect(result.success).toBe(false);
+			expect(result.success).toBe(true);
+			if (result.success) expect(result.data.amount).toBe("1000.000");
 		});
 
+		test("normalizes missing integer part: .001 → 0.001", () => {
+			const result = priceSchema.safeParse({ amount: ".001", currency: "HIVE" });
+			expect(result.success).toBe(true);
+			if (result.success) expect(result.data.amount).toBe("0.001");
+		});
+	});
+
+	describe("rejects invalid amounts", () => {
 		test("rejects negative amount: -1.000", () => {
 			const result = priceSchema.safeParse({ amount: "-1.000", currency: "HIVE" });
 			expect(result.success).toBe(false);
@@ -74,11 +87,6 @@ describe("priceSchema", () => {
 
 		test("rejects non-numeric amount: abc", () => {
 			const result = priceSchema.safeParse({ amount: "abc", currency: "HIVE" });
-			expect(result.success).toBe(false);
-		});
-
-		test("rejects missing integer part: .001", () => {
-			const result = priceSchema.safeParse({ amount: ".001", currency: "HIVE" });
 			expect(result.success).toBe(false);
 		});
 	});

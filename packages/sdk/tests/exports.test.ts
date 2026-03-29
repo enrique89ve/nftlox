@@ -89,9 +89,10 @@ describe("priceSchema works when imported from index", () => {
 		expect(result.success).toBe(true);
 	});
 
-	test("price with 2 decimal places fails", () => {
+	test("price with 2 decimal places normalizes to 3", () => {
 		const result = priceSchema.safeParse({ amount: "1.00", currency: "HIVE" });
-		expect(result.success).toBe(false);
+		expect(result.success).toBe(true);
+		if (result.success) expect(result.data.amount).toBe("1.000");
 	});
 });
 

@@ -71,7 +71,11 @@ export const symbolSchema = z
 
 export const priceSchema = z.object({
 	amount: z.string()
-		.regex(HIVE_DECIMAL_REGEX, "Price must be in Hive decimal format (e.g. \"1.000\")")
+		.refine(
+			(val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
+			{ message: "Price must be a valid positive number" },
+		)
+		.transform((val) => parseFloat(val).toFixed(3))
 		.refine(
 			(val) => parseFloat(val) >= parseFloat(MIN_PRICE_AMOUNT),
 			{ message: `Price amount must be at least ${MIN_PRICE_AMOUNT}` },

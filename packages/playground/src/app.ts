@@ -97,6 +97,10 @@ function navigateTo(pageId: string) {
 
 	if (page) page.classList.add("active");
 	if (nav) nav.classList.add("active");
+
+	if (pageId === "marketplace") {
+		(window as any).loadListings?.();
+	}
 }
 
 function showPage(pageId: string) {

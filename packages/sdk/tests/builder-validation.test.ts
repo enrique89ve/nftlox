@@ -60,37 +60,23 @@ describe("Builder username validation", () => {
 });
 
 describe("Builder price validation", () => {
-	describe("buildList rejects invalid price formats", () => {
-		test("rejects 2 decimal places (1.00)", async () => {
+	describe("buildList normalizes price formats", () => {
+		test("normalizes 2 decimal places (1.00 → 1.000)", async () => {
 			const result = await buildList({
 				nftId: "nft_test123",
 				price: { amount: "1.00", currency: "HIVE" },
 				owner: "alice",
 			});
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				const errorMessages = result.errors.map((e) => e.message);
-				const hasPriceError = errorMessages.some((msg) =>
-					msg.toLowerCase().includes("price") || msg.toLowerCase().includes("decimal"),
-				);
-				expect(hasPriceError).toBe(true);
-			}
+			expect(result.success).toBe(true);
 		});
 
-		test("rejects leading zeros (001.000)", async () => {
+		test("normalizes leading zeros (001.000 → 1.000)", async () => {
 			const result = await buildList({
 				nftId: "nft_test123",
 				price: { amount: "001.000", currency: "HIVE" },
 				owner: "alice",
 			});
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				const errorMessages = result.errors.map((e) => e.message);
-				const hasPriceError = errorMessages.some((msg) =>
-					msg.toLowerCase().includes("price") || msg.toLowerCase().includes("decimal"),
-				);
-				expect(hasPriceError).toBe(true);
-			}
+			expect(result.success).toBe(true);
 		});
 
 		test("valid price (1.000) does not produce price errors", async () => {
