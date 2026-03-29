@@ -5,6 +5,7 @@ import {
 	ORIGIN_DNA_LENGTH,
 	INSTANCE_DNA_LENGTH,
 	ACCESS_KEY_LENGTH,
+	INSTANCE_ID_HASH_LENGTH,
 	LISTING_ID_PREFIX,
 	LISTING_NONCE_LENGTH,
 	LISTING_HASH_LENGTH,
@@ -37,7 +38,7 @@ export const generateHashAsync = generateHash;
 export async function generateOriginDna(collectionId: string): Promise<string> {
 	const input = `nftlox:origin:${collectionId}`;
 	const fullHash = await generateHash(input);
-	return fullHash.slice(0, ORIGIN_DNA_LENGTH).toUpperCase();
+	return "o" + fullHash.slice(0, ORIGIN_DNA_LENGTH - 1).toUpperCase();
 }
 
 // ============ INSTANCE DNA (NFT Level) ============
@@ -45,7 +46,7 @@ export async function generateOriginDna(collectionId: string): Promise<string> {
 /**
  * Generates the instance DNA for an individual NFT.
  * DETERMINISTIC: SHA-256 of nftId + originDna + edition + imageHash.
- * The nftId (seed_xxx or nft_xxx) guarantees uniqueness across NFTs.
+ * Prefixed with "i" to identify as instance DNA.
  */
 export async function generateInstanceDna(
 	nftId: string,
@@ -55,12 +56,13 @@ export async function generateInstanceDna(
 ): Promise<string> {
 	const input = `nftlox:instance:${nftId}:${originDna}:${edition}:${imageHash}`;
 	const fullHash = await generateHash(input);
-	return fullHash.slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
+	return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
 }
 
 /**
  * Generates instance DNA for a replica.
  * DETERMINISTIC: SHA-256 derived from original's DNA to maintain lineage.
+ * Prefixed with "i" to identify as instance DNA.
  */
 export async function generateReplicaInstanceDna(
 	originDna: string,
@@ -68,7 +70,7 @@ export async function generateReplicaInstanceDna(
 ): Promise<string> {
 	const input = `nftlox:replica:${originDna}:${originalInstanceDna}`;
 	const fullHash = await generateHash(input);
-	return fullHash.slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
+	return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
 }
 
 // ============ ACCESS KEY ============
@@ -102,8 +104,8 @@ export async function generateImageHash(imageUrl: string): Promise<string> {
  * Generates a deterministic replica ID from an original NFT ID.
  * Same originalId always produces the same replicaId.
  */
-export function generateReplicaId(originalId: string): string {
-	const hash = deterministicHash(`nftlox:replica:${originalId}`);
+export async function generateReplicaId(originalId: string): Promise<string> {
+	const hash = await generateHash(`nftlox:replica:${originalId}`);
 	return `${originalId}_r${hash.slice(0, 8)}`;
 }
 
@@ -130,26 +132,44 @@ export function isReplicaId(id: string): boolean {
  * Format: nft_[seedSuffix]_[instanceNumber]_[hash]
  * Same seedId + instanceNumber always produces the same ID.
  */
-export function generateInstanceId(seedId: string, instanceNumber: number): string {
+export async function generateInstanceId(seedId: string, instanceNumber: number): Promise<string> {
 	return generateDeterministicInstanceId(seedId, instanceNumber);
 }
 
 /**
  * Extracts the seed ID from an instance ID.
- * Returns null if the ID is not a valid instance format.
+ * Format: nft_[seedSuffix]_[N]_[20hex] → seed_[seedSuffix]
+ * Parses from the end: last segment is hash, second-to-last is instance number.
  */
 export function extractSeedId(instanceId: string): string | null {
-	const match = instanceId.match(/^nft_([a-z0-9]+)_\d+_[a-z0-9]+$/);
-	return match ? `seed_${match[1]}` : null;
+	if (!instanceId.startsWith("nft_")) return null;
+	const withoutPrefix = instanceId.slice(4);
+	const lastUnderscore = withoutPrefix.lastIndexOf("_");
+	if (lastUnderscore === -1) return null;
+	const beforeHash = withoutPrefix.slice(0, lastUnderscore);
+	const secondLastUnderscore = beforeHash.lastIndexOf("_");
+	if (secondLastUnderscore === -1) return null;
+	const instanceNum = beforeHash.slice(secondLastUnderscore + 1);
+	if (!/^\d+$/.test(instanceNum)) return null;
+	const seedSuffix = beforeHash.slice(0, secondLastUnderscore);
+	return `seed_${seedSuffix}`;
 }
 
 /**
  * Extracts the instance number from an instance ID.
- * Returns null if the ID is not a valid instance format.
+ * Format: nft_[seedSuffix]_[N]_[20hex]
  */
 export function extractInstanceNumber(instanceId: string): number | null {
-	const match = instanceId.match(/^nft_[a-z0-9]+_(\d+)_[a-z0-9]+$/);
-	return match ? parseInt(match[1]!, 10) : null;
+	if (!instanceId.startsWith("nft_")) return null;
+	const withoutPrefix = instanceId.slice(4);
+	const lastUnderscore = withoutPrefix.lastIndexOf("_");
+	if (lastUnderscore === -1) return null;
+	const beforeHash = withoutPrefix.slice(0, lastUnderscore);
+	const secondLastUnderscore = beforeHash.lastIndexOf("_");
+	if (secondLastUnderscore === -1) return null;
+	const instanceNum = beforeHash.slice(secondLastUnderscore + 1);
+	if (!/^\d+$/.test(instanceNum)) return null;
+	return parseInt(instanceNum, 10);
 }
 
 /**
@@ -161,9 +181,19 @@ export function isSeedId(id: string): boolean {
 
 /**
  * Checks if an ID is an instance ID (spawned from a seed).
+ * Format: nft_[seedSuffix]_[N]_[20hex]
  */
 export function isInstanceId(id: string): boolean {
-	return /^nft_[a-z0-9]+_\d+_[a-z0-9]+$/.test(id);
+	if (!id.startsWith("nft_")) return false;
+	const withoutPrefix = id.slice(4);
+	const lastUnderscore = withoutPrefix.lastIndexOf("_");
+	if (lastUnderscore === -1) return false;
+	const hash = withoutPrefix.slice(lastUnderscore + 1);
+	if (!/^[a-f0-9]+$/.test(hash)) return false;
+	const beforeHash = withoutPrefix.slice(0, lastUnderscore);
+	const secondLastUnderscore = beforeHash.lastIndexOf("_");
+	if (secondLastUnderscore === -1) return false;
+	return /^\d+$/.test(beforeHash.slice(secondLastUnderscore + 1));
 }
 
 // ============ ART ID VALIDATION ============
@@ -238,83 +268,64 @@ export function validateArtIdArray(artIds: string[]): {
 // ============ DETERMINISTIC ID GENERATION ============
 
 /**
- * Deterministic hash function (no random, no timestamp).
- * Uses FNV-1a algorithm for better distribution and collision resistance.
- */
-export function deterministicHash(input: string): string {
-	// FNV-1a 32-bit hash
-	let hash1 = 2166136261;
-	for (let i = 0; i < input.length; i++) {
-		hash1 ^= input.charCodeAt(i);
-		hash1 = Math.imul(hash1, 16777619);
-	}
-
-	// Second pass with different seed for more bits
-	let hash2 = 2166136261;
-	for (let i = input.length - 1; i >= 0; i--) {
-		hash2 ^= input.charCodeAt(i);
-		hash2 = Math.imul(hash2, 16777619);
-	}
-
-	// Combine both hashes for better uniqueness
-	const combined = (Math.abs(hash1) >>> 0).toString(36) + (Math.abs(hash2) >>> 0).toString(36);
-	return combined.padStart(12, "0").slice(0, 12);
-}
-
-/**
  * Generates a deterministic collection ID from creator + name + symbol.
+ * Uses SHA-256 for cryptographic collision resistance.
  * Same inputs always produce the same collectionId.
  */
-export function generateDeterministicCollectionId(
+export async function generateDeterministicCollectionId(
 	creator: string,
 	name: string,
 	symbol: string,
-): string {
+): Promise<string> {
 	const input = `nftlox:col:${creator.toLowerCase()}:${name}:${symbol.toUpperCase()}`;
-	const hash = deterministicHash(input);
-	return `col_${hash.slice(0, 12)}`;
+	const hash = await generateHash(input);
+	return `col_${hash.slice(0, 14)}`;
 }
 
 /**
  * Generates a deterministic seed ID from collectionId + artId.
+ * Uses SHA-256 for cryptographic collision resistance.
+ * Format: seed_[20 hex] — 80 bits, birthday bound ~1.1T.
  * Same collectionId + artId always produce the same seedId.
  */
-export function generateDeterministicSeedId(
+export async function generateDeterministicSeedId(
 	collectionId: string,
 	artId: string,
-): string {
+): Promise<string> {
 	const input = `nftlox:seed:${collectionId}:${artId.toLowerCase()}`;
-	const hash = deterministicHash(input);
-	return `seed_${hash.slice(0, 8)}`;
+	const hash = await generateHash(input);
+	return `seed_${hash.slice(0, 20)}`;
 }
 
 /**
  * Generates a deterministic instance ID from seedId + instanceNumber.
+ * Uses SHA-256. Hash suffix is 20 hex chars (80 bits, birthday bound ~1.1T).
  * Same seedId + instanceNumber always produce the same instanceId.
  */
-export function generateDeterministicInstanceId(
+export async function generateDeterministicInstanceId(
 	seedId: string,
 	instanceNumber: number,
-): string {
+): Promise<string> {
 	const input = `nftlox:inst:${seedId}:${instanceNumber}`;
-	const hash = deterministicHash(input);
+	const hash = await generateHash(input);
 	const seedSuffix = seedId.replace("seed_", "");
-	return `nft_${seedSuffix}_${instanceNumber}_${hash.slice(0, 4)}`;
+	return `nft_${seedSuffix}_${instanceNumber}_${hash.slice(0, INSTANCE_ID_HASH_LENGTH)}`;
 }
 
 // ============ PACK ID GENERATION ============
 
 /**
  * Generates a deterministic pack ID from collectionId + packName.
+ * Uses SHA-256 for cryptographic collision resistance.
  * Same inputs always produce the same packId.
  */
-export function generateDeterministicPackId(
+export async function generateDeterministicPackId(
 	collectionId: string,
 	packName: string,
-): string {
+): Promise<string> {
 	const input = `nftlox:pack:${collectionId}:${packName.toLowerCase()}`;
-	const hash = deterministicHash(input);
-	return `pack_${hash.slice(0, 12)}`;
+	const hash = await generateHash(input);
+	return `pack_${hash.slice(0, 14)}`;
 }
 
 // ============ LISTING ID GENERATION ============
@@ -359,32 +370,35 @@ export function isPackId(id: string): boolean {
 
 /**
  * Generates a deterministic instanceDna for NFTs minted from packs.
- * Uses immutable block data to ensure all indexers produce identical results.
- * Format: 14-char uppercase hex, matching INSTANCE_DNA_LENGTH.
+ * Uses SHA-256 over immutable block data to ensure all indexers produce identical results.
+ * The txId acts as a cryptographic nonce (SHA-256 of the full serialized tx,
+ * unique and unpredictable before mining).
+ * Format: "i" + 19-char uppercase hex = 20 chars (INSTANCE_DNA_LENGTH).
  */
-export function generateDeterministicInstanceDna(
+export async function generateDeterministicInstanceDna(
 	seedId: string,
 	instanceNumber: number,
 	txId: string,
 	blockNum: number,
-): string {
+): Promise<string> {
 	const input = `nftlox:dna:${seedId}:${instanceNumber}:${txId}:${blockNum}`;
-	const hash = deterministicHash(input);
-	return hash.padStart(INSTANCE_DNA_LENGTH, "0").slice(0, INSTANCE_DNA_LENGTH).toUpperCase();
+	const fullHash = await generateHash(input);
+	return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
 }
 
 /**
  * Generates a deterministic access key for NFTs minted from packs.
- * Same inputs always produce the same key across all indexers.
+ * Uses SHA-256 for cryptographic strength. Same inputs always produce
+ * the same key across all indexers. The txId provides uniqueness per transaction.
  */
-export function generateDeterministicAccessKey(
+export async function generateDeterministicAccessKey(
 	instanceDna: string,
 	owner: string,
 	txId: string,
-): string {
+): Promise<string> {
 	const input = `nftlox:key:${instanceDna}:${owner}:${txId}`;
-	const hash = deterministicHash(input);
-	return hash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
+	const fullHash = await generateHash(input);
+	return fullHash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
 }
 
 // ============ DETERMINISTIC RNG ============
@@ -393,11 +407,15 @@ export function generateDeterministicAccessKey(
  * Deterministic RNG using double-pass FNV-1a.
  * Returns a number in [0, 1) normalized by dividing by 2^32.
  * Same seed + index always produces the same result.
+ *
+ * Note: each FNV-1a pass is 32-bit. For RNG purposes (distribution quality,
+ * not uniqueness), this is sufficient. The dual-pass XOR combination improves
+ * avalanche properties without increasing the output range beyond 32 bits.
  */
 export function deterministicRng(seed: string, index: number): number {
 	const input = `nftlox:rng:${seed}:${index}`;
 
-	// FNV-1a 32-bit hash (same pattern as deterministicHash)
+	// FNV-1a 32-bit hash (kept for RNG distribution, not for IDs)
 	let hash1 = 2166136261;
 	for (let i = 0; i < input.length; i++) {
 		hash1 ^= input.charCodeAt(i);

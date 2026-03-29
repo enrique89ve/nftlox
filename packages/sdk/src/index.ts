@@ -19,6 +19,7 @@ export {
 	ORIGIN_DNA_LENGTH,
 	INSTANCE_DNA_LENGTH,
 	ACCESS_KEY_LENGTH,
+	INSTANCE_ID_HASH_LENGTH,
 	SUPPORTED_CURRENCIES,
 	MAX_ROYALTY_PCT,
 	MIN_PRICE_AMOUNT,
@@ -191,8 +192,7 @@ export {
 	validateArtId,
 	validateArtIdArray,
 	type ArtIdValidationResult,
-	// Deterministic ID generation (anti-duplication)
-	deterministicHash,
+	// Deterministic ID generation (SHA-256)
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateDeterministicInstanceId,

@@ -3,7 +3,14 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
 import { requireString, optionalString, optionalNumber, optionalObject } from "@/utils/validation.ts";
-import { validateMintData, computeDataHash, type CollectionSchema } from "nftlox-sdk";
+import {
+	validateMintData,
+	computeDataHash,
+	generateOriginDna,
+	generateInstanceDna,
+	generateDeterministicAccessKey,
+	type CollectionSchema,
+} from "nftlox-sdk";
 
 export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
@@ -41,13 +48,21 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 	const immutableDataHash = immutableData ? await computeDataHash(immutableData) : null;
 	const mutableDataHash = mutableData ? await computeDataHash(mutableData) : null;
 
+	// DNA is always computed by the indexer — never trust user-supplied values.
+	// This guarantees every NFT has a verifiable, deterministic DNA chain.
+	const edition = optionalNumber(d.edition) ?? 1;
+	const imageHash = optionalString(metadata.imageHash) ?? "";
+	const originDna = await generateOriginDna(collectionId);
+	const instanceDna = await generateInstanceDna(id, originDna, edition, imageHash);
+	const uniqueAccessKey = await generateDeterministicAccessKey(instanceDna, op.signer, op.txId);
+
 	await insertNft({
 		id, collectionId, nftType: isSeed ? "seed" : "instance",
-		edition: optionalNumber(d.edition) ?? 1,
+		edition,
 		owner: optionalString(d.owner) ?? op.signer,
-		originDna: optionalString(d.originDna),
-		instanceDna: optionalString(d.instanceDna),
-		uniqueAccessKey: optionalString(d.uniqueAccessKey),
+		originDna,
+		instanceDna,
+		uniqueAccessKey,
 		birthBlock: op.blockNum,
 		birthTx: op.txId,
 		mintedBy: op.signer,

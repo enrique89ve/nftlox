@@ -129,7 +129,12 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 						protocol: PROTOCOL_ID,
 						version: PROTOCOL_VERSION,
 						action: ACTION_BUY,
-						data: { nftId: body.nftId, listingId: info.listingId, listTxId: info.listTxId },
+						data: {
+							nftId: body.nftId,
+							listingId: info.listingId,
+							listTxId: info.listTxId,
+							...(info.birthTx && { birthTx: info.birthTx }),
+						},
 					}),
 				});
 

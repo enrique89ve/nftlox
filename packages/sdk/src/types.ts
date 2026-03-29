@@ -145,6 +145,7 @@ export interface BulkDistributeItem {
 	seedId: string;
 	quantity: number;
 	originBlock: number;
+	birthTx?: string;
 }
 
 export interface BulkDistributeData {
@@ -185,6 +186,8 @@ export interface SetDataData {
 	instanceDna: string;
 	data?: Record<string, unknown>;
 	mutableData?: Record<string, unknown>;
+	seedId?: string;
+	birthTx?: string;
 }
 
 // ============ SET_OWNER_DATA TYPES ============
@@ -193,6 +196,8 @@ export interface SetOwnerDataData {
 	nftId: string;
 	instanceDna: string;
 	data: Record<string, unknown>;
+	seedId?: string;
+	birthTx?: string;
 }
 
 // ============ DATA OPERATOR TYPES ============
@@ -253,13 +258,17 @@ export interface UnlistData {
 	nftId: string;
 	imageUrl?: string;
 	imageHash?: string;
+	seedId?: string;
+	birthTx?: string;
 }
 
-export type BuyData = {
+export interface BuyData {
 	readonly nftId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
-};
+	readonly seedId?: string;
+	readonly birthTx?: string;
+}
 
 // ============ PACK TYPES (Semi-Fungible) ============
 
@@ -481,4 +490,5 @@ export type PaymentInfo = Readonly<{
 	feeAmount: number;
 	feeAccount: string;
 	nodeAccount: string;
+	birthTx: string;
 }>;

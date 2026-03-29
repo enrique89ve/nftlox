@@ -175,7 +175,7 @@ export async function createReplicatePayload(
 		version: PROTOCOL_VERSION,
 		action: ACTION_REPLICATE,
 		data: {
-			id: generateReplicaId(input.originalId),
+			id: await generateReplicaId(input.originalId),
 			originalId: input.originalId,
 			newOwner: input.newOwner,
 			originDna: input.originDna,
@@ -201,6 +201,7 @@ export function createBulkDistributePayload(
 				seedId: item.seedId,
 				quantity: item.quantity,
 				originBlock: item.originBlock,
+				...(item.birthTx && { birthTx: item.birthTx }),
 			})),
 			...(input.imageOverrides && { imageOverrides: input.imageOverrides }),
 			...(input.data && { data: input.data }),
@@ -289,6 +290,7 @@ export function createSetDataPayload(
 			instanceDna: input.instanceDna,
 			...(input.data && { data: input.data }),
 			...(input.mutableData && { mutableData: input.mutableData }),
+			...spreadProvenance(input),
 		},
 	};
 }
@@ -388,6 +390,7 @@ export function createSetOwnerDataPayload(
 			nftId: input.nftId,
 			instanceDna: input.instanceDna,
 			data: input.data,
+			...spreadProvenance(input),
 		},
 	};
 }
@@ -470,6 +473,7 @@ export function createUnlistPayload(
 	nftId: string,
 	imageUrl?: string,
 	imageHash?: string,
+	provenance?: SeedProvenance,
 ): ProtocolPayload<UnlistData> {
 	return {
 		protocol: PROTOCOL_ID,
@@ -479,6 +483,7 @@ export function createUnlistPayload(
 			nftId,
 			...(imageUrl && { imageUrl }),
 			...(imageHash && { imageHash }),
+			...spreadProvenance(provenance),
 		},
 	};
 }
@@ -581,8 +586,9 @@ export function createUnlistOperation(
 	owner: string,
 	imageUrl?: string,
 	imageHash?: string,
+	provenance?: SeedProvenance,
 ): HiveOperation {
-	const payload = createUnlistPayload(nftId, imageUrl, imageHash);
+	const payload = createUnlistPayload(nftId, imageUrl, imageHash, provenance);
 	return [
 		"custom_json",
 		{
@@ -717,7 +723,7 @@ export interface DeterministicCollectionInput {
 export async function createDeterministicCollectionPayload(
 	input: DeterministicCollectionInput,
 ): Promise<ProtocolPayload<CollectionData>> {
-	const id = generateDeterministicCollectionId(
+	const id = await generateDeterministicCollectionId(
 		input.creator,
 		input.name,
 		input.symbol,
@@ -775,7 +781,7 @@ export interface DeterministicMintInput {
 export async function createDeterministicMintPayload(
 	input: DeterministicMintInput,
 ): Promise<ProtocolPayload<NFTData>> {
-	const seedId = generateDeterministicSeedId(input.collectionId, input.artId);
+	const seedId = await generateDeterministicSeedId(input.collectionId, input.artId);
 	const imageHash = input.imageHash || await generateImageHash(input.imageUrl);
 	const instanceDna = await generateInstanceDna(
 		seedId,
@@ -824,11 +830,11 @@ export async function createDeterministicMintOperation(
 
 // ============ PACK PAYLOADS ============
 
-export function createPackCreatePayload(
+export async function createPackCreatePayload(
 	input: PackCreateInput,
 	creator: string,
-): ProtocolPayload<PackCreateData> {
-	const id = generateDeterministicPackId(input.collectionId, input.name);
+): Promise<ProtocolPayload<PackCreateData>> {
+	const id = await generateDeterministicPackId(input.collectionId, input.name);
 	return {
 		protocol: PROTOCOL_ID,
 		version: PROTOCOL_VERSION,
@@ -892,11 +898,11 @@ export function createPackOpenPayload(
 
 // ============ PACK HIVE OPERATIONS ============
 
-export function createPackCreateOperation(
+export async function createPackCreateOperation(
 	input: PackCreateInput,
 	creator: string,
-): HiveOperation {
-	const payload = createPackCreatePayload(input, creator);
+): Promise<HiveOperation> {
+	const payload = await createPackCreatePayload(input, creator);
 	return [
 		"custom_json",
 		{

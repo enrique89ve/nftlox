@@ -2,7 +2,7 @@
 // Manages minting sessions in localStorage for recovery and deduplication
 
 import {
-	deterministicHash,
+	generateHash,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	type SeedNFTWithArtId,
@@ -21,13 +21,14 @@ const MAX_SESSIONS = 10;
  * Generates a unique session ID from the minting parameters.
  * Same parameters always produce the same sessionId.
  */
-export function generateSessionId(
+export async function generateSessionId(
 	creator: string,
 	collectionName: string,
 	artIds: string[],
-): string {
+): Promise<string> {
 	const input = `session:${creator.toLowerCase()}:${collectionName}:${artIds.sort().join(",")}`;
-	return `session_${deterministicHash(input).slice(0, 12)}`;
+	const hash = await generateHash(input);
+	return `session_${hash.slice(0, 12)}`;
 }
 
 // ============ SESSION STORAGE ============

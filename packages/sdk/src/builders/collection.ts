@@ -28,7 +28,7 @@ export async function buildCollection(input: CreateCollectionInput): Promise<Bui
 		warnings.push("Royalty percentage is high (>25%), consider reducing");
 	}
 
-	const generatedId = generateDeterministicCollectionId(
+	const generatedId = await generateDeterministicCollectionId(
 		data.creator,
 		data.name,
 		data.symbol,

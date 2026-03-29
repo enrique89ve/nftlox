@@ -98,6 +98,8 @@ export async function buildUnlist(input: UnlistBuilderInput): Promise<BuildResul
 		nftId: data.nftId,
 		...(data.imageUrl && { imageUrl: data.imageUrl }),
 		...(imageHash && { imageHash }),
+		...(data.seedId && { seedId: data.seedId }),
+		...(data.birthTx && { birthTx: data.birthTx }),
 	};
 
 	const payload: ProtocolPayload<UnlistData> = {
@@ -164,6 +166,8 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 			nftId: data.nftId,
 			listingId: data.listingId,
 			listTxId: data.listTxId,
+			...(data.seedId && { seedId: data.seedId }),
+			...(data.birthTx && { birthTx: data.birthTx }),
 		},
 	};
 

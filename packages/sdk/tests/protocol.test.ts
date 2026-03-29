@@ -22,6 +22,9 @@ import {
 	isReplicaId,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
+	generateDeterministicInstanceDna,
+	generateDeterministicAccessKey,
+	ACCESS_KEY_LENGTH,
 	createListPayload,
 	createBuyPayload,
 	createBuyOperation,
@@ -43,7 +46,7 @@ import {
 
 describe("Protocol Version", () => {
 	test("version should be 0.2.1", () => {
-		expect(PROTOCOL_VERSION).toBe("0.3.0");
+		expect(PROTOCOL_VERSION).toBe("0.4.0");
 	});
 });
 
@@ -64,9 +67,10 @@ describe("Origin DNA Generation", () => {
 		expect(dna1).not.toBe(dna2);
 	});
 
-	test("origin DNA should be uppercase", async () => {
+	test("origin DNA should start with 'o' prefix and be uppercase hex after", async () => {
 		const dna = await generateOriginDna("col_test");
-		expect(dna).toBe(dna.toUpperCase());
+		expect(dna.startsWith("o")).toBe(true);
+		expect(dna.slice(1)).toBe(dna.slice(1).toUpperCase());
 	});
 });
 
@@ -133,64 +137,131 @@ describe("Access Key Generation", () => {
 	});
 });
 
+describe("Deterministic Instance DNA (SHA-256)", () => {
+	test("should be deterministic", async () => {
+		const dna1 = await generateDeterministicInstanceDna("seed_abc", 1, "tx_123", 90000);
+		const dna2 = await generateDeterministicInstanceDna("seed_abc", 1, "tx_123", 90000);
+		expect(dna1).toBe(dna2);
+	});
+
+	test("should have correct length", async () => {
+		const dna = await generateDeterministicInstanceDna("seed_abc", 1, "tx_123", 90000);
+		expect(dna.length).toBe(INSTANCE_DNA_LENGTH);
+	});
+
+	test("should start with 'i' prefix and be uppercase hex after", async () => {
+		const dna = await generateDeterministicInstanceDna("seed_abc", 1, "tx_123", 90000);
+		expect(dna.startsWith("i")).toBe(true);
+		expect(dna.slice(1)).toBe(dna.slice(1).toUpperCase());
+	});
+
+	test("should differ with different txId", async () => {
+		const dna1 = await generateDeterministicInstanceDna("seed_abc", 1, "tx_aaa", 90000);
+		const dna2 = await generateDeterministicInstanceDna("seed_abc", 1, "tx_bbb", 90000);
+		expect(dna1).not.toBe(dna2);
+	});
+
+	test("should differ with different instanceNumber", async () => {
+		const dna1 = await generateDeterministicInstanceDna("seed_abc", 1, "tx_123", 90000);
+		const dna2 = await generateDeterministicInstanceDna("seed_abc", 2, "tx_123", 90000);
+		expect(dna1).not.toBe(dna2);
+	});
+
+	test("should differ with different blockNum", async () => {
+		const dna1 = await generateDeterministicInstanceDna("seed_abc", 1, "tx_123", 90000);
+		const dna2 = await generateDeterministicInstanceDna("seed_abc", 1, "tx_123", 90001);
+		expect(dna1).not.toBe(dna2);
+	});
+});
+
+describe("Deterministic Access Key (SHA-256)", () => {
+	test("should be deterministic", async () => {
+		const key1 = await generateDeterministicAccessKey("ABCDEF12345678", "alice", "tx_123");
+		const key2 = await generateDeterministicAccessKey("ABCDEF12345678", "alice", "tx_123");
+		expect(key1).toBe(key2);
+	});
+
+	test("should have correct length", async () => {
+		const key = await generateDeterministicAccessKey("ABCDEF12345678", "alice", "tx_123");
+		expect(key.length).toBe(ACCESS_KEY_LENGTH);
+	});
+
+	test("should be uppercase", async () => {
+		const key = await generateDeterministicAccessKey("ABCDEF12345678", "alice", "tx_123");
+		expect(key).toBe(key.toUpperCase());
+	});
+
+	test("should differ with different owner", async () => {
+		const key1 = await generateDeterministicAccessKey("ABCDEF12345678", "alice", "tx_123");
+		const key2 = await generateDeterministicAccessKey("ABCDEF12345678", "bob", "tx_123");
+		expect(key1).not.toBe(key2);
+	});
+
+	test("should differ with different txId", async () => {
+		const key1 = await generateDeterministicAccessKey("ABCDEF12345678", "alice", "tx_aaa");
+		const key2 = await generateDeterministicAccessKey("ABCDEF12345678", "alice", "tx_bbb");
+		expect(key1).not.toBe(key2);
+	});
+});
+
 describe("ID Generation", () => {
-	test("generateDeterministicCollectionId should create IDs with col_ prefix", () => {
-		const colId = generateDeterministicCollectionId("creator", "My Collection", "MYCOL");
+	test("generateDeterministicCollectionId should create IDs with col_ prefix", async () => {
+		const colId = await generateDeterministicCollectionId("creator", "My Collection", "MYCOL");
 
 		expect(colId.startsWith("col_")).toBe(true);
 	});
 
-	test("generateDeterministicCollectionId should be deterministic", () => {
-		const id1 = generateDeterministicCollectionId("creator", "My Collection", "MYCOL");
-		const id2 = generateDeterministicCollectionId("creator", "My Collection", "MYCOL");
+	test("generateDeterministicCollectionId should be deterministic", async () => {
+		const id1 = await generateDeterministicCollectionId("creator", "My Collection", "MYCOL");
+		const id2 = await generateDeterministicCollectionId("creator", "My Collection", "MYCOL");
 
 		expect(id1).toBe(id2);
 	});
 
-	test("generateDeterministicSeedId should create IDs with seed_ prefix", () => {
-		const seedId = generateDeterministicSeedId("col_test123", "art-01");
+	test("generateDeterministicSeedId should create IDs with seed_ prefix", async () => {
+		const seedId = await generateDeterministicSeedId("col_test123", "art-01");
 
 		expect(seedId.startsWith("seed_")).toBe(true);
 	});
 
-	test("generateDeterministicSeedId should be deterministic", () => {
-		const id1 = generateDeterministicSeedId("col_test123", "art-01");
-		const id2 = generateDeterministicSeedId("col_test123", "art-01");
+	test("generateDeterministicSeedId should be deterministic", async () => {
+		const id1 = await generateDeterministicSeedId("col_test123", "art-01");
+		const id2 = await generateDeterministicSeedId("col_test123", "art-01");
 
 		expect(id1).toBe(id2);
 	});
 
-	test("different inputs should produce different deterministic IDs", () => {
-		const col1 = generateDeterministicCollectionId("creator", "Collection A", "COLA");
-		const col2 = generateDeterministicCollectionId("creator", "Collection B", "COLB");
+	test("different inputs should produce different deterministic IDs", async () => {
+		const col1 = await generateDeterministicCollectionId("creator", "Collection A", "COLA");
+		const col2 = await generateDeterministicCollectionId("creator", "Collection B", "COLB");
 
 		expect(col1).not.toBe(col2);
 
-		const seed1 = generateDeterministicSeedId("col_test123", "art-01");
-		const seed2 = generateDeterministicSeedId("col_test123", "art-02");
+		const seed1 = await generateDeterministicSeedId("col_test123", "art-01");
+		const seed2 = await generateDeterministicSeedId("col_test123", "art-02");
 
 		expect(seed1).not.toBe(seed2);
 	});
 
-	test("replica ID should contain original ID", () => {
+	test("replica ID should contain original ID", async () => {
 		const originalId = "nft_abc123";
-		const replicaId = generateReplicaId(originalId);
+		const replicaId = await generateReplicaId(originalId);
 
 		expect(replicaId.startsWith(originalId)).toBe(true);
 		expect(replicaId).toContain("_r");
 	});
 
-	test("extractOriginalId should work correctly", () => {
+	test("extractOriginalId should work correctly", async () => {
 		const originalId = "nft_abc123";
-		const replicaId = generateReplicaId(originalId);
+		const replicaId = await generateReplicaId(originalId);
 		const extracted = extractOriginalId(replicaId);
 
 		expect(extracted).toBe(originalId);
 	});
 
-	test("isReplicaId should identify replicas", () => {
+	test("isReplicaId should identify replicas", async () => {
 		const originalId = "nft_abc123";
-		const replicaId = generateReplicaId(originalId);
+		const replicaId = await generateReplicaId(originalId);
 
 		expect(isReplicaId(originalId)).toBe(false);
 		expect(isReplicaId(replicaId)).toBe(true);
@@ -219,7 +290,7 @@ describe("Collection Payload", () => {
 		const payload = await createDeterministicCollectionPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.3.0");
+		expect(payload.version).toBe("0.4.0");
 		expect(payload.action).toBe(ACTION_CREATE_COLLECTION);
 		expect(payload.data.id.startsWith("col_")).toBe(true);
 		expect(payload.data.originDna.length).toBe(ORIGIN_DNA_LENGTH);
@@ -250,7 +321,7 @@ describe("Mint Payload", () => {
 		const payload = await createDeterministicMintPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.3.0");
+		expect(payload.version).toBe("0.4.0");
 		expect(payload.action).toBe(ACTION_MINT);
 		expect(payload.data.id.startsWith("seed_")).toBe(true);
 		expect(payload.data.originDna).toBe("ABCD1234EFGH5678");
@@ -482,7 +553,7 @@ describe("Buy Action (Multisig)", () => {
 		const payload = createBuyPayload(data);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.3.0");
+		expect(payload.version).toBe("0.4.0");
 		expect(payload.action).toBe(ACTION_BUY);
 		expect(payload.data.nftId).toBe("nft_test123");
 		expect(payload.data.listingId).toBe("list_abc123");

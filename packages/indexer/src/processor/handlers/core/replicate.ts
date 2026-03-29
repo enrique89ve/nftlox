@@ -4,6 +4,10 @@ import { insertNft, nftExists, getNftForProcessing, updateNftListing } from "@/d
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireUsername, optionalString } from "@/utils/validation.ts";
 import { assertTransferable } from "@/utils/status-checks.ts";
+import {
+	generateReplicaInstanceDna,
+	generateDeterministicAccessKey,
+} from "nftlox-sdk";
 
 export async function handleReplicate(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
@@ -23,10 +27,21 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 		throw new Error(`Collection ${original.collection_id} is not replicable`);
 	}
 
+	// DNA is always computed by the indexer — never trust user-supplied values.
+	// Fetch origin_dna from DB since NftProcessingRow doesn't include it.
+	const [dnaRow] = await txn`SELECT origin_dna FROM nfts WHERE id = ${originalId}`;
+	const originDna = (dnaRow?.origin_dna as string) ?? null;
+	const instanceDna = originDna && original.instance_dna
+		? await generateReplicaInstanceDna(originDna, original.instance_dna)
+		: null;
+	const uniqueAccessKey = instanceDna
+		? await generateDeterministicAccessKey(instanceDna, newOwner, op.txId)
+		: null;
+
 	await insertNft({
 		id, collectionId: original.collection_id, nftType: "replica", edition: 1,
-		owner: newOwner, originDna: optionalString(d.originDna),
-		instanceDna: optionalString(d.instanceDna), uniqueAccessKey: optionalString(d.uniqueAccessKey),
+		owner: newOwner, originDna,
+		instanceDna, uniqueAccessKey,
 		birthBlock: op.blockNum, birthTx: op.txId, mintedBy: op.signer,
 		name: optionalString(d.name) ?? `${original.name} (Replica)`,
 		description: null, imageUrl: null, imageHash: null,

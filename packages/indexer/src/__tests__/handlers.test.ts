@@ -91,9 +91,6 @@ async function seedMint(txn: Queryable = sql) {
 		collectionId: "col_test",
 		edition: 1,
 		owner: "alice",
-		originDna: "dna_col_test_1234",
-		instanceDna: "dna_inst_12345",
-		uniqueAccessKey: "key12345",
 		maxReplicas: 10,
 		metadata: { name: "Test Seed", imageUrl: "https://example.com/nft.png", imageHash: "img_abc" },
 	});
@@ -170,6 +167,59 @@ describe("Handlers (integration)", () => {
 			await expect(seedMint()).resolves.toBeUndefined();
 		});
 
+		test("always computes DNA internally, ignoring user-supplied values", async () => {
+			await seedCollection();
+			const op = makeOp(ACTION_MINT, {
+				id: "seed_dna_test",
+				collectionId: "col_test",
+				edition: 1,
+				originDna: "FAKE_ORIGIN_DNA",
+				instanceDna: "FAKE_INSTANCE_DNA",
+				uniqueAccessKey: "FAKEKEY1",
+				metadata: { name: "DNA Test", imageHash: "hash_abc" },
+			});
+			await handleMint(op, sql);
+
+			const [nft] = await sql`SELECT origin_dna, instance_dna, unique_access_key FROM nfts WHERE id = 'seed_dna_test'`;
+			expect(nft).toBeDefined();
+			// Must NOT be the fake values
+			expect(nft!.origin_dna).not.toBe("FAKE_ORIGIN_DNA");
+			expect(nft!.instance_dna).not.toBe("FAKE_INSTANCE_DNA");
+			expect(nft!.unique_access_key).not.toBe("FAKEKEY1");
+			// Must be non-null (computed)
+			expect(nft!.origin_dna).toBeTruthy();
+			expect(nft!.instance_dna).toBeTruthy();
+			expect(nft!.unique_access_key).toBeTruthy();
+		});
+
+		test("mint DNA is deterministic across replays", async () => {
+			await seedCollection();
+
+			const op1 = makeOp(ACTION_MINT, {
+				id: "seed_replay_dna",
+				collectionId: "col_test",
+				metadata: { name: "Replay", imageHash: "hash_xyz" },
+			});
+			// Force same txId for both calls
+			(op1 as any).txId = "tx_fixed_replay";
+			await handleMint(op1, sql);
+
+			const [nft1] = await sql`SELECT instance_dna FROM nfts WHERE id = 'seed_replay_dna'`;
+
+			// Clean and replay with same txId
+			await sql`DELETE FROM nfts WHERE id = 'seed_replay_dna'`;
+			const op2 = makeOp(ACTION_MINT, {
+				id: "seed_replay_dna",
+				collectionId: "col_test",
+				metadata: { name: "Replay", imageHash: "hash_xyz" },
+			});
+			(op2 as any).txId = "tx_fixed_replay";
+			await handleMint(op2, sql);
+
+			const [nft2] = await sql`SELECT instance_dna FROM nfts WHERE id = 'seed_replay_dna'`;
+			expect(nft1!.instance_dna).toBe(nft2!.instance_dna);
+		});
+
 		test("detects seed vs instance by ID prefix", async () => {
 			await seedCollection();
 
@@ -215,6 +265,29 @@ describe("Handlers (integration)", () => {
 
 			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_test1'`;
 			expect(seed!.distributed).toBe(3);
+		});
+
+		test("distributed instances always have non-null DNA and access keys", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
+				to: "bob",
+				items: [{ seedId: "seed_test1", quantity: 2 }],
+			});
+			await handleBulkDistribute(op, sql);
+
+			const instances = await sql`
+				SELECT origin_dna, instance_dna, unique_access_key
+				FROM nfts WHERE seed_id = 'seed_test1' ORDER BY instance_number
+			`;
+			for (const inst of instances) {
+				expect(inst.origin_dna).toBeTruthy();
+				expect(inst.instance_dna).toBeTruthy();
+				expect(inst.unique_access_key).toBeTruthy();
+			}
+			// Different instances should have different DNA
+			expect(instances[0]!.instance_dna).not.toBe(instances[1]!.instance_dna);
 		});
 
 		test("rejects distribute by non-owner and non-creator", async () => {
@@ -930,6 +1003,32 @@ describe("Handlers (integration)", () => {
 			expect(instances[1]!.instance_number).toBe(2);
 		});
 
+		test("pack-opened instances have non-null deterministic DNA", async () => {
+			await seedCollection();
+			await seedForPack("seed_pdna");
+
+			await setupPack({ packId: "pack_dna", seedIds: ["seed_pdna"], buyQuantity: 2 });
+
+			const openOp = makeOp(ACTION_PACK_OPEN, {
+				packId: "pack_dna",
+				quantity: 2,
+			}, "bob");
+			(openOp as any).txId = "tx_dna_check";
+			await handlePackOpen(openOp, sql);
+
+			const instances = await sql`
+				SELECT origin_dna, instance_dna, unique_access_key
+				FROM nfts WHERE seed_id = 'seed_pdna' ORDER BY instance_number
+			`;
+			expect(instances.length).toBe(2);
+			for (const inst of instances) {
+				expect(inst.origin_dna).toBeTruthy();
+				expect(inst.instance_dna).toBeTruthy();
+				expect(inst.unique_access_key).toBeTruthy();
+			}
+			expect(instances[0]!.instance_dna).not.toBe(instances[1]!.instance_dna);
+		});
+
 		test("pack open is idempotent on replay", async () => {
 			await seedCollection();
 			await seedForPack("seed_p2");
@@ -1285,6 +1384,30 @@ describe("Handlers (integration)", () => {
 				metadata: { name: "Evil" },
 			}, "eve");
 			await expect(handleMint(op, sql)).rejects.toThrow("Only the collection creator can mint");
+		});
+
+		test("replicate computes DNA from original, ignoring user-supplied values", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp(ACTION_REPLICATE, {
+				id: "replica_dna_test",
+				originalId: "seed_test1",
+				newOwner: "bob",
+				originDna: "FAKE_ORIGIN",
+				instanceDna: "FAKE_INSTANCE",
+				uniqueAccessKey: "FAKEKEY9",
+			});
+			await handleReplicate(op, sql);
+
+			const [replica] = await sql`SELECT origin_dna, instance_dna, unique_access_key FROM nfts WHERE id = 'replica_dna_test'`;
+			expect(replica).toBeDefined();
+			expect(replica!.origin_dna).not.toBe("FAKE_ORIGIN");
+			expect(replica!.instance_dna).not.toBe("FAKE_INSTANCE");
+			expect(replica!.unique_access_key).not.toBe("FAKEKEY9");
+			// DNA should be derived from original
+			expect(replica!.instance_dna).toBeTruthy();
+			expect(replica!.unique_access_key).toBeTruthy();
 		});
 
 		test("replicate rejects non-owner signer", async () => {

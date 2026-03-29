@@ -121,14 +121,14 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 		for (let i = 0; i < quantity; i++) {
 			const instanceNumber = baseDistributed + i + 1;
-			const instanceId = generateDeterministicInstanceId(seedId, instanceNumber);
+			const instanceId = await generateDeterministicInstanceId(seedId, instanceNumber);
 
 			if (await nftExists(instanceId, txn)) continue;
 
-			const instanceDna = generateDeterministicInstanceDna(
+			const instanceDna = await generateDeterministicInstanceDna(
 				seedId, instanceNumber, op.txId, op.blockNum,
 			);
-			const uniqueAccessKey = generateDeterministicAccessKey(
+			const uniqueAccessKey = await generateDeterministicAccessKey(
 				instanceDna, op.signer, op.txId,
 			);
 

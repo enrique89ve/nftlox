@@ -49,7 +49,7 @@ export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): 
 		warnings.push("Max supply is very large (>10000), ensure this is intentional");
 	}
 
-	const generatedId = generateDeterministicSeedId(data.collectionId, data.artId);
+	const generatedId = await generateDeterministicSeedId(data.collectionId, data.artId);
 	const originDna = await generateOriginDna(data.collectionId);
 
 	const mintInput: DeterministicMintInput = {
@@ -99,7 +99,7 @@ export interface SeedBatchPayload {
 	}>;
 }
 
-export function buildSeedBatch(input: SeedBatchInput): BuildResult<SeedBatchPayload> {
+export async function buildSeedBatch(input: SeedBatchInput): Promise<BuildResult<SeedBatchPayload>> {
 	const parsed = seedBatchInputSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -131,8 +131,8 @@ export function buildSeedBatch(input: SeedBatchInput): BuildResult<SeedBatchPayl
 		return { success: false, errors };
 	}
 
-	const processedSeeds = data.seeds.map((seed) => {
-		const seedId = generateDeterministicSeedId(data.collectionId, seed.artId);
+	const processedSeeds = await Promise.all(data.seeds.map(async (seed) => {
+		const seedId = await generateDeterministicSeedId(data.collectionId, seed.artId);
 		return {
 			seedId,
 			artId: seed.artId,
@@ -141,7 +141,7 @@ export function buildSeedBatch(input: SeedBatchInput): BuildResult<SeedBatchPayl
 			maxSupply: seed.maxSupply,
 			brief: seed.brief,
 		};
-	});
+	}));
 
 	const payload: ProtocolPayload<SeedBatchPayload> = {
 		protocol: PROTOCOL_ID,

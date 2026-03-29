@@ -1,8 +1,8 @@
-// NFTLox Protocol Constants - v0.3.0
+// NFTLox Protocol Constants - v0.4.0
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.3.0";
-export const MIN_PROTOCOL_VERSION = "0.2.0";
+export const PROTOCOL_VERSION = "0.4.0";
+export const MIN_PROTOCOL_VERSION = "0.3.0";
 export const HASH_VERSION = "v1";
 // Transaction Limits
 export const MAX_JSON_SIZE = 8000;
@@ -19,8 +19,9 @@ export const SYMBOL_REGEX = /^[A-Z0-9]{3,8}$/;
 
 // DNA Constants
 export const ORIGIN_DNA_LENGTH = 16;
-export const INSTANCE_DNA_LENGTH = 14;
+export const INSTANCE_DNA_LENGTH = 20;
 export const ACCESS_KEY_LENGTH = 8;
+export const INSTANCE_ID_HASH_LENGTH = 20;
 
 // Marketplace Constants
 export const SUPPORTED_CURRENCIES = ["HIVE", "HBD"] as const;

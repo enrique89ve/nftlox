@@ -122,6 +122,8 @@ export const setOwnerDataInputSchema = z.object({
 	nftId: z.string().min(1),
 	instanceDna: z.string().min(1),
 	data: z.record(z.string(), z.unknown()),
+	seedId: z.string().optional(),
+	birthTx: z.string().optional(),
 });
 export type SetOwnerDataInput = z.infer<typeof setOwnerDataInputSchema>;
 
@@ -182,6 +184,8 @@ export const buyInputSchema = z.object({
 	nftId: z.string().min(1, "NFT ID is required"),
 	listingId: z.string().min(1, "Listing ID is required"),
 	listTxId: txIdSchema,
+	seedId: z.string().optional(),
+	birthTx: z.string().optional(),
 });
 export type BuyInput = z.infer<typeof buyInputSchema>;
 
@@ -236,6 +240,7 @@ export const bulkDistributeItemSchema = z.object({
 	seedId: z.string().min(1, "seedId is required"),
 	quantity: z.number().int().min(1, "Quantity must be positive"),
 	originBlock: z.number().int().nonnegative("originBlock must be a non-negative integer"),
+	birthTx: z.string().optional(),
 });
 
 export const bulkDistributeInputSchema = z.object({
@@ -278,6 +283,8 @@ export const unlistInputSchema = z.object({
 	nftId: z.string().min(1),
 	imageUrl: httpUrlSchema.optional(),
 	imageHash: z.string().optional(),
+	seedId: z.string().optional(),
+	birthTx: z.string().optional(),
 });
 export type UnlistInput = z.infer<typeof unlistInputSchema>;
 
@@ -323,6 +330,8 @@ export const setDataInputSchema = z.object({
 	instanceDna: z.string().min(1),
 	data: z.record(z.string(), z.unknown()).optional(),
 	mutableData: z.record(z.string(), z.unknown()).optional(),
+	seedId: z.string().optional(),
+	birthTx: z.string().optional(),
 });
 export type SetDataInput = z.infer<typeof setDataInputSchema>;
 

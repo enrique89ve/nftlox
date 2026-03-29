@@ -79,22 +79,22 @@ export interface DeterministicDerivationResult {
 
 /**
  * Verifies deterministic derivation of instanceId, DNA, and accessKey.
- * Pure function — no network calls.
+ * Async due to SHA-256 hash — no network calls.
  */
-export function verifyDeterministicDerivation(
+export async function verifyDeterministicDerivation(
 	params: DeterministicDerivationParams,
-): DeterministicDerivationResult {
-	const instanceId = generateDeterministicInstanceId(
+): Promise<DeterministicDerivationResult> {
+	const instanceId = await generateDeterministicInstanceId(
 		params.seedId,
 		params.instanceNumber,
 	);
-	const instanceDna = generateDeterministicInstanceDna(
+	const instanceDna = await generateDeterministicInstanceDna(
 		params.seedId,
 		params.instanceNumber,
 		params.txId,
 		params.blockNum,
 	);
-	const accessKey = generateDeterministicAccessKey(
+	const accessKey = await generateDeterministicAccessKey(
 		instanceDna,
 		params.signer,
 		params.txId,
@@ -280,7 +280,7 @@ export async function verifyPackOpen(
 			const instanceNumber = extractInstanceNumber(nft.instanceId);
 			if (instanceNumber === null) continue;
 
-			const derived = verifyDeterministicDerivation({
+			const derived = await verifyDeterministicDerivation({
 				seedId: nft.seedId,
 				instanceNumber,
 				txId: params.txId,

@@ -19,7 +19,7 @@ export const packCreateBuilderSchema = packCreateInputSchema.extend({
 });
 export type PackCreateBuilderInput = z.infer<typeof packCreateBuilderSchema>;
 
-export function buildPackCreate(input: PackCreateBuilderInput): BuildResult<PackCreateData> {
+export async function buildPackCreate(input: PackCreateBuilderInput): Promise<BuildResult<PackCreateData>> {
 	const parsed = packCreateBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -32,9 +32,9 @@ export function buildPackCreate(input: PackCreateBuilderInput): BuildResult<Pack
 		warnings.push("Total drop table weight is low, consider normalizing to 10000 for better precision");
 	}
 
-	const generatedId = generateDeterministicPackId(data.collectionId, data.name);
+	const generatedId = await generateDeterministicPackId(data.collectionId, data.name);
 
-	const payload = createPackCreatePayload(data, data.creator);
+	const payload = await createPackCreatePayload(data, data.creator);
 	const operation = toHiveOperation(payload, data.creator);
 
 	return {

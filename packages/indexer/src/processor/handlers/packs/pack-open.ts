@@ -96,7 +96,7 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 			// Skip if max supply reached
 			if (maxReplicas > 0 && instanceNumber > maxReplicas) continue;
 
-			const instanceId = generateDeterministicInstanceId(seedId, instanceNumber);
+			const instanceId = await generateDeterministicInstanceId(seedId, instanceNumber);
 
 			// Skip if instance already exists (idempotency)
 			if (await nftExists(instanceId, txn)) {
@@ -107,10 +107,10 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 			// DNA Lineage: deterministic from immutable block data
 			const originDna = seed.origin_dna
 				?? await generateOriginDna(seed.collection_id);
-			const instanceDna = generateDeterministicInstanceDna(
+			const instanceDna = await generateDeterministicInstanceDna(
 				seedId, instanceNumber, op.txId, op.blockNum,
 			);
-			const uniqueAccessKey = generateDeterministicAccessKey(
+			const uniqueAccessKey = await generateDeterministicAccessKey(
 				instanceDna, op.signer, op.txId,
 			);
 
