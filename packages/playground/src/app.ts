@@ -1994,12 +1994,14 @@ async function nftDetailTransferSeed() {
 (window as any).nftDetailTransferSeed = nftDetailTransferSeed;
 
 async function nftDetailList() {
-	const price = ($("nft-action-price") as HTMLInputElement)?.value.trim();
+	const rawPrice = ($("nft-action-price") as HTMLInputElement)?.value.trim();
 	const currency = ($("nft-action-currency") as HTMLSelectElement)?.value as "HIVE" | "HBD";
-	if (!price || !connectedUser || !currentNftId) {
+	if (!rawPrice || !connectedUser || !currentNftId) {
 		log("Fill price and ensure you're connected", "error");
 		return;
 	}
+
+	const price = parseFloat(rawPrice).toFixed(3);
 
 	try {
 		const response = await fetch("/api/build/list", {
