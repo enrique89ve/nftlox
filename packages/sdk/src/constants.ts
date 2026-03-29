@@ -129,6 +129,12 @@ export const ACTION_LIST = "list";
 export const ACTION_UNLIST = "unlist";
 export const ACTION_BUY = "buy" as const;
 
+// Atomic Transfer (dual-registro) Constants
+// Canonical tracking amount for on-chain transfer+memo verification channel.
+// Any atomic NFT transfer pairs a 0.001 HIVE transfer (with structured memo)
+// alongside the custom_json, both signed with active key for atomicity.
+export const ATOMIC_TRACKING_AMOUNT = "0.001 HIVE";
+
 // Multisig Constants
 export const MULTISIG_EXPIRATION_MS = 60_000;
 export const MAX_MULTISIG_OPERATIONS = 4; // seller + royalty + fee + custom_json

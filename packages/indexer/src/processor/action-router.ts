@@ -70,6 +70,10 @@ import { handleNftReturn } from "./handlers/lending/nft-return.ts";
 
 const log = createLogger("router");
 
+// Actions that MUST be signed with active key (required_auths).
+// All other actions accept posting key (required_posting_auths).
+const ACTIVE_AUTH_ACTIONS = new Set<string>([ACTION_BUY]);
+
 type Handler = (op: ParsedOperation, txn: Queryable) => Promise<void>;
 
 const handlers: Record<string, Handler> = {
@@ -128,6 +132,19 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 				signer: op.signer,
 				action: op.action,
 				reason: `Unknown action: ${op.action}`,
+				rawPayload: op.data,
+			}, txn);
+			return;
+		}
+
+		// Enforce canonical auth level before dispatching
+		if (ACTIVE_AUTH_ACTIONS.has(op.action) && op.authLevel !== "active") {
+			await insertInvalidOperation({
+				blockNum: op.blockNum,
+				txId: op.txId,
+				signer: op.signer,
+				action: op.action,
+				reason: `Action '${op.action}' requires active key authority, got posting`,
 				rawPayload: op.data,
 			}, txn);
 			return;

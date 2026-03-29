@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { sql, type Queryable } from "@/db/client.ts";
-import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import type { ParsedOperation, AuthLevel } from "@/scanner/operation-parser.ts";
 import { handleCreateCollection } from "@/processor/handlers/core/create-collection.ts";
 import { handleMint } from "@/processor/handlers/core/mint.ts";
 import { handleBulkDistribute } from "@/processor/handlers/core/bulk-distribute.ts";
@@ -44,12 +44,14 @@ function makeOp(
 	data: Record<string, unknown>,
 	signer = "alice",
 	pairedTransfers?: ParsedOperation["pairedTransfers"],
+	authLevel: AuthLevel = "posting",
 ): ParsedOperation {
 	return {
 		blockNum: 90000100,
 		timestamp: "2024-01-01T00:00:00",
 		txId: `tx_${action}_${Date.now()}`,
 		signer,
+		authLevel,
 		action: action as ParsedOperation["action"],
 		version: "0.2.1",
 		data,

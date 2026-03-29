@@ -6,11 +6,14 @@ import {
 } from "@/protocol.ts";
 import type { HafAHOperation } from "./hive-client.ts";
 
+export type AuthLevel = "active" | "posting";
+
 export interface ParsedOperation {
 	blockNum: number;
 	timestamp: string;
 	txId: string;
 	signer: string;
+	authLevel: AuthLevel;
 	action: ProtocolAction;
 	version: string;
 	data: Record<string, unknown>;
@@ -109,9 +112,11 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParsedOperation[
 
 		if (!isValidPayload(payload)) continue;
 
-		const signer =
-			value.required_auths[0] ??
-			value.required_posting_auths[0];
+		const hasActiveAuth = value.required_auths.length > 0;
+		const signer = hasActiveAuth
+			? value.required_auths[0]
+			: value.required_posting_auths[0];
+		const authLevel: AuthLevel = hasActiveAuth ? "active" : "posting";
 
 		// Reject operations without a valid signer — cannot authorize anything
 		if (!signer) continue;
@@ -121,6 +126,7 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParsedOperation[
 			timestamp: hafOp.timestamp,
 			txId: hafOp.trx_id,
 			signer,
+			authLevel,
 			action: payload.action,
 			version: payload.version,
 			data: payload.data,

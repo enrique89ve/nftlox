@@ -11,8 +11,17 @@ import { config } from "@/config.ts";
  *
  * The custom_json's required_auths is [nodeAccount], so op.signer is the NODE,
  * not the buyer. The buyer is extracted from the first paired transfer's `from`.
+ *
+ * Security: the router enforces active key auth; this handler enforces the signer
+ * is the configured node account — matching multisig-service.ts validation.
  */
 export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<void> {
+	if (op.signer !== config.hiveAccount) {
+		throw new Error(
+			`Buy must be signed by node account '${config.hiveAccount}', got '${op.signer}'`,
+		);
+	}
+
 	const nftId = requireString(op.data.nftId, "nftId");
 
 	const rawBuyer = op.pairedTransfers?.[0]?.from;

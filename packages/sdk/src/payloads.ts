@@ -5,6 +5,7 @@ import {
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
 	SAFE_PAYLOAD_MAX_BYTES,
+	ATOMIC_TRACKING_AMOUNT,
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
@@ -671,8 +672,6 @@ export function createUnlistOperation(
 
 // ============ ATOMIC TRANSFER (DUAL-REGISTRO) ============
 
-const TRACKING_AMOUNT = "0.001 HIVE";
-
 export function buildTransferMemo(data: TransferMemo): string {
 	return `nftlox:${data.action}:${data.nftId}:${data.collectionId}:${data.edition}:${data.instanceDna}`;
 }
@@ -718,7 +717,7 @@ export function createAtomicTransferOperations(
 		{
 			from: input.from,
 			to: input.to,
-			amount: TRACKING_AMOUNT,
+			amount: ATOMIC_TRACKING_AMOUNT,
 			memo: memo,
 		},
 	];
@@ -748,7 +747,7 @@ export function createAtomicTransferOperations(
 }
 
 export function getTrackingAmount(): string {
-	return TRACKING_AMOUNT;
+	return ATOMIC_TRACKING_AMOUNT;
 }
 
 // ============ DETERMINISTIC PAYLOAD CREATION (ANTI-DUPLICATION) ============

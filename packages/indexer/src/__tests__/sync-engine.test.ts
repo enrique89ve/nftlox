@@ -101,6 +101,7 @@ function fakeParsedOp(block: number, action = ACTION_TRANSFER): ParsedOperation 
 		timestamp: "2024-01-01T00:00:00",
 		txId: `tx_${block}`,
 		signer: "alice",
+		authLevel: "posting",
 		action: action as ParsedOperation["action"],
 		version: "0.2.1",
 		data: {},
