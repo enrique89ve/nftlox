@@ -12,6 +12,7 @@ import { nftTrackerRoutes } from "./routes/nft-tracker";
 import { validationRoutes } from "./routes/validation";
 import { spvRoutes } from "./routes/spv";
 import { debugRoutes } from "./routes/debug";
+import { marketplaceRoutes } from "./routes/marketplace";
 import { scenarioRoutes } from "./routes/scenarios";
 
 const json = (data: unknown, status = 200) =>
@@ -91,6 +92,9 @@ const server = Bun.serve({
 
 		// ============ SPV VERIFICATION ROUTES ============
 		...spvRoutes,
+
+		// ============ MARKETPLACE ROUTES (multisig buy) ============
+		...marketplaceRoutes,
 
 		// ============ DEBUG ROUTES ============
 		...(playgroundConfig.debugRoutesEnabled ? debugRoutes : {}),

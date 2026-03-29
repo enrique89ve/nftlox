@@ -79,12 +79,16 @@ async function buyFromMarketplace(nftId: string, listingId: string, listTxId: st
 	log(`Requesting multisig for ${nftId}...`);
 
 	try {
-		const res = await fetch("/api/debug/multisig-buy", {
+		const res = await fetch("/api/marketplace/buy", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ buyer: user, nftId }),
 		});
-		const data = await res.json();
+		if (!res.ok && res.status === 404) {
+			log("Buy endpoint not available", "error");
+			return;
+		}
+		const data = await res.json().catch(() => ({ success: false, error: "Invalid server response" }));
 
 		if (!data.success) {
 			log(`Buy failed: ${data.error}${data.code ? ` [${data.code}]` : ""}`, "error");
