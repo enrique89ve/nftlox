@@ -117,7 +117,7 @@ const server = Bun.serve({
 			});
 		},
 	},
-	development: { hmr: true, console: true },
+	development: process.env.NODE_ENV !== "production" ? { hmr: true, console: true } : false,
 });
 
 console.log(`
