@@ -88,7 +88,7 @@ Working code for common workflows:
 | Min Version | `0.2.0` |
 | Blockchain | Hive L1 |
 | Finality | ~3 seconds |
-| Auth | Posting key (most ops) / Active key (marketplace, operators) |
+| Auth | Posting key (all ops) / Active key (buy only) |
 
 | Environment | URL |
 |---|---|

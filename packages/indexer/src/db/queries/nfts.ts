@@ -82,7 +82,18 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 }
 
 export async function getNftById(id: string) {
-	const [row] = await sql`SELECT * FROM nfts WHERE id = ${id}`;
+	const [row] = await sql`
+		SELECT n.*,
+			COALESCE(NULLIF(n.name, ''), s.name) AS name,
+			COALESCE(n.image_url, s.image_url) AS image_url,
+			COALESCE(n.image_hash, s.image_hash) AS image_hash,
+			COALESCE(n.origin_dna, s.origin_dna) AS origin_dna,
+			COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
+			COALESCE(n.immutable_data_hash, s.immutable_data_hash) AS immutable_data_hash
+		FROM nfts n
+		LEFT JOIN nfts s ON s.id = n.seed_id
+		WHERE n.id = ${id}
+	`;
 	return row ?? null;
 }
 

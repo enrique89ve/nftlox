@@ -154,7 +154,7 @@ import {
 import hive from "hive-tx";
 
 const GAME_SERVER = "ragnarok-server";
-const ACTIVE_KEY = process.env.HIVE_ACTIVE_KEY!;
+const POSTING_KEY = process.env.HIVE_POSTING_KEY!;
 
 interface MatchResult {
 	readonly winnerId: string;
@@ -197,7 +197,7 @@ async function recordMatchResult(match: MatchResult): Promise<string> {
 
 	const tx = new hive.Transaction();
 	tx.create(operations);
-	tx.sign(hive.PrivateKey.from(ACTIVE_KEY));
+	tx.sign(hive.PrivateKey.from(POSTING_KEY));
 	const result = await tx.broadcast();
 
 	if (result?.error) {
@@ -239,7 +239,7 @@ async function levelUpCard(
 
 	const tx = new hive.Transaction();
 	tx.create([operation]);
-	tx.sign(hive.PrivateKey.from(ACTIVE_KEY));
+	tx.sign(hive.PrivateKey.from(POSTING_KEY));
 	const result = await tx.broadcast();
 
 	if (result?.error) {

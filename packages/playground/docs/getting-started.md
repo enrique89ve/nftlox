@@ -5,7 +5,7 @@ This guide walks you through making your first API calls to the NFTLox protocol 
 ## Prerequisites
 
 - **Hive account** -- You need a Hive blockchain account. Create one at [signup.hive.io](https://signup.hive.io).
-- **Posting key** -- Required for signing most write operations (mint, transfer, list, burn, distribute, packs). Some operations (set-data, allowances, lending, buy) require an **active key** instead. Your private keys never leave your client; the API only builds unsigned payloads.
+- **Posting key** -- Required for signing all operations except marketplace buy. The `buy` operation requires an **active key** because it involves HIVE/HBD transfers. Your private keys never leave your client; the API only builds unsigned payloads.
 
 ## Your First API Call
 
