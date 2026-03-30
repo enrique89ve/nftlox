@@ -13,7 +13,11 @@
 
 - **Game Integration**
 	- [Architecture](game-integration.md)
+	- [Pack Distribution](pack-distribution-guide.md)
 	- [RNG Algorithm](rng-reference.md)
+
+- **Security**
+	- [Key Security & Permissions](key-security.md)
 
 - **Examples**
 	- [Seed Ceremony](examples/seed-ceremony.md)

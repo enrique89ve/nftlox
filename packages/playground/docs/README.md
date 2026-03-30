@@ -69,6 +69,8 @@ Then follow the [Getting Started guide](getting-started.md) to make your first A
 | [Build API Reference](build-reference.md) | All write endpoints -- payload construction |
 | [SDK Direct Usage](using-sdk.md) | Use the TypeScript SDK without the HTTP layer |
 | [Game Integration](game-integration.md) | Server-side resolution pattern for games |
+| [Pack Distribution](pack-distribution-guide.md) | Native packs vs custom distribution comparison |
+| [Key Security](key-security.md) | Permission model, key types, and account architecture |
 | [RNG Algorithm](rng-reference.md) | Deterministic RNG specification with test vectors |
 
 ## Examples
@@ -88,7 +90,7 @@ Working code for common workflows:
 | Min Version | `0.3.0` |
 | Blockchain | Hive L1 |
 | Finality | ~3 seconds |
-| Auth | Posting key (all ops) / Active key (buy only) |
+| Auth | Posting key (15 ops) / Active key (10 ops) |
 
 | Environment | URL |
 |---|---|

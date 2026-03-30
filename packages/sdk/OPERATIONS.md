@@ -1,756 +1,778 @@
-# Catalogo de Operaciones NFTLox Protocol v0.4.0
+# NFTLox Protocol Operations Catalog v0.4.1
 
-Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion se transmite como `custom_json` en la blockchain de Hive con `id = "nftlox_testnet"`.
-
----
-
-## Resumen
-
-| # | Accion | Categoria | Key | Descripcion |
-|---|--------|-----------|-----|-------------|
-| 1 | `create_collection` | Core | posting | Crea una coleccion (arquetipo) |
-| 2 | `mint` | Core | posting | Crea un seed NFT dentro de una coleccion |
-| 3 | `transfer` | Core | active | Transfiere ownership de un NFT |
-| 4 | `burn` | Core | active | Destruye un NFT permanentemente |
-| 5 | `replicate` | Core | posting | Crea una replica derivada de un NFT original |
-| 6 | `bulk_distribute` | Core | posting | Mintea multiples instancias desde seeds |
-| 7 | `set_data` | Core | posting | Creator actualiza datos mutables de un NFT (requiere schema) |
-| 8 | `set_owner_data` | Core | posting | Owner escribe datos propios en un NFT |
-| 9 | `extend_schema` | Core | posting | Creator agrega campos al schema de una coleccion |
-| 10 | `list` | Marketplace | active | Pone un NFT a la venta |
-| 11 | `unlist` | Marketplace | posting | Retira un NFT del marketplace |
-| 12 | `buy` | Marketplace | active | Compra un NFT listado (multisig con nodo) |
-| 13 | `pack_create` | Pack | posting | Crea un pack con drop table probabilistico |
-| 14 | `pack_buy` | Pack | active | Compra packs (gratis o pagados) |
-| 15 | `pack_transfer` | Pack | active | Transfiere packs entre usuarios |
-| 16 | `pack_open` | Pack | posting | Abre packs y genera instancias NFT |
-| 17 | `nft_approve` | Approve | active | Aprueba spender para UN NFT especifico |
-| 18 | `nft_approve_all` | Approve | active | Aprueba spender para TODOS los NFTs de una coleccion |
-| 19 | `nft_transfer_from` | Approve | posting | Spender aprobado transfiere NFT del owner |
-| 20 | `pack_approve` | Approve | active | Aprueba spender para gastar N packs |
-| 21 | `pack_transfer_from` | Approve | posting | Spender aprobado transfiere packs del owner |
-| 22 | `nft_lend` | Lending | posting | Presta un NFT a un borrower |
-| 23 | `nft_return` | Lending | posting | Devuelve un NFT prestado |
-| 24 | `data_operator_approve` | DataOperator | active | Autoriza operador externo para una coleccion |
-| 25 | `set_data_from` | DataOperator | posting | Operador aprobado modifica datos mutables de NFTs (requiere schema) |
+Complete reference for all 25 protocol operations. Each operation is broadcast as a `custom_json` on the Hive blockchain with `id = "nftlox_testnet"`.
 
 ---
 
-## Core (9 operaciones)
+## Summary
+
+| # | Action | Category | Key | Description |
+|---|--------|----------|-----|-------------|
+| 1 | `create_collection` | Core | posting | Creates a collection (archetype) |
+| 2 | `mint` | Core | posting | Creates a seed NFT within a collection |
+| 3 | `transfer` | Core | active | Transfers ownership of an NFT |
+| 4 | `burn` | Core | active | Permanently destroys an NFT |
+| 5 | `replicate` | Core | posting | Creates a derived replica from an original NFT |
+| 6 | `bulk_distribute` | Core | posting | Mints multiple instances from seeds |
+| 7 | `set_data` | Core | posting | Creator updates mutable data of an NFT (requires schema) |
+| 8 | `set_owner_data` | Core | posting | Owner writes own data to an NFT |
+| 9 | `extend_schema` | Core | posting | Creator adds fields to a collection schema |
+| 10 | `list` | Marketplace | active | Lists an NFT for sale |
+| 11 | `unlist` | Marketplace | posting | Removes an NFT from the marketplace |
+| 12 | `buy` | Marketplace | active | Buys a listed NFT (multisig with node) |
+| 13 | `pack_create` | Pack | posting | Creates a pack with a probabilistic drop table |
+| 14 | `pack_buy` | Pack | active | Buys packs (free or paid) |
+| 15 | `pack_transfer` | Pack | active | Transfers packs between users |
+| 16 | `pack_open` | Pack | posting | Opens packs and generates NFT instances |
+| 17 | `nft_approve` | Approve | active | Approves a spender for ONE specific NFT |
+| 18 | `nft_approve_all` | Approve | active | Approves a spender for ALL NFTs in a collection |
+| 19 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
+| 20 | `pack_approve` | Approve | active | Approves a spender to spend N packs |
+| 21 | `pack_transfer_from` | Approve | posting | Approved spender transfers packs from the owner |
+| 22 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
+| 23 | `nft_return` | Lending | posting | Returns a lent NFT |
+| 24 | `data_operator_approve` | DataOperator | active | Authorizes an external operator for a collection |
+| 25 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
+
+---
+
+## Core (9 operations)
 
 ### 1. `create_collection`
 
-**Constante SDK**: `ACTION_CREATE_COLLECTION`
-**Descripcion**: Crea una coleccion que agrupa NFTs bajo reglas comunes (transferencia, burn, royalties).
-**Key authority**: posting -- accion de configuracion del creator.
-**Signer role**: El signer se convierte en el creator de la coleccion (campo `creator` del payload se ignora).
+**SDK constant**: `ACTION_CREATE_COLLECTION`
+**Description**: Creates a collection that groups NFTs under shared rules (transfer, burn, royalties).
+**Key authority**: posting -- creator configuration action.
+**Signer role**: The signer becomes the collection creator (`creator` field in the payload is ignored).
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `id` | string | si | ID deterministico de la coleccion |
-| `name` | string | si | Nombre (max 100 chars) |
-| `symbol` | string | si | Simbolo 3-8 chars, A-Z0-9 |
-| `totalPotential` | number | no | Supply potencial total (default 0) |
-| `originDna` | string | no | DNA de la coleccion (16 chars hex) |
-| `metadata.description` | string | no | Descripcion |
-| `metadata.image` | string | no | URL de imagen |
-| `metadata.externalUrl` | string | no | URL externa |
-| `rules.transferable` | boolean | no | Si los NFTs son transferibles (default true) |
-| `rules.burnable` | boolean | no | Si los NFTs se pueden quemar (default true) |
-| `rules.replicable` | boolean | no | Si los NFTs se pueden replicar (default true) |
-| `rules.royaltyPct` | number | no | Porcentaje de royalty 0-50 (default 0) |
-| `rules.royaltyRecipient` | string | no | Cuenta que recibe royalties |
-| `schema` | object | no | Schema tipado con campos `immutable` y `mutable` |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | yes | Deterministic collection ID |
+| `name` | string | yes | Name (max 100 chars) |
+| `symbol` | string | yes | Symbol 3-8 chars, A-Z0-9 |
+| `totalPotential` | number | no | Total potential supply (default 0) |
+| `originDna` | string | no | Collection DNA (16 chars hex) |
+| `metadata.description` | string | no | Description |
+| `metadata.image` | string | no | Image URL |
+| `metadata.externalUrl` | string | no | External URL |
+| `rules.transferable` | boolean | no | Whether NFTs are transferable (default true) |
+| `rules.burnable` | boolean | no | Whether NFTs can be burned (default true) |
+| `rules.replicable` | boolean | no | Whether NFTs can be replicated (default true) |
+| `rules.royaltyPct` | number | no | Royalty percentage 0-50 (default 0) |
+| `rules.royaltyRecipient` | string | no | Account that receives royalties |
+| `schema` | object | no | Typed schema with `immutable` and `mutable` fields |
 
-**Validaciones del indexer**:
-- `id` no debe existir previamente
-- `creator` se fuerza a `op.signer`
-- Campos faltantes usan defaults seguros
+**Indexer validations**:
+- `id` must not already exist
+- `creator` is forced to `op.signer`
+- Missing fields use safe defaults
 
-**Cambios de estado**: Inserta fila en `collections`.
-**Restricciones**: ID duplicado -> rechazado (ON CONFLICT DO NOTHING).
+**State changes**: Inserts row in `collections`.
+**Restrictions**: Duplicate ID -> rejected (ON CONFLICT DO NOTHING).
 
 ---
 
 ### 2. `mint`
 
-**Constante SDK**: `ACTION_MINT`
-**Descripcion**: Crea un seed NFT (plantilla) o instancia dentro de una coleccion. Solo el creator de la coleccion puede mintear.
-**Key authority**: posting -- solo el creator necesita firmar.
-**Signer role**: Debe ser el creator de la coleccion.
+**SDK constant**: `ACTION_MINT`
+**Description**: Creates a seed NFT (template) or instance within a collection. Only the collection creator can mint.
+**Key authority**: posting -- only the creator needs to sign.
+**Signer role**: Must be the collection creator.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `id` | string | si | ID del NFT. Prefijo `seed_` -> tipo seed, otro -> instancia |
-| `collectionId` | string | si | Coleccion destino |
-| `edition` | number | no | Edicion (default 1) |
-| `owner` | string | no | Owner inicial (default signer) |
-| `originDna` | string | no | DNA del origen |
-| `instanceDna` | string | no | DNA de la instancia |
-| `uniqueAccessKey` | string | no | Clave de acceso unica |
-| `birthBlock` | -- | ignorado | Forzado a `op.blockNum` |
-| `birthTx` | -- | ignorado | Forzado a `op.txId` |
-| `mintedBy` | -- | ignorado | Forzado a `op.signer` |
-| `maxReplicas` | number | no | Maximo de replicas permitidas (default 1) |
-| `metadata.name` | string | no | Nombre del NFT |
-| `metadata.description` | string | no | Descripcion |
-| `metadata.imageUrl` | string | no | URL de imagen |
-| `metadata.imageHash` | string | no | Hash de imagen |
-| `immutableData` | object | no | Datos inmutables validados contra schema |
-| `mutableData` | object | no | Datos mutables validados contra schema |
-| `collectionBlock` | number | si | Bloque donde se creo la coleccion (trazabilidad L1 sin indexer) |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | yes | NFT ID. Prefix `seed_` -> seed type, other -> instance |
+| `collectionId` | string | yes | Target collection |
+| `edition` | number | no | Edition (default 1) |
+| `owner` | string | no | Initial owner (default signer) |
+| `originDna` | string | no | Origin DNA |
+| `instanceDna` | string | no | Instance DNA |
+| `uniqueAccessKey` | string | no | Unique access key |
+| `birthBlock` | -- | ignored | Forced to `op.blockNum` |
+| `birthTx` | -- | ignored | Forced to `op.txId` |
+| `mintedBy` | -- | ignored | Forced to `op.signer` |
+| `maxReplicas` | number | no | Maximum allowed replicas (default 1) |
+| `metadata.name` | string | no | NFT name |
+| `metadata.description` | string | no | Description |
+| `metadata.imageUrl` | string | no | Image URL |
+| `metadata.imageHash` | string | no | Image hash |
+| `immutableData` | object | no | Immutable data validated against schema |
+| `mutableData` | object | no | Mutable data validated against schema |
+| `collectionBlock` | number | yes | Block where the collection was created (L1 traceability without indexer) |
 
-**Nota**: Si la coleccion tiene schema, `immutableData` y `mutableData` se validan contra el schema. Los campos inmutables no pueden modificarse despues del mint.
+**Note**: If the collection has a schema, `immutableData` and `mutableData` are validated against it. Immutable fields cannot be modified after mint.
 
-**Validaciones del indexer**:
-- NFT con ese `id` no debe existir
-- La coleccion debe existir
-- `collection.creator === op.signer` (solo el creator puede mintear)
-- Si la coleccion tiene schema, se valida `immutableData`/`mutableData` contra el schema
-- Si la coleccion tiene `totalPotential > 0`, se valida el seed cap
-- Tipo determinado por prefijo del ID
+**Indexer validations**:
+- NFT with that `id` must not exist
+- Collection must exist
+- `collection.creator === op.signer` (only creator can mint)
+- If the collection has a schema, `immutableData`/`mutableData` are validated against it
+- If the collection has `totalPotential > 0`, seed cap is validated
+- Type determined by ID prefix
 
-**Cambios de estado**: Inserta fila en `nfts` con status `active`. Almacena `immutable_data`, `immutable_data_hash`, `mutable_data`, `mutable_data_hash`.
-**Restricciones**: ID duplicado, coleccion inexistente, seed cap alcanzado, o validacion de schema fallida -> rechazado.
+**State changes**: Inserts row in `nfts` with status `active`. Stores `immutable_data`, `immutable_data_hash`, `mutable_data`, `mutable_data_hash`.
+**Restrictions**: Duplicate ID, nonexistent collection, seed cap reached, or schema validation failure -> rejected.
 
 ---
 
 ### 3. `transfer`
 
-**Constante SDK**: `ACTION_TRANSFER`
-**Descripcion**: Transfiere la propiedad de un NFT a otra cuenta. Limpia approvals y listings.
-**Key authority**: active -- el owner firma la transferencia.
-**Signer role**: Debe ser el owner actual del NFT.
+**SDK constant**: `ACTION_TRANSFER`
+**Description**: Transfers ownership of an NFT to another account. Clears approvals and listings.
+**Key authority**: active -- the owner signs the transfer.
+**Signer role**: Must be the current NFT owner.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `nftId` | string | si | ID del NFT a transferir |
-| `to` | string | si | Username del destinatario |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nftId` | string | yes | ID of the NFT to transfer |
+| `to` | string | yes | Recipient username |
 
-**Validaciones del indexer**:
-- NFT debe existir
-- Status no puede ser `burned` ni `lent`
+**Indexer validations**:
+- NFT must exist
+- `assertTransferable`: status cannot be `burned` or `lent`; if `listed`, the listing must be expired (auto-cleared) otherwise transfer is blocked
 - `nft.owner === op.signer`
+- Cannot transfer to yourself (`to !== signer`)
+- Collection must be transferable (`transferable=true` in rules)
 
-**Cambios de estado**: Actualiza `owner` en `nfts`, limpia listing fields, elimina `nft_allowances` para ese NFT.
-**Restricciones**: NFT quemado, prestado, o signer no es owner -> rechazado.
+**State changes**: Updates `owner` in `nfts`, clears listing fields, deletes `nft_allowances` for that NFT.
+**Restrictions**: NFT burned, lent, actively listed, collection not transferable, or signer is not owner -> rejected.
 
 ---
 
 ### 4. `burn`
 
-**Constante SDK**: `ACTION_BURN`
-**Descripcion**: Destruye un NFT permanentemente. Estado terminal irreversible.
-**Key authority**: active -- el owner firma la destruccion.
-**Signer role**: Debe ser el owner actual del NFT.
+**SDK constant**: `ACTION_BURN`
+**Description**: Permanently destroys an NFT. Terminal irreversible state.
+**Key authority**: active -- the owner signs the destruction.
+**Signer role**: Must be the current NFT owner.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `nftId` | string | si | ID del NFT a quemar |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nftId` | string | yes | ID of the NFT to burn |
 
-**Validaciones del indexer**:
-- NFT debe existir
-- Status no puede ser `burned` (previene doble-burn)
-- Status no puede ser `lent`
-- Status no puede ser `listed`
+**Indexer validations**:
+- NFT must exist
+- `assertNotBurned`: status cannot be `burned` (prevents double-burn)
+- `assertNotLent`: status cannot be `lent`
+- `assertNotListed`: status cannot be `listed`
 - `nft.owner === op.signer`
+- Collection must allow burning (`burnable=true` in rules)
 
-**Cambios de estado**: Status -> `burned`, registra `burned_by` (signer) y `burned_at_block` (bloque actual), limpia listing, elimina `nft_allowances`.
-**Restricciones**: Ya quemado, prestado, listado, o signer no es owner -> rechazado.
+**State changes**: Status -> `burned`, records `burned_by` (signer) and `burned_at_block` (current block), clears listing, deletes `nft_allowances`.
+**Restrictions**: Already burned, lent, listed, collection not burnable, or signer is not owner -> rejected.
 
 ---
 
 ### 5. `replicate`
 
-**Constante SDK**: `ACTION_REPLICATE`
-**Descripcion**: Crea una replica derivada de un NFT original. La replica es un NFT nuevo con referencia al original.
-**Key authority**: posting -- el owner del original firma.
-**Signer role**: Debe ser el owner del NFT original.
+**SDK constant**: `ACTION_REPLICATE`
+**Description**: Creates a derived replica from an original NFT. The replica is a new NFT referencing the original.
+**Key authority**: posting -- the owner of the original signs.
+**Signer role**: Must be the owner of the original NFT.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `id` | string | si | ID de la nueva replica |
-| `originalId` | string | si | ID del NFT original |
-| `newOwner` | string | si | Owner de la replica |
-| `originDna` | string | no | DNA del origen |
-| `instanceDna` | string | no | DNA de la instancia |
-| `uniqueAccessKey` | string | no | Clave de acceso (ignorada por indexer, genera la suya) |
-| `name` | string | no | Nombre (default: "Original Name (Replica)") |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | yes | ID of the new replica |
+| `originalId` | string | yes | ID of the original NFT |
+| `newOwner` | string | yes | Owner of the replica |
+| `originDna` | string | no | Origin DNA |
+| `instanceDna` | string | no | Instance DNA |
+| `uniqueAccessKey` | string | no | Access key (ignored by indexer, generates its own) |
+| `name` | string | no | Name (default: "Original Name (Replica)") |
 
-**Validaciones del indexer**:
-- Replica con ese `id` no debe existir
-- Original debe existir
+**Indexer validations**:
+- Replica with that `id` must not exist
+- Original must exist
 - `original.owner === op.signer`
-- Original no puede estar `burned` ni `lent`
+- Original cannot be `burned` or `lent`
 
-**Cambios de estado**: Inserta fila en `nfts` con `nft_type = "replica"`, `originalId` referenciando al original.
-**Restricciones**: ID duplicado, original inexistente/quemado/prestado, o signer no es owner -> rechazado.
+**State changes**: Inserts row in `nfts` with `nft_type = "replica"`, `originalId` referencing the original.
+**Restrictions**: Duplicate ID, original nonexistent/burned/lent, or signer is not owner -> rejected.
 
 ---
 
 ### 6. `bulk_distribute`
 
-**Constante SDK**: `ACTION_BULK_DISTRIBUTE`
-**Descripcion**: Mintea multiples instancias de uno o varios seeds en una sola operacion. Genera DNA deterministico. Las instancias heredan `immutable_data` del seed automaticamente.
-**Key authority**: posting -- el seed owner firma.
-**Signer role**: Debe ser el owner del seed.
+**SDK constant**: `ACTION_BULK_DISTRIBUTE`
+**Description**: Mints multiple instances from one or more seeds in a single operation. Generates deterministic DNA. Instances inherit `immutable_data` from the seed automatically.
+**Key authority**: posting -- the seed owner or collection creator signs.
+**Signer role**: Must be the seed owner OR the collection creator.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `to` | string | no | Owner de las instancias (default signer) |
-| `items` | array | si | `[{ seedId, quantity, originBlock }]` -- max 50 items |
-| `items[].originBlock` | number | si | Bloque donde se minteo el seed original (trazabilidad L1 sin indexer) |
-| `imageOverrides` | object | no | `{ seedId: imageUrl }` -- override por seed |
-| `mutableData` | object | no | Datos mutables para las instancias (validados contra schema) |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `to` | string | no | Owner of the instances (default signer) |
+| `items` | array | yes | `[{ seedId, quantity, originBlock }]` -- max 50 items |
+| `items[].originBlock` | number | yes | Block where the original seed was minted (L1 traceability without indexer) |
+| `imageOverrides` | object | no | `{ seedId: { imageUrl, imageHash } }` -- override per seed |
+| `mutableData` | object | no | Mutable data for the instances (validated against schema) |
 
-**Nota**: Las instancias heredan `immutable_data` y `immutable_data_hash` del seed automaticamente. Si la coleccion tiene schema, `mutableData` se valida contra los campos mutables del schema.
+**Note**: Instances inherit `immutable_data` and `immutable_data_hash` from the seed automatically. If the collection has a schema, `mutableData` is validated against the mutable schema fields.
 
-**Validaciones del indexer**:
-- Items no vacio, max 50
-- No puede haber seedIds duplicados en items
-- Cada seed debe existir y tener supply disponible (`distributed + quantity <= maxReplicas`)
-- Signer debe ser owner del seed
-- Si la coleccion tiene schema y se proporciona `mutableData`, se valida contra el schema
+**Indexer validations**:
+- Items not empty, max 50
+- No duplicate seedIds in items
+- Each seed must exist, not be burned (`assertNotBurned`), not be lent (`assertNotLent`), and must be of type `"seed"`
+- Each seed must have available supply (`distributed + quantity <= maxReplicas`)
+- Signer must be owner of the seed OR creator of the collection
+- If the collection has a schema and `mutableData` is provided, it is validated against the schema
 
-**Cambios de estado**: Inserta N filas en `nfts` (tipo `instance`), incrementa `distributed` del seed.
-**Idempotencia**: Detecta re-envios del mismo txId y ajusta contadores.
-**Restricciones**: Supply excedido, seeds inexistentes, signer sin permiso -> rechazado.
+**State changes**: Inserts N rows in `nfts` (type `instance`), increments `distributed` on the seed.
+**Idempotency**: Detects re-sends of the same txId and adjusts counters.
+**Restrictions**: Supply exceeded, nonexistent seeds, signer without permission -> rejected.
 
 ---
 
 ### 7. `set_data`
 
-**Constante SDK**: `ACTION_SET_DATA`
-**Descripcion**: El creator de la coleccion actualiza los datos mutables de un NFT. Requiere que la coleccion tenga schema definido.
-**Key authority**: posting -- el creator firma.
-**Signer role**: Debe ser el creator de la coleccion a la que pertenece el NFT.
+**SDK constant**: `ACTION_SET_DATA`
+**Description**: The collection creator updates the mutable data of an NFT. Requires the collection to have a defined schema.
+**Key authority**: posting -- the creator signs.
+**Signer role**: Must be the creator of the collection the NFT belongs to.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `nftId` | string | si | ID del NFT |
-| `instanceDna` | string | si | DNA de la instancia (debe coincidir) |
-| `mutableData` | object | si | Datos mutables a actualizar |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nftId` | string | yes | NFT ID |
+| `instanceDna` | string | yes | Instance DNA (must match) |
+| `mutableData` | object | yes | Mutable data to update |
 
-**Nota**: La coleccion DEBE tener un schema definido. No existe fallback legacy. Los datos enviados se validan contra los campos mutables del schema y se fusionan (merge) con los datos mutables existentes.
+**Note**: The collection MUST have a defined schema. No legacy fallback exists. Data sent is validated against the mutable schema fields and merged with existing mutable data.
 
-**Validaciones del indexer**:
-- NFT debe existir y no estar `burned`
-- `collection.creator === op.signer` (solo el creator puede usar set_data)
-- `instanceDna` debe coincidir con el DNA almacenado
-- La coleccion debe tener schema
-- `mutableData` se valida contra el schema (campos y tipos)
+**Indexer validations**:
+- NFT must exist and not be `burned`
+- `collection.creator === op.signer` (only creator can use set_data)
+- `instanceDna` must match the stored DNA
+- Collection must have a schema
+- `mutableData` is validated against the schema (fields and types)
 
-**Cambios de estado**: Actualiza `mutable_data`, `mutable_data_hash`, `mutable_data_tx`, `mutable_data_block` en `nfts`.
-**Restricciones**: NFT quemado, signer no es creator, DNA no coincide, coleccion sin schema, validacion de schema fallida -> rechazado.
+**State changes**: Updates `mutable_data`, `mutable_data_hash`, `mutable_data_tx`, `mutable_data_block` in `nfts`.
+**Restrictions**: NFT burned, signer is not creator, DNA mismatch, collection without schema, schema validation failure -> rejected.
 
 ---
 
 ### 8. `set_owner_data`
 
-**Constante SDK**: `ACTION_SET_OWNER_DATA`
-**Descripcion**: El owner del NFT escribe datos en el campo `owner_data`, separado del `mutable_data` del creator. No requiere validacion de schema.
-**Key authority**: posting -- el owner firma.
-**Signer role**: Debe ser el owner del NFT.
+**SDK constant**: `ACTION_SET_OWNER_DATA`
+**Description**: The NFT owner writes data to the `owner_data` field, separate from the creator's `mutable_data`. Does not require schema validation.
+**Key authority**: posting -- the owner signs.
+**Signer role**: Must be the NFT owner.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `nftId` | string | si | ID del NFT |
-| `instanceDna` | string | si | DNA de la instancia (debe coincidir) |
-| `data` | object | si | Datos a escribir en `owner_data` |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nftId` | string | yes | NFT ID |
+| `instanceDna` | string | yes | Instance DNA (must match) |
+| `data` | object | yes | Data to write to `owner_data` |
 
-**Validaciones del indexer**:
-- NFT debe existir y no estar `burned`
+**Indexer validations**:
+- NFT must exist and not be `burned`
 - `nft.owner === op.signer`
-- `instanceDna` debe coincidir con el DNA almacenado
+- `instanceDna` must match the stored DNA
 
-**Cambios de estado**: Actualiza `owner_data`, `owner_data_hash`, `owner_data_tx`, `owner_data_block` en `nfts`.
-**Restricciones**: NFT quemado, signer no es owner, DNA no coincide -> rechazado.
+**State changes**: Updates `owner_data`, `owner_data_hash`, `owner_data_tx`, `owner_data_block` in `nfts`.
+**Restrictions**: NFT burned, signer is not owner, DNA mismatch -> rejected.
 
 ---
 
 ### 9. `extend_schema`
 
-**Constante SDK**: `ACTION_EXTEND_SCHEMA`
-**Descripcion**: El creator agrega nuevos campos al schema de una coleccion. No se pueden eliminar ni modificar campos existentes; solo se pueden agregar campos nuevos. Si la coleccion no tiene schema, se crea uno nuevo.
-**Key authority**: posting -- el creator firma.
-**Signer role**: Debe ser el creator de la coleccion.
+**SDK constant**: `ACTION_EXTEND_SCHEMA`
+**Description**: The creator adds new fields to a collection schema. Existing fields cannot be deleted or modified; only new fields can be added. If the collection has no schema, a new one is created.
+**Key authority**: posting -- the creator signs.
+**Signer role**: Must be the collection creator.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `collectionId` | string | si | ID de la coleccion |
-| `newImmutableFields` | array | no | Nuevos campos inmutables `[{ name, type }]` |
-| `newMutableFields` | array | no | Nuevos campos mutables `[{ name, type }]` |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `collectionId` | string | yes | Collection ID |
+| `newImmutableFields` | array | no | New immutable fields `[{ name, type }]` |
+| `newMutableFields` | array | no | New mutable fields `[{ name, type }]` |
 
-**Tipos de campo soportados**: `string`, `bool`, `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float`, `double`, y sus variantes array (`string[]`, `bool[]`, etc.).
+**Supported field types**: `string`, `bool`, `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float`, `double`, and their array variants (`string[]`, `bool[]`, etc.).
 
-**Validaciones del indexer**:
-- Coleccion debe existir
+**Indexer validations**:
+- Collection must exist
 - `collection.creator === op.signer`
-- Si la coleccion ya tiene schema, los nuevos campos se fusionan (merge) con `mergeSchemas()` -- no se permiten campos duplicados ni modificaciones a campos existentes
-- Si la coleccion no tiene schema, se crea uno nuevo validando la definicion
+- If the collection already has a schema, new fields are merged with `mergeSchemas()` -- duplicate fields or modifications to existing fields are not allowed
+- If the collection has no schema, a new one is created after validating the definition
 
-**Cambios de estado**: Actualiza `schema` en `collections`.
-**Restricciones**: Coleccion inexistente, signer no es creator, campos duplicados, nombres de campo invalidos -> rechazado.
+**State changes**: Updates `schema` in `collections`.
+**Restrictions**: Nonexistent collection, signer is not creator, duplicate fields, invalid field names -> rejected.
 
 ---
 
-## Marketplace (3 operaciones)
+## Marketplace (3 operations)
 
 ### 10. `list`
 
-**Constante SDK**: `ACTION_LIST`
-**Descripcion**: Pone un NFT a la venta en el marketplace con precio y moneda.
-**Key authority**: active -- el owner firma el listing.
-**Signer role**: Debe ser el owner del NFT.
+**SDK constant**: `ACTION_LIST`
+**Description**: Lists an NFT for sale on the marketplace with price and currency.
+**Key authority**: active -- the owner signs the listing.
+**Signer role**: Must be the NFT owner.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `nftId` | string | si | ID del NFT |
-| `price` | HiveAmount | si | `{ amount: "10.000", currency: "HIVE"|"HBD" }` |
-| `expiresAt` | string | no | Fecha de expiracion ISO |
-| `marketplace` | string | no | ID del marketplace tercero |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nftId` | string | yes | NFT ID |
+| `listingId` | string | yes | Deterministic listing ID (must start with `list_`) |
+| `listingNonce` | string | yes | Random nonce (12 chars) used to generate the listingId |
+| `price` | HiveAmount | yes | `{ amount: "10.000", currency: "HIVE"\|"HBD" }` |
+| `expiresAt` | number | no | Expiration timestamp |
+| `marketplace` | string | no | Third-party marketplace ID |
 
-**Validaciones del indexer**:
-- NFT debe existir
-- Status no puede ser `burned` ni `lent`
+**Indexer validations**:
+- NFT must exist
+- `assertNotBurned`, `assertNotLent`
+- Collection must be transferable (`transferable=true` in rules)
+- If currently listed, the existing listing must be expired; otherwise must unlist first
 - `nft.owner === op.signer`
-- La coleccion debe ser transferible (`transferable=true` en rules)
-- Precio debe tener formato Hive valido (3 decimales)
-- Moneda debe ser HIVE o HBD
+- `listingId` must start with `list_` prefix
+- `listingId` must match the deterministic hash computed from `{ nftId, owner, marketplace, priceAmount, priceCurrency, expiresAt, nonce: listingNonce }`
+- Price must have valid Hive format (3 decimals)
+- Currency must be HIVE or HBD
 
-**Cambios de estado**: Status -> `listed`, almacena `listing_price`, `listing_currency`, `listing_expires_at`, `listing_marketplace`.
-**Restricciones**: NFT quemado, prestado, coleccion no transferible, o signer no es owner -> rechazado.
+**State changes**: Status -> `listed`, stores `listing_price`, `listing_currency`, `listing_expires_at`, `listing_marketplace`, `listing_id`, `listing_tx_id`.
+**Restrictions**: NFT burned, lent, collection not transferable, already actively listed, listingId mismatch, or signer is not owner -> rejected.
 
 ---
 
 ### 11. `unlist`
 
-**Constante SDK**: `ACTION_UNLIST`
-**Descripcion**: Retira un NFT del marketplace.
-**Key authority**: posting -- el owner firma.
-**Signer role**: Debe ser el owner del NFT.
+**SDK constant**: `ACTION_UNLIST`
+**Description**: Removes an NFT from the marketplace.
+**Key authority**: posting -- the owner signs.
+**Signer role**: Must be the NFT owner.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `nftId` | string | si | ID del NFT |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nftId` | string | yes | NFT ID |
 
-**Validaciones del indexer**:
-- NFT debe existir
-- Status debe ser `listed`
+**Indexer validations**:
+- NFT must exist
+- Status must be `listed`
 - `nft.owner === op.signer`
 
-**Cambios de estado**: Status -> `active`, limpia todos los campos de listing.
-**Restricciones**: NFT no listado o signer no es owner -> rechazado.
+**State changes**: Status -> `active`, clears all listing fields.
+**Restrictions**: NFT not listed or signer is not owner -> rejected.
 
 ---
 
 ### 12. `buy`
 
-**Constante SDK**: `ACTION_BUY`
-**Descripcion**: Compra un NFT listado. Operacion especial: el nodo co-firma con active key (multisig). El buyer se extrae de los transfers pareados, no del signer.
-**Key authority**: active -- firmado por el nodo indexador (multisig).
-**Signer role**: El nodo que co-firma. Buyer se identifica de `pairedTransfers[0].from`.
+**SDK constant**: `ACTION_BUY`
+**Description**: Buys a listed NFT. Special operation: the node co-signs with active key (multisig). The buyer is extracted from paired transfers, not from the signer.
+**Key authority**: active -- signed by the indexer node (multisig).
+**Signer role**: The co-signing node. Buyer is identified from `pairedTransfers[0].from`.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `nftId` | string | si | ID del NFT a comprar |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nftId` | string | yes | ID of the NFT to buy |
+| `listingId` | string | yes | Active listing ID (must match `nft.listing_id`) |
+| `listTxId` | string | yes | Transaction ID of the list operation (must match `nft.listing_tx_id`) |
 
-**Transfers pareados** (generados por el SDK como operaciones HIVE):
-- Transfer al seller (precio - royalty - fee)
-- Transfer al royaltyRecipient (si aplica y != seller)
-- Transfer al feeAccount (fee del protocolo 1%, si != seller)
+**Paired transfers** (generated by the SDK as HIVE operations):
+- Transfer to seller (price - royalty - fee)
+- Transfer to royaltyRecipient (if applicable and != seller)
+- Transfer to feeAccount (protocol fee 1%, if != seller)
 
-**Validaciones del indexer**:
-- NFT debe existir y estar `listed`
-- La coleccion debe ser transferible (`transferable=true` en rules)
+**Indexer validations**:
+- `op.signer` must be the configured node account (`config.hiveAccount`)
+- NFT must exist
+- `assertNotBurned`, `assertNotLent`
+- Status must be `listed` and listing must not be expired
+- Collection must be transferable (`transferable=true` in rules)
+- `listingId` must match `nft.listing_id` (prevents stale listing replays)
+- `listTxId` must match `nft.listing_tx_id` (prevents stale listing replays)
 - Buyer != seller
-- `verifyTransfers()` valida montos exactos de cada transfer
-- Si `royaltyRecipient === seller`, royalty se fusiona en el pago al seller
-- Si `feeAccount === seller`, fee se fusiona en el pago al seller
+- `verifyTransfers()` validates exact amounts of each transfer
+- If `royaltyRecipient === seller`, royalty merges into seller payment
+- If `feeAccount === seller`, fee merges into seller payment
 
-**Cambios de estado**: `owner` -> buyer, status -> `active`, limpia listing y allowances.
-**Restricciones**: NFT no listado, coleccion no transferible, pagos incorrectos, buyer = seller -> rechazado.
+**State changes**: `owner` -> buyer, status -> `active`, clears listing and allowances.
+**Restrictions**: NFT not listed, listing expired, collection not transferable, listingId mismatch, listTxId mismatch, incorrect payments, buyer = seller -> rejected.
 
 ---
 
-## Packs (4 operaciones)
+## Packs (4 operations)
 
 ### 13. `pack_create`
 
-**Constante SDK**: `ACTION_PACK_CREATE`
-**Descripcion**: Crea un pack con tabla de drop probabilistico. Al abrir un pack, se generan instancias segun los pesos de la tabla.
-**Key authority**: posting -- el creator de la coleccion firma.
-**Signer role**: Debe ser el creator de la coleccion asociada.
+**SDK constant**: `ACTION_PACK_CREATE`
+**Description**: Creates a pack with a probabilistic drop table. When a pack is opened, instances are generated according to the table weights.
+**Key authority**: posting -- the collection creator signs.
+**Signer role**: Must be the creator of the associated collection.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `id` | string | si | ID deterministico del pack |
-| `collectionId` | string | si | Coleccion asociada |
-| `name` | string | si | Nombre del pack |
-| `description` | string | no | Descripcion |
-| `imageUrl` | string | no | URL de imagen |
-| `dropTable` | array | si | `[{ seedId, weight }]` -- max 50 entries, weight 1-10000 |
-| `itemsPerPack` | number | si | Items por apertura (max 20) |
-| `price` | HiveAmount | no | Precio por pack (null = gratis) |
-| `maxSupply` | number | si | Supply maximo |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | yes | Deterministic pack ID |
+| `collectionId` | string | yes | Associated collection |
+| `name` | string | yes | Pack name |
+| `description` | string | no | Description |
+| `imageUrl` | string | no | Image URL |
+| `dropTable` | array | yes | `[{ seedId, weight }]` -- max 50 entries, weight 1-10000 |
+| `itemsPerPack` | number | yes | Items per opening (max 20) |
+| `price` | HiveAmount | no | Price per pack (null = free) |
+| `maxSupply` | number | yes | Maximum supply |
 
-**Validaciones del indexer**:
-- Pack con ese `id` no debe existir
+**Indexer validations**:
+- Pack with that `id` must not exist
 - `pack.creator === collection.creator === op.signer`
-- Cada seed del dropTable debe existir, ser tipo "seed", y pertenecer a la coleccion
-- Supply de seeds debe soportar la demanda (maxSupply x itemsPerPack)
-- Precio si existe debe ser > 0
+- Each seed in the dropTable must exist, be of type "seed", and belong to the collection
+- Seed supply must support the demand (maxSupply x itemsPerPack)
+- Price, if present, must be > 0
 
-**Cambios de estado**: Inserta fila en `packs`.
-**Restricciones**: ID duplicado, seeds invalidos, creator mismatch -> rechazado.
+**State changes**: Inserts row in `packs`.
+**Restrictions**: Duplicate ID, invalid seeds, creator mismatch -> rejected.
 
 ---
 
 ### 14. `pack_buy`
 
-**Constante SDK**: `ACTION_PACK_BUY`
-**Descripcion**: Compra packs. Si el pack tiene precio, requiere transfer HIVE/HBD pareado del buyer al creator.
-**Key authority**: active -- el buyer firma.
+**SDK constant**: `ACTION_PACK_BUY`
+**Description**: Buys packs. If the pack has a price, requires a paired HIVE/HBD transfer from buyer to creator.
+**Key authority**: active -- the buyer signs.
 **Signer role**: Buyer.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `packId` | string | si | ID del pack |
-| `quantity` | number | si | Cantidad a comprar |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `packId` | string | yes | Pack ID |
+| `quantity` | number | yes | Quantity to buy |
 
-**Validaciones del indexer**:
-- Pack debe existir y estar activo
+**Indexer validations**:
+- Pack must exist and be active
 - Quantity > 0
-- Supply disponible (`current_supply + quantity <= max_supply`)
-- Para packs pagados: transfer pareado con monto exacto (price x quantity)
+- Available supply (`current_supply + quantity <= max_supply`)
+- For paid packs: paired transfer with exact amount (price x quantity)
 
-**Cambios de estado**: Incrementa `current_supply` en `packs`, upsert en `user_pack_balances`.
-**Restricciones**: Supply agotado, pago insuficiente -> rechazado.
+**State changes**: Increments `current_supply` in `packs`, upserts in `user_pack_balances`.
+**Restrictions**: Supply exhausted, insufficient payment -> rejected.
 
 ---
 
 ### 15. `pack_transfer`
 
-**Constante SDK**: `ACTION_PACK_TRANSFER`
-**Descripcion**: Transfiere packs entre usuarios.
-**Key authority**: active -- el sender firma.
-**Signer role**: Debe ser el poseedor de los packs.
+**SDK constant**: `ACTION_PACK_TRANSFER`
+**Description**: Transfers packs between users.
+**Key authority**: active -- the sender signs.
+**Signer role**: Must be the pack holder.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `from` | string | si | Sender (debe ser signer) |
-| `to` | string | si | Recipient |
-| `packId` | string | si | ID del pack |
-| `quantity` | number | si | Cantidad a transferir |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from` | string | yes | Sender (must be signer) |
+| `to` | string | yes | Recipient |
+| `packId` | string | yes | Pack ID |
+| `quantity` | number | yes | Quantity to transfer |
 
-**Validaciones del indexer**:
-- Pack debe existir
+**Indexer validations**:
+- Pack must exist
 - `from != to`
 - Quantity > 0
 - `getPackBalance(from, packId) >= quantity`
 
-**Cambios de estado**: Debita balance del sender, acredita al recipient en `user_pack_balances`.
-**Restricciones**: Balance insuficiente, self-transfer -> rechazado.
+**State changes**: Debits sender balance, credits recipient in `user_pack_balances`.
+**Restrictions**: Insufficient balance, self-transfer -> rejected.
 
 ---
 
 ### 16. `pack_open`
 
-**Constante SDK**: `ACTION_PACK_OPEN`
-**Descripcion**: Abre packs y genera instancias NFT deterministicas basadas en la drop table. El RNG es deterministico (txId, blockNum, signer, packId, index).
-**Key authority**: posting -- el owner de los packs firma.
-**Signer role**: Debe poseer los packs.
+**SDK constant**: `ACTION_PACK_OPEN`
+**Description**: Opens packs and generates deterministic NFT instances based on the drop table. RNG is deterministic (txId, blockNum, signer, packId, index).
+**Key authority**: posting -- the pack holder signs.
+**Signer role**: Must own the packs.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `packId` | string | si | ID del pack |
-| `quantity` | number | si | Cantidad de packs a abrir (max 50) |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `packId` | string | yes | Pack ID |
+| `quantity` | number | yes | Number of packs to open (max 50) |
 
-**Validaciones del indexer**:
-- Pack debe existir
-- Quantity > 0
+**Indexer validations**:
+- Pack must exist
+- Quantity > 0, max 50
 - `getPackBalance(signer, packId) >= quantity`
 
-**Cambios de estado**: Debita balance, incrementa `total_opened`, inserta N instancias en `nfts`, incrementa `distributed` por seed.
-**Idempotencia**: Detecta re-envios del mismo txId.
-**Restricciones**: Balance insuficiente, seeds sin supply -> skip (no error).
+**Delivery behavior**:
+- For each pack, seeds are selected from the drop table using deterministic RNG
+- If a selected seed has exhausted its supply (`instanceNumber > maxReplicas`), that individual pack is skipped
+- Balance is deducted ONLY for successfully delivered packs (not skipped ones)
+- If ALL packs fail delivery (all seeds exhausted), the operation throws an error: `"No packs could be delivered for {packId}: all seeds exhausted"`
+
+**State changes**: Debits balance (only for delivered count), increments `total_opened`, inserts N instances in `nfts`, increments `distributed` per seed.
+**Idempotency**: Detects re-sends of the same txId.
+**Restrictions**: Insufficient balance -> rejected. All seeds exhausted -> error (no silent skip).
 
 ---
 
-## Approve/Delegacion (5 operaciones)
+## Approve/Delegation (5 operations)
 
 ### 17. `nft_approve`
 
-**Constante SDK**: `ACTION_NFT_APPROVE`
-**Descripcion**: Aprueba a un spender para transferir UN NFT especifico del owner.
-**Key authority**: active -- el owner firma la aprobacion.
-**Signer role**: Debe ser el owner del NFT.
+**SDK constant**: `ACTION_NFT_APPROVE`
+**Description**: Approves a spender to transfer ONE specific NFT from the owner.
+**Key authority**: active -- the owner signs the approval.
+**Signer role**: Must be the NFT owner.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `spender` | string | si | Cuenta aprobada |
-| `instanceId` | string | si | ID del NFT |
-| `approved` | boolean | si | true = aprobar, false = revocar |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `spender` | string | yes | Approved account |
+| `instanceId` | string | yes | NFT ID |
+| `approved` | boolean | yes | true = approve, false = revoke |
 
-**Validaciones del indexer**:
+**Indexer validations**:
 - `spender != op.signer`
-- NFT debe existir
+- NFT must exist
 - `nft.owner === op.signer`
-- NFT no puede estar `burned` ni `lent`
+- NFT cannot be `burned` or `lent`
 
-**Cambios de estado**: Upsert/delete en `nft_allowances`.
-**Restricciones**: Self-approval, NFT quemado/prestado, signer no es owner -> rechazado.
+**State changes**: Upsert/delete in `nft_allowances`.
+**Restrictions**: Self-approval, NFT burned/lent, signer is not owner -> rejected.
 
 ---
 
 ### 18. `nft_approve_all`
 
-**Constante SDK**: `ACTION_NFT_APPROVE_ALL`
-**Descripcion**: Aprueba a un spender para transferir TODOS los NFTs del signer en una coleccion. Analogo a ERC-721 `setApprovalForAll`.
-**Key authority**: active -- el owner firma.
-**Signer role**: El signer es el owner que concede permiso (firmo la tx).
+**SDK constant**: `ACTION_NFT_APPROVE_ALL`
+**Description**: Approves a spender to transfer ALL of the signer's NFTs in a collection. Analogous to ERC-721 `setApprovalForAll`.
+**Key authority**: active -- the owner signs.
+**Signer role**: The signer is the owner granting permission (signed the tx).
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `spender` | string | si | Cuenta aprobada |
-| `collectionId` | string | si | ID de la coleccion |
-| `approved` | boolean | si | true = aprobar, false = revocar |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `spender` | string | yes | Approved account |
+| `collectionId` | string | yes | Collection ID |
+| `approved` | boolean | yes | true = approve, false = revoke |
 
-**Validaciones del indexer**:
+**Indexer validations**:
 - `spender != op.signer`
-- Coleccion debe existir
+- Collection must exist
 
-**Cambios de estado**: Upsert en `collection_allowances` con `owner = op.signer`.
-**Restricciones**: Self-approval, coleccion inexistente -> rechazado.
+**State changes**: Upsert in `collection_allowances` with `owner = op.signer`.
+**Restrictions**: Self-approval, nonexistent collection -> rejected.
 
 ---
 
 ### 19. `nft_transfer_from`
 
-**Constante SDK**: `ACTION_NFT_TRANSFER_FROM`
-**Descripcion**: Un spender aprobado transfiere el NFT del owner a otro destinatario.
-**Key authority**: posting -- el spender firma.
-**Signer role**: Debe tener approval especifico del NFT o approval de toda la coleccion.
+**SDK constant**: `ACTION_NFT_TRANSFER_FROM`
+**Description**: An approved spender transfers an NFT from the owner to another recipient.
+**Key authority**: posting -- the spender signs.
+**Signer role**: Must have specific NFT approval or collection-wide approval.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `from` | string | si | Owner actual |
-| `to` | string | si | Destinatario |
-| `instanceId` | string | si | ID del NFT |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from` | string | yes | Current owner |
+| `to` | string | yes | Recipient |
+| `instanceId` | string | yes | NFT ID |
 
-**Validaciones del indexer**:
+**Indexer validations**:
 - `from != to`
-- NFT debe existir, `nft.owner === from`
-- Status: no `burned`, no `lent`, no `listed`
-- Coleccion debe ser `transferable`
-- Autorizacion: `getNftAllowance(nftId)` o `hasCollectionAllowance(from, signer, collectionId)`
+- NFT must exist, `nft.owner === from`
+- Status: not `burned`, not `lent`, not `listed`
+- Collection must be `transferable`
+- Authorization: `getNftAllowance(nftId)` or `hasCollectionAllowance(from, signer, collectionId)`
 
-**Cambios de estado**: `owner` -> `to`, limpia allowances.
-**Restricciones**: Sin autorizacion, NFT no transferible/quemado/prestado/listado -> rechazado.
+**State changes**: `owner` -> `to`, clears allowances.
+**Restrictions**: No authorization, NFT not transferable/burned/lent/listed -> rejected.
 
 ---
 
 ### 20. `pack_approve`
 
-**Constante SDK**: `ACTION_PACK_APPROVE`
-**Descripcion**: Aprueba a un spender para gastar N packs del owner. Analogo a ERC-20 `approve`.
-**Key authority**: active -- el owner firma.
-**Signer role**: Debe poseer balance del pack.
+**SDK constant**: `ACTION_PACK_APPROVE`
+**Description**: Approves a spender to spend N packs from the owner. Analogous to ERC-20 `approve`.
+**Key authority**: active -- the owner signs.
+**Signer role**: Must hold a balance of the pack.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `spender` | string | si | Cuenta aprobada |
-| `packId` | string | si | ID del pack |
-| `quantity` | number | si (si approved) | Cantidad aprobada |
-| `approved` | boolean | si | true = aprobar, false = revocar |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `spender` | string | yes | Approved account |
+| `packId` | string | yes | Pack ID |
+| `quantity` | number | yes (if approved) | Approved quantity |
+| `approved` | boolean | yes | true = approve, false = revoke |
 
-**Validaciones del indexer**:
+**Indexer validations**:
 - `spender != op.signer`
-- Pack debe existir
-- Si `approved`: quantity > 0 y `getPackBalance(signer, packId) >= 1`
+- Pack must exist
+- If `approved`: quantity > 0 and `getPackBalance(signer, packId) >= 1`
 
-**Cambios de estado**: Upsert en `pack_allowances`.
-**Restricciones**: Self-approval, pack inexistente, sin balance -> rechazado.
+**State changes**: Upsert in `pack_allowances`.
+**Restrictions**: Self-approval, nonexistent pack, no balance -> rejected.
 
 ---
 
 ### 21. `pack_transfer_from`
 
-**Constante SDK**: `ACTION_PACK_TRANSFER_FROM`
-**Descripcion**: Un spender aprobado transfiere packs del owner a otro destinatario.
-**Key authority**: posting -- el spender firma.
-**Signer role**: Debe tener allowance del owner para ese pack.
+**SDK constant**: `ACTION_PACK_TRANSFER_FROM`
+**Description**: An approved spender transfers packs from the owner to another recipient.
+**Key authority**: posting -- the spender signs.
+**Signer role**: Must have an allowance from the owner for that pack.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `from` | string | si | Owner de los packs |
-| `to` | string | si | Destinatario |
-| `packId` | string | si | ID del pack |
-| `quantity` | number | si | Cantidad a transferir |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from` | string | yes | Pack owner |
+| `to` | string | yes | Recipient |
+| `packId` | string | yes | Pack ID |
+| `quantity` | number | yes | Quantity to transfer |
 
-**Validaciones del indexer**:
+**Indexer validations**:
 - `from != to`, quantity > 0
-- Pack debe existir
+- Pack must exist
 - `getPackAllowance(signer, from, packId) >= quantity`
 - `getPackBalance(from, packId) >= quantity`
 
-**Cambios de estado**: Deduce allowance PRIMERO (previene doble-gasto), luego transfiere balance.
-**Restricciones**: Sin allowance, balance insuficiente -> rechazado.
+**State changes**: Deducts allowance FIRST (prevents double-spend), then transfers balance.
+**Restrictions**: No allowance, insufficient balance -> rejected.
 
 ---
 
-## Lending (2 operaciones)
+## Lending (2 operations)
 
 ### 22. `nft_lend`
 
-**Constante SDK**: `ACTION_NFT_LEND`
-**Descripcion**: Presta un NFT a un borrower. El NFT queda bloqueado (no se puede transferir, listar, quemar ni aprobar).
-**Key authority**: posting -- el owner/lender firma.
-**Signer role**: Debe ser el owner del NFT.
+**SDK constant**: `ACTION_NFT_LEND`
+**Description**: Lends an NFT to a borrower. The NFT is locked (cannot be transferred, listed, burned, or approved).
+**Key authority**: posting -- the owner/lender signs.
+**Signer role**: Must be the NFT owner.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `instanceId` | string | si | ID del NFT |
-| `borrower` | string | si | Cuenta del prestatario |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `instanceId` | string | yes | NFT ID |
+| `borrower` | string | yes | Borrower account |
 
-**Validaciones del indexer**:
+**Indexer validations**:
 - `borrower != op.signer`
-- NFT debe existir, `nft.owner === op.signer`
-- Status debe ser `active` (no listed, burned, o ya lent)
-- Coleccion debe ser `transferable` (NFTs no-transferibles no se pueden prestar)
-- No debe existir prestamo activo para este NFT
+- NFT must exist, `nft.owner === op.signer`
+- Status must be `active` (not listed, burned, or already lent)
+- Collection must be `transferable` (non-transferable NFTs cannot be lent)
+- No active loan must exist for this NFT
 
-**Cambios de estado**: Status -> `lent`, inserta fila en `nft_loans`, elimina `nft_allowances`.
-**Restricciones**: Self-lend, NFT no transferible/quemado/listado/ya prestado -> rechazado.
+**State changes**: Status -> `lent`, inserts row in `nft_loans`, deletes `nft_allowances`.
+**Restrictions**: Self-lend, NFT not transferable/burned/listed/already lent -> rejected.
 
 ---
 
 ### 23. `nft_return`
 
-**Constante SDK**: `ACTION_NFT_RETURN`
-**Descripcion**: Devuelve un NFT prestado. Tanto el lender como el borrower pueden ejecutar esta accion.
-**Key authority**: posting -- lender o borrower firma.
-**Signer role**: Debe ser el lender o el borrower del prestamo activo.
+**SDK constant**: `ACTION_NFT_RETURN`
+**Description**: Returns a lent NFT. Both the lender and the borrower can execute this action.
+**Key authority**: posting -- lender or borrower signs.
+**Signer role**: Must be the lender or borrower of the active loan.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `instanceId` | string | si | ID del NFT |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `instanceId` | string | yes | NFT ID |
 
-**Validaciones del indexer**:
-- NFT debe existir, status debe ser `lent`
-- Prestamo debe existir en `nft_loans`
+**Indexer validations**:
+- NFT must exist, status must be `lent`
+- Loan must exist in `nft_loans`
 - `op.signer === loan.lender || op.signer === loan.borrower`
 
-**Cambios de estado**: Status -> `active`, elimina fila de `nft_loans`.
-**Restricciones**: NFT no prestado, signer no es lender ni borrower -> rechazado.
+**State changes**: Status -> `active`, deletes row from `nft_loans`.
+**Restrictions**: NFT not lent, signer is neither lender nor borrower -> rejected.
 
 ---
 
-## Data Operators (2 operaciones)
+## Data Operators (2 operations)
 
 ### 24. `data_operator_approve`
 
-**Constante SDK**: `ACTION_DATA_OPERATOR_APPROVE`
-**Descripcion**: El creator de una coleccion autoriza a un operador externo para modificar datos mutables de NFTs en esa coleccion.
-**Key authority**: active -- el creator firma.
-**Signer role**: Debe ser el creator de la coleccion.
+**SDK constant**: `ACTION_DATA_OPERATOR_APPROVE`
+**Description**: The collection creator authorizes an external operator to modify mutable data of NFTs in that collection.
+**Key authority**: active -- the creator signs.
+**Signer role**: Must be the collection creator.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `collectionId` | string | si | ID de la coleccion |
-| `operator` | string | si | Cuenta del operador |
-| `approved` | boolean | si | true = aprobar, false = revocar |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `collectionId` | string | yes | Collection ID |
+| `operator` | string | yes | Operator account |
+| `approved` | boolean | yes | true = approve, false = revoke |
 
-**Validaciones del indexer**:
+**Indexer validations**:
 - `operator != op.signer`
-- Coleccion debe existir
+- Collection must exist
 - `collection.creator === op.signer`
 
-**Cambios de estado**: Upsert/delete en `data_operators`.
-**Restricciones**: Self-approval, coleccion inexistente, signer no es creator -> rechazado.
+**State changes**: Upsert/delete in `data_operators`.
+**Restrictions**: Self-approval, nonexistent collection, signer is not creator -> rejected.
 
 ---
 
 ### 25. `set_data_from`
 
-**Constante SDK**: `ACTION_SET_DATA_FROM`
-**Descripcion**: Un operador aprobado modifica los datos mutables (`mutable_data`) de un NFT. Funciona igual que `set_data` pero firmado por un operador autorizado en lugar del creator. Requiere que la coleccion tenga schema definido.
-**Key authority**: posting -- el operador firma.
-**Signer role**: Debe estar aprobado como data operator para la coleccion del NFT.
+**SDK constant**: `ACTION_SET_DATA_FROM`
+**Description**: An approved operator modifies the mutable data (`mutable_data`) of an NFT. Works identically to `set_data` but signed by an authorized operator instead of the creator. Requires the collection to have a defined schema.
+**Key authority**: posting -- the operator signs.
+**Signer role**: Must be approved as a data operator for the NFT's collection.
 
-**Payload del SDK**:
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `nftId` | string | si | ID del NFT |
-| `instanceDna` | string | si | DNA de la instancia (debe coincidir) |
-| `mutableData` | object | si | Datos mutables a actualizar |
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nftId` | string | yes | NFT ID |
+| `instanceDna` | string | yes | Instance DNA (must match) |
+| `mutableData` | object | yes | Mutable data to update |
 
-**Nota**: La coleccion DEBE tener un schema definido. No existe fallback legacy. Los datos enviados se validan contra los campos mutables del schema y se fusionan (merge) con los datos mutables existentes.
+**Note**: The collection MUST have a defined schema. No legacy fallback exists. Data sent is validated against the mutable schema fields and merged with existing mutable data.
 
-**Validaciones del indexer**:
-- NFT debe existir y no estar `burned`
-- `instanceDna` debe coincidir
-- `hasDataOperatorApproval(signer, collectionId)` debe ser true
-- La coleccion debe tener schema
-- `mutableData` se valida contra el schema (campos y tipos)
+**Indexer validations**:
+- NFT must exist and not be `burned`
+- `instanceDna` must match
+- `hasDataOperatorApproval(signer, collectionId)` must be true
+- Collection must have a schema
+- `mutableData` is validated against the schema (fields and types)
 
-**Cambios de estado**: Actualiza `mutable_data`, `mutable_data_hash`, `mutable_data_tx`, `mutable_data_block` en `nfts`.
-**Restricciones**: NFT quemado, DNA no coincide, sin aprobacion de operador, coleccion sin schema, validacion de schema fallida -> rechazado.
+**State changes**: Updates `mutable_data`, `mutable_data_hash`, `mutable_data_tx`, `mutable_data_block` in `nfts`.
+**Restrictions**: NFT burned, DNA mismatch, no operator approval, collection without schema, schema validation failure -> rejected.
 
 ---
 
-## Notas de arquitectura
+## Architecture Notes
 
 ### Key Authority
-El indexer extrae el signer de `required_auths[0] ?? required_posting_auths[0]`. No valida el tipo de key directamente -- la validacion de key la hace la blockchain de Hive al aceptar la transaccion. El SDK marca la autoridad correcta al construir el `custom_json`.
+The indexer extracts the signer from `required_auths[0] ?? required_posting_auths[0]`. It does not validate the key type directly -- key validation is performed by the Hive blockchain when accepting the transaction. The SDK sets the correct authority when building the `custom_json`.
 
-### Idempotencia
-Las operaciones `bulk_distribute` y `pack_open` son idempotentes: si se re-envia la misma transaccion (mismo `txId`), detectan las instancias ya creadas y ajustan contadores para no duplicar NFTs.
+### Idempotency
+The `bulk_distribute` and `pack_open` operations are idempotent: if the same transaction is re-sent (same `txId`), they detect already-created instances and adjust counters to avoid duplicating NFTs. The baseline is computed by subtracting instances born from the same `txId` from the current `distributed` count.
 
-### IDs deterministicos
-Collections, seeds y packs usan IDs deterministicos generados por el SDK (hash de campos unicos). Esto previene la creacion de duplicados incluso si la misma transaccion se procesa multiples veces.
+### Deterministic IDs
+Collections, seeds, and packs use deterministic IDs generated by the SDK (hash of unique fields). This prevents duplicate creation even if the same transaction is processed multiple times.
 
 ### Payment Splits (Marketplace)
-La funcion `calculatePaymentSplit()` del SDK se reutiliza en el indexer para verificar pagos. El split es:
-- **Seller**: precio - royalty - fee
-- **Royalty**: `totalPrice x royaltyPct / 100` (si royaltyRecipient != seller)
-- **Fee**: `totalPrice x 1%` (si feeAccount != seller)
+The SDK's `calculatePaymentSplit()` function is reused in the indexer to verify payments. The split is:
+- **Seller**: price - royalty - fee
+- **Royalty**: `totalPrice x royaltyPct / 100` (if royaltyRecipient != seller)
+- **Fee**: `totalPrice x 1%` (protocol fee, always goes to the co-signing node)
 
-Si royaltyRecipient o feeAccount coinciden con el seller, esos montos se fusionan en el pago al seller.
+If royaltyRecipient or feeAccount equals the seller, those amounts merge into the seller payment. Marketplace fees are handled off-chain by the marketplace frontend.
 
 ### Multisig (Buy)
-La operacion `buy` es la unica que requiere active key porque el nodo co-firma. El buyer envia transfers HIVE/HBD y el nodo valida y co-firma el `custom_json`. Si el nodo rechaza, los fondos nunca salen de la cuenta del buyer.
+The `buy` operation is the only one where the node co-signs. The buyer submits transfers (HIVE/HBD) and the node validates and co-signs the `custom_json`. If the node rejects, the funds never leave the buyer's account. The multisig lock window is 125 seconds (`MULTISIG_EXPIRATION_MS = 125_000`). The transaction bundle includes up to 4 operations (`MAX_MULTISIG_OPERATIONS`): seller payment + royalty payment + fee payment + custom_json.
 
-### Sistema de datos (v0.4.0)
-El protocolo maneja tres capas de datos por NFT:
+### Data System (v0.4.1)
+The protocol manages three data layers per NFT:
 
-- **`immutable_data`**: Datos inmutables definidos en el mint. No se pueden modificar despues de la creacion. Solo el creator los establece. Se validan contra los campos `immutable` del schema.
-- **`mutable_data`**: Datos mutables controlados por el creator de la coleccion (via `set_data`) o por operadores autorizados (via `set_data_from`). Requiere schema definido en la coleccion. Se validan contra los campos `mutable` del schema. Incluyen trazabilidad on-chain (`mutable_data_hash`, `mutable_data_tx`, `mutable_data_block`).
-- **`owner_data`**: Datos escritos por el owner del NFT (via `set_owner_data`). No requiere schema. Incluyen trazabilidad on-chain (`owner_data_hash`, `owner_data_tx`, `owner_data_block`).
+- **`immutable_data`**: Immutable data defined at mint. Cannot be modified after creation. Only the creator sets them. Validated against the `immutable` fields of the schema.
+- **`mutable_data`**: Mutable data controlled by the collection creator (via `set_data`) or by authorized operators (via `set_data_from`). Requires a defined schema on the collection. Validated against the `mutable` fields of the schema. Includes on-chain traceability (`mutable_data_hash`, `mutable_data_tx`, `mutable_data_block`).
+- **`owner_data`**: Data written by the NFT owner (via `set_owner_data`). Does not require schema. Includes on-chain traceability (`owner_data_hash`, `owner_data_tx`, `owner_data_block`).
 
-### Schema y validacion
-Las colecciones pueden definir un schema tipado con campos inmutables y mutables. Las operaciones `set_data` y `set_data_from` requieren obligatoriamente que la coleccion tenga schema. El schema se puede extender con `extend_schema` (agregar campos nuevos) pero no se pueden eliminar ni modificar campos existentes.
+### Schema and Validation
+Collections can define a typed schema with immutable and mutable fields. The `set_data` and `set_data_from` operations mandatorily require the collection to have a schema. The schema can be extended with `extend_schema` (add new fields) but existing fields cannot be deleted or modified.
