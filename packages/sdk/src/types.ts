@@ -1,7 +1,6 @@
 // NFTLox Protocol Types - v0.3.0
 
 import type { ProtocolAction, SupportedCurrency } from "./constants";
-import type { ListingTxId } from "./branded";
 export type * from "./schemas";
 
 // ============ HIVE OPERATION TYPES ============
@@ -270,7 +269,7 @@ export interface UnlistData {
 export interface BuyData {
 	readonly nftId: string;
 	readonly listingId: string;
-	readonly listTxId: ListingTxId;
+	readonly listTxId: string;
 	readonly seedId?: string;
 	readonly seedTxId?: string;
 }
@@ -479,14 +478,14 @@ export type MultisigRequest = Readonly<{
 	buyer: string;
 	nftId: string;
 	listingId: string;
-	listTxId: ListingTxId;
+	listTxId: string;
 	transaction: HiveTransactionObject;
 }>;
 
 export type PaymentInfo = Readonly<{
 	nftId: string;
 	listingId: string;
-	listTxId: ListingTxId;
+	listTxId: string;
 	seller: string;
 	totalPrice: number;
 	currency: string;

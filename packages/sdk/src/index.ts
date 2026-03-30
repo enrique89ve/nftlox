@@ -388,11 +388,5 @@ export {
 	type UserNftsPage,
 } from "./client";
 
-// ============ BRANDED TYPES ============
-export {
-	type ListingTxId,
-	asListingTxId,
-} from "./branded";
-
 // ============ UTILS ============
 export * from "./utils/tx-sizing";
