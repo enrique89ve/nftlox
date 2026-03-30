@@ -9,6 +9,9 @@ import {
 } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertTransferable } from "@/utils/status-checks.ts";
+import { createLogger } from "@/utils/logger.ts";
+
+const log = createLogger("handler:nft-transfer-from");
 
 export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const from = requireUsername(op.data.from, "from");
@@ -20,7 +23,10 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 	const nft = await getNftForProcessing(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
 
-	assertTransferable(nft, instanceId, op.timestamp);
+	const { hadExpiredListing } = assertTransferable(nft, instanceId, op.timestamp);
+	if (hadExpiredListing) {
+		log.info("TransferFrom auto-cleared expired listing", { instanceId, block: op.blockNum });
+	}
 
 	if (nft.owner !== from) throw new Error(`Account ${from} is not owner of ${instanceId}`);
 

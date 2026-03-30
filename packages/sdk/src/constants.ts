@@ -142,7 +142,7 @@ export const ACTION_BUY = "buy" as const;
 export const ATOMIC_TRACKING_AMOUNT = "0.001 HIVE";
 
 // Multisig Constants
-export const MULTISIG_EXPIRATION_MS = 60_000;
+export const MULTISIG_EXPIRATION_MS = 125_000;
 export const MAX_MULTISIG_OPERATIONS = 4; // seller + royalty + fee + custom_json
 
 // Protocol Actions (Packs)
@@ -211,6 +211,43 @@ export const DATA_OPERATOR_ACTIONS = [
 ] as const;
 
 export const ALL_ACTIONS = [...CORE_ACTIONS, ...MARKETPLACE_ACTIONS, ...PACK_ACTIONS, ...APPROVE_ACTIONS, ...LENDING_ACTIONS, ...DATA_OPERATOR_ACTIONS] as const;
+
+// Authority Classification — Single Source of Truth
+// Active key: custody transfers, financial ops, delegation of control
+// Posting key: creation, own-data updates, safe/protective actions
+export const ACTIVE_AUTH_ACTIONS = [
+	ACTION_TRANSFER,
+	ACTION_BURN,
+	ACTION_LIST,
+	ACTION_BUY,
+	ACTION_PACK_BUY,
+	ACTION_PACK_TRANSFER,
+	ACTION_NFT_APPROVE,
+	ACTION_NFT_APPROVE_ALL,
+	ACTION_PACK_APPROVE,
+	ACTION_DATA_OPERATOR_APPROVE,
+] as const;
+
+export const POSTING_AUTH_ACTIONS = [
+	ACTION_CREATE_COLLECTION,
+	ACTION_MINT,
+	ACTION_REPLICATE,
+	ACTION_BULK_DISTRIBUTE,
+	ACTION_SET_DATA,
+	ACTION_SET_OWNER_DATA,
+	ACTION_EXTEND_SCHEMA,
+	ACTION_UNLIST,
+	ACTION_PACK_CREATE,
+	ACTION_PACK_OPEN,
+	ACTION_NFT_TRANSFER_FROM,
+	ACTION_PACK_TRANSFER_FROM,
+	ACTION_SET_DATA_FROM,
+	ACTION_NFT_LEND,
+	ACTION_NFT_RETURN,
+] as const;
+
+export type ActiveAuthAction = (typeof ACTIVE_AUTH_ACTIONS)[number];
+export type PostingAuthAction = (typeof POSTING_AUTH_ACTIONS)[number];
 
 // Type exports
 export type CoreAction = (typeof CORE_ACTIONS)[number];

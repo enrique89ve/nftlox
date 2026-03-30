@@ -2,6 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { insertCollection, collectionExists } from "@/db/queries/collections.ts";
 import { requireString, optionalString, optionalNumber, optionalBoolean, optionalObject } from "@/utils/validation.ts";
+import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { validateSchemaDefinition, type CollectionSchema } from "nftlox-sdk";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -18,8 +19,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	if (rawSchema) {
 		const schemaErrors = validateSchemaDefinition(rawSchema);
 		if (schemaErrors.length > 0) {
-			const messages = schemaErrors.map((e) => `${e.field}: ${e.message}`).join("; ");
-			throw new Error(`Invalid schema: ${messages}`);
+			throw new Error(`Invalid schema: ${formatSchemaErrors(schemaErrors)}`);
 		}
 	}
 

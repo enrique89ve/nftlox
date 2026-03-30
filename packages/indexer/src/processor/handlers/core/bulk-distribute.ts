@@ -3,13 +3,13 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import {
 	insertNft,
 	nftExists,
-	getSeedWithDna,
+	getSeedWithSchema,
 	incrementDistributedBy,
-	NFT_STATUS_BURNED,
-	NFT_STATUS_LENT,
 } from "@/db/queries/nfts.ts";
-import { getCollectionRules } from "@/db/queries/collections.ts";
+import { assertNotBurned, assertNotLent } from "@/utils/status-checks.ts";
 import { requireString, requireNumber, requireArray, optionalString, optionalObject } from "@/utils/validation.ts";
+import { formatSchemaErrors } from "@/utils/data-transforms.ts";
+import { computeInstanceBaseline, validateSeedSupplyForDistribution } from "@/utils/nft-rules.ts";
 import {
 	generateDeterministicInstanceId,
 	generateOriginDna,
@@ -33,11 +33,6 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	const imageOverrides = (optionalObject(op.data.imageOverrides) ?? {}) as Record<string, { imageUrl?: string; imageHash?: string }>;
 	const mutableData = optionalObject(op.data.mutableData) as Record<string, unknown> | null;
 
-	// Validate mutableData against schema if collection has one
-	if (mutableData) {
-		// We need to check at least one seed's collection for schema
-		// Validation happens per-seed below after collection is fetched
-	}
 	const mutableDataHash = mutableData ? await computeDataHash(mutableData) : null;
 
 	if (items.length === 0) throw new Error("Items array is empty");
@@ -60,36 +55,30 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		parsedItems.push({ seedId, quantity });
 	}
 
-	// Cache collection creators to avoid repeated queries
-	const collectionCreators = new Map<string, string>();
+	// Track validated schemas to avoid re-validating mutableData per collection
+	const validatedSchemas = new Set<string>();
 
 	for (const { seedId, quantity } of parsedItems) {
-		const seed = await getSeedWithDna(seedId, txn);
+		const seed = await getSeedWithSchema(seedId, txn);
 		if (!seed) throw new Error(`Seed not found: ${seedId}`);
-		if (seed.status === NFT_STATUS_BURNED) throw new Error(`Seed is burned: ${seedId}`);
-		if (seed.status === NFT_STATUS_LENT) throw new Error(`Seed is lent: ${seedId}`);
+		assertNotBurned(seed, seedId);
+		assertNotLent(seed, seedId);
 		if (seed.nft_type !== "seed") throw new Error(`${seedId} is not a seed`);
 
-		// Permission: seed owner OR collection creator
 		const isOwner = seed.owner === op.signer;
-		let collectionRules = collectionCreators.get(seed.collection_id);
-		if (collectionRules === undefined) {
-			const rules = await getCollectionRules(seed.collection_id, txn);
-			collectionCreators.set(seed.collection_id, rules?.creator ?? "");
-			// Validate mutableData against schema (once per collection)
-			const schema = rules?.schema as CollectionSchema | null;
+		const isCreator = seed.creator === op.signer;
+		if (!isOwner && !isCreator) {
+			throw new Error(`Signer ${op.signer} is neither owner nor collection creator of seed ${seedId}`);
+		}
+
+		if (!validatedSchemas.has(seed.collection_id)) {
+			validatedSchemas.add(seed.collection_id);
+			const schema = seed.schema as CollectionSchema | null;
 			if (schema && mutableData) {
 				const errors = validateMutableUpdate(schema, mutableData);
 				if (errors.length > 0) {
-					const messages = errors.map((e) => `${e.field}: ${e.message}`).join("; ");
-					throw new Error(`Schema validation failed for bulk_distribute mutableData: ${messages}`);
+					throw new Error(`Schema validation failed for bulk_distribute mutableData: ${formatSchemaErrors(errors)}`);
 				}
-			}
-		}
-		if (!isOwner) {
-			const creator = collectionCreators.get(seed.collection_id);
-			if (creator !== op.signer) {
-				throw new Error(`Signer ${op.signer} is not owner of seed ${seedId} nor creator of collection ${seed.collection_id}`);
 			}
 		}
 
@@ -105,13 +94,9 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 			WHERE seed_id = ${seedId} AND birth_tx = ${op.txId}
 		`;
 		const alreadyMintedThisTx = existingFromTx?.count ?? 0;
-		const baseDistributed = distributed - alreadyMintedThisTx;
+		const baseDistributed = computeInstanceBaseline(distributed, alreadyMintedThisTx);
 
-		if (maxReplicas > 0 && baseDistributed + quantity > maxReplicas) {
-			throw new Error(
-				`Seed ${seedId} insufficient supply: needs ${quantity}, available ${maxReplicas - baseDistributed}`,
-			);
-		}
+		validateSeedSupplyForDistribution(seedId, maxReplicas, baseDistributed, quantity);
 
 		const originDna = seed.origin_dna
 			?? await generateOriginDna(seed.collection_id);

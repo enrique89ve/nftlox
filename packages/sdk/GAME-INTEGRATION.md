@@ -392,11 +392,15 @@ async function openPack(
 		items: aggregated as Array<{ seedId: string; quantity: number; originBlock: number }>,
 	});
 
+	// bulk_distribute requires posting key (required_posting_auths).
+	// The signer MUST be the current seed owner. If the creator transferred
+	// the seeds, only the new owner can call bulk_distribute.
+	const seedOwner = "ragnarok-game"; // must be the current seed owner
 	const operation = [
 		"custom_json",
 		{
 			required_auths: [],
-			required_posting_auths: ["ragnarok-game"],
+			required_posting_auths: [seedOwner],
 			id: "nftlox_testnet",
 			json: JSON.stringify(payload),
 		},
@@ -541,7 +545,7 @@ If your game server account is different from the collection creator, you need t
 
 ### Granting Operator Access
 
-The collection creator broadcasts this once:
+The collection creator broadcasts this once. This operation requires the creator's **active key** (`required_auths`, not `required_posting_auths`).
 
 ```typescript
 import {
@@ -556,7 +560,7 @@ const approveInput: DataOperatorApproveInput = {
 };
 
 const operation = createDataOperatorApproveOperation(approveInput, "ragnarok-game");
-// Broadcast as collection creator
+// Broadcast as collection creator using ACTIVE key
 ```
 
 ### Updating Data as Operator
@@ -692,6 +696,8 @@ Each selection is independent (sampling with replacement). The same seed can be 
 | `MAX_DESCRIPTION_LENGTH`      | 250   | Description field length                             |
 | `MAX_SCHEMA_FIELDS`           | 64    | Fields per schema section (immutable or mutable)     |
 
+**Non-transferable collections:** Collections with `transferable: false` cannot list or buy NFTs on the marketplace. Any marketplace operation (`list`, `buy`, `cancel_listing`) will be rejected by the indexer for non-transferable collections.
+
 **Important:** `MAX_BULK_DISTRIBUTE_ITEMS = 50` limits distinct seed IDs per operation, but each entry can have `quantity > 1`. For example, 3 distinct seeds with quantities [20, 15, 15] = 50 instances in one operation. If a pack opening resolves to more than 50 distinct seeds (unlikely for 5-card packs, possible for bulk operations), split into multiple `bulk_distribute` operations.
 
 ---
@@ -782,7 +788,7 @@ const approveOp = createDataOperatorApproveOperation(
 	CREATOR,
 );
 
-// Broadcast as CREATOR
+// Broadcast as CREATOR using ACTIVE key (required_auths)
 
 // ---------------------------------------------------------------
 // STEP 3: Mint all 2,134 seeds (5 per Hive transaction)
@@ -905,12 +911,15 @@ async function handlePackOpen(
 	}));
 
 	// 5d. Broadcast bulk_distribute
+	// IMPORTANT: The signer must be the current seed owner, not necessarily the creator.
+	// If the creator transferred the seeds, only the new owner can distribute.
+	const SEED_OWNER = CREATOR; // same account in this example
 	const payload = createBulkDistributePayload({ to: player, items });
 	const operation = [
 		"custom_json",
 		{
 			required_auths: [],
-			required_posting_auths: [CREATOR],
+			required_posting_auths: [SEED_OWNER],
 			id: "nftlox_testnet",
 			json: JSON.stringify(payload),
 		},

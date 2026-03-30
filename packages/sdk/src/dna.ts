@@ -133,7 +133,7 @@ export function isReplicaId(id: string): boolean {
  * Same seedId + instanceNumber always produces the same ID.
  */
 export async function generateInstanceId(seedId: string, instanceNumber: number): Promise<string> {
-	return generateDeterministicInstanceId(seedId, instanceNumber);
+	return await generateDeterministicInstanceId(seedId, instanceNumber);
 }
 
 /**

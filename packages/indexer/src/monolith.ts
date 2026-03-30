@@ -1,19 +1,77 @@
 import { closePool } from "./db/client.ts";
-import { startSync, stopSync } from "./scanner/sync-engine.ts";
 import { startApiServer } from "./api/server.ts";
-import { setStartupTime, getSyncProgress, isSynced } from "./scanner/sync-state.ts";
+import { setStartupTime, setSynced, updateSyncProgress, getSyncProgress, isSynced } from "./scanner/sync-state.ts";
 import { connectWithRetry } from "./bootstrap.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
+import { dns } from "bun";
+import type { WorkerMessage, MainToWorkerMessage } from "./scanner/sync-messages.ts";
 
 const log = createLogger("monolith");
 
+// Catch unhandled errors to prevent silent process death
+process.on("unhandledRejection", (err) => {
+	log.error("Unhandled rejection", { error: err instanceof Error ? err.message : String(err) });
+});
+
+process.on("uncaughtException", (err) => {
+	log.error("Uncaught exception — shutting down", { error: err.message });
+	process.exit(1);
+});
+
+let syncWorker: Worker | null = null;
+
+function startSyncWorker(): void {
+	const worker = new Worker(new URL("./scanner/sync-worker.ts", import.meta.url).href);
+
+	worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+		const msg = event.data;
+
+		switch (msg.type) {
+			case "progress":
+				updateSyncProgress(msg.lastBlock, msg.headBlock);
+				break;
+			case "synced":
+				setSynced(msg.synced);
+				break;
+			case "ready":
+				log.info("Sync worker ready — processing blocks");
+				break;
+			case "log":
+				log[msg.level](msg.message, msg.data);
+				break;
+			case "fatal":
+				log.error("Sync worker fatal error", { error: msg.error });
+				break;
+		}
+	};
+
+	worker.onerror = (event) => {
+		log.error("Sync worker error", { message: event.message });
+	};
+
+	worker.addEventListener("close", (event) => {
+		log.warn("Sync worker closed", { exitCode: (event as CloseEvent).code });
+		syncWorker = null;
+	});
+
+	syncWorker = worker;
+}
+
+function stopSyncWorker(): void {
+	if (!syncWorker) return;
+	const msg: MainToWorkerMessage = { type: "stop" };
+	syncWorker.postMessage(msg);
+}
+
 async function main(): Promise<void> {
 	setStartupTime();
-	log.info("NFTLox Indexer starting (monolith)...");
+	log.info("NFTLox Indexer starting (monolith + worker)...");
 
+	// Main thread connects to DB for API queries
 	await connectWithRetry();
 
+	// API server runs on main thread — event loop stays free
 	startApiServer();
 
 	if (config.healthPort > 0) {
@@ -34,22 +92,27 @@ async function main(): Promise<void> {
 		log.info(`Static health endpoint on port ${config.healthPort}`);
 	}
 
-	startSync();
+	// Pre-resolve DNS for Hive endpoints to avoid cold-start latency
+	for (const endpoint of config.hiveEndpoints) {
+		try {
+			const url = new URL(endpoint);
+			dns.prefetch(url.hostname, Number(url.port) || 443);
+		} catch { /* invalid URL handled elsewhere */ }
+	}
+
+	// Sync engine runs on dedicated worker thread
+	startSyncWorker();
 }
 
-process.on("SIGINT", async () => {
+async function shutdown(): Promise<void> {
 	log.info("Shutting down...");
-	stopSync();
+	stopSyncWorker();
 	await closePool();
 	process.exit(0);
-});
+}
 
-process.on("SIGTERM", async () => {
-	log.info("Shutting down...");
-	stopSync();
-	await closePool();
-	process.exit(0);
-});
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 main().catch((err) => {
 	log.error("Fatal error", { error: err instanceof Error ? err.message : String(err) });

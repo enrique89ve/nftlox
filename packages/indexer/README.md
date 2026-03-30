@@ -25,7 +25,7 @@ nft_return { instanceId: "sword_42" }
 
 **Lending** -- NFTs can be lent without transferring ownership. The protocol blocks transfers, sales, and burns while lent. No escrow, no smart contract.
 
-**Data Operators** -- A game can write stats to an NFT it didn't create. The owner approves an operator once; from then on, that operator can call `set_data_from` on any of the owner's NFTs. The owner's economic rights never change.
+**Data Operators** -- A game can write stats to an NFT it didn't create. The collection creator approves an operator once; from then on, that operator can call `set_data_from` on any NFT in the collection. The NFT owner's economic rights never change.
 
 ```
 data_operator_approve { operator: "chess_game", collectionId: "col_abc" }
@@ -67,7 +67,7 @@ Client                         Indexer              Hive L1
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) v1.0+
+- [Bun](https://bun.sh) v1.1+ (required runtime — uses io_uring for async I/O)
 - [Docker](https://docs.docker.com/get-docker/) (for PostgreSQL)
 
 ## Quick Start
@@ -237,43 +237,98 @@ bun run dev
 
 ## Architecture
 
+### Monolith Mode (`INDEXER_ROLE=both`)
+
+The API runs on the main thread with a free event loop. The sync engine runs on a dedicated Bun Worker thread, communicating progress via `postMessage`.
+
+```
+Main Thread (event loop free for API)
+  |
+  +-- Elysia API Server (:3050)
+  |     GET /api/nfts, /api/collections, /api/marketplace, ...
+  |     Swagger UI (:3050/swagger)
+  |     Rate limiting, cache headers, sync gating
+  |
+  +-- Health Endpoint (:healthPort)
+  |
+  +-- Worker.onmessage <-- receives progress from sync worker
+        updateSyncProgress(), setSynced()
+
+Sync Worker Thread (dedicated, never blocks API)
+  |
+  +-- syncLoop()
+  |     |
+  |     +-- HafAH REST (fetch + AbortSignal.timeout)
+  |     |     Fetches custom_json ops, paginated
+  |     |     Endpoint failover with rotation
+  |     |
+  |     +-- parseHafAHOperations (CPU, ~35ms max)
+  |     |
+  |     +-- Promise.all(buy enrichment)
+  |     |     Parallel RPC calls for payment verification
+  |     |
+  |     +-- withTransaction(routeOperation x N)
+  |     |     25 handlers, infallible routing
+  |     |
+  |     +-- setTimeout(0) yield (massive sync only)
+  |
+  +-- postMessage --> main thread
+        { type: "progress", lastBlock, headBlock }
+```
+
+### Separated Mode
+
+For production at scale, run sync and API as separate processes:
+
+```bash
+# Process 1: Sync engine only (writes to DB)
+INDEXER_ROLE=sync bun run start
+
+# Process 2: API server only (reads from DB, polls sync_state every 2s)
+INDEXER_ROLE=api bun run start
+```
+
+### Component Overview
+
 ```
 Hive Blockchain
     |
     v
-+------------------+
-|  Scanner         |  Fetches blocks via custom fetch client
-|  (hive-client)   |  Failover across multiple endpoints
-|  (op-parser)     |  Filters custom_json + atomic transfers
-|  (sync-engine)   |  Batch loop with PostgreSQL transactions
-+--------+---------+
++-------------------+
+|  Scanner          |  HafAH REST + JSON-RPC with failover
+|  (hive-client)    |  AbortSignal.timeout, DNS prefetch
+|  (op-parser)      |  Filters custom_json, validates protocol
+|  (sync-engine)    |  Batch loop, Promise.all enrichment
+|  (sync-worker)    |  Dedicated Bun Worker thread
+|  (sync-messages)  |  Typed postMessage (uses Bun fast path)
++--------+----------+
          |
          v
-+------------------+
-|  Processor       |  Validates operations
-|  (action-router) |  Routes to 23 handlers
-|  handlers/       |  core/ marketplace/ packs/ allowances/ lending/
-+--------+---------+
++-------------------+
+|  Processor        |  Validates operations
+|  (action-router)  |  Infallible: errors -> invalid_operations
+|  handlers/        |  core/ marketplace/ packs/ allowances/ lending/
++--------+----------+
          |
          v
-+------------------+
-|  PostgreSQL      |  collections, nfts, packs, user_pack_balances,
-|  (Docker)        |  pack_allowances, nft_allowances, collection_allowances,
-|                  |  data_operators, nft_loans, owner_nft_counts,
-|                  |  invalid_operations, sync_state
-+--------+---------+
++-------------------+
+|  PostgreSQL       |  Auto-reconnect with exponential backoff
+|  (postgres.js)    |  keep_alive: 60s, max_lifetime: 30min
+|                   |  collections, nfts, packs, nft_loans,
+|                   |  owner_nft_counts, invalid_operations, sync_state
++--------+----------+
          |
          v
-+------------------+
-|  REST API        |  Elysia + OpenAPI/Swagger
-|  (routes/)       |  Rate limiting, cache headers, health check
-|  (multisig)      |  Co-signs buy transactions with node active key
-+------------------+
++-------------------+
+|  REST API         |  Elysia + OpenAPI/Swagger
+|  (routes/)        |  Rate limiting, cache headers, health check
+|  (multisig)       |  Co-signs buy transactions with node active key
++-------------------+
 ```
 
-## Protocol Actions (23)
+## Protocol Actions (25)
 
-### Core (7)
+### Core (9)
 | Action | Description |
 |--------|-------------|
 | `create_collection` | Create NFT collection |
@@ -282,7 +337,9 @@ Hive Blockchain
 | `transfer` | Transfer ownership |
 | `burn` | Destroy NFT |
 | `replicate` | Create replica |
-| `set_data` | Update custom data/tags |
+| `set_data` | Update mutable data (creator only) |
+| `set_owner_data` | Update owner-specific data |
+| `extend_schema` | Add fields to collection schema |
 
 ### Marketplace (3)
 | Action | Description |
@@ -320,11 +377,116 @@ Hive Blockchain
 | `data_operator_approve` | Authorize external app to write data |
 | `set_data_from` | Write data as approved operator (cross-game) |
 
+## Code Architecture
+
+### Pure Business Logic (zero I/O, testable with plain values)
+
+All business rules are extracted as pure functions in two utility modules:
+
+**`utils/nft-rules.ts`** — NFT domain rules:
+| Function | Purpose |
+|----------|---------|
+| `resolveNftType` | Determine seed vs instance from ID pattern |
+| `validateSeedCap` | Enforce collection seed limit |
+| `validateTransferCount` | Reject extra transfers in buy payment |
+| `validateSeedDemand` | Verify pack has enough seed supply (weighted math) |
+| `validatePackPayment` | Verify payment amount with integer arithmetic (no float) |
+| `computeInstanceBaseline` | Replay-safe instance numbering |
+| `validateSeedSupplyForDistribution` | Check seed supply before minting |
+
+**`utils/data-transforms.ts`** — Data validation and transformation:
+| Function | Purpose |
+|----------|---------|
+| `formatSchemaErrors` | Consistent error formatting (used by 6 handlers) |
+| `validateAndMergeMutableData` | Schema validate + shallow merge + hash (used by set_data and set_data_from) |
+
+### Handler Pattern
+
+Each handler follows the same structure: parse input -> validate (pure) -> read state (DB) -> check rules (pure) -> write state (DB).
+
+```
+handleMint(op, txn)
+  |-- requireString(op.data.id)           -- pure: parse input
+  |-- resolveNftType(type, id)            -- pure: business rule
+  |-- validateSeedCap(id, count, cap)     -- pure: business rule
+  |-- formatSchemaErrors(errors)          -- pure: data transform
+  |-- insertNft(...)                      -- I/O: DB write
+```
+
+### Infallible Operation Router
+
+The action router (`processor/action-router.ts`) uses a `Record<string, Handler>` dispatcher. Every handler call is wrapped in try/catch — errors are logged to `invalid_operations` and never abort the sync loop.
+
+## Reliability
+
+### Event Loop Protection
+
+The sync engine never blocks the API server:
+- **Worker thread isolation**: Sync runs on a dedicated Bun Worker (monolith mode)
+- **Event loop yields**: `setTimeout(0)` between batches during massive sync
+- **Parallel enrichment**: Buy/pack_buy transfer lookups use `Promise.all`
+- **CPU-bound parsing**: ~35ms max per batch, well within acceptable limits
+
+### Database Resilience
+
+PostgreSQL connection pool (postgres.js) with production hardening:
+- **Auto-reconnect**: Exponential backoff (0.5s -> 20s max) on connection loss
+- **TCP keep-alive**: Ping every 60s to detect dead connections before they timeout
+- **Connection recycling**: `max_lifetime: 30min` prevents prepared statement bloat
+- **Idle cleanup**: Connections idle >30s are released back to the OS
+- **onclose logging**: Every connection drop is logged for observability
+
+### Hive Endpoint Failover
+
+- **Multi-endpoint rotation**: Cycles through configured endpoints on failure
+- **AbortSignal.timeout**: All fetch calls have hard timeouts (15s normal, 45s massive)
+- **DNS prefetch**: Endpoints pre-resolved at startup via `dns.prefetch()`
+- **Response body drain**: Error responses consumed to prevent connection leaks
+- **Adaptive page sizes**: 1000 ops/page normal, 5000 ops/page during catch-up
+
+### Error Handling
+
+- **Infallible operation routing**: Handler errors recorded in `invalid_operations`, never abort sync
+- **Orphaned buy detection**: Failed buy ops with HIVE transfers flagged for manual review
+- **Block continuity checks**: In-memory cursor verified against DB each batch (max 3 failures)
+- **Global error handlers**: `unhandledRejection` and `uncaughtException` prevent silent death
+
+### Production Environment Variables
+
+| Variable | Recommended | Purpose |
+|----------|-------------|---------|
+| `BUN_CONFIG_MAX_HTTP_REQUESTS` | 512 | Increase concurrent fetch limit for massive sync |
+| `BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS` | 5 | Faster DNS failover for Hive endpoints |
+| `DO_NOT_TRACK` | 1 | Disable Bun telemetry |
+
 ## Testing
 
 ```bash
+# All tests (38 tests across 4 files)
 bun test
+
+# Unit tests only
+bun test src/__tests__/sync-engine.test.ts src/__tests__/sync-state.test.ts
+
+# Concurrency tests (event loop yields, parallel enrichment, progress tracking)
+bun test src/__tests__/concurrency.test.ts
+
+# Stress tests (4800 HTTP requests, API under sync load, GC pressure)
+bun test src/__tests__/stress.test.ts
+
+# Integration tests (handlers with real DB)
+bun test src/__tests__/handlers.test.ts
 ```
+
+### Test Coverage
+
+| Suite | Tests | What it verifies |
+|-------|-------|-----------------|
+| sync-engine | 11 | Block processing, continuity, massive sync, genesis init |
+| sync-state | 8 | State management, SyncReporter for worker mode |
+| concurrency | 12 | Event loop yields, buy parallelism, progress accuracy |
+| stress | 7 | 4800 HTTP requests, API during sync, GC stability |
+| handlers | 63 | All 25 operation handlers with real PostgreSQL |
 
 ## License
 

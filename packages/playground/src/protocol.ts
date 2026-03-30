@@ -182,20 +182,20 @@ export function previewBatchMint(
  * Creates a test collection with deterministic ID.
  * Same creator + name + symbol always produces the same collectionId.
  */
-export function createDeterministicCollection(
+export async function createDeterministicCollection(
 	creator: string,
 	name: string,
 	symbol: string,
 	totalPotential: number,
 	options?: CollectionOptions,
-): {
-	payload: ReturnType<typeof createDeterministicCollectionPayload>;
+): Promise<{
+	payload: Awaited<ReturnType<typeof createDeterministicCollectionPayload>>;
 	operation: HiveOperation;
 	collectionId: string;
-} {
-	const collectionId = generateDeterministicCollectionId(creator, name, symbol);
+}> {
+	const collectionId = await generateDeterministicCollectionId(creator, name, symbol);
 
-	const payload = createDeterministicCollectionPayload({
+	const payload = await createDeterministicCollectionPayload({
 		name,
 		symbol,
 		creator,
@@ -243,19 +243,19 @@ export interface DeterministicBatchMintResult {
  * Generates seed mint operations with deterministic seedIds from artIds.
  * Same collectionId + artId always produces the same seedId.
  */
-export function createDeterministicSeedMintOperations(
+export async function createDeterministicSeedMintOperations(
 	nfts: SeedNFTWithArtId[],
 	collectionId: string,
 	collectionOriginDna: string,
 	owner: string,
-): DeterministicBatchMintResult {
+): Promise<DeterministicBatchMintResult> {
 	const seeds: DeterministicBatchMintResult["seeds"] = [];
 
 	for (let i = 0; i < nfts.length; i++) {
 		const nft = nfts[i]!;
-		const seedId = generateDeterministicSeedId(collectionId, nft.artId);
+		const seedId = await generateDeterministicSeedId(collectionId, nft.artId);
 
-		const payload = createDeterministicMintPayload({
+		const payload = await createDeterministicMintPayload({
 			artId: nft.artId,
 			collectionId,
 			collectionOriginDna,
@@ -313,21 +313,21 @@ export async function loadSampleNFTsWithArtId(filePath: string): Promise<SeedNFT
 /**
  * Generates a preview with artId information.
  */
-export function previewBatchMintWithArtId(
+export async function previewBatchMintWithArtId(
 	nfts: SeedNFTWithArtId[],
 	collectionName: string,
 	creator: string,
 	symbol: string,
-): {
+): Promise<{
 	collection: { name: string; symbol: string; totalPotential: number; collectionId: string };
 	seeds: Array<{ artId: string; seedId: string; name: string; maxSupply: number }>;
 	summary: { totalSeeds: number; totalPotentialInstances: number };
-} {
+}> {
 	const totalPotential = nfts.reduce((sum, nft) => sum + nft.maxSupply, 0);
 	const normalizedSymbol = symbol.toUpperCase().replace(/[^A-Z0-9]/g, "");
 	const finalSymbol = normalizedSymbol.length >= 3 ? normalizedSymbol : normalizedSymbol.padEnd(3, "X");
 
-	const collectionId = generateDeterministicCollectionId(creator, collectionName, finalSymbol);
+	const collectionId = await generateDeterministicCollectionId(creator, collectionName, finalSymbol);
 
 	return {
 		collection: {
@@ -336,12 +336,12 @@ export function previewBatchMintWithArtId(
 			totalPotential,
 			collectionId,
 		},
-		seeds: nfts.map((nft) => ({
+		seeds: await Promise.all(nfts.map(async (nft) => ({
 			artId: nft.artId,
-			seedId: generateDeterministicSeedId(collectionId, nft.artId),
+			seedId: await generateDeterministicSeedId(collectionId, nft.artId),
 			name: nft.name,
 			maxSupply: nft.maxSupply,
-		})),
+		}))),
 		summary: {
 			totalSeeds: nfts.length,
 			totalPotentialInstances: totalPotential,

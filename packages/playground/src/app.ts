@@ -1314,7 +1314,7 @@ async function createCollection() {
 		mintLog(`Generated ${mintData.seeds.length} seed operations in ${mintData.batches.length} batches`);
 
 		// Create session for persistence
-		currentSession = createSession(creator, colName, colSymbol, applySuffix(uploadedSeeds));
+		currentSession = await createSession(creator, colName, colSymbol, applySuffix(uploadedSeeds));
 		saveSession(currentSession);
 		const seedIds = mintData.seeds.map((s: any) => s.seedId);
 		initializeSeedBatches(currentSession.id, mintData.batches.map((_: any, i: number) => ({
@@ -2027,7 +2027,7 @@ async function nftDetailList() {
 		(window as any).hive_keychain.requestBroadcast(
 			connectedUser,
 			[result.operation],
-			"Posting",
+			"Active",
 			(res: any) => {
 				if (res.success) {
 					log(`Listed for ${price} ${currency}!`, "success");

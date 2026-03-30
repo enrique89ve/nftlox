@@ -72,7 +72,19 @@ const log = createLogger("router");
 
 // Actions that MUST be signed with active key (required_auths).
 // All other actions accept posting key (required_posting_auths).
-const ACTIVE_AUTH_ACTIONS = new Set<string>([ACTION_BUY]);
+// Mirrors ACTIVE_AUTH_ACTIONS from SDK constants.
+const ACTIVE_AUTH_ACTIONS = new Set<string>([
+	ACTION_BUY,
+	ACTION_TRANSFER,
+	ACTION_BURN,
+	ACTION_LIST,
+	ACTION_PACK_BUY,
+	ACTION_PACK_TRANSFER,
+	ACTION_NFT_APPROVE,
+	ACTION_NFT_APPROVE_ALL,
+	ACTION_PACK_APPROVE,
+	ACTION_DATA_OPERATOR_APPROVE,
+]);
 
 type Handler = (op: ParsedOperation, txn: Queryable) => Promise<void>;
 

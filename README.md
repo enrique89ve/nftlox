@@ -78,7 +78,7 @@ SPV "Boleto Suizo" ──── Trustless verification via HAFAH REST API
 
 ## Protocol Features
 
-- **23 protocol actions**: Core, Marketplace, Packs, Allowances, Lending, Data Operators
+- **25 protocol actions**: Core, Marketplace, Packs, Allowances, Lending, Data Operators
 - **Multisig buy**: Node co-signs buy transactions to protect buyer funds (HIVE transfers + NFT transfer are atomic)
 - **Deterministic RNG**: All indexers produce identical results from the same blockchain data
 - **SPV Verification**: Browser-side trustless verification against Hive L1

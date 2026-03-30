@@ -102,26 +102,26 @@ export function clearAllSessions(): void {
 /**
  * Creates a new minting session.
  */
-export function createSession(
+export async function createSession(
 	creator: string,
 	collectionName: string,
 	collectionSymbol: string,
 	nfts: SeedNFTWithArtId[],
-): MintingSession {
+): Promise<MintingSession> {
 	const artIds = nfts.map(n => n.artId);
-	const sessionId = generateSessionId(creator, collectionName, artIds);
+	const sessionId = await generateSessionId(creator, collectionName, artIds);
 
-	const collectionId = generateDeterministicCollectionId(
+	const collectionId = await generateDeterministicCollectionId(
 		creator,
 		collectionName,
 		collectionSymbol,
 	);
 
-	const seedMapping = nfts.map(nft => ({
+	const seedMapping = await Promise.all(nfts.map(async (nft) => ({
 		artId: nft.artId,
-		seedId: generateDeterministicSeedId(collectionId, nft.artId),
+		seedId: await generateDeterministicSeedId(collectionId, nft.artId),
 		status: "new" as const,
-	}));
+	})));
 
 	const session: MintingSession = {
 		id: sessionId,
@@ -241,12 +241,12 @@ export function initializeSeedBatches(
  * Finds an existing session that matches the given parameters.
  * Used to recover from tab close/refresh.
  */
-export function findExistingSession(
+export async function findExistingSession(
 	creator: string,
 	collectionName: string,
 	artIds: string[],
-): MintingSession | null {
-	const sessionId = generateSessionId(creator, collectionName, artIds);
+): Promise<MintingSession | null> {
+	const sessionId = await generateSessionId(creator, collectionName, artIds);
 	return getSession(sessionId);
 }
 

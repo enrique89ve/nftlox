@@ -10,6 +10,17 @@ const toBool = (val: string | undefined, fallback: boolean): boolean => {
 	return val === "true" || val === "1";
 };
 
+const VALID_ROLES = new Set(["sync", "api", "both"] as const);
+type IndexerRole = "sync" | "api" | "both";
+
+const toIndexerRole = (val: string | undefined): IndexerRole => {
+	const role = val ?? "both";
+	if (!VALID_ROLES.has(role as IndexerRole)) {
+		throw new Error(`Invalid INDEXER_ROLE: "${role}". Must be sync | api | both`);
+	}
+	return role as IndexerRole;
+};
+
 const LOG_LEVELS = new Set(["debug", "info", "warn", "error"]);
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -38,7 +49,7 @@ export const config = {
 	postgresDb: process.env.POSTGRES_DB ?? "nftlox_indexer",
 	// Cuenta del nodo: firma operaciones y recibe el fee 2.5% en ventas.
 	hiveAccount: process.env.HIVE_ACCOUNT ?? DEFAULT_FEE_ACCOUNT,
-	indexerRole: (process.env.INDEXER_ROLE ?? "both") as "sync" | "api" | "both",
+	indexerRole: toIndexerRole(process.env.INDEXER_ROLE),
 	// Node public info
 	nodeUrl: process.env.NODE_URL ?? "",
 	// Multisig (buy transaction signing)

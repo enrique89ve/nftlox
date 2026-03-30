@@ -76,7 +76,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/seeds": buildRoute(async (body) => {
-		const result = buildSeedBatch(body);
+		const result = await buildSeedBatch(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 
 		const operations = await Promise.all(body.seeds.map(async (seed: any) => {
@@ -187,7 +187,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/preview-ids": buildRoute(async (body) => {
-		const collectionId = generateDeterministicCollectionId(
+		const collectionId = await generateDeterministicCollectionId(
 			body.creator,
 			body.name,
 			body.symbol,
@@ -197,7 +197,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		const seedIds: Record<string, string> = {};
 		if (body.artIds && Array.isArray(body.artIds)) {
 			for (const artId of body.artIds) {
-				seedIds[artId] = generateDeterministicSeedId(collectionId, artId);
+				seedIds[artId] = await generateDeterministicSeedId(collectionId, artId);
 			}
 		}
 
@@ -215,8 +215,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 
 	// --- Packs (4) ---
 
-	"/api/build/pack-create": buildRoute((body) => {
-		const result = buildPackCreate(body);
+	"/api/build/pack-create": buildRoute(async (body) => {
+		const result = await buildPackCreate(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -382,7 +382,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	// --- Data Operators (2) ---
 
 	"/api/build/data-operator-approve": buildRoute((body) => {
-		const result = buildDataOperatorApprove({ ...body, owner: body.creator });
+		const result = buildDataOperatorApprove(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,

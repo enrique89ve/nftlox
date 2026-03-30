@@ -184,6 +184,23 @@ export async function getSeedWithDna(id: string, txn: Queryable = sql): Promise<
 	return row ?? null;
 }
 
+export interface SeedWithSchemaRow extends SeedWithDnaRow {
+	schema: unknown | null;
+	creator: string;
+}
+
+export async function getSeedWithSchema(id: string, txn: Queryable = sql): Promise<SeedWithSchemaRow | null> {
+	const [row] = await txn<SeedWithSchemaRow[]>`
+		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data,
+			c.schema, c.creator
+		FROM nfts n
+		JOIN collections c ON c.id = n.collection_id
+		WHERE n.id = ${id}
+	`;
+	return row ?? null;
+}
+
 export async function updateNftOwner(nftId: string, newOwner: string, txn: Queryable = sql) {
 	await txn`
 		UPDATE nfts

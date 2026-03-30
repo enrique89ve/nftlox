@@ -51,8 +51,8 @@ export async function buildTransfer(input: TransferBuilderInput): Promise<BuildR
 	const operation: HiveOperation = [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [data.from],
+			required_auths: [data.from],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},

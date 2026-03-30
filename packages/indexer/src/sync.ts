@@ -4,9 +4,18 @@ import { setStartupTime, getSyncProgress, isSynced } from "./scanner/sync-state.
 import { connectWithRetry } from "./bootstrap.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
-
+import { dns } from "bun";
 
 const log = createLogger("sync");
+
+process.on("unhandledRejection", (err) => {
+	log.error("Unhandled rejection", { error: err instanceof Error ? err.message : String(err) });
+});
+
+process.on("uncaughtException", (err) => {
+	log.error("Uncaught exception — shutting down", { error: err.message });
+	process.exit(1);
+});
 
 
 
@@ -32,6 +41,14 @@ async function main(): Promise<void> {
 			},
 		});
 		log.info(`Static health endpoint on port ${config.healthPort}`);
+	}
+
+	// Pre-resolve DNS for Hive endpoints
+	for (const endpoint of config.hiveEndpoints) {
+		try {
+			const url = new URL(endpoint);
+			dns.prefetch(url.hostname, Number(url.port) || 443);
+		} catch { /* invalid URL handled elsewhere */ }
 	}
 
 	startSync();

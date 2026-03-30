@@ -24,23 +24,23 @@ const GAME_ACCOUNT = "game-server";
 const COLLECTION_NAME = "Dragon Masters TCG";
 const COLLECTION_SYMBOL = "DMTCG";
 
-const COLLECTION_ID = generateDeterministicCollectionId(GAME_ACCOUNT, COLLECTION_NAME, COLLECTION_SYMBOL);
+const COLLECTION_ID = await generateDeterministicCollectionId(GAME_ACCOUNT, COLLECTION_NAME, COLLECTION_SYMBOL);
 const ORIGIN_DNA = await generateOriginDna(COLLECTION_ID);
 
 const SEED_IDS = {
-	fireDragon: generateDeterministicSeedId(COLLECTION_ID, "FIRE-DRAGON-001"),
-	iceGolem: generateDeterministicSeedId(COLLECTION_ID, "ICE-GOLEM-001"),
-	windSpell: generateDeterministicSeedId(COLLECTION_ID, "WIND-SPELL-001"),
-	earthShield: generateDeterministicSeedId(COLLECTION_ID, "EARTH-SHIELD-001"),
-	starterWolf: generateDeterministicSeedId(COLLECTION_ID, "STARTER-WOLF-001"),
+	fireDragon: await generateDeterministicSeedId(COLLECTION_ID, "FIRE-DRAGON-001"),
+	iceGolem: await generateDeterministicSeedId(COLLECTION_ID, "ICE-GOLEM-001"),
+	windSpell: await generateDeterministicSeedId(COLLECTION_ID, "WIND-SPELL-001"),
+	earthShield: await generateDeterministicSeedId(COLLECTION_ID, "EARTH-SHIELD-001"),
+	starterWolf: await generateDeterministicSeedId(COLLECTION_ID, "STARTER-WOLF-001"),
 };
 
 const INSTANCE_IDS = {
-	starterWolf1: generateDeterministicInstanceId(SEED_IDS.starterWolf, 1),
-	starterWolf2: generateDeterministicInstanceId(SEED_IDS.starterWolf, 2),
-	starterWolf3: generateDeterministicInstanceId(SEED_IDS.starterWolf, 3),
-	fireDragon1: generateDeterministicInstanceId(SEED_IDS.fireDragon, 1),
-	iceGolem1: generateDeterministicInstanceId(SEED_IDS.iceGolem, 1),
+	starterWolf1: await generateDeterministicInstanceId(SEED_IDS.starterWolf, 1),
+	starterWolf2: await generateDeterministicInstanceId(SEED_IDS.starterWolf, 2),
+	starterWolf3: await generateDeterministicInstanceId(SEED_IDS.starterWolf, 3),
+	fireDragon1: await generateDeterministicInstanceId(SEED_IDS.fireDragon, 1),
+	iceGolem1: await generateDeterministicInstanceId(SEED_IDS.iceGolem, 1),
 };
 
 const PLAYERS = {

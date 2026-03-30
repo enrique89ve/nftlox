@@ -7,6 +7,7 @@ import {
 	updatePackStatus,
 } from "@/db/queries/packs.ts";
 import { requireString, requireNumber } from "@/utils/validation.ts";
+import { validatePackPayment } from "@/utils/nft-rules.ts";
 import { MAX_PACK_OPEN_BATCH } from "nftlox-sdk";
 
 export async function handlePackBuy(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -36,25 +37,14 @@ export async function handlePackBuy(op: ParsedOperation, txn: Queryable): Promis
 			throw new Error("Payment transfer required for paid pack");
 		}
 
-		const pricePerUnit = parseFloat(pack.price_amount);
-		if (Number.isNaN(pricePerUnit) || pricePerUnit <= 0 || !Number.isFinite(pricePerUnit)) {
-			throw new Error(`Pack has invalid price: ${pack.price_amount}`);
-		}
-
-		const expectedTotal = pricePerUnit * quantity;
-
-		const payment = op.pairedTransfers.find(t =>
-			t.from === op.signer &&
-			t.to === pack.creator &&
-			t.currency === pack.price_currency &&
-			t.amount >= expectedTotal
-		);
-
-		if (!payment) {
-			throw new Error(
-				`Invalid payment: expected >= ${expectedTotal} ${pack.price_currency} from @${op.signer} to @${pack.creator}`,
-			);
-		}
+		validatePackPayment({
+			transfers: op.pairedTransfers,
+			buyer: op.signer,
+			creator: pack.creator,
+			pricePerUnit: parseFloat(pack.price_amount),
+			currency: pack.price_currency ?? "",
+			quantity,
+		});
 	}
 
 	await upsertPackBalance(op.signer, packId, quantity, txn);

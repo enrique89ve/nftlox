@@ -50,8 +50,8 @@ export async function buildBurn(input: BurnBuilderInput): Promise<BuildResult<Bu
 	const operation: HiveOperation = [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [data.owner],
+			required_auths: [data.owner],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: JSON.stringify(payload),
 		},

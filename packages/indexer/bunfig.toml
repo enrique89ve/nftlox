@@ -1,0 +1,10 @@
+# NFTLox Indexer — Bun runtime configuration
+
+telemetry = false
+
+[install]
+frozenLockfile = true
+
+[test]
+coverage = false
+retry = 0

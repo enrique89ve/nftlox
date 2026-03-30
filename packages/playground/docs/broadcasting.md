@@ -17,7 +17,7 @@ The NFTLox API and SDK return raw Hive operations in this format:
 	"required_auths": [],
 	"required_posting_auths": ["myaccount"],
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.3.0\",\"action\":\"mint\",\"data\":{...}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.4.0\",\"action\":\"mint\",\"data\":{...}}"
 }]
 ```
 
@@ -25,10 +25,14 @@ You are responsible for wrapping them in a transaction, signing, and broadcastin
 
 ### Which key to use
 
-| Operation type | Key required |
+The protocol has **10 actions requiring active key** and **15 using posting key**.
+
+| Key required | Actions |
 |---|---|
-| All operations except buy | **Posting key** |
-| Marketplace `buy` (involves HIVE/HBD transfer) | **Active key** |
+| **Active key** (10) | `transfer`, `burn`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `pack_approve`, `data_operator_approve` |
+| **Posting key** (15) | `create_collection`, `mint`, `replicate`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `unlist`, `pack_create`, `pack_open`, `nft_transfer_from`, `pack_transfer_from`, `set_data_from`, `nft_lend`, `nft_return` |
+
+Active-key actions use `required_auths` while posting-key actions use `required_posting_auths` in the `custom_json` operation.
 
 ### RPC nodes
 
@@ -76,7 +80,7 @@ async function broadcastSingleOperation() {
 		id: "nftlox_testnet",
 		json: JSON.stringify({
 			protocol: "nftlox_testnet",
-			version: "0.3.0",
+			version: "0.4.0",
 			action: "mint",
 			data: {
 				id: "seed_abc123",
@@ -195,7 +199,7 @@ const operation = ["custom_json", {
 	id: "nftlox_testnet",
 	json: JSON.stringify({
 		protocol: "nftlox_testnet",
-		version: "0.3.0",
+		version: "0.4.0",
 		action: "mint",
 		data: {
 			id: "seed_abc123",
@@ -298,7 +302,7 @@ async function broadcastManual() {
 				id: "nftlox_testnet",
 				json: JSON.stringify({
 					protocol: "nftlox_testnet",
-					version: "0.3.0",
+					version: "0.4.0",
 					action: "mint",
 					data: { /* ... */ },
 				}),
@@ -372,7 +376,7 @@ async function broadcastSingleOperation() {
 			id: "nftlox_testnet",
 			json: JSON.stringify({
 				protocol: "nftlox_testnet",
-				version: "0.3.0",
+				version: "0.4.0",
 				action: "mint",
 				data: {
 					id: "seed_abc123",
@@ -421,7 +425,7 @@ async function broadcastWithManualSigning() {
 			id: "nftlox_testnet",
 			json: JSON.stringify({
 				protocol: "nftlox_testnet",
-				version: "0.3.0",
+				version: "0.4.0",
 				action: "mint",
 				data: {
 					id: "seed_abc123",
@@ -607,7 +611,7 @@ async function broadcastAndConfirm(broadcastFn: () => Promise<string>) {
 
 All three libraries throw errors on broadcast failure. Common failure reasons:
 
-- **Missing required authority** -- wrong key type (posting vs active)
+- **Missing required authority** -- wrong key type (posting vs active). Remember: 10 actions need active key, 15 need posting key
 - **Duplicate transaction** -- same operation already in a pending block
 - **Expired transaction** -- transaction was created too long ago (> 60 seconds)
 - **RC (Resource Credits) insufficient** -- account does not have enough RC to broadcast
@@ -616,8 +620,8 @@ All three libraries throw errors on broadcast failure. Common failure reasons:
 try {
 	await broadcast();
 } catch (error) {
-	if (error.message.includes("missing required posting authority")) {
-		console.error("Wrong key -- this operation requires a posting key");
+	if (error.message.includes("missing required posting authority") || error.message.includes("missing required active authority")) {
+		console.error("Wrong key -- check if this action requires posting or active key");
 	} else if (error.message.includes("rc_plugin")) {
 		console.error("Insufficient Resource Credits -- claim or delegate RC first");
 	} else if (error.message.includes("expired")) {
@@ -628,21 +632,29 @@ try {
 }
 ```
 
-### Using active key for marketplace buy
+### Using active key for active-key operations
 
-The `buy` action requires an active key because it involves HIVE/HBD transfers:
+Actions like `transfer`, `burn`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `pack_approve`, and `data_operator_approve` require an active key. These operations use `required_auths` instead of `required_posting_auths`:
 
 ```typescript
+// The operation format for active-key actions
+const activeKeyOperation = ["custom_json", {
+	required_auths: ["myaccount"],        // active key
+	required_posting_auths: [],           // empty
+	id: "nftlox_testnet",
+	json: JSON.stringify({ /* ... */ }),
+}];
+
 // hive-tx example
 const ACTIVE_KEY = "5K...your_active_key_wif";
 const tx = new Transaction();
-await tx.create([buyOperation]);
+await tx.create([activeKeyOperation]);
 tx.sign(ACTIVE_KEY);
 await tx.broadcast();
 
 // dhive example
 const ACTIVE_KEY = PrivateKey.fromString("5K...your_active_key_wif");
-await client.broadcast.sendOperations([buyOperation], ACTIVE_KEY);
+await client.broadcast.sendOperations([activeKeyOperation], ACTIVE_KEY);
 
 // wax example
 const activePublicKey = await wallet.importKey("5K...your_active_key_wif");

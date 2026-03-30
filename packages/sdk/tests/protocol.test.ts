@@ -540,8 +540,8 @@ describe("Buy Action (Multisig)", () => {
 		expect(ACTION_BUY).toBe("buy");
 	});
 
-	test("MULTISIG_EXPIRATION_MS should be 60 seconds", () => {
-		expect(MULTISIG_EXPIRATION_MS).toBe(60_000);
+	test("MULTISIG_EXPIRATION_MS should be 125 seconds", () => {
+		expect(MULTISIG_EXPIRATION_MS).toBe(125_000);
 	});
 
 	test("MAX_MULTISIG_OPERATIONS should be 4", () => {

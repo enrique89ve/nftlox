@@ -9,6 +9,7 @@ import {
 	optionalString,
 	optionalNumber,
 } from "@/utils/validation.ts";
+import { validateSeedDemand } from "@/utils/nft-rules.ts";
 
 type DropEntry = { seedId: string; weight: number };
 
@@ -57,23 +58,16 @@ async function validateSeedSupply(
 		throw new Error(`Seed ${entry.seedId} does not belong to collection ${collectionId}`);
 	}
 
-	if (maxSupply > 0) {
-		const totalDemand = maxSupply * itemsPerPack;
-		const expectedDemand = Math.ceil((totalDemand * entry.weight) / totalWeight);
-		const remaining = seed.max_replicas > 0
-			? seed.max_replicas - seed.distributed
-			: Infinity;
-
-		if (seed.max_replicas > 0 && remaining < expectedDemand) {
-			throw new Error(
-				`Seed ${entry.seedId} needs ${expectedDemand} remaining supply but has ${remaining}`,
-			);
-		}
-	} else if (seed.max_replicas > 0) {
-		throw new Error(
-			`Unlimited pack requires unlimited seeds (max_replicas=0), but seed ${entry.seedId} has max_replicas=${seed.max_replicas}`,
-		);
-	}
+	const demand = validateSeedDemand({
+		seedId: entry.seedId,
+		weight: entry.weight,
+		totalWeight,
+		maxReplicas: seed.max_replicas,
+		distributed: seed.distributed,
+		maxSupply,
+		itemsPerPack,
+	});
+	if (!demand.ok) throw new Error(demand.error);
 }
 
 export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Promise<void> {

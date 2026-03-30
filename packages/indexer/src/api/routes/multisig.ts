@@ -70,38 +70,30 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			return { ok: false, code: "MULTISIG_DISABLED", message: "Multisig signing is not enabled on this node" };
 		}
 
-		// Rate limit by buyer account
-		const buyer = extractBuyerFromBody(body);
-		if (buyer) {
-			const rateResult = rateLimiter.check(buyer);
-			if (!rateResult.allowed) {
-				set.status = 429;
-				return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${rateResult.retryAfterMs}ms` };
-			}
+		// Elysia validates body schema, so buyer and nftId are typed strings.
+		// Always apply rate limiting — no silent skip on empty values.
+		const rateResult = rateLimiter.check(body.buyer);
+		if (!rateResult.allowed) {
+			set.status = 429;
+			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${rateResult.retryAfterMs}ms` };
 		}
 
 		// Acquire per-NFT lock to prevent two buyers co-signing the same NFT
-		const nftId = extractNftIdFromBody(body);
-		if (nftId && buyer) {
-			const lockResult = nftLock.acquire(nftId, buyer, MULTISIG_EXPIRATION_MS);
-			if (!lockResult.acquired) {
-				set.status = 409;
-				return {
-					ok: false,
-					code: "NFT_LOCKED",
-					message: `NFT is being purchased by another buyer. Retry after ${lockResult.retryAfterMs}ms`,
-				};
-			}
+		const lockResult = nftLock.acquire(body.nftId, body.buyer, MULTISIG_EXPIRATION_MS);
+		if (!lockResult.acquired) {
+			set.status = 409;
+			return {
+				ok: false,
+				code: "NFT_LOCKED",
+				message: `NFT is being purchased by another buyer. Retry after ${lockResult.retryAfterMs}ms`,
+			};
 		}
 
 		const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId, config.activeKey);
 
 		// Release lock on validation failure so the NFT is available again
-		if (!result.ok && nftId) {
-			nftLock.release(nftId);
-		}
-
 		if (!result.ok) {
+			nftLock.release(body.nftId);
 			set.status = 400;
 			return result;
 		}
@@ -116,8 +108,8 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 				ref_block_num: t.Number(),
 				ref_block_prefix: t.Number(),
 				expiration: t.String(),
-				operations: t.Array(t.Any()),
-				extensions: t.Optional(t.Array(t.Any())),
+				operations: t.Array(t.Tuple([t.String(), t.Record(t.String(), t.Unknown())])),
+				extensions: t.Optional(t.Array(t.Unknown())),
 				signatures: t.Array(t.String()),
 			}, { description: "Unsigned Hive transaction object" }),
 		}),
@@ -127,16 +119,3 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		},
 	});
 
-/** Safely extract `buyer` string from an unvalidated request body. */
-function extractBuyerFromBody(body: unknown): string {
-	if (!body || typeof body !== "object" || Array.isArray(body)) return "";
-	const record = body as Record<string, unknown>;
-	return typeof record.buyer === "string" ? record.buyer : "";
-}
-
-/** Safely extract `nftId` string from an unvalidated request body. */
-function extractNftIdFromBody(body: unknown): string {
-	if (!body || typeof body !== "object" || Array.isArray(body)) return "";
-	const record = body as Record<string, unknown>;
-	return typeof record.nftId === "string" ? record.nftId : "";
-}

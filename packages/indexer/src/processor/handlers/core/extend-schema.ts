@@ -2,6 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getCollectionRules, updateCollectionSchema } from "@/db/queries/collections.ts";
 import { requireString } from "@/utils/validation.ts";
+import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { mergeSchemas, validateSchemaDefinition, type CollectionSchema, type SchemaField } from "nftlox-sdk";
 
 export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -25,12 +26,10 @@ export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): P
 	if (existingSchema) {
 		const { merged, errors } = mergeSchemas(existingSchema, { newImmutableFields, newMutableFields });
 		if (errors.length > 0) {
-			const messages = errors.map((e) => `${e.field}: ${e.message}`).join("; ");
-			throw new Error(`Schema extension failed: ${messages}`);
+			throw new Error(`Schema extension failed: ${formatSchemaErrors(errors)}`);
 		}
 		await updateCollectionSchema(collectionId, merged, txn);
 	} else {
-		// First schema creation via extend_schema
 		const newSchema: CollectionSchema = {
 			immutable: newImmutableFields ?? [],
 			mutable: newMutableFields ?? [],
@@ -38,8 +37,7 @@ export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): P
 
 		const errors = validateSchemaDefinition(newSchema);
 		if (errors.length > 0) {
-			const messages = errors.map((e) => `${e.field}: ${e.message}`).join("; ");
-			throw new Error(`Schema validation failed: ${messages}`);
+			throw new Error(`Schema validation failed: ${formatSchemaErrors(errors)}`);
 		}
 
 		await updateCollectionSchema(collectionId, newSchema, txn);

@@ -7,7 +7,8 @@ import {
 } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, optionalObject } from "@/utils/validation.ts";
-import { validateMutableUpdate, computeDataHash, type CollectionSchema } from "nftlox-sdk";
+import { validateAndMergeMutableData } from "@/utils/data-transforms.ts";
+import type { CollectionSchema } from "nftlox-sdk";
 
 export async function handleSetData(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");
@@ -32,22 +33,10 @@ export async function handleSetData(op: ParsedOperation, txn: Queryable): Promis
 			throw new Error("mutableData is required for schema-based collections");
 		}
 
-		const errors = validateMutableUpdate(schema, mutableData);
-		if (errors.length > 0) {
-			const messages = errors.map((e) => `${e.field}: ${e.message}`).join("; ");
-			throw new Error(`Schema validation failed: ${messages}`);
-		}
+		const existing = (nft.mutable_data ?? {}) as Record<string, unknown>;
+		const { merged, dataHash } = await validateAndMergeMutableData(schema, mutableData, existing);
 
-		// Merge in JS and write the FULL merged result (hash must match stored value)
-		const existingMutable = (nft.mutable_data ?? {}) as Record<string, unknown>;
-		const merged = { ...existingMutable, ...mutableData };
-		const dataHash = await computeDataHash(merged);
-
-		await updateNftMutableData(
-			nftId, merged, dataHash,
-			op.txId, op.blockNum,
-			txn,
-		);
+		await updateNftMutableData(nftId, merged, dataHash, op.txId, op.blockNum, txn);
 	} else {
 		throw new Error(`Collection ${nft.collection_id} requires a schema for set_data`);
 	}

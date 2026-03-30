@@ -119,7 +119,7 @@ Define your game's collection with a typed schema via the playground API. The sc
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.3.0",
+	"protocolVersion": "0.4.0",
 	"hashVersion": "v1",
 	"collectionId": "col_abc123def456",
 	"generatedIds": { "collectionId": "col_abc123def456", "originDna": "A1B2C3D4E5F6G7H8" },
@@ -164,7 +164,7 @@ Each unique card in your catalog becomes one **seed** -- a non-transferable temp
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.3.0",
+	"protocolVersion": "0.4.0",
 	"collectionId": "col_abc123def456",
 	"generatedIds": {
 		"odin-allfather": "seed_a1b2c3d4",
@@ -248,6 +248,8 @@ See [RNG Reference](rng-reference.md) for the full algorithm specification.
 }
 ```
 
+The `signer` must be the **current owner of the seeds** (not necessarily the collection creator). If the creator transferred seed ownership to another account, only that account can call `bulk_distribute`.
+
 Aggregate resolved seeds before sending: if `resolveDropTable()` returns the same seed ID more than once, combine them into a single entry with the appropriate `quantity` rather than sending duplicate entries. The `originBlock` should be the block number of the player's payment transaction.
 
 **Response:**
@@ -255,14 +257,14 @@ Aggregate resolved seeds before sending: if `resolveDropTable()` returns the sam
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.3.0",
+	"protocolVersion": "0.4.0",
 	"operation": ["custom_json", { "..." }],
 	"payload": { "..." },
 	"keyType": "Posting"
 }
 ```
 
-Sign the resulting operation with the collection creator's posting key and broadcast it to the network.
+Sign the resulting operation with the **seed owner's posting key** and broadcast it to the network. Note: `bulk_distribute` can only be called by the current owner of the seeds, not necessarily the collection creator. If the creator transferred the seeds to another account, only that new owner can distribute them.
 
 **What happens on-chain:** The NFTLox indexer processes `bulk_distribute` and for each item:
 1. Looks up the seed and validates that it has available supply.
@@ -351,7 +353,7 @@ If the Hive account running your game server is different from the collection cr
 
 ### Granting operator access
 
-The collection creator broadcasts this authorization once:
+The collection creator broadcasts this authorization once. This operation requires the creator's **active key** (`required_auths`).
 
 **Endpoint:** `POST /api/build/data-operator-approve`
 
@@ -414,5 +416,7 @@ To revoke an operator's access, set `approved` to `false`:
 | `MAX_NAME_LENGTH` | 100 | Collection/NFT name length |
 | `MAX_DESCRIPTION_LENGTH` | 250 | Description field length |
 | `MAX_SCHEMA_FIELDS` | 64 | Fields per schema section (immutable or mutable) |
+
+**Non-transferable collections:** Collections with `transferable: false` cannot list or buy NFTs on the marketplace. Any marketplace operation (`list`, `buy`, `cancel_listing`) will be rejected by the indexer for non-transferable collections.
 
 **Note:** `MAX_BULK_DISTRIBUTE_ITEMS = 50` limits the number of *distinct* seed IDs per operation, not the total number of instances. Each entry can have `quantity > 1`. For example, 3 distinct seeds with quantities [20, 15, 15] produces 50 instances in a single operation. If a pack opening resolves to more than 50 distinct seeds (unlikely for typical 5-card packs), split the request into multiple `bulk_distribute` operations.

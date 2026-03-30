@@ -5,7 +5,9 @@ This guide walks you through making your first API calls to the NFTLox protocol 
 ## Prerequisites
 
 - **Hive account** -- You need a Hive blockchain account. Create one at [signup.hive.io](https://signup.hive.io).
-- **Posting key** -- Required for signing all operations except marketplace buy. The `buy` operation requires an **active key** because it involves HIVE/HBD transfers. Your private keys never leave your client; the API only builds unsigned payloads.
+- **Active key** -- Required for operations that move value: `transfer`, `burn`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `pack_approve`, and `data_operator_approve`.
+- **Posting key** -- Required for the remaining operations: `create_collection`, `mint`, `replicate`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `unlist`, `pack_create`, `pack_open`, `nft_transfer_from`, `pack_transfer_from`, `set_data_from`, `nft_lend`, and `nft_return`.
+- Your private keys never leave your client; the API only builds unsigned payloads.
 
 ## Your First API Call
 
@@ -25,7 +27,7 @@ Response:
 
 ```json
 {
-	"protocolVersion": "0.3.0",
+	"protocolVersion": "0.4.0",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -126,14 +128,14 @@ Response:
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.3.0",
+	"protocolVersion": "0.4.0",
 	"hashVersion": "v1",
 	"collectionId": "deterministic-id-here",
 	"generatedIds": { "collectionId": "..." },
 	"operation": ["custom_json", { ... }],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.3.0",
+		"version": "0.4.0",
 		"action": "create_collection",
 		"data": { ... }
 	}
@@ -151,31 +153,33 @@ All build endpoints accept `POST` with a JSON body:
 | `/api/build/collection` | Create a new collection | Posting |
 | `/api/build/seeds` | Batch-mint seed NFTs | Posting |
 | `/api/build/bulk-distribute` | Distribute instances to users | Posting |
-| `/api/build/transfer` | Transfer an NFT | Posting |
-| `/api/build/list` | List NFT for sale | Posting |
+| `/api/build/transfer` | Transfer an NFT | Active |
+| `/api/build/list` | List NFT for sale | Active |
 | `/api/build/unlist` | Remove listing | Posting |
-| `/api/build/burn` | Burn an NFT | Posting |
+| `/api/build/burn` | Burn an NFT | Active |
 | `/api/build/buy` | Buy a listed NFT | Active |
 | `/api/build/replicate` | Replicate a seed | Posting |
-| `/api/build/set-data` | Update mutable data | Posting |
+| `/api/build/set-data` | Update mutable data (creator) | Posting |
+| `/api/build/set-owner-data` | Update owner-specific data | Posting |
+| `/api/build/extend-schema` | Add fields to collection schema | Posting |
 | `/api/build/pack-create` | Create a pack | Posting |
-| `/api/build/pack-buy` | Buy packs | Posting |
+| `/api/build/pack-buy` | Buy packs | Active |
 | `/api/build/pack-open` | Open packs | Posting |
-| `/api/build/pack-transfer` | Transfer packs | Posting |
-| `/api/build/nft-approve` | Approve NFT operator | Posting |
-| `/api/build/nft-approve-all` | Approve operator for collection | Posting |
+| `/api/build/pack-transfer` | Transfer packs | Active |
+| `/api/build/nft-approve` | Approve NFT operator | Active |
+| `/api/build/nft-approve-all` | Approve operator for collection | Active |
 | `/api/build/nft-transfer-from` | Operator transfers NFT | Posting |
-| `/api/build/pack-approve` | Approve pack operator | Posting |
+| `/api/build/pack-approve` | Approve pack operator | Active |
 | `/api/build/pack-transfer-from` | Operator transfers packs | Posting |
 | `/api/build/nft-lend` | Lend an NFT | Posting |
 | `/api/build/nft-return` | Return a lent NFT | Posting |
-| `/api/build/data-operator-approve` | Approve data operator | Posting |
+| `/api/build/data-operator-approve` | Approve data operator | Active |
 | `/api/build/set-data-from` | Operator updates data | Posting |
 | `/api/build/preview-ids` | Preview deterministic IDs | -- |
 
 ## Signing and Broadcasting
 
-The build API returns an unsigned `operation`. You must sign it with your Hive posting key (or active key, depending on the endpoint) and broadcast it to a Hive RPC node.
+The build API returns an unsigned `operation`. You must sign it with the appropriate Hive key (active or posting, depending on the endpoint -- see the table above) and broadcast it to a Hive RPC node.
 
 Use any Hive signing library. Here is a minimal TypeScript example using `dhive`:
 
@@ -187,9 +191,9 @@ const client = new Client("https://api.hive.blog");
 async function signAndBroadcast(
 	operation: [string, Record<string, unknown>],
 	signerAccount: string,
-	postingKey: string,
+	privateKey: string,
 ): Promise<void> {
-	const key = PrivateKey.fromString(postingKey);
+	const key = PrivateKey.fromString(privateKey);
 
 	const result = await client.broadcast.sendOperations(
 		[operation],
@@ -214,7 +218,7 @@ if (buildResponse.success) {
 	await signAndBroadcast(
 		buildResponse.operation,
 		"alice",
-		"5K...your-posting-key...",
+		"5K...your-active-key...",
 	);
 }
 ```

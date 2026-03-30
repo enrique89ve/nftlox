@@ -121,7 +121,7 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 				}
 
 				const collectionOriginDna = await generateOriginDna(body.collectionId);
-				const result = createDeterministicSeedMintOperations(nfts, body.collectionId, collectionOriginDna, body.owner);
+				const result = await createDeterministicSeedMintOperations(nfts, body.collectionId, collectionOriginDna, body.owner);
 				const opValidation = validateOperationsVersion(result.seeds.map(s => s.operation));
 				const batches = splitOperationsIntoBatches(result.seeds.map(s => s.operation));
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test";
+import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
 import { ACTION_TRANSFER, ACTION_PACK_BUY } from "nftlox-sdk";
@@ -60,6 +60,7 @@ mock.module("@/db/client.ts", () => ({
 		{
 			begin: (fn: (sql: unknown) => Promise<unknown>) => fn((s: TemplateStringsArray, ..._v: unknown[]) => Promise.resolve([])),
 			end: () => Promise.resolve(),
+			unsafe: (_query: string) => Promise.resolve([]),
 		},
 	),
 	clampLimit: (limit: number, defaultVal = 50) => {
@@ -153,6 +154,7 @@ function resetAllMocks(): void {
 
 describe("syncCycle", () => {
 	beforeEach(resetAllMocks);
+	afterEach(resetAllMocks);
 
 	test("initializes from genesis when lastBlock is 0", async () => {
 		trackedLastBlock = 0;

@@ -1,9 +1,10 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftWithCollectionRules, updateNftOwner, NFT_STATUS_LISTED, NFT_STATUS_BURNED, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
+import { getNftWithCollectionRules, updateNftOwner, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername, verifyTransfers } from "@/utils/validation.ts";
-import { isListingExpired } from "@/utils/status-checks.ts";
+import { validateTransferCount } from "@/utils/nft-rules.ts";
+import { assertNotBurned, assertNotLent, isListingExpired } from "@/utils/status-checks.ts";
 import { config } from "@/config.ts";
 
 /**
@@ -34,13 +35,17 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 
 	const nft = await getNftWithCollectionRules(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
-	if (nft.status === NFT_STATUS_BURNED) throw new Error(`NFT is burned: ${nftId}`);
-	if (nft.status === NFT_STATUS_LENT) throw new Error(`NFT is lent: ${nftId}`);
+	assertNotBurned(nft, nftId);
+	assertNotLent(nft, nftId);
 	if (nft.status !== NFT_STATUS_LISTED) throw new Error(`NFT not listed: ${nftId}`);
 	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
 		throw new Error(`Listing has expired for NFT: ${nftId}`);
 	}
 	if (nft.owner === buyer) throw new Error(`Cannot buy own NFT: ${nftId}`);
+
+	if (!nft.transferable) {
+		throw new Error(`Collection ${nft.collection_id} is not transferable — buy blocked`);
+	}
 
 	// Validate listingId matches the active listing
 	if (nft.listing_id !== listingId) {
@@ -73,17 +78,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 		feeAccount: config.hiveAccount,
 	});
 
-	// Validate exact transfer count — reject extra transfers
-	let expectedCount = 0;
-	if (split.sellerAmount > 0) expectedCount++;
-	if (split.royaltyAmount > 0 && split.royaltyRecipient) expectedCount++;
-	if (split.feeAmount > 0) expectedCount++;
-
-	if (transfers.length !== expectedCount) {
-		throw new Error(
-			`Expected exactly ${expectedCount} transfers, got ${transfers.length}`,
-		);
-	}
+	validateTransferCount(transfers, split);
 
 	await updateNftOwner(nftId, buyer, txn);
 	await deleteNftAllowance(nftId, txn);

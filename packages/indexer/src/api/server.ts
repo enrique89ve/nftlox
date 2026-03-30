@@ -117,7 +117,7 @@ export function startApiServer(): void {
 		.use(packsRoutes)
 		.use(statusRoutes)
 		.use(multisigRoutes)
-		.listen(config.port);
+		.listen({ port: config.port, idleTimeout: 30 });
 
 	log.info(`API server listening on port ${config.port}`);
 	if (config.enableSwagger) {

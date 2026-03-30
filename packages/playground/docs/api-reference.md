@@ -30,7 +30,7 @@ Sync status and node information.
 
 ```json
 {
-	"protocolVersion": "0.3.0",
+	"protocolVersion": "0.4.0",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",

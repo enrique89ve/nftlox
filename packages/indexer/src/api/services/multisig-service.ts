@@ -417,6 +417,10 @@ async function validateNftState(
 		throw createMultisigError("CANNOT_BUY_OWN", "Buyer cannot purchase their own NFT");
 	}
 
+	if (!nftWithRules.transferable) {
+		throw createMultisigError("NFT_NOT_TRANSFERABLE", `Collection '${nftWithRules.collection_id}' is not transferable — co-sign rejected`);
+	}
+
 	const nft: NftProcessingRow = nftWithRules;
 	const rules = {
 		id: nftWithRules.collection_id,

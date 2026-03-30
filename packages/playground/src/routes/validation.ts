@@ -71,14 +71,14 @@ export const validationRoutes: Record<string, { POST: RouteHandler }> = {
 				}
 
 				// 3. Generate deterministic IDs
-				const collectionId = generateDeterministicCollectionId(
+				const collectionId = await generateDeterministicCollectionId(
 					body.creator,
 					body.collectionName,
 					body.collectionSymbol,
 				);
-				const seedIds = body.nfts.map(nft =>
+				const seedIds = await Promise.all(body.nfts.map(nft =>
 					generateDeterministicSeedId(collectionId, nft.artId),
-				);
+				));
 
 				// 4. Check indexer for existing IDs
 				let colExists = false;

@@ -77,16 +77,16 @@ console.log(report.verified, "of", report.samplesChecked, "verified");
 | Export | Description |
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
-| `PROTOCOL_VERSION` | `"0.3.0"` |
-| `ALL_ACTIONS` | All 23 protocol actions |
-| `CORE_ACTIONS` | 7 core actions |
+| `PROTOCOL_VERSION` | `"0.4.0"` |
+| `ALL_ACTIONS` | All 25 protocol actions |
+| `CORE_ACTIONS` | 9 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |
 | `PACK_ACTIONS` | 4 pack actions |
 | `APPROVE_ACTIONS` | 5 approve/transferFrom actions |
 | `LENDING_ACTIONS` | 2 lending actions (nft_lend, nft_return) |
 | `DATA_OPERATOR_ACTIONS` | 2 data operator actions |
 | `SUPPORTED_CURRENCIES` | `["HIVE", "HBD"]` |
-| `PROTOCOL_FEE_PCT` | `2.5` (protocol fee percentage) |
+| `PROTOCOL_FEE_PCT` | `1.0` (protocol fee percentage, 1% on sales) |
 | `calculatePaymentSplit()` | Compute seller/royalty/fee split for a sale |
 
 ### Payload Creators

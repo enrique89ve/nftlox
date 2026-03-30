@@ -1,4 +1,4 @@
-# Catalogo de Operaciones NFTLox Protocol v0.3.0
+# Catalogo de Operaciones NFTLox Protocol v0.4.0
 
 Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion se transmite como `custom_json` en la blockchain de Hive con `id = "nftlox_testnet"`.
 
@@ -10,28 +10,28 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 |---|--------|-----------|-----|-------------|
 | 1 | `create_collection` | Core | posting | Crea una coleccion (arquetipo) |
 | 2 | `mint` | Core | posting | Crea un seed NFT dentro de una coleccion |
-| 3 | `transfer` | Core | posting | Transfiere ownership de un NFT |
-| 4 | `burn` | Core | posting | Destruye un NFT permanentemente |
+| 3 | `transfer` | Core | active | Transfiere ownership de un NFT |
+| 4 | `burn` | Core | active | Destruye un NFT permanentemente |
 | 5 | `replicate` | Core | posting | Crea una replica derivada de un NFT original |
 | 6 | `bulk_distribute` | Core | posting | Mintea multiples instancias desde seeds |
 | 7 | `set_data` | Core | posting | Creator actualiza datos mutables de un NFT (requiere schema) |
 | 8 | `set_owner_data` | Core | posting | Owner escribe datos propios en un NFT |
 | 9 | `extend_schema` | Core | posting | Creator agrega campos al schema de una coleccion |
-| 10 | `list` | Marketplace | posting | Pone un NFT a la venta |
+| 10 | `list` | Marketplace | active | Pone un NFT a la venta |
 | 11 | `unlist` | Marketplace | posting | Retira un NFT del marketplace |
 | 12 | `buy` | Marketplace | active | Compra un NFT listado (multisig con nodo) |
 | 13 | `pack_create` | Pack | posting | Crea un pack con drop table probabilistico |
-| 14 | `pack_buy` | Pack | posting | Compra packs (gratis o pagados) |
-| 15 | `pack_transfer` | Pack | posting | Transfiere packs entre usuarios |
+| 14 | `pack_buy` | Pack | active | Compra packs (gratis o pagados) |
+| 15 | `pack_transfer` | Pack | active | Transfiere packs entre usuarios |
 | 16 | `pack_open` | Pack | posting | Abre packs y genera instancias NFT |
-| 17 | `nft_approve` | Approve | posting | Aprueba spender para UN NFT especifico |
-| 18 | `nft_approve_all` | Approve | posting | Aprueba spender para TODOS los NFTs de una coleccion |
+| 17 | `nft_approve` | Approve | active | Aprueba spender para UN NFT especifico |
+| 18 | `nft_approve_all` | Approve | active | Aprueba spender para TODOS los NFTs de una coleccion |
 | 19 | `nft_transfer_from` | Approve | posting | Spender aprobado transfiere NFT del owner |
-| 20 | `pack_approve` | Approve | posting | Aprueba spender para gastar N packs |
+| 20 | `pack_approve` | Approve | active | Aprueba spender para gastar N packs |
 | 21 | `pack_transfer_from` | Approve | posting | Spender aprobado transfiere packs del owner |
 | 22 | `nft_lend` | Lending | posting | Presta un NFT a un borrower |
 | 23 | `nft_return` | Lending | posting | Devuelve un NFT prestado |
-| 24 | `data_operator_approve` | DataOperator | posting | Autoriza operador externo para una coleccion |
+| 24 | `data_operator_approve` | DataOperator | active | Autoriza operador externo para una coleccion |
 | 25 | `set_data_from` | DataOperator | posting | Operador aprobado modifica datos mutables de NFTs (requiere schema) |
 
 ---
@@ -121,7 +121,7 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 
 **Constante SDK**: `ACTION_TRANSFER`
 **Descripcion**: Transfiere la propiedad de un NFT a otra cuenta. Limpia approvals y listings.
-**Key authority**: posting -- el owner firma la transferencia.
+**Key authority**: active -- el owner firma la transferencia.
 **Signer role**: Debe ser el owner actual del NFT.
 
 **Payload del SDK**:
@@ -144,7 +144,7 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 
 **Constante SDK**: `ACTION_BURN`
 **Descripcion**: Destruye un NFT permanentemente. Estado terminal irreversible.
-**Key authority**: posting -- el owner firma la destruccion.
+**Key authority**: active -- el owner firma la destruccion.
 **Signer role**: Debe ser el owner actual del NFT.
 
 **Payload del SDK**:
@@ -197,8 +197,8 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 
 **Constante SDK**: `ACTION_BULK_DISTRIBUTE`
 **Descripcion**: Mintea multiples instancias de uno o varios seeds en una sola operacion. Genera DNA deterministico. Las instancias heredan `immutable_data` del seed automaticamente.
-**Key authority**: posting -- el creator o seed owner firma.
-**Signer role**: Debe ser owner del seed O creator de la coleccion.
+**Key authority**: posting -- el seed owner firma.
+**Signer role**: Debe ser el owner del seed.
 
 **Payload del SDK**:
 | Campo | Tipo | Requerido | Descripcion |
@@ -215,7 +215,7 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 - Items no vacio, max 50
 - No puede haber seedIds duplicados en items
 - Cada seed debe existir y tener supply disponible (`distributed + quantity <= maxReplicas`)
-- Signer debe ser owner del seed o creator de la coleccion
+- Signer debe ser owner del seed
 - Si la coleccion tiene schema y se proporciona `mutableData`, se valida contra el schema
 
 **Cambios de estado**: Inserta N filas en `nfts` (tipo `instance`), incrementa `distributed` del seed.
@@ -309,7 +309,7 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 
 **Constante SDK**: `ACTION_LIST`
 **Descripcion**: Pone un NFT a la venta en el marketplace con precio y moneda.
-**Key authority**: posting -- el owner firma el listing.
+**Key authority**: active -- el owner firma el listing.
 **Signer role**: Debe ser el owner del NFT.
 
 **Payload del SDK**:
@@ -324,11 +324,12 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 - NFT debe existir
 - Status no puede ser `burned` ni `lent`
 - `nft.owner === op.signer`
+- La coleccion debe ser transferible (`transferable=true` en rules)
 - Precio debe tener formato Hive valido (3 decimales)
 - Moneda debe ser HIVE o HBD
 
 **Cambios de estado**: Status -> `listed`, almacena `listing_price`, `listing_currency`, `listing_expires_at`, `listing_marketplace`.
-**Restricciones**: NFT quemado, prestado, o signer no es owner -> rechazado.
+**Restricciones**: NFT quemado, prestado, coleccion no transferible, o signer no es owner -> rechazado.
 
 ---
 
@@ -369,17 +370,18 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 **Transfers pareados** (generados por el SDK como operaciones HIVE):
 - Transfer al seller (precio - royalty - fee)
 - Transfer al royaltyRecipient (si aplica y != seller)
-- Transfer al feeAccount (fee del protocolo 2.5%, si != seller)
+- Transfer al feeAccount (fee del protocolo 1%, si != seller)
 
 **Validaciones del indexer**:
 - NFT debe existir y estar `listed`
+- La coleccion debe ser transferible (`transferable=true` en rules)
 - Buyer != seller
 - `verifyTransfers()` valida montos exactos de cada transfer
 - Si `royaltyRecipient === seller`, royalty se fusiona en el pago al seller
 - Si `feeAccount === seller`, fee se fusiona en el pago al seller
 
 **Cambios de estado**: `owner` -> buyer, status -> `active`, limpia listing y allowances.
-**Restricciones**: NFT no listado, pagos incorrectos, buyer = seller -> rechazado.
+**Restricciones**: NFT no listado, coleccion no transferible, pagos incorrectos, buyer = seller -> rechazado.
 
 ---
 
@@ -421,7 +423,7 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 
 **Constante SDK**: `ACTION_PACK_BUY`
 **Descripcion**: Compra packs. Si el pack tiene precio, requiere transfer HIVE/HBD pareado del buyer al creator.
-**Key authority**: posting -- el buyer firma.
+**Key authority**: active -- el buyer firma.
 **Signer role**: Buyer.
 
 **Payload del SDK**:
@@ -445,7 +447,7 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 
 **Constante SDK**: `ACTION_PACK_TRANSFER`
 **Descripcion**: Transfiere packs entre usuarios.
-**Key authority**: posting -- el sender firma.
+**Key authority**: active -- el sender firma.
 **Signer role**: Debe ser el poseedor de los packs.
 
 **Payload del SDK**:
@@ -497,7 +499,7 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 
 **Constante SDK**: `ACTION_NFT_APPROVE`
 **Descripcion**: Aprueba a un spender para transferir UN NFT especifico del owner.
-**Key authority**: posting -- el owner firma la aprobacion.
+**Key authority**: active -- el owner firma la aprobacion.
 **Signer role**: Debe ser el owner del NFT.
 
 **Payload del SDK**:
@@ -522,7 +524,7 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 
 **Constante SDK**: `ACTION_NFT_APPROVE_ALL`
 **Descripcion**: Aprueba a un spender para transferir TODOS los NFTs del signer en una coleccion. Analogo a ERC-721 `setApprovalForAll`.
-**Key authority**: posting -- el owner firma.
+**Key authority**: active -- el owner firma.
 **Signer role**: El signer es el owner que concede permiso (firmo la tx).
 
 **Payload del SDK**:
@@ -571,7 +573,7 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 
 **Constante SDK**: `ACTION_PACK_APPROVE`
 **Descripcion**: Aprueba a un spender para gastar N packs del owner. Analogo a ERC-20 `approve`.
-**Key authority**: posting -- el owner firma.
+**Key authority**: active -- el owner firma.
 **Signer role**: Debe poseer balance del pack.
 
 **Payload del SDK**:
@@ -673,7 +675,7 @@ Referencia completa de las 25 operaciones del protocolo NFTLox. Cada operacion s
 
 **Constante SDK**: `ACTION_DATA_OPERATOR_APPROVE`
 **Descripcion**: El creator de una coleccion autoriza a un operador externo para modificar datos mutables de NFTs en esa coleccion.
-**Key authority**: posting -- el creator firma.
+**Key authority**: active -- el creator firma.
 **Signer role**: Debe ser el creator de la coleccion.
 
 **Payload del SDK**:
@@ -736,14 +738,14 @@ Collections, seeds y packs usan IDs deterministicos generados por el SDK (hash d
 La funcion `calculatePaymentSplit()` del SDK se reutiliza en el indexer para verificar pagos. El split es:
 - **Seller**: precio - royalty - fee
 - **Royalty**: `totalPrice x royaltyPct / 100` (si royaltyRecipient != seller)
-- **Fee**: `totalPrice x 2.5%` (si feeAccount != seller)
+- **Fee**: `totalPrice x 1%` (si feeAccount != seller)
 
 Si royaltyRecipient o feeAccount coinciden con el seller, esos montos se fusionan en el pago al seller.
 
 ### Multisig (Buy)
 La operacion `buy` es la unica que requiere active key porque el nodo co-firma. El buyer envia transfers HIVE/HBD y el nodo valida y co-firma el `custom_json`. Si el nodo rechaza, los fondos nunca salen de la cuenta del buyer.
 
-### Sistema de datos (v0.3.0)
+### Sistema de datos (v0.4.0)
 El protocolo maneja tres capas de datos por NFT:
 
 - **`immutable_data`**: Datos inmutables definidos en el mint. No se pueden modificar despues de la creacion. Solo el creator los establece. Se validan contra los campos `immutable` del schema.

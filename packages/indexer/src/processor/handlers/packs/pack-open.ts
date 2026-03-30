@@ -11,17 +11,156 @@ import {
 	getSeedWithDna,
 	nftExists,
 	incrementDistributed,
+	type SeedWithDnaRow,
 } from "@/db/queries/nfts.ts";
 import { requireString, requireNumber } from "@/utils/validation.ts";
+import { computeInstanceBaseline } from "@/utils/nft-rules.ts";
 import {
 	resolveDropTable,
 	generateDeterministicInstanceId,
 	generateOriginDna,
 	generateDeterministicInstanceDna,
 	generateDeterministicAccessKey,
-	computeDataHash,
 	MAX_PACK_OPEN_BATCH,
 } from "nftlox-sdk";
+
+// ============ TYPES ============
+
+type DropEntry = { readonly seedId: string; readonly weight: number };
+
+type MintPlanItem = {
+	readonly seedId: string;
+	readonly seed: SeedWithDnaRow;
+	readonly instanceNumber: number;
+};
+
+// ============ DROP TABLE VALIDATION ============
+
+function parseDropTable(raw: unknown, packId: string): ReadonlyArray<DropEntry> {
+	const parsed = typeof raw === "string" ? tryParseJson(raw) : raw;
+	if (!Array.isArray(parsed) || parsed.length === 0) {
+		throw new Error(`Pack ${packId} has empty or invalid drop_table`);
+	}
+	for (const entry of parsed) {
+		if (
+			typeof entry !== "object" || entry === null ||
+			typeof entry.seedId !== "string" ||
+			typeof entry.weight !== "number"
+		) {
+			throw new Error(`Pack ${packId} has corrupted drop_table entry`);
+		}
+	}
+	return parsed as ReadonlyArray<DropEntry>;
+}
+
+function tryParseJson(raw: string): unknown {
+	try {
+		return JSON.parse(raw);
+	} catch {
+		return null;
+	}
+}
+
+// ============ SUPPLY VALIDATION (Phase 1) ============
+
+async function buildMintPlan(
+	selectedSeeds: ReadonlyArray<string>,
+	packId: string,
+	txId: string,
+	localMintedPerSeed: ReadonlyMap<string, number>,
+	txn: Queryable,
+): Promise<ReadonlyArray<MintPlanItem> | null> {
+	const plan: MintPlanItem[] = [];
+	const packOffsets = new Map<string, number>();
+
+	for (const seedId of selectedSeeds) {
+		const seed = await getSeedWithDna(seedId, txn);
+		if (!seed) throw new Error(`Seed ${seedId} not found during pack opening (pack: ${packId})`);
+
+		const maxReplicas = Number(seed.max_replicas) || 0;
+		const distributed = Number(seed.distributed) || 0;
+
+		const [existingFromTx] = await txn`
+			SELECT COUNT(*)::int AS count FROM nfts
+			WHERE seed_id = ${seedId} AND birth_tx = ${txId}
+		`;
+		const baseDistributed = computeInstanceBaseline(distributed, existingFromTx?.count ?? 0);
+
+		const globalOffset = localMintedPerSeed.get(seedId) ?? 0;
+		const packOffset = packOffsets.get(seedId) ?? 0;
+		const instanceNumber = baseDistributed + globalOffset + packOffset + 1;
+
+		if (maxReplicas > 0 && instanceNumber > maxReplicas) {
+			return null; // supply exhausted — entire pack cannot deliver
+		}
+
+		packOffsets.set(seedId, packOffset + 1);
+		plan.push({ seedId, seed, instanceNumber });
+	}
+
+	return plan;
+}
+
+// ============ MINT EXECUTION (Phase 2) ============
+
+async function executeMintPlan(
+	plan: ReadonlyArray<MintPlanItem>,
+	op: ParsedOperation,
+	localMintedPerSeed: Map<string, number>,
+	txn: Queryable,
+): Promise<void> {
+	for (const item of plan) {
+		const instanceId = await generateDeterministicInstanceId(item.seedId, item.instanceNumber);
+
+		if (await nftExists(instanceId, txn)) {
+			localMintedPerSeed.set(item.seedId, (localMintedPerSeed.get(item.seedId) ?? 0) + 1);
+			continue;
+		}
+
+		const originDna = item.seed.origin_dna
+			?? await generateOriginDna(item.seed.collection_id);
+		const instanceDna = await generateDeterministicInstanceDna(
+			item.seedId, item.instanceNumber, op.txId, op.blockNum,
+		);
+		const uniqueAccessKey = await generateDeterministicAccessKey(
+			instanceDna, op.signer, op.txId,
+		);
+
+		await insertNft({
+			id: instanceId,
+			collectionId: item.seed.collection_id,
+			nftType: "instance",
+			edition: 1,
+			owner: op.signer,
+			originDna,
+			instanceDna,
+			uniqueAccessKey,
+			birthBlock: op.blockNum,
+			birthTx: op.txId,
+			mintedBy: op.signer,
+			name: "",
+			description: null,
+			imageUrl: null,
+			imageHash: null,
+			maxReplicas: 0,
+			seedId: item.seedId,
+			instanceNumber: item.instanceNumber,
+			originalId: null,
+			immutableData: null,
+			immutableDataHash: null,
+			mutableData: null,
+			mutableDataHash: null,
+			blockNum: op.blockNum,
+			txId: op.txId,
+			createdAt: op.timestamp,
+		}, txn);
+
+		await incrementDistributed(item.seedId, txn);
+		localMintedPerSeed.set(item.seedId, (localMintedPerSeed.get(item.seedId) ?? 0) + 1);
+	}
+}
+
+// ============ HANDLER ============
 
 export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const packId = requireString(op.data.packId, "packId");
@@ -35,118 +174,35 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 	const pack = await getPackForProcessing(packId, txn);
 	if (!pack) throw new Error(`Pack not found: ${packId}`);
 
-	// Parse drop_table BEFORE any state mutations to fail fast on corrupted data
-	let dropTable: unknown;
-	try {
-		dropTable = typeof pack.drop_table === "string"
-			? JSON.parse(pack.drop_table) : pack.drop_table;
-	} catch {
-		throw new Error(`Pack ${packId} has corrupted drop_table`);
-	}
-	if (!Array.isArray(dropTable) || dropTable.length === 0) {
-		throw new Error(`Pack ${packId} has empty or invalid drop_table`);
-	}
+	const dropTable = parseDropTable(pack.drop_table, packId);
 
-	// Pre-check balance before deduction (prevents raw Postgres CHECK violation)
 	const currentBalance = await getPackBalance(op.signer, packId, txn);
 	if (currentBalance < quantity) {
-		throw new Error(
-			`Insufficient pack balance: has ${currentBalance}, needs ${quantity}`,
-		);
+		throw new Error(`Insufficient pack balance: has ${currentBalance}, needs ${quantity}`);
 	}
 
-	await upsertPackBalance(op.signer, packId, -quantity, txn);
-
-	// Balance tracker: tracks how many instances we've minted per seed
-	// within THIS handler invocation, so the same seed appearing multiple
-	// times in the drop table gets sequential instance numbers.
+	let deliveredPacks = 0;
 	const localMintedPerSeed = new Map<string, number>();
 
 	for (let packIndex = 0; packIndex < quantity; packIndex++) {
-		// Deterministic RNG seed using immutable block data
 		const rngSeed = `${op.txId}:${op.blockNum}:${op.signer}:${packId}:${packIndex}`;
 		const selectedSeeds = resolveDropTable(
-			dropTable as Array<{ seedId: string; weight: number }>,
+			dropTable as Array<DropEntry>,
 			pack.items_per_pack,
 			rngSeed,
 		);
 
-		for (let itemIndex = 0; itemIndex < selectedSeeds.length; itemIndex++) {
-			const seedId = selectedSeeds[itemIndex]!;
+		const mintPlan = await buildMintPlan(selectedSeeds, packId, op.txId, localMintedPerSeed, txn);
+		if (!mintPlan) continue;
 
-			const seed = await getSeedWithDna(seedId, txn);
-			if (!seed) throw new Error(`Seed ${seedId} not found during pack opening (pack: ${packId})`);
-
-			const distributed = Number(seed.distributed) || 0;
-			const maxReplicas = Number(seed.max_replicas) || 0;
-
-			// Idempotency: recover pre-tx baseline by subtracting instances
-			// already created by this exact transaction
-			const [existingFromTx] = await txn`
-				SELECT COUNT(*)::int AS count FROM nfts
-				WHERE seed_id = ${seedId} AND birth_tx = ${op.txId}
-			`;
-			const alreadyMintedThisTx = existingFromTx?.count ?? 0;
-			const baseDistributed = distributed - alreadyMintedThisTx;
-
-			// Local offset for same seed appearing multiple times in this invocation
-			const localOffset = localMintedPerSeed.get(seedId) ?? 0;
-			const instanceNumber = baseDistributed + localOffset + 1;
-
-			// Skip if max supply reached
-			if (maxReplicas > 0 && instanceNumber > maxReplicas) continue;
-
-			const instanceId = await generateDeterministicInstanceId(seedId, instanceNumber);
-
-			// Skip if instance already exists (idempotency)
-			if (await nftExists(instanceId, txn)) {
-				localMintedPerSeed.set(seedId, localOffset + 1);
-				continue;
-			}
-
-			// DNA Lineage: deterministic from immutable block data
-			const originDna = seed.origin_dna
-				?? await generateOriginDna(seed.collection_id);
-			const instanceDna = await generateDeterministicInstanceDna(
-				seedId, instanceNumber, op.txId, op.blockNum,
-			);
-			const uniqueAccessKey = await generateDeterministicAccessKey(
-				instanceDna, op.signer, op.txId,
-			);
-
-			await insertNft({
-				id: instanceId,
-				collectionId: seed.collection_id,
-				nftType: "instance",
-				edition: 1,
-				owner: op.signer,
-				originDna,
-				instanceDna,
-				uniqueAccessKey,
-				birthBlock: op.blockNum,
-				birthTx: op.txId,
-				mintedBy: op.signer,
-				name: "",
-				description: null,
-				imageUrl: null,
-				imageHash: null,
-				maxReplicas: 0,
-				seedId,
-				instanceNumber,
-				originalId: null,
-				immutableData: null,
-				immutableDataHash: null,
-				mutableData: null,
-				mutableDataHash: null,
-				blockNum: op.blockNum,
-				txId: op.txId,
-				createdAt: op.timestamp,
-			}, txn);
-
-			await incrementDistributed(seedId, txn);
-			localMintedPerSeed.set(seedId, localOffset + 1);
-		}
+		await executeMintPlan(mintPlan, op, localMintedPerSeed, txn);
+		deliveredPacks++;
 	}
 
-	await incrementPackOpened(packId, quantity, txn);
+	if (deliveredPacks === 0) {
+		throw new Error(`No packs could be delivered for ${packId}: all seeds exhausted`);
+	}
+
+	await upsertPackBalance(op.signer, packId, -deliveredPacks, txn);
+	await incrementPackOpened(packId, deliveredPacks, txn);
 }

@@ -3,6 +3,8 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
 import { requireString, optionalString, optionalNumber, optionalObject } from "@/utils/validation.ts";
+import { resolveNftType, validateSeedCap } from "@/utils/nft-rules.ts";
+import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import {
 	validateMintData,
 	computeDataHash,
@@ -23,13 +25,11 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 	if (collection.creator !== op.signer) throw new Error(`Only the collection creator can mint in ${collectionId}`);
 
 	const metadata = optionalObject(d.metadata) ?? {};
-	const explicitType = optionalString(d.nftType);
-	const isSeed = explicitType === "seed" || (!explicitType && id.startsWith("seed_"));
+	const nftType = resolveNftType(optionalString(d.nftType), id);
+	const isSeed = nftType === "seed";
 
-	if (isSeed && collection.total_potential > 0 && collection.seed_count >= collection.total_potential) {
-		throw new Error(
-			`Collection ${collectionId} reached its seed cap: ${collection.seed_count}/${collection.total_potential}`,
-		);
+	if (isSeed) {
+		validateSeedCap(collectionId, collection.seed_count, collection.total_potential);
 	}
 
 	// Schema-based validation
@@ -40,8 +40,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 	if (schema) {
 		const errors = validateMintData(schema, immutableData ?? undefined, mutableData ?? undefined);
 		if (errors.length > 0) {
-			const messages = errors.map((e) => `${e.field}: ${e.message}`).join("; ");
-			throw new Error(`Schema validation failed: ${messages}`);
+			throw new Error(`Schema validation failed: ${formatSchemaErrors(errors)}`);
 		}
 	}
 

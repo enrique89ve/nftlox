@@ -146,6 +146,7 @@ export function toHiveOperation(
 	];
 }
 
+
 /** Spread seed provenance fields only when present */
 function spreadProvenance(p?: SeedProvenance): Record<string, string> {
 	if (!p) return {};
@@ -276,7 +277,7 @@ export function createBurnPayload(
 
 /**
  * Create a set_data payload to update an NFT's mutable data.
- * Only the NFT owner can call this (requires active key).
+ * Only the collection creator can call this (posting key).
  */
 export function createSetDataPayload(
 	input: SetDataInput,
@@ -336,8 +337,8 @@ export function createDataOperatorApproveOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [creator],
+			required_auths: [creator],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: safeStringify(payload),
 		},
@@ -536,8 +537,8 @@ export function createTransferOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [from],
+			required_auths: [from],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: safeStringify(payload),
 		},
@@ -555,8 +556,8 @@ export function createBurnOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [owner],
+			required_auths: [owner],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: safeStringify(payload),
 		},
@@ -573,8 +574,8 @@ export function createListOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [owner],
+			required_auths: [owner],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: safeStringify(payload),
 		},
@@ -922,8 +923,8 @@ export function createPackBuyOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [buyer],
+			required_auths: [buyer],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: safeStringify(payload),
 		},
@@ -938,8 +939,8 @@ export function createPackTransferOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [from],
+			required_auths: [from],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: safeStringify(payload),
 		},
@@ -1043,7 +1044,7 @@ export function createNftTransferFromPayload(
 }
 
 // ============ APPROVE & TRANSFER_FROM OPERATIONS ============
-// Approve operations use required_auths (active key) for security
+// Approve operations require active key; transfer_from uses posting (gate was at approve)
 
 export function createPackApproveOperation(
 	input: PackApproveInput,
@@ -1053,8 +1054,8 @@ export function createPackApproveOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [owner],
+			required_auths: [owner],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: safeStringify(payload),
 		},
@@ -1085,8 +1086,8 @@ export function createNftApproveOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [owner],
+			required_auths: [owner],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: safeStringify(payload),
 		},
@@ -1101,8 +1102,8 @@ export function createNftApproveAllOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [owner],
+			required_auths: [owner],
+			required_posting_auths: [],
 			id: PROTOCOL_ID,
 			json: safeStringify(payload),
 		},

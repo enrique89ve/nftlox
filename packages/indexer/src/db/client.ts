@@ -7,9 +7,15 @@ const log = createLogger("db");
 
 export const sql = pgClient(config.databaseUrl, {
 	max: 10,
-	idle_timeout: 20,
-	connect_timeout: 10,
+	idle_timeout: 30,
+	max_lifetime: 60 * 30,
+	connect_timeout: 30,
+	keep_alive: 60,
+	backoff: (retries: number) => Math.min(Math.pow(2, retries) * 0.5, 20),
 	onnotice: () => {},
+	onclose: (connId: number) => {
+		log.warn("DB connection closed", { connectionId: connId });
+	},
 });
 
 /**

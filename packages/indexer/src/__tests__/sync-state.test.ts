@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "bun:test";
+import { describe, test, expect, beforeEach, mock } from "bun:test";
 import {
 	isSynced,
 	setSynced,
@@ -6,10 +6,12 @@ import {
 	updateSyncProgress,
 	setStartupTime,
 	getStartupTime,
+	setSyncReporter,
 } from "@/scanner/sync-state.ts";
 
 describe("sync-state", () => {
 	beforeEach(() => {
+		setSyncReporter(null as any);
 		setSynced(false);
 		updateSyncProgress(0, 0);
 	});
@@ -47,5 +49,46 @@ describe("sync-state", () => {
 		const after = Date.now();
 		expect(getStartupTime()).toBeGreaterThanOrEqual(before);
 		expect(getStartupTime()).toBeLessThanOrEqual(after);
+	});
+});
+
+describe("sync-state reporter (worker mode)", () => {
+	beforeEach(() => {
+		setSyncReporter(null as any);
+		setSynced(false);
+		updateSyncProgress(0, 0);
+	});
+
+	test("should call onProgress when updateSyncProgress is called", () => {
+		const onProgress = mock(() => {});
+		const onSyncedChange = mock(() => {});
+		setSyncReporter({ onProgress, onSyncedChange });
+
+		updateSyncProgress(100, 200);
+
+		expect(onProgress).toHaveBeenCalledWith(100, 200);
+		expect(onProgress).toHaveBeenCalledTimes(1);
+	});
+
+	test("should call onSyncedChange when setSynced is called", () => {
+		const onProgress = mock(() => {});
+		const onSyncedChange = mock(() => {});
+		setSyncReporter({ onProgress, onSyncedChange });
+
+		setSynced(true);
+		expect(onSyncedChange).toHaveBeenCalledWith(true);
+
+		setSynced(false);
+		expect(onSyncedChange).toHaveBeenCalledWith(false);
+		expect(onSyncedChange).toHaveBeenCalledTimes(2);
+	});
+
+	test("should not fail when no reporter is set", () => {
+		setSyncReporter(null as any);
+
+		expect(() => {
+			updateSyncProgress(100, 200);
+			setSynced(true);
+		}).not.toThrow();
 	});
 });

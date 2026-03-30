@@ -133,9 +133,11 @@ export async function syncCycle(): Promise<void> {
 		const buyOps = ops.filter(op =>
 			op.action === ACTION_BUY || op.action === ACTION_PACK_BUY
 		);
-		for (const op of buyOps) {
-			op.pairedTransfers = await getTransfersInTransaction(op.txId);
-		}
+		await Promise.all(
+			buyOps.map(async (op) => {
+				op.pairedTransfers = await getTransfersInTransaction(op.txId);
+			})
+		);
 
 		// Process operations in a transaction.
 		// routeOperation is infallible — individual handler errors are caught and recorded
@@ -153,6 +155,11 @@ export async function syncCycle(): Promise<void> {
 		} else {
 			// No ops in range — just advance the cursor
 			await updateLastBlock(rangeEnd);
+		}
+
+		// Yield to event loop during massive sync so the API server can handle requests
+		if (isMassive) {
+			await new Promise(resolve => setTimeout(resolve, 0));
 		}
 
 		const blocksInRange = rangeEnd - current + 1;

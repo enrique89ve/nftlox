@@ -8,7 +8,7 @@ Each endpoint validates input, generates deterministic IDs where applicable, and
 
 **Base URL:** `https://nftloxtest.hivecreators.co` (playground server). This is not the production indexer.
 
-**Protocol version:** `0.3.0`
+**Protocol version:** `0.4.0`
 
 ---
 
@@ -19,9 +19,9 @@ All endpoints return JSON with the following standard shape:
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.3.0",
+	"protocolVersion": "0.4.0",
 	"operation": ["custom_json", { ... }],
-	"payload": { "protocol": "nftlox_testnet", "version": "0.3.0", "action": "...", "data": { ... } },
+	"payload": { "protocol": "nftlox_testnet", "version": "0.4.0", "action": "...", "data": { ... } },
 	"keyType": "Posting"
 }
 ```
@@ -29,7 +29,7 @@ All endpoints return JSON with the following standard shape:
 | Field             | Type       | Description                                                                 |
 |-------------------|------------|-----------------------------------------------------------------------------|
 | `success`         | `boolean`  | Whether the build succeeded.                                                |
-| `protocolVersion` | `string`   | Protocol version used (`0.3.0`).                                            |
+| `protocolVersion` | `string`   | Protocol version used (`0.4.0`).                                            |
 | `hashVersion`     | `string`   | Hash version (present on collection/seed endpoints): `v1`.                  |
 | `operation`       | `array`    | Hive operation tuple `["custom_json", {...}]`, ready to sign.               |
 | `payload`         | `object`   | The decoded protocol payload embedded inside the operation's `json` field.  |
@@ -343,6 +343,42 @@ Update mutable data as an approved data operator.
 
 ---
 
+### POST /api/build/set-owner-data
+
+Update owner-specific data on an NFT instance. Only the current owner can call this. Owner data is separate from mutable data (which is controlled by the collection creator).
+
+**Request Body:**
+
+| Field         | Type     | Required | Description                                   |
+|---------------|----------|----------|-----------------------------------------------|
+| `nftId`       | `string` | Yes      | NFT instance ID.                              |
+| `instanceDna` | `string` | Yes      | Instance DNA of the NFT.                      |
+| `owner`       | `string` | Yes      | Hive username of the current NFT owner.       |
+| `ownerData`   | `object` | Yes      | Key-value pairs to update (owner-specific).   |
+
+**Key type:** Posting
+
+---
+
+### POST /api/build/extend-schema
+
+Add new fields to an existing collection schema. Only the collection creator can extend the schema. Existing fields cannot be modified or removed.
+
+**Request Body:**
+
+| Field                | Type    | Required | Description                                    |
+|----------------------|---------|----------|------------------------------------------------|
+| `collectionId`       | `string`| Yes      | Collection ID.                                 |
+| `creator`            | `string`| Yes      | Hive username of the collection creator.       |
+| `newImmutableFields` | `array` | No       | New immutable field definitions to add.        |
+| `newMutableFields`   | `array` | No       | New mutable field definitions to add.          |
+
+At least one of `newImmutableFields` or `newMutableFields` must be provided.
+
+**Key type:** Posting
+
+---
+
 ### POST /api/build/data-operator-approve
 
 Approve or revoke a data operator for a collection. Only the collection creator can call this.
@@ -380,7 +416,7 @@ Preview deterministic IDs without creating any operation. Useful for pre-computi
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.3.0",
+	"protocolVersion": "0.4.0",
 	"hashVersion": "v1",
 	"collectionId": "col_...",
 	"originDna": "...",
@@ -476,7 +512,7 @@ Buy a listed NFT. Returns multiple Hive operations: a `custom_json` payload plus
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.3.0",
+	"protocolVersion": "0.4.0",
 	"hiveOperations": [
 		["transfer", { "from": "buyer", "to": "seller", "amount": "9.900 HIVE", "memo": "NFTLox BUY:nft_abc" }],
 		["transfer", { "from": "buyer", "to": "nftlox", "amount": "0.100 HIVE", "memo": "NFTLox FEE:nft_abc" }],

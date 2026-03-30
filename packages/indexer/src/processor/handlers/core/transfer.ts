@@ -5,6 +5,9 @@ import { getCollectionRules } from "@/db/queries/collections.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertTransferable } from "@/utils/status-checks.ts";
+import { createLogger } from "@/utils/logger.ts";
+
+const log = createLogger("handler:transfer");
 
 export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");
@@ -14,7 +17,10 @@ export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promi
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
-	assertTransferable(nft, nftId, op.timestamp);
+	const { hadExpiredListing } = assertTransferable(nft, nftId, op.timestamp);
+	if (hadExpiredListing) {
+		log.info("Transfer auto-cleared expired listing", { nftId, block: op.blockNum });
+	}
 
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 

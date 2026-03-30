@@ -8,6 +8,8 @@ import { handleTransfer } from "@/processor/handlers/core/transfer.ts";
 import { handleBurn } from "@/processor/handlers/core/burn.ts";
 import { handleList } from "@/processor/handlers/marketplace/list.ts";
 import { handleUnlist } from "@/processor/handlers/marketplace/unlist.ts";
+import { handleBuy } from "@/processor/handlers/marketplace/buy.ts";
+import { config } from "@/config.ts";
 import { handleNftApprove } from "@/processor/handlers/allowances/nft-approve.ts";
 import { handleNftApproveAll } from "@/processor/handlers/allowances/nft-approve-all.ts";
 import { handleNftTransferFrom } from "@/processor/handlers/allowances/nft-transfer-from.ts";
@@ -37,14 +39,21 @@ import {
 	ACTION_PACK_APPROVE,
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
+	ACTION_BUY,
+	calculatePaymentSplit,
+	ACTIVE_AUTH_ACTIONS,
+	generateListingNonce,
+	generateListingId,
 } from "nftlox-sdk";
+
+const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 
 function makeOp(
 	action: string,
 	data: Record<string, unknown>,
 	signer = "alice",
 	pairedTransfers?: ParsedOperation["pairedTransfers"],
-	authLevel: AuthLevel = "posting",
+	authLevel: AuthLevel = ACTIVE_SET.has(action) ? "active" : "posting",
 ): ParsedOperation {
 	return {
 		blockNum: 90000100,
@@ -97,6 +106,40 @@ async function seedMint(txn: Queryable = sql) {
 	await handleMint(op, txn);
 }
 
+async function makeListData(params: {
+	nftId: string;
+	owner?: string;
+	priceAmount?: string;
+	priceCurrency?: string;
+	marketplace?: string;
+	expiresAt?: number;
+}): Promise<Record<string, unknown>> {
+	const nonce = generateListingNonce();
+	const amount = params.priceAmount ?? "10.000";
+	const currency = params.priceCurrency ?? "HIVE";
+	const marketplace = params.marketplace ?? "";
+	const expiresAt = params.expiresAt ?? 0;
+
+	const listingId = await generateListingId({
+		nftId: params.nftId,
+		owner: params.owner ?? "alice",
+		marketplace,
+		priceAmount: amount,
+		priceCurrency: currency,
+		expiresAt,
+		nonce,
+	});
+
+	return {
+		nftId: params.nftId,
+		listingId,
+		listingNonce: nonce,
+		price: { amount, currency },
+		...(marketplace ? { marketplace } : {}),
+		...(expiresAt ? { expiresAt } : {}),
+	};
+}
+
 describe("Handlers (integration)", () => {
 	beforeAll(async () => {
 		// Drop all tables to ensure clean schema (testnet only)
@@ -136,6 +179,7 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await expect(seedCollection()).resolves.toBeUndefined();
 		});
+
 
 	});
 
@@ -298,7 +342,7 @@ describe("Handlers (integration)", () => {
 				to: "bob",
 				items: [{ seedId: "seed_test1", quantity: 1 }],
 			}, "eve");
-			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("not owner");
+			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("neither owner nor collection creator");
 		});
 
 		test("rejects distribute over max supply", async () => {
@@ -658,10 +702,8 @@ describe("Handlers (integration)", () => {
 		test("rejects transfer of listed NFT", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleList(makeOp(ACTION_LIST, {
-				nftId: "seed_test1",
-				price: { amount: "10.000", currency: "HIVE" },
-			}), sql);
+			const listData = await makeListData({ nftId: "seed_test1" });
+			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			const op = makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "bob" });
 			await expect(handleTransfer(op, sql)).rejects.toThrow("listed for sale");
@@ -673,11 +715,8 @@ describe("Handlers (integration)", () => {
 			// Set listing that expires before the block timestamp used in makeOp
 			const blockTime = new Date("2024-01-01T00:00:00").getTime();
 			const pastExpiry = blockTime - 60_000;
-			await handleList(makeOp(ACTION_LIST, {
-				nftId: "seed_test1",
-				price: { amount: "10.000", currency: "HIVE" },
-				expiresAt: pastExpiry,
-			}), sql);
+			const listData = await makeListData({ nftId: "seed_test1", expiresAt: pastExpiry });
+			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			const op = makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "bob" });
 			await handleTransfer(op, sql);
@@ -742,10 +781,8 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 
-			await handleList(makeOp(ACTION_LIST, {
-				nftId: "seed_test1",
-				price: { amount: "10.000", currency: "HIVE" },
-			}), sql);
+			const listData = await makeListData({ nftId: "seed_test1" });
+			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			const [listed] = await sql`SELECT status, listing_price, listing_currency FROM nfts WHERE id = 'seed_test1'`;
 			expect(listed!.status).toBe("listed");
@@ -757,6 +794,82 @@ describe("Handlers (integration)", () => {
 			const [unlisted] = await sql`SELECT status, listing_price FROM nfts WHERE id = 'seed_test1'`;
 			expect(unlisted!.status).toBe("active");
 			expect(unlisted!.listing_price).toBeNull();
+		});
+
+		test("rejects list for non-transferable collection", async () => {
+			const colOp = makeOp(ACTION_CREATE_COLLECTION, {
+				id: "col_notransfer",
+				name: "No Transfer Collection",
+				symbol: "NOTX",
+				creator: "alice",
+				totalPotential: 100,
+				originDna: "dna_col_notransfer",
+				metadata: { description: "Non-transferable" },
+				rules: { transferable: false, burnable: true, replicable: true, royaltyPct: 0 },
+			});
+			await handleCreateCollection(colOp, sql);
+
+			const mintOp = makeOp(ACTION_MINT, {
+				id: "seed_notransfer1",
+				collectionId: "col_notransfer",
+				metadata: { name: "Locked Seed" },
+			});
+			await handleMint(mintOp, sql);
+
+			const listData = await makeListData({ nftId: "seed_notransfer1" });
+			await expect(
+				handleList(makeOp(ACTION_LIST, listData), sql),
+			).rejects.toThrow("not transferable");
+		});
+
+		test("buy rejects non-transferable collection", async () => {
+			// Create non-transferable collection and mint a seed
+			const colOp = makeOp(ACTION_CREATE_COLLECTION, {
+				id: "col_nobuy",
+				name: "No Buy Collection",
+				symbol: "NOBUY",
+				creator: "alice",
+				totalPotential: 100,
+				originDna: "dna_col_nobuy",
+				metadata: { description: "Non-transferable" },
+				rules: { transferable: false, burnable: true, replicable: true, royaltyPct: 0 },
+			});
+			await handleCreateCollection(colOp, sql);
+
+			const mintOp = makeOp(ACTION_MINT, {
+				id: "seed_nobuy1",
+				collectionId: "col_nobuy",
+				metadata: { name: "No Buy Seed" },
+			});
+			await handleMint(mintOp, sql);
+
+			// Force-list via SQL (bypassing the list handler's transferable check)
+			// to test the buy handler's own guard
+			const listData = await makeListData({ nftId: "seed_nobuy1" });
+			await sql`
+				UPDATE nfts
+				SET status = 'listed',
+					listing_id = ${listData.listingId as string},
+					listing_tx_id = 'tx_fake_list',
+					listing_price = 10,
+					listing_currency = 'HIVE'
+				WHERE id = 'seed_nobuy1'
+			`;
+
+			const nodeAccount = config.hiveAccount;
+			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
+			const transfers = [
+				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE" },
+				{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE" },
+			];
+
+			const buyOp = makeOp(ACTION_BUY, {
+				nftId: "seed_nobuy1",
+				listingId: listData.listingId,
+				listTxId: "tx_fake_list",
+			}, nodeAccount, transfers);
+
+			await expect(handleBuy(buyOp, sql)).rejects.toThrow("not transferable");
 		});
 
 	});
@@ -929,11 +1042,9 @@ describe("Handlers (integration)", () => {
 				borrower: "bob",
 			}), sql);
 
+			const listData = await makeListData({ nftId: "seed_test1" });
 			await expect(
-				handleList(makeOp(ACTION_LIST, {
-					nftId: "seed_test1",
-					price: { amount: "10.000", currency: "HIVE" },
-				}), sql),
+				handleList(makeOp(ACTION_LIST, listData), sql),
 			).rejects.toThrow("lent");
 		});
 	});
@@ -1128,7 +1239,6 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedForPack("seed_p5", 3); // max 3 replicas
 
-			// Create pack with maxSupply matching seed capacity
 			const dropTable = [{ seedId: "seed_p5", weight: 1 }];
 			const createOp = makeOp(ACTION_PACK_CREATE, {
 				id: "pack_5",
@@ -1152,16 +1262,83 @@ describe("Handlers (integration)", () => {
 			const [seedAfter3] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p5'`;
 			expect(seedAfter3!.distributed).toBe(3);
 
-			// Open 1 more — seed is exhausted, should produce 0 new instances
+			// Snapshot state before the failed open
+			const [balanceBefore] = await sql`
+				SELECT balance FROM user_pack_balances
+				WHERE account = 'bob' AND pack_id = 'pack_5'
+			`;
+			const [packBefore] = await sql`SELECT total_opened FROM packs WHERE id = 'pack_5'`;
+
+			// Open 1 more — seed exhausted, must throw (no silent loss)
 			const op2 = makeOp(ACTION_PACK_OPEN, { packId: "pack_5", quantity: 1 }, "bob");
 			(op2 as any).txId = "tx_open_5b";
-			await handlePackOpen(op2, sql);
+			await expect(handlePackOpen(op2, sql)).rejects.toThrow("all seeds exhausted");
 
+			// Verify ALL five invariants after failed open:
 			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_p5'`;
-			expect(instances.length).toBe(3); // capped
+			expect(instances.length).toBe(3); // no new instances
 
 			const [seedFinal] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p5'`;
-			expect(seedFinal!.distributed).toBe(3);
+			expect(seedFinal!.distributed).toBe(3); // distributed unchanged
+
+			const [balanceAfter] = await sql`
+				SELECT balance FROM user_pack_balances
+				WHERE account = 'bob' AND pack_id = 'pack_5'
+			`;
+			expect(Number(balanceAfter!.balance)).toBe(Number(balanceBefore!.balance)); // balance not deducted
+
+			const [packAfter] = await sql`SELECT total_opened FROM packs WHERE id = 'pack_5'`;
+			expect(Number(packAfter!.total_opened)).toBe(Number(packBefore!.total_opened)); // total_opened unchanged
+		});
+
+		test("partial delivery: delivers only packs whose seeds have supply", async () => {
+			await seedCollection();
+			await seedForPack("seed_partial", 2); // max 2 instances
+
+			const dropTable = [{ seedId: "seed_partial", weight: 1 }];
+			const createOp = makeOp(ACTION_PACK_CREATE, {
+				id: "pack_partial",
+				collectionId: "col_test",
+				name: "Partial Pack",
+				dropTable,
+				itemsPerPack: 1,
+				maxSupply: 2, // matches seed capacity
+			});
+			await handlePackCreate(createOp, sql);
+			// Give more balance than seed can fulfill (simulate oversold scenario)
+			await sql`
+				INSERT INTO user_pack_balances (account, pack_id, balance)
+				VALUES ('bob', 'pack_partial', 5)
+			`;
+
+			// Open 1 pack — delivers fine, 1 instance minted
+			const op1 = makeOp(ACTION_PACK_OPEN, { packId: "pack_partial", quantity: 1 }, "bob");
+			(op1 as any).txId = "tx_partial_1a";
+			await handlePackOpen(op1, sql);
+
+			// Open 3 more — only 1 more instance can be produced
+			const op2 = makeOp(ACTION_PACK_OPEN, { packId: "pack_partial", quantity: 3 }, "bob");
+			(op2 as any).txId = "tx_partial_1b";
+			await handlePackOpen(op2, sql);
+
+			// Only 2 total instances minted (seed cap)
+			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_partial'`;
+			expect(instances.length).toBe(2);
+
+			// Balance deducted for 1 + 1 = 2 delivered packs (not 1 + 3 = 4)
+			const [balance] = await sql`
+				SELECT balance FROM user_pack_balances
+				WHERE account = 'bob' AND pack_id = 'pack_partial'
+			`;
+			expect(Number(balance!.balance)).toBe(3); // 5 - 2 = 3
+
+			// total_opened reflects only delivered packs
+			const [pack] = await sql`SELECT total_opened FROM packs WHERE id = 'pack_partial'`;
+			expect(Number(pack!.total_opened)).toBe(2);
+
+			// distributed matches instances
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_partial'`;
+			expect(seed!.distributed).toBe(2);
 		});
 
 		test("multiple users opening packs simultaneously from same seed", async () => {
@@ -1223,10 +1400,8 @@ describe("Handlers (integration)", () => {
 			}), sql);
 
 			// Alice lista el NFT en el marketplace built-in
-			await handleList(makeOp(ACTION_LIST, {
-				nftId: "seed_test1",
-				price: { amount: "50.000", currency: "HIVE" },
-			}), sql);
+			const listData = await makeListData({ nftId: "seed_test1", priceAmount: "50.000" });
+			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			// gameshop intenta mover el NFT → bloqueado
 			await expect(
@@ -1249,10 +1424,8 @@ describe("Handlers (integration)", () => {
 				approved: true,
 			}), sql);
 
-			await handleList(makeOp(ACTION_LIST, {
-				nftId: "seed_test1",
-				price: { amount: "50.000", currency: "HIVE" },
-			}), sql);
+			const listData2 = await makeListData({ nftId: "seed_test1", priceAmount: "50.000" });
+			await handleList(makeOp(ACTION_LIST, listData2), sql);
 
 			// Alice quita el listado
 			await handleUnlist(makeOp(ACTION_UNLIST, { nftId: "seed_test1" }), sql);
@@ -1281,10 +1454,8 @@ describe("Handlers (integration)", () => {
 				approved: true,
 			}), sql);
 
-			await handleList(makeOp(ACTION_LIST, {
-				nftId: "seed_test1",
-				price: { amount: "100.000", currency: "HIVE" },
-			}), sql);
+			const listData3 = await makeListData({ nftId: "seed_test1", priceAmount: "100.000" });
+			await handleList(makeOp(ACTION_LIST, listData3), sql);
 
 			await expect(
 				handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
@@ -1332,11 +1503,8 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 
-			await handleList(makeOp(ACTION_LIST, {
-				nftId: "seed_test1",
-				price: { amount: "10.000", currency: "HIVE" },
-				marketplace: "norse",
-			}), sql);
+			const listData = await makeListData({ nftId: "seed_test1", marketplace: "norse" });
+			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			const [nft] = await sql`SELECT listing_marketplace, listing_price, status FROM nfts WHERE id = 'seed_test1'`;
 			expect(nft!.listing_marketplace).toBe("norse");
@@ -1347,10 +1515,8 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 
-			await handleList(makeOp(ACTION_LIST, {
-				nftId: "seed_test1",
-				price: { amount: "10.000", currency: "HIVE" },
-			}), sql);
+			const listData = await makeListData({ nftId: "seed_test1" });
+			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			const [nft] = await sql`SELECT listing_marketplace FROM nfts WHERE id = 'seed_test1'`;
 			expect(nft!.listing_marketplace).toBeNull();
@@ -1425,10 +1591,8 @@ describe("Handlers (integration)", () => {
 		test("replicate rejects listed original", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleList(makeOp(ACTION_LIST, {
-				nftId: "seed_test1",
-				price: { amount: "5.000", currency: "HIVE" },
-			}), sql);
+			const listData = await makeListData({ nftId: "seed_test1", priceAmount: "5.000" });
+			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			const op = makeOp(ACTION_REPLICATE, {
 				id: "replica_listed",

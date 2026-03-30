@@ -1,6 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftListing, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireHiveAmount, optionalNumber, optionalString } from "@/utils/validation.ts";
 import { assertNotBurned, assertNotLent, isListingExpired } from "@/utils/status-checks.ts";
 import { generateListingId, LISTING_ID_PREFIX } from "nftlox-sdk";
@@ -22,6 +23,11 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<v
 
 	assertNotBurned(nft, nftId);
 	assertNotLent(nft, nftId);
+
+	const rules = await getCollectionRules(nft.collection_id, txn);
+	if (rules && !rules.transferable) {
+		throw new Error(`Collection ${nft.collection_id} is not transferable — listing blocked`);
+	}
 
 	if (nft.status === NFT_STATUS_LISTED && !isListingExpired(nft.listing_expires_at, op.timestamp)) {
 		throw new Error(`NFT is already listed. Unlist first: ${nftId}`);

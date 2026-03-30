@@ -22,18 +22,15 @@ function rotateEndpoint(): string {
 // ============ JSON-RPC (for head block only) ============
 
 async function rpcCall<T>(endpoint: string, method: string, params: Record<string, unknown> | unknown[]): Promise<T> {
-	const controller = new AbortController();
-	const timeoutId = setTimeout(() => controller.abort(), 15_000);
-
 	const response = await fetch(endpoint, {
 		method: "POST",
-		signal: controller.signal,
+		signal: AbortSignal.timeout(15_000),
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
 	});
-	clearTimeout(timeoutId);
 
 	if (!response.ok) {
+		await response.text().catch(() => {}); // drain body to release connection
 		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 	}
 
@@ -42,6 +39,10 @@ async function rpcCall<T>(endpoint: string, method: string, params: Record<strin
 	if (json.error != null && typeof json.error === "object") {
 		const errObj = json.error as Record<string, unknown>;
 		throw new Error(`RPC error: ${typeof errObj.message === "string" ? errObj.message : "unknown"}`);
+	}
+
+	if (json.result === undefined || json.result === null) {
+		throw new Error(`RPC returned empty result for ${method}`);
 	}
 
 	return json.result as T;
@@ -111,15 +112,13 @@ const CUSTOM_JSON_OP_TYPE = 18;
 async function hafahFetch(endpoint: string, fromBlock: number, toBlock: number, operationBegin: string, pageSize: number): Promise<HafAHResponse> {
 	// Adaptive timeout: larger pages need more time for server-side query + transfer
 	const timeoutMs = pageSize > HAFAH_PAGE_SIZE_NORMAL ? 45_000 : 15_000;
-	const controller = new AbortController();
-	const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
 	const url = `${endpoint}/hafah-api/operations?from-block=${fromBlock}&to-block=${toBlock}&operation-types=${CUSTOM_JSON_OP_TYPE}&page-size=${pageSize}&operation-begin=${operationBegin}`;
 
-	const response = await fetch(url, { signal: controller.signal });
-	clearTimeout(timeoutId);
+	const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
 
 	if (!response.ok) {
+		await response.text().catch(() => {}); // drain body to release connection
 		throw new Error(`HafAH HTTP ${response.status}: ${response.statusText}`);
 	}
 
@@ -130,7 +129,11 @@ async function hafahFetch(endpoint: string, fromBlock: number, toBlock: number, 
 		return { ops: [], next_block_range_begin: null, next_operation_begin: null };
 	}
 
-	return data as unknown as HafAHResponse;
+	return {
+		ops: data.ops as HafAHOperation[],
+		next_block_range_begin: typeof data.next_block_range_begin === "number" ? data.next_block_range_begin : null,
+		next_operation_begin: typeof data.next_operation_begin === "string" ? data.next_operation_begin : null,
+	};
 }
 
 async function hafahWithFailover(fromBlock: number, toBlock: number, operationBegin: string, pageSize: number): Promise<HafAHResponse> {
@@ -185,10 +188,7 @@ export async function getHeadBlockNum(): Promise<number> {
 	for (let attempt = 0; attempt < maxRetries; attempt++) {
 		const endpoint = getCurrentEndpoint();
 		try {
-			const controller = new AbortController();
-			const timeoutId = setTimeout(() => controller.abort(), 30_000);
-			const response = await fetch(`${endpoint}/hafah-api/headblock`, { signal: controller.signal });
-			clearTimeout(timeoutId);
+			const response = await fetch(`${endpoint}/hafah-api/headblock`, { signal: AbortSignal.timeout(30_000) });
 			const text = await response.text();
 			const blockNum = parseInt(text, 10);
 			if (Number.isNaN(blockNum)) throw new Error(`Invalid headblock: ${text}`);
@@ -295,14 +295,19 @@ function parseTransferAmount(raw: unknown): { amount: number; currency: string }
  * then extract transfer operations. Direct lookup — no block scan needed.
  */
 export async function getTransfersInTransaction(txId: string): Promise<TransferDetail[]> {
-	const result = await callWithFailover<{
-		operations: Array<{ type: string; value: Record<string, unknown> }>;
-	}>("account_history_api.get_transaction", { id: txId, include_reversible: false });
+	const result = await callWithFailover<Record<string, unknown>>(
+		"account_history_api.get_transaction", { id: txId, include_reversible: false },
+	);
+
+	const operations = Array.isArray(result.operations) ? result.operations : [];
 
 	const transfers: TransferDetail[] = [];
-	for (const op of result.operations) {
+	for (const raw of operations) {
+		if (typeof raw !== "object" || raw === null) continue;
+		const op = raw as Record<string, unknown>;
 		if (op.type !== "transfer_operation") continue;
-		const val = op.value;
+		if (typeof op.value !== "object" || op.value === null) continue;
+		const val = op.value as Record<string, unknown>;
 		if (typeof val.from !== "string" || typeof val.to !== "string") continue;
 
 		const parsed = parseTransferAmount(val.amount);
