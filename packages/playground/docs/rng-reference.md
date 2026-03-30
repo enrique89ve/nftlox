@@ -6,6 +6,19 @@ This document specifies the NFTLox deterministic RNG algorithm so it can be inde
 
 ---
 
+## Cryptographic Functions in NFTLox
+
+NFTLox uses two distinct algorithms for different purposes:
+
+| Function | Algorithm | Purpose | Collision resistance |
+|----------|-----------|---------|---------------------|
+| **Identity & uniqueness** (DNA, IDs, hashes, listing IDs) | **SHA-256** (via `crypto.subtle`) | Deterministic, collision-resistant identifiers | ~2^128 (birthday bound) -- effectively unlimited |
+| **RNG for drop tables** | **SHA-256** (53-bit extraction) | Weighted random selection for pack openings | 256-bit hash, 53-bit output precision -- no practical ceiling |
+
+**Why SHA-256 for everything?** SHA-256 provides 256-bit avalanche and uniform distribution. For identity (DNA, IDs), the full hash output guarantees collision resistance. For RNG, we extract 53 bits (JS safe integer precision) from the hash to produce a float in `[0, 1)` with uniform distribution. No practical ceiling on drop table size or selection count.
+
+---
+
 ## Table of Contents
 
 1. [deterministicRng(seed, index)](#1-deterministicrng-seed-index)
@@ -20,7 +33,7 @@ This document specifies the NFTLox deterministic RNG algorithm so it can be inde
 
 Returns a deterministic float in the range `[0, 1)` for a given seed string and index number.
 
-**Algorithm:** Dual-pass FNV-1a 32-bit hash.
+**Algorithm:** SHA-256 with 53-bit extraction.
 
 ### Detailed Steps
 
@@ -29,64 +42,56 @@ Returns a deterministic float in the range `[0, 1)` for a given seed string and 
    input = "nftlox:rng:" + seed + ":" + toString(index)
    ```
 
-2. **Pass 1 (forward FNV-1a):**
+2. **Hash with SHA-256:**
    ```
-   hash1 = 2166136261          (FNV offset basis, 32-bit)
-   for each byte b in input (left to right):
-       hash1 = hash1 XOR b
-       hash1 = hash1 * 16777619  (FNV prime, wrapping 32-bit multiply)
+   hash = SHA-256(input)    // 32 bytes (256 bits)
    ```
 
-3. **Pass 2 (reverse FNV-1a):**
+3. **Extract 53 bits** (JS safe integer precision):
    ```
-   hash2 = 2166136261
-   for each byte b in input (right to left):
-       hash2 = hash2 XOR b
-       hash2 = hash2 * 16777619  (wrapping 32-bit multiply)
+   hi = first 4 bytes as uint32 big-endian, right-shifted 11 bits  // 21 bits
+   lo = next 4 bytes as uint32 big-endian                          // 32 bits
+   combined = hi * 2^32 + lo                                       // 53 bits total
    ```
-
-4. **Combine:**
+4. **Normalize:**
    ```
-   combined = (abs(hash1) XOR abs(hash2)) as unsigned 32-bit integer
+   result = combined / 2^53
    ```
-   The `abs()` converts the signed 32-bit result to its absolute value before XOR. The `>>> 0` (unsigned right shift by 0) in JavaScript/TypeScript converts the result to an unsigned 32-bit integer.
-
-5. **Normalize:**
-   ```
-   result = combined / 4294967296   (divide by 2^32)
-   ```
-   The result is a float in `[0, 1)`.
+   The result is a float in `[0, 1)` with full JavaScript floating-point precision.
 
 ### Key Implementation Notes
 
-- **Wrapping multiply:** The multiplication `hash * 16777619` must wrap at 32 bits. In JavaScript/TypeScript, use `Math.imul(hash, 16777619)`. In C/Rust, standard `uint32_t` or `u32` multiplication wraps automatically. In Python, apply `& 0xFFFFFFFF` after each multiply.
-- **Character encoding:** Input bytes are the Unicode code points of each character. For ASCII strings (which all NFTLox seeds are), this is equivalent to the ASCII byte value.
-- **Signed vs unsigned:** FNV-1a produces a signed 32-bit integer in languages like JavaScript. The `Math.abs()` call before XOR, followed by `>>> 0` to convert to unsigned, is critical for consistent results.
+- **SHA-256 is available everywhere:** Node.js (`crypto.createHash`), Bun (same API), browsers (`crypto.subtle.digest` -- async variant), Python (`hashlib.sha256`), Rust (`sha2` crate), Go (`crypto/sha256`).
+- **53-bit extraction:** JavaScript's `Number` type has 53 bits of integer precision (IEEE 754 double). We extract exactly 53 bits from the SHA-256 output to avoid precision loss.
+- **Big-endian byte order:** The first 8 bytes of the hash are read as two big-endian uint32 values. This is deterministic across platforms.
+- **Character encoding:** The input string is UTF-8 encoded before hashing. For ASCII strings (which all NFTLox RNG seeds are), this is equivalent to the raw byte values.
 
 ### TypeScript Reference Implementation
 
 ```typescript
+import { createHash } from "crypto";
+
 function deterministicRng(seed: string, index: number): number {
 	const input = `nftlox:rng:${seed}:${index}`;
-
-	// Pass 1: forward FNV-1a
-	let hash1 = 2166136261;
-	for (let i = 0; i < input.length; i++) {
-		hash1 ^= input.charCodeAt(i);
-		hash1 = Math.imul(hash1, 16777619);
-	}
-
-	// Pass 2: reverse FNV-1a
-	let hash2 = 2166136261;
-	for (let i = input.length - 1; i >= 0; i--) {
-		hash2 ^= input.charCodeAt(i);
-		hash2 = Math.imul(hash2, 16777619);
-	}
-
-	// Combine and normalize to [0, 1)
-	const combined = (Math.abs(hash1) ^ Math.abs(hash2)) >>> 0;
-	return combined / 4294967296;
+	const hash = createHash("sha256").update(input).digest();
+	const hi = hash.readUInt32BE(0) >>> 11; // top 21 bits
+	const lo = hash.readUInt32BE(4);        // next 32 bits = 53 total
+	return (hi * 0x100000000 + lo) / 0x20000000000000; // / 2^53
 }
+```
+
+### Python Reference Implementation
+
+```python
+import hashlib
+import struct
+
+def deterministic_rng(seed: str, index: int) -> float:
+    input_str = f"nftlox:rng:{seed}:{index}"
+    h = hashlib.sha256(input_str.encode()).digest()
+    hi = struct.unpack(">I", h[0:4])[0] >> 11  # top 21 bits
+    lo = struct.unpack(">I", h[4:8])[0]         # next 32 bits
+    return (hi * 0x100000000 + lo) / 0x20000000000000
 ```
 
 ---
@@ -207,33 +212,18 @@ The `context` field can differentiate between different RNG uses within the same
 This language-independent pseudocode covers the complete algorithm. Use it to implement the RNG in any language.
 
 ```
-CONSTANT FNV_OFFSET = 2166136261
-CONSTANT FNV_PRIME  = 16777619
-CONSTANT UINT32_MAX = 4294967296   // 2^32
+CONSTANT TWO_POW_53 = 9007199254740992   // 2^53
 
 FUNCTION deterministicRng(seed: STRING, index: INTEGER) -> FLOAT:
     input = "nftlox:rng:" + seed + ":" + toString(index)
-    bytes = getAsciiBytes(input)
-    length = len(bytes)
+    hash = SHA256(input)                    // 32 bytes
 
-    // Forward pass
-    hash1 = FNV_OFFSET
-    FOR i FROM 0 TO length - 1:
-        hash1 = hash1 XOR bytes[i]
-        hash1 = wrappingMultiply32(hash1, FNV_PRIME)
-    END FOR
+    hi = readUint32BigEndian(hash, offset=0) >> 11   // top 21 bits
+    lo = readUint32BigEndian(hash, offset=4)          // next 32 bits
 
-    // Reverse pass
-    hash2 = FNV_OFFSET
-    FOR i FROM length - 1 DOWN TO 0:
-        hash2 = hash2 XOR bytes[i]
-        hash2 = wrappingMultiply32(hash2, FNV_PRIME)
-    END FOR
+    combined = hi * 4294967296 + lo                   // 53-bit integer
 
-    // Combine: take absolute values, XOR, interpret as unsigned 32-bit
-    combined = toUnsigned32(abs(toSigned32(hash1)) XOR abs(toSigned32(hash2)))
-
-    RETURN combined / UINT32_MAX
+    RETURN combined / TWO_POW_53
 END FUNCTION
 
 
@@ -310,38 +300,27 @@ Use these test vectors to verify your implementation produces correct results. R
 
 ### deterministicRng Vectors
 
-To verify your implementation, run the following against the reference code:
-
-```typescript
-import { deterministicRng } from "nftlox-sdk";
-
-// Vector 1
-deterministicRng("test-seed", 0);
-
-// Vector 2
-deterministicRng("test-seed", 1);
-
-// Vector 3
-deterministicRng("test-seed", 2);
-
-// Vector 4: RNG seed in pack-open format
-deterministicRng("abc123:999:alice", 0);
-```
+| Vector | Input | Expected Output |
+|--------|-------|-----------------|
+| 1 | `deterministicRng("test-seed", 0)` | `0.6388407883190451` |
+| 2 | `deterministicRng("test-seed", 1)` | `0.07153829138479328` |
+| 3 | `deterministicRng("test-seed", 2)` | `0.641578527515963` |
+| 4 | `deterministicRng("abc123:999:alice", 0)` | `0.9480245541428474` |
 
 **How to manually trace Vector 1:**
 
-Input string: `"nftlox:rng:test-seed:0"` (22 characters)
+Input string: `"nftlox:rng:test-seed:0"`
 
-1. Forward FNV-1a: Start with `hash1 = 2166136261`. For each character code point (`n`=110, `f`=102, `t`=116, `l`=108, `o`=111, `x`=120, `:`=58, `r`=114, `n`=110, `g`=103, `:`=58, `t`=116, `e`=101, `s`=115, `t`=116, `-`=45, `s`=115, `e`=101, `e`=101, `d`=100, `:`=58, `0`=48), XOR with hash then multiply by `16777619` with 32-bit wrapping.
-2. Reverse FNV-1a: Same process, characters in reverse order.
-3. Combined: `(abs(hash1) XOR abs(hash2)) >>> 0`.
-4. Result: `combined / 4294967296`.
-
-The exact output value depends on the 32-bit wrapping arithmetic at each step. Use the reference implementation to obtain the precise floating-point result, then compare against your implementation with at least 10 decimal places of precision.
+1. Compute `SHA-256("nftlox:rng:test-seed:0")` to get 32 bytes
+2. Read bytes 0-3 as uint32 big-endian, shift right 11 → `hi` (21 bits)
+3. Read bytes 4-7 as uint32 big-endian → `lo` (32 bits)
+4. `combined = hi * 4294967296 + lo` (53-bit integer)
+5. `result = combined / 9007199254740992` (divide by 2^53)
+6. Expected: `0.6388407883190451`
 
 ### resolveDropTable Vectors
 
-Use this drop table for all vectors:
+Drop table for all vectors:
 
 ```json
 [
@@ -352,30 +331,22 @@ Use this drop table for all vectors:
 ]
 ```
 
-Total weight = 126.
+Total weight = 126. Cumulative thresholds: `[0, 100)` → common, `[100, 120)` → rare, `[120, 125)` → epic, `[125, 126)` → legend.
 
-**Vector A:** `resolveDropTable(table, 5, "test-seed")`
-
-For each index 0..4, `deterministicRng("test-seed", i)` produces a float, multiplied by 126 to get the roll. The roll is compared against cumulative weights:
-- `[0, 100)` selects `seed_common`
-- `[100, 120)` selects `seed_rare`
-- `[120, 125)` selects `seed_epic`
-- `[125, 126)` selects `seed_legend`
-
-Run the reference implementation to get the exact 5-element result array.
-
-**Vector B:** `resolveDropTable(table, 3, "abc123:999:alice")`
-
-**Vector C:** `resolveDropTable(table, 4, "tx123abc:92345678:player1")`
+| Vector | Input | Expected Result |
+|--------|-------|-----------------|
+| A | `resolveDropTable(table, 5, "test-seed")` | `["seed_common", "seed_common", "seed_common", "seed_common", "seed_common"]` |
+| B | `resolveDropTable(table, 3, "abc123:999:alice")` | `["seed_rare", "seed_common", "seed_common"]` |
+| C | `resolveDropTable(table, 4, "tx123abc:92345678:player1")` | `["seed_rare", "seed_rare", "seed_rare", "seed_common"]` |
 
 ### Verification Procedure
 
-1. Implement `deterministicRng` in your target language.
-2. Run Vectors 1-4 and compare output against the reference TypeScript implementation.
+1. Implement `deterministicRng` in your target language using SHA-256.
+2. Run Vectors 1-4 and compare output to at least 15 decimal places.
 3. Implement `resolveDropTable`.
 4. Run Vectors A-C and confirm the output arrays match exactly (same seed IDs, same order).
 5. If any vector differs, check:
-   - Is your wrapping multiply correct at 32 bits?
-   - Are you using `abs()` before XOR?
-   - Is unsigned 32-bit conversion applied after XOR?
-   - Are input characters treated as their Unicode code point values?
+   - Is your SHA-256 implementation producing correct output? (test with a known SHA-256 vector first)
+   - Are you reading bytes in big-endian order?
+   - Is the right-shift by 11 applied to the first uint32, not the second?
+   - Are you using 53-bit precision (not 32-bit)?

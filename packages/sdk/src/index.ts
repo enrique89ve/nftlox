@@ -177,7 +177,6 @@ export type {
 // ============ DNA GENERATION ============
 export {
 	generateHash,
-	generateHashAsync,
 	generateOriginDna,
 	generateInstanceDna,
 	generateReplicaInstanceDna,

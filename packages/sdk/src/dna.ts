@@ -1,6 +1,8 @@
 // NFTLox DNA Generation Module
 // Implements dual DNA system: originDna (collection) + instanceDna (individual NFT)
 
+import { createHash } from "crypto";
+
 import {
 	ORIGIN_DNA_LENGTH,
 	INSTANCE_DNA_LENGTH,
@@ -14,8 +16,12 @@ import {
 // ============ HASH FUNCTIONS ============
 
 /**
- * SHA-256 hash using Web Crypto (crypto.subtle).
- * Works in all modern runtimes: browsers, Node 18+, Deno, Bun, Cloudflare Workers.
+ * SHA-256 hash using Web Crypto (crypto.subtle). Async.
+ * Used for all identity generation (DNA, IDs, access keys, listing IDs).
+ * Uses crypto.subtle for universal runtime support (browsers, Node 18+, Bun, Deno).
+ *
+ * Note: deterministicRng() uses sync crypto.createHash("sha256") instead,
+ * because resolveDropTable() calls it in a tight loop and must stay synchronous.
  */
 export async function generateHash(input: string): Promise<string> {
 	const encoder = new TextEncoder();
@@ -25,8 +31,6 @@ export async function generateHash(input: string): Promise<string> {
 	return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** @deprecated Use `generateHash` instead. Will be removed in a future version. */
-export const generateHashAsync = generateHash;
 
 // ============ ORIGIN DNA (Collection Level) ============
 
@@ -404,33 +408,20 @@ export async function generateDeterministicAccessKey(
 // ============ DETERMINISTIC RNG ============
 
 /**
- * Deterministic RNG using double-pass FNV-1a.
- * Returns a number in [0, 1) normalized by dividing by 2^32.
+ * Deterministic RNG using SHA-256.
+ * Returns a number in [0, 1) with 53-bit precision (JS safe integer range).
  * Same seed + index always produces the same result.
  *
- * Note: each FNV-1a pass is 32-bit. For RNG purposes (distribution quality,
- * not uniqueness), this is sufficient. The dual-pass XOR combination improves
- * avalanche properties without increasing the output range beyond 32 bits.
+ * Uses the first 7 bytes of SHA-256 to construct a 53-bit integer,
+ * then divides by 2^53 for uniform distribution in [0, 1).
+ * SHA-256 provides 256-bit avalanche — no practical collision ceiling.
  */
 export function deterministicRng(seed: string, index: number): number {
 	const input = `nftlox:rng:${seed}:${index}`;
-
-	// FNV-1a 32-bit hash (kept for RNG distribution, not for IDs)
-	let hash1 = 2166136261;
-	for (let i = 0; i < input.length; i++) {
-		hash1 ^= input.charCodeAt(i);
-		hash1 = Math.imul(hash1, 16777619);
-	}
-
-	let hash2 = 2166136261;
-	for (let i = input.length - 1; i >= 0; i--) {
-		hash2 ^= input.charCodeAt(i);
-		hash2 = Math.imul(hash2, 16777619);
-	}
-
-	// Combine and normalize to [0, 1)
-	const combined = (Math.abs(hash1) ^ Math.abs(hash2)) >>> 0;
-	return combined / 4294967296; // 2^32
+	const hash = createHash("sha256").update(input).digest();
+	const hi = hash.readUInt32BE(0) >>> 11; // top 21 bits
+	const lo = hash.readUInt32BE(4);        // next 32 bits = 53 total
+	return (hi * 0x100000000 + lo) / 0x20000000000000; // / 2^53
 }
 
 /**

@@ -18,7 +18,7 @@ import {
 	ACTION_NFT_TRANSFER_FROM,
 	ACTION_SET_DATA,
 } from "../constants.ts";
-import { buildRngSeed } from "./constants.ts";
+import { buildRngSeed, selectRandomSample } from "./constants.ts";
 import {
 	fetchTransaction,
 	parseNftloxOperation,
@@ -547,19 +547,6 @@ export async function verifyNftOwnership(
 			message: err instanceof Error ? err.message : String(err),
 		});
 	}
-}
-
-function selectRandomSample<T>(items: T[], count: number): T[] {
-	const copy = [...items];
-	const selected: T[] = [];
-
-	for (let i = 0; i < count && copy.length > 0; i++) {
-		const index = Math.floor(Math.random() * copy.length);
-		selected.push(copy[index]!);
-		copy.splice(index, 1);
-	}
-
-	return selected;
 }
 
 interface BuildOwnershipPartial {

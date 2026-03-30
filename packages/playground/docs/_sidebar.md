@@ -4,20 +4,21 @@
 	- [Signing and Broadcasting](broadcasting.md)
 	- [Data Formats](data-formats.md)
 
-- **API Reference**
-	- [Query API (Read)](api-reference.md)
-	- [Build API (Write)](build-reference.md)
-
-- **SDK**
-	- [Direct Usage](using-sdk.md)
-
 - **Game Integration**
-	- [Architecture](game-integration.md)
+	- [Architecture & Flow](game-integration.md)
 	- [Pack Distribution](pack-distribution-guide.md)
 	- [RNG Algorithm](rng-reference.md)
 
 - **Security**
 	- [Key Security & Permissions](key-security.md)
+
+- **API Reference**
+	- [API Endpoints](api-endpoints.md)
+	- [SDK Functions](sdk-functions.md)
+	- [Error Codes](error-codes.md)
+
+- **SDK**
+	- [Direct Usage](using-sdk.md)
 
 - **Examples**
 	- [Seed Ceremony](examples/seed-ceremony.md)

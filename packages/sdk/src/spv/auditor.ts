@@ -5,6 +5,7 @@ import {
 	DEFAULT_HIVE_ENDPOINTS,
 	DEFAULT_HIVE_TIMEOUT_MS,
 	DEFAULT_AUDIT_SAMPLE_SIZE,
+	selectRandomSample,
 } from "./constants.ts";
 import { ACTION_PACK_OPEN } from "../constants.ts";
 import { createDefaultL1Config } from "./hive-l1-client.ts";
@@ -171,17 +172,3 @@ export async function runSingleVerification(
 	});
 }
 
-// ============ HELPERS ============
-
-function selectRandomSample<T>(items: T[], count: number): T[] {
-	const copy = [...items];
-	const selected: T[] = [];
-
-	for (let i = 0; i < count && copy.length > 0; i++) {
-		const index = Math.floor(Math.random() * copy.length);
-		selected.push(copy[index]!);
-		copy.splice(index, 1);
-	}
-
-	return selected;
-}

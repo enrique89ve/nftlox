@@ -9,7 +9,7 @@ Two paths to distribute NFTs to players. Choose based on your game.
 | | **Native Pack** | **Custom (bulk_distribute)** |
 |---|---|---|
 | **Flow** | Creator creates pack → Player buys → Player opens → RNG decides | Server resolves logic → Server distributes directly |
-| **RNG** | On-chain, deterministic (FNV-1a), resolved at open time | Your logic: local RNG, business rules, or whatever you want |
+| **RNG** | On-chain, deterministic (SHA-256), resolved at open time | Your logic: local RNG, business rules, or whatever you want |
 | **Payment** | Built-in: price per pack, 100% to creator | Your responsibility: detect payment off-protocol |
 | **Drop table** | Max 50 seeds, weights 1-1,000,000 | No limit: 2,134 seeds or more |
 | **Items per pack** | Max 20 | Max 50 distinct seeds per operation (each with quantity > 1) |

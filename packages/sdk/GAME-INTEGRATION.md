@@ -615,50 +615,29 @@ The deterministic RNG is the core of trustless pack openings. This section docum
 
 Returns a deterministic float in `[0, 1)` for a given seed string and index number.
 
-**Algorithm:** Dual-pass FNV-1a 32-bit hash.
+**Algorithm:** SHA-256 with 53-bit extraction.
 
 ```
 Input string: "nftlox:rng:{seed}:{index}"
 
-Pass 1 (forward):
-  hash1 = 2166136261  (FNV offset basis)
-  for each byte in input (left to right):
-    hash1 = hash1 XOR byte
-    hash1 = hash1 * 16777619  (FNV prime, using wrapping multiply)
-
-Pass 2 (reverse):
-  hash2 = 2166136261
-  for each byte in input (right to left):
-    hash2 = hash2 XOR byte
-    hash2 = hash2 * 16777619
-
-Combine:
-  combined = (abs(hash1) XOR abs(hash2)) as unsigned 32-bit integer
-
-Result:
-  combined / 4294967296  (divide by 2^32)
+hash = SHA-256(input)                              // 32 bytes
+hi   = first 4 bytes as uint32 big-endian >> 11    // 21 bits
+lo   = next 4 bytes as uint32 big-endian           // 32 bits
+combined = hi * 2^32 + lo                          // 53-bit integer
+result   = combined / 2^53                         // float in [0, 1)
 ```
 
 In TypeScript:
 
 ```typescript
+import { createHash } from "crypto";
+
 function deterministicRng(seed: string, index: number): number {
 	const input = `nftlox:rng:${seed}:${index}`;
-
-	let hash1 = 2166136261;
-	for (let i = 0; i < input.length; i++) {
-		hash1 ^= input.charCodeAt(i);
-		hash1 = Math.imul(hash1, 16777619);
-	}
-
-	let hash2 = 2166136261;
-	for (let i = input.length - 1; i >= 0; i--) {
-		hash2 ^= input.charCodeAt(i);
-		hash2 = Math.imul(hash2, 16777619);
-	}
-
-	const combined = (Math.abs(hash1) ^ Math.abs(hash2)) >>> 0;
-	return combined / 4294967296;
+	const hash = createHash("sha256").update(input).digest();
+	const hi = hash.readUInt32BE(0) >>> 11;
+	const lo = hash.readUInt32BE(4);
+	return (hi * 0x100000000 + lo) / 0x20000000000000;
 }
 ```
 

@@ -15,7 +15,7 @@ Traditional NFT protocols force you into rigid smart contract environments. NFTL
 - **No smart contracts** -- Operations are `custom_json` payloads on Hive L1; the protocol is enforced by deterministic indexing
 - **Typed schemas** -- Define immutable, mutable, and owner-editable fields per collection with strict validation
 - **Deterministic DNA** -- Every NFT has a reproducible cryptographic identity derived from blockchain data
-- **Verifiable RNG** -- Pack openings use dual-pass FNV-1a seeded from block data; anyone can independently verify the results
+- **Verifiable RNG** -- Pack openings use SHA-256 deterministic RNG seeded from block data; anyone can independently verify the results
 - **Seed/Instance model** -- Mint a seed template, distribute instances from it; each instance gets unique DNA
 - **Zero transaction fees** -- Hive L1 uses resource credits, not gas; end users pay nothing
 - **3-second finality** -- Operations are confirmed in the next Hive block
@@ -62,16 +62,19 @@ Then follow the [Getting Started guide](getting-started.md) to make your first A
 
 | Section | What you will find |
 |---|---|
+| **Guides** | |
 | [Getting Started](getting-started.md) | First API call, reading data, building transactions |
 | [Signing and Broadcasting](broadcasting.md) | How to sign payloads and broadcast to Hive |
-| [Data Formats](data-formats.md) | Field constraints, validation rules, accepted values |
-| [Query API Reference](api-reference.md) | All read endpoints -- collections, NFTs, users, marketplace |
-| [Build API Reference](build-reference.md) | All write endpoints -- payload construction |
-| [SDK Direct Usage](using-sdk.md) | Use the TypeScript SDK without the HTTP layer |
-| [Game Integration](game-integration.md) | Server-side resolution pattern for games |
+| [Game Integration](game-integration.md) | Complete game developer integration walkthrough |
 | [Pack Distribution](pack-distribution-guide.md) | Native packs vs custom distribution comparison |
 | [Key Security](key-security.md) | Permission model, key types, and account architecture |
+| **Reference** | |
+| [API Endpoints](api-endpoints.md) | All read and write endpoints in one reference |
+| [SDK Functions](sdk-functions.md) | SDK exports, builders, payload creators, utilities |
+| [Error Codes](error-codes.md) | Handler errors, multisig errors, troubleshooting |
 | [RNG Algorithm](rng-reference.md) | Deterministic RNG specification with test vectors |
+| [Data Formats](data-formats.md) | Field constraints, validation rules, accepted values |
+| [SDK Direct Usage](using-sdk.md) | Use the TypeScript SDK without the HTTP layer |
 
 ## Examples
 

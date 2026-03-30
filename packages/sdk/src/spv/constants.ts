@@ -25,3 +25,20 @@ export function buildRngSeed(
 ): string {
 	return `${txId}:${blockNum}:${signer}:${packId}:${packIndex}`;
 }
+
+/**
+ * Selects a random sample from an array without replacement.
+ * Uses Fisher-Yates partial shuffle for unbiased selection.
+ */
+export function selectRandomSample<T>(items: ReadonlyArray<T>, count: number): T[] {
+	const copy = [...items];
+	const selected: T[] = [];
+
+	for (let i = 0; i < count && copy.length > 0; i++) {
+		const index = Math.floor(Math.random() * copy.length);
+		selected.push(copy[index]!);
+		copy.splice(index, 1);
+	}
+
+	return selected;
+}
