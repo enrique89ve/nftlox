@@ -47,6 +47,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					originDna: nft.origin_dna,
 					instanceDna: nft.instance_dna,
 					seedId: nft.seed_id,
+					seedTxId: nft.seed_tx_id ?? null,
 					instanceNumber: nft.instance_number,
 					maxSupply: nft.max_replicas,
 					distributed: nft.distributed,
@@ -71,6 +72,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					creator: c.creator,
 					originDna: c.origin_dna,
 					totalPotential: c.total_potential,
+					status: c.status,
 				})),
 			});
 		}),
@@ -131,9 +133,12 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					isReplica: nft.nft_type === "replica",
 					originalId: nft.original_id,
 					seedId: nft.seed_id,
+					seedTxId: nft.seed_tx_id ?? null,
 					instanceNumber: nft.instance_number,
 					imageHash: nft.image_hash,
 					dna: nft.instance_dna,
+					txId: nft.tx_id,
+					blockNum: nft.block_num,
 				},
 				original: original ? {
 					id: original.id,
@@ -167,6 +172,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					totalPotential: c.total_potential,
 					seedCount: c.seed_count,
 					instanceCount: c.instance_count,
+					status: c.status,
 				})),
 			});
 		}),

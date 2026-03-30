@@ -250,38 +250,28 @@ describe("mintInputSchema collectionBlock", () => {
 	});
 });
 
-// ============ bulkDistributeItemSchema.originBlock ============
+// ============ bulkDistributeItemSchema.seedTxId ============
 
-describe("bulkDistributeItemSchema originBlock", () => {
+describe("bulkDistributeItemSchema seedTxId", () => {
 	const validItem = {
 		seedId: "seed_abc",
 		quantity: 3,
-		originBlock: 90000100,
+		seedTxId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	};
 
-	test("accepts valid originBlock", () => {
+	test("accepts valid seedTxId", () => {
 		const result = bulkDistributeItemSchema.safeParse(validItem);
 		expect(result.success).toBe(true);
 	});
 
-	test("accepts originBlock of 0", () => {
-		const result = bulkDistributeItemSchema.safeParse({ ...validItem, originBlock: 0 });
-		expect(result.success).toBe(true);
-	});
-
-	test("rejects negative originBlock", () => {
-		const result = bulkDistributeItemSchema.safeParse({ ...validItem, originBlock: -1 });
+	test("rejects malformed seedTxId", () => {
+		const result = bulkDistributeItemSchema.safeParse({ ...validItem, seedTxId: "tx_seed_abc" });
 		expect(result.success).toBe(false);
 	});
 
-	test("rejects float originBlock", () => {
-		const result = bulkDistributeItemSchema.safeParse({ ...validItem, originBlock: 1.5 });
-		expect(result.success).toBe(false);
-	});
-
-	test("rejects missing originBlock", () => {
-		const { originBlock, ...withoutBlock } = validItem;
-		const result = bulkDistributeItemSchema.safeParse(withoutBlock);
+	test("rejects missing seedTxId", () => {
+		const { seedTxId, ...withoutTx } = validItem;
+		const result = bulkDistributeItemSchema.safeParse(withoutTx);
 		expect(result.success).toBe(false);
 	});
 });

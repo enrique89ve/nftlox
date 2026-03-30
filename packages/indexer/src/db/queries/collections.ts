@@ -1,5 +1,11 @@
 import { sql, type Queryable, clampLimit } from "@/db/client.ts";
 
+export const COLLECTION_STATUS_ACTIVE = "active";
+export const COLLECTION_STATUS_ARCHIVED = "archived";
+export type CollectionStatus =
+	| typeof COLLECTION_STATUS_ACTIVE
+	| typeof COLLECTION_STATUS_ARCHIVED;
+
 export interface InsertCollectionParams {
 	id: string;
 	jsonId: string | null;
@@ -46,7 +52,10 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 }
 
 export async function getCollectionById(id: string): Promise<Record<string, unknown> | null> {
-	const [row] = await sql`SELECT * FROM collections WHERE id = ${id}`;
+	const [row] = await sql`
+		SELECT * FROM collections
+		WHERE id = ${id} AND status = ${COLLECTION_STATUS_ACTIVE}
+	`;
 	return row ?? null;
 }
 
@@ -55,6 +64,7 @@ export interface CollectionRulesRow {
 	creator: string;
 	total_potential: number;
 	seed_count: number;
+	status: CollectionStatus;
 	transferable: boolean;
 	burnable: boolean;
 	replicable: boolean;
@@ -63,12 +73,20 @@ export interface CollectionRulesRow {
 	schema: unknown | null;
 }
 
+export interface CollectionArchiveSnapshotRow {
+	id: string;
+	creator: string;
+	status: CollectionStatus;
+	nft_count: number;
+	pack_count: number;
+}
+
 export async function getCollectionRules(
 	id: string,
 	txn: Queryable = sql,
 ): Promise<CollectionRulesRow | null> {
 	const [row] = await txn<CollectionRulesRow[]>`
-		SELECT c.id, c.creator, c.total_potential, c.transferable,
+		SELECT c.id, c.creator, c.total_potential, c.status, c.transferable,
 			c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient,
 			c.schema,
 			COALESCE(COUNT(n.id) FILTER (WHERE n.nft_type = 'seed'), 0)::int AS seed_count
@@ -76,6 +94,23 @@ export async function getCollectionRules(
 		LEFT JOIN nfts n ON n.collection_id = c.id
 		WHERE c.id = ${id}
 		GROUP BY c.id
+	`;
+	return row ?? null;
+}
+
+export async function getCollectionArchiveSnapshot(
+	id: string,
+	txn: Queryable = sql,
+): Promise<CollectionArchiveSnapshotRow | null> {
+	const [row] = await txn<CollectionArchiveSnapshotRow[]>`
+		SELECT
+			c.id,
+			c.creator,
+			c.status,
+			COALESCE((SELECT COUNT(*)::int FROM nfts n WHERE n.collection_id = c.id), 0) AS nft_count,
+			COALESCE((SELECT COUNT(*)::int FROM packs p WHERE p.collection_id = c.id), 0) AS pack_count
+		FROM collections c
+		WHERE c.id = ${id}
 	`;
 	return row ?? null;
 }
@@ -88,6 +123,23 @@ export async function updateCollectionSchema(
 	await txn`
 		UPDATE collections
 		SET schema = ${JSON.stringify(schema)}
+		WHERE id = ${collectionId}
+	`;
+}
+
+export async function archiveCollection(
+	collectionId: string,
+	blockNum: number,
+	txId: string,
+	archivedAt: string,
+	txn: Queryable = sql,
+): Promise<void> {
+	await txn`
+		UPDATE collections
+		SET status = ${COLLECTION_STATUS_ARCHIVED},
+			archived_at_block = ${blockNum},
+			archived_tx_id = ${txId},
+			archived_at = ${archivedAt}
 		WHERE id = ${collectionId}
 	`;
 }
@@ -105,6 +157,7 @@ export async function listCollections(limit = 50, offset = 0) {
 			COALESCE(COUNT(*) FILTER (WHERE n.nft_type = 'instance'), 0) AS instance_count
 		FROM collections c
 		LEFT JOIN nfts n ON n.collection_id = c.id
+		WHERE c.status = ${COLLECTION_STATUS_ACTIVE}
 		GROUP BY c.id
 		ORDER BY c.created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
@@ -119,7 +172,7 @@ export async function getCollectionsByCreator(creator: string, limit = 50, offse
 			COALESCE(COUNT(*) FILTER (WHERE n.nft_type = 'instance'), 0) AS instance_count
 		FROM collections c
 		LEFT JOIN nfts n ON n.collection_id = c.id
-		WHERE c.creator = ${creator}
+		WHERE c.creator = ${creator} AND c.status = ${COLLECTION_STATUS_ACTIVE}
 		GROUP BY c.id
 		ORDER BY c.created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}

@@ -44,7 +44,7 @@ export async function buildTransfer(input: TransferBuilderInput): Promise<BuildR
 			...(data.imageUrl && { imageUrl: data.imageUrl }),
 			...(imageHash && { imageHash }),
 			...(data.seedId && { seedId: data.seedId }),
-			...(data.birthTx && { birthTx: data.birthTx }),
+			...(data.seedTxId && { seedTxId: data.seedTxId }),
 		},
 	};
 

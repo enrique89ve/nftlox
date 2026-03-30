@@ -216,7 +216,7 @@ Get full details for a single NFT.
 - `max_replicas`, `distributed`, `seed_id`, `instance_number`
 - `listing_price`, `listing_currency`, `listing_marketplace`
 - `immutable_data`, `mutable_data`, `owner_data`
-- `birth_block`, `birth_tx`, `created_at`
+- `mint_block`, `mint_tx`, `created_at`
 
 **Error:** `404` if the NFT does not exist.
 
@@ -788,7 +788,7 @@ Transfer an NFT instance to another Hive account.
 | `imageUrl` | `string` | No       | Image URL for indexer verification (recommended).    |
 | `imageHash`| `string` | No       | Pre-computed image hash.                             |
 | `seedId`   | `string` | No       | Seed provenance ID.                                  |
-| `birthTx`  | `string` | No       | Birth transaction ID.                                |
+| `seedTxId`  | `string` | No       | Seed's creation tx_id (anti-replay proof).                                |
 
 **Key type:** Posting
 
@@ -807,7 +807,7 @@ Permanently destroy an NFT instance.
 | `imageUrl` | `string` | No       | Image URL for indexer verification (recommended).    |
 | `imageHash`| `string` | No       | Pre-computed image hash.                             |
 | `seedId`   | `string` | No       | Seed provenance ID.                                  |
-| `birthTx`  | `string` | No       | Birth transaction ID.                                |
+| `seedTxId`  | `string` | No       | Seed's creation tx_id (anti-replay proof).                                |
 
 **Key type:** Posting
 
@@ -879,7 +879,7 @@ Update mutable data as an approved data operator.
 | `data`        | `object` | No       | Key-value pairs to update (legacy format).    |
 | `mutableData` | `object` | No       | Key-value pairs to update (schema format).    |
 | `seedId`      | `string` | No       | Seed provenance ID.                           |
-| `birthTx`     | `string` | No       | Birth transaction ID.                         |
+| `seedTxId`     | `string` | No       | Seed's creation tx_id (anti-replay proof).                         |
 
 **Key type:** Posting
 
@@ -991,7 +991,7 @@ List an NFT for sale on the marketplace.
 | `imageHash`  | `string` | No       | Pre-computed image hash.                                        |
 | `marketplace`| `string` | No       | Marketplace identifier (metadata only, not used for fee routing). |
 | `seedId`     | `string` | No       | Seed provenance ID.                                             |
-| `birthTx`    | `string` | No       | Birth transaction ID.                                           |
+| `seedTxId`    | `string` | No       | Seed's creation tx_id (anti-replay proof).                                           |
 
 **Key type:** Posting
 
@@ -1219,7 +1219,7 @@ Transfer an NFT as an approved spender (operator).
 | `to`         | `string` | Yes      | Recipient (Hive username).                    |
 | `instanceId` | `string` | Yes      | NFT instance ID.                              |
 | `seedId`     | `string` | No       | Seed provenance ID.                           |
-| `birthTx`    | `string` | No       | Birth transaction ID.                         |
+| `seedTxId`    | `string` | No       | Seed's creation tx_id (anti-replay proof).                         |
 
 Note: The `spender` field in the request body maps to `operator` internally.
 
@@ -1279,7 +1279,7 @@ Lend an NFT to another account. The borrower gets temporary custody but cannot t
 | `instanceId` | `string` | Yes      | NFT instance ID to lend.                          |
 | `borrower`   | `string` | Yes      | Hive username of the borrower. Must differ from owner. |
 | `seedId`     | `string` | No       | Seed provenance ID.                               |
-| `birthTx`    | `string` | No       | Birth transaction ID.                             |
+| `seedTxId`    | `string` | No       | Seed's creation tx_id (anti-replay proof).                             |
 
 **Key type:** Posting
 
@@ -1296,7 +1296,7 @@ Return a lent NFT to its owner. Can be called by the borrower or the owner.
 | `signer`     | `string` | Yes      | Hive username of the signer (borrower or owner).  |
 | `instanceId` | `string` | Yes      | NFT instance ID to return.                        |
 | `seedId`     | `string` | No       | Seed provenance ID.                               |
-| `birthTx`    | `string` | No       | Birth transaction ID.                             |
+| `seedTxId`    | `string` | No       | Seed's creation tx_id (anti-replay proof).                             |
 
 Note: The `signer` field in the request body maps to `owner` internally.
 

@@ -41,29 +41,33 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	}
 
 	let totalQuantity = 0;
-	const parsedItems: Array<{ seedId: string; quantity: number }> = [];
+	const parsedItems: Array<{ seedId: string; quantity: number; seedTxId: string }> = [];
 	const seenSeeds = new Set<string>();
 
 	for (const item of items) {
 		const raw = item as Record<string, unknown>;
 		const seedId = requireString(raw.seedId, "seedId");
 		const quantity = requireNumber(raw.quantity, "quantity");
+		const seedTxId = requireString(raw.seedTxId, "seedTxId");
 		if (quantity < 1) throw new Error(`Invalid quantity for seed ${seedId}`);
 		if (seenSeeds.has(seedId)) throw new Error(`Duplicate seedId in items: ${seedId}`);
 		seenSeeds.add(seedId);
 		totalQuantity += quantity;
-		parsedItems.push({ seedId, quantity });
+		parsedItems.push({ seedId, quantity, seedTxId });
 	}
 
 	// Track validated schemas to avoid re-validating mutableData per collection
 	const validatedSchemas = new Set<string>();
 
-	for (const { seedId, quantity } of parsedItems) {
+	for (const { seedId, quantity, seedTxId } of parsedItems) {
 		const seed = await getSeedWithSchema(seedId, txn);
 		if (!seed) throw new Error(`Seed not found: ${seedId}`);
 		assertNotBurned(seed, seedId);
 		assertNotLent(seed, seedId);
 		if (seed.nft_type !== "seed") throw new Error(`${seedId} is not a seed`);
+		if (seed.tx_id !== seedTxId) {
+			throw new Error(`seedTxId mismatch for seed ${seedId}`);
+		}
 
 		const isOwner = seed.owner === op.signer;
 		const isCreator = seed.creator === op.signer;
@@ -85,13 +89,14 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const distributed = Number(seed.distributed) || 0;
 		const maxReplicas = Number(seed.max_replicas) || 0;
 
-		// Idempotency: count instances already created by THIS transaction.
-		// On replay, `distributed` reflects prior runs. Subtracting instances
-		// born from the same txId recovers the pre-tx baseline so instance
-		// numbers remain deterministic across replays.
+		// Idempotency: count instances already created by THIS Hive transaction.
+		// Multiple instances share the same tx_id (Hive txIds are per-transaction,
+		// not per-operation). On replay, `distributed` reflects prior runs.
+		// Subtracting instances from the same txId recovers the pre-tx baseline
+		// so instance numbers remain deterministic across replays.
 		const [existingFromTx] = await txn`
 			SELECT COUNT(*)::int AS count FROM nfts
-			WHERE seed_id = ${seedId} AND birth_tx = ${op.txId}
+			WHERE seed_id = ${seedId} AND tx_id = ${op.txId}
 		`;
 		const alreadyMintedThisTx = existingFromTx?.count ?? 0;
 		const baseDistributed = computeInstanceBaseline(distributed, alreadyMintedThisTx);
@@ -128,8 +133,6 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				originDna,
 				instanceDna,
 				uniqueAccessKey,
-				birthBlock: op.blockNum,
-				birthTx: op.txId,
 				mintedBy: op.signer,
 				name: "",
 				description: null,

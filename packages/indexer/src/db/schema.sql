@@ -46,11 +46,44 @@ CREATE TABLE IF NOT EXISTS collections (
 	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
 	royalty_recipient TEXT,
 	schema JSONB,
+	status TEXT NOT NULL DEFAULT 'active',
+	archived_at_block BIGINT,
+	archived_tx_id TEXT,
+	archived_at TIMESTAMPTZ,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS archived_at_block BIGINT;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS archived_tx_id TEXT;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+
+DO $$
+BEGIN
+	IF EXISTS (
+		SELECT 1
+		FROM information_schema.columns
+		WHERE table_name = 'collections' AND column_name = 'archived'
+	) THEN
+		EXECUTE '
+			UPDATE collections
+			SET status = CASE WHEN archived THEN ''archived'' ELSE ''active'' END
+			WHERE status IS NULL
+		';
+	END IF;
+END $$;
+
+UPDATE collections SET status = 'active' WHERE status IS NULL;
+ALTER TABLE collections ALTER COLUMN status SET DEFAULT 'active';
+ALTER TABLE collections ALTER COLUMN status SET NOT NULL;
+ALTER TABLE collections DROP CONSTRAINT IF EXISTS collections_status_check;
+ALTER TABLE collections
+	ADD CONSTRAINT collections_status_check
+	CHECK (status IN ('active', 'archived'));
+ALTER TABLE collections DROP COLUMN IF EXISTS archived;
 
 -- NFTs (unified: seeds, instances, replicas)
 CREATE TABLE IF NOT EXISTS nfts (
@@ -63,8 +96,6 @@ CREATE TABLE IF NOT EXISTS nfts (
 	origin_dna TEXT,
 	instance_dna TEXT,
 	unique_access_key TEXT,
-	birth_block BIGINT NOT NULL DEFAULT 0,
-	birth_tx TEXT NOT NULL DEFAULT '',
 	minted_by TEXT NOT NULL,
 	name TEXT NOT NULL,
 	description TEXT,
@@ -99,6 +130,11 @@ CREATE TABLE IF NOT EXISTS nfts (
 	created_at TIMESTAMPTZ NOT NULL,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Burned NFTs must not retain listing fields
+ALTER TABLE nfts DROP CONSTRAINT IF EXISTS burned_nft_no_listing;
+ALTER TABLE nfts ADD CONSTRAINT burned_nft_no_listing
+	CHECK (status != 'burned' OR (listing_id IS NULL AND listing_price IS NULL));
 
 -- Invalid operations (audit trail)
 CREATE TABLE IF NOT EXISTS invalid_operations (
@@ -225,10 +261,14 @@ CREATE TABLE IF NOT EXISTS owner_nft_counts (
 
 CREATE INDEX IF NOT EXISTS idx_collections_creator ON collections(creator);
 CREATE INDEX IF NOT EXISTS idx_collections_symbol ON collections(symbol);
+DROP INDEX IF EXISTS idx_collections_archived;
+CREATE INDEX IF NOT EXISTS idx_collections_status ON collections(status, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_nfts_collection ON nfts(collection_id);
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_created ON nfts(owner, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_nfts_seed_instances ON nfts(seed_id, instance_number) WHERE seed_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nfts_seed_tx ON nfts(seed_id, tx_id) WHERE seed_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nfts_owner_type_status ON nfts(owner, nft_type, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_active_instances ON nfts(owner, created_at DESC) WHERE nft_type = 'instance' AND status = 'active';
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_active_seeds ON nfts(owner, collection_id) WHERE nft_type = 'seed' AND status = 'active';
 CREATE INDEX IF NOT EXISTS idx_nfts_seeds_available ON nfts(collection_id, distributed) WHERE nft_type = 'seed' AND supply_exhausted = FALSE;

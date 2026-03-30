@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:tes
 import { sql, type Queryable } from "@/db/client.ts";
 import type { ParsedOperation, AuthLevel } from "@/scanner/operation-parser.ts";
 import { handleCreateCollection } from "@/processor/handlers/core/create-collection.ts";
+import { handleArchiveCollection } from "@/processor/handlers/core/archive-collection.ts";
 import { handleMint } from "@/processor/handlers/core/mint.ts";
 import { handleBulkDistribute } from "@/processor/handlers/core/bulk-distribute.ts";
 import { handleTransfer } from "@/processor/handlers/core/transfer.ts";
@@ -20,8 +21,11 @@ import { handlePackCreate } from "@/processor/handlers/packs/pack-create.ts";
 import { handlePackBuy } from "@/processor/handlers/packs/pack-buy.ts";
 import { handlePackOpen } from "@/processor/handlers/packs/pack-open.ts";
 import { handlePackApprove } from "@/processor/handlers/allowances/pack-approve.ts";
+import { handleDataOperatorApprove } from "@/processor/handlers/allowances/data-operator-approve.ts";
+import { listCollections } from "@/db/queries/collections.ts";
 import {
 	ACTION_CREATE_COLLECTION,
+	ACTION_ARCHIVE_COLLECTION,
 	ACTION_MINT,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_TRANSFER,
@@ -39,6 +43,7 @@ import {
 	ACTION_PACK_APPROVE,
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
+	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_BUY,
 	calculatePaymentSplit,
 	ACTIVE_AUTH_ACTIONS,
@@ -104,7 +109,14 @@ async function seedMint(txn: Queryable = sql) {
 		metadata: { name: "Test Seed", imageUrl: "https://example.com/nft.png", imageHash: "img_abc" },
 	});
 	await handleMint(op, txn);
+	return op.txId;
 }
+
+const makeBulkItem = (seedId: string, quantity: number, seedTxId: string) => ({
+	seedId,
+	quantity,
+	seedTxId,
+});
 
 async function makeListData(params: {
 	nftId: string;
@@ -181,6 +193,130 @@ describe("Handlers (integration)", () => {
 		});
 
 
+	});
+
+	// ─── archive_collection ─────────────────────────
+
+	describe("archive_collection", () => {
+		test("archives an empty collection, clears collection-scoped permissions, and hides it from lists", async () => {
+			await seedCollection();
+
+			await handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
+				spender: "bob",
+				collectionId: "col_test",
+				approved: true,
+			}), sql);
+			await handleDataOperatorApprove(makeOp(ACTION_DATA_OPERATOR_APPROVE, {
+				collectionId: "col_test",
+				operator: "carol",
+				approved: true,
+			}), sql);
+
+			await handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
+				collectionId: "col_test",
+			}), sql);
+
+			const [collection] = await sql`
+				SELECT status, archived_at_block, archived_tx_id
+				FROM collections
+				WHERE id = 'col_test'
+			`;
+			expect(collection).toBeDefined();
+			expect(collection!.status).toBe("archived");
+			expect(collection!.archived_at_block).toBe(90000100);
+			expect(collection!.archived_tx_id).toContain("archive_collection");
+
+			const [allowances] = await sql`
+				SELECT COUNT(*)::int AS count FROM collection_allowances WHERE collection_id = 'col_test'
+			`;
+			const [operators] = await sql`
+				SELECT COUNT(*)::int AS count FROM data_operators WHERE collection_id = 'col_test'
+			`;
+			expect(Number(allowances!.count)).toBe(0);
+			expect(Number(operators!.count)).toBe(0);
+
+			const visibleCollections = await listCollections();
+			expect(visibleCollections.some((row) => row.id === "col_test")).toBe(false);
+		});
+
+		test("rejects archive when NFTs already exist", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await expect(
+				handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
+					collectionId: "col_test",
+				}), sql),
+			).rejects.toThrow("NFTs still exist");
+		});
+
+		test("rejects archive when packs already exist", async () => {
+			await seedCollection();
+			await sql`
+				INSERT INTO packs (
+					id, collection_id, creator, name, description, image_url,
+					drop_table, items_per_pack,
+					price_amount, price_currency,
+					max_supply, current_supply, total_opened, status,
+					block_num, tx_id, created_at
+				) VALUES (
+					'pack_orphan', 'col_test', 'alice', 'Pack',
+					NULL, NULL, '[]'::jsonb, 1,
+					NULL, NULL,
+					0, 0, 0, 'active',
+					90000100, 'tx_pack_orphan', '2024-01-01T00:00:00'
+				)
+			`;
+
+			await expect(
+				handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
+					collectionId: "col_test",
+				}), sql),
+			).rejects.toThrow("packs still exist");
+		});
+
+		test("rejects archive from non-creator signer", async () => {
+			await seedCollection();
+
+			await expect(
+				handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
+					collectionId: "col_test",
+				}, "eve"), sql),
+			).rejects.toThrow("is not creator");
+		});
+
+		test("mint rejects archived collection", async () => {
+			await seedCollection();
+			await handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
+				collectionId: "col_test",
+			}), sql);
+
+			await expect(
+				handleMint(makeOp(ACTION_MINT, {
+					id: "seed_after_archive",
+					collectionId: "col_test",
+					metadata: { name: "After Archive" },
+				}), sql),
+			).rejects.toThrow("is archived");
+		});
+
+		test("pack_create rejects archived collection", async () => {
+			await seedCollection();
+			await handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
+				collectionId: "col_test",
+			}), sql);
+
+			await expect(
+				handlePackCreate(makeOp(ACTION_PACK_CREATE, {
+					id: "pack_archived",
+					collectionId: "col_test",
+					name: "Archived Pack",
+					dropTable: [{ seedId: "seed_missing", weight: 1 }],
+					itemsPerPack: 1,
+					maxSupply: 0,
+				}), sql),
+			).rejects.toThrow("is archived");
+		});
 	});
 
 	// ─── mint ───────────────────────────────────────
@@ -293,11 +429,11 @@ describe("Handlers (integration)", () => {
 	describe("bulk_distribute", () => {
 		test("distributes instances from seed", async () => {
 			await seedCollection();
-			await seedMint();
+			const seedTxId = await seedMint();
 
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [{ seedId: "seed_test1", quantity: 3 }],
+				items: [makeBulkItem("seed_test1", 3, seedTxId)],
 			});
 			await handleBulkDistribute(op, sql);
 
@@ -313,11 +449,11 @@ describe("Handlers (integration)", () => {
 
 		test("distributed instances always have non-null DNA and access keys", async () => {
 			await seedCollection();
-			await seedMint();
+			const seedTxId = await seedMint();
 
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [{ seedId: "seed_test1", quantity: 2 }],
+				items: [makeBulkItem("seed_test1", 2, seedTxId)],
 			});
 			await handleBulkDistribute(op, sql);
 
@@ -336,11 +472,11 @@ describe("Handlers (integration)", () => {
 
 		test("rejects distribute by non-owner and non-creator", async () => {
 			await seedCollection();
-			await seedMint();
+			const seedTxId = await seedMint();
 
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [{ seedId: "seed_test1", quantity: 1 }],
+				items: [makeBulkItem("seed_test1", 1, seedTxId)],
 			}, "eve");
 			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("neither owner nor collection creator");
 		});
@@ -358,32 +494,54 @@ describe("Handlers (integration)", () => {
 
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [{ seedId: "seed_limited", quantity: 3 }],
+				items: [makeBulkItem("seed_limited", 3, mintOp.txId)],
 			});
 			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("insufficient supply");
 		});
 
 		test("rejects duplicate seedId in items", async () => {
 			await seedCollection();
-			await seedMint();
+			const seedTxId = await seedMint();
 
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
 				items: [
-					{ seedId: "seed_test1", quantity: 1 },
-					{ seedId: "seed_test1", quantity: 1 },
+					makeBulkItem("seed_test1", 1, seedTxId),
+					makeBulkItem("seed_test1", 1, seedTxId),
 				],
 			});
 			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("Duplicate seedId");
 		});
 
-		test("idempotent on reprocess (same tx)", async () => {
+		test("rejects missing seedTxId", async () => {
 			await seedCollection();
 			await seedMint();
 
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [{ seedId: "seed_test1", quantity: 2 }],
+				items: [{ seedId: "seed_test1", quantity: 1 }],
+			});
+			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("seedTxId");
+		});
+
+		test("rejects mismatched seedTxId", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
+				to: "bob",
+				items: [makeBulkItem("seed_test1", 1, "tx_wrong_seed_birth")],
+			});
+			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("seedTxId mismatch");
+		});
+
+		test("idempotent on reprocess (same tx)", async () => {
+			await seedCollection();
+			const seedTxId = await seedMint();
+
+			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
+				to: "bob",
+				items: [makeBulkItem("seed_test1", 2, seedTxId)],
 			});
 			await handleBulkDistribute(op, sql);
 
@@ -396,10 +554,10 @@ describe("Handlers (integration)", () => {
 
 		test("defaults to signer when no 'to' provided", async () => {
 			await seedCollection();
-			await seedMint();
+			const seedTxId = await seedMint();
 
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
-				items: [{ seedId: "seed_test1", quantity: 1 }],
+				items: [makeBulkItem("seed_test1", 1, seedTxId)],
 			});
 			await handleBulkDistribute(op, sql);
 
@@ -423,7 +581,7 @@ describe("Handlers (integration)", () => {
 			// Alice (creator) distributes bob's seed
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "charlie",
-				items: [{ seedId: "seed_bob", quantity: 2 }],
+				items: [makeBulkItem("seed_bob", 2, mintOp.txId)],
 			}, "alice");
 			await handleBulkDistribute(op, sql);
 
@@ -436,11 +594,11 @@ describe("Handlers (integration)", () => {
 
 		test("idempotent on reprocess — instances unchanged", async () => {
 			await seedCollection();
-			await seedMint();
+			const seedTxId = await seedMint();
 
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [{ seedId: "seed_test1", quantity: 2 }],
+				items: [makeBulkItem("seed_test1", 2, seedTxId)],
 			});
 			await handleBulkDistribute(op, sql);
 			await handleBulkDistribute(op, sql);
@@ -453,17 +611,17 @@ describe("Handlers (integration)", () => {
 
 		test("sequential distributes produce sequential instance numbers", async () => {
 			await seedCollection();
-			await seedMint();
+			const seedTxId = await seedMint();
 
 			const op1 = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [{ seedId: "seed_test1", quantity: 2 }],
+				items: [makeBulkItem("seed_test1", 2, seedTxId)],
 			});
 			await handleBulkDistribute(op1, sql);
 
 			const op2 = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "charlie",
-				items: [{ seedId: "seed_test1", quantity: 3 }],
+				items: [makeBulkItem("seed_test1", 3, seedTxId)],
 			});
 			await handleBulkDistribute(op2, sql);
 
@@ -477,11 +635,11 @@ describe("Handlers (integration)", () => {
 
 		test("partial replay only creates missing instances", async () => {
 			await seedCollection();
-			await seedMint();
+			const seedTxId = await seedMint();
 
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [{ seedId: "seed_test1", quantity: 3 }],
+				items: [makeBulkItem("seed_test1", 3, seedTxId)],
 			});
 			await handleBulkDistribute(op, sql);
 
@@ -512,7 +670,7 @@ describe("Handlers (integration)", () => {
 			// Distribute 2
 			const op1 = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [{ seedId: "seed_capped", quantity: 2 }],
+				items: [makeBulkItem("seed_capped", 2, mintOp.txId)],
 			});
 			await handleBulkDistribute(op1, sql);
 
@@ -525,7 +683,7 @@ describe("Handlers (integration)", () => {
 
 		test("multi-seed bulk distribute is idempotent", async () => {
 			await seedCollection();
-			await seedMint(); // seed_test1
+			const seed1BirthTx = await seedMint(); // seed_test1
 
 			const mintOp2 = makeOp(ACTION_MINT, {
 				id: "seed_test2",
@@ -538,8 +696,8 @@ describe("Handlers (integration)", () => {
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
 				items: [
-					{ seedId: "seed_test1", quantity: 2 },
-					{ seedId: "seed_test2", quantity: 3 },
+					makeBulkItem("seed_test1", 2, seed1BirthTx),
+					makeBulkItem("seed_test2", 3, mintOp2.txId),
 				],
 			});
 			await handleBulkDistribute(op, sql);
@@ -575,7 +733,7 @@ describe("Handlers (integration)", () => {
 			for (let t = 0; t < 5; t++) {
 				const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 					to: testUsers[t],
-					items: [{ seedId: "seed_concurrent", quantity: 2 }],
+					items: [makeBulkItem("seed_concurrent", 2, mintOp.txId)],
 				});
 				// Override txId to make each unique
 				(op as any).txId = `tx_concurrent_${t}`;
@@ -614,7 +772,7 @@ describe("Handlers (integration)", () => {
 			// Distribute 3 first
 			const op1 = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "alice",
-				items: [{ seedId: "seed_race", quantity: 3 }],
+				items: [makeBulkItem("seed_race", 3, mintOp.txId)],
 			});
 			(op1 as any).txId = "tx_race_1";
 			await handleBulkDistribute(op1, sql);
@@ -622,7 +780,7 @@ describe("Handlers (integration)", () => {
 			// Now try to distribute 3 more — should fail (only 2 remaining)
 			const op2 = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [{ seedId: "seed_race", quantity: 3 }],
+				items: [makeBulkItem("seed_race", 3, mintOp.txId)],
 			});
 			(op2 as any).txId = "tx_race_2";
 			await expect(handleBulkDistribute(op2, sql)).rejects.toThrow("insufficient supply");
@@ -647,7 +805,7 @@ describe("Handlers (integration)", () => {
 			const ops = Array.from({ length: 3 }, (_, t) => {
 				const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 					to: replayUsers[t],
-					items: [{ seedId: "seed_replay_multi", quantity: 2 }],
+					items: [makeBulkItem("seed_replay_multi", 2, mintOp.txId)],
 				});
 				(op as any).txId = `tx_replay_multi_${t}`;
 				return op;

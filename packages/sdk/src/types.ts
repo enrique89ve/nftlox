@@ -1,6 +1,7 @@
 // NFTLox Protocol Types - v0.3.0
 
 import type { ProtocolAction, SupportedCurrency } from "./constants";
+import type { ListingTxId } from "./branded";
 export type * from "./schemas";
 
 // ============ HIVE OPERATION TYPES ============
@@ -82,6 +83,10 @@ export interface CollectionData {
 	schema?: CollectionSchema;
 }
 
+export interface ArchiveCollectionData {
+	collectionId: string;
+}
+
 // ============ EXTEND SCHEMA TYPES ============
 
 export type ExtendSchemaData = {
@@ -104,15 +109,14 @@ export interface NFTData {
 	collectionId: string;
 	edition: number;
 	owner: string;
+	nftType?: "seed" | "instance";
 
 	// Identidad (inmutable)
 	originDna: string;
 	instanceDna: string;
 	uniqueAccessKey: string;
 
-	// Procedencia (inmutable)
-	birthBlock: number;
-	birthTx: string;
+	// Procedencia (inmutable — tx_id y block_num del NFT)
 	mintedBy: string;
 	collectionBlock?: number;
 
@@ -144,8 +148,8 @@ export interface ReplicaData extends SeedProvenance {
 export interface BulkDistributeItem {
 	seedId: string;
 	quantity: number;
-	originBlock: number;
-	birthTx?: string;
+	/** Anti-replay proof: must match the seed's tx_id in DB. */
+	seedTxId: string;
 }
 
 export interface BulkDistributeData {
@@ -160,7 +164,8 @@ export interface BulkDistributeData {
 
 export interface SeedProvenance {
 	seedId?: string;
-	birthTx?: string;
+	/** Anti-replay proof: must match the seed's tx_id in DB. */
+	seedTxId?: string;
 }
 
 // ============ TRANSFER & BURN TYPES ============
@@ -187,7 +192,7 @@ export interface SetDataData {
 	data?: Record<string, unknown>;
 	mutableData?: Record<string, unknown>;
 	seedId?: string;
-	birthTx?: string;
+	seedTxId?: string;
 }
 
 // ============ SET_OWNER_DATA TYPES ============
@@ -197,7 +202,7 @@ export interface SetOwnerDataData {
 	instanceDna: string;
 	data: Record<string, unknown>;
 	seedId?: string;
-	birthTx?: string;
+	seedTxId?: string;
 }
 
 // ============ DATA OPERATOR TYPES ============
@@ -259,15 +264,15 @@ export interface UnlistData {
 	imageUrl?: string;
 	imageHash?: string;
 	seedId?: string;
-	birthTx?: string;
+	seedTxId?: string;
 }
 
 export interface BuyData {
 	readonly nftId: string;
 	readonly listingId: string;
-	readonly listTxId: string;
+	readonly listTxId: ListingTxId;
 	readonly seedId?: string;
-	readonly birthTx?: string;
+	readonly seedTxId?: string;
 }
 
 // ============ PACK TYPES (Semi-Fungible) ============
@@ -474,14 +479,14 @@ export type MultisigRequest = Readonly<{
 	buyer: string;
 	nftId: string;
 	listingId: string;
-	listTxId: string;
+	listTxId: ListingTxId;
 	transaction: HiveTransactionObject;
 }>;
 
 export type PaymentInfo = Readonly<{
 	nftId: string;
 	listingId: string;
-	listTxId: string;
+	listTxId: ListingTxId;
 	seller: string;
 	totalPrice: number;
 	currency: string;
@@ -491,5 +496,5 @@ export type PaymentInfo = Readonly<{
 	feeAmount: number;
 	feeAccount: string;
 	nodeAccount: string;
-	birthTx: string;
+	seedTxId: string;
 }>;

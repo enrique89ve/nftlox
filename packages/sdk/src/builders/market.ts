@@ -45,7 +45,7 @@ export async function buildList(input: ListBuilderInput): Promise<BuildResult<Li
 		...(data.imageUrl && { imageUrl: data.imageUrl }),
 		...(imageHash && { imageHash }),
 		...(data.seedId && { seedId: data.seedId }),
-		...(data.birthTx && { birthTx: data.birthTx }),
+		...(data.seedTxId && { seedTxId: data.seedTxId }),
 		...(data.marketplace && { marketplace: data.marketplace }),
 	};
 
@@ -99,7 +99,7 @@ export async function buildUnlist(input: UnlistBuilderInput): Promise<BuildResul
 		...(data.imageUrl && { imageUrl: data.imageUrl }),
 		...(imageHash && { imageHash }),
 		...(data.seedId && { seedId: data.seedId }),
-		...(data.birthTx && { birthTx: data.birthTx }),
+		...(data.seedTxId && { seedTxId: data.seedTxId }),
 	};
 
 	const payload: ProtocolPayload<UnlistData> = {
@@ -167,7 +167,7 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 			listingId: data.listingId,
 			listTxId: data.listTxId,
 			...(data.seedId && { seedId: data.seedId }),
-			...(data.birthTx && { birthTx: data.birthTx }),
+			...(data.seedTxId && { seedTxId: data.seedTxId }),
 		},
 	};
 

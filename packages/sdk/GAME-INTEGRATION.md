@@ -362,23 +362,26 @@ const resolvedSeedIds = resolveDropTable(
 ```typescript
 function aggregateSeedIds(
 	seedIds: ReadonlyArray<string>,
-	originBlock: number,
-): ReadonlyArray<{ seedId: string; quantity: number; originBlock: number }> {
+	seedTxIdById: ReadonlyMap<string, string>,
+): ReadonlyArray<{ seedId: string; quantity: number; seedTxId: string }> {
 	const counts = new Map<string, number>();
 	for (const id of seedIds) {
 		counts.set(id, (counts.get(id) ?? 0) + 1);
 	}
-	return Array.from(counts.entries()).map(([seedId, quantity]) => ({
-		seedId,
-		quantity,
-		originBlock,
-	}));
+	return Array.from(counts.entries()).map(([seedId, quantity]) => {
+		const seedTxId = seedTxIdById.get(seedId);
+		if (!seedTxId) {
+			throw new Error(`Missing seedTxId for seed ${seedId}`);
+		}
+		return { seedId, quantity, seedTxId };
+	});
 }
 
 async function openPack(
 	player: string,
 	paymentTxId: string,
 	paymentBlockNum: number,
+	seedTxIdById: ReadonlyMap<string, string>,
 	broadcastFn: (operations: ReadonlyArray<unknown>) => Promise<string>,
 ): Promise<ReadonlyArray<string>> {
 	const rngSeed = buildPackOpenRngSeed(paymentTxId, paymentBlockNum, player);
@@ -388,11 +391,11 @@ async function openPack(
 		rngSeed,
 	);
 
-	const aggregated = aggregateSeedIds(resolvedSeedIds, paymentBlockNum);
+	const aggregated = aggregateSeedIds(resolvedSeedIds, seedTxIdById);
 
 	const payload = createBulkDistributePayload({
 		to: player,
-		items: aggregated as Array<{ seedId: string; quantity: number; originBlock: number }>,
+		items: aggregated as Array<{ seedId: string; quantity: number; seedTxId: string }>,
 	});
 
 	// bulk_distribute requires posting key (required_posting_auths).
@@ -418,7 +421,7 @@ async function openPack(
 
 When the indexer processes `bulk_distribute`, for each item it:
 
-1. Looks up the seed and validates it exists, is not burned/lent, and has available supply
+1. Looks up the seed and validates it exists, is not burned/lent, has available supply, and that `seedTxId` matches the seed's real mint transaction
 2. Generates deterministic instance IDs: `generateDeterministicInstanceId(seedId, instanceNumber)`
 3. Generates deterministic DNA: `generateDeterministicInstanceDna(seedId, instanceNumber, txId, blockNum)`
 4. Generates deterministic access keys: `generateDeterministicAccessKey(instanceDna, signer, txId)`
@@ -886,11 +889,13 @@ async function handlePackOpen(
 	for (const seedId of resolved) {
 		counts.set(seedId, (counts.get(seedId) ?? 0) + 1);
 	}
-	const items = Array.from(counts.entries()).map(([seedId, quantity]) => ({
-		seedId,
-		quantity,
-		originBlock: paymentBlockNum,
-	}));
+	const items = Array.from(counts.entries()).map(([seedId, quantity]) => {
+		const seedTxId = seedTxIdById.get(seedId);
+		if (!seedTxId) {
+			throw new Error(`Missing seedTxId for seed ${seedId}`);
+		}
+		return { seedId, quantity, seedTxId };
+	});
 
 	// 5d. Broadcast bulk_distribute
 	// IMPORTANT: The signer must be the current seed owner, not necessarily the creator.

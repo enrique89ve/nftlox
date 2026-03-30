@@ -19,6 +19,7 @@ import {
 	// Posting operations
 	createSetDataOperation,
 	createSetOwnerDataOperation,
+	createArchiveCollectionOperation,
 	createSetDataFromOperation,
 	createUnlistOperation,
 	createPackOpenOperation,
@@ -33,9 +34,9 @@ import {
 
 describe("Authority exhaustiveness", () => {
 	test("ACTIVE + POSTING covers ALL_ACTIONS exactly", () => {
-		const active = new Set(ACTIVE_AUTH_ACTIONS);
-		const posting = new Set(POSTING_AUTH_ACTIONS);
-		const all = new Set(ALL_ACTIONS);
+		const active = new Set<string>(ACTIVE_AUTH_ACTIONS);
+		const posting = new Set<string>(POSTING_AUTH_ACTIONS);
+		const all = new Set<string>(ALL_ACTIONS);
 
 		// No overlap
 		const overlap = [...active].filter(a => posting.has(a));
@@ -50,16 +51,16 @@ describe("Authority exhaustiveness", () => {
 	});
 
 	test("no action appears in both ACTIVE and POSTING", () => {
-		const active = new Set(ACTIVE_AUTH_ACTIONS);
+		const active = new Set<string>(ACTIVE_AUTH_ACTIONS);
 		for (const action of POSTING_AUTH_ACTIONS) {
 			expect(active.has(action)).toBe(false);
 		}
 	});
 
-	test("counts match: 10 active + 15 posting = 25 total", () => {
+	test("counts match: 10 active + 16 posting = 26 total", () => {
 		expect(ACTIVE_AUTH_ACTIONS.length).toBe(10);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(15);
-		expect(ALL_ACTIONS.length).toBe(25);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(16);
+		expect(ALL_ACTIONS.length).toBe(26);
 	});
 });
 
@@ -152,7 +153,7 @@ describe("Active key operations use required_auths", () => {
 describe("Posting key operations use required_posting_auths", () => {
 	test("bulk_distribute", () => {
 		const op = createBulkDistributeOperation(
-			{ items: [{ seedId: "seed_1", quantity: 1, originBlock: 1 }] },
+			{ items: [{ seedId: "seed_1", quantity: 1, seedTxId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }] },
 			"alice",
 		);
 		expect(op[1].required_auths).toEqual([]);
@@ -171,6 +172,15 @@ describe("Posting key operations use required_posting_auths", () => {
 	test("set_owner_data", () => {
 		const op = createSetOwnerDataOperation(
 			{ nftId: "nft_1", instanceDna: "dna_1", data: { foo: "bar" } },
+			"alice",
+		);
+		expect(op[1].required_auths).toEqual([]);
+		expect(op[1].required_posting_auths).toEqual(["alice"]);
+	});
+
+	test("archive_collection", () => {
+		const op = createArchiveCollectionOperation(
+			{ collectionId: "col_1" },
 			"alice",
 		);
 		expect(op[1].required_auths).toEqual([]);

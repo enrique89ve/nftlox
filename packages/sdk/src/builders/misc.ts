@@ -37,7 +37,7 @@ export async function buildBurn(input: BurnBuilderInput): Promise<BuildResult<Bu
 		...(data.imageUrl && { imageUrl: data.imageUrl }),
 		...(imageHash && { imageHash }),
 		...(data.seedId && { seedId: data.seedId }),
-		...(data.birthTx && { birthTx: data.birthTx }),
+		...(data.seedTxId && { seedTxId: data.seedTxId }),
 	};
 
 	const payload: ProtocolPayload<BurnData> = {

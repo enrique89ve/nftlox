@@ -16,6 +16,7 @@ export const MAX_IMAGE_URL_LENGTH = 500;
 export const MIN_SYMBOL_LENGTH = 3;
 export const MAX_SYMBOL_LENGTH = 8;
 export const SYMBOL_REGEX = /^[A-Z0-9]{3,8}$/;
+export const TX_ID_REGEX = /^[0-9a-f]{40}$/;
 
 // DNA Constants
 export const ORIGIN_DNA_LENGTH = 16;
@@ -129,6 +130,7 @@ export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
 export const ACTION_SET_OWNER_DATA = "set_owner_data";
 export const ACTION_EXTEND_SCHEMA = "extend_schema";
+export const ACTION_ARCHIVE_COLLECTION = "archive_collection";
 
 // Protocol Actions (Marketplace)
 export const ACTION_LIST = "list";
@@ -177,6 +179,7 @@ export const CORE_ACTIONS = [
 	ACTION_SET_DATA,
 	ACTION_SET_OWNER_DATA,
 	ACTION_EXTEND_SCHEMA,
+	ACTION_ARCHIVE_COLLECTION,
 ] as const;
 
 export const MARKETPLACE_ACTIONS = [
@@ -236,6 +239,7 @@ export const POSTING_AUTH_ACTIONS = [
 	ACTION_SET_DATA,
 	ACTION_SET_OWNER_DATA,
 	ACTION_EXTEND_SCHEMA,
+	ACTION_ARCHIVE_COLLECTION,
 	ACTION_UNLIST,
 	ACTION_PACK_CREATE,
 	ACTION_PACK_OPEN,

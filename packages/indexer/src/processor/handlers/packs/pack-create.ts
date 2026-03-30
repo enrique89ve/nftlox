@@ -1,6 +1,9 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getCollectionRules } from "@/db/queries/collections.ts";
+import {
+	COLLECTION_STATUS_ARCHIVED,
+	getCollectionRules,
+} from "@/db/queries/collections.ts";
 import { getNftForProcessing } from "@/db/queries/nfts.ts";
 import { insertPack, packExists } from "@/db/queries/packs.ts";
 import {
@@ -83,6 +86,7 @@ export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Pro
 	if (collection.creator !== op.signer) {
 		throw new Error(`Signer ${op.signer} is not creator of collection ${collectionId}`);
 	}
+	if (collection.status === COLLECTION_STATUS_ARCHIVED) throw new Error(`Collection ${collectionId} is archived`);
 
 	const dropTable = parseDropTable(d.dropTable);
 	const maxSupply = optionalNumber(d.maxSupply) ?? 0;

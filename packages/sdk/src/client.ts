@@ -84,6 +84,10 @@ export interface IndexerCollection {
 	royalty_pct: number;
 	royalty_recipient: string | null;
 	json_id: string | null;
+	status: "active" | "archived";
+	archived_at_block: number | null;
+	archived_tx_id: string | null;
+	archived_at: string | null;
 	seed_count: number;
 	instance_count: number;
 	block_num: number;
@@ -113,6 +117,7 @@ export interface IndexerNftSummary {
 	origin_dna: string | null;
 	instance_dna: string | null;
 	seed_id: string | null;
+	seed_tx_id: string | null;
 	instance_number: number | null;
 	max_replicas: number;
 	distributed: number;
@@ -128,8 +133,6 @@ export interface IndexerNft extends IndexerNftSummary {
 	unique_access_key: string | null;
 	original_id: string | null;
 	minted_by: string | null;
-	birth_block: number | null;
-	birth_tx: string | null;
 	block_num: number;
 	tx_id: string;
 }

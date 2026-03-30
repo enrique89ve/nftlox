@@ -77,9 +77,9 @@ console.log(report.verified, "of", report.samplesChecked, "verified");
 | Export | Description |
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
-| `PROTOCOL_VERSION` | `"0.4.0"` |
-| `ALL_ACTIONS` | All 25 protocol actions |
-| `CORE_ACTIONS` | 9 core actions |
+| `PROTOCOL_VERSION` | `"0.4.1"` |
+| `ALL_ACTIONS` | All 26 protocol actions |
+| `CORE_ACTIONS` | 10 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |
 | `PACK_ACTIONS` | 4 pack actions |
 | `APPROVE_ACTIONS` | 5 approve/transferFrom actions |
@@ -95,11 +95,12 @@ console.log(report.verified, "of", report.samplesChecked, "verified");
 |----------|-------------|
 | `createDeterministicCollectionPayload()` | Create collection (deterministic ID) |
 | `createDeterministicMintPayload()` | Mint seed/NFT (deterministic ID) |
-| `createBulkDistributePayload()` | Bulk distribute instances from seed |
+| `createBulkDistributePayload()` | Bulk distribute instances from seed (`seedTxId` per item) |
 | `createTransferPayload()` | Transfer NFT |
 | `createBurnPayload()` | Burn NFT |
 | `createReplicatePayload()` | Create replica |
 | `createSetDataPayload()` | Update custom data/tags |
+| `createArchiveCollectionPayload()` | Archive an empty collection |
 | `createListPayload()` | List on marketplace |
 | `createUnlistPayload()` | Remove listing |
 | `createBuyPayload()` | Buy listed NFT (multisig) |
@@ -135,6 +136,7 @@ Higher-level functions that validate input via Zod schemas, generate determinist
 | `buildBuy()` | Validate + build buy (with payment split) |
 | `buildBurn()` | Validate + build burn |
 | `buildSetData()` | Validate + build set-data |
+| `buildArchiveCollection()` | Validate + build collection archive |
 | `buildSetDataFrom()` | Validate + build set-data-from |
 | `buildPackCreate()` | Validate + build pack create |
 | `buildPackBuy()` | Validate + build pack buy |
@@ -177,7 +179,7 @@ const nft = await indexer.getNft("nft_abc123");
 | `getHealth()` | Health check |
 | `getStats()` | Protocol statistics |
 | `getCollections(params?)` | List collections |
-| `getCollection(id)` | Collection by ID |
+| `getCollection(id)` | Active collection by ID |
 | `getCollectionNfts(id, params?)` | NFTs in collection |
 | `getCollectionStats(id)` | Collection statistics |
 | `getNft(id)` | NFT by ID |
@@ -222,6 +224,8 @@ Exported from `schemas.ts`. Each schema validates input for its corresponding ac
 | `atomicTransferInputSchema` | Atomic transfer input |
 | `usernameSchema` | Hive username validation |
 | `priceSchema` | Price object validation |
+
+`IndexerCollection` includes an explicit `status: "active" | "archived"` plus archive metadata fields (`archived_at_block`, `archived_tx_id`, `archived_at`). Public indexer collection queries only return active collections.
 
 ### SPV Verification ("Boleto Suizo")
 

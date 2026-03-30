@@ -1,6 +1,10 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getCollectionRules, updateCollectionSchema } from "@/db/queries/collections.ts";
+import {
+	COLLECTION_STATUS_ARCHIVED,
+	getCollectionRules,
+	updateCollectionSchema,
+} from "@/db/queries/collections.ts";
 import { requireString } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { mergeSchemas, validateSchemaDefinition, type CollectionSchema, type SchemaField } from "nftlox-sdk";
@@ -13,6 +17,7 @@ export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): P
 	if (collection.creator !== op.signer) {
 		throw new Error(`Signer ${op.signer} is not the creator of collection ${collectionId}`);
 	}
+	if (collection.status === COLLECTION_STATUS_ARCHIVED) throw new Error(`Collection ${collectionId} is archived`);
 
 	const newImmutableFields = Array.isArray(op.data.newImmutableFields)
 		? op.data.newImmutableFields as SchemaField[]

@@ -27,8 +27,6 @@ export interface InsertNftParams {
 	originDna: string | null;
 	instanceDna: string | null;
 	uniqueAccessKey: string | null;
-	birthBlock: number;
-	birthTx: string;
 	mintedBy: string;
 	name: string;
 	description: string | null;
@@ -53,7 +51,7 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 		INSERT INTO nfts (
 			id, collection_id, nft_type, status, edition, owner,
 			origin_dna, instance_dna, unique_access_key,
-			birth_block, birth_tx, minted_by,
+			minted_by,
 			name, description, image_url, image_hash,
 			max_replicas, distributed,
 			seed_id, instance_number, original_id,
@@ -64,7 +62,7 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			${params.id}, ${params.collectionId}, ${params.nftType},
 			${params.status ?? NFT_STATUS_ACTIVE}, ${params.edition}, ${params.owner},
 			${params.originDna}, ${params.instanceDna}, ${params.uniqueAccessKey},
-			${params.birthBlock}, ${params.birthTx}, ${params.mintedBy},
+			${params.mintedBy},
 			${params.name}, ${params.description}, ${params.imageUrl}, ${params.imageHash},
 			${params.maxReplicas}, ${params.distributed ?? 0},
 			${params.seedId}, ${params.instanceNumber}, ${params.originalId},
@@ -89,7 +87,8 @@ export async function getNftById(id: string) {
 			COALESCE(n.image_hash, s.image_hash) AS image_hash,
 			COALESCE(n.origin_dna, s.origin_dna) AS origin_dna,
 			COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
-			COALESCE(n.immutable_data_hash, s.immutable_data_hash) AS immutable_data_hash
+			COALESCE(n.immutable_data_hash, s.immutable_data_hash) AS immutable_data_hash,
+			s.tx_id AS seed_tx_id
 		FROM nfts n
 		LEFT JOIN nfts s ON s.id = n.seed_id
 		WHERE n.id = ${id}
@@ -138,7 +137,7 @@ export interface NftWithRulesRow extends NftProcessingRow {
 	replicable: boolean;
 	royalty_pct: number;
 	royalty_recipient: string | null;
-	birth_tx: string;
+	tx_id: string;
 }
 
 export async function getNftWithCollectionRules(
@@ -149,7 +148,7 @@ export async function getNftWithCollectionRules(
 		SELECT
 			n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
 			n.collection_id, n.instance_dna, n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
-			n.listing_expires_at, n.listing_marketplace, n.birth_tx,
+			n.listing_expires_at, n.listing_marketplace, n.tx_id,
 			c.creator, c.transferable, c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient
 		FROM nfts n
 		JOIN collections c ON c.id = n.collection_id
@@ -173,12 +172,13 @@ export interface SeedWithDnaRow {
 	image_url: string | null;
 	image_hash: string | null;
 	immutable_data: unknown | null;
+	tx_id: string;
 }
 
 export async function getSeedWithDna(id: string, txn: Queryable = sql): Promise<SeedWithDnaRow | null> {
 	const [row] = await txn<SeedWithDnaRow[]>`
 		SELECT id, owner, status, nft_type, name, seed_id, max_replicas, distributed,
-			collection_id, instance_dna, origin_dna, image_url, image_hash, immutable_data
+			collection_id, instance_dna, origin_dna, image_url, image_hash, immutable_data, tx_id
 		FROM nfts WHERE id = ${id}
 	`;
 	return row ?? null;
@@ -192,7 +192,7 @@ export interface SeedWithSchemaRow extends SeedWithDnaRow {
 export async function getSeedWithSchema(id: string, txn: Queryable = sql): Promise<SeedWithSchemaRow | null> {
 	const [row] = await txn<SeedWithSchemaRow[]>`
 		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
-			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data,
+			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data, n.tx_id,
 			c.schema, c.creator
 		FROM nfts n
 		JOIN collections c ON c.id = n.collection_id
@@ -365,7 +365,7 @@ const LIST_COLUMNS = sql`
 	COALESCE(n.image_url, s.image_url) AS image_url,
 	COALESCE(n.origin_dna, s.origin_dna) AS origin_dna,
 	n.instance_dna,
-	n.seed_id, n.instance_number,
+	n.seed_id, n.instance_number, s.tx_id AS seed_tx_id,
 	n.max_replicas, n.distributed, n.supply_exhausted,
 	n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency, n.listing_expires_at, n.created_at
 `;
@@ -383,6 +383,7 @@ export interface NftListRow {
 	instance_dna: string | null;
 	seed_id: string | null;
 	instance_number: number | null;
+	seed_tx_id: string | null;
 	max_replicas: number;
 	distributed: number;
 	supply_exhausted: boolean;

@@ -90,8 +90,6 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 | `originDna` | string | no | Origin DNA |
 | `instanceDna` | string | no | Instance DNA |
 | `uniqueAccessKey` | string | no | Unique access key |
-| `birthBlock` | -- | ignored | Forced to `op.blockNum` |
-| `birthTx` | -- | ignored | Forced to `op.txId` |
 | `mintedBy` | -- | ignored | Forced to `op.signer` |
 | `maxReplicas` | number | no | Maximum allowed replicas (default 1) |
 | `metadata.name` | string | no | NFT name |

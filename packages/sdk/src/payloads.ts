@@ -28,6 +28,7 @@ import {
 	ACTION_SET_DATA_FROM,
 	ACTION_SET_OWNER_DATA,
 	ACTION_EXTEND_SCHEMA,
+	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
 	ACTION_BUY,
@@ -50,6 +51,8 @@ import type {
 	SetOwnerDataInput,
 	ExtendSchemaData,
 	ExtendSchemaInput,
+	ArchiveCollectionData,
+	ArchiveCollectionInput,
 	BulkDistributeData,
 	BulkDistributeInput,
 	ListingData,
@@ -152,11 +155,40 @@ function spreadProvenance(p?: SeedProvenance): Record<string, string> {
 	if (!p) return {};
 	return {
 		...(p.seedId && { seedId: p.seedId }),
-		...(p.birthTx && { birthTx: p.birthTx }),
+		...(p.seedTxId && { seedTxId: p.seedTxId }),
 	};
 }
 
 // ============ COLLECTION PAYLOADS ============
+
+export function createArchiveCollectionPayload(
+	input: ArchiveCollectionInput,
+): ProtocolPayload<ArchiveCollectionData> {
+	return {
+		protocol: PROTOCOL_ID,
+		version: PROTOCOL_VERSION,
+		action: ACTION_ARCHIVE_COLLECTION,
+		data: {
+			collectionId: input.collectionId,
+		},
+	};
+}
+
+export function createArchiveCollectionOperation(
+	input: ArchiveCollectionInput,
+	creator: string,
+): HiveOperation {
+	const payload = createArchiveCollectionPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [creator],
+			id: PROTOCOL_ID,
+			json: safeStringify(payload),
+		},
+	];
+}
 
 // ============ MINT PAYLOADS ============
 
@@ -201,8 +233,7 @@ export function createBulkDistributePayload(
 			items: input.items.map(item => ({
 				seedId: item.seedId,
 				quantity: item.quantity,
-				originBlock: item.originBlock,
-				...(item.birthTx && { birthTx: item.birthTx }),
+				seedTxId: item.seedTxId,
 			})),
 			...(input.imageOverrides && { imageOverrides: input.imageOverrides }),
 			...(input.data && { data: input.data }),
@@ -768,8 +799,6 @@ export interface DeterministicMintInput {
 	imageUrl: string;
 	imageHash?: string;
 	maxReplicas?: number;
-	birthBlock?: number;
-	birthTx?: string;
 	collectionBlock?: number;
 	immutableData?: Record<string, unknown>;
 	mutableData?: Record<string, unknown>;
@@ -804,8 +833,6 @@ export async function createDeterministicMintPayload(
 			originDna: input.collectionOriginDna,
 			instanceDna,
 			uniqueAccessKey,
-			birthBlock: input.birthBlock ?? 0,
-			birthTx: input.birthTx ?? "",
 			mintedBy: input.owner,
 			...(input.collectionBlock !== undefined && { collectionBlock: input.collectionBlock }),
 			metadata: {

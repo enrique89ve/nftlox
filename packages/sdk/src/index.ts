@@ -40,6 +40,7 @@ export {
 	ACTION_SET_DATA,
 	ACTION_SET_OWNER_DATA,
 	ACTION_EXTEND_SCHEMA,
+	ACTION_ARCHIVE_COLLECTION,
 	MAX_SCHEMA_FIELDS,
 	MAX_FIELD_NAME_LENGTH,
 	ACTION_LIST,
@@ -105,6 +106,7 @@ export type {
 	CollectionMetadata,
 	CollectionRules,
 	CollectionData,
+	ArchiveCollectionData,
 	NFTMetadata,
 	NFTData,
 	SeedProvenance,
@@ -130,6 +132,7 @@ export type {
 	PaymentInfo,
 	ProtocolPayload,
 	CreateCollectionInput,
+	ArchiveCollectionInput,
 	MintInput,
 	ReplicateInput,
 	ListInput,
@@ -228,6 +231,8 @@ export {
 	createSetOwnerDataOperation,
 	createExtendSchemaPayload,
 	createExtendSchemaOperation,
+	createArchiveCollectionPayload,
+	createArchiveCollectionOperation,
 	createListPayload,
 	createUnlistPayload,
 	createBuyPayload,
@@ -382,6 +387,12 @@ export {
 	type UserNftCounts,
 	type UserNftsPage,
 } from "./client";
+
+// ============ BRANDED TYPES ============
+export {
+	type ListingTxId,
+	asListingTxId,
+} from "./branded";
 
 // ============ UTILS ============
 export * from "./utils/tx-sizing";

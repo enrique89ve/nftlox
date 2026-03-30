@@ -3,7 +3,7 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { insertNft, nftExists, getNftForProcessing, updateNftListing } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireUsername, optionalString } from "@/utils/validation.ts";
-import { assertTransferable } from "@/utils/status-checks.ts";
+import { assertTransferable, assertNotBurned } from "@/utils/status-checks.ts";
 import {
 	generateReplicaInstanceDna,
 	generateDeterministicAccessKey,
@@ -21,6 +21,12 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 	if (original.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${originalId}`);
 
 	const { hadExpiredListing } = assertTransferable(original, originalId, op.timestamp);
+
+	// If replicating an instance, verify the parent seed is not burned
+	if (original.seed_id) {
+		const seed = await getNftForProcessing(original.seed_id, txn);
+		if (seed) assertNotBurned(seed, original.seed_id);
+	}
 
 	const rules = await getCollectionRules(original.collection_id, txn);
 	if (rules && !rules.replicable) {
@@ -42,7 +48,7 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 		id, collectionId: original.collection_id, nftType: "replica", edition: 1,
 		owner: newOwner, originDna,
 		instanceDna, uniqueAccessKey,
-		birthBlock: op.blockNum, birthTx: op.txId, mintedBy: op.signer,
+		mintedBy: op.signer,
 		name: optionalString(d.name) ?? `${original.name} (Replica)`,
 		description: null, imageUrl: null, imageHash: null,
 		maxReplicas: 0, seedId: null, instanceNumber: null, originalId,

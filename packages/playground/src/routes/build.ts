@@ -5,8 +5,16 @@ import {
 	// Direct operation creators for replicate (no builder exists)
 	createReplicateOperation,
 	createReplicatePayload,
+	createSetOwnerDataOperation,
+	createSetOwnerDataPayload,
+	createExtendSchemaOperation,
+	createExtendSchemaPayload,
+	setOwnerDataInputSchema,
+	extendSchemaInputSchema,
+	usernameSchema,
 	// Builders
 	buildCollection,
+	buildArchiveCollection,
 	buildSeedBatch,
 	buildSeed,
 	buildBulkDistribute,
@@ -294,6 +302,52 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
+			keyType: "Posting",
+		});
+	}),
+
+	"/api/build/archive-collection": buildRoute((body) => {
+		const result = buildArchiveCollection(body);
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
+		return json({
+			success: true,
+			protocolVersion: PROTOCOL_VERSION,
+			operation: result.operation,
+			payload: result.payload,
+			keyType: "Posting",
+		});
+	}),
+
+	"/api/build/set-owner-data": buildRoute((body) => {
+		const parsedInput = setOwnerDataInputSchema.safeParse(body);
+		if (!parsedInput.success) return json({ success: false, errors: parsedInput.error.issues }, 400);
+		const parsedOwner = usernameSchema.safeParse(body.owner);
+		if (!parsedOwner.success) return json({ success: false, errors: parsedOwner.error.issues }, 400);
+
+		const operation = createSetOwnerDataOperation(parsedInput.data, parsedOwner.data);
+		const payload = createSetOwnerDataPayload(parsedInput.data);
+		return json({
+			success: true,
+			protocolVersion: PROTOCOL_VERSION,
+			operation,
+			payload,
+			keyType: "Posting",
+		});
+	}),
+
+	"/api/build/extend-schema": buildRoute((body) => {
+		const parsedInput = extendSchemaInputSchema.safeParse(body);
+		if (!parsedInput.success) return json({ success: false, errors: parsedInput.error.issues }, 400);
+		const parsedCreator = usernameSchema.safeParse(body.creator);
+		if (!parsedCreator.success) return json({ success: false, errors: parsedCreator.error.issues }, 400);
+
+		const operation = createExtendSchemaOperation(parsedInput.data, parsedCreator.data);
+		const payload = createExtendSchemaPayload(parsedInput.data);
+		return json({
+			success: true,
+			protocolVersion: PROTOCOL_VERSION,
+			operation,
+			payload,
 			keyType: "Posting",
 		});
 	}),

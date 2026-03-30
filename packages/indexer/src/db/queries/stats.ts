@@ -3,7 +3,7 @@ import { sql } from "@/db/client.ts";
 export async function getProtocolStats() {
 	const [stats] = await sql`
 		SELECT
-			(SELECT COUNT(*) FROM collections) AS total_collections,
+			(SELECT COUNT(*) FROM collections WHERE status = 'active') AS total_collections,
 			COUNT(*) AS total_nfts,
 			COUNT(*) FILTER (WHERE nft_type = 'seed') AS total_seeds,
 			COUNT(*) FILTER (WHERE nft_type = 'instance') AS total_instances,

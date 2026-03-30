@@ -12,7 +12,7 @@ const ESCAPE_MAP: Record<string, string> = {
 
 export function escapeHtml(str: string | null | undefined): string {
 	if (!str) return "";
-	return str.replace(/[&<>"']/g, (ch) => ESCAPE_MAP[ch]);
+	return str.replace(/[&<>"']/g, (ch) => ESCAPE_MAP[ch] ?? ch);
 }
 
 // Inline SVG placeholders (no external service dependency)

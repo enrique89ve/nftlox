@@ -8,6 +8,7 @@ import {
 	INSTANCE_DNA_LENGTH,
 	ACTION_BUY,
 	ACTION_CREATE_COLLECTION,
+	ACTION_ARCHIVE_COLLECTION,
 	ACTION_MINT,
 	ACTION_LIST,
 	ACTION_BULK_DISTRIBUTE,
@@ -39,7 +40,10 @@ import {
 	createDeterministicCollectionPayload,
 	createDeterministicMintPayload,
 	createDeterministicMintOperation,
+	createArchiveCollectionPayload,
+	createArchiveCollectionOperation,
 	type BuyData,
+	type ArchiveCollectionInput,
 	type DeterministicCollectionInput,
 	type DeterministicMintInput,
 } from "../src/index";
@@ -304,6 +308,28 @@ describe("Collection Payload", () => {
 	});
 });
 
+describe("Archive Collection Payload", () => {
+	const validInput: ArchiveCollectionInput = {
+		collectionId: "col_test123",
+	};
+
+	test("should create valid archive payload", () => {
+		const payload = createArchiveCollectionPayload(validInput);
+
+		expect(payload.protocol).toBe("nftlox_testnet");
+		expect(payload.version).toBe("0.4.1");
+		expect(payload.action).toBe(ACTION_ARCHIVE_COLLECTION);
+		expect(payload.data.collectionId).toBe(validInput.collectionId);
+	});
+
+	test("archive operation should use posting auth", () => {
+		const operation = createArchiveCollectionOperation(validInput, "alice");
+
+		expect(operation[1].required_auths).toEqual([]);
+		expect(operation[1].required_posting_auths).toEqual(["alice"]);
+	});
+});
+
 describe("Mint Payload", () => {
 	const validInput: DeterministicMintInput = {
 		artId: "test-art-01",
@@ -327,17 +353,6 @@ describe("Mint Payload", () => {
 		expect(payload.data.originDna).toBe("ABCD1234EFGH5678");
 		expect(payload.data.instanceDna.length).toBe(INSTANCE_DNA_LENGTH);
 		expect(payload.data.mintedBy).toBe("testuser");
-	});
-
-	test("mint payload should include procedencia fields", async () => {
-		const payload = await createDeterministicMintPayload({
-			...validInput,
-			birthBlock: 12345,
-			birthTx: "tx_abc123",
-		});
-
-		expect(payload.data.birthBlock).toBe(12345);
-		expect(payload.data.birthTx).toBe("tx_abc123");
 	});
 
 	test("mint payload should include collectionBlock", async () => {
@@ -508,30 +523,30 @@ describe("NFT DNA Inheritance", () => {
 });
 
 describe("Bulk Distribute Payload", () => {
-	test("should include originBlock per item", () => {
+	test("should include seedTxId per item", () => {
 		const payload = createBulkDistributePayload({
 			to: "bob",
 			items: [
-				{ seedId: "seed_abc", quantity: 3, originBlock: 90000100 },
-				{ seedId: "seed_def", quantity: 1, originBlock: 90000200 },
+				{ seedId: "seed_abc", quantity: 3, seedTxId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+				{ seedId: "seed_def", quantity: 1, seedTxId: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
 			],
 		});
 
 		expect(payload.action).toBe(ACTION_BULK_DISTRIBUTE);
-		expect(payload.data.items[0]!.originBlock).toBe(90000100);
-		expect(payload.data.items[1]!.originBlock).toBe(90000200);
+		expect(payload.data.items[0]!.seedTxId).toBe("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+		expect(payload.data.items[1]!.seedTxId).toBe("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
 	});
 
 	test("should preserve all item fields", () => {
 		const payload = createBulkDistributePayload({
 			items: [
-				{ seedId: "seed_xyz", quantity: 5, originBlock: 0 },
+				{ seedId: "seed_xyz", quantity: 5, seedTxId: "cccccccccccccccccccccccccccccccccccccccc" },
 			],
 		});
 
 		expect(payload.data.items[0]!.seedId).toBe("seed_xyz");
 		expect(payload.data.items[0]!.quantity).toBe(5);
-		expect(payload.data.items[0]!.originBlock).toBe(0);
+		expect(payload.data.items[0]!.seedTxId).toBe("cccccccccccccccccccccccccccccccccccccccc");
 	});
 });
 
@@ -849,19 +864,19 @@ describe("Mint Payload (extended)", () => {
 			nftType: "seed",
 		});
 
-		expect((payload.data as Record<string, unknown>).nftType).toBe("seed");
+		expect(payload.data.nftType).toBe("seed");
 	});
 
 	test("nftType is omitted when not provided", async () => {
 		const payload = await createDeterministicMintPayload(baseMintInput);
 
-		expect((payload.data as Record<string, unknown>).nftType).toBeUndefined();
+		expect(payload.data.nftType).toBeUndefined();
 	});
 
 	test("createdAt is NOT present in payload", async () => {
 		const payload = await createDeterministicMintPayload(baseMintInput);
 
-		expect((payload.data as Record<string, unknown>).createdAt).toBeUndefined();
+		expect("createdAt" in payload.data).toBe(false);
 	});
 });
 
@@ -893,7 +908,7 @@ describe("Deterministic Collection Payloads", () => {
 	test("createdAt is NOT present", async () => {
 		const payload = await createDeterministicCollectionPayload(baseCollectionInput);
 
-		expect((payload.data as Record<string, unknown>).createdAt).toBeUndefined();
+		expect("createdAt" in payload.data).toBe(false);
 	});
 
 	test("schema is included when provided", async () => {

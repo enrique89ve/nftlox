@@ -1,6 +1,7 @@
 import { test, expect, describe } from "bun:test";
 
 import {
+	buildArchiveCollection,
 	buildCollection,
 	buildSeed,
 	type CreateCollectionInput,
@@ -69,6 +70,38 @@ describe("buildCollection consistency", () => {
 	});
 });
 
+describe("buildArchiveCollection consistency", () => {
+	test("returns success=true with valid input", () => {
+		const result = buildArchiveCollection({
+			collectionId: "col_test_archive",
+			creator: "testcreator",
+		});
+
+		expect(result.success).toBe(true);
+	});
+
+	test("payload collectionId matches operation JSON", () => {
+		const result = buildArchiveCollection({
+			collectionId: "col_test_archive",
+			creator: "testcreator",
+		});
+		if (!result.success) throw new Error("Expected success");
+
+		const parsed = JSON.parse(result.operation![1].json);
+		expect(result.payload.data.collectionId).toBe(parsed.data.collectionId);
+	});
+
+	test("operation required_posting_auths equals [creator]", () => {
+		const result = buildArchiveCollection({
+			collectionId: "col_test_archive",
+			creator: "testcreator",
+		});
+		if (!result.success) throw new Error("Expected success");
+
+		expect(result.operation![1].required_posting_auths).toEqual(["testcreator"]);
+	});
+});
+
 describe("buildSeed consistency", () => {
 	const validInput = {
 		artId: "art001",
@@ -120,6 +153,6 @@ describe("buildSeed consistency", () => {
 		const result = await buildSeed(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		expect((result.payload.data as Record<string, unknown>).nftType).toBe("seed");
+		expect(result.payload.data.nftType).toBe("seed");
 	});
 });

@@ -30,6 +30,20 @@ let debugRoutesEnabled = false;
 
 // ============ FETCH-BACKED HELPERS ============
 
+async function fetchJsonOrThrow<T>(url: string, init?: RequestInit): Promise<T> {
+	const response = await fetch(url, init);
+	const data = await response.json().catch(() => null) as
+		| { error?: string; errors?: Array<{ message?: string }> }
+		| null;
+
+	if (!response.ok) {
+		const message = data?.error ?? data?.errors?.map((item) => item.message).filter(Boolean).join(", ");
+		throw new Error(message || `Request failed (${response.status})`);
+	}
+
+	return data as T;
+}
+
 async function getNFTsByOwner(owner: string, limit = 200, offset = 0) {
 	const firstRes = await fetch(`/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${offset}`);
 	const firstData = await firstRes.json();
@@ -232,16 +246,25 @@ async function loadCollections() {
 			return;
 		}
 
-		container.innerHTML = data.collections.map((col: any) => `
-			<div class="collection-card" data-id="${col.id}">
-				<span class="collection-symbol">${col.symbol}</span>
-				<div class="collection-name">${col.name}</div>
-				<div class="collection-meta">
-					<span class="collection-creator">@${col.creator}</span>
+		container.innerHTML = data.collections.map((col: any) => {
+			const status = String(col.status || "active");
+			const statusClass = status === "archived" ? "status-archived" : "status-active";
+
+			return `
+				<div class="collection-card" data-id="${col.id}">
+					<div class="collection-card-header">
+						<span class="collection-symbol">${col.symbol}</span>
+						<span class="status-badge ${statusClass}">${status.toUpperCase()}</span>
+					</div>
+					<div class="collection-name">${col.name}</div>
+					<div class="collection-meta">
+						<span class="collection-creator">@${col.creator}</span>
+					</div>
+					<div class="collection-meta" style="margin-top: 4px;">${col.seedCount || 0} seeds • ${col.instanceCount || 0} instances</div>
+					<div class="collection-meta" style="margin-top: 4px;">${col.id}</div>
 				</div>
-				<div class="collection-meta" style="margin-top: 4px;">${col.id}</div>
-			</div>
-		`).join("");
+			`;
+		}).join("");
 
 		log(`Loaded ${data.collections.length} collections`, "success");
 
@@ -267,6 +290,23 @@ async function loadCollections() {
 
 // ============ COLLECTION DETAIL ============
 
+function updateCollectionArchiveActions(collection: { creator: string; status: string } | null) {
+	const actions = $("detail-archive-actions");
+	const button = $("btn-archive-collection") as HTMLButtonElement | null;
+	const canArchive = Boolean(
+		collection &&
+		collection.status === "active" &&
+		connectedUser &&
+		collection.creator.toLowerCase() === connectedUser.toLowerCase(),
+	);
+
+	if (actions) actions.style.display = canArchive ? "flex" : "none";
+	if (button) {
+		button.disabled = !canArchive;
+		button.textContent = "Archive Empty Collection";
+	}
+}
+
 async function loadCollectionDetail(collectionId: string) {
 	currentCollectionId = collectionId;
 	navigationStack = ["collections", "collection-detail"];
@@ -275,29 +315,35 @@ async function loadCollectionDetail(collectionId: string) {
 	// Show loading state
 	const seedsContainer = $("collection-seeds");
 	const instancesContainer = $("collection-instances");
+	const statusEl = $("detail-status");
 	if (seedsContainer) seedsContainer.innerHTML = '<div class="empty-state"><p class="empty-state-text">Loading...</p></div>';
 	if (instancesContainer) instancesContainer.innerHTML = "";
+	if (statusEl) {
+		statusEl.textContent = "ACTIVE";
+		statusEl.className = "status-badge status-active";
+	}
+	updateCollectionArchiveActions(null);
 
 	try {
-		// Fetch collection info and NFTs
-		const [colResponse, nftsResponse] = await Promise.all([
-			fetch("/api/collections"),
-			fetch(`/api/collection/${collectionId}/nfts`),
+		const [collection, nftsData] = await Promise.all([
+			fetchJsonOrThrow<any>(`/api/collection/${collectionId}`),
+			fetchJsonOrThrow<any>(`/api/collection/${collectionId}/nfts`),
 		]);
-
-		const colData = await colResponse.json();
-		const nftsData = await nftsResponse.json();
-
-		// Find the collection info
-		const collection = colData.collections?.find((c: any) => c.id === collectionId);
 
 		// Update header
 		const symbolEl = $("detail-symbol");
 		const nameEl = $("detail-collection-name");
 		const creatorEl = $("detail-creator");
-		if (symbolEl) symbolEl.textContent = collection?.symbol || "N/A";
-		if (nameEl) nameEl.textContent = collection?.name || collectionId;
-		if (creatorEl) creatorEl.textContent = `@${collection?.creator || "unknown"}`;
+		if (symbolEl) symbolEl.textContent = collection.symbol || "N/A";
+		if (nameEl) nameEl.textContent = collection.name || collectionId;
+		if (creatorEl) creatorEl.textContent = `@${collection.creator || "unknown"}`;
+		if (statusEl) {
+			statusEl.textContent = String(collection.status || "active").toUpperCase();
+			statusEl.className = collection.status === "archived"
+				? "status-badge status-archived"
+				: "status-badge status-active";
+		}
+		updateCollectionArchiveActions(collection);
 
 		// Update stats
 		const seedsCount = $("detail-seeds-count");
@@ -367,16 +413,84 @@ async function loadCollectionDetail(collectionId: string) {
 			}
 		}
 
-		log(`Loaded collection: ${collection?.name || collectionId}`, "success");
+		log(`Loaded collection: ${collection.name || collectionId}`, "success");
 	} catch (e) {
 		if (seedsContainer) {
 			seedsContainer.innerHTML = '<div class="empty-state"><p class="empty-state-text">Error loading collection</p></div>';
 		}
+		updateCollectionArchiveActions(null);
 		log(`Error: ${(e as Error).message}`, "error");
 	}
 }
 
 (window as any).loadCollectionDetail = loadCollectionDetail;
+
+async function archiveCurrentCollection() {
+	if (!connectedUser || !currentCollectionId) {
+		log("Connect wallet first", "error");
+		return;
+	}
+
+	if (!(window as any).hive_keychain) {
+		log("Install Hive Keychain extension to broadcast operations", "error");
+		return;
+	}
+
+	const confirmed = window.confirm(
+		"Archive this collection? This only succeeds if it has no seeds, instances, or packs.",
+	);
+	if (!confirmed) return;
+
+	const button = $("btn-archive-collection") as HTMLButtonElement | null;
+	if (button) {
+		button.disabled = true;
+		button.textContent = "Archiving...";
+	}
+
+	try {
+		const result = await fetchJsonOrThrow<{ operation: HiveOperation }>(
+			"/api/build/archive-collection",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					collectionId: currentCollectionId,
+					creator: connectedUser,
+				}),
+			},
+		);
+
+		log(`Archiving collection ${currentCollectionId}...`);
+		(window as any).hive_keychain.requestBroadcast(
+			connectedUser,
+			[result.operation],
+			"Posting",
+			async (res: any) => {
+				if (res.success) {
+					log(`Collection ${currentCollectionId} archived`, "success");
+					await loadCollections();
+					goBackToCollections();
+					return;
+				}
+
+				const err = typeof res.error === "object" ? JSON.stringify(res.error) : (res.error || res.message);
+				if (button) {
+					button.disabled = false;
+					button.textContent = "Archive Empty Collection";
+				}
+				log(`Archive failed: ${err}`, "error");
+			},
+		);
+	} catch (e) {
+		if (button) {
+			button.disabled = false;
+			button.textContent = "Archive Empty Collection";
+		}
+		log(`Error: ${(e as Error).message}`, "error");
+	}
+}
+
+(window as any).archiveCurrentCollection = archiveCurrentCollection;
 
 // ============ NFT DETAIL ============
 
@@ -732,6 +846,11 @@ async function distributeFromSeed(seedId: string, to: string, quantity: number) 
 		return;
 	}
 
+	if (!nft.txId) {
+		log("Seed is missing transaction ID", "error");
+		return;
+	}
+
 	const remaining = (nft.maxSupply || 0) - (nft.distributed || 0);
 	if (quantity > remaining) {
 		log(`Cannot distribute ${quantity}. Only ${remaining} remaining.`, "error");
@@ -741,7 +860,11 @@ async function distributeFromSeed(seedId: string, to: string, quantity: number) 
 	// Use bulk_distribute: 1 single custom_json instead of 2N operations
 	const payload = createBulkDistributePayload({
 		to,
-		items: [{ seedId, quantity }],
+		items: [{
+			seedId,
+			quantity,
+			seedTxId: nft.txId,
+		}],
 	});
 
 	const operation: HiveOperation = [

@@ -21,6 +21,7 @@ Open `http://localhost:3040` in your browser.
 ## Features
 
 - **Collections**: Create collections with metadata and rules
+- **Collection lifecycle**: Archive empty collections while retaining on-chain history
 - **Minting**: Mint seed NFTs with deterministic IDs and anti-duplication
 - **Distribution**: Bulk distribute instances from seeds
 - **Transfers**: Transfer NFTs with atomic notifications (0.001 HIVE)
@@ -45,8 +46,8 @@ Open `http://localhost:3040` in your browser.
 | `GET /api/user/:username/packs` | User's pack balances |
 | `GET /api/nft/:nftId` | NFT details |
 | `GET /api/nft/:nftId/details` | NFT with parent/instances |
-| `GET /api/collections` | All collections |
-| `GET /api/collection/:id` | Collection details |
+| `GET /api/collections` | Active collections |
+| `GET /api/collection/:id` | Active collection details |
 | `GET /api/collection/:id/nfts` | Collection NFTs |
 | `GET /api/collection/:id/stats` | Collection statistics |
 | `GET /api/collection/:id/exists` | Collection existence check |
@@ -59,7 +60,7 @@ Open `http://localhost:3040` in your browser.
 | `GET /api/status` | Sync status |
 | `GET /api/health` | Health check |
 
-### Build API (26 endpoints)
+### Build API (27 endpoints)
 
 All `POST` endpoints that validate input and return Hive operations ready for Keychain signing:
 
@@ -75,6 +76,7 @@ All `POST` endpoints that validate input and return Hive operations ready for Ke
 | `/api/build/burn` | Burn NFT |
 | `/api/build/replicate` | Create replica |
 | `/api/build/set-data` | Update mutable data (creator) |
+| `/api/build/archive-collection` | Archive empty collection |
 | `/api/build/set-owner-data` | Update owner-specific data |
 | `/api/build/extend-schema` | Add fields to collection schema |
 | `/api/build/preview-ids` | Preview deterministic IDs |
@@ -109,6 +111,15 @@ All `POST` endpoints that validate input and return Hive operations ready for Ke
 | `POST /api/validate/pre-mint` | Pre-mint validation |
 | `GET /api/protocol/version` | Protocol version info |
 | `GET /api/protocol/info` | Full protocol info |
+
+## Collection Status
+
+Collections use an explicit lifecycle status in indexer responses:
+
+- `active`: visible in public collection queries and open for normal mutations
+- `archived`: retained in the indexer database but hidden from the standard collection query endpoints
+
+The playground only shows active collections in browse flows. Archiving is exposed through `/api/build/archive-collection` and will only succeed when the collection has no seeds, instances, or packs.
 
 ## Configuration
 

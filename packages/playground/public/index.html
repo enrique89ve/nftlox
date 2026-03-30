@@ -337,6 +337,17 @@
 			border-color: var(--border-hover);
 		}
 
+		.btn-danger {
+			background: rgba(239, 68, 68, 0.12);
+			color: var(--error);
+			border: 1px solid rgba(239, 68, 68, 0.24);
+		}
+
+		.btn-danger:hover {
+			background: rgba(239, 68, 68, 0.18);
+			border-color: rgba(239, 68, 68, 0.36);
+		}
+
 		.btn:disabled {
 			opacity: 0.5;
 			cursor: not-allowed;
@@ -474,6 +485,14 @@
 			transform: translateY(-2px);
 		}
 
+		.collection-card-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			margin-bottom: 12px;
+		}
+
 		.collection-symbol {
 			display: inline-block;
 			font-family: var(--mono);
@@ -500,6 +519,29 @@
 
 		.collection-creator {
 			color: var(--text-muted);
+		}
+
+		.status-badge {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			padding: 4px 8px;
+			border-radius: 999px;
+			font-family: var(--mono);
+			font-size: 11px;
+			font-weight: 600;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+
+		.status-active {
+			background: rgba(16, 185, 129, 0.14);
+			color: var(--success);
+		}
+
+		.status-archived {
+			background: rgba(245, 158, 11, 0.14);
+			color: var(--warning);
 		}
 
 		/* NFT grid */
@@ -1707,11 +1749,19 @@
 				</button>
 
 				<div class="page-header">
-					<div class="collection-symbol" id="detail-symbol">SYMBOL</div>
+					<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+						<div class="collection-symbol" id="detail-symbol">SYMBOL</div>
+						<span class="status-badge status-active" id="detail-status">ACTIVE</span>
+					</div>
 					<h1 class="page-title" id="detail-collection-name">Collection Name</h1>
 					<p class="page-desc">
 						Created by <span id="detail-creator" style="color: var(--accent);">@creator</span>
 					</p>
+					<div class="btn-group" id="detail-archive-actions" style="display: none; margin-top: 16px;">
+						<button class="btn btn-danger btn-sm" id="btn-archive-collection" onclick="archiveCurrentCollection()">
+							Archive Empty Collection
+						</button>
+					</div>
 				</div>
 
 				<div class="preview-stats" style="margin-bottom: 24px;">

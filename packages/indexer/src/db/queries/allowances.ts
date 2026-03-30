@@ -85,6 +85,16 @@ export async function hasCollectionAllowance(
 	return !!row;
 }
 
+export async function deleteCollectionAllowancesByCollection(
+	collectionId: string,
+	txn: Queryable = sql,
+): Promise<void> {
+	await txn`
+		DELETE FROM collection_allowances
+		WHERE collection_id = ${collectionId}
+	`;
+}
+
 // ============ DATA OPERATORS ============
 
 export async function upsertDataOperator(
@@ -113,6 +123,16 @@ export async function deleteDataOperator(
 	await txn`
 		DELETE FROM data_operators
 		WHERE collection_id = ${collectionId} AND operator = ${operator}
+	`;
+}
+
+export async function deleteDataOperatorsByCollection(
+	collectionId: string,
+	txn: Queryable = sql,
+): Promise<void> {
+	await txn`
+		DELETE FROM data_operators
+		WHERE collection_id = ${collectionId}
 	`;
 }
 
@@ -189,4 +209,3 @@ export async function deductPackAllowance(
 		throw new Error("Insufficient pack allowance");
 	}
 }
-

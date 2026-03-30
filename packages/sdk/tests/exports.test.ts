@@ -8,7 +8,9 @@ import {
 	priceSchema,
 	// Existing exports (regression check)
 	PROTOCOL_ID,
+	buildArchiveCollection,
 	buildCollection,
+	createArchiveCollectionPayload,
 	createDeterministicCollectionPayload,
 	generateOriginDna,
 } from "../src/index";
@@ -107,8 +109,16 @@ describe("Existing exports still work (no regressions)", () => {
 		expect(typeof buildCollection).toBe("function");
 	});
 
+	test("buildArchiveCollection is a function", () => {
+		expect(typeof buildArchiveCollection).toBe("function");
+	});
+
 	test("createDeterministicCollectionPayload is a function", () => {
 		expect(typeof createDeterministicCollectionPayload).toBe("function");
+	});
+
+	test("createArchiveCollectionPayload is a function", () => {
+		expect(typeof createArchiveCollectionPayload).toBe("function");
 	});
 
 	test("generateOriginDna is a function", () => {

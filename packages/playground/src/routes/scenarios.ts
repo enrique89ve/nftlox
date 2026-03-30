@@ -214,8 +214,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				payload: {
 					owner: GAME_ACCOUNT,
 					items: [
-						{ seedId: SEED_IDS.starterWolf, quantity: 100 },
-						{ seedId: SEED_IDS.fireDragon, quantity: 10 },
+						{ seedId: SEED_IDS.starterWolf, quantity: 100, seedTxId: "<seed mint txid>" },
+						{ seedId: SEED_IDS.fireDragon, quantity: 10, seedTxId: "<seed mint txid>" },
 					],
 					mutableData: {
 						game_owner: "",

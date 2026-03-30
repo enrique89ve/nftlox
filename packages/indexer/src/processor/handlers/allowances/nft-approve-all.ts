@@ -1,6 +1,9 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { collectionExists } from "@/db/queries/collections.ts";
+import {
+	COLLECTION_STATUS_ARCHIVED,
+	getCollectionRules,
+} from "@/db/queries/collections.ts";
 import { upsertCollectionAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireBoolean, requireUsername } from "@/utils/validation.ts";
 
@@ -13,8 +16,9 @@ export async function handleNftApproveAll(op: ParsedOperation, txn: Queryable): 
 
 	if (spender === op.signer) throw new Error("Cannot approve yourself");
 
-	const exists = await collectionExists(collectionId, txn);
-	if (!exists) throw new Error(`Collection not found: ${collectionId}`);
+	const collection = await getCollectionRules(collectionId, txn);
+	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
+	if (collection.status === COLLECTION_STATUS_ARCHIVED) throw new Error(`Collection ${collectionId} is archived`);
 
 	await upsertCollectionAllowance(
 		op.signer, spender, collectionId, approved,

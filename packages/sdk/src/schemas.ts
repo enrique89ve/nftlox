@@ -15,8 +15,8 @@ import {
 	MAX_DROP_WEIGHT,
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	SYMBOL_REGEX,
+	TX_ID_REGEX,
 } from "./constants";
-const TX_ID_REGEX = /^[0-9a-f]{40}$/;
 // Hive asset precision: exactly 3 decimal places, no leading zeros (except "0.xxx")
 const HIVE_DECIMAL_REGEX = /^(0|[1-9]\d*)\.\d{3}$/;
 
@@ -85,7 +85,7 @@ export const priceSchema = z.object({
 
 export const seedProvenanceSchema = z.object({
 	seedId: z.string().optional(),
-	birthTx: z.string().optional(),
+	seedTxId: z.string().optional(),
 });
 
 // ============ SCHEMA FIELD SCHEMAS ============
@@ -118,12 +118,17 @@ export const extendSchemaInputSchema = z.object({
 });
 export type ExtendSchemaInput = z.infer<typeof extendSchemaInputSchema>;
 
+export const archiveCollectionInputSchema = z.object({
+	collectionId: z.string().min(1, "Collection ID is required"),
+});
+export type ArchiveCollectionInput = z.infer<typeof archiveCollectionInputSchema>;
+
 export const setOwnerDataInputSchema = z.object({
 	nftId: z.string().min(1),
 	instanceDna: z.string().min(1),
 	data: z.record(z.string(), z.unknown()),
 	seedId: z.string().optional(),
-	birthTx: z.string().optional(),
+	seedTxId: z.string().optional(),
 });
 export type SetOwnerDataInput = z.infer<typeof setOwnerDataInputSchema>;
 
@@ -161,8 +166,6 @@ export const mintInputSchema = z.object({
 	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH),
 	imageHash: z.string().optional(),
 	maxReplicas: z.number().int().min(1, "Max replicas must be at least 1").optional(),
-	birthBlock: z.number().optional(),
-	birthTx: z.string().optional(),
 	data: z.record(z.string(), z.unknown()).optional(),
 	immutableData: z.record(z.string(), z.unknown()).optional(),
 	mutableData: z.record(z.string(), z.unknown()).optional(),
@@ -185,7 +188,7 @@ export const buyInputSchema = z.object({
 	listingId: z.string().min(1, "Listing ID is required"),
 	listTxId: txIdSchema,
 	seedId: z.string().optional(),
-	birthTx: z.string().optional(),
+	seedTxId: z.string().optional(),
 });
 export type BuyInput = z.infer<typeof buyInputSchema>;
 
@@ -239,8 +242,7 @@ export type PackOpenInput = z.infer<typeof packOpenInputSchema>;
 export const bulkDistributeItemSchema = z.object({
 	seedId: z.string().min(1, "seedId is required"),
 	quantity: z.number().int().min(1, "Quantity must be positive"),
-	originBlock: z.number().int().nonnegative("originBlock must be a non-negative integer"),
-	birthTx: z.string().optional(),
+	seedTxId: txIdSchema,
 });
 
 export const bulkDistributeInputSchema = z.object({
@@ -284,7 +286,7 @@ export const unlistInputSchema = z.object({
 	imageUrl: httpUrlSchema.optional(),
 	imageHash: z.string().optional(),
 	seedId: z.string().optional(),
-	birthTx: z.string().optional(),
+	seedTxId: z.string().optional(),
 });
 export type UnlistInput = z.infer<typeof unlistInputSchema>;
 
@@ -331,7 +333,7 @@ export const setDataInputSchema = z.object({
 	data: z.record(z.string(), z.unknown()).optional(),
 	mutableData: z.record(z.string(), z.unknown()).optional(),
 	seedId: z.string().optional(),
-	birthTx: z.string().optional(),
+	seedTxId: z.string().optional(),
 });
 export type SetDataInput = z.infer<typeof setDataInputSchema>;
 

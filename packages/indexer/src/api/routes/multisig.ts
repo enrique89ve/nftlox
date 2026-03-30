@@ -27,6 +27,13 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			set.status = 400;
 			return { error: "NFT not listed" };
 		}
+		if (nft.listing_expires_at) {
+			const expiresMs = new Date(nft.listing_expires_at).getTime();
+			if (Date.now() > expiresMs) {
+				set.status = 410;
+				return { error: "Listing has expired" };
+			}
+		}
 
 		const totalPrice = Number(nft.listing_price);
 		if (!totalPrice || !nft.listing_currency) {
@@ -53,7 +60,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			feeAmount: split.feeAmount,
 			feeAccount: split.feeAccount,
 			nodeAccount: config.hiveAccount,
-			birthTx: nft.birth_tx ?? "",
+			seedTxId: nft.tx_id ?? "",
 		};
 	}, {
 		params: t.Object({ nftId: t.String() }),

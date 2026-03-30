@@ -14,6 +14,7 @@ import {
 	type SeedWithDnaRow,
 } from "@/db/queries/nfts.ts";
 import { requireString, requireNumber } from "@/utils/validation.ts";
+import { assertNotBurned, assertNotLent } from "@/utils/status-checks.ts";
 import { computeInstanceBaseline } from "@/utils/nft-rules.ts";
 import {
 	resolveDropTable,
@@ -76,13 +77,16 @@ async function buildMintPlan(
 	for (const seedId of selectedSeeds) {
 		const seed = await getSeedWithDna(seedId, txn);
 		if (!seed) throw new Error(`Seed ${seedId} not found during pack opening (pack: ${packId})`);
+		assertNotBurned(seed, seedId);
+		assertNotLent(seed, seedId);
 
 		const maxReplicas = Number(seed.max_replicas) || 0;
 		const distributed = Number(seed.distributed) || 0;
 
+		// Idempotency: multiple instances share the same tx_id (Hive txId is per-transaction)
 		const [existingFromTx] = await txn`
 			SELECT COUNT(*)::int AS count FROM nfts
-			WHERE seed_id = ${seedId} AND birth_tx = ${txId}
+			WHERE seed_id = ${seedId} AND tx_id = ${txId}
 		`;
 		const baseDistributed = computeInstanceBaseline(distributed, existingFromTx?.count ?? 0);
 
@@ -135,8 +139,6 @@ async function executeMintPlan(
 			originDna,
 			instanceDna,
 			uniqueAccessKey,
-			birthBlock: op.blockNum,
-			birthTx: op.txId,
 			mintedBy: op.signer,
 			name: "",
 			description: null,

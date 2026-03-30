@@ -133,7 +133,7 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 							nftId: body.nftId,
 							listingId: info.listingId,
 							listTxId: info.listTxId,
-							...(info.birthTx && { birthTx: info.birthTx }),
+							...(info.seedTxId && { seedTxId: info.seedTxId }),
 						},
 					}),
 				});

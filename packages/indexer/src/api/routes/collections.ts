@@ -35,6 +35,13 @@ export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: 
 		detail: { summary: "Get collection by ID" },
 	})
 	.get("/:id/nfts", async ({ params, query }) => {
+		const row = await getCollectionById(params.id);
+		if (!row) {
+			return new Response(JSON.stringify({ error: "Collection not found" }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
 		return queryNfts(
 			{ by: "collection", collectionId: params.id, type: parseNftKind(query.type) },
 			{ limit: query.limit, offset: query.offset },
@@ -49,6 +56,13 @@ export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: 
 		detail: { summary: "List NFTs in collection" },
 	})
 	.get("/:id/stats", async ({ params }) => {
+		const row = await getCollectionById(params.id);
+		if (!row) {
+			return new Response(JSON.stringify({ error: "Collection not found" }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
 		const stats = await getCollectionStats(params.id);
 		return stats ?? {};
 	}, {
