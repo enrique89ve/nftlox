@@ -18,6 +18,8 @@ For the RNG algorithm specification, see [RNG Reference](rng-reference.md). For 
 4. [Verification](#4-verification)
 5. [Data Operators for Game Servers](#5-data-operators-for-game-servers)
 6. [Protocol Limits Reference](#6-protocol-limits-reference)
+7. [Permission Model & Key Security](#7-permission-model--key-security)
+8. [Error Handling & Supply Management](#8-error-handling--supply-management)
 
 ---
 
@@ -420,3 +422,96 @@ To revoke an operator's access, set `approved` to `false`:
 **Non-transferable collections:** Collections with `transferable: false` cannot list or buy NFTs on the marketplace. Any marketplace operation (`list`, `buy`, `cancel_listing`) will be rejected by the indexer for non-transferable collections.
 
 **Note:** `MAX_BULK_DISTRIBUTE_ITEMS = 50` limits the number of *distinct* seed IDs per operation, not the total number of instances. Each entry can have `quantity > 1`. For example, 3 distinct seeds with quantities [20, 15, 15] produces 50 instances in a single operation. If a pack opening resolves to more than 50 distinct seeds (unlikely for typical 5-card packs), split the request into multiple `bulk_distribute` operations.
+
+---
+
+## 7. Permission Model & Key Security
+
+### Who Can Do What
+
+| Role | Actions | Key |
+|------|---------|-----|
+| **Collection creator** | `create_collection`, `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting (except `data_operator_approve` = Active) |
+| **Seed owner** | `bulk_distribute`, `transfer`, `burn`, `list` | Posting for `bulk_distribute`; Active for the rest |
+| **NFT owner** | `transfer`, `burn`, `list`, `unlist`, `nft_approve`, `nft_lend`, `set_owner_data` | Active (except `set_owner_data`, `unlist` = Posting) |
+| **Approved operator** | `set_data_from` | Posting |
+
+**Key distinction**: The creator controls schema and metadata. The seed/NFT owner controls custody and distribution. If the creator transfers a seed, they lose distribution rights.
+
+### Recommended Account Setup for Games
+
+**Single account** (simplest -- creator IS the game server):
+
+```
+ragnarok-game (creator + seed owner)
+  Posting key on server: bulk_distribute, set_data, mint
+  Active key in vault:   data_operator_approve (one-time setup)
+```
+
+**Two accounts** (security isolation):
+
+```
+ragnarok-game  (creator, keeps seeds)    ragnarok-server (operator)
+  Posting key: bulk_distribute, mint       Posting key: set_data_from
+  Active key:  data_operator_approve       Cannot distribute or transfer
+```
+
+### Key Security
+
+| Key | Store where | Risk if compromised |
+|-----|-------------|---------------------|
+| **Active** | Secure vault, offline | Total loss -- can transfer/sell all NFTs |
+| **Posting** | Game server (env var) | Game data corruption only -- cannot move assets |
+| **Owner** | Cold storage | Account takeover |
+
+**Rule**: Only the posting key belongs on a running server. Active key is used once for setup and stored offline.
+
+### Mutable Data Merge
+
+`set_data` and `set_data_from` do a **shallow merge** (overwrite per key):
+
+```
+Current state: { level: 5, xp: 1000, wins: 10, losses: 2 }
+Update with:   { xp: 1500, wins: 11 }
+Result:        { level: 5, xp: 1500, wins: 11, losses: 2 }
+```
+
+Values are **replaced**, not added. Your server must read current state, compute new values, then write.
+
+---
+
+## 8. Error Handling & Supply Management
+
+### Supply Exhaustion
+
+Each seed has `maxSupply`. When exhausted, `bulk_distribute` **rejects the entire operation** (not just the exhausted seed).
+
+```
+Error: "Supply limit reached for seed seed_odin: 1000/1000 distributed"
+```
+
+**Prevention**: Monitor supply and remove exhausted seeds from your drop table:
+
+```typescript
+// Before resolving a pack, filter the drop table
+const activeTable = fullDropTable.filter(entry => {
+  const supply = seedSupplyCache.get(entry.seedId);
+  return supply && supply.distributed < supply.maxReplicas;
+});
+const resolved = resolveDropTable(activeTable, CARDS_PER_PACK, rngSeed);
+```
+
+### Safe Retries
+
+`bulk_distribute` is **idempotent** -- deterministic instance IDs mean duplicate broadcasts are silently skipped. Safe to retry on network errors.
+
+### Common Errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Seed not found` | Invalid seedId | Verify seedId, wait for indexer sync |
+| `Seed is burned` | Seed destroyed | Remove from drop table |
+| `Supply limit reached` | All instances minted | Remove from table or mint new seed |
+| `Signer is not owner of seed` | Wrong signing account | Use seed owner's posting key |
+| `Schema validation failed` | mutableData mismatch | Check field names/types vs schema |
+| `Payload too large` | Too many items | Split into multiple operations |

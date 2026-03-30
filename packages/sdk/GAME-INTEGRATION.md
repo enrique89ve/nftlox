@@ -4,7 +4,7 @@
 
 **Primary use case:** A card game (e.g., Ragnarok with 2,134 unique cards) where each card is an on-chain NFT with immutable stats and mutable game progression.
 
-**Recommended pattern:** Option C+ -- NFTLox deterministic RNG + `bulk_distribute`. This avoids the pack system's 50-entry drop table limit, keeps real card data on-chain, and provides fully verifiable randomness.
+**Recommended pattern:** NFTLox deterministic RNG + `bulk_distribute`. This avoids the native pack system's 50-entry drop table limit, keeps real card data on-chain, and provides fully verifiable randomness.
 
 For general protocol operations, see [OPERATIONS.md](./OPERATIONS.md). For SDK setup and overview, see [README.md](./README.md).
 
@@ -22,6 +22,9 @@ For general protocol operations, see [OPERATIONS.md](./OPERATIONS.md). For SDK s
 8. [RNG Algorithm Reference](#8-rng-algorithm-reference)
 9. [Protocol Limits Reference](#9-protocol-limits-reference)
 10. [Complete End-to-End Example](#10-complete-end-to-end-example)
+11. [Permission Model & Account Architecture](#permission-model--account-architecture)
+12. [Key Security Guide](#key-security-guide)
+13. [Error Handling & Supply Management](#error-handling--supply-management)
 
 ---
 
@@ -964,8 +967,8 @@ async function recordMatchResult(
 			nftId: winnerId,
 			instanceDna: winnerDna,
 			mutableData: { xp: xpGained, wins: 1 },
-			// Note: the indexer adds to existing values based on your game logic.
-			// Typically you read current state, compute new values, then write.
+			// Note: the indexer does a SHALLOW MERGE (overwrite per key).
+			// Read current state, compute new values, then write the result.
 		},
 		{
 			nftId: loserId,
@@ -983,14 +986,157 @@ async function recordMatchResult(
 
 ---
 
+## Permission Model & Account Architecture
+
+### Who Can Do What
+
+| Role | Actions | Key Required |
+|------|---------|-------------|
+| **Collection creator** | `create_collection`, `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting (except `data_operator_approve` = Active) |
+| **Seed owner** | `bulk_distribute`, `transfer`, `burn`, `replicate`, `list`, `unlist` | Posting for `bulk_distribute`; Active for the rest |
+| **NFT owner** | `transfer`, `burn`, `list`, `unlist`, `nft_approve`, `nft_lend`, `set_owner_data` | Active (except `set_owner_data`, `unlist` = Posting) |
+| **Approved operator** | `set_data_from` | Posting |
+| **Approved spender** | `nft_transfer_from`, `pack_transfer_from` | Posting |
+
+**Key distinction**: The collection creator controls the **schema and metadata**. The seed/NFT owner controls **custody and distribution**. If the creator transfers a seed, they lose distribution rights over it.
+
+### Recommended Architecture for Games
+
+For a game like Ragnarok, the creator and the game server are typically the same account:
+
+```
+ragnarok-game (creator + seed owner + game server)
+  - Creates collection, mints seeds, distributes packs, updates stats
+  - Posting key on the server for bulk_distribute and set_data
+  - Active key in secure vault for one-time setup (data_operator_approve)
+```
+
+If you need a **separate game server account** (e.g., for security isolation):
+
+```
+ragnarok-game (creator)          ragnarok-server (operator)
+  - Creates collection             - Calls set_data_from (posting key)
+  - Mints seeds                    - Cannot distribute (not seed owner)
+  - Calls data_operator_approve    - Cannot transfer/list seeds
+  - Calls bulk_distribute
+```
+
+The creator keeps seed ownership and handles distribution. The server only updates mutable data via operator delegation.
+
+### Mutable Data Merge Behavior
+
+When `set_data` or `set_data_from` is called, mutable data is **shallow-merged** (overwrite per key):
+
+```typescript
+// Current mutable_data: { level: 5, xp: 1000, wins: 10, losses: 2 }
+// set_data_from with:   { xp: 1500, wins: 11 }
+// Result:               { level: 5, xp: 1500, wins: 11, losses: 2 }
+//                         ^unchanged  ^overwritten  ^overwritten  ^unchanged
+```
+
+The indexer does NOT add values -- it replaces each key you send. Your game server must read current state, compute new values, and write the result.
+
+---
+
+## Key Security Guide
+
+### Which Keys Go Where
+
+| Key | Where | Used For |
+|-----|-------|----------|
+| **Active key** | Secure vault, offline | One-time setup: `data_operator_approve`. Never on a server. |
+| **Posting key** | Game server (env var) | Recurring ops: `bulk_distribute`, `set_data`, `set_data_from`, `mint` |
+| **Owner/Master key** | Cold storage only | Account recovery. Never used in game operations. |
+
+### Risk Matrix
+
+| If compromised... | Active key | Posting key |
+|-------------------|-----------|-------------|
+| Can transfer NFTs? | Yes | No |
+| Can list/sell NFTs? | Yes | No |
+| Can modify game data? | Yes | Yes |
+| Can distribute packs? | Yes | Yes |
+| Can approve operators? | Yes | No |
+| **Blast radius** | **Total loss of assets** | **Game data corruption only** |
+
+**Best practice**: Only the posting key should exist on a running server. The active key should be used once for setup (`data_operator_approve`) and stored offline.
+
+---
+
+## Error Handling & Supply Management
+
+### Supply Exhaustion
+
+Each seed has a `maxSupply` (set at mint time). When all instances are distributed, further `bulk_distribute` calls for that seed are rejected:
+
+```
+Error: "Supply limit reached for seed seed_odin_allfather: 1000/1000 distributed, cannot mint 1 more"
+```
+
+**The entire operation fails** -- not just the exhausted seed. If a pack resolves to 5 cards and 1 seed is exhausted, all 5 fail.
+
+### Recommended Pattern: Supply Buffer
+
+Monitor supply levels and remove exhausted seeds from your drop table before they cause failures:
+
+```typescript
+async function getActiveDropTable(
+	fullTable: ReadonlyArray<{ seedId: string; weight: number }>,
+	indexerApiUrl: string,
+): Promise<ReadonlyArray<{ seedId: string; weight: number }>> {
+	const response = await fetch(`${indexerApiUrl}/api/nfts/seeds/supply`);
+	const supplies = await response.json();
+
+	return fullTable.filter(entry => {
+		const supply = supplies[entry.seedId];
+		return supply && supply.distributed < supply.maxReplicas;
+	});
+}
+```
+
+### Retry Logic
+
+If a `bulk_distribute` broadcast fails (network timeout, node error), it is **safe to retry** with the same transaction. The indexer uses deterministic instance IDs -- if the instances already exist, they are silently skipped (idempotent).
+
+```typescript
+async function distributeWithRetry(
+	operation: unknown[],
+	broadcastFn: (ops: unknown[]) => Promise<void>,
+	maxRetries = 3,
+): Promise<void> {
+	for (let attempt = 1; attempt <= maxRetries; attempt++) {
+		try {
+			await broadcastFn(operation);
+			return;
+		} catch (err) {
+			if (attempt === maxRetries) throw err;
+			await new Promise(r => setTimeout(r, 2000 * attempt));
+		}
+	}
+}
+```
+
+### Common Errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Seed not found` | Invalid seedId or not yet indexed | Wait for indexer to catch up, verify seedId |
+| `Seed is burned` | Seed was destroyed | Remove from drop table |
+| `Supply limit reached` | All instances distributed | Remove from drop table, mint new seed |
+| `Signer is not owner of seed` | Wrong account signing | Use the seed owner's posting key |
+| `Schema validation failed` | mutableData doesn't match schema | Check field names and types against schema |
+| `Payload too large` | Too many items in one operation | Split into multiple `bulk_distribute` calls |
+
+---
+
 ## Summary
 
 | Step | Action | Frequency |
 |------|--------|-----------|
 | 1. Create collection | `create_collection` with schema | Once |
-| 2. Approve operator | `data_operator_approve` | Once per operator |
-| 3. Mint seeds | `mint` (5 per tx) | Once (2,134 cards = ~427 txs) |
-| 4. Build drop table | In-memory, from card catalog | Once (cached) |
-| 5. Open pack | `resolveDropTable()` + `bulk_distribute` | Per player purchase |
+| 2. Approve operator | `data_operator_approve` (active key) | Once per operator |
+| 3. Mint seeds | `mint` (5 per tx, posting key) | Once (2,134 cards = ~427 txs) |
+| 4. Build drop table | In-memory, from card catalog | Once (cached, refresh on supply changes) |
+| 5. Open pack | `resolveDropTable()` + `bulk_distribute` (posting key) | Per player purchase |
 | 6. Verify | `resolveDropTable()` with same inputs | On demand |
-| 7. Update stats | `set_data_from` (up to 5 per tx) | After each game match |
+| 7. Update stats | `set_data_from` (posting key, as operator) | After each game match |
