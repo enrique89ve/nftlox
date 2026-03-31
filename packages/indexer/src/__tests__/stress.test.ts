@@ -41,6 +41,7 @@ const mockWithTransaction = mock(async (fn: (txn: unknown) => Promise<void>) => 
 mock.module("@/db/queries/sync.ts", () => ({
 	getLastBlock: mockGetLastBlock,
 	updateLastBlock: mockUpdateLastBlock,
+	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
 }));
 
 mock.module("@/scanner/hive-client.ts", () => ({
