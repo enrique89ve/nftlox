@@ -758,7 +758,8 @@ Mint seed NFTs for a collection. Returns operations batched into groups of up to
 | Field                  | Type     | Required | Description                                     |
 |------------------------|----------|----------|-------------------------------------------------|
 | `collectionId`         | `string` | Yes      | Target collection ID.                           |
-| `owner`                | `string` | Yes      | Hive username of the collection creator. Signs the transaction and receives the seeds. Must be the account that created the collection. |
+| `signer`               | `string` | Yes      | Hive username of the collection creator. Signs the transaction. Must be the account that created the collection. |
+| `owner`                | `string` | No       | Hive username of the seed owner. Defaults to `signer`. Use when minting seeds for a different account. |
 | `seeds`                | `array`  | Yes      | Array of seed definitions (at least 1).         |
 | `seeds[].artId`        | `string` | Yes      | Unique art identifier within the collection.    |
 | `seeds[].name`         | `string` | Yes      | Seed name (1-100 chars).                        |
@@ -819,7 +820,7 @@ Distribute instances from seeds to a recipient. Creates NFT instances from exist
 | `items`                          | `array`  | Yes      | Seed items to distribute (1-50, no duplicate seedIds).         |
 | `items[].seedId`                 | `string` | Yes      | Seed ID to distribute from.                                    |
 | `items[].quantity`               | `number` | Yes      | Number of instances to create (>= 1).                          |
-| `items[].originBlock`            | `number` | Yes      | Block number of the seed mint (>= 0).                          |
+| `items[].seedTxId`            | `string` | Yes      | Transaction ID of the seed mint (40-char hex). Validated against actual seed tx_id. |
 | `imageOverrides`                 | `object` | No       | Map of `seedId -> { imageUrl?, imageHash? }` overrides.        |
 | `data`                           | `object` | No       | Arbitrary data to attach to distributed instances.             |
 
@@ -834,8 +835,8 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/bulk-distribute \
 		"signer": "alice",
 		"to": "bob",
 		"items": [
-			{ "seedId": "seed_abc", "quantity": 3, "originBlock": 12345 },
-			{ "seedId": "seed_def", "quantity": 1, "originBlock": 12346 }
+			{ "seedId": "seed_abc", "quantity": 3, "seedTxId": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" },
+			{ "seedId": "seed_def", "quantity": 1, "seedTxId": "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5" }
 		]
 	}'
 ```

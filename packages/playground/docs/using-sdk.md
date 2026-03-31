@@ -106,7 +106,8 @@ import { buildSeed } from "nftlox-sdk";
 const result = buildSeed({
 	artId: "odin-001",
 	collectionId: "col_abc123",
-	owner: "ragnarok-admin",
+	signer: "ragnarok-admin",   // collection creator (signs the operation)
+	owner: "ragnarok-admin",    // optional, defaults to signer. Can be a different account
 	edition: 1,
 	name: "Echo of the Allfather",
 	imageUrl: "https://example.com/art/odin-001.webp",
@@ -114,7 +115,7 @@ const result = buildSeed({
 });
 
 // result.generatedId -- deterministic seed ID (same artId + collectionId = same ID)
-// result.operation   -- ready-to-sign Hive operation
+// result.operation   -- ready-to-sign Hive operation (signed by signer, not owner)
 ```
 
 ### With immutableData (typed schema)
@@ -151,7 +152,7 @@ import { buildSeedBatch } from "nftlox-sdk";
 
 const result = buildSeedBatch({
 	collectionId: "col_abc123",
-	owner: "ragnarok-admin",
+	signer: "ragnarok-admin",   // collection creator
 	seeds: [
 		{ artId: "odin-001", name: "Echo of the Allfather", imageUrl: "https://...", maxSupply: 250 },
 		{ artId: "thor-001", name: "Thunder Strike", imageUrl: "https://...", maxSupply: 500 },
@@ -172,7 +173,7 @@ if (result.success) {
 		const seedResult = buildSeed({
 			...seed,
 			collectionId: "col_abc123",
-			owner: "ragnarok-admin",
+			signer: "ragnarok-admin",
 			edition: i + 1,
 		});
 		return seedResult.operation;
@@ -198,9 +199,9 @@ const result = buildBulkDistribute({
 	signer: "ragnarok-admin",
 	to: "player123",
 	items: [
-		{ seedId: "seed_xxx1", quantity: 1, originBlock: 104812188 },
-		{ seedId: "seed_xxx2", quantity: 1, originBlock: 104812188 },
-		{ seedId: "seed_xxx3", quantity: 1, originBlock: 104812188 },
+		{ seedId: "seed_xxx1", quantity: 1, seedTxId: "abc123...def456" },
+		{ seedId: "seed_xxx2", quantity: 1, seedTxId: "abc123...def789" },
+		{ seedId: "seed_xxx3", quantity: 1, seedTxId: "abc123...def012" },
 	],
 	mutableData: {
 		level: 1,
@@ -247,7 +248,7 @@ const payload = createBulkDistributePayload({
 	items: Array.from(seedCounts.entries()).map(([seedId, quantity]) => ({
 		seedId,
 		quantity,
-		originBlock: blockNum,
+		seedTxId: seedTxIds.get(seedId)!,
 	})),
 });
 

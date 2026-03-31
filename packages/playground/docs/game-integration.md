@@ -271,7 +271,7 @@ function buildSeedMintPayload(card: CardDefinition): DeterministicMintInput {
 		collectionId: COLLECTION_ID,
 		collectionOriginDna: COLLECTION_ORIGIN_DNA,
 		edition: 1,
-		owner: CREATOR,
+		owner: CREATOR, // owner of the seed (can differ from signer/creator)
 		name: card.name,
 		imageUrl: card.imageUrl,
 		maxReplicas: card.maxSupply,
@@ -479,8 +479,8 @@ const resolvedSeedIds = resolveDropTable(
 ```typescript
 function aggregateSeedIds(
 	seedIds: ReadonlyArray<string>,
-	originBlock: number,
-): ReadonlyArray<{ seedId: string; quantity: number; originBlock: number }> {
+	seedTxId: string,
+): ReadonlyArray<{ seedId: string; quantity: number; seedTxId: string }> {
 	const counts = new Map<string, number>();
 	for (const id of seedIds) {
 		counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -488,7 +488,7 @@ function aggregateSeedIds(
 	return Array.from(counts.entries()).map(([seedId, quantity]) => ({
 		seedId,
 		quantity,
-		originBlock,
+		seedTxId,
 	}));
 }
 
@@ -507,7 +507,7 @@ async function openPack(
 
 	const aggregated = aggregateSeedIds(resolvedSeedIds, paymentBlockNum);
 
-	const payload = createBulkDistributePayload({ to: player, items: aggregated as Array<{ seedId: string; quantity: number; originBlock: number }> });
+	const payload = createBulkDistributePayload({ to: player, items: aggregated as Array<{ seedId: string; quantity: number; seedTxId: string }> });
 
 	// bulk_distribute requires posting key (required_posting_auths).
 	// The signer MUST be the current seed owner. If the creator transferred
@@ -537,9 +537,9 @@ async function openPack(
 	"signer": "ragnarok-game",
 	"to": "player-alice",
 	"items": [
-		{ "seedId": "seed_a1b2c3d4", "quantity": 2, "originBlock": 92345678 },
-		{ "seedId": "seed_e5f6g7h8", "quantity": 1, "originBlock": 92345678 },
-		{ "seedId": "seed_i9j0k1l2", "quantity": 2, "originBlock": 92345678 }
+		{ "seedId": "seed_a1b2c3d4", "quantity": 2, "seedTxId": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" },
+		{ "seedId": "seed_e5f6g7h8", "quantity": 1, "seedTxId": "e5f6g7h8i9j0e5f6g7h8i9j0e5f6g7h8i9j0e5f6" },
+		{ "seedId": "seed_i9j0k1l2", "quantity": 2, "seedTxId": "i9j0k1l2m3n4i9j0k1l2m3n4i9j0k1l2m3n4i9j0" }
 	]
 }
 ```
@@ -1104,7 +1104,7 @@ async function handlePackOpen(
 	const items = Array.from(counts.entries()).map(([seedId, quantity]) => ({
 		seedId,
 		quantity,
-		originBlock: paymentBlockNum,
+		seedTxId: seedTxIds.get(seedId)!,
 	}));
 
 	// 5d. Broadcast bulk_distribute

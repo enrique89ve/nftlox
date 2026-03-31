@@ -211,8 +211,8 @@ function resolvePackCards(
 
 function aggregateSeeds(
 	seedIds: ReadonlyArray<string>,
-	originBlock: number,
-): Array<{ seedId: string; quantity: number; originBlock: number }> {
+	seedTxId: string,
+): Array<{ seedId: string; quantity: number; seedTxId: string }> {
 	const counts = new Map<string, number>();
 	for (const id of seedIds) {
 		counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -220,7 +220,7 @@ function aggregateSeeds(
 	return Array.from(counts.entries()).map(([seedId, quantity]) => ({
 		seedId,
 		quantity,
-		originBlock,
+		seedTxId,
 	}));
 }
 
@@ -230,7 +230,7 @@ function aggregateSeeds(
 
 async function broadcastBulkDistribute(
 	player: string,
-	items: Array<{ seedId: string; quantity: number; originBlock: number }>,
+	items: Array<{ seedId: string; quantity: number; seedTxId: string }>,
 ): Promise<string> {
 	// Safety check: bulk_distribute supports up to 50 distinct seeds
 	if (items.length > MAX_BULK_DISTRIBUTE_ITEMS) {
@@ -383,7 +383,7 @@ for (const id of resolvedSeeds) {
 const items = Array.from(counts.entries()).map(([seedId, quantity]) => ({
 	seedId,
 	quantity,
-	originBlock: blockNum,
+	seedTxId: seedTxIds.get(seedId)!,
 }));
 
 // Step 3: Build the operation via playground API

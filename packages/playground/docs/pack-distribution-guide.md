@@ -158,7 +158,7 @@ async function handlePlayerPayment(
 
   const resolvedSeeds = resolveWithPityTimer(player, pity, rngSeed);
 
-  // Aggregate: {seedId, quantity, originBlock}
+  // Aggregate: {seedId, quantity, seedTxId}
   const counts = new Map<string, number>();
   for (const seedId of resolvedSeeds) {
     counts.set(seedId, (counts.get(seedId) ?? 0) + 1);
@@ -167,7 +167,7 @@ async function handlePlayerPayment(
   const items = [...counts.entries()].map(([seedId, quantity]) => ({
     seedId,
     quantity,
-    originBlock: paymentBlock,
+    seedTxId: seedTxIds.get(seedId)!,
   }));
 
   const payload = createBulkDistributePayload({
@@ -197,7 +197,7 @@ async function handlePlayerPayment(
 for (const player of players) {
   const payload = createBulkDistributePayload({
     to: player,
-    items: [{ seedId: "seed_promo", quantity: 1, originBlock: currentBlock }],
+    items: [{ seedId: "seed_promo", quantity: 1, seedTxId: promoSeedTxId }],
   });
   // broadcast...
 }
@@ -210,9 +210,9 @@ for (const player of players) {
 const payload = createBulkDistributePayload({
   to: player,
   items: [
-    { seedId: "seed_quest_sword",  quantity: 1, originBlock: block },
-    { seedId: "seed_quest_shield", quantity: 1, originBlock: block },
-    { seedId: "seed_quest_potion", quantity: 1, originBlock: block },
+    { seedId: "seed_quest_sword",  quantity: 1, seedTxId: questSeedTxIds.sword },
+    { seedId: "seed_quest_shield", quantity: 1, seedTxId: questSeedTxIds.shield },
+    { seedId: "seed_quest_potion", quantity: 1, seedTxId: questSeedTxIds.potion },
   ],
 });
 ```
