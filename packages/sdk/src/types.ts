@@ -113,7 +113,7 @@ export interface NFTData {
 	// Identidad (inmutable)
 	originDna: string;
 	instanceDna: string;
-	uniqueAccessKey: string;
+	uniqueAccessKey?: string;
 
 	// Procedencia (inmutable — tx_id y block_num del NFT)
 	mintedBy: string;
@@ -139,7 +139,7 @@ export interface ReplicaData extends SeedProvenance {
 	newOwner: string;
 	originDna: string;
 	instanceDna: string;
-	uniqueAccessKey: string;
+	uniqueAccessKey?: string;
 }
 
 // ============ BULK DISTRIBUTE TYPES ============

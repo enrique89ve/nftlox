@@ -845,9 +845,10 @@ export async function createDeterministicMintPayload(
 
 export async function createDeterministicMintOperation(
 	input: DeterministicMintInput,
+	signer: string,
 ): Promise<HiveOperation> {
 	const payload = await createDeterministicMintPayload(input);
-	return toHiveOperation(payload, input.owner);
+	return toHiveOperation(payload, signer);
 }
 
 // ============ PACK PAYLOADS ============

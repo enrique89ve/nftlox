@@ -106,6 +106,7 @@ describe("buildSeed consistency", () => {
 	const validInput = {
 		artId: "art001",
 		collectionId: "col_test_seed_builder",
+		signer: "testcreator",
 		owner: "testowner",
 		edition: 1,
 		name: "Seed Builder Test",
@@ -142,11 +143,28 @@ describe("buildSeed consistency", () => {
 		expect(result.payload.data.id).toBe(parsed.data.id);
 	});
 
-	test("operation required_posting_auths equals [input.owner]", async () => {
+	test("operation required_posting_auths equals [input.signer]", async () => {
 		const result = await buildSeed(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		expect(result.operation![1].required_posting_auths).toEqual([validInput.owner]);
+		expect(result.operation![1].required_posting_auths).toEqual([validInput.signer]);
+	});
+
+	test("payload.data.owner is the recipient, not the signer", async () => {
+		const result = await buildSeed(validInput);
+		if (!result.success) throw new Error("Expected success");
+
+		expect(result.payload.data.owner).toBe("testowner");
+		expect(result.operation![1].required_posting_auths).toEqual(["testcreator"]);
+	});
+
+	test("owner defaults to signer when not provided", async () => {
+		const { owner: _, ...inputWithoutOwner } = validInput;
+		const result = await buildSeed(inputWithoutOwner);
+		if (!result.success) throw new Error("Expected success");
+
+		expect(result.payload.data.owner).toBe("testcreator");
+		expect(result.operation![1].required_posting_auths).toEqual(["testcreator"]);
 	});
 
 	test("nftType is seed in the payload", async () => {

@@ -24,7 +24,6 @@ import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateDeterministicInstanceDna,
-	generateDeterministicAccessKey,
 	ACCESS_KEY_LENGTH,
 	createListPayload,
 	createBuyPayload,
@@ -380,7 +379,7 @@ describe("Mint Payload", () => {
 	});
 
 	test("mint operation should be under 8KB", async () => {
-		const operation = await createDeterministicMintOperation(validInput);
+		const operation = await createDeterministicMintOperation(validInput, validInput.owner);
 		const size = estimateOperationSize(operation);
 
 		expect(size).toBeLessThan(MAX_JSON_SIZE);

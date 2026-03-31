@@ -94,6 +94,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 				name: seed.name,
 				imageUrl: seed.imageUrl,
 				maxSupply: seed.maxSupply,
+				signer: body.signer ?? body.owner,
 				owner: body.owner,
 				edition: 1,
 				brief: seed.brief,

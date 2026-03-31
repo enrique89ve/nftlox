@@ -27,7 +27,8 @@ export type SeedInput = z.infer<typeof seedInputSchema>;
 
 export const seedBuilderInputSchema = seedInputSchema.extend({
 	collectionId: z.string().min(1, "Collection ID is required"),
-	owner: usernameSchema,
+	signer: usernameSchema,
+	owner: usernameSchema.optional(),
 	edition: z.number().int().min(1, "Edition must be at least 1"),
 	collectionBlock: z.number().int().nonnegative().optional(),
 });
@@ -52,12 +53,14 @@ export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): 
 	const generatedId = await generateDeterministicSeedId(data.collectionId, data.artId);
 	const originDna = await generateOriginDna(data.collectionId);
 
+	const owner = data.owner ?? data.signer;
+
 	const mintInput: DeterministicMintInput = {
 		artId: data.artId,
 		collectionId: data.collectionId,
 		collectionOriginDna: originDna,
 		edition: data.edition,
-		owner: data.owner,
+		owner,
 		nftType: "seed",
 		name: data.name,
 		description: data.brief,
@@ -67,7 +70,7 @@ export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): 
 	};
 
 	const payload = await createDeterministicMintPayload(mintInput);
-	const operation = toHiveOperation(payload, data.owner);
+	const operation = toHiveOperation(payload, data.signer);
 
 	return {
 		success: true,
@@ -81,7 +84,8 @@ export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): 
 
 export const seedBatchInputSchema = z.object({
 	collectionId: z.string().min(1, "Collection ID is required"),
-	owner: usernameSchema,
+	signer: usernameSchema,
+	owner: usernameSchema.optional(),
 	seeds: z.array(seedInputSchema).min(1, "At least one seed is required"),
 });
 export type SeedBatchInput = z.infer<typeof seedBatchInputSchema>;
@@ -131,6 +135,8 @@ export async function buildSeedBatch(input: SeedBatchInput): Promise<BuildResult
 		return { success: false, errors };
 	}
 
+	const batchOwner = data.owner ?? data.signer;
+
 	const processedSeeds = await Promise.all(data.seeds.map(async (seed) => {
 		const seedId = await generateDeterministicSeedId(data.collectionId, seed.artId);
 		return {
@@ -149,7 +155,7 @@ export async function buildSeedBatch(input: SeedBatchInput): Promise<BuildResult
 		action: ACTION_MINT,
 		data: {
 			collectionId: data.collectionId,
-			owner: data.owner,
+			owner: batchOwner,
 			seeds: processedSeeds,
 		},
 	};
