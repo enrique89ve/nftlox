@@ -197,7 +197,9 @@ export {
 	extractInstanceNumber,
 	isSeedId,
 	isInstanceId,
-	// ArtId validation
+	// ArtId validation & sanitization
+	sanitizeArtId,
+	generateArtIdFromName,
 	validateArtId,
 	validateArtIdArray,
 	type ArtIdValidationResult,

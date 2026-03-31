@@ -1,5 +1,7 @@
 import { test, expect, describe } from "bun:test";
 import {
+	sanitizeArtId,
+	generateArtIdFromName,
 	validateArtId,
 	validateArtIdArray,
 	generateHash,
@@ -8,29 +10,121 @@ import {
 	generateDeterministicInstanceId,
 } from "../src/dna";
 
+describe("sanitizeArtId", () => {
+	test("trims whitespace", () => {
+		expect(sanitizeArtId("  gen-001  ")).toBe("gen-001");
+	});
+
+	test("converts to lowercase", () => {
+		expect(sanitizeArtId("MyCard-001")).toBe("mycard-001");
+		expect(sanitizeArtId("EPIC-HERO")).toBe("epic-hero");
+	});
+
+	test("replaces spaces with hyphens", () => {
+		expect(sanitizeArtId("common card 001")).toBe("common-card-001");
+		expect(sanitizeArtId("my  art")).toBe("my-art");
+	});
+
+	test("replaces underscores with hyphens", () => {
+		expect(sanitizeArtId("my_art_id")).toBe("my-art-id");
+	});
+
+	test("strips special characters", () => {
+		expect(sanitizeArtId("art!@#$%001")).toBe("art001");
+		expect(sanitizeArtId("héro-ñoño")).toBe("hro-oo");
+	});
+
+	test("collapses repeated hyphens", () => {
+		expect(sanitizeArtId("bad---art")).toBe("bad-art");
+		expect(sanitizeArtId("a - - b")).toBe("a-b");
+	});
+
+	test("strips leading and trailing hyphens", () => {
+		expect(sanitizeArtId("-start-")).toBe("start");
+		expect(sanitizeArtId("---middle---")).toBe("middle");
+	});
+
+	test("handles combined edge cases", () => {
+		expect(sanitizeArtId("  My Card #1!  ")).toBe("my-card-1");
+		expect(sanitizeArtId("___test___")).toBe("test");
+	});
+});
+
+describe("generateArtIdFromName", () => {
+	test("generates slug with 2-char hex suffix", async () => {
+		const artId = await generateArtIdFromName("Mythic King Odin");
+		expect(artId).toMatch(/^mythic-king-odin-[a-f0-9]{2}$/);
+	});
+
+	test("is deterministic", async () => {
+		const a = await generateArtIdFromName("Common Card #42");
+		const b = await generateArtIdFromName("Common Card #42");
+		expect(a).toBe(b);
+	});
+
+	test("different names with same slug get different suffixes", async () => {
+		const a = await generateArtIdFromName("Card #1!");
+		const b = await generateArtIdFromName("Card 1");
+		// Both slugify to "card-1" but suffixes differ
+		expect(a.startsWith("card-1-")).toBe(true);
+		expect(b.startsWith("card-1-")).toBe(true);
+		expect(a).not.toBe(b);
+	});
+
+	test("result passes validateArtId", async () => {
+		const names = [
+			"Epic Hero Thor",
+			"Common Card #927",
+			"Mythic King Odin #1",
+			"Rare Spell Ragnarok",
+		];
+		for (const name of names) {
+			const artId = await generateArtIdFromName(name);
+			expect(validateArtId(artId).valid).toBe(true);
+		}
+	});
+
+	test("truncates long names to fit 32 chars", async () => {
+		const artId = await generateArtIdFromName("This Is A Very Long Card Name That Exceeds The Limit");
+		expect(artId.length).toBeLessThanOrEqual(32);
+		expect(validateArtId(artId).valid).toBe(true);
+	});
+
+	test("throws on empty name", async () => {
+		expect(generateArtIdFromName("")).rejects.toThrow("Name is required");
+		expect(generateArtIdFromName("   ")).rejects.toThrow("Name is required");
+	});
+});
+
 describe("artId validation", () => {
 	test("validates correct artId", () => {
 		expect(validateArtId("gen-001")).toEqual({ valid: true });
 		expect(validateArtId("myart123")).toEqual({ valid: true });
-		expect(validateArtId("CAPS-ok")).toEqual({ valid: true });
 		expect(validateArtId("a")).toEqual({ valid: true });
 		expect(validateArtId("12345")).toEqual({ valid: true });
+		expect(validateArtId("common-card-0001")).toEqual({ valid: true });
+		expect(validateArtId("mythic-hero-odin-01")).toEqual({ valid: true });
+	});
+
+	test("rejects uppercase (must be lowercase)", () => {
+		expect(validateArtId("CAPS-bad")).toEqual({ valid: false, error: "only lowercase letters, numbers and hyphens allowed" });
+		expect(validateArtId("Mixed")).toEqual({ valid: false, error: "only lowercase letters, numbers and hyphens allowed" });
 	});
 
 	test("rejects empty artId", () => {
 		expect(validateArtId("")).toEqual({ valid: false, error: "artId is required" });
 	});
 
-	test("rejects artId longer than 14 chars", () => {
-		expect(validateArtId("this-is-too-long")).toEqual({ valid: false, error: "maximum 14 characters" });
-		expect(validateArtId("12345678901234")).toEqual({ valid: true }); // exactly 14
-		expect(validateArtId("123456789012345")).toEqual({ valid: false, error: "maximum 14 characters" }); // 15
+	test("rejects artId longer than 32 chars", () => {
+		expect(validateArtId("this-is-a-very-long-art-id-name-x")).toEqual({ valid: false, error: "maximum 32 characters" });
+		expect(validateArtId("12345678901234567890123456789012")).toEqual({ valid: true }); // exactly 32
+		expect(validateArtId("123456789012345678901234567890123")).toEqual({ valid: false, error: "maximum 32 characters" }); // 33
 	});
 
 	test("rejects invalid characters", () => {
-		expect(validateArtId("has spaces")).toEqual({ valid: false, error: "only letters, numbers and hyphens allowed" });
-		expect(validateArtId("under_score")).toEqual({ valid: false, error: "only letters, numbers and hyphens allowed" });
-		expect(validateArtId("special!")).toEqual({ valid: false, error: "only letters, numbers and hyphens allowed" });
+		expect(validateArtId("has spaces")).toEqual({ valid: false, error: "only lowercase letters, numbers and hyphens allowed" });
+		expect(validateArtId("under_score")).toEqual({ valid: false, error: "only lowercase letters, numbers and hyphens allowed" });
+		expect(validateArtId("special!")).toEqual({ valid: false, error: "only lowercase letters, numbers and hyphens allowed" });
 	});
 
 	test("rejects artId starting or ending with hyphen", () => {
@@ -52,7 +146,7 @@ describe("artId array validation", () => {
 	});
 
 	test("detects duplicates (case-insensitive)", () => {
-		const result = validateArtIdArray(["Art-001", "art-001", "art-002"]);
+		const result = validateArtIdArray(["art-001", "art-001", "art-002"]);
 		expect(result.valid).toBe(false);
 		expect(result.duplicates).toContain("art-001");
 	});

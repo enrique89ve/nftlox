@@ -208,10 +208,54 @@ export interface ArtIdValidationResult {
 }
 
 /**
+ * Sanitizes a raw string into a valid artId:
+ * - Trims whitespace
+ * - Converts to lowercase
+ * - Replaces spaces and underscores with hyphens
+ * - Strips non-alphanumeric/hyphen characters
+ * - Collapses repeated hyphens
+ * - Strips leading/trailing hyphens
+ */
+export function sanitizeArtId(raw: string): string {
+	return raw
+		.trim()
+		.toLowerCase()
+		.replace(/[\s_]+/g, "-")
+		.replace(/[^a-z0-9-]/g, "")
+		.replace(/-{2,}/g, "-")
+		.replace(/^-+|-+$/g, "");
+}
+
+const ART_ID_SUFFIX_LENGTH = 2;
+const ART_ID_MAX_SLUG_LENGTH = 32 - 1 - ART_ID_SUFFIX_LENGTH; // 29 chars for slug + "-" + 2 hex
+
+/**
+ * Generates a deterministic artId from a seed name.
+ * Slugifies the name and appends a 2-char hex suffix from its hash
+ * to prevent collisions when different names sanitize to the same slug.
+ *
+ * "Mythic King Odin #1" → "mythic-king-odin-1-a3"
+ * "Card #1!"            → "card-1-e7"
+ * "Card 1"              → "card-1-85"
+ */
+export async function generateArtIdFromName(name: string): Promise<string> {
+	const trimmed = name.trim();
+	if (!trimmed) {
+		throw new Error("Name is required to generate artId");
+	}
+
+	const slug = sanitizeArtId(trimmed).slice(0, ART_ID_MAX_SLUG_LENGTH);
+	const hash = await generateHash(`nftlox:artid:${trimmed}`);
+	const suffix = hash.slice(0, ART_ID_SUFFIX_LENGTH);
+
+	return `${slug}-${suffix}`;
+}
+
+/**
  * Validates an artId according to protocol rules:
  * - Required field
- * - Max 14 characters
- * - Only letters, numbers, and hyphens
+ * - Max 32 characters
+ * - Only lowercase letters, numbers, and hyphens
  * - No repeated hyphens (--)
  * - Cannot start or end with hyphen
  */
@@ -219,11 +263,11 @@ export function validateArtId(artId: string): ArtIdValidationResult {
 	if (!artId) {
 		return { valid: false, error: "artId is required" };
 	}
-	if (artId.length > 14) {
-		return { valid: false, error: "maximum 14 characters" };
+	if (artId.length > 32) {
+		return { valid: false, error: "maximum 32 characters" };
 	}
-	if (!/^[a-zA-Z0-9-]+$/.test(artId)) {
-		return { valid: false, error: "only letters, numbers and hyphens allowed" };
+	if (!/^[a-z0-9-]+$/.test(artId)) {
+		return { valid: false, error: "only lowercase letters, numbers and hyphens allowed" };
 	}
 	if (/--/.test(artId)) {
 		return { valid: false, error: "repeated hyphens not allowed" };
