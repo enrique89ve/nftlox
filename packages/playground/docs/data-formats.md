@@ -11,34 +11,36 @@ The `artId` uniquely identifies a seed template within a collection. It is used 
 | Rule | Constraint |
 |------|-----------|
 | Required | Yes |
-| Max length | **14 characters** |
-| Allowed characters | Letters (a-z, A-Z), numbers (0-9), hyphens (-) |
+| Max length | **32 characters** |
+| Allowed characters | Lowercase letters (a-z), numbers (0-9), hyphens (-) |
+| No uppercase | Only lowercase is accepted |
 | No repeated hyphens | `--` is not allowed |
 | No leading/trailing hyphens | `-foo` and `foo-` are invalid |
-| Case-insensitive for duplicates | `CARD-001` and `card-001` are treated as the same |
 
 **Valid examples:**
 
 ```
-odin-allfather    (14 chars, max length)
-CARD-001          (8 chars)
-20001             (5 chars, numeric only)
-fire-drg-001      (12 chars)
-a1b2c3            (6 chars)
+odin-allfather         (14 chars)
+card-001               (8 chars)
+20001                  (5 chars, numeric only)
+fire-drg-001           (12 chars)
+a1b2c3                 (6 chars)
+legendary-fire-drake   (20 chars)
 ```
 
 **Invalid examples:**
 
 ```
-fire-dragon-001   (15 chars, exceeds 14 limit)
-earth-shield-001  (16 chars, exceeds 14 limit)
---double          (repeated hyphens)
--leading          (starts with hyphen)
-trailing-         (ends with hyphen)
-special!char      (invalid character)
+CARD-001              (uppercase not allowed)
+Fire-Dragon           (uppercase not allowed)
+--double              (repeated hyphens)
+-leading              (starts with hyphen)
+trailing-             (ends with hyphen)
+special!char          (invalid character)
+this-artid-is-way-too-long-exceeding  (exceeds 32 chars)
 ```
 
-**Tip:** For card games with many cards, use short numeric IDs (`20001`, `00437`) or abbreviated names (`FRE-DRG-001`).
+**Tip:** For card games with many cards, use short numeric IDs (`20001`, `00437`) or abbreviated names (`fire-drg-001`).
 
 ---
 
@@ -173,7 +175,7 @@ Collections can define a typed schema with immutable and mutable fields. If a sc
 
 ```json
 {
-	"artId": "MY-NFT-001",
+	"artId": "my-nft-001",
 	"name": "My First NFT",
 	"brief": "Description of this NFT seed",
 	"imageUrl": "https://example.com/image.png",
@@ -185,7 +187,7 @@ Collections can define a typed schema with immutable and mutable fields. If a sc
 
 ```json
 {
-	"artId": "FIRE-DRG-001",
+	"artId": "fire-drg-001",
 	"name": "Inferno Drake",
 	"brief": "Legendary fire dragon with devastating flame attacks",
 	"imageUrl": "https://files.peakd.com/file/peakd-hive/user/hash.png",
@@ -208,7 +210,7 @@ For minting multiple seeds at once, provide an array:
 ```json
 [
 	{
-		"artId": "CARD-001",
+		"artId": "card-001",
 		"name": "Fire Dragon",
 		"brief": "A powerful dragon",
 		"imageUrl": "https://cdn.example.com/001.webp",
@@ -216,7 +218,7 @@ For minting multiple seeds at once, provide an array:
 		"immutableData": { "card_id": 1, "rarity": "mythic", "attack": 7, "health": 7 }
 	},
 	{
-		"artId": "CARD-002",
+		"artId": "card-002",
 		"name": "Ice Golem",
 		"brief": "A frozen sentinel",
 		"imageUrl": "https://cdn.example.com/002.webp",
@@ -230,7 +232,7 @@ For minting multiple seeds at once, provide an array:
 
 | Field | Type | Required | Constraints |
 |-------|------|----------|-------------|
-| `artId` | string | Yes | 1-14 chars, alphanumeric + hyphens (see rules above) |
+| `artId` | string | Yes | 1-32 chars, lowercase a-z, 0-9, hyphens (see rules above) |
 | `name` | string | Yes | 1-100 characters |
 | `brief` | string | No | Max 250 characters |
 | `imageUrl` | string | Yes | Valid HTTPS URL, max 500 chars |
@@ -290,11 +292,12 @@ Used for marketplace listings and pack pricing.
 | Max image URL length | 500 chars |
 | Max schema fields | 64 |
 | Max field name length | 64 chars |
-| Max artId length | 14 chars |
+| Max artId length | 32 chars |
 | Symbol length | 3-8 chars |
 | Max royalty | 50% |
 | Protocol fee | 1.0% (paid to co-signing node on every sale) |
 | Max drop table entries | 50 (pack_create only) |
+| Drop table weight range | 1 to 10,000 per entry |
 | Max items per pack | 20 |
 | Max pack open batch | 50 |
 | Max bulk distribute items | 50 |

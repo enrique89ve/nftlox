@@ -36,6 +36,12 @@ The `MultisigErrorCode` type (defined in `packages/sdk/src/types.ts`) represents
 | `INVALID_TX_STRUCTURE` | 400 | The Hive transaction structure is malformed (wrong operation types, missing fields, etc.). |
 | `INTERNAL_ERROR` | 500 | Unexpected server-side error during multisig processing. |
 
+Additionally, the `GET /api/payment-info/:nftId` endpoint returns:
+
+| Status | Meaning |
+|--------|---------|
+| `410` | Listing has expired (the resource is gone). |
+
 ---
 
 ## Common Errors
@@ -54,6 +60,16 @@ Errors encountered during normal protocol operations (handler validation, Build 
 | `Seeds cannot be delegated` | Seeds cannot be approved (`nft_approve`) or lent (`nft_lend`) regardless of distribution count. | Use instances for delegation, not seeds. |
 | `maxReplicas must be >= 1 for seeds` | Seeds require at least 1 max replica at mint time. | Set `maxReplicas` to a positive integer when minting seeds. |
 | `Payload too large` | The `custom_json` payload exceeds `SAFE_PAYLOAD_MAX_BYTES` (7,372 bytes). | Split into multiple operations. For `bulk_distribute`, reduce the number of items per call. |
+| `Seed {seedId} insufficient supply: needs {N}, available {M}` | `bulk_distribute` requests more instances than the seed has remaining. | Reduce the requested quantity or mint a new seed with additional supply. |
+| `Collection {collectionId} reached its seed cap: {N}/{M}` | Minting a new seed would exceed the collection's `totalPotential`. | Increase `totalPotential` or use an existing seed. |
+
+### Status Guard Errors
+
+| Error Message | Cause | Fix |
+|---------------|-------|-----|
+| `NFT is burned: {nftId}` | The NFT was permanently destroyed via `burn`. | Remove the NFT from any active workflows. |
+| `NFT is lent and cannot be modified: {nftId}` | The NFT is currently lent to another user. | Return the NFT first via `nft_return`, then retry the operation. |
+| `NFT is listed and must be unlisted first: {nftId}` | The NFT is on the marketplace. Transfer, burn, lend, and approve operations are blocked while listed. | Call `unlist` first, then retry the operation. |
 
 ### Schema and Data Errors
 
@@ -68,6 +84,8 @@ Errors encountered during normal protocol operations (handler validation, Build 
 | `NFT not listed` | Attempting to buy or unlist an NFT that is not currently on the marketplace. | Verify the NFT's status is `listed` before attempting the operation. |
 | `NFT not found` | The NFT ID does not exist. | Double-check the `nftId`. |
 | `NFT not listed or has no valid price` | The NFT exists but either is not listed or its listing price is invalid. | Fetch fresh payment info via `GET /api/payment-info/:nftId` before building a buy transaction. |
+| `listingId mismatch` / `listTxId mismatch` | The listing reference in the multisig request does not match the current listing (stale data). | Re-fetch payment info and rebuild the buy transaction with fresh listing data. |
+| `Invalid Hive amount format` | The HIVE transfer amount in the multisig request is malformed or does not have exactly 3 decimal places. | Use the exact amount format from `GET /api/payment-info/:nftId` (e.g., `"10.000 HIVE"`). |
 
 ### Build API Errors
 

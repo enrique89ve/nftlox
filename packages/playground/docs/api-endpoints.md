@@ -717,6 +717,38 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 
 ---
 
+### POST /api/build/archive-collection
+
+Archive a collection. Prevents new seed mints; existing NFTs remain fully functional (transfers, burns, data updates still work).
+
+**Request Body:**
+
+| Field          | Type     | Required | Description                         |
+|----------------|----------|----------|-------------------------------------|
+| `creator`      | `string` | Yes      | Hive username of the collection creator. |
+| `collectionId` | `string` | Yes      | The collection ID to archive.       |
+
+**Response** (standard build response):
+
+| Field       | Type     | Description                          |
+|-------------|----------|--------------------------------------|
+| `operation` | `array`  | Hive `custom_json` operation tuple.  |
+| `payload`   | `object` | Protocol payload.                    |
+| `keyType`   | `string` | `"Posting"`.                         |
+
+**curl example:**
+
+```bash
+curl -X POST https://nftloxtest.hivecreators.co/api/build/archive-collection \
+	-H "Content-Type: application/json" \
+	-d '{
+		"creator": "alice",
+		"collectionId": "col_abc123def456"
+	}'
+```
+
+---
+
 ### POST /api/build/seeds
 
 Mint seed NFTs for a collection. Returns operations batched into groups of up to 5 (Hive transaction limit).

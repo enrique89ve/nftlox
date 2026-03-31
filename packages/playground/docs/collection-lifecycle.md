@@ -1,0 +1,517 @@
+# Collection Lifecycle
+
+A collection is the top-level container in NFTLox. Every NFT (seed, instance, replica) belongs to exactly one collection. This page covers the full lifecycle: creation, schema definition, schema extension, and archival.
+
+```
+create_collection ──► ACTIVE ──► extend_schema (repeatable)
+                        │
+                        └──► archive_collection ──► ARCHIVED
+```
+
+---
+
+## 1. Creating a Collection
+
+A `create_collection` operation registers the collection on-chain. The collection ID is **deterministic** -- the same `creator + name + symbol` always produces the same ID (prevents duplicates).
+
+### Required Fields
+
+| Field | Type | Constraints |
+|---|---|---|
+| `name` | string | 1--100 characters |
+| `symbol` | string | 3--8 uppercase alphanumeric (`A-Z`, `0-9`) |
+| `creator` | string | Valid Hive username (signer) |
+| `totalPotential` | number | Non-negative integer (0 = unlimited) |
+| `metadata.description` | string | 1--250 characters |
+| `metadata.image` | string | Valid HTTP/HTTPS URL, max 500 chars |
+| `rules` | object | See [Collection Rules](#2-collection-rules) |
+
+### Optional Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `metadata.externalUrl` | string | Project website URL |
+| `schema` | object | Typed schema for NFT data (see [Schema Definition](#3-schema-definition)) |
+
+### SDK Builder
+
+```typescript
+import { buildCollection } from "nftlox-sdk";
+
+const result = await buildCollection({
+	name: "Ragnarok Cards",
+	symbol: "RGNRK",
+	creator: "ragnarok-admin",
+	totalPotential: 2134,
+	metadata: {
+		description: "Norse Mythos Card Game",
+		image: "https://example.com/collection.webp",
+	},
+	rules: {
+		transferable: true,
+		burnable: true,
+		replicable: false,
+		royaltyPct: 5,
+		royaltyRecipient: "ragnarok-treasury",
+	},
+	schema: {
+		immutable: [
+			{ name: "card_id", type: "uint32" },
+			{ name: "rarity", type: "string" },
+			{ name: "base_attack", type: "uint16" },
+		],
+		mutable: [
+			{ name: "level", type: "uint8" },
+			{ name: "xp", type: "uint32" },
+		],
+	},
+});
+
+if (result.success) {
+	console.log(result.generatedIds.collectionId); // deterministic ID
+	console.log(result.generatedIds.originDna);     // origin DNA hash
+	console.log(result.operation);                   // ready-to-sign Hive operation
+	console.log(result.warnings);                    // optional warnings
+}
+```
+
+The builder returns warnings (not errors) for edge cases:
+- Name close to 100-char limit
+- Royalty percentage above 25%
+
+### Build API
+
+```bash
+curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
+	-H "Content-Type: application/json" \
+	-d '{
+		"name": "Ragnarok Cards",
+		"symbol": "RGNRK",
+		"creator": "ragnarok-admin",
+		"totalPotential": 2134,
+		"metadata": {
+			"description": "Norse Mythos Card Game",
+			"image": "https://example.com/collection.webp"
+		},
+		"rules": {
+			"transferable": true,
+			"burnable": true,
+			"replicable": false,
+			"royaltyPct": 5
+		}
+	}'
+```
+
+**Response:**
+
+```json
+{
+	"success": true,
+	"protocolVersion": "0.4.1",
+	"collectionId": "a1b2c3d4...",
+	"generatedIds": {
+		"collectionId": "a1b2c3d4...",
+		"originDna": "e5f6a7b8..."
+	},
+	"operation": ["custom_json", { ... }],
+	"payload": {
+		"protocol": "nftlox_testnet",
+		"version": "0.4.1",
+		"action": "create_collection",
+		"data": { ... }
+	}
+}
+```
+
+### Indexer Behavior
+
+On processing `create_collection`:
+
+1. Validates the collection ID does not already exist (idempotent -- duplicate broadcasts are silently ignored).
+2. Validates the schema definition if provided (field names, types, limits).
+3. Stores the collection with `status = active`.
+4. The `creator` is always derived from the transaction signer, not from the payload body.
+
+---
+
+## 2. Collection Rules
+
+Rules are set at creation time and cannot be changed afterward.
+
+| Rule | Type | Default | Description |
+|---|---|---|---|
+| `transferable` | bool | `true` | Whether NFTs in this collection can be transferred between owners |
+| `burnable` | bool | `true` | Whether NFTs can be permanently destroyed |
+| `replicable` | bool | `true` | Whether NFTs can be replicated (copies with new instanceDna) |
+| `royaltyPct` | number | `0` | Royalty percentage on marketplace sales (0--50) |
+| `royaltyRecipient` | string | -- | Hive account that receives royalty payments |
+
+### Design Notes
+
+- Setting `transferable: false` creates soulbound tokens -- they stay with the minting owner forever.
+- Setting `burnable: false` makes NFTs permanent -- useful for certifications or credentials.
+- Setting `replicable: false` prevents copies -- each seed can only produce instances, no replicas.
+- `royaltyPct` is enforced by the protocol on marketplace sales. Maximum is 50%. Values above 25% trigger a builder warning.
+
+---
+
+## 3. Schema Definition
+
+A schema defines **typed fields** for NFT data within the collection. It has two sections:
+
+| Section | Behavior | Set at | Updated by |
+|---|---|---|---|
+| `immutable` | Locked at mint time, never changes | Mint | -- (read-only) |
+| `mutable` | Can be updated after mint | Mint (optional) | Creator or approved data operators |
+
+### Supported Field Types
+
+**Scalar types:**
+
+| Type | Range |
+|---|---|
+| `string` | Any UTF-8 string |
+| `bool` | `true` / `false` |
+| `uint8` | 0 -- 255 |
+| `uint16` | 0 -- 65,535 |
+| `uint32` | 0 -- 4,294,967,295 |
+| `uint64` | 0 -- `Number.MAX_SAFE_INTEGER` |
+| `int8` | -128 -- 127 |
+| `int16` | -32,768 -- 32,767 |
+| `int32` | -2,147,483,648 -- 2,147,483,647 |
+| `int64` | `Number.MIN_SAFE_INTEGER` -- `Number.MAX_SAFE_INTEGER` |
+| `float` | Finite IEEE 754 float |
+| `double` | Finite IEEE 754 double |
+
+**Array types:** Append `[]` to any scalar type (e.g. `string[]`, `uint32[]`, `bool[]`).
+
+### Field Name Rules
+
+- Must start with a lowercase letter
+- Only lowercase letters, digits, and underscores: `/^[a-z][a-z0-9_]*$/`
+- Maximum 64 characters
+- Must be unique across both `immutable` and `mutable` sections
+- Maximum 64 total fields per schema
+
+### Schema Builder (Fluent API)
+
+```typescript
+import { createSchemaBuilder } from "nftlox-sdk";
+
+const schema = createSchemaBuilder()
+	.immutable("card_id", "uint32")
+	.immutable("rarity", "string")
+	.immutable("base_attack", "uint16")
+	.immutable("base_health", "uint16")
+	.immutable("keywords", "string[]")
+	.mutable("level", "uint8")
+	.mutable("xp", "uint32")
+	.mutable("wins", "uint32")
+	.build();
+```
+
+### Pre-built Templates
+
+The SDK includes ready-to-use templates for common use cases:
+
+| Template | Immutable Fields | Mutable Fields | Use Case |
+|---|---|---|---|
+| `GAMING_SCHEMA` | rarity, element, base_power, class | level, xp, health, wins, losses, equipped | RPG items |
+| `ART_SCHEMA` | artist, medium, year, edition_of, dimensions | exhibition, certificate_url | Digital art |
+| `COLLECTIBLE_SCHEMA` | rarity, series, card_number, total_in_series | condition, grade | Trading cards |
+| `MUSIC_SCHEMA` | artist, album, track_number, duration_seconds, genre | play_count, license_url | Music NFTs |
+
+```typescript
+import { GAMING_SCHEMA } from "nftlox-sdk";
+
+const result = await buildCollection({
+	name: "My Game Items",
+	symbol: "ITEMS",
+	creator: "game-account",
+	totalPotential: 10000,
+	metadata: {
+		description: "In-game equipment and weapons",
+		image: "https://example.com/items.webp",
+	},
+	rules: {
+		transferable: true,
+		burnable: true,
+		replicable: false,
+		royaltyPct: 0,
+	},
+	schema: GAMING_SCHEMA,
+});
+```
+
+Ragnarok-specific templates are also available: `RAGNAROK_MINION_SCHEMA`, `RAGNAROK_SPELL_SCHEMA`, `RAGNAROK_WEAPON_SCHEMA`, `RAGNAROK_PET_SCHEMA`, `RAGNAROK_ARMOR_SCHEMA`, `RAGNAROK_HERO_SCHEMA`.
+
+---
+
+## 4. Extending a Schema
+
+Use `extend_schema` to **append new fields** to an existing collection's schema. This is an append-only operation -- existing fields cannot be removed or modified.
+
+### Constraints
+
+- Only the collection **creator** can extend the schema.
+- Collection must not be archived.
+- New field names must not collide with existing field names.
+- Total fields (existing + new) must not exceed 64.
+- Each new field must pass the same validation rules as schema definition.
+- At least one new field is required per operation.
+
+### SDK Usage
+
+```typescript
+import { createExtendSchemaPayload, createExtendSchemaOperation } from "nftlox-sdk";
+
+const payload = createExtendSchemaPayload({
+	collectionId: "a1b2c3d4...",
+	newImmutableFields: [
+		{ name: "element", type: "string" },
+	],
+	newMutableFields: [
+		{ name: "losses", type: "uint32" },
+		{ name: "equipped", type: "string[]" },
+	],
+});
+
+// Wrap into a Hive custom_json operation (posting key)
+const operation = createExtendSchemaOperation(
+	{
+		collectionId: "a1b2c3d4...",
+		newMutableFields: [
+			{ name: "losses", type: "uint32" },
+		],
+	},
+	"ragnarok-admin",
+);
+```
+
+### Build API
+
+```bash
+curl -X POST https://nftloxtest.hivecreators.co/api/build/extend-schema \
+	-H "Content-Type: application/json" \
+	-d '{
+		"creator": "ragnarok-admin",
+		"collectionId": "a1b2c3d4...",
+		"newMutableFields": [
+			{ "name": "losses", "type": "uint32" },
+			{ "name": "equipped", "type": "string[]" }
+		]
+	}'
+```
+
+**Response:**
+
+```json
+{
+	"success": true,
+	"protocolVersion": "0.4.1",
+	"operation": ["custom_json", { ... }],
+	"payload": {
+		"protocol": "nftlox_testnet",
+		"version": "0.4.1",
+		"action": "extend_schema",
+		"data": {
+			"collectionId": "a1b2c3d4...",
+			"newMutableFields": [
+				{ "name": "losses", "type": "uint32" },
+				{ "name": "equipped", "type": "string[]" }
+			]
+		}
+	},
+	"keyType": "Posting"
+}
+```
+
+### Indexer Behavior
+
+On processing `extend_schema`:
+
+1. Verifies the signer is the collection creator.
+2. Verifies the collection is not archived.
+3. If the collection already has a schema, merges new fields using `mergeSchemas()` -- checks for name collisions, validates types, enforces the 64-field cap.
+4. If the collection has no schema yet, creates a new one from the provided fields and validates it.
+
+---
+
+## 5. Archiving a Collection
+
+`archive_collection` permanently closes a collection. Archived collections cannot mint new NFTs, create packs, or extend their schema.
+
+### Preconditions
+
+All of the following must be true:
+
+- The signer must be the collection **creator**.
+- The collection must not already be archived.
+- The collection must have **0 NFTs** remaining (all burned or otherwise removed).
+- The collection must have **0 packs** remaining.
+
+### What Happens on Archive
+
+1. All collection-level allowances are deleted (NFT approvals, data operator approvals).
+2. All data operators for the collection are removed.
+3. Collection status changes to `archived`.
+4. The archive block number, tx ID, and timestamp are recorded.
+
+### Existing Data
+
+- The collection record itself is **not deleted** -- it remains queryable for historical reference.
+- The archive is irreversible.
+
+### SDK Usage
+
+```typescript
+import { buildArchiveCollection } from "nftlox-sdk";
+
+const result = buildArchiveCollection({
+	creator: "ragnarok-admin",
+	collectionId: "a1b2c3d4...",
+});
+
+if (result.success) {
+	console.log(result.operation); // ready-to-sign (posting key)
+	console.log(result.payload);
+}
+```
+
+### Build API
+
+```bash
+curl -X POST https://nftloxtest.hivecreators.co/api/build/archive-collection \
+	-H "Content-Type: application/json" \
+	-d '{
+		"creator": "ragnarok-admin",
+		"collectionId": "a1b2c3d4..."
+	}'
+```
+
+**Response:**
+
+```json
+{
+	"success": true,
+	"protocolVersion": "0.4.1",
+	"operation": ["custom_json", { ... }],
+	"payload": {
+		"protocol": "nftlox_testnet",
+		"version": "0.4.1",
+		"action": "archive_collection",
+		"data": {
+			"collectionId": "a1b2c3d4..."
+		}
+	},
+	"keyType": "Posting"
+}
+```
+
+---
+
+## 6. Seed Management & `totalPotential`
+
+The `totalPotential` field defines the maximum number of **seeds** (unique art pieces) a collection can hold. Each seed can then be minted into multiple editions/instances.
+
+| Value | Meaning |
+|---|---|
+| `0` | Unlimited -- no cap on seeds |
+| `> 0` | Hard cap on the number of unique seeds |
+
+Seed IDs are deterministic: `SHA-256(collectionId + artId)`. This prevents duplicate seeds within the same collection without requiring a global counter.
+
+```
+Collection (totalPotential: 3)
+├── Seed "fire-sword"     (artId → deterministic seedId)
+│   ├── Instance #1
+│   └── Instance #2
+├── Seed "ice-shield"
+│   └── Instance #1
+└── Seed "thunder-helm"   ← 3rd seed, cap reached
+```
+
+---
+
+## 7. Query API
+
+### GET /api/collections
+
+List collections with optional filtering.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `creator` | string | -- | Filter by creator username |
+| `limit` | number | 50 | Results per page (1--200) |
+| `offset` | number | 0 | Pagination offset |
+
+```bash
+curl "https://api-nftlox.hivecreators.co/api/collections?creator=ragnarok-admin&limit=10"
+```
+
+### GET /api/collections/:id
+
+Get a single collection by its deterministic ID. Returns the full object including metadata, rules, schema, and timestamps.
+
+```bash
+curl https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4...
+```
+
+### GET /api/collections/:id/nfts
+
+List NFTs belonging to a collection. Supports `type` filter (`seed`, `instance`, `replica`).
+
+```bash
+curl "https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4.../nfts?type=seed&limit=20"
+```
+
+### GET /api/collections/:id/stats
+
+Aggregated statistics: seed count, instance count, replica count, listed, burned, unique owners, floor price.
+
+```bash
+curl https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4.../stats
+```
+
+---
+
+## 8. Build API Summary
+
+All build endpoints return an unsigned Hive `custom_json` operation. The client signs and broadcasts it.
+
+| Endpoint | Action | Key Type |
+|---|---|---|
+| `POST /api/build/collection` | `create_collection` | Posting |
+| `POST /api/build/extend-schema` | `extend_schema` | Posting |
+| `POST /api/build/archive-collection` | `archive_collection` | Posting |
+| `POST /api/build/preview-ids` | (utility) Preview deterministic IDs | -- |
+
+### Preview IDs
+
+Utility endpoint to preview the deterministic collection ID, origin DNA, and seed IDs before creating anything on-chain.
+
+```bash
+curl -X POST https://nftloxtest.hivecreators.co/api/build/preview-ids \
+	-H "Content-Type: application/json" \
+	-d '{
+		"creator": "ragnarok-admin",
+		"name": "Ragnarok Cards",
+		"symbol": "RGNRK",
+		"artIds": ["fire-sword", "ice-shield"]
+	}'
+```
+
+**Response:**
+
+```json
+{
+	"success": true,
+	"protocolVersion": "0.4.1",
+	"collectionId": "a1b2c3d4...",
+	"originDna": "e5f6a7b8...",
+	"seedIds": {
+		"fire-sword": "seed-id-1...",
+		"ice-shield": "seed-id-2..."
+	}
+}
+```

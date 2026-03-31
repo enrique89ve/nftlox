@@ -1,8 +1,15 @@
-- **Learn**
+- **Getting Started**
 	- [Introduction](/)
-	- [Getting Started](getting-started.md)
-	- [Signing and Broadcasting](broadcasting.md)
+	- [Quick Start](getting-started.md)
+	- [Signing & Broadcasting](broadcasting.md)
 	- [Data Formats](data-formats.md)
+
+- **Core Features**
+	- [Collection Lifecycle](collection-lifecycle.md)
+	- [Marketplace Trading](marketplace-trading.md)
+	- [Allowances & Operators](allowances-operators.md)
+	- [NFT Lending](lending-system.md)
+	- [SPV Verification](spv-verification.md)
 
 - **Game Integration**
 	- [Architecture & Flow](game-integration.md)

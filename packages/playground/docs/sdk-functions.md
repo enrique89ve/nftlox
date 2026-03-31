@@ -10,8 +10,8 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
 | `PROTOCOL_VERSION` | `"0.4.1"` |
-| `ALL_ACTIONS` | All 25 protocol actions |
-| `CORE_ACTIONS` | 9 core actions |
+| `ALL_ACTIONS` | All 26 protocol actions |
+| `CORE_ACTIONS` | 10 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |
 | `PACK_ACTIONS` | 4 pack actions |
 | `APPROVE_ACTIONS` | 5 approve/transferFrom actions |
@@ -51,6 +51,9 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 | `createPackTransferFromPayload()` | Transfer pack as spender |
 | `createNftLendPayload()` | Lend NFT to borrower |
 | `createNftReturnPayload()` | Return lent NFT |
+| `createSetOwnerDataPayload()` | Update owner-controlled data |
+| `createExtendSchemaPayload()` | Extend collection schema |
+| `createArchiveCollectionPayload()` | Archive collection |
 | `createDataOperatorApprovePayload()` | Approve data operator |
 | `createSetDataFromPayload()` | Write data as operator |
 
@@ -87,6 +90,7 @@ Higher-level functions that validate input via Zod schemas, generate determinist
 | `buildNftLend()` | Validate + build lend |
 | `buildNftReturn()` | Validate + build return |
 | `buildDataOperatorApprove()` | Validate + build data operator approve |
+| `buildArchiveCollection()` | Validate + build archive collection |
 | `computeSeedAvailability()` | Compute remaining supply from seed fields |
 
 ---
@@ -211,6 +215,17 @@ Trustless verification -- the browser reads Hive L1 directly and replays determi
 | `parseNftloxOperation(tx)` | Parse NFTLox custom_json from tx |
 | `replayDropTableResolution(params)` | Replay RNG locally (pure function) |
 | `verifyDeterministicDerivation(params)` | Verify instanceId/DNA/accessKey derivation |
+
+---
+
+## Transaction Utilities
+
+| Function | Description |
+|----------|-------------|
+| `estimateOperationSize(operation)` | Estimate byte size of a Hive operation |
+| `validateOperationSize(operation)` | Validate operation fits within Hive tx limits |
+| `splitIntoBatches(items, maxBatchSize)` | Split items into transaction-safe batches |
+| `calculateMaxOperationsPerTx(targetByteSize)` | Calculate max ops for a target byte size |
 
 ---
 

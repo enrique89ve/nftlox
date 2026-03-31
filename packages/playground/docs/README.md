@@ -62,18 +62,26 @@ Then follow the [Getting Started guide](getting-started.md) to make your first A
 
 | Section | What you will find |
 |---|---|
-| **Guides** | |
-| [Getting Started](getting-started.md) | First API call, reading data, building transactions |
+| **Getting Started** | |
+| [Quick Start](getting-started.md) | First API call, reading data, building transactions |
 | [Signing and Broadcasting](broadcasting.md) | How to sign payloads and broadcast to Hive |
-| [Game Integration](game-integration.md) | Complete game developer integration walkthrough |
+| [Data Formats](data-formats.md) | Field constraints, validation rules, accepted values |
+| **Core Features** | |
+| [Collection Lifecycle](collection-lifecycle.md) | Create, extend schema, archive collections |
+| [Marketplace Trading](marketplace-trading.md) | List, buy, unlist with multisig buyer protection |
+| [Allowances & Operators](allowances-operators.md) | ERC-721-style approvals, data operators, delegated access |
+| [NFT Lending](lending-system.md) | Peer-to-peer lending with ownership retention |
+| [SPV Verification](spv-verification.md) | Trustless client-side verification against Hive L1 |
+| **Game Integration** | |
+| [Architecture & Flow](game-integration.md) | Complete game developer integration walkthrough |
 | [Pack Distribution](pack-distribution-guide.md) | Native packs vs custom distribution comparison |
+| [RNG Algorithm](rng-reference.md) | Deterministic RNG specification with test vectors |
+| **Security** | |
 | [Key Security](key-security.md) | Permission model, key types, and account architecture |
 | **Reference** | |
 | [API Endpoints](api-endpoints.md) | All read and write endpoints in one reference |
 | [SDK Functions](sdk-functions.md) | SDK exports, builders, payload creators, utilities |
 | [Error Codes](error-codes.md) | Handler errors, multisig errors, troubleshooting |
-| [RNG Algorithm](rng-reference.md) | Deterministic RNG specification with test vectors |
-| [Data Formats](data-formats.md) | Field constraints, validation rules, accepted values |
 | [SDK Direct Usage](using-sdk.md) | Use the TypeScript SDK without the HTTP layer |
 
 ## Examples
