@@ -235,7 +235,7 @@ Trustless verification -- the browser reads Hive L1 directly and replays determi
 |----------|-------------|
 | `generateOriginDna()` | Collection-level DNA (async) |
 | `generateInstanceDna()` | NFT-level DNA |
-| `generateAccessKey()` | Unique access key |
+| `generateDeterministicAccessKey()` | Verify access key post-broadcast (instanceDna, owner, txId) |
 | `generateDeterministicCollectionId()` | Deterministic collection ID |
 | `generateDeterministicSeedId()` | Deterministic seed ID |
 | `generateDeterministicInstanceId()` | Deterministic instance ID |

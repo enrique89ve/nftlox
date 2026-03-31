@@ -27,16 +27,16 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 
 	const metadata = optionalObject(d.metadata) ?? {};
 	const nftType = resolveNftType(optionalString(d.nftType), id);
-	const isSeed = nftType === "seed";
-
-	if (isSeed) {
-		validateSeedCap(collectionId, collection.seed_count, collection.total_potential);
+	if (nftType !== "seed") {
+		throw new Error("Only seeds can be minted directly. Instances are created via bulk_distribute or pack_open");
 	}
+
+	validateSeedCap(collectionId, collection.seed_count, collection.total_potential);
 
 	// Schema-based validation
 	const schema = collection.schema as CollectionSchema | null;
-	const immutableData = optionalObject(d.immutableData) as Record<string, unknown> | null;
-	const mutableData = optionalObject(d.mutableData) as Record<string, unknown> | null;
+	const immutableData = optionalObject(d.immutableData);
+	const mutableData = optionalObject(d.mutableData);
 
 	if (schema) {
 		const errors = validateMintData(schema, immutableData ?? undefined, mutableData ?? undefined);
@@ -54,17 +54,18 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 	const imageHash = optionalString(metadata.imageHash) ?? "";
 	const originDna = await generateOriginDna(collectionId);
 	const instanceDna = await generateInstanceDna(id, originDna, edition, imageHash);
-	const uniqueAccessKey = await generateDeterministicAccessKey(instanceDna, op.signer, op.txId);
+	const owner = optionalString(d.owner) ?? op.signer;
+	const uniqueAccessKey = await generateDeterministicAccessKey(instanceDna, owner, op.txId);
 
 	const maxReplicas = optionalNumber(d.maxReplicas) ?? 1;
-	if (isSeed && maxReplicas < 1) {
+	if (maxReplicas < 1) {
 		throw new Error(`maxReplicas must be >= 1 for seeds, got ${maxReplicas}`);
 	}
 
 	await insertNft({
-		id, collectionId, nftType: isSeed ? "seed" : "instance",
+		id, collectionId, nftType: "seed",
 		edition,
-		owner: optionalString(d.owner) ?? op.signer,
+		owner,
 		originDna,
 		instanceDna,
 		uniqueAccessKey,

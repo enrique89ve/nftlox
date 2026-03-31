@@ -186,7 +186,6 @@ export {
 	generateOriginDna,
 	generateInstanceDna,
 	generateReplicaInstanceDna,
-	generateAccessKey,
 	generateImageHash,
 	generateReplicaId,
 	extractOriginalId,

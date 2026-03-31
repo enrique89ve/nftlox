@@ -97,7 +97,6 @@ import {
 	generateOriginDna,
 	generateInstanceDna,
 	generateReplicaInstanceDna,
-	generateAccessKey,
 	generateImageHash,
 	generateReplicaId,
 	generateDeterministicCollectionId,
@@ -201,7 +200,6 @@ export async function createReplicatePayload(
 		input.originDna,
 		input.originalInstanceDna,
 	);
-	const uniqueAccessKey = await generateAccessKey(instanceDna, input.newOwner);
 
 	return {
 		protocol: PROTOCOL_ID,
@@ -213,7 +211,6 @@ export async function createReplicatePayload(
 			newOwner: input.newOwner,
 			originDna: input.originDna,
 			instanceDna,
-			uniqueAccessKey,
 			...spreadProvenance(input),
 		},
 	};
@@ -819,8 +816,6 @@ export async function createDeterministicMintPayload(
 		input.edition,
 		imageHash,
 	);
-	const uniqueAccessKey = await generateAccessKey(instanceDna, input.owner);
-
 	return {
 		protocol: PROTOCOL_ID,
 		version: PROTOCOL_VERSION,
@@ -832,7 +827,6 @@ export async function createDeterministicMintPayload(
 			owner: input.owner,
 			originDna: input.collectionOriginDna,
 			instanceDna,
-			uniqueAccessKey,
 			mintedBy: input.owner,
 			...(input.collectionBlock !== undefined && { collectionBlock: input.collectionBlock }),
 			metadata: {

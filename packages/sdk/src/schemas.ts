@@ -138,7 +138,7 @@ export const createCollectionInputSchema = z.object({
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH, `Name must be at most ${MAX_NAME_LENGTH} characters`),
 	symbol: symbolSchema,
 	creator: usernameSchema,
-	totalPotential: z.number().nonnegative("Total potential must be non-negative"),
+	totalPotential: z.number().int("Total potential must be an integer").nonnegative("Total potential must be non-negative"),
 	metadata: z.object({
 		description: z.string().min(1, "Description is required").max(MAX_DESCRIPTION_LENGTH, `Description must be at most ${MAX_DESCRIPTION_LENGTH} characters`),
 		image: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH, `Image URL must be at most ${MAX_IMAGE_URL_LENGTH} characters`),

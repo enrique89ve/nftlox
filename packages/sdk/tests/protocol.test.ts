@@ -17,7 +17,7 @@ import {
 	generateOriginDna,
 	generateInstanceDna,
 	generateReplicaInstanceDna,
-	generateAccessKey,
+	generateDeterministicAccessKey,
 	generateReplicaId,
 	extractOriginalId,
 	isReplicaId,
@@ -118,25 +118,33 @@ describe("Instance DNA Generation", () => {
 	});
 });
 
-describe("Access Key Generation", () => {
+describe("Deterministic Access Key Generation", () => {
 	test("access keys should be deterministic", async () => {
 		const instanceDna = "INSTANCE123456";
-		const key1 = await generateAccessKey(instanceDna, "user1");
-		const key2 = await generateAccessKey(instanceDna, "user1");
+		const key1 = await generateDeterministicAccessKey(instanceDna, "user1", "tx_123");
+		const key2 = await generateDeterministicAccessKey(instanceDna, "user1", "tx_123");
 
 		expect(key1).toBe(key2);
 	});
 
 	test("access keys should differ with different owners", async () => {
 		const instanceDna = "INSTANCE123456";
-		const key1 = await generateAccessKey(instanceDna, "user1");
-		const key2 = await generateAccessKey(instanceDna, "user2");
+		const key1 = await generateDeterministicAccessKey(instanceDna, "user1", "tx_123");
+		const key2 = await generateDeterministicAccessKey(instanceDna, "user2", "tx_123");
+
+		expect(key1).not.toBe(key2);
+	});
+
+	test("access keys should differ with different txIds", async () => {
+		const instanceDna = "INSTANCE123456";
+		const key1 = await generateDeterministicAccessKey(instanceDna, "user1", "tx_aaa");
+		const key2 = await generateDeterministicAccessKey(instanceDna, "user1", "tx_bbb");
 
 		expect(key1).not.toBe(key2);
 	});
 
 	test("access key should have length 8", async () => {
-		const key = await generateAccessKey("DNA123", "owner");
+		const key = await generateDeterministicAccessKey("DNA123", "owner", "tx_123");
 		expect(key.length).toBe(8);
 	});
 });

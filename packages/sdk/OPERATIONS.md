@@ -48,50 +48,51 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 **SDK payload**:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | string | yes | Deterministic collection ID |
+| `id` | string | yes | Canonical collection ID (must equal `generateDeterministicCollectionId(signer, name, symbol)`) |
 | `name` | string | yes | Name (max 100 chars) |
 | `symbol` | string | yes | Symbol 3-8 chars, A-Z0-9 |
-| `totalPotential` | number | no | Total potential supply (default 0) |
-| `originDna` | string | no | Collection DNA (16 chars hex) |
-| `metadata.description` | string | no | Description |
-| `metadata.image` | string | no | Image URL |
+| `totalPotential` | number | yes | Seed cap (non-negative integer). 0 = unlimited |
+| `metadata` | object | yes | Collection metadata (required) |
+| `metadata.description` | string | yes | Description |
+| `metadata.image` | string | yes | Image URL (HTTPS) |
 | `metadata.externalUrl` | string | no | External URL |
-| `rules.transferable` | boolean | no | Whether NFTs are transferable (default true) |
-| `rules.burnable` | boolean | no | Whether NFTs can be burned (default true) |
-| `rules.replicable` | boolean | no | Whether NFTs can be replicated (default true) |
-| `rules.royaltyPct` | number | no | Royalty percentage 0-50 (default 0) |
+| `rules` | object | yes | Collection rules (required, all fields explicit) |
+| `rules.transferable` | boolean | yes | Whether NFTs are transferable |
+| `rules.burnable` | boolean | yes | Whether NFTs can be burned |
+| `rules.replicable` | boolean | yes | Whether NFTs can be replicated |
+| `rules.royaltyPct` | number | yes | Royalty percentage 0-50 |
 | `rules.royaltyRecipient` | string | no | Account that receives royalties |
 | `schema` | object | no | Typed schema with `immutable` and `mutable` fields |
 
 **Indexer validations**:
-- `id` must not already exist
+- `id` must be canonical: recalculated from `signer + name + symbol` and rejected if mismatch
+- `id` must not already exist (duplicate is idempotent no-op)
 - `creator` is forced to `op.signer`
-- Missing fields use safe defaults
+- `originDna` is always recalculated by the indexer (payload value ignored)
+- `metadata`, `rules`, and `totalPotential` are required — missing fields are rejected (no defaults)
+- `royaltyPct` must be between 0 and 50
+- `totalPotential` must be a non-negative integer
 
 **State changes**: Inserts row in `collections`.
-**Restrictions**: Duplicate ID -> rejected (ON CONFLICT DO NOTHING).
+**Restrictions**: Non-canonical ID, missing required fields, or invalid values -> rejected.
 
 ---
 
 ### 2. `mint`
 
 **SDK constant**: `ACTION_MINT`
-**Description**: Creates a seed NFT (template) or instance within a collection. Only the collection creator can mint.
+**Description**: Creates a seed NFT (template) within a collection. Only seeds can be minted directly; instances are created via `bulk_distribute` or `pack_open`.
 **Key authority**: posting -- only the creator needs to sign.
-**Signer role**: Must be the collection creator.
+**Signer role**: Must be the collection creator. Can mint seeds for other owners.
 
 **SDK payload**:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | string | yes | NFT ID. Prefix `seed_` -> seed type, other -> instance |
+| `id` | string | yes | Seed ID (must have `seed_` prefix) |
 | `collectionId` | string | yes | Target collection |
 | `edition` | number | no | Edition (default 1) |
 | `owner` | string | no | Initial owner (default signer) |
-| `originDna` | string | no | Origin DNA |
-| `instanceDna` | string | no | Instance DNA |
-| `uniqueAccessKey` | string | no | Unique access key |
-| `mintedBy` | -- | ignored | Forced to `op.signer` |
-| `maxReplicas` | number | no | Maximum allowed replicas (default 1) |
+| `maxReplicas` | number | no | Maximum instances from this seed (default 1, must be >= 1) |
 | `metadata.name` | string | no | NFT name |
 | `metadata.description` | string | no | Description |
 | `metadata.imageUrl` | string | no | Image URL |
@@ -100,18 +101,18 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 | `mutableData` | object | no | Mutable data validated against schema |
 | `collectionBlock` | number | yes | Block where the collection was created (L1 traceability without indexer) |
 
-**Note**: If the collection has a schema, `immutableData` and `mutableData` are validated against it. Immutable fields cannot be modified after mint.
+**Note**: `originDna`, `instanceDna`, and `uniqueAccessKey` are always computed by the indexer — any payload values are ignored. The `uniqueAccessKey` is derived from `(instanceDna, owner, txId)` and can be verified client-side post-broadcast via `generateDeterministicAccessKey()`.
 
 **Indexer validations**:
-- NFT with that `id` must not exist
-- Collection must exist
+- Only seeds can be minted (non-seed nftType is rejected)
+- NFT with that `id` must not exist (duplicate is idempotent no-op)
+- Collection must exist and not be archived
 - `collection.creator === op.signer` (only creator can mint)
 - If the collection has a schema, `immutableData`/`mutableData` are validated against it
 - If the collection has `totalPotential > 0`, seed cap is validated
-- Type determined by ID prefix
 
-**State changes**: Inserts row in `nfts` with status `active`. Stores `immutable_data`, `immutable_data_hash`, `mutable_data`, `mutable_data_hash`.
-**Restrictions**: Duplicate ID, nonexistent collection, seed cap reached, or schema validation failure -> rejected.
+**State changes**: Inserts row in `nfts` with type `seed` and status `active`.
+**Restrictions**: Instance mint, duplicate ID, nonexistent/archived collection, non-creator signer, seed cap reached, or schema validation failure -> rejected.
 
 ---
 
@@ -205,8 +206,8 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `to` | string | no | Owner of the instances (default signer) |
-| `items` | array | yes | `[{ seedId, quantity, originBlock }]` -- max 50 items |
-| `items[].originBlock` | number | yes | Block where the original seed was minted (L1 traceability without indexer) |
+| `items` | array | yes | `[{ seedId, quantity, seedTxId }]` -- max 50 items |
+| `items[].seedTxId` | string | yes | Transaction ID where the seed was minted (L1 traceability without indexer) |
 | `imageOverrides` | object | no | `{ seedId: { imageUrl, imageHash } }` -- override per seed |
 | `mutableData` | object | no | Mutable data for the instances (validated against schema) |
 
@@ -215,14 +216,16 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 **Indexer validations**:
 - Items not empty, max 50
 - No duplicate seedIds in items
-- Each seed must exist, not be burned (`assertNotBurned`), not be lent (`assertNotLent`), and must be of type `"seed"`
+- Each `seedTxId` must match the actual seed's `tx_id` (provenance verification)
+- Each seed must exist, not be burned, not be lent, and must be of type `"seed"`
 - Each seed must have available supply (`distributed + quantity <= maxReplicas`)
-- Signer must be owner of the seed OR creator of the collection
+- Signer must be the owner of the seed
 - If the collection has a schema and `mutableData` is provided, it is validated against the schema
+- `uniqueAccessKey` is computed by the indexer from `(instanceDna, recipient, txId)` — not from signer
 
 **State changes**: Inserts N rows in `nfts` (type `instance`), increments `distributed` on the seed.
 **Idempotency**: Detects re-sends of the same txId and adjusts counters.
-**Restrictions**: Supply exceeded, nonexistent seeds, signer without permission -> rejected.
+**Restrictions**: Invalid seedTxId, supply exceeded, nonexistent seeds, or non-owner signer -> rejected.
 
 ---
 

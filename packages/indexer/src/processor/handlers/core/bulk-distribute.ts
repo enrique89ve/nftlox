@@ -7,7 +7,7 @@ import {
 	incrementDistributedBy,
 } from "@/db/queries/nfts.ts";
 import { assertNotBurned, assertNotLent } from "@/utils/status-checks.ts";
-import { requireString, requireNumber, requireArray, optionalString, optionalObject } from "@/utils/validation.ts";
+import { requireString, requireNumber, requireObject, requireArray, optionalString, optionalObject } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { computeInstanceBaseline, validateSeedSupplyForDistribution } from "@/utils/nft-rules.ts";
 import {
@@ -31,7 +31,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	const to = toRaw ?? op.signer;
 	const items = requireArray(op.data.items, "items");
 	const imageOverrides = (optionalObject(op.data.imageOverrides) ?? {}) as Record<string, { imageUrl?: string; imageHash?: string }>;
-	const mutableData = optionalObject(op.data.mutableData) as Record<string, unknown> | null;
+	const mutableData = optionalObject(op.data.mutableData);
 
 	const mutableDataHash = mutableData ? await computeDataHash(mutableData) : null;
 
@@ -40,30 +40,33 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		throw new Error(`Too many distinct seeds: ${items.length} exceeds max ${MAX_BULK_DISTRIBUTE_ITEMS}`);
 	}
 
-	let totalQuantity = 0;
-	const parsedItems: Array<{ seedId: string; quantity: number }> = [];
+	const parsedItems: Array<{ seedId: string; quantity: number; seedTxId: string }> = [];
 	const seenSeeds = new Set<string>();
 
 	for (const item of items) {
-		const raw = item as Record<string, unknown>;
+		const raw = requireObject(item, "items[]");
 		const seedId = requireString(raw.seedId, "seedId");
 		const quantity = requireNumber(raw.quantity, "quantity");
+		const seedTxId = requireString(raw.seedTxId, "seedTxId");
 		if (quantity < 1) throw new Error(`Invalid quantity for seed ${seedId}`);
 		if (seenSeeds.has(seedId)) throw new Error(`Duplicate seedId in items: ${seedId}`);
 		seenSeeds.add(seedId);
-		totalQuantity += quantity;
-		parsedItems.push({ seedId, quantity });
+		parsedItems.push({ seedId, quantity, seedTxId });
 	}
 
 	// Track validated schemas to avoid re-validating mutableData per collection
 	const validatedSchemas = new Set<string>();
 
-	for (const { seedId, quantity } of parsedItems) {
+	for (const { seedId, quantity, seedTxId } of parsedItems) {
 		const seed = await getSeedWithSchema(seedId, txn);
 		if (!seed) throw new Error(`Seed not found: ${seedId}`);
 		assertNotBurned(seed, seedId);
 		assertNotLent(seed, seedId);
 		if (seed.nft_type !== "seed") throw new Error(`${seedId} is not a seed`);
+
+		if (seed.tx_id !== seedTxId) {
+			throw new Error(`Invalid seedTxId for ${seedId}: expected ${seed.tx_id}, got ${seedTxId}`);
+		}
 
 		if (seed.owner !== op.signer) {
 			throw new Error(`Signer ${op.signer} is not the owner of seed ${seedId}`);
@@ -113,7 +116,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				seedId, instanceNumber, op.txId, op.blockNum,
 			);
 			const uniqueAccessKey = await generateDeterministicAccessKey(
-				instanceDna, op.signer, op.txId,
+				instanceDna, to, op.txId,
 			);
 
 			// Instance stores only its own data; name, image, immutable_data

@@ -77,19 +77,6 @@ export async function generateReplicaInstanceDna(
 	return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
 }
 
-// ============ ACCESS KEY ============
-
-/**
- * Generates a unique access key for an NFT.
- * DETERMINISTIC: SHA-256 of instanceDna + owner.
- * Used for software activation, membership access, etc.
- */
-export async function generateAccessKey(instanceDna: string, owner: string): Promise<string> {
-	const input = `nftlox:accesskey:${instanceDna}:${owner}`;
-	const fullHash = await generateHash(input);
-	return fullHash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
-}
-
 // ============ IMAGE HASH ============
 
 /**

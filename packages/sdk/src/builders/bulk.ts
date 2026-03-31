@@ -25,6 +25,7 @@ export function buildBulkDistribute(input: BulkDistributeBuilderInput): BuildRes
 		items: data.items,
 		...(data.imageOverrides && { imageOverrides: data.imageOverrides }),
 		...(data.data && { data: data.data }),
+		...(data.mutableData && { mutableData: data.mutableData }),
 	};
 
 	const payload = createBulkDistributePayload(bulkInput);
