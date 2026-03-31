@@ -11,12 +11,12 @@ This guide covers the NFTLox permission model, recommended account architecture 
 | Role | Actions | Key Required |
 |------|---------|-------------|
 | **Collection creator** | `create_collection`, `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting (except `data_operator_approve` = Active) |
-| **Seed owner** | `bulk_distribute`, `transfer`, `burn`, `replicate`, `list`, `unlist` | Posting for `bulk_distribute`; Active for the rest |
-| **NFT owner** | `transfer`, `burn`, `list`, `unlist`, `nft_approve`, `nft_lend`, `set_owner_data` | Active (except `set_owner_data`, `unlist` = Posting) |
+| **Seed owner** | `bulk_distribute`, `transfer` (only if `distributed === 0`), `burn`, `replicate`, `list` (only if `distributed === 0`), `unlist` | Posting for `bulk_distribute`; Active for the rest |
+| **NFT/Instance owner** | `transfer`, `burn`, `list`, `unlist`, `nft_approve`, `nft_lend`, `set_owner_data` | Active (except `set_owner_data`, `unlist` = Posting) |
 | **Approved operator** | `set_data_from` | Posting |
 | **Approved spender** | `nft_transfer_from`, `pack_transfer_from` | Posting |
 
-**Key distinction**: The collection creator controls the **schema and metadata**. The seed/NFT owner controls **custody and distribution**. If the creator transfers a seed, they lose distribution rights over it.
+**Key distinction**: The collection creator controls the **schema and metadata**. The seed owner controls **custody and distribution exclusively** — the collection creator has NO distribution rights over seeds they don't own. Seeds with distributed instances (`distributed > 0`) cannot be transferred, listed, sold, delegated, or lent.
 
 ### Key Types
 
@@ -39,7 +39,8 @@ For a game like Ragnarok, the creator and the game server are typically the same
 
 ```
 ragnarok-game (creator + seed owner + game server)
-  - Creates collection, mints seeds, distributes packs, updates stats
+  - Creates collection, mints seeds, distributes instances, updates stats
+  - Seeds are non-transferable once instances are distributed
   - Posting key on the server for bulk_distribute and set_data
   - Active key in secure vault for one-time setup (data_operator_approve)
 ```
@@ -49,14 +50,14 @@ ragnarok-game (creator + seed owner + game server)
 If you need a separate game server account for security isolation:
 
 ```
-ragnarok-game (creator)          ragnarok-server (operator)
-  - Creates collection             - Calls set_data_from (posting key)
-  - Mints seeds                    - Cannot distribute (not seed owner)
-  - Calls data_operator_approve    - Cannot transfer/list seeds
-  - Calls bulk_distribute
+ragnarok-game (creator + seed owner)   ragnarok-server (operator)
+  - Creates collection                   - Calls set_data_from (posting key)
+  - Mints seeds                          - Cannot distribute (not seed owner)
+  - Calls data_operator_approve          - Cannot transfer/list/approve seeds
+  - Calls bulk_distribute (as owner)
 ```
 
-The creator keeps seed ownership and handles distribution. The server only updates mutable data via operator delegation.
+The creator retains seed ownership and handles distribution. Only the seed owner can call `bulk_distribute` — the collection creator role alone is insufficient. The server only updates mutable data via operator delegation. Seeds cannot be approved or lent.
 
 ---
 

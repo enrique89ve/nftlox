@@ -1,5 +1,5 @@
-import { Elysia } from "elysia";
-import { getLastBlock, getSyncStatus } from "@/db/queries/sync.ts";
+import { Elysia, t } from "elysia";
+import { getLastBlock, getSyncStatus, getOperationStatus } from "@/db/queries/sync.ts";
 import { getHeadBlockNum } from "@/scanner/hive-client.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
 import { getStartupTime } from "@/scanner/sync-state.ts";
@@ -88,4 +88,13 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			summary: "Protocol statistics",
 			description: "Aggregate counts: collections, NFTs, sales, etc.",
 		},
-	});
+	})
+	.get("/api/operation-status/:txId", async ({ params }) => {
+		return getOperationStatus(params.txId);
+	}, {
+		params: t.Object({ txId: t.String() }),
+		detail: {
+			summary: "Operation status by transaction ID",
+			description: "Returns whether a Hive transaction was confirmed, invalid, orphaned, or unknown by the indexer.",
+		},
+	})

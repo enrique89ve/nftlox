@@ -49,6 +49,9 @@ import {
 	ACTIVE_AUTH_ACTIONS,
 	generateListingNonce,
 	generateListingId,
+	MEMO_PREFIX_BUY,
+	MEMO_PREFIX_ROYALTY,
+	MEMO_PREFIX_FEE,
 } from "nftlox-sdk";
 
 const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
@@ -530,7 +533,7 @@ describe("Handlers (integration)", () => {
 
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
-				items: [makeBulkItem("seed_test1", 1, "tx_wrong_seed_birth")],
+				items: [makeBulkItem("seed_test1", 1, "tx_wrong_seed_txid")],
 			});
 			await expect(handleBulkDistribute(op, sql)).rejects.toThrow("seedTxId mismatch");
 		});
@@ -683,7 +686,7 @@ describe("Handlers (integration)", () => {
 
 		test("multi-seed bulk distribute is idempotent", async () => {
 			await seedCollection();
-			const seed1BirthTx = await seedMint(); // seed_test1
+			const seed1TxId = await seedMint(); // seed_test1
 
 			const mintOp2 = makeOp(ACTION_MINT, {
 				id: "seed_test2",
@@ -696,7 +699,7 @@ describe("Handlers (integration)", () => {
 			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
 				to: "bob",
 				items: [
-					makeBulkItem("seed_test1", 2, seed1BirthTx),
+					makeBulkItem("seed_test1", 2, seed1TxId),
 					makeBulkItem("seed_test2", 3, mintOp2.txId),
 				],
 			});
@@ -1079,14 +1082,15 @@ describe("Handlers (integration)", () => {
 			const nodeAccount = config.hiveAccount;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
-				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE" },
-				{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE" },
+				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}seed_nobuy1` },
+				{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}seed_nobuy1` },
 			];
 
 			const buyOp = makeOp(ACTION_BUY, {
 				nftId: "seed_nobuy1",
 				listingId: listData.listingId,
 				listTxId: "tx_fake_list",
+				txId: mintOp.txId,
 			}, nodeAccount, transfers);
 
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("not transferable");
@@ -2079,32 +2083,32 @@ describe("Handlers (integration)", () => {
 		async function listNft(nftId: string, priceAmount = "10.000") {
 			const listData = await makeListData({ nftId, priceAmount });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
-			const [nft] = await sql`SELECT listing_id, listing_tx_id FROM nfts WHERE id = ${nftId}`;
-			return { listingId: nft!.listing_id as string, listTxId: nft!.listing_tx_id as string };
+			const [nft] = await sql`SELECT listing_id, listing_tx_id, tx_id FROM nfts WHERE id = ${nftId}`;
+			return { listingId: nft!.listing_id as string, listTxId: nft!.listing_tx_id as string, txId: nft!.tx_id as string };
 		}
 
-		function makeBuyOp(nftId: string, listingId: string, listTxId: string, buyer: string, seller: string, price = 10) {
+		function makeBuyOp(nftId: string, listingId: string, listTxId: string, buyer: string, seller: string, price = 10, txId = "a".repeat(40)) {
 			const split = calculatePaymentSplit(price, "HIVE", 0, null, seller, nodeAccount);
 			const transfers = [
-				{ from: buyer, to: seller, amount: split.sellerAmount, currency: "HIVE" },
-				...(split.feeAmount > 0 ? [{ from: buyer, to: nodeAccount, amount: split.feeAmount, currency: "HIVE" }] : []),
+				{ from: buyer, to: seller, amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${nftId}` },
+				...(split.feeAmount > 0 ? [{ from: buyer, to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${nftId}` }] : []),
 			];
-			return makeOp(ACTION_BUY, { nftId, listingId, listTxId }, nodeAccount, transfers);
+			return makeOp(ACTION_BUY, { nftId, listingId, listTxId, txId }, nodeAccount, transfers);
 		}
 
 		test("rejects buy own NFT", async () => {
 			await seedCollection();
 			await seedMint();
-			const { listingId, listTxId } = await listNft("seed_test1");
+			const { listingId, listTxId, txId } = await listNft("seed_test1");
 
 			// alice owns the NFT, alice tries to buy — paired transfer from alice
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
-				{ from: "alice", to: "alice", amount: split.sellerAmount, currency: "HIVE" },
-				{ from: "alice", to: nodeAccount, amount: split.feeAmount, currency: "HIVE" },
+				{ from: "alice", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}seed_test1` },
+				{ from: "alice", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}seed_test1` },
 			];
 			const buyOp = makeOp(ACTION_BUY, {
-				nftId: "seed_test1", listingId, listTxId,
+				nftId: "seed_test1", listingId, listTxId, txId,
 			}, nodeAccount, transfers);
 
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("Cannot buy own");
@@ -2179,15 +2183,15 @@ describe("Handlers (integration)", () => {
 		test("rejects buy with wrong payment amount", async () => {
 			await seedCollection();
 			await seedMint();
-			const { listingId, listTxId } = await listNft("seed_test1");
+			const { listingId, listTxId, txId } = await listNft("seed_test1");
 
 			// Send wrong amount (50 instead of 9.9 to seller)
 			const transfers = [
-				{ from: "bob", to: "alice", amount: 50, currency: "HIVE" },
-				{ from: "bob", to: nodeAccount, amount: 0.1, currency: "HIVE" },
+				{ from: "bob", to: "alice", amount: 50, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}seed_test1` },
+				{ from: "bob", to: nodeAccount, amount: 0.1, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}seed_test1` },
 			];
 			const buyOp = makeOp(ACTION_BUY, {
-				nftId: "seed_test1", listingId, listTxId,
+				nftId: "seed_test1", listingId, listTxId, txId,
 			}, nodeAccount, transfers);
 
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("Missing");
@@ -2240,17 +2244,18 @@ describe("Handlers (integration)", () => {
 			const listData = await makeListData({ nftId: "seed_test1" });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
-			const [nft] = await sql`SELECT listing_id, listing_tx_id FROM nfts WHERE id = 'seed_test1'`;
+			const [nft] = await sql`SELECT listing_id, listing_tx_id, tx_id FROM nfts WHERE id = 'seed_test1'`;
 			const nodeAccount = config.hiveAccount;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
-				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE" },
-				{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE" },
+				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}seed_test1` },
+				{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}seed_test1` },
 			];
 			const buyOp = makeOp(ACTION_BUY, {
 				nftId: "seed_test1",
 				listingId: nft!.listing_id,
 				listTxId: nft!.listing_tx_id,
+				txId: nft!.tx_id,
 			}, nodeAccount, transfers);
 			await handleBuy(buyOp, sql);
 

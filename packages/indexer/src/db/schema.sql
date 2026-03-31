@@ -136,6 +136,14 @@ ALTER TABLE nfts DROP CONSTRAINT IF EXISTS burned_nft_no_listing;
 ALTER TABLE nfts ADD CONSTRAINT burned_nft_no_listing
 	CHECK (status != 'burned' OR (listing_id IS NULL AND listing_price IS NULL));
 
+-- Supply integrity: distributed count can never go negative
+ALTER TABLE nfts DROP CONSTRAINT IF EXISTS distributed_non_negative;
+ALTER TABLE nfts ADD CONSTRAINT distributed_non_negative CHECK (distributed >= 0);
+
+-- Supply integrity: max_replicas must be non-negative (0 = no distribution for non-seeds)
+ALTER TABLE nfts DROP CONSTRAINT IF EXISTS max_replicas_non_negative;
+ALTER TABLE nfts ADD CONSTRAINT max_replicas_non_negative CHECK (max_replicas >= 0);
+
 -- Invalid operations (audit trail)
 CREATE TABLE IF NOT EXISTS invalid_operations (
 	id BIGSERIAL PRIMARY KEY,
@@ -282,6 +290,8 @@ CREATE INDEX IF NOT EXISTS idx_nfts_immutable_data ON nfts USING GIN (immutable_
 CREATE INDEX IF NOT EXISTS idx_nfts_mutable_data ON nfts USING GIN (mutable_data) WHERE mutable_data IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_invalid_block ON invalid_operations(block_num);
+CREATE INDEX IF NOT EXISTS idx_invalid_tx ON invalid_operations(tx_id) WHERE tx_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_invalid_signer ON invalid_operations(signer) WHERE signer IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_orphaned_buys_buyer ON orphaned_buys(buyer);
 CREATE INDEX IF NOT EXISTS idx_orphaned_buys_tx ON orphaned_buys(tx_id);

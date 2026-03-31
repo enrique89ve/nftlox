@@ -147,7 +147,7 @@ export interface ReplicaData extends SeedProvenance {
 export interface BulkDistributeItem {
 	seedId: string;
 	quantity: number;
-	/** Anti-replay proof: must match the seed's tx_id in DB. */
+	/** The seed's tx_id. Validated by the indexer against the seed's actual tx_id. */
 	seedTxId: string;
 }
 
@@ -163,7 +163,7 @@ export interface BulkDistributeData {
 
 export interface SeedProvenance {
 	seedId?: string;
-	/** Anti-replay proof: must match the seed's tx_id in DB. */
+	/** The seed parent's tx_id — for L1 traceability without indexer. */
 	seedTxId?: string;
 }
 
@@ -270,6 +270,7 @@ export interface BuyData {
 	readonly nftId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
+	readonly txId: string;
 	readonly seedId?: string;
 	readonly seedTxId?: string;
 }
@@ -463,6 +464,7 @@ export type MultisigErrorCode =
 	| "NFT_NOT_TRANSFERABLE"
 	| "NFT_EXPIRED_LISTING"
 	| "CANNOT_BUY_OWN"
+	| "SEED_HAS_INSTANCES"
 	| "INVALID_PAYMENT_SPLIT"
 	| "INVALID_PROTOCOL_PAYLOAD"
 	| "NODE_ACCOUNT_MISMATCH"
@@ -495,5 +497,6 @@ export type PaymentInfo = Readonly<{
 	feeAmount: number;
 	feeAccount: string;
 	nodeAccount: string;
-	seedTxId: string;
+	txId: string;
+	seedTxId: string | null;
 }>;

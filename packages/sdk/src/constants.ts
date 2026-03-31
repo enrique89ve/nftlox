@@ -31,6 +31,11 @@ export const MIN_PRICE_AMOUNT = "0.001";
 export const PROTOCOL_FEE_PCT = 1.0;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 
+// Memo Prefixes (Marketplace) — strict format: `${PREFIX}${nftId}`
+export const MEMO_PREFIX_BUY = "NFTLox BUY:";
+export const MEMO_PREFIX_ROYALTY = "NFTLox ROY:";
+export const MEMO_PREFIX_FEE = "NFTLox FEE:";
+
 // Listing Constants
 export const LISTING_ID_PREFIX = "list_";
 export const LISTING_NONCE_LENGTH = 12;

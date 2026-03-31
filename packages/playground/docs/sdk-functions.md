@@ -9,7 +9,7 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 | Export | Description |
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
-| `PROTOCOL_VERSION` | `"0.4.0"` |
+| `PROTOCOL_VERSION` | `"0.4.1"` |
 | `ALL_ACTIONS` | All 25 protocol actions |
 | `CORE_ACTIONS` | 9 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |
@@ -19,6 +19,9 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 | `DATA_OPERATOR_ACTIONS` | 2 data operator actions |
 | `SUPPORTED_CURRENCIES` | `["HIVE", "HBD"]` |
 | `PROTOCOL_FEE_PCT` | `1.0` (protocol fee percentage, 1% on sales) |
+| `MEMO_PREFIX_BUY` | `"NFTLox BUY:"` — strict memo prefix for seller transfer |
+| `MEMO_PREFIX_ROYALTY` | `"NFTLox ROY:"` — strict memo prefix for royalty transfer |
+| `MEMO_PREFIX_FEE` | `"NFTLox FEE:"` — strict memo prefix for fee transfer |
 | `calculatePaymentSplit()` | Compute seller/royalty/fee split for a sale |
 
 ---
@@ -85,6 +88,33 @@ Higher-level functions that validate input via Zod schemas, generate determinist
 | `buildNftReturn()` | Validate + build return |
 | `buildDataOperatorApprove()` | Validate + build data operator approve |
 | `computeSeedAvailability()` | Compute remaining supply from seed fields |
+
+---
+
+## Pre-validation
+
+Pure function to validate an NFT operation against current state before broadcasting. No API calls — the caller passes NFT data fetched from `GET /api/nfts/:id`.
+
+```typescript
+import { validateNftOperation, ACTION_TRANSFER } from "nftlox-sdk";
+
+const nft = await indexer.getNft("seed_abc123");
+const result = validateNftOperation(ACTION_TRANSFER, nft, "alice", nft.id);
+if (!result.valid) {
+  console.error(result.errors);
+  // → ["Seed seed_abc123 has 50 distributed instance(s) — ownership transfer blocked"]
+}
+```
+
+| Function | Description |
+|----------|-------------|
+| `validateNftOperation(action, nft, signer, nftId)` | Pre-validate any NFT operation against current state |
+
+Related types: `NftState`, `PreValidationResult`.
+
+**Checks performed:** burned, lent, listed status, ownership, seed delegation guard, seed distribution guard, supply exhaustion, collection transferable/burnable, buy/unlist state.
+
+**Not checked (indexer-only):** listing expiry, spender authorization, payment splits, schema validation, listing ID determinism.
 
 ---
 

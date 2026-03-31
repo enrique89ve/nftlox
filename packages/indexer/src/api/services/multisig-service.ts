@@ -80,7 +80,7 @@ export async function processMultisigRequest(
 		validateBuyPayloadData(request.transaction.operations, request.listingId, request.listTxId);
 
 		const transfers = extractTransfers(request.transaction.operations, request.buyer);
-		validatePaymentSplit(transfers, nft, rules, nodeAccount);
+		validatePaymentSplit(transfers, nft, request.nftId, rules, nodeAccount);
 
 		const signResult = signTransaction(request.transaction, activeKey);
 		return {
@@ -386,6 +386,7 @@ function extractTransfers(
 			to: body.to as string,
 			amount: parsed.amount,
 			currency: parsed.currency,
+			memo: (body.memo as string) ?? "",
 		};
 	});
 }
@@ -421,6 +422,13 @@ async function validateNftState(
 		throw createMultisigError("NFT_NOT_TRANSFERABLE", `Collection '${nftWithRules.collection_id}' is not transferable — co-sign rejected`);
 	}
 
+	if (nftWithRules.nft_type === "seed" && nftWithRules.distributed > 0) {
+		throw createMultisigError(
+			"SEED_HAS_INSTANCES",
+			`Seed '${nftId}' has ${nftWithRules.distributed} distributed instance(s) — sale blocked`,
+		);
+	}
+
 	const nft: NftProcessingRow = nftWithRules;
 	const rules = {
 		id: nftWithRules.collection_id,
@@ -440,6 +448,7 @@ async function validateNftState(
 function validatePaymentSplit(
 	transfers: ReadonlyArray<TransferRecord>,
 	nft: NftProcessingRow,
+	nftId: string,
 	rules: MultisigRules,
 	nodeAccount: string,
 ): void {
@@ -462,6 +471,7 @@ function validatePaymentSplit(
 			royaltyPct: rules.royalty_pct,
 			royaltyRecipient: rules.royalty_recipient,
 			feeAccount: nodeAccount,
+			nftId,
 		});
 
 		// Validate exact transfer count — reject extra transfers

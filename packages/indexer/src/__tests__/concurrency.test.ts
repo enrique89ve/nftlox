@@ -248,10 +248,10 @@ describe("event loop yields during massive sync", () => {
 
 		let yieldCount = 0;
 		const originalSetTimeout = globalThis.setTimeout;
-		setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((fn: Function, ms?: number) => {
+		setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
 			if (ms === 0) yieldCount++;
 			return originalSetTimeout(fn, ms);
-		}) as typeof setTimeout);
+		}) as unknown as typeof setTimeout);
 
 		await syncCycle();
 
@@ -268,10 +268,10 @@ describe("event loop yields during massive sync", () => {
 
 		let yieldCount = 0;
 		const originalSetTimeout = globalThis.setTimeout;
-		setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((fn: Function, ms?: number) => {
+		setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
 			if (ms === 0) yieldCount++;
 			return originalSetTimeout(fn, ms);
-		}) as typeof setTimeout);
+		}) as unknown as typeof setTimeout);
 
 		await syncCycle();
 

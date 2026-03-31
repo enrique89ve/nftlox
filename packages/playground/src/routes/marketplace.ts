@@ -4,6 +4,9 @@ import {
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
 	ACTION_BUY,
+	MEMO_PREFIX_BUY,
+	MEMO_PREFIX_ROYALTY,
+	MEMO_PREFIX_FEE,
 	type PaymentInfo,
 	type MultisigResponse,
 } from "nftlox-sdk";
@@ -42,7 +45,7 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 						from: body.buyer,
 						to: info.seller,
 						amount: `${info.sellerAmount.toFixed(3)} ${info.currency}`,
-						memo: `NFTLox buy: ${body.nftId}`,
+						memo: `${MEMO_PREFIX_BUY}${body.nftId}`,
 					});
 				}
 
@@ -51,7 +54,7 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 						from: body.buyer,
 						to: info.royaltyRecipient,
 						amount: `${info.royaltyAmount.toFixed(3)} ${info.currency}`,
-						memo: `NFTLox royalty: ${body.nftId}`,
+						memo: `${MEMO_PREFIX_ROYALTY}${body.nftId}`,
 					});
 				}
 
@@ -60,7 +63,7 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 						from: body.buyer,
 						to: info.feeAccount,
 						amount: `${info.feeAmount.toFixed(3)} ${info.currency}`,
-						memo: `NFTLox fee: ${body.nftId}`,
+						memo: `${MEMO_PREFIX_FEE}${body.nftId}`,
 					});
 				}
 
@@ -76,6 +79,7 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 							nftId: body.nftId,
 							listingId: info.listingId,
 							listTxId: info.listTxId,
+							txId: info.txId,
 							...(info.seedTxId && { seedTxId: info.seedTxId }),
 						},
 					}),

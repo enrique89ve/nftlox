@@ -4,7 +4,7 @@ import { getNftWithCollectionRules, updateNftOwner, NFT_STATUS_LISTED } from "@/
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername, verifyTransfers } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
-import { assertNotBurned, assertNotLent, isListingExpired } from "@/utils/status-checks.ts";
+import { assertNotBurned, assertNotLent, assertSeedNotDistributed, isListingExpired } from "@/utils/status-checks.ts";
 import { config } from "@/config.ts";
 
 /**
@@ -28,6 +28,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	const nftId = requireString(op.data.nftId, "nftId");
 	const listingId = requireString(op.data.listingId, "listingId");
 	const listTxId = requireString(op.data.listTxId, "listTxId");
+	const txId = requireString(op.data.txId, "txId");
 
 	const rawBuyer = op.pairedTransfers?.[0]?.from;
 	if (!rawBuyer) throw new Error("No payment transfers found for buy action");
@@ -37,6 +38,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 	assertNotBurned(nft, nftId);
 	assertNotLent(nft, nftId);
+	assertSeedNotDistributed(nft, nftId);
 	if (nft.status !== NFT_STATUS_LISTED) throw new Error(`NFT not listed: ${nftId}`);
 	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
 		throw new Error(`Listing has expired for NFT: ${nftId}`);
@@ -55,6 +57,11 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	// Validate listTxId matches the listing transaction
 	if (nft.listing_tx_id !== listTxId) {
 		throw new Error(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
+	}
+
+	// Validate txId matches the NFT's creation transaction
+	if (nft.tx_id !== txId) {
+		throw new Error(`txId mismatch: expected '${nft.tx_id}', got '${txId}'`);
 	}
 
 	const totalPrice = Number(nft.listing_price);
@@ -76,6 +83,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 		royaltyPct,
 		royaltyRecipient,
 		feeAccount: config.hiveAccount,
+		nftId,
 	});
 
 	validateTransferCount(transfers, split);

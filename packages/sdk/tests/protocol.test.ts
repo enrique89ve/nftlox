@@ -564,7 +564,7 @@ describe("Buy Action (Multisig)", () => {
 	});
 
 	test("createBuyPayload should produce valid payload with listingId and listTxId", () => {
-		const data: BuyData = { nftId: "nft_test123", listingId: "list_abc123", listTxId: "a".repeat(40) };
+		const data: BuyData = { nftId: "nft_test123", listingId: "list_abc123", listTxId: "a".repeat(40), txId: "c".repeat(40) };
 		const payload = createBuyPayload(data);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
@@ -576,7 +576,7 @@ describe("Buy Action (Multisig)", () => {
 	});
 
 	test("createBuyOperation should use nodeAccount in required_auths", () => {
-		const data: BuyData = { nftId: "nft_test123", listingId: "list_abc123", listTxId: "a".repeat(40) };
+		const data: BuyData = { nftId: "nft_test123", listingId: "list_abc123", listTxId: "a".repeat(40), txId: "c".repeat(40) };
 		const operation = createBuyOperation(data, "indexer-node");
 
 		expect(operation[0]).toBe("custom_json");
@@ -591,7 +591,7 @@ describe("Buy Action (Multisig)", () => {
 	});
 
 	test("buy operation payload should be under 8KB", () => {
-		const data: BuyData = { nftId: "nft_test123", listingId: "list_abc123", listTxId: "a".repeat(40) };
+		const data: BuyData = { nftId: "nft_test123", listingId: "list_abc123", listTxId: "a".repeat(40), txId: "c".repeat(40) };
 		const operation = createBuyOperation(data, "indexer-node");
 		const size = estimateOperationSize(operation);
 
@@ -618,10 +618,13 @@ describe("buildBuy Transfer Generation", () => {
 		currency: "HIVE" as const,
 	};
 
+	const NFT_TX_ID = "c".repeat(40);
+
 	const baseInput = {
 		nftId: NFT_ID,
 		listingId: LISTING_ID,
 		listTxId: LIST_TX_ID,
+		txId: NFT_TX_ID,
 		buyer: BUYER,
 		seller: SELLER,
 		nodeAccount: NODE_ACCOUNT,

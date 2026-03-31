@@ -421,7 +421,7 @@ async function openPack(
 
 When the indexer processes `bulk_distribute`, for each item it:
 
-1. Looks up the seed and validates it exists, is not burned/lent, has available supply, and that `seedTxId` matches the seed's real mint transaction
+1. Looks up the seed and validates it exists, is not burned/lent, has available supply, and that `seedTxId` matches the seed's `tx_id`
 2. Generates deterministic instance IDs: `generateDeterministicInstanceId(seedId, instanceNumber)`
 3. Generates deterministic DNA: `generateDeterministicInstanceDna(seedId, instanceNumber, txId, blockNum)`
 4. Generates deterministic access keys: `generateDeterministicAccessKey(instanceDna, signer, txId)`

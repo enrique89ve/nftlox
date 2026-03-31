@@ -2,7 +2,7 @@ import { z } from "zod";
 import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema } from "../schemas";
 import { formatZodError } from "./helpers";
 import { generateImageHash, generateListingNonce, generateListingId } from "../dna";
-import { PROTOCOL_ID, PROTOCOL_VERSION, ACTION_LIST, ACTION_BUY, ACTION_UNLIST } from "../constants";
+import { PROTOCOL_ID, PROTOCOL_VERSION, ACTION_LIST, ACTION_BUY, ACTION_UNLIST, MEMO_PREFIX_BUY, MEMO_PREFIX_ROYALTY, MEMO_PREFIX_FEE } from "../constants";
 import type { BuildResult, ListingData, UnlistData, ProtocolPayload, HiveOperation, BuyData, HiveTransferOperation } from "../types";
 
 export const listBuilderSchema = listInputSchema.extend({
@@ -166,6 +166,7 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 			nftId: data.nftId,
 			listingId: data.listingId,
 			listTxId: data.listTxId,
+			txId: data.txId,
 			...(data.seedId && { seedId: data.seedId }),
 			...(data.seedTxId && { seedTxId: data.seedTxId }),
 		},
@@ -195,7 +196,7 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 				from: data.buyer,
 				to: data.seller,
 				amount: formatAmount(paymentSplit.sellerAmount),
-				memo: `NFTLox BUY:${data.nftId}`,
+				memo: `${MEMO_PREFIX_BUY}${data.nftId}`,
 			},
 		]);
 	}
@@ -206,7 +207,7 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 				from: data.buyer,
 				to: paymentSplit.royaltyRecipient,
 				amount: formatAmount(paymentSplit.royaltyAmount),
-				memo: `NFTLox ROY:${data.nftId}`,
+				memo: `${MEMO_PREFIX_ROYALTY}${data.nftId}`,
 			},
 		]);
 	}
@@ -217,7 +218,7 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 				from: data.buyer,
 				to: paymentSplit.feeAccount,
 				amount: formatAmount(paymentSplit.feeAmount),
-				memo: `NFTLox FEE:${data.nftId}`,
+				memo: `${MEMO_PREFIX_FEE}${data.nftId}`,
 			},
 		]);
 	}

@@ -4,7 +4,7 @@
  */
 
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { calculatePaymentSplit, validateHiveUsername, type PaymentSplit } from "nftlox-sdk";
+import { calculatePaymentSplit, validateHiveUsername, MEMO_PREFIX_BUY, MEMO_PREFIX_ROYALTY, MEMO_PREFIX_FEE, type PaymentSplit } from "nftlox-sdk";
 
 // ============ TRANSFER VERIFICATION (source-agnostic) ============
 
@@ -13,6 +13,7 @@ export interface TransferRecord {
 	to: string;
 	amount: number;
 	currency: string;
+	memo: string;
 }
 
 export interface VerifyTransfersParams {
@@ -24,6 +25,7 @@ export interface VerifyTransfersParams {
 	royaltyPct: number;
 	royaltyRecipient: string | null;
 	feeAccount: string;
+	nftId: string;
 }
 
 /**
@@ -32,7 +34,7 @@ export interface VerifyTransfersParams {
  * Reusable for multisig pre-signing verification.
  */
 export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
-	const { transfers, buyer, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount } = params;
+	const { transfers, buyer, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, nftId } = params;
 
 	if (transfers.length === 0) {
 		throw new Error("No transfers found. Payment split is required.");
@@ -42,30 +44,31 @@ export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 
 	const AMOUNT_TOLERANCE = 0.0005;
 
-	function expectTransfer(to: string, expectedAmount: number, label: string): void {
+	function expectTransfer(to: string, expectedAmount: number, label: string, expectedMemo: string): void {
 		const found = transfers.find(t =>
 			t.from === buyer &&
 			t.to === to &&
 			t.currency === currency &&
-			Math.abs(t.amount - expectedAmount) < AMOUNT_TOLERANCE
+			Math.abs(t.amount - expectedAmount) < AMOUNT_TOLERANCE &&
+			t.memo === expectedMemo
 		);
 		if (!found) {
 			throw new Error(
-				`Missing ${label}: expected ${expectedAmount} ${currency} from @${buyer} to @${to}`
+				`Missing ${label}: expected ${expectedAmount} ${currency} from @${buyer} to @${to} with memo '${expectedMemo}'`
 			);
 		}
 	}
 
 	if (split.sellerAmount > 0) {
-		expectTransfer(seller, split.sellerAmount, "seller payment");
+		expectTransfer(seller, split.sellerAmount, "seller payment", `${MEMO_PREFIX_BUY}${nftId}`);
 	}
 
 	if (split.royaltyAmount > 0 && split.royaltyRecipient) {
-		expectTransfer(split.royaltyRecipient, split.royaltyAmount, "royalty payment");
+		expectTransfer(split.royaltyRecipient, split.royaltyAmount, "royalty payment", `${MEMO_PREFIX_ROYALTY}${nftId}`);
 	}
 
 	if (split.feeAmount > 0) {
-		expectTransfer(split.feeAccount, split.feeAmount, "protocol fee");
+		expectTransfer(split.feeAccount, split.feeAmount, "protocol fee", `${MEMO_PREFIX_FEE}${nftId}`);
 	}
 
 	return split;
@@ -83,6 +86,7 @@ export function verifyPaymentSplit(params: {
 	royaltyPct: number;
 	royaltyRecipient: string | null;
 	feeAccount: string;
+	nftId: string;
 }): void {
 	const { op, ...rest } = params;
 	verifyTransfers({

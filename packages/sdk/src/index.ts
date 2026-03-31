@@ -50,6 +50,9 @@ export {
 	LISTING_ID_PREFIX,
 	LISTING_NONCE_LENGTH,
 	LISTING_HASH_LENGTH,
+	MEMO_PREFIX_BUY,
+	MEMO_PREFIX_ROYALTY,
+	MEMO_PREFIX_FEE,
 	MULTISIG_EXPIRATION_MS,
 	MAX_MULTISIG_OPERATIONS,
 	ACTION_PACK_CREATE,
@@ -287,6 +290,8 @@ export {
 
 // ============ SCHEMAS ============
 export * from "./schemas";
+export { validateNftOperation } from "./validate";
+export type { NftState, PreValidationResult } from "./validate";
 
 // ============ SCHEMA VALIDATION ============
 export {

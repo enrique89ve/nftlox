@@ -56,6 +56,11 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 	const instanceDna = await generateInstanceDna(id, originDna, edition, imageHash);
 	const uniqueAccessKey = await generateDeterministicAccessKey(instanceDna, op.signer, op.txId);
 
+	const maxReplicas = optionalNumber(d.maxReplicas) ?? 1;
+	if (isSeed && maxReplicas < 1) {
+		throw new Error(`maxReplicas must be >= 1 for seeds, got ${maxReplicas}`);
+	}
+
 	await insertNft({
 		id, collectionId, nftType: isSeed ? "seed" : "instance",
 		edition,
@@ -68,7 +73,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		description: optionalString(metadata.description),
 		imageUrl: optionalString(metadata.imageUrl),
 		imageHash: optionalString(metadata.imageHash),
-		maxReplicas: optionalNumber(d.maxReplicas) ?? 1,
+		maxReplicas,
 		seedId: null, instanceNumber: null, originalId: null,
 		immutableData, immutableDataHash,
 		mutableData, mutableDataHash,

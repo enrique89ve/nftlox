@@ -41,38 +41,32 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	}
 
 	let totalQuantity = 0;
-	const parsedItems: Array<{ seedId: string; quantity: number; seedTxId: string }> = [];
+	const parsedItems: Array<{ seedId: string; quantity: number }> = [];
 	const seenSeeds = new Set<string>();
 
 	for (const item of items) {
 		const raw = item as Record<string, unknown>;
 		const seedId = requireString(raw.seedId, "seedId");
 		const quantity = requireNumber(raw.quantity, "quantity");
-		const seedTxId = requireString(raw.seedTxId, "seedTxId");
 		if (quantity < 1) throw new Error(`Invalid quantity for seed ${seedId}`);
 		if (seenSeeds.has(seedId)) throw new Error(`Duplicate seedId in items: ${seedId}`);
 		seenSeeds.add(seedId);
 		totalQuantity += quantity;
-		parsedItems.push({ seedId, quantity, seedTxId });
+		parsedItems.push({ seedId, quantity });
 	}
 
 	// Track validated schemas to avoid re-validating mutableData per collection
 	const validatedSchemas = new Set<string>();
 
-	for (const { seedId, quantity, seedTxId } of parsedItems) {
+	for (const { seedId, quantity } of parsedItems) {
 		const seed = await getSeedWithSchema(seedId, txn);
 		if (!seed) throw new Error(`Seed not found: ${seedId}`);
 		assertNotBurned(seed, seedId);
 		assertNotLent(seed, seedId);
 		if (seed.nft_type !== "seed") throw new Error(`${seedId} is not a seed`);
-		if (seed.tx_id !== seedTxId) {
-			throw new Error(`seedTxId mismatch for seed ${seedId}`);
-		}
 
-		const isOwner = seed.owner === op.signer;
-		const isCreator = seed.creator === op.signer;
-		if (!isOwner && !isCreator) {
-			throw new Error(`Signer ${op.signer} is neither owner nor collection creator of seed ${seedId}`);
+		if (seed.owner !== op.signer) {
+			throw new Error(`Signer ${op.signer} is not the owner of seed ${seedId}`);
 		}
 
 		if (!validatedSchemas.has(seed.collection_id)) {

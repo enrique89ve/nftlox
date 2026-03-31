@@ -4,7 +4,7 @@ import { getNftForProcessing, updateNftOwner } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
-import { assertTransferable } from "@/utils/status-checks.ts";
+import { assertTransferable, assertSeedNotDistributed } from "@/utils/status-checks.ts";
 import { createLogger } from "@/utils/logger.ts";
 
 const log = createLogger("handler:transfer");
@@ -21,6 +21,7 @@ export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promi
 	if (hadExpiredListing) {
 		log.info("Transfer auto-cleared expired listing", { nftId, block: op.blockNum });
 	}
+	assertSeedNotDistributed(nft, nftId);
 
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 

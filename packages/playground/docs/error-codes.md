@@ -28,7 +28,8 @@ The `MultisigErrorCode` type (defined in `packages/sdk/src/types.ts`) represents
 | `NFT_NOT_TRANSFERABLE` | 400 | The NFT belongs to a collection with `transferable: false`. |
 | `NFT_EXPIRED_LISTING` | 400 | The listing has expired (past its `expiresAt` timestamp). |
 | `CANNOT_BUY_OWN` | 400 | The buyer is the same account as the seller. |
-| `INVALID_PAYMENT_SPLIT` | 400 | The payment amounts in the transaction do not match the expected seller/royalty/fee split. |
+| `SEED_HAS_INSTANCES` | 400 | The NFT is a seed with distributed instances — sale blocked. Seeds with `distributed > 0` cannot change ownership. |
+| `INVALID_PAYMENT_SPLIT` | 400 | The payment amounts or memo format in the transaction do not match the expected split. Memos must follow strict format: `NFTLox BUY:{nftId}`, `NFTLox ROY:{nftId}`, `NFTLox FEE:{nftId}`. |
 | `INVALID_PROTOCOL_PAYLOAD` | 400 | The `custom_json` protocol payload embedded in the transaction is malformed or invalid. |
 | `NODE_ACCOUNT_MISMATCH` | 400 | The transaction does not reference the correct node account for co-signing. |
 | `MISSING_BUYER_AUTH` | 400 | The buyer's authorization (signature placeholder) is missing from the transaction. |
@@ -48,7 +49,10 @@ Errors encountered during normal protocol operations (handler validation, Build 
 | `Supply limit reached for seed <seedId>: N/N distributed` | All instances of a seed have been distributed; `bulk_distribute` rejects the entire operation (not just the exhausted seed). | Remove exhausted seeds from your drop table. Monitor supply levels proactively. Optionally mint a new seed with additional supply. |
 | `Seed not found` | The `seedId` does not exist or has not been indexed yet. | Verify the `seedId` is correct. If recently minted, wait for the indexer to catch up. |
 | `Seed is burned` | The seed NFT was permanently destroyed via `burn`. | Remove the seed from your drop table entirely. |
-| `Signer is not owner of seed` | The account signing the `bulk_distribute` operation is not the current owner of the seed. | Use the seed owner's posting key. If ownership was transferred, only the new owner can distribute. |
+| `Signer is not the owner of seed` | The account signing the `bulk_distribute` operation is not the current owner of the seed. Only the owner can distribute — collection creators no longer have implicit distribution rights. | Use the seed owner's posting key. If ownership was transferred, only the new owner can distribute. |
+| `Seed has N distributed instance(s) — ownership transfer blocked` | A seed with distributed instances cannot be transferred, listed, sold, or delegated. Following AtomicAssets pattern. | Seeds with `distributed > 0` are permanently locked to their owner. Only seeds with `distributed === 0` can be transferred. |
+| `Seeds cannot be delegated` | Seeds cannot be approved (`nft_approve`) or lent (`nft_lend`) regardless of distribution count. | Use instances for delegation, not seeds. |
+| `maxReplicas must be >= 1 for seeds` | Seeds require at least 1 max replica at mint time. | Set `maxReplicas` to a positive integer when minting seeds. |
 | `Payload too large` | The `custom_json` payload exceeds `SAFE_PAYLOAD_MAX_BYTES` (7,372 bytes). | Split into multiple operations. For `bulk_distribute`, reduce the number of items per call. |
 
 ### Schema and Data Errors

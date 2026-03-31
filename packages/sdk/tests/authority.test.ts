@@ -92,7 +92,7 @@ describe("Active key operations use required_auths", () => {
 
 	test("buy (node account)", () => {
 		const op = createBuyOperation(
-			{ nftId: "nft_1", listingId: "list_1", listTxId: "a".repeat(40) },
+			{ nftId: "nft_1", listingId: "list_1", listTxId: "a".repeat(40), txId: "b".repeat(40) },
 			"indexer-node",
 		);
 		expect(op[1].required_auths).toEqual(["indexer-node"]);

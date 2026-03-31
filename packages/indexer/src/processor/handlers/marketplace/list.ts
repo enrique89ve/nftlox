@@ -3,7 +3,7 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftListing, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireHiveAmount, optionalNumber, optionalString } from "@/utils/validation.ts";
-import { assertNotBurned, assertNotLent, isListingExpired } from "@/utils/status-checks.ts";
+import { assertNotBurned, assertNotLent, assertSeedNotDistributed, isListingExpired } from "@/utils/status-checks.ts";
 import { generateListingId, LISTING_ID_PREFIX } from "nftlox-sdk";
 
 export async function handleList(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -23,6 +23,7 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<v
 
 	assertNotBurned(nft, nftId);
 	assertNotLent(nft, nftId);
+	assertSeedNotDistributed(nft, nftId);
 
 	const rules = await getCollectionRules(nft.collection_id, txn);
 	if (rules && !rules.transferable) {

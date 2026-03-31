@@ -3,7 +3,7 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing } from "@/db/queries/nfts.ts";
 import { upsertNftAllowance, deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireBoolean, requireUsername } from "@/utils/validation.ts";
-import { assertNotBurned, assertNotLent } from "@/utils/status-checks.ts";
+import { assertNotBurned, assertNotLent, assertNotSeed } from "@/utils/status-checks.ts";
 
 export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const spender = requireUsername(op.data.spender, "spender");
@@ -17,6 +17,7 @@ export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Pro
 
 	assertNotBurned(nft, instanceId);
 	assertNotLent(nft, instanceId);
+	assertNotSeed(nft, instanceId);
 
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${instanceId}`);
 
