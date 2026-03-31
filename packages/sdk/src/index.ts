@@ -352,6 +352,9 @@ export {
 	type DeterministicDerivationResult,
 	type PackOpenVerifyParams,
 	type OnChainVerifyParams,
+	type ListingPriceVerifyParams,
+	type ListingPriceVerificationResult,
+	type OnChainPrice,
 	// Constants
 	DEFAULT_HIVE_ENDPOINTS,
 	DEFAULT_HIVE_TIMEOUT_MS,
@@ -369,6 +372,7 @@ export {
 	verifyPackOpen,
 	verifyOperationOnChain,
 	verifyNftOwnership,
+	verifyListingPrice,
 	// Auditor
 	createAuditorConfig,
 	fetchRecentPackOpenEvents,

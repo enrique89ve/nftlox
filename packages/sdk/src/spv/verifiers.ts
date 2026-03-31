@@ -17,6 +17,8 @@ import {
 	ACTION_REPLICATE,
 	ACTION_NFT_TRANSFER_FROM,
 	ACTION_SET_DATA,
+	SUPPORTED_CURRENCIES,
+	type SupportedCurrency,
 } from "../constants.ts";
 import { buildRngSeed, selectRandomSample } from "./constants.ts";
 import {
@@ -32,6 +34,9 @@ import type {
 	OwnershipCheckResult,
 	ReportedMintedNft,
 	SpvMismatch,
+	ListingPriceVerifyParams,
+	ListingPriceVerificationResult,
+	OnChainPrice,
 } from "./types.ts";
 
 // ============ PURE VERIFIERS (no network) ============
@@ -573,6 +578,149 @@ function buildOwnershipResult(
 		durationMs: Date.now() - startTime,
 		message: partial.message,
 	};
+}
+
+// ============ LISTING PRICE VERIFICATION ============
+
+/** Hive amounts use 3 decimal places — tolerance for floating-point comparison */
+const HIVE_AMOUNT_TOLERANCE = 0.0005;
+
+const SUPPORTED_CURRENCIES_SET = new Set<string>(SUPPORTED_CURRENCIES);
+
+function isSupportedCurrency(value: string): value is SupportedCurrency {
+	return SUPPORTED_CURRENCIES_SET.has(value.toUpperCase());
+}
+
+/**
+ * Runtime-validates the on-chain price object from a list payload.
+ * Returns null if the data is missing or malformed.
+ */
+function parseOnChainPrice(raw: unknown): OnChainPrice | null {
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+	const obj = raw as Record<string, unknown>;
+	if (typeof obj.amount !== "string" || typeof obj.currency !== "string") return null;
+	if (!isSupportedCurrency(obj.currency)) return null;
+	const parsed = parseFloat(obj.amount);
+	if (Number.isNaN(parsed) || parsed < 0) return null;
+	return { amount: obj.amount, currency: obj.currency.toUpperCase() as SupportedCurrency };
+}
+
+type BuildListingPartial = {
+	readonly blockNum: number;
+	readonly onChainPrice?: OnChainPrice | null;
+	readonly onChainSeller?: string | null;
+	readonly onChainNftId?: string | null;
+	readonly message: string;
+};
+
+function buildListingResult(
+	status: ListingPriceVerificationResult["status"],
+	listTxId: string,
+	partial: BuildListingPartial,
+): ListingPriceVerificationResult {
+	return {
+		status,
+		listTxId,
+		blockNum: partial.blockNum,
+		onChainPrice: partial.onChainPrice ?? null,
+		onChainSeller: partial.onChainSeller ?? null,
+		onChainNftId: partial.onChainNftId ?? null,
+		message: partial.message,
+	};
+}
+
+/**
+ * Verifies that the listing price reported by a node matches the on-chain listing tx.
+ * Protects the buyer against a malicious node inflating the price.
+ *
+ * Flow: reads the list tx directly from Hive L1 (public RPC, not the node),
+ * extracts price/seller/nftId from the custom_json payload, and compares.
+ */
+export async function verifyListingPrice(
+	params: ListingPriceVerifyParams,
+): Promise<ListingPriceVerificationResult> {
+	try {
+		const tx = await fetchTransaction(params.l1Config, params.listTxId);
+		const l1Op = parseNftloxOperation(tx);
+
+		if (!l1Op) {
+			return buildListingResult("not_found", params.listTxId, {
+				blockNum: tx.block_num,
+				message: "No NFTLox operation found in listing transaction",
+			});
+		}
+
+		if (l1Op.action !== ACTION_LIST) {
+			return buildListingResult("mismatch", params.listTxId, {
+				blockNum: tx.block_num,
+				onChainSeller: l1Op.signer,
+				message: `Expected 'list' action, found '${l1Op.action}'`,
+			});
+		}
+
+		const onChainPrice = parseOnChainPrice(l1Op.data.price);
+		const onChainNftId = typeof l1Op.data.nftId === "string" ? l1Op.data.nftId : null;
+		const onChainSeller = l1Op.signer;
+
+		if (!onChainPrice || !onChainNftId) {
+			return buildListingResult("error", params.listTxId, {
+				blockNum: tx.block_num,
+				onChainSeller,
+				onChainNftId,
+				message: "On-chain listing payload missing price or nftId",
+			});
+		}
+
+		const mismatches: string[] = [];
+
+		const onChainAmount = parseFloat(onChainPrice.amount);
+		if (Math.abs(onChainAmount - params.expectedPrice.amount) > HIVE_AMOUNT_TOLERANCE) {
+			mismatches.push(
+				`price: on-chain ${onChainPrice.amount} ${onChainPrice.currency}, expected ${params.expectedPrice.amount} ${params.expectedPrice.currency}`,
+			);
+		}
+
+		if (onChainPrice.currency !== params.expectedPrice.currency.toUpperCase()) {
+			mismatches.push(
+				`currency: on-chain ${onChainPrice.currency}, expected ${params.expectedPrice.currency}`,
+			);
+		}
+
+		if (onChainSeller !== params.expectedSeller) {
+			mismatches.push(
+				`seller: on-chain ${onChainSeller}, expected ${params.expectedSeller}`,
+			);
+		}
+
+		if (onChainNftId !== params.expectedNftId) {
+			mismatches.push(
+				`nftId: on-chain ${onChainNftId}, expected ${params.expectedNftId}`,
+			);
+		}
+
+		if (mismatches.length > 0) {
+			return buildListingResult("mismatch", params.listTxId, {
+				blockNum: tx.block_num,
+				onChainPrice,
+				onChainSeller,
+				onChainNftId,
+				message: `Listing mismatch: ${mismatches.join("; ")}`,
+			});
+		}
+
+		return buildListingResult("verified", params.listTxId, {
+			blockNum: tx.block_num,
+			onChainPrice,
+			onChainSeller,
+			onChainNftId,
+			message: "Listing price verified against L1",
+		});
+	} catch (err) {
+		return buildListingResult("error", params.listTxId, {
+			blockNum: 0,
+			message: err instanceof Error ? err.message : String(err),
+		});
+	}
 }
 
 // ============ HELPERS ============

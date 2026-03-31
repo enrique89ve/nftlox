@@ -12,6 +12,9 @@ export type {
 	OwnershipVerifyParams,
 	OwnershipVerificationResult,
 	OwnershipCheckResult,
+	ListingPriceVerifyParams,
+	ListingPriceVerificationResult,
+	OnChainPrice,
 	AuditorConfig,
 	AuditReport,
 } from "./types.ts";
@@ -37,6 +40,7 @@ export {
 	verifyPackOpen,
 	verifyOperationOnChain,
 	verifyNftOwnership,
+	verifyListingPrice,
 	type DropTableReplayParams,
 	type DeterministicDerivationParams,
 	type DeterministicDerivationResult,

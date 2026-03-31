@@ -1,6 +1,8 @@
 // SPV "Boleto Suizo" - Types
 // Trustless verification system for NFTLox pack operations
 
+import type { SupportedCurrency } from "../constants.ts";
+
 // ============ L1 CLIENT CONFIG ============
 
 export interface HiveL1Config {
@@ -105,6 +107,28 @@ export interface OwnershipVerificationResult {
 	durationMs: number;
 	message: string;
 }
+
+// ============ LISTING PRICE VERIFICATION ============
+
+export type OnChainPrice = { readonly amount: string; readonly currency: SupportedCurrency };
+
+export type ListingPriceVerifyParams = {
+	readonly listTxId: string;
+	readonly expectedPrice: { readonly amount: number; readonly currency: SupportedCurrency };
+	readonly expectedSeller: string;
+	readonly expectedNftId: string;
+	readonly l1Config: HiveL1Config;
+};
+
+export type ListingPriceVerificationResult = {
+	readonly status: VerificationStatus;
+	readonly listTxId: string;
+	readonly blockNum: number;
+	readonly onChainPrice: OnChainPrice | null;
+	readonly onChainSeller: string | null;
+	readonly onChainNftId: string | null;
+	readonly message: string;
+};
 
 // ============ AUDITOR ============
 
