@@ -574,6 +574,10 @@ Multisig transactions must expire within 30-120 seconds (`MIN_EXPIRATION_MS` / `
 - **State drift** -- the NFT state cannot change significantly within the window
 - **Replay attacks** -- expired transactions are rejected by the Hive blockchain
 
+### Persistent DB lock
+
+Beyond transaction expiration, the indexer uses a persistent lock stored in the `multisig_locks` table to prevent concurrent purchases of the same NFT. This lock is DB-backed rather than in-memory, so it works correctly even when multiple API instances run behind a load balancer. The lock is acquired when the node co-signs and released when it expires or the purchase completes.
+
 ---
 
 ## Querying Marketplace Listings

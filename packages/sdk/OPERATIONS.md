@@ -766,7 +766,7 @@ The SDK's `calculatePaymentSplit()` function is reused in the indexer to verify 
 If royaltyRecipient or feeAccount equals the seller, those amounts merge into the seller payment. Marketplace fees are handled off-chain by the marketplace frontend.
 
 ### Multisig (Buy)
-The `buy` operation is the only one where the node co-signs. The buyer submits transfers (HIVE/HBD) and the node validates and co-signs the `custom_json`. If the node rejects, the funds never leave the buyer's account. The multisig lock window is 125 seconds (`MULTISIG_EXPIRATION_MS = 125_000`). The transaction bundle includes up to 4 operations (`MAX_MULTISIG_OPERATIONS`): seller payment + royalty payment + fee payment + custom_json.
+The `buy` operation is the only one where the node co-signs. The buyer submits transfers (HIVE/HBD) and the node validates and co-signs the `custom_json`. If the node rejects, the funds never leave the buyer's account. The multisig lock is DB-backed (table `multisig_locks`) with a configurable expiration, preventing concurrent purchases of the same NFT even across multiple API instances. The transaction bundle includes up to 4 operations (`MAX_MULTISIG_OPERATIONS`): seller payment + royalty payment + fee payment + custom_json.
 
 ### Data System (v0.4.1)
 The protocol manages three data layers per NFT:

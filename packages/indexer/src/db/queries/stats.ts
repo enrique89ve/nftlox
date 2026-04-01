@@ -4,17 +4,16 @@ export async function getProtocolStats() {
 	const [nftStats] = await sql`
 		SELECT
 			(SELECT COUNT(*) FROM collections WHERE status = 'active') AS total_collections,
-			COUNT(*) AS total_nfts,
-			COUNT(*) FILTER (WHERE nft_type = 'seed') AS total_seeds,
-			COUNT(*) FILTER (WHERE nft_type = 'instance') AS total_instances,
-			COUNT(*) FILTER (WHERE nft_type = 'replica') AS total_replicas,
-			COUNT(*) FILTER (WHERE status = 'listed') AS total_listed,
-			COUNT(*) FILTER (WHERE status = 'burned') AS total_burned,
-			COUNT(DISTINCT owner) FILTER (WHERE status != 'burned') AS unique_owners,
+			COALESCE((SELECT SUM(total) FROM collection_stats), 0) AS total_nfts,
+			COALESCE((SELECT SUM(seeds) FROM collection_stats), 0) AS total_seeds,
+			COALESCE((SELECT SUM(instances) FROM collection_stats), 0) AS total_instances,
+			COALESCE((SELECT SUM(replicas) FROM collection_stats), 0) AS total_replicas,
+			COALESCE((SELECT SUM(listed) FROM collection_stats), 0) AS total_listed,
+			COALESCE((SELECT SUM(burned) FROM collection_stats), 0) AS total_burned,
+			(SELECT COUNT(DISTINCT owner) FROM nfts WHERE status != 'burned') AS unique_owners,
 			(SELECT COUNT(*) FROM invalid_operations) AS invalid_ops,
 			(SELECT COUNT(*) FROM packs) AS total_packs,
 			(SELECT COUNT(*) FROM schema_versions) AS total_schema_versions
-		FROM nfts
 	`;
 
 	const salesStats = await sql`

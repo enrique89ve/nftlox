@@ -10,7 +10,7 @@ When the indexer processes a protocol operation and validation fails, the operat
 
 The action router (`processor/action-router.ts`) dispatches each operation to its handler. Every handler call is wrapped in try/catch -- errors are logged and the operation is marked invalid, but the sync continues.
 
-**Orphaned buy detection:** If a `buy` operation fails validation but the associated HIVE transfers were already broadcast, the indexer flags these for manual review.
+**Orphaned buy detection:** If a `buy` operation fails validation but the associated HIVE transfers were already broadcast, the indexer records them in the `orphaned_buys` table (with a UNIQUE constraint on `tx_id` to prevent duplicates) for manual review.
 
 ---
 
@@ -22,7 +22,7 @@ The `MultisigErrorCode` type (defined in `packages/sdk/src/types.ts`) represents
 |------|-------------|-------------|
 | `MULTISIG_DISABLED` | 503 | The indexer node does not have multisig enabled (no `ACTIVE_KEY` configured). |
 | `RATE_LIMITED` | 429 | Too many multisig requests from this buyer within the rate limit window. |
-| `NFT_LOCKED` | 409 | The NFT is currently being purchased by another buyer (concurrent lock). |
+| `NFT_LOCKED` | 409 | The NFT is currently being purchased by another buyer (DB-backed lock via `multisig_locks` table with expiration). |
 | `NFT_NOT_FOUND` | 400 | The specified NFT does not exist in the indexer database. |
 | `NFT_NOT_LISTED` | 400 | The NFT is not currently listed for sale on the marketplace. |
 | `NFT_NOT_TRANSFERABLE` | 400 | The NFT belongs to a collection with `transferable: false`. |

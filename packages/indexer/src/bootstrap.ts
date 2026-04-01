@@ -61,6 +61,7 @@ const DATA_TABLES = [
 	"nft_loans", "nft_allowances", "collection_allowances",
 	"pack_allowances", "user_pack_balances", "data_operators",
 	"orphaned_buys", "invalid_operations", "owner_nft_counts",
+	"collection_stats",
 	"nfts", "packs", "collections",
 ] as const;
 

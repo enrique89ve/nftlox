@@ -89,6 +89,7 @@ async function cleanDb() {
 	await sql`DELETE FROM user_pack_balances`;
 	await sql`DELETE FROM packs`;
 	await sql`DELETE FROM nfts`;
+	await sql`DELETE FROM collection_stats`;
 	await sql`DELETE FROM collections`;
 }
 
@@ -204,6 +205,7 @@ describe("Handlers (integration)", () => {
 			DROP TABLE IF EXISTS nft_loans, nft_allowances, collection_allowances,
 				pack_allowances, user_pack_balances, data_operators,
 				orphaned_buys, invalid_operations, owner_nft_counts,
+				collection_stats,
 				nfts, packs, collections, sync_state CASCADE
 		`);
 		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status, pack_status CASCADE");

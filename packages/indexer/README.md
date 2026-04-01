@@ -300,6 +300,8 @@ INDEXER_ROLE=sync bun run start
 INDEXER_ROLE=api bun run start
 ```
 
+Sync instances use `pg_advisory_lock` to prevent double-processing of the same block range when multiple sync processes run against the same database.
+
 ### Component Overview
 
 ```
@@ -327,7 +329,8 @@ Hive Blockchain
 |  PostgreSQL       |  Auto-reconnect with exponential backoff
 |  (postgres.js)    |  keep_alive: 60s, max_lifetime: 30min
 |                   |  collections, nfts, packs, nft_loans, sales,
-|                   |  schema_versions, owner_nft_counts, invalid_operations, sync_state
+|                   |  schema_versions, owner_nft_counts, invalid_operations, sync_state,
+|                   |  multisig_locks, orphaned_buys
 +--------+----------+
          |
          v

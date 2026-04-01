@@ -91,11 +91,10 @@ export async function getCollectionRules(
 		SELECT c.id, c.creator, c.total_potential, c.status, c.transferable,
 			c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient,
 			c.schema, c.schema_version,
-			COALESCE(COUNT(n.id) FILTER (WHERE n.nft_type = 'seed'), 0)::int AS seed_count
+			COALESCE(cs.seeds, 0)::int AS seed_count
 		FROM collections c
-		LEFT JOIN nfts n ON n.collection_id = c.id
+		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
 		WHERE c.id = ${id}
-		GROUP BY c.id
 	`;
 	return row ?? null;
 }
@@ -109,9 +108,10 @@ export async function getCollectionArchiveSnapshot(
 			c.id,
 			c.creator,
 			c.status,
-			COALESCE((SELECT COUNT(*)::int FROM nfts n WHERE n.collection_id = c.id), 0) AS nft_count,
+			COALESCE(cs.total, 0)::int AS nft_count,
 			COALESCE((SELECT COUNT(*)::int FROM packs p WHERE p.collection_id = c.id), 0) AS pack_count
 		FROM collections c
+		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
 		WHERE c.id = ${id}
 	`;
 	return row ?? null;
@@ -156,12 +156,11 @@ export async function listCollections(limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
 	return sql`
 		SELECT c.*,
-			COALESCE(COUNT(*) FILTER (WHERE n.nft_type = 'seed'), 0) AS seed_count,
-			COALESCE(COUNT(*) FILTER (WHERE n.nft_type = 'instance'), 0) AS instance_count
+			COALESCE(cs.seeds, 0) AS seed_count,
+			COALESCE(cs.instances, 0) AS instance_count
 		FROM collections c
-		LEFT JOIN nfts n ON n.collection_id = c.id
+		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
 		WHERE c.status = ${COLLECTION_STATUS_ACTIVE}
-		GROUP BY c.id
 		ORDER BY c.created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
@@ -171,12 +170,11 @@ export async function getCollectionsByCreator(creator: string, limit = 50, offse
 	const safeLimit = clampLimit(limit);
 	return sql`
 		SELECT c.*,
-			COALESCE(COUNT(*) FILTER (WHERE n.nft_type = 'seed'), 0) AS seed_count,
-			COALESCE(COUNT(*) FILTER (WHERE n.nft_type = 'instance'), 0) AS instance_count
+			COALESCE(cs.seeds, 0) AS seed_count,
+			COALESCE(cs.instances, 0) AS instance_count
 		FROM collections c
-		LEFT JOIN nfts n ON n.collection_id = c.id
+		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
 		WHERE c.creator = ${creator} AND c.status = ${COLLECTION_STATUS_ACTIVE}
-		GROUP BY c.id
 		ORDER BY c.created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
@@ -185,15 +183,18 @@ export async function getCollectionsByCreator(creator: string, limit = 50, offse
 export async function getCollectionStats(collectionId: string) {
 	const [stats] = await sql`
 		SELECT
-			COUNT(*) FILTER (WHERE nft_type = 'seed') AS total_seeds,
-			COUNT(*) FILTER (WHERE nft_type = 'instance') AS total_instances,
-			COUNT(*) FILTER (WHERE nft_type = 'replica') AS total_replicas,
-			COUNT(*) FILTER (WHERE status = 'listed') AS total_listed,
-			COUNT(*) FILTER (WHERE status = 'burned') AS total_burned,
-			COUNT(DISTINCT owner) AS unique_owners,
-			MIN(listing_price) FILTER (WHERE status = 'listed') AS floor_price
-		FROM nfts
-		WHERE collection_id = ${collectionId}
+			COALESCE(cs.seeds, 0) AS total_seeds,
+			COALESCE(cs.instances, 0) AS total_instances,
+			COALESCE(cs.replicas, 0) AS total_replicas,
+			COALESCE(cs.listed, 0) AS total_listed,
+			COALESCE(cs.burned, 0) AS total_burned,
+			COALESCE((SELECT COUNT(DISTINCT owner) FROM nfts WHERE collection_id = ${collectionId} AND status != 'burned'), 0) AS unique_owners,
+			(SELECT MIN(listing_price) FROM nfts WHERE collection_id = ${collectionId} AND status = 'listed') AS floor_price
+		FROM collection_stats cs
+		WHERE cs.collection_id = ${collectionId}
 	`;
-	return stats;
+	return stats ?? {
+		total_seeds: 0, total_instances: 0, total_replicas: 0,
+		total_listed: 0, total_burned: 0, unique_owners: 0, floor_price: null,
+	};
 }

@@ -392,6 +392,35 @@ export async function repairOwnerNftCounts(txn: Queryable = sql): Promise<number
 	return result.count;
 }
 
+export async function repairCollectionStats(txn: Queryable = sql): Promise<number> {
+	const result = await txn`
+		WITH expected AS (
+			SELECT collection_id,
+				COUNT(*)::int AS total,
+				COUNT(*) FILTER (WHERE nft_type = 'seed')::int AS seeds,
+				COUNT(*) FILTER (WHERE nft_type = 'instance')::int AS instances,
+				COUNT(*) FILTER (WHERE nft_type = 'replica')::int AS replicas,
+				COUNT(*) FILTER (WHERE status = 'listed')::int AS listed,
+				COUNT(*) FILTER (WHERE status = 'burned')::int AS burned
+			FROM nfts
+			GROUP BY collection_id
+		)
+		INSERT INTO collection_stats (collection_id, total, seeds, instances, replicas, listed, burned)
+		SELECT * FROM expected
+		ON CONFLICT (collection_id) DO UPDATE SET
+			total = EXCLUDED.total, seeds = EXCLUDED.seeds,
+			instances = EXCLUDED.instances, replicas = EXCLUDED.replicas,
+			listed = EXCLUDED.listed, burned = EXCLUDED.burned
+		WHERE collection_stats.total != EXCLUDED.total
+			OR collection_stats.seeds != EXCLUDED.seeds
+			OR collection_stats.instances != EXCLUDED.instances
+			OR collection_stats.replicas != EXCLUDED.replicas
+			OR collection_stats.listed != EXCLUDED.listed
+			OR collection_stats.burned != EXCLUDED.burned
+	`;
+	return result.count;
+}
+
 export type ListSort = "price_asc" | "price_desc" | "recent";
 
 export type NftListQuery =
