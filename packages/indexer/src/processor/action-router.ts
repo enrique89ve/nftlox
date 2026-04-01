@@ -9,7 +9,6 @@ import {
 	ACTION_MINT,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_TRANSFER,
-	ACTION_BURN,
 	ACTION_REPLICATE,
 	ACTION_SET_DATA,
 	ACTION_LIST,
@@ -36,7 +35,6 @@ import { handleCreateCollection } from "./handlers/core/create-collection.ts";
 import { handleMint } from "./handlers/core/mint.ts";
 import { handleBulkDistribute } from "./handlers/core/bulk-distribute.ts";
 import { handleTransfer } from "./handlers/core/transfer.ts";
-import { handleBurn } from "./handlers/core/burn.ts";
 import { handleReplicate } from "./handlers/core/replicate.ts";
 import { handleSetData } from "./handlers/core/set-data.ts";
 import { handleSetOwnerData } from "./handlers/core/set-owner-data.ts";
@@ -78,7 +76,6 @@ const log = createLogger("router");
 const ACTIVE_AUTH_ACTIONS = new Set<string>([
 	ACTION_BUY,
 	ACTION_TRANSFER,
-	ACTION_BURN,
 	ACTION_LIST,
 	ACTION_PACK_BUY,
 	ACTION_PACK_TRANSFER,
@@ -96,7 +93,6 @@ const handlers: Record<string, Handler> = {
 	[ACTION_MINT]: handleMint,
 	[ACTION_BULK_DISTRIBUTE]: handleBulkDistribute,
 	[ACTION_TRANSFER]: handleTransfer,
-	[ACTION_BURN]: handleBurn,
 	[ACTION_REPLICATE]: handleReplicate,
 	[ACTION_SET_DATA]: handleSetData,
 	[ACTION_SET_OWNER_DATA]: handleSetOwnerData,

@@ -1,9 +1,10 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { insertCollection, collectionExists } from "@/db/queries/collections.ts";
+import { insertCollection, collectionExists, symbolTakenByCreator } from "@/db/queries/collections.ts";
 import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
 import {
 	requireString,
+	requireSymbol,
 	requireNumber,
 	requireObject,
 	requireBoolean,
@@ -23,7 +24,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const d = op.data;
 	const payloadId = requireString(d.id, "id");
 	const name = requireString(d.name, "name");
-	const symbol = requireString(d.symbol, "symbol");
+	const symbol = requireSymbol(d.symbol, "symbol");
 
 	// C4: Recalculate canonical collectionId and reject mismatch
 	const canonicalId = await generateDeterministicCollectionId(op.signer, name, symbol);
@@ -34,6 +35,10 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	}
 
 	if (await collectionExists(canonicalId, txn)) return;
+
+	if (await symbolTakenByCreator(op.signer, symbol, txn)) {
+		throw new Error(`Symbol ${symbol} already used by @${op.signer}`);
+	}
 
 	// H3: Require metadata with mandatory fields
 	const metadata = requireObject(d.metadata, "metadata");

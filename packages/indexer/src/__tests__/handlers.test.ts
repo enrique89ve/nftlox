@@ -6,7 +6,6 @@ import { handleArchiveCollection } from "@/processor/handlers/core/archive-colle
 import { handleMint } from "@/processor/handlers/core/mint.ts";
 import { handleBulkDistribute } from "@/processor/handlers/core/bulk-distribute.ts";
 import { handleTransfer } from "@/processor/handlers/core/transfer.ts";
-import { handleBurn } from "@/processor/handlers/core/burn.ts";
 import { handleList } from "@/processor/handlers/marketplace/list.ts";
 import { handleUnlist } from "@/processor/handlers/marketplace/unlist.ts";
 import { handleBuy } from "@/processor/handlers/marketplace/buy.ts";
@@ -29,7 +28,6 @@ import {
 	ACTION_MINT,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_TRANSFER,
-	ACTION_BURN,
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
@@ -1064,7 +1062,7 @@ describe("Handlers (integration)", () => {
 		test("rejects transfer of burned NFT", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleBurn(makeOp(ACTION_BURN, { nftId: "seed_test1" }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
 
 			const op = makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "bob" });
 			await expect(handleTransfer(op, sql)).rejects.toThrow("burned");
@@ -1137,7 +1135,7 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 
-			await handleBurn(makeOp(ACTION_BURN, { nftId: "seed_test1" }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
 
 			const [nft] = await sql`SELECT status FROM nfts WHERE id = 'seed_test1'`;
 			expect(nft!.status).toBe("burned");
@@ -1146,15 +1144,15 @@ describe("Handlers (integration)", () => {
 		test("rejects double burn", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleBurn(makeOp(ACTION_BURN, { nftId: "seed_test1" }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
 			await expect(
-				handleBurn(makeOp(ACTION_BURN, { nftId: "seed_test1" }), sql),
+				handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql),
 			).rejects.toThrow("NFT is burned");
 		});
 
 		test("rejects burn of non-existent NFT", async () => {
 			await expect(
-				handleBurn(makeOp(ACTION_BURN, { nftId: "nft_ghost" }), sql),
+				handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "nft_ghost", to: "null" }), sql),
 			).rejects.toThrow("not found");
 		});
 
@@ -1169,7 +1167,7 @@ describe("Handlers (integration)", () => {
 			}), sql);
 
 			await expect(
-				handleBurn(makeOp(ACTION_BURN, { nftId: "seed_noburn1" }), sql),
+				handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_noburn1", to: "null" }), sql),
 			).rejects.toThrow("does not allow burning");
 		});
 
@@ -1180,7 +1178,7 @@ describe("Handlers (integration)", () => {
 			await handleNftLend(makeOp(ACTION_NFT_LEND, { instanceId: instId, borrower: "bob" }), sql);
 
 			await expect(
-				handleBurn(makeOp(ACTION_BURN, { nftId: instId }), sql),
+				handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "null" }), sql),
 			).rejects.toThrow("lent");
 		});
 
@@ -1191,7 +1189,7 @@ describe("Handlers (integration)", () => {
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			await expect(
-				handleBurn(makeOp(ACTION_BURN, { nftId: "seed_test1" }), sql),
+				handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql),
 			).rejects.toThrow("listed");
 		});
 	});
@@ -1286,7 +1284,7 @@ describe("Handlers (integration)", () => {
 		test("rejects list of burned NFT", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleBurn(makeOp(ACTION_BURN, { nftId: "seed_test1" }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
 
 			const listData = await makeListData({ nftId: "seed_test1" });
 			await expect(
@@ -1500,7 +1498,7 @@ describe("Handlers (integration)", () => {
 			}), sql);
 
 			await expect(
-				handleBurn(makeOp(ACTION_BURN, { nftId: instId }), sql),
+				handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "null" }), sql),
 			).rejects.toThrow("lent");
 		});
 
@@ -1524,7 +1522,7 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
-			await handleBurn(makeOp(ACTION_BURN, { nftId: instId }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "null" }), sql);
 
 			await expect(
 				handleNftLend(makeOp(ACTION_NFT_LEND, { instanceId: instId, borrower: "bob" }), sql),
@@ -2098,7 +2096,7 @@ describe("Handlers (integration)", () => {
 			await handleNftApprove(makeOp(ACTION_NFT_APPROVE, {
 				spender: "gameshop", instanceId: instId, approved: true,
 			}), sql);
-			await handleBurn(makeOp(ACTION_BURN, { nftId: instId }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "null" }), sql);
 
 			await expect(
 				handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
@@ -2341,7 +2339,7 @@ describe("Handlers (integration)", () => {
 		test("rejects buy burned NFT", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleBurn(makeOp(ACTION_BURN, { nftId: "seed_test1" }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
 
 			const buyOp = makeBuyOp("seed_test1", "list_fake", "tx_fake", "bob", "alice");
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("burned");
@@ -2440,7 +2438,7 @@ describe("Handlers (integration)", () => {
 				spender: "gameshop", instanceId: instId, approved: true,
 			}), sql);
 
-			await handleBurn(makeOp(ACTION_BURN, { nftId: instId }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "null" }), sql);
 
 			const [after] = await sql`SELECT * FROM nft_allowances WHERE nft_id = ${instId}`;
 			expect(after).toBeUndefined();

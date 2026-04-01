@@ -17,7 +17,7 @@
 
 import type { ProtocolAction } from "./constants";
 import {
-	ACTION_TRANSFER, ACTION_LIST, ACTION_BUY, ACTION_BURN,
+	ACTION_TRANSFER, ACTION_LIST, ACTION_BUY,
 	ACTION_BULK_DISTRIBUTE, ACTION_NFT_APPROVE, ACTION_NFT_TRANSFER_FROM,
 	ACTION_NFT_LEND, ACTION_UNLIST,
 } from "./constants";
@@ -41,7 +41,7 @@ export type PreValidationResult = Readonly<{
 
 /** Actions where signer must be the NFT owner. */
 const OWNER_REQUIRED: ReadonlySet<string> = new Set([
-	ACTION_TRANSFER, ACTION_LIST, ACTION_BURN, ACTION_BULK_DISTRIBUTE,
+	ACTION_TRANSFER, ACTION_LIST, ACTION_BULK_DISTRIBUTE,
 	ACTION_NFT_LEND, ACTION_NFT_APPROVE, ACTION_UNLIST,
 ]);
 
@@ -89,9 +89,6 @@ export function validateNftOperation(
 	}
 
 	if (nft.status === "listed") {
-		if (action === ACTION_BURN) {
-			errors.push(`NFT is listed and must be unlisted first: ${nftId}`);
-		}
 		if (action === ACTION_LIST) {
 			errors.push(`NFT is already listed: ${nftId}`);
 		}
@@ -129,9 +126,6 @@ export function validateNftOperation(
 		errors.push(`Collection is not transferable`);
 	}
 
-	if (action === ACTION_BURN && nft.burnable === false) {
-		errors.push(`Collection is not burnable`);
-	}
 
 	// --- Buy-specific ---
 

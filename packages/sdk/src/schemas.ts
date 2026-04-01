@@ -67,7 +67,7 @@ export const symbolSchema = z
 	.toUpperCase()
 	.min(MIN_SYMBOL_LENGTH, `Symbol must be at least ${MIN_SYMBOL_LENGTH} characters`)
 	.max(MAX_SYMBOL_LENGTH, `Symbol must be at most ${MAX_SYMBOL_LENGTH} characters`)
-	.regex(SYMBOL_REGEX, "Symbol must contain only uppercase letters and numbers (A-Z, 0-9)");
+	.regex(SYMBOL_REGEX, "Symbol must start with a letter and contain only uppercase letters and numbers (A-Z, 0-9)");
 
 export const priceSchema = z.object({
 	amount: z.string()
@@ -275,11 +275,14 @@ export const replicateInputSchema = seedProvenanceSchema.extend({
 });
 export type ReplicateInput = z.infer<typeof replicateInputSchema>;
 
-export const burnInputSchema = seedProvenanceSchema.extend({
-	nftId: z.string().min(1),
-	imageUrl: httpUrlSchema.optional(),
-	imageHash: z.string().optional(),
-});
+export const burnInputSchema = z.object({
+	nftId: z.string().min(1).optional(),
+	nftIds: z.array(z.string().min(1)).min(1).optional(),
+	owner: usernameSchema,
+}).refine(
+	(data) => Boolean(data.nftId) || Boolean(data.nftIds),
+	{ message: "Either nftId or nftIds is required" },
+);
 export type BurnInput = z.infer<typeof burnInputSchema>;
 
 export const unlistInputSchema = z.object({

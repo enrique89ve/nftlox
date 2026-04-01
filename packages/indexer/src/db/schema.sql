@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS collections (
 	id TEXT PRIMARY KEY,
 	json_id TEXT,
 	name TEXT NOT NULL,
-	symbol TEXT NOT NULL,
+	symbol VARCHAR(10) NOT NULL CHECK (symbol ~ '^[A-Z][A-Z0-9]{2,9}$'),
 	creator TEXT NOT NULL,
 	total_potential INTEGER NOT NULL DEFAULT 0,
 	origin_dna TEXT,
@@ -285,6 +285,7 @@ CREATE INDEX IF NOT EXISTS idx_multisig_locks_expires ON multisig_locks(expires_
 
 -- Collections
 CREATE INDEX IF NOT EXISTS idx_collections_creator ON collections(creator);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_creator_symbol ON collections(creator, symbol);
 CREATE INDEX IF NOT EXISTS idx_collections_symbol ON collections(symbol);
 CREATE INDEX IF NOT EXISTS idx_collections_status ON collections(status, created_at DESC);
 

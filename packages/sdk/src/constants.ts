@@ -14,8 +14,8 @@ export const MAX_NAME_LENGTH = 100;
 export const MAX_DESCRIPTION_LENGTH = 250;
 export const MAX_IMAGE_URL_LENGTH = 500;
 export const MIN_SYMBOL_LENGTH = 3;
-export const MAX_SYMBOL_LENGTH = 8;
-export const SYMBOL_REGEX = /^[A-Z0-9]{3,8}$/;
+export const MAX_SYMBOL_LENGTH = 10;
+export const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;
 export const TX_ID_REGEX = /^[0-9a-f]{40}$/;
 
 // DNA Constants
@@ -125,11 +125,13 @@ export const MAX_FIELD_NAME_LENGTH = 64;
 // Bulk Distribute Limits
 export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
 
+// Transfer/Burn Batch Limits
+export const MAX_TRANSFER_BATCH_SIZE = 50;
+
 // Protocol Actions (Core)
 export const ACTION_CREATE_COLLECTION = "create_collection";
 export const ACTION_MINT = "mint";
 export const ACTION_TRANSFER = "transfer";
-export const ACTION_BURN = "burn";
 export const ACTION_REPLICATE = "replicate";
 export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
@@ -178,7 +180,6 @@ export const CORE_ACTIONS = [
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
-	ACTION_BURN,
 	ACTION_REPLICATE,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_SET_DATA,
@@ -225,7 +226,6 @@ export const ALL_ACTIONS = [...CORE_ACTIONS, ...MARKETPLACE_ACTIONS, ...PACK_ACT
 // Posting key: creation, own-data updates, safe/protective actions
 export const ACTIVE_AUTH_ACTIONS = [
 	ACTION_TRANSFER,
-	ACTION_BURN,
 	ACTION_LIST,
 	ACTION_BUY,
 	ACTION_PACK_BUY,

@@ -152,6 +152,11 @@ export async function collectionExists(id: string, txn: Queryable = sql): Promis
 	return !!row;
 }
 
+export async function symbolTakenByCreator(creator: string, symbol: string, txn: Queryable = sql): Promise<boolean> {
+	const [row] = await txn`SELECT 1 FROM collections WHERE creator = ${creator} AND symbol = ${symbol}`;
+	return !!row;
+}
+
 export async function listCollections(limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
 	return sql`

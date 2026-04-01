@@ -9,7 +9,6 @@ import {
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
-	ACTION_BURN,
 	ACTION_REPLICATE,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_SET_DATA,
@@ -40,7 +39,6 @@ import type {
 	ReplicaData,
 	SeedProvenance,
 	TransferData,
-	BurnData,
 	SetDataData,
 	SetDataInput,
 	DataOperatorApproveData,
@@ -256,6 +254,7 @@ export function createBulkDistributeOperation(
 }
 
 // ============ TRANSFER PAYLOADS ============
+// Burn = transfer(to: "null"). Supports single nftId or bulk nftIds.
 
 export function createTransferPayload(
 	nftId: string,
@@ -280,25 +279,33 @@ export function createTransferPayload(
 	};
 }
 
-// ============ BURN PAYLOADS ============
-
-export function createBurnPayload(
-	nftId: string,
-	imageUrl?: string,
-	imageHash?: string,
-	provenance?: SeedProvenance,
-): ProtocolPayload<BurnData> {
+export function createBulkTransferPayload(
+	nftIds: string[],
+	from: string,
+	to: string,
+): ProtocolPayload<TransferData> {
 	return {
 		protocol: PROTOCOL_ID,
 		version: PROTOCOL_VERSION,
-		action: ACTION_BURN,
-		data: {
-			nftId,
-			...(imageUrl && { imageUrl }),
-			...(imageHash && { imageHash }),
-			...spreadProvenance(provenance),
-		},
+		action: ACTION_TRANSFER,
+		data: { nftIds, from, to },
 	};
+}
+
+// ============ BURN PAYLOADS (via transfer to null) ============
+
+export function createBurnPayload(
+	nftId: string,
+	owner: string,
+): ProtocolPayload<TransferData> {
+	return createTransferPayload(nftId, owner, "null");
+}
+
+export function createBulkBurnPayload(
+	nftIds: string[],
+	owner: string,
+): ProtocolPayload<TransferData> {
+	return createBulkTransferPayload(nftIds, owner, "null");
 }
 
 // ============ SET_DATA PAYLOADS ============
@@ -576,11 +583,24 @@ export function createTransferOperation(
 export function createBurnOperation(
 	nftId: string,
 	owner: string,
-	imageUrl?: string,
-	imageHash?: string,
-	provenance?: SeedProvenance,
 ): HiveOperation {
-	const payload = createBurnPayload(nftId, imageUrl, imageHash, provenance);
+	const payload = createBurnPayload(nftId, owner);
+	return [
+		"custom_json",
+		{
+			required_auths: [owner],
+			required_posting_auths: [],
+			id: PROTOCOL_ID,
+			json: safeStringify(payload),
+		},
+	];
+}
+
+export function createBulkBurnOperation(
+	nftIds: string[],
+	owner: string,
+): HiveOperation {
+	const payload = createBulkBurnPayload(nftIds, owner);
 	return [
 		"custom_json",
 		{

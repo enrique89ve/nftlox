@@ -81,6 +81,18 @@ export function requireString(value: unknown, fieldName: string): string {
 	return value;
 }
 
+const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;
+
+export function requireSymbol(value: unknown, fieldName: string): string {
+	const str = requireString(value, fieldName);
+	if (!SYMBOL_REGEX.test(str)) {
+		throw new Error(
+			`Invalid ${fieldName}: "${str}" must be 3-10 uppercase chars, start with letter (e.g. "CARD", "NFT01")`,
+		);
+	}
+	return str;
+}
+
 export function requireUsername(value: unknown, fieldName: string): string {
 	const str = requireString(value, fieldName);
 	const error = validateHiveUsername(str);

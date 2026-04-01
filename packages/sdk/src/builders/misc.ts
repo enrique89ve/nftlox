@@ -1,51 +1,32 @@
 import { z } from "zod";
 import { burnInputSchema, setDataInputSchema, setDataFromInputSchema, nftLendInputSchema, nftReturnInputSchema } from "../schemas";
 import { formatZodError } from "./helpers";
-import { generateImageHash } from "../dna";
 import {
 	createBurnPayload,
+	createBulkBurnPayload,
 	createSetDataPayload,
 	createSetDataFromPayload,
 	createNftLendPayload,
 	createNftReturnPayload,
 } from "../payloads";
-import { PROTOCOL_ID, PROTOCOL_VERSION, ACTION_BURN, ACTION_SET_DATA, ACTION_SET_DATA_FROM, ACTION_NFT_LEND, ACTION_NFT_RETURN } from "../constants";
-import type { BuildResult, BurnData, SetDataData, SetDataFromData, NftLendData, NftReturnData, ProtocolPayload, HiveOperation } from "../types";
+import { PROTOCOL_ID, ACTION_SET_DATA, ACTION_SET_DATA_FROM, ACTION_NFT_LEND, ACTION_NFT_RETURN } from "../constants";
+import type { BuildResult, TransferData, SetDataData, SetDataFromData, NftLendData, NftReturnData, HiveOperation } from "../types";
 import { usernameSchema } from "../schemas";
 
-export const burnBuilderSchema = burnInputSchema.extend({
-	owner: usernameSchema,
-});
+export const burnBuilderSchema = burnInputSchema;
 export type BurnBuilderInput = z.infer<typeof burnBuilderSchema>;
 
-export async function buildBurn(input: BurnBuilderInput): Promise<BuildResult<BurnData>> {
+export function buildBurn(input: BurnBuilderInput): BuildResult<TransferData> {
 	const parsed = burnBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 	const data = parsed.data;
-	const warnings: string[] = [];
 
-	if (!data.imageUrl) {
-		warnings.push("imageUrl not provided - recommended for indexer verification");
-	}
-
-	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
-
-	const payloadData: BurnData = {
-		nftId: data.nftId,
-		...(data.imageUrl && { imageUrl: data.imageUrl }),
-		...(imageHash && { imageHash }),
-		...(data.seedId && { seedId: data.seedId }),
-		...(data.seedTxId && { seedTxId: data.seedTxId }),
-	};
-
-	const payload: ProtocolPayload<BurnData> = {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_BURN,
-		data: payloadData,
-	};
+	const isBulk = Boolean(data.nftIds);
+	const payload = isBulk
+		? createBulkBurnPayload(data.nftIds!, data.owner)
+		: createBurnPayload(data.nftId!, data.owner);
 
 	const operation: HiveOperation = [
 		"custom_json",
@@ -57,12 +38,7 @@ export async function buildBurn(input: BurnBuilderInput): Promise<BuildResult<Bu
 		},
 	];
 
-	return {
-		success: true,
-		payload,
-		operation,
-		warnings: warnings.length > 0 ? warnings : undefined,
-	};
+	return { success: true, payload, operation };
 }
 
 export const setDataBuilderSchema = setDataInputSchema.extend({

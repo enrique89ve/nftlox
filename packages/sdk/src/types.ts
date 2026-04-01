@@ -167,18 +167,14 @@ export interface SeedProvenance {
 	seedTxId?: string;
 }
 
-// ============ TRANSFER & BURN TYPES ============
+// ============ TRANSFER TYPES ============
+// Burn = transfer to "null". No separate burn action.
 
 export interface TransferData extends SeedProvenance {
-	nftId: string;
+	nftId?: string;
+	nftIds?: string[];
 	from: string;
 	to: string;
-	imageUrl?: string;
-	imageHash?: string;
-}
-
-export interface BurnData extends SeedProvenance {
-	nftId: string;
 	imageUrl?: string;
 	imageHash?: string;
 }
