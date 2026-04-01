@@ -5,9 +5,16 @@ import {
 	getCollectionRules,
 	updateCollectionSchema,
 } from "@/db/queries/collections.ts";
+import { getLatestSchemaVersion, insertSchemaVersion } from "@/db/queries/schema-versions.ts";
 import { requireString } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
-import { mergeSchemas, validateSchemaDefinition, type CollectionSchema, type SchemaField } from "nftlox-sdk";
+import {
+	mergeSchemas,
+	validateSchemaDefinition,
+	computeDataHash,
+	type CollectionSchema,
+	type SchemaField,
+} from "nftlox-sdk";
 
 export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const collectionId = requireString(op.data.collectionId, "collectionId");
@@ -27,24 +34,39 @@ export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): P
 		: undefined;
 
 	const existingSchema = collection.schema as CollectionSchema | null;
+	let finalSchema: CollectionSchema;
 
 	if (existingSchema) {
 		const { merged, errors } = mergeSchemas(existingSchema, { newImmutableFields, newMutableFields });
 		if (errors.length > 0) {
 			throw new Error(`Schema extension failed: ${formatSchemaErrors(errors)}`);
 		}
-		await updateCollectionSchema(collectionId, merged, txn);
+		finalSchema = merged;
 	} else {
-		const newSchema: CollectionSchema = {
+		finalSchema = {
 			immutable: newImmutableFields ?? [],
 			mutable: newMutableFields ?? [],
 		};
-
-		const errors = validateSchemaDefinition(newSchema);
+		const errors = validateSchemaDefinition(finalSchema);
 		if (errors.length > 0) {
 			throw new Error(`Schema validation failed: ${formatSchemaErrors(errors)}`);
 		}
-
-		await updateCollectionSchema(collectionId, newSchema, txn);
 	}
+
+	const prev = await getLatestSchemaVersion(collectionId, txn);
+	const newVersion = (prev?.version ?? 0) + 1;
+	const schemaHash = await computeDataHash(finalSchema as unknown as Record<string, unknown>);
+
+	await insertSchemaVersion({
+		collectionId,
+		version: newVersion,
+		schema: finalSchema,
+		schemaHash,
+		prevHash: prev?.schema_hash ?? null,
+		blockNum: op.blockNum,
+		txId: op.txId,
+		createdAt: op.timestamp,
+	}, txn);
+
+	await updateCollectionSchema(collectionId, finalSchema, newVersion, txn);
 }

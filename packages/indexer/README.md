@@ -70,6 +70,11 @@ Client                         Indexer              Hive L1
 - [Bun](https://bun.sh) v1.1+ (required runtime — uses io_uring for async I/O)
 - [Docker](https://docs.docker.com/get-docker/) (for PostgreSQL)
 
+## Related Docs
+
+- [Development Guide](/root/projects/nftlox/docs/contributing/development-guide.md)
+- [Database Migration Strategy](/root/projects/nftlox/docs/contributing/database-migrations.md)
+
 ## Quick Start
 
 ```bash
@@ -125,12 +130,19 @@ Interactive documentation available at `http://localhost:3050/swagger` (disabled
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/marketplace/listings` | Active listings (?sort=price_asc&currency=HIVE) |
+| `GET /api/marketplace/sales` | Completed sales with financial breakdown (gross, royalty, fee, net) |
+| `GET /api/marketplace/volume` | Aggregated marketplace volume statistics |
 
 ### Multisig
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/payment-info/:nftId` | Payment split for building a buy transaction |
 | `POST /api/multisig` | Validate and co-sign a buy transaction |
+
+### Schema
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/collections/:id/schema-history` | Schema version history (hash chain) for a collection |
 
 ### Packs
 | Endpoint | Description |
@@ -314,8 +326,8 @@ Hive Blockchain
 +-------------------+
 |  PostgreSQL       |  Auto-reconnect with exponential backoff
 |  (postgres.js)    |  keep_alive: 60s, max_lifetime: 30min
-|                   |  collections, nfts, packs, nft_loans,
-|                   |  owner_nft_counts, invalid_operations, sync_state
+|                   |  collections, nfts, packs, nft_loans, sales,
+|                   |  schema_versions, owner_nft_counts, invalid_operations, sync_state
 +--------+----------+
          |
          v

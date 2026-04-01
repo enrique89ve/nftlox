@@ -153,28 +153,13 @@ export async function updatePackStatus(
 
 // ============ API QUERIES ============
 
-export async function listPacks(collectionId?: string, limit = 50, offset = 0) {
+export async function listPacks(collectionId?: string, creator?: string, limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
-	if (collectionId) {
-		return sql`
-			SELECT * FROM packs
-			WHERE collection_id = ${collectionId}
-			ORDER BY created_at DESC
-			LIMIT ${safeLimit} OFFSET ${offset}
-		`;
-	}
+	const collectionFilter = collectionId ? sql`AND collection_id = ${collectionId}` : sql``;
+	const creatorFilter = creator ? sql`AND creator = ${creator}` : sql``;
 	return sql`
 		SELECT * FROM packs
-		ORDER BY created_at DESC
-		LIMIT ${safeLimit} OFFSET ${offset}
-	`;
-}
-
-export async function getPacksByCreator(creator: string, limit = 50, offset = 0) {
-	const safeLimit = clampLimit(limit);
-	return sql`
-		SELECT * FROM packs
-		WHERE creator = ${creator}
+		WHERE TRUE ${collectionFilter} ${creatorFilter}
 		ORDER BY created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
 	`;

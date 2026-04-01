@@ -4,7 +4,12 @@ import { getHeadBlockNum } from "@/scanner/hive-client.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
 import { getStartupTime } from "@/scanner/sync-state.ts";
 import { config } from "@/config.ts";
-import { PROTOCOL_VERSION } from "nftlox-sdk";
+import {
+	PROTOCOL_VERSION,
+	PROTOCOL_FEE_PCT,
+	MAX_ROYALTY_PCT,
+	SUPPORTED_CURRENCIES,
+} from "nftlox-sdk";
 
 const STALE_THRESHOLD_MS = 60_000; // 1 minute without processing = stale
 const SYNC_TOLERANCE = 10; // blocks behind threshold to consider "in sync"
@@ -24,6 +29,9 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			nodeAccount: config.hiveAccount,
 			nodeUrl: config.nodeUrl || null,
 			multisigEnabled: !!config.activeKey,
+			protocolFee: PROTOCOL_FEE_PCT,
+			maxRoyalty: MAX_ROYALTY_PCT,
+			supportedCurrencies: SUPPORTED_CURRENCIES,
 			lastBlock,
 			headBlock,
 			blocksBehind,

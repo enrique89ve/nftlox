@@ -33,6 +33,9 @@ Sync status and node information.
 	"nodeAccount": "nftlox",
 	"nodeUrl": "https://api-nftlox.hivecreators.co",
 	"multisigEnabled": true,
+	"protocolFee": 1.0,
+	"maxRoyalty": 50,
+	"supportedCurrencies": ["HIVE", "HBD"],
 	"lastBlock": 98765432,
 	"headBlock": 98765435,
 	"blocksBehind": 3,
@@ -90,7 +93,25 @@ Aggregate protocol statistics.
 	"total_listed": 120,
 	"total_burned": 80,
 	"unique_owners": 350,
-	"invalid_ops": 12
+	"invalid_ops": 12,
+	"total_packs": 25,
+	"total_schema_versions": 78,
+	"sales": [
+		{
+			"currency": "HIVE",
+			"total_volume": 5000.0,
+			"total_royalties": 250.0,
+			"total_fees": 50.0,
+			"sale_count": 320
+		},
+		{
+			"currency": "HBD",
+			"total_volume": 1200.0,
+			"total_royalties": 60.0,
+			"total_fees": 12.0,
+			"sale_count": 85
+		}
+	]
 }
 ```
 
@@ -230,6 +251,55 @@ curl https://api-nftlox.hivecreators.co/api/collections/abc123def456/stats
 
 ---
 
+### GET /api/collections/:id/schema-history
+
+Returns the append-only hash chain of schema versions for a collection. Each version links to the previous via `prev_hash`, forming a verifiable chain.
+
+**Path parameters:**
+
+| Parameter | Description |
+|---|---|
+| `id` | Collection ID |
+
+**Response:** Array of schema version objects ordered by version number (ascending):
+
+```json
+[
+	{
+		"version": 1,
+		"schema": {
+			"immutable": [{ "name": "rarity", "type": "string" }],
+			"mutable": [{ "name": "level", "type": "uint32" }]
+		},
+		"schema_hash": "a1b2c3d4e5f6...",
+		"prev_hash": null,
+		"block_num": 90000100,
+		"tx_id": "abcdef1234567890abcdef1234567890abcdef12"
+	},
+	{
+		"version": 2,
+		"schema": {
+			"immutable": [{ "name": "rarity", "type": "string" }],
+			"mutable": [{ "name": "level", "type": "uint32" }, { "name": "xp", "type": "uint64" }]
+		},
+		"schema_hash": "f6e5d4c3b2a1...",
+		"prev_hash": "a1b2c3d4e5f6...",
+		"block_num": 90000200,
+		"tx_id": "1234567890abcdef1234567890abcdef12345678"
+	}
+]
+```
+
+**Error:** `404` if the collection does not exist.
+
+**Example:**
+
+```bash
+curl https://api-nftlox.hivecreators.co/api/collections/abc123def456/schema-history
+```
+
+---
+
 ## NFTs
 
 ### GET /api/nfts/:id
@@ -250,7 +320,10 @@ Get full details for a single NFT.
 - `max_replicas`, `distributed`, `seed_id`, `instance_number`
 - `listing_price`, `listing_currency`, `listing_marketplace`
 - `immutable_data`, `mutable_data`, `owner_data`
+- `schema_version`, `owner_tx_id`
 - `block_num`, `tx_id`, `created_at`, `seed_tx_id`
+
+> All NFT list endpoints (collection NFTs, user NFTs, marketplace listings) also include `schema_version` and `owner_tx_id` in each NFT object.
 
 **Error:** `404` if the NFT does not exist.
 
@@ -419,6 +492,89 @@ curl "https://api-nftlox.hivecreators.co/api/marketplace/listings?sort=price_asc
 
 ---
 
+### GET /api/marketplace/sales
+
+Sales history with financial split breakdown. Without filters, returns recent sales.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `nftId` | string | -- | Filter by NFT ID |
+| `collectionId` | string | -- | Filter by collection ID |
+| `seller` | string | -- | Filter by seller Hive username |
+| `buyer` | string | -- | Filter by buyer Hive username |
+| `limit` | number | 50 | Results per page (1-200) |
+| `offset` | number | 0 | Pagination offset |
+
+**Response:** Paginated array of sale objects:
+
+```json
+[
+	{
+		"nft_id": "abc123",
+		"collection_id": "col_xyz",
+		"seller": "alice",
+		"buyer": "bob",
+		"gross_amount": 10.0,
+		"currency": "HIVE",
+		"royalty_amount": 0.5,
+		"protocol_fee": 0.1,
+		"seller_net": 9.4,
+		"block_num": 90000300,
+		"tx_id": "abcdef1234567890abcdef1234567890abcdef12",
+		"timestamp": "2026-03-31T10:00:00Z"
+	}
+]
+```
+
+**Example:**
+
+```bash
+curl "https://api-nftlox.hivecreators.co/api/marketplace/sales?collectionId=col_xyz&limit=20"
+```
+
+---
+
+### GET /api/marketplace/volume
+
+Aggregated trading volume by currency with royalties and fees breakdown. Optionally scoped to a single collection.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `collectionId` | string | -- | Filter by collection ID |
+
+**Response:** Array of volume objects, one per currency:
+
+```json
+[
+	{
+		"currency": "HIVE",
+		"total_volume": 5000.0,
+		"total_royalties": 250.0,
+		"total_fees": 50.0,
+		"sale_count": 320
+	},
+	{
+		"currency": "HBD",
+		"total_volume": 1200.0,
+		"total_royalties": 60.0,
+		"total_fees": 12.0,
+		"sale_count": 85
+	}
+]
+```
+
+**Example:**
+
+```bash
+curl "https://api-nftlox.hivecreators.co/api/marketplace/volume?collectionId=col_xyz"
+```
+
+---
+
 ## Packs
 
 ### GET /api/packs
@@ -430,6 +586,7 @@ List available packs.
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `collectionId` | string | -- | Filter by collection ID |
+| `creator` | string | -- | Filter by creator Hive username |
 | `limit` | number | 50 | Results per page (1-200) |
 | `offset` | number | 0 | Pagination offset |
 

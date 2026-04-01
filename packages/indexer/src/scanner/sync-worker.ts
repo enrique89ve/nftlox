@@ -24,9 +24,9 @@ setSyncReporter({
 });
 
 // Listen for stop command from main thread
-self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
+self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
 	if (event.data.type === "stop") {
-		stopSync();
+		await stopSync();
 	}
 };
 

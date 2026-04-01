@@ -29,7 +29,8 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 	}
 
 	const rules = await getCollectionRules(original.collection_id, txn);
-	if (rules && !rules.replicable) {
+	if (!rules) throw new Error(`Collection not found: ${original.collection_id}`);
+	if (!rules.replicable) {
 		throw new Error(`Collection ${original.collection_id} is not replicable`);
 	}
 
@@ -54,6 +55,7 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 		maxReplicas: 0, seedId: null, instanceNumber: null, originalId,
 		immutableData: null, immutableDataHash: null,
 		mutableData: null, mutableDataHash: null,
+		schemaVersion: rules.schema_version,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
 	}, txn);
 

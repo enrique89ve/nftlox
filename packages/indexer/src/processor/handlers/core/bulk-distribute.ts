@@ -3,7 +3,7 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import {
 	insertNft,
 	nftExists,
-	getSeedWithSchema,
+	getSeedWithSchemaForUpdate,
 	incrementDistributedBy,
 } from "@/db/queries/nfts.ts";
 import { assertNotBurned, assertNotLent } from "@/utils/status-checks.ts";
@@ -58,7 +58,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	const validatedSchemas = new Set<string>();
 
 	for (const { seedId, quantity, seedTxId } of parsedItems) {
-		const seed = await getSeedWithSchema(seedId, txn);
+		const seed = await getSeedWithSchemaForUpdate(seedId, txn);
 		if (!seed) throw new Error(`Seed not found: ${seedId}`);
 		assertNotBurned(seed, seedId);
 		assertNotLent(seed, seedId);
@@ -143,6 +143,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				immutableDataHash: null,
 				mutableData,
 				mutableDataHash,
+				schemaVersion: seed.schema_version,
 				blockNum: op.blockNum,
 				txId: op.txId,
 				createdAt: op.timestamp,

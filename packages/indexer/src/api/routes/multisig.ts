@@ -87,7 +87,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		}
 
 		// Acquire per-NFT lock to prevent two buyers co-signing the same NFT
-		const lockResult = nftLock.acquire(body.nftId, body.buyer, MULTISIG_EXPIRATION_MS);
+		const lockResult = await nftLock.acquire(body.nftId, body.buyer, MULTISIG_EXPIRATION_MS);
 		if (!lockResult.acquired) {
 			set.status = 409;
 			return {
@@ -101,7 +101,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 
 		// Release lock on validation failure so the NFT is available again
 		if (!result.ok) {
-			nftLock.release(body.nftId);
+			await nftLock.release(body.nftId);
 			set.status = 400;
 			return result;
 		}

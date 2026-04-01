@@ -78,6 +78,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		seedId: null, instanceNumber: null, originalId: null,
 		immutableData, immutableDataHash,
 		mutableData, mutableDataHash,
+		schemaVersion: collection.schema_version,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
 	}, txn);
 }

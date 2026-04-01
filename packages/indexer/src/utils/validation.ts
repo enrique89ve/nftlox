@@ -74,28 +74,6 @@ export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 	return split;
 }
 
-/**
- * Convenience wrapper: verify payment split against pairedTransfers in a ParsedOperation.
- * Used by multisig verification where transfers come from the same atomic transaction.
- */
-export function verifyPaymentSplit(params: {
-	op: ParsedOperation;
-	seller: string;
-	totalPrice: number;
-	currency: string;
-	royaltyPct: number;
-	royaltyRecipient: string | null;
-	feeAccount: string;
-	nftId: string;
-}): void {
-	const { op, ...rest } = params;
-	verifyTransfers({
-		transfers: op.pairedTransfers ?? [],
-		buyer: op.signer,
-		...rest,
-	});
-}
-
 export function requireString(value: unknown, fieldName: string): string {
 	if (typeof value !== "string" || value === "") {
 		throw new Error(`Missing or invalid ${fieldName}: expected non-empty string`);

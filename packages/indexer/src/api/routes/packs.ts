@@ -3,16 +3,17 @@ import { listPacks, getPackById } from "@/db/queries/packs.ts";
 
 export const packsRoutes = new Elysia({ prefix: "/api/packs", tags: ["Packs"] })
 	.get("/", async ({ query }) => {
-		return listPacks(query.collectionId, query.limit, query.offset);
+		return listPacks(query.collectionId, query.creator, query.limit, query.offset);
 	}, {
 		query: t.Object({
 			collectionId: t.Optional(t.String({ description: "Filter by collection ID" })),
+			creator: t.Optional(t.String({ description: "Filter by creator account" })),
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
 		detail: {
 			summary: "List packs",
-			description: "Browse available packs, optionally filtered by collection",
+			description: "Browse available packs, optionally filtered by collection or creator",
 		},
 	})
 	.get("/:id", async ({ params }) => {

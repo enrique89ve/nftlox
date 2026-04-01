@@ -8,7 +8,7 @@ import {
 } from "@/db/queries/packs.ts";
 import {
 	insertNft,
-	getSeedWithDna,
+	getSeedWithDnaForUpdate,
 	nftExists,
 	incrementDistributed,
 	type SeedWithDnaRow,
@@ -75,7 +75,7 @@ async function buildMintPlan(
 	const packOffsets = new Map<string, number>();
 
 	for (const seedId of selectedSeeds) {
-		const seed = await getSeedWithDna(seedId, txn);
+		const seed = await getSeedWithDnaForUpdate(seedId, txn);
 		if (!seed) throw new Error(`Seed ${seedId} not found during pack opening (pack: ${packId})`);
 		assertNotBurned(seed, seedId);
 		assertNotLent(seed, seedId);
@@ -152,6 +152,7 @@ async function executeMintPlan(
 			immutableDataHash: null,
 			mutableData: null,
 			mutableDataHash: null,
+			schemaVersion: item.seed.schema_version,
 			blockNum: op.blockNum,
 			txId: op.txId,
 			createdAt: op.timestamp,

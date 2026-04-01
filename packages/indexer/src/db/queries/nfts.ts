@@ -41,6 +41,7 @@ export interface InsertNftParams {
 	immutableDataHash: string | null;
 	mutableData: unknown | null;
 	mutableDataHash: string | null;
+	schemaVersion?: number | null;
 	blockNum: number;
 	txId: string;
 	createdAt: string;
@@ -57,6 +58,7 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			seed_id, instance_number, original_id,
 			immutable_data, immutable_data_hash,
 			mutable_data, mutable_data_hash, mutable_data_tx, mutable_data_block,
+			schema_version, owner_tx_id,
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.collectionId}, ${params.nftType},
@@ -72,6 +74,8 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			${params.mutableDataHash},
 			${params.mutableData ? params.txId : null},
 			${params.mutableData ? params.blockNum : null},
+			${params.schemaVersion ?? null},
+			${params.txId},  /* owner_tx_id: mint tx = first ownership */
 			${params.blockNum}, ${params.txId}, ${params.createdAt}
 		)
 		ON CONFLICT (id) DO NOTHING
@@ -176,26 +180,14 @@ export interface SeedWithDnaRow {
 	image_hash: string | null;
 	immutable_data: unknown | null;
 	tx_id: string;
+	schema_version: number;
 }
 
 export async function getSeedWithDna(id: string, txn: Queryable = sql): Promise<SeedWithDnaRow | null> {
 	const [row] = await txn<SeedWithDnaRow[]>`
-		SELECT id, owner, status, nft_type, name, seed_id, max_replicas, distributed,
-			collection_id, instance_dna, origin_dna, image_url, image_hash, immutable_data, tx_id
-		FROM nfts WHERE id = ${id}
-	`;
-	return row ?? null;
-}
-
-export interface SeedWithSchemaRow extends SeedWithDnaRow {
-	schema: unknown | null;
-}
-
-export async function getSeedWithSchema(id: string, txn: Queryable = sql): Promise<SeedWithSchemaRow | null> {
-	const [row] = await txn<SeedWithSchemaRow[]>`
 		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
 			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data, n.tx_id,
-			c.schema
+			c.schema_version  /* collection's current version — used to stamp child instances */
 		FROM nfts n
 		JOIN collections c ON c.id = n.collection_id
 		WHERE n.id = ${id}
@@ -203,10 +195,59 @@ export async function getSeedWithSchema(id: string, txn: Queryable = sql): Promi
 	return row ?? null;
 }
 
-export async function updateNftOwner(nftId: string, newOwner: string, txn: Queryable = sql) {
+export async function getSeedWithDnaForUpdate(id: string, txn: Queryable): Promise<SeedWithDnaRow | null> {
+	const [row] = await txn<SeedWithDnaRow[]>`
+		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data, n.tx_id,
+			c.schema_version
+		FROM nfts n
+		JOIN collections c ON c.id = n.collection_id
+		WHERE n.id = ${id}
+		FOR UPDATE OF n
+	`;
+	return row ?? null;
+}
+
+export interface SeedWithSchemaRow extends SeedWithDnaRow {
+	schema: unknown | null;
+	schema_version: number;
+}
+
+export async function getSeedWithSchema(id: string, txn: Queryable = sql): Promise<SeedWithSchemaRow | null> {
+	const [row] = await txn<SeedWithSchemaRow[]>`
+		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data, n.tx_id,
+			c.schema, c.schema_version
+		FROM nfts n
+		JOIN collections c ON c.id = n.collection_id
+		WHERE n.id = ${id}
+	`;
+	return row ?? null;
+}
+
+export async function getSeedWithSchemaForUpdate(id: string, txn: Queryable): Promise<SeedWithSchemaRow | null> {
+	const [row] = await txn<SeedWithSchemaRow[]>`
+		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data, n.tx_id,
+			c.schema, c.schema_version
+		FROM nfts n
+		JOIN collections c ON c.id = n.collection_id
+		WHERE n.id = ${id}
+		FOR UPDATE OF n
+	`;
+	return row ?? null;
+}
+
+export async function updateNftOwner(
+	nftId: string,
+	newOwner: string,
+	ownerTxId: string,
+	txn: Queryable = sql,
+) {
 	await txn`
 		UPDATE nfts
 		SET owner = ${newOwner}, status = ${NFT_STATUS_ACTIVE},
+		    owner_tx_id = ${ownerTxId},
 		    listing_id = NULL, listing_tx_id = NULL,
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
@@ -369,6 +410,7 @@ const LIST_COLUMNS = sql`
 	n.instance_dna,
 	n.seed_id, n.instance_number, s.tx_id AS seed_tx_id,
 	n.max_replicas, n.distributed, n.supply_exhausted,
+	n.schema_version, n.owner_tx_id,
 	n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency, n.listing_expires_at, n.created_at
 `;
 
@@ -389,6 +431,8 @@ export interface NftListRow {
 	max_replicas: number;
 	distributed: number;
 	supply_exhausted: boolean;
+	schema_version: number | null;
+	owner_tx_id: string | null;
 	listing_id: string | null;
 	listing_tx_id: string | null;
 	listing_price: string | null;

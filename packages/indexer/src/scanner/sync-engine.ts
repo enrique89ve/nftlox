@@ -1,6 +1,6 @@
 import { config } from "@/config.ts";
 import { withTransaction } from "@/db/client.ts";
-import { getLastBlock, updateLastBlock, cleanupExpiredOperations } from "@/db/queries/sync.ts";
+import { getLastBlock, updateLastBlock, cleanupExpiredOperations, acquireSyncLock, releaseSyncLock } from "@/db/queries/sync.ts";
 import { getBlockchainHead, getCustomJsonInRange, getHafAHBlockRange, getTransfersInTransaction } from "./hive-client.ts";
 import { ACTION_BUY, ACTION_PACK_BUY } from "nftlox-sdk";
 import { parseHafAHOperations } from "./operation-parser.ts";
@@ -36,8 +36,9 @@ export function startSync(): void {
 	});
 }
 
-export function stopSync(): void {
+export async function stopSync(): Promise<void> {
 	running = false;
+	await releaseSyncLock();
 	log.info("Sync engine stopping");
 }
 
@@ -45,6 +46,12 @@ const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 let lastCleanup = 0;
 
 async function syncLoop(): Promise<void> {
+	const lockAcquired = await acquireSyncLock();
+	if (!lockAcquired) {
+		log.warn("Another instance is already syncing — skipping sync loop");
+		return;
+	}
+
 	while (running) {
 		try {
 			await syncCycle();

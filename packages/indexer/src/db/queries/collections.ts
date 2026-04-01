@@ -23,6 +23,7 @@ export interface InsertCollectionParams {
 	royaltyPct: number;
 	royaltyRecipient: string | null;
 	schema: unknown | null;
+	schemaVersion: number;
 	blockNum: number;
 	txId: string;
 	createdAt: string;
@@ -34,7 +35,7 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 			id, json_id, name, symbol, creator, total_potential,
 			origin_dna, description, image_url, external_url,
 			transferable, burnable, replicable, royalty_pct, royalty_recipient,
-			schema,
+			schema, schema_version,
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.jsonId}, ${params.name}, ${params.symbol},
@@ -42,7 +43,7 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 			${params.description}, ${params.imageUrl}, ${params.externalUrl},
 			${params.transferable}, ${params.burnable}, ${params.replicable}, ${params.royaltyPct},
 			${params.royaltyRecipient},
-			${params.schema ? JSON.stringify(params.schema) : null},
+			${params.schema ? JSON.stringify(params.schema) : null}, ${params.schemaVersion},
 			${params.blockNum}, ${params.txId},
 			${params.createdAt}
 		)
@@ -71,6 +72,7 @@ export interface CollectionRulesRow {
 	royalty_pct: number;
 	royalty_recipient: string | null;
 	schema: unknown | null;
+	schema_version: number;
 }
 
 export interface CollectionArchiveSnapshotRow {
@@ -88,7 +90,7 @@ export async function getCollectionRules(
 	const [row] = await txn<CollectionRulesRow[]>`
 		SELECT c.id, c.creator, c.total_potential, c.status, c.transferable,
 			c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient,
-			c.schema,
+			c.schema, c.schema_version,
 			COALESCE(COUNT(n.id) FILTER (WHERE n.nft_type = 'seed'), 0)::int AS seed_count
 		FROM collections c
 		LEFT JOIN nfts n ON n.collection_id = c.id
@@ -118,11 +120,12 @@ export async function getCollectionArchiveSnapshot(
 export async function updateCollectionSchema(
 	collectionId: string,
 	schema: unknown,
+	schemaVersion: number,
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
 		UPDATE collections
-		SET schema = ${JSON.stringify(schema)}
+		SET schema = ${JSON.stringify(schema)}, schema_version = ${schemaVersion}
 		WHERE id = ${collectionId}
 	`;
 }

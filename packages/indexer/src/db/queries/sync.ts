@@ -1,5 +1,21 @@
 import { sql, type Queryable } from "@/db/client.ts";
 
+const SYNC_LOCK_ID = 1;
+
+export async function acquireSyncLock(): Promise<boolean> {
+	const [row] = await sql`SELECT pg_try_advisory_lock(${SYNC_LOCK_ID}) AS acquired`;
+	return row?.acquired === true;
+}
+
+export async function releaseSyncLock(): Promise<void> {
+	await sql`SELECT pg_advisory_unlock(${SYNC_LOCK_ID})`;
+}
+
+export async function getLastBlockForUpdate(txn: Queryable): Promise<number> {
+	const [row] = await txn`SELECT last_block FROM sync_state WHERE id = 1 FOR UPDATE`;
+	return Number(row?.last_block ?? 0);
+}
+
 export async function getLastBlock(): Promise<number> {
 	const [row] = await sql`SELECT last_block FROM sync_state WHERE id = 1`;
 	return Number(row?.last_block ?? 0);
@@ -22,7 +38,7 @@ export async function updateLastBlock(blockNum: number, txn: Queryable = sql): P
 	await txn`
 		UPDATE sync_state
 		SET last_block = ${blockNum}, updated_at = NOW()
-		WHERE id = 1
+		WHERE id = 1 AND last_block < ${blockNum}
 	`;
 }
 
@@ -47,6 +63,7 @@ export async function insertInvalidOperation(
 			${op.reason},
 			${JSON.stringify(op.rawPayload)}
 		)
+		ON CONFLICT DO NOTHING
 	`;
 }
 
@@ -185,5 +202,6 @@ export async function insertOrphanedBuy(
 			${op.reason},
 			${JSON.stringify(op.transfers)}
 		)
+		ON CONFLICT (tx_id) DO NOTHING
 	`;
 }

@@ -56,14 +56,14 @@ async function main(): Promise<void> {
 
 process.on("SIGINT", async () => {
 	log.info("Shutting down...");
-	stopSync();
+	await stopSync();
 	await closePool();
 	process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
 	log.info("Shutting down...");
-	stopSync();
+	await stopSync();
 	await closePool();
 	process.exit(0);
 });

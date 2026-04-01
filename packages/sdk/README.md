@@ -189,8 +189,11 @@ const nft = await indexer.getNft("nft_abc123");
 | `getUserCollections(username, params?)` | User's collections |
 | `getUserPacks(username, params?)` | User's pack balances |
 | `getListings(params?)` | Marketplace listings |
+| `getSales(params?)` | Completed sales with financial breakdown |
+| `getVolume()` | Aggregated marketplace volume statistics |
 | `getPaymentInfo(nftId)` | Payment split for buy |
 | `multisig(request)` | Request multisig signing |
+| `getSchemaHistory(collectionId)` | Schema version history (hash chain) |
 | `getPacks(params?)` | List packs |
 | `getPack(id)` | Pack by ID |
 

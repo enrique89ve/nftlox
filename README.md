@@ -56,6 +56,12 @@ bun run typecheck
 7. Add handler in `packages/indexer/src/processor/handlers/`
 8. Register in `packages/indexer/src/processor/action-router.ts`
 
+## Documentation
+
+- [Development Guide](./docs/contributing/development-guide.md)
+- [Database Migration Strategy](./docs/contributing/database-migrations.md)
+- [Protocol Spec](./docs/spec/protocol-spec.md)
+
 ## Architecture
 
 ```

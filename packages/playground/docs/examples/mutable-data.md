@@ -297,9 +297,26 @@ After this operation is processed, `set_data_from` calls from `ragnarok-server` 
 
 ---
 
+## Schema Versions and Mutable Data
+
+Collections track a `schema_version` that increments with each `extend_schema` call. NFTs record the `schema_version` at the time they were minted (immutable). However, `set_data` always validates against the collection's **current** schema, not the NFT's birth schema.
+
+This is correct because `extend_schema` is append-only -- version N contains all fields from version N-1 plus new ones. An NFT born under schema v1 can receive v2 fields via `set_data`. The NFT's `schema_version` stays at 1 (recording when it was born), but its `mutable_data` can include fields added in later versions.
+
+### Example
+
+1. Collection created with schema v1: mutable fields `level`, `xp`.
+2. Creator calls `extend_schema` adding mutable field `wins` -- collection is now at schema v2.
+3. An NFT minted under v1 can now receive `wins` via `set_data`, because the current schema (v2) includes it.
+4. The NFT's `schema_version` remains 1.
+
+To inspect the full schema history, use `GET /api/collections/:id/schema-history`.
+
+---
+
 ## Important Notes
 
 - **Key type:** Both `set_data` and `set_data_from` use the **posting key**.
-- **Schema enforcement:** Only fields declared in the schema's `mutable` section can be updated. Attempting to set an undeclared field or an `immutable` field will be rejected.
+- **Schema enforcement:** Only fields declared in the collection's **current** schema's `mutable` section can be updated. Attempting to set an undeclared field or an `immutable` field will be rejected.
 - **Partial updates:** You only need to include the fields you want to change. Omitted fields retain their current values.
-- **No schema, no updates:** If the collection was created without a schema, `set_data` and `set_data_from` will be rejected. The schema must exist at collection creation time.
+- **No schema, no updates:** If the collection was created without a schema, `set_data` and `set_data_from` will be rejected. The schema must exist (either at collection creation or via `extend_schema`).

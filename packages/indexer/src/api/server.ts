@@ -73,6 +73,8 @@ export function startApiServer(): void {
 		})
 		.onAfterHandle(({ request, set }) => {
 			set.headers["X-Content-Type-Options"] = "nosniff";
+			set.headers["X-Frame-Options"] = "DENY";
+			set.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
 			set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
 
 			if (request.method !== "GET") return;

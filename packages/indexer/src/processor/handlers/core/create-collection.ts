@@ -1,6 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { insertCollection, collectionExists } from "@/db/queries/collections.ts";
+import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
 import {
 	requireString,
 	requireNumber,
@@ -12,6 +13,7 @@ import {
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import {
 	validateSchemaDefinition,
+	computeDataHash,
 	generateDeterministicCollectionId,
 	generateOriginDna,
 	type CollectionSchema,
@@ -65,6 +67,8 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		}
 	}
 
+	const schemaVersion = rawSchema ? 1 : 0;
+
 	await insertCollection({
 		id: canonicalId,
 		jsonId: null,
@@ -82,8 +86,23 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		royaltyPct,
 		royaltyRecipient: optionalString(rules.royaltyRecipient),
 		schema: rawSchema,
+		schemaVersion,
 		blockNum: op.blockNum,
 		txId: op.txId,
 		createdAt: op.timestamp,
 	}, txn);
+
+	if (rawSchema) {
+		const schemaHash = await computeDataHash(rawSchema as unknown as Record<string, unknown>);
+		await insertSchemaVersion({
+			collectionId: canonicalId,
+			version: 1,
+			schema: rawSchema,
+			schemaHash,
+			prevHash: null,
+			blockNum: op.blockNum,
+			txId: op.txId,
+			createdAt: op.timestamp,
+		}, txn);
+	}
 }

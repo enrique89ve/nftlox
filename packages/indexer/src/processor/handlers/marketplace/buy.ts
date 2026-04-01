@@ -2,6 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftWithCollectionRules, updateNftOwner, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
+import { insertSale } from "@/db/queries/marketplace-history.ts";
 import { requireString, requireUsername, verifyTransfers } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
 import { assertNotBurned, assertNotLent, assertSeedNotDistributed, isListingExpired } from "@/utils/status-checks.ts";
@@ -65,7 +66,8 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	}
 
 	const totalPrice = Number(nft.listing_price);
-	if (Number.isNaN(totalPrice) || totalPrice <= 0 || !nft.listing_currency) {
+	const currency = nft.listing_currency;
+	if (Number.isNaN(totalPrice) || totalPrice <= 0 || !currency) {
 		throw new Error("NFT has no valid listing price");
 	}
 
@@ -79,7 +81,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 		buyer,
 		seller: nft.owner,
 		totalPrice,
-		currency: nft.listing_currency,
+		currency,
 		royaltyPct,
 		royaltyRecipient,
 		feeAccount: config.hiveAccount,
@@ -88,6 +90,22 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 
 	validateTransferCount(transfers, split);
 
-	await updateNftOwner(nftId, buyer, txn);
+	await insertSale({
+		nftId,
+		collectionId: nft.collection_id,
+		listingId,
+		seller: nft.owner,
+		buyer,
+		grossAmount: totalPrice,
+		currency,
+		royaltyAmount: split.royaltyAmount,
+		protocolFee: split.feeAmount,
+		sellerNet: split.sellerAmount,
+		blockNum: op.blockNum,
+		txId: op.txId,
+		createdAt: op.timestamp,
+	}, txn);
+
+	await updateNftOwner(nftId, buyer, op.txId, txn);
 	await deleteNftAllowance(nftId, txn);
 }

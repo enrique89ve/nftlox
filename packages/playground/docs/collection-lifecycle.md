@@ -33,6 +33,14 @@ A `create_collection` operation registers the collection on-chain. The collectio
 | `metadata.externalUrl` | string | Project website URL |
 | `schema` | object | Typed schema for NFT data (see [Schema Definition](#3-schema-definition)) |
 
+### Schema Versioning at Creation
+
+When a collection is created, it receives a `schema_version`:
+- **0** if no schema is provided at creation.
+- **1** if a schema is provided at creation.
+
+Each subsequent `extend_schema` call increments the version (see [Extending a Schema](#4-extending-a-schema)).
+
 ### SDK Builder
 
 ```typescript
@@ -130,7 +138,9 @@ On processing `create_collection`:
 1. Validates the collection ID does not already exist (idempotent -- duplicate broadcasts are silently ignored).
 2. Validates the schema definition if provided (field names, types, limits).
 3. Stores the collection with `status = active`.
-4. The `creator` is always derived from the transaction signer, not from the payload body.
+4. Sets `schema_version = 1` if a schema was provided, or `schema_version = 0` if not.
+5. If a schema is provided, creates the first entry in the `schema_versions` hash chain (version 1, full schema JSONB, SHA-256 hash, `prev_hash = null`).
+6. The `creator` is always derived from the transaction signer, not from the payload body.
 
 ---
 
@@ -249,7 +259,20 @@ Ragnarok-specific templates are also available: `RAGNAROK_MINION_SCHEMA`, `RAGNA
 
 ## 4. Extending a Schema
 
-Use `extend_schema` to **append new fields** to an existing collection's schema. This is an append-only operation -- existing fields cannot be removed or modified.
+Use `extend_schema` to **append new fields** to an existing collection's schema. This is an append-only operation -- existing fields cannot be removed or modified. Each call increments the collection's `schema_version` and appends a new entry to the `schema_versions` hash chain.
+
+### Schema Version Hash Chain
+
+Every `extend_schema` creates a new record in the `schema_versions` table:
+
+| Column | Description |
+|---|---|
+| `version` | Auto-incremented version number (2, 3, ...) |
+| `schema` | Full schema JSONB at this version (all fields, not just the new ones) |
+| `hash` | SHA-256 of the canonical JSON schema (via `computeDataHash`/`canonicalJson`) |
+| `prev_hash` | Hash of the previous version, forming a linked chain |
+
+This hash chain provides a tamper-evident audit trail of all schema changes.
 
 ### Constraints
 
@@ -334,6 +357,12 @@ On processing `extend_schema`:
 2. Verifies the collection is not archived.
 3. If the collection already has a schema, merges new fields using `mergeSchemas()` -- checks for name collisions, validates types, enforces the 64-field cap.
 4. If the collection has no schema yet, creates a new one from the provided fields and validates it.
+5. Increments `schema_version` on the collection.
+6. Inserts a new `schema_versions` row with the full merged schema, its SHA-256 hash, and `prev_hash` linking to the previous version.
+
+### NFTs and Schema Versions
+
+NFTs store the collection's `schema_version` at the time they are minted. This value is **immutable** -- it records under which schema rules the NFT was created. However, `set_data` always validates against the collection's **current** schema (not the NFT's birth schema). This is safe because `extend_schema` is append-only: version N always contains all fields from version N-1 plus new ones. An NFT born under v1 can receive v2 fields via `set_data`, but its `schema_version` stays at 1.
 
 ---
 
@@ -433,7 +462,30 @@ Collection (totalPotential: 3)
 
 ---
 
-## 7. Query API
+## 7. Ownership Provenance
+
+NFTs include an `owner_tx_id` field -- the Hive transaction ID that gave the current owner their ownership. This field is:
+
+- **Set at mint** to the mint transaction ID.
+- **Updated on transfer, buy, and transfer_from** to the respective transaction ID.
+
+Anyone can look up the `owner_tx_id` on HafAH to see the full operation details (who sent what, when, and in which block). This provides a transparent, on-chain provenance trail for every ownership change without requiring the indexer to store the full operation history.
+
+```bash
+# Get an NFT and check its ownership provenance
+curl https://api-nftlox.hivecreators.co/api/nfts/nft_a1b2c3d4_1_ef56
+
+# Response includes:
+# "owner": "new-owner",
+# "owner_tx_id": "abc123def456..."
+#
+# Then verify on HafAH:
+# https://hafah.hivehub.dev/rpc/get_transaction?_trx_hash=abc123def456...
+```
+
+---
+
+## 8. Query API
 
 ### GET /api/collections
 
@@ -465,6 +517,36 @@ List NFTs belonging to a collection. Supports `type` filter (`seed`, `instance`,
 curl "https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4.../nfts?type=seed&limit=20"
 ```
 
+### GET /api/collections/:id/schema-history
+
+Returns the full schema version hash chain for a collection. Each entry includes the version number, full schema JSONB, SHA-256 hash, and `prev_hash`.
+
+```bash
+curl https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4.../schema-history
+```
+
+**Response:**
+
+```json
+{
+	"collectionId": "a1b2c3d4...",
+	"versions": [
+		{
+			"version": 1,
+			"schema": { "immutable": [...], "mutable": [...] },
+			"hash": "sha256-of-v1...",
+			"prev_hash": null
+		},
+		{
+			"version": 2,
+			"schema": { "immutable": [...], "mutable": [...] },
+			"hash": "sha256-of-v2...",
+			"prev_hash": "sha256-of-v1..."
+		}
+	]
+}
+```
+
 ### GET /api/collections/:id/stats
 
 Aggregated statistics: seed count, instance count, replica count, listed, burned, unique owners, floor price.
@@ -475,7 +557,7 @@ curl https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4.../stats
 
 ---
 
-## 8. Build API Summary
+## 9. Build API Summary
 
 All build endpoints return an unsigned Hive `custom_json` operation. The client signs and broadcasts it.
 

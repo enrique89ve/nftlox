@@ -6,6 +6,7 @@ import {
 	getCollectionStats,
 } from "@/db/queries/collections.ts";
 import { queryNfts, parseNftKind } from "@/db/queries/nfts.ts";
+import { getSchemaChain } from "@/db/queries/schema-versions.ts";
 
 export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: ["Collections"] })
 	.get("/", async ({ query }) => {
@@ -54,6 +55,19 @@ export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: 
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
 		detail: { summary: "List NFTs in collection" },
+	})
+	.get("/:id/schema-history", async ({ params }) => {
+		const row = await getCollectionById(params.id);
+		if (!row) {
+			return new Response(JSON.stringify({ error: "Collection not found" }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		return getSchemaChain(params.id);
+	}, {
+		params: t.Object({ id: t.String() }),
+		detail: { summary: "Get schema version history", description: "Append-only hash chain of schema versions for this collection" },
 	})
 	.get("/:id/stats", async ({ params }) => {
 		const row = await getCollectionById(params.id);

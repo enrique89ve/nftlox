@@ -578,7 +578,7 @@ Multisig transactions must expire within 30-120 seconds (`MIN_EXPIRATION_MS` / `
 
 ## Querying Marketplace Listings
 
-Use the indexer API to browse active listings:
+Use the indexer API to browse active listings. Each listed NFT includes `schema_version` and `owner_tx_id` in the response.
 
 ```bash
 # All listings, sorted by price ascending
@@ -604,5 +604,48 @@ const listings = await client.getListings({
 
 for (const nft of listings) {
 	console.log(`${nft.name} — ${nft.listing_price} ${nft.listing_currency}`);
+	// nft.schema_version -- schema version at time of last ownership change
+	// nft.owner_tx_id -- transaction ID of the last ownership change
 }
 ```
+
+---
+
+## Sales History and Volume
+
+Completed sales are recorded in a `sales` table with the full financial split. Listing history is **not** stored locally -- it comes from the blockchain via HafAH when needed.
+
+### GET /api/marketplace/sales
+
+Returns completed sales with financial breakdown.
+
+```bash
+curl "https://api-nftlox.hivecreators.co/api/marketplace/sales?limit=20"
+```
+
+**Response fields per sale:**
+
+| Field | Type | Description |
+|---|---|---|
+| `gross_amount` | number | Total sale price |
+| `royalty_amount` | number | Royalty paid to creator |
+| `protocol_fee` | number | Protocol fee (1%) |
+| `seller_net` | number | Net amount received by the seller |
+| `currency` | string | HIVE or HBD |
+| `nft_id` | string | NFT identifier |
+| `seller` | string | Seller account |
+| `buyer` | string | Buyer account |
+
+### GET /api/marketplace/volume
+
+Returns aggregated marketplace volume statistics.
+
+```bash
+curl "https://api-nftlox.hivecreators.co/api/marketplace/volume"
+```
+
+---
+
+## Listing Expiration
+
+Listing expiration is **lazy** -- it is not detected by a background timer. Instead, an expired listing is detected when the NFT is touched by any operation: re-list, transfer, or buy attempt. When an expired listing is detected, the NFT status is auto-cleared back to `active` before the new operation proceeds.

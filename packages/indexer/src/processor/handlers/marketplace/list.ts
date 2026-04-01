@@ -30,7 +30,9 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<v
 		throw new Error(`Collection ${nft.collection_id} is not transferable — listing blocked`);
 	}
 
-	if (nft.status === NFT_STATUS_LISTED && !isListingExpired(nft.listing_expires_at, op.timestamp)) {
+	const hadExpiredListing = nft.status === NFT_STATUS_LISTED && isListingExpired(nft.listing_expires_at, op.timestamp);
+
+	if (nft.status === NFT_STATUS_LISTED && !hadExpiredListing) {
 		throw new Error(`NFT is already listed. Unlist first: ${nftId}`);
 	}
 

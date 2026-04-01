@@ -1,4 +1,4 @@
--- NFTLox Indexer Schema (idempotent — safe to re-run)
+-- NFTLox Indexer Schema (testnet — clean rebuild)
 
 -- ============ ENUMS ============
 
@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS collections (
 	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
 	royalty_recipient TEXT,
 	schema JSONB,
-	status TEXT NOT NULL DEFAULT 'active',
+	schema_version INTEGER NOT NULL DEFAULT 0,
+	status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
 	archived_at_block BIGINT,
 	archived_tx_id TEXT,
 	archived_at TIMESTAMPTZ,
@@ -55,35 +56,6 @@ CREATE TABLE IF NOT EXISTS collections (
 	created_at TIMESTAMPTZ NOT NULL,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-ALTER TABLE collections ADD COLUMN IF NOT EXISTS status TEXT;
-ALTER TABLE collections ADD COLUMN IF NOT EXISTS archived_at_block BIGINT;
-ALTER TABLE collections ADD COLUMN IF NOT EXISTS archived_tx_id TEXT;
-ALTER TABLE collections ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
-
-DO $$
-BEGIN
-	IF EXISTS (
-		SELECT 1
-		FROM information_schema.columns
-		WHERE table_name = 'collections' AND column_name = 'archived'
-	) THEN
-		EXECUTE '
-			UPDATE collections
-			SET status = CASE WHEN archived THEN ''archived'' ELSE ''active'' END
-			WHERE status IS NULL
-		';
-	END IF;
-END $$;
-
-UPDATE collections SET status = 'active' WHERE status IS NULL;
-ALTER TABLE collections ALTER COLUMN status SET DEFAULT 'active';
-ALTER TABLE collections ALTER COLUMN status SET NOT NULL;
-ALTER TABLE collections DROP CONSTRAINT IF EXISTS collections_status_check;
-ALTER TABLE collections
-	ADD CONSTRAINT collections_status_check
-	CHECK (status IN ('active', 'archived'));
-ALTER TABLE collections DROP COLUMN IF EXISTS archived;
 
 -- NFTs (unified: seeds, instances, replicas)
 CREATE TABLE IF NOT EXISTS nfts (
@@ -101,8 +73,8 @@ CREATE TABLE IF NOT EXISTS nfts (
 	description TEXT,
 	image_url TEXT,
 	image_hash TEXT,
-	max_replicas INTEGER NOT NULL DEFAULT 1,
-	distributed INTEGER NOT NULL DEFAULT 0,
+	max_replicas INTEGER NOT NULL DEFAULT 1 CHECK (max_replicas >= 0),
+	distributed INTEGER NOT NULL DEFAULT 0 CHECK (distributed >= 0),
 	supply_exhausted BOOLEAN GENERATED ALWAYS AS (max_replicas > 0 AND distributed >= max_replicas) STORED,
 	seed_id TEXT REFERENCES nfts(id),
 	instance_number INTEGER,
@@ -117,6 +89,8 @@ CREATE TABLE IF NOT EXISTS nfts (
 	owner_data_hash TEXT,
 	owner_data_tx TEXT,
 	owner_data_block BIGINT,
+	schema_version INTEGER,
+	owner_tx_id TEXT,
 	burned_by TEXT,
 	burned_at_block BIGINT,
 	listing_id TEXT,
@@ -128,21 +102,9 @@ CREATE TABLE IF NOT EXISTS nfts (
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
-	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	CHECK (status != 'burned' OR (listing_id IS NULL AND listing_price IS NULL))
 );
-
--- Burned NFTs must not retain listing fields
-ALTER TABLE nfts DROP CONSTRAINT IF EXISTS burned_nft_no_listing;
-ALTER TABLE nfts ADD CONSTRAINT burned_nft_no_listing
-	CHECK (status != 'burned' OR (listing_id IS NULL AND listing_price IS NULL));
-
--- Supply integrity: distributed count can never go negative
-ALTER TABLE nfts DROP CONSTRAINT IF EXISTS distributed_non_negative;
-ALTER TABLE nfts ADD CONSTRAINT distributed_non_negative CHECK (distributed >= 0);
-
--- Supply integrity: max_replicas must be non-negative (0 = no distribution for non-seeds)
-ALTER TABLE nfts DROP CONSTRAINT IF EXISTS max_replicas_non_negative;
-ALTER TABLE nfts ADD CONSTRAINT max_replicas_non_negative CHECK (max_replicas >= 0);
 
 -- Invalid operations (audit trail)
 CREATE TABLE IF NOT EXISTS invalid_operations (
@@ -155,6 +117,7 @@ CREATE TABLE IF NOT EXISTS invalid_operations (
 	raw_payload JSONB,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invalid_ops_tx_action_unique ON invalid_operations(tx_id, COALESCE(action, '')) WHERE tx_id IS NOT NULL;
 
 -- Orphaned buys
 CREATE TABLE IF NOT EXISTS orphaned_buys (
@@ -167,6 +130,7 @@ CREATE TABLE IF NOT EXISTS orphaned_buys (
 	transfers JSONB NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orphaned_buys_tx_unique ON orphaned_buys(tx_id);
 
 -- Packs
 CREATE TABLE IF NOT EXISTS packs (
@@ -199,7 +163,6 @@ CREATE TABLE IF NOT EXISTS user_pack_balances (
 
 -- ============ ALLOWANCE TABLES ============
 
--- Pack allowances (ERC-20 style)
 CREATE TABLE IF NOT EXISTS pack_allowances (
 	owner TEXT NOT NULL,
 	spender TEXT NOT NULL,
@@ -211,7 +174,6 @@ CREATE TABLE IF NOT EXISTS pack_allowances (
 	PRIMARY KEY (owner, spender, pack_id)
 );
 
--- NFT allowances (ERC-721 style)
 CREATE TABLE IF NOT EXISTS nft_allowances (
 	nft_id TEXT PRIMARY KEY REFERENCES nfts(id),
 	owner TEXT NOT NULL,
@@ -221,7 +183,6 @@ CREATE TABLE IF NOT EXISTS nft_allowances (
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Collection allowances (setApprovalForAll style)
 CREATE TABLE IF NOT EXISTS collection_allowances (
 	owner TEXT NOT NULL,
 	spender TEXT NOT NULL,
@@ -255,23 +216,67 @@ CREATE TABLE IF NOT EXISTS nft_loans (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ============ SCHEMA VERSIONS (append-only hash chain) ============
+
+CREATE TABLE IF NOT EXISTS schema_versions (
+	collection_id TEXT NOT NULL REFERENCES collections(id),
+	version INTEGER NOT NULL,
+	schema JSONB NOT NULL,
+	schema_hash TEXT NOT NULL,
+	prev_hash TEXT,
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL,
+	PRIMARY KEY (collection_id, version)
+);
+
+-- ============ SALES (append-only financial record) ============
+
+CREATE TABLE IF NOT EXISTS sales (
+	id BIGSERIAL PRIMARY KEY,
+	nft_id TEXT NOT NULL REFERENCES nfts(id),
+	collection_id TEXT NOT NULL REFERENCES collections(id),
+	listing_id TEXT NOT NULL,
+	seller TEXT NOT NULL,
+	buyer TEXT NOT NULL,
+	gross_amount NUMERIC(18,3) NOT NULL,
+	currency TEXT NOT NULL,
+	royalty_amount NUMERIC(18,3) NOT NULL DEFAULT 0,
+	protocol_fee NUMERIC(18,3) NOT NULL DEFAULT 0,
+	seller_net NUMERIC(18,3) NOT NULL,
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL,
+	UNIQUE (nft_id, listing_id, tx_id)
+);
+
 -- ============ OWNER NFT COUNTS ============
 
 CREATE TABLE IF NOT EXISTS owner_nft_counts (
 	owner TEXT PRIMARY KEY,
-	total INT NOT NULL DEFAULT 0,
-	seeds INT NOT NULL DEFAULT 0,
-	instances INT NOT NULL DEFAULT 0,
-	replicas INT NOT NULL DEFAULT 0
+	total INT NOT NULL DEFAULT 0 CHECK (total >= 0),
+	seeds INT NOT NULL DEFAULT 0 CHECK (seeds >= 0),
+	instances INT NOT NULL DEFAULT 0 CHECK (instances >= 0),
+	replicas INT NOT NULL DEFAULT 0 CHECK (replicas >= 0)
 );
+
+-- ============ MULTISIG LOCKS ============
+
+CREATE TABLE IF NOT EXISTS multisig_locks (
+	nft_id TEXT PRIMARY KEY,
+	buyer TEXT NOT NULL,
+	expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_multisig_locks_expires ON multisig_locks(expires_at);
 
 -- ============ INDEXES ============
 
+-- Collections
 CREATE INDEX IF NOT EXISTS idx_collections_creator ON collections(creator);
 CREATE INDEX IF NOT EXISTS idx_collections_symbol ON collections(symbol);
-DROP INDEX IF EXISTS idx_collections_archived;
 CREATE INDEX IF NOT EXISTS idx_collections_status ON collections(status, created_at DESC);
 
+-- NFTs
 CREATE INDEX IF NOT EXISTS idx_nfts_collection ON nfts(collection_id);
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_created ON nfts(owner, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_nfts_seed_instances ON nfts(seed_id, instance_number) WHERE seed_id IS NOT NULL;
@@ -285,17 +290,20 @@ CREATE INDEX IF NOT EXISTS idx_nfts_listed ON nfts(listing_price, listing_curren
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_recent ON nfts(created_at DESC) WHERE status = 'listed';
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_marketplace ON nfts(listing_marketplace) WHERE status = 'listed' AND listing_marketplace IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_listing_id ON nfts(listing_id) WHERE listing_id IS NOT NULL;
-
+CREATE INDEX IF NOT EXISTS idx_nfts_schema_version ON nfts(collection_id, schema_version);
 CREATE INDEX IF NOT EXISTS idx_nfts_immutable_data ON nfts USING GIN (immutable_data) WHERE immutable_data IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_mutable_data ON nfts USING GIN (mutable_data) WHERE mutable_data IS NOT NULL;
 
+-- Invalid operations
 CREATE INDEX IF NOT EXISTS idx_invalid_block ON invalid_operations(block_num);
 CREATE INDEX IF NOT EXISTS idx_invalid_tx ON invalid_operations(tx_id) WHERE tx_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_invalid_signer ON invalid_operations(signer) WHERE signer IS NOT NULL;
 
+-- Orphaned buys
 CREATE INDEX IF NOT EXISTS idx_orphaned_buys_buyer ON orphaned_buys(buyer);
 CREATE INDEX IF NOT EXISTS idx_orphaned_buys_tx ON orphaned_buys(tx_id);
 
+-- Packs
 CREATE INDEX IF NOT EXISTS idx_packs_collection ON packs(collection_id);
 CREATE INDEX IF NOT EXISTS idx_packs_creator ON packs(creator);
 CREATE INDEX IF NOT EXISTS idx_packs_status ON packs(status);
@@ -303,6 +311,7 @@ CREATE INDEX IF NOT EXISTS idx_pack_balances_account ON user_pack_balances(accou
 CREATE INDEX IF NOT EXISTS idx_pack_balances_pack ON user_pack_balances(pack_id);
 CREATE INDEX IF NOT EXISTS idx_pack_balances_positive ON user_pack_balances(account, pack_id) WHERE balance > 0;
 
+-- Allowances
 CREATE INDEX IF NOT EXISTS idx_pack_allowances_spender ON pack_allowances(spender);
 CREATE INDEX IF NOT EXISTS idx_pack_allowances_pack ON pack_allowances(pack_id);
 CREATE INDEX IF NOT EXISTS idx_pack_allowances_positive ON pack_allowances(owner, pack_id) WHERE quantity > 0;
@@ -312,11 +321,24 @@ CREATE INDEX IF NOT EXISTS idx_collection_allowances_spender ON collection_allow
 CREATE INDEX IF NOT EXISTS idx_collection_allowances_collection ON collection_allowances(collection_id);
 CREATE INDEX IF NOT EXISTS idx_collection_allowances_active ON collection_allowances(owner, collection_id) WHERE approved = TRUE;
 
+-- Data operators
 CREATE INDEX IF NOT EXISTS idx_data_operators_operator ON data_operators(operator);
 CREATE INDEX IF NOT EXISTS idx_data_operators_collection ON data_operators(collection_id);
 
+-- Lending
 CREATE INDEX IF NOT EXISTS idx_nft_loans_lender ON nft_loans(lender);
 CREATE INDEX IF NOT EXISTS idx_nft_loans_borrower ON nft_loans(borrower);
+
+-- Schema versions
+CREATE INDEX IF NOT EXISTS idx_schema_versions_hash ON schema_versions(schema_hash);
+
+-- Sales
+CREATE INDEX IF NOT EXISTS idx_sales_nft ON sales(nft_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_collection ON sales(collection_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_seller ON sales(seller, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_currency_date ON sales(currency, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_block ON sales(block_num);
 
 -- ============ TRIGGER FUNCTION ============
 

@@ -73,7 +73,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - `royaltyPct` must be between 0 and 50
 - `totalPotential` must be a non-negative integer
 
-**State changes**: Inserts row in `collections`.
+**State changes**: Inserts row in `collections`. If a `schema` is provided, inserts initial `schema_version=1` in `schema_versions`.
 **Restrictions**: Non-canonical ID, missing required fields, or invalid values -> rejected.
 
 ---
@@ -111,7 +111,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - If the collection has a schema, `immutableData`/`mutableData` are validated against it
 - If the collection has `totalPotential > 0`, seed cap is validated
 
-**State changes**: Inserts row in `nfts` with type `seed` and status `active`.
+**State changes**: Inserts row in `nfts` with type `seed` and status `active`. The NFT is stamped with the collection's current `schema_version`.
 **Restrictions**: Instance mint, duplicate ID, nonexistent/archived collection, non-creator signer, seed cap reached, or schema validation failure -> rejected.
 
 ---
@@ -136,7 +136,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - Cannot transfer to yourself (`to !== signer`)
 - Collection must be transferable (`transferable=true` in rules)
 
-**State changes**: Updates `owner` in `nfts`, clears listing fields, deletes `nft_allowances` for that NFT.
+**State changes**: Updates `owner` and `owner_tx_id` in `nfts`, clears listing fields, deletes `nft_allowances` for that NFT.
 **Restrictions**: NFT burned, lent, actively listed, collection not transferable, or signer is not owner -> rejected.
 
 ---
@@ -190,7 +190,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - `original.owner === op.signer`
 - Original cannot be `burned` or `lent`
 
-**State changes**: Inserts row in `nfts` with `nft_type = "replica"`, `originalId` referencing the original.
+**State changes**: Inserts row in `nfts` with `nft_type = "replica"` stamped with the collection's current `schema_version`, `originalId` referencing the original.
 **Restrictions**: Duplicate ID, original nonexistent/burned/lent, or signer is not owner -> rejected.
 
 ---
@@ -223,7 +223,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - If the collection has a schema and `mutableData` is provided, it is validated against the schema
 - `uniqueAccessKey` is computed by the indexer from `(instanceDna, recipient, txId)` — not from signer
 
-**State changes**: Inserts N rows in `nfts` (type `instance`), increments `distributed` on the seed.
+**State changes**: Inserts N rows in `nfts` (type `instance`) stamped with the collection's current `schema_version`, increments `distributed` on the seed.
 **Idempotency**: Detects re-sends of the same txId and adjusts counters.
 **Restrictions**: Invalid seedTxId, supply exceeded, nonexistent seeds, or non-owner signer -> rejected.
 
@@ -303,7 +303,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - If the collection already has a schema, new fields are merged with `mergeSchemas()` -- duplicate fields or modifications to existing fields are not allowed
 - If the collection has no schema, a new one is created after validating the definition
 
-**State changes**: Updates `schema` in `collections`.
+**State changes**: Updates `schema` in `collections`. Inserts a new row in `schema_versions` with a hash chain linking to the previous version (each version's hash includes the previous version's hash, forming an immutable chain).
 **Restrictions**: Nonexistent collection, signer is not creator, duplicate fields, invalid field names -> rejected.
 
 ---
@@ -397,7 +397,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - If `royaltyRecipient === seller`, royalty merges into seller payment
 - If `feeAccount === seller`, fee merges into seller payment
 
-**State changes**: `owner` -> buyer, status -> `active`, clears listing and allowances.
+**State changes**: `owner` -> buyer, `owner_tx_id` -> current txId, status -> `active`, clears listing and allowances. A sale record is inserted in the `sales` table with `gross_amount`, `royalty_amount`, `protocol_fee`, and `seller_net`.
 **Restrictions**: NFT not listed, listing expired, collection not transferable, listingId mismatch, listTxId mismatch, incorrect payments, buyer = seller -> rejected.
 
 ---
@@ -510,7 +510,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - Balance is deducted ONLY for successfully delivered packs (not skipped ones)
 - If ALL packs fail delivery (all seeds exhausted), the operation throws an error: `"No packs could be delivered for {packId}: all seeds exhausted"`
 
-**State changes**: Debits balance (only for delivered count), increments `total_opened`, inserts N instances in `nfts`, increments `distributed` per seed.
+**State changes**: Debits balance (only for delivered count), increments `total_opened`, inserts N instances in `nfts` stamped with the collection's current `schema_version`, increments `distributed` per seed.
 **Idempotency**: Detects re-sends of the same txId.
 **Restrictions**: Insufficient balance -> rejected. All seeds exhausted -> error (no silent skip).
 
@@ -587,7 +587,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - Collection must be `transferable`
 - Authorization: `getNftAllowance(nftId)` or `hasCollectionAllowance(from, signer, collectionId)`
 
-**State changes**: `owner` -> `to`, clears allowances.
+**State changes**: `owner` -> `to`, `owner_tx_id` -> current txId, clears allowances.
 **Restrictions**: No authorization, NFT not transferable/burned/lent/listed -> rejected.
 
 ---

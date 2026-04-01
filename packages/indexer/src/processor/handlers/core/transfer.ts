@@ -30,6 +30,6 @@ export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promi
 		throw new Error(`Collection ${nft.collection_id} is not transferable`);
 	}
 
-	await updateNftOwner(nftId, to, txn);
+	await updateNftOwner(nftId, to, op.txId, txn);
 	await deleteNftAllowance(nftId, txn);
 }

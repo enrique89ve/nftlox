@@ -47,6 +47,6 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 		throw new Error(`Signer ${op.signer} is not approved to transfer ${instanceId}`);
 	}
 
-	await updateNftOwner(instanceId, to, txn);
+	await updateNftOwner(instanceId, to, op.txId, txn);
 	await deleteNftAllowance(instanceId, txn);
 }

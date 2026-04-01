@@ -97,6 +97,7 @@ If you provide `imageHash`, it is stored as-is for integrity verification. If om
 | `rules.replicable` | boolean | Yes | Whether NFTs can be replicated |
 | `rules.royaltyPct` | number | Yes | 0-50 |
 | `rules.royaltyRecipient` | string | No | Valid Hive username |
+| `schemaVersion` | number | Read-only | Current schema version (0 = no schema, incremented by `extend_schema`) |
 
 ### Symbol Examples
 
@@ -110,6 +111,19 @@ Invalid: rgnrk (lowercase), AB (too short), ABCDEFGHI (too long), NFT-1 (hyphen)
 ## Schema Definition
 
 Collections can define a typed schema with immutable and mutable fields. If a schema is defined, `set_data` and `set_data_from` validate data against it.
+
+### Schema Versioning
+
+| Concept | Detail |
+|---------|--------|
+| `schema_version=0` | Collection has no typed schema |
+| First `extend_schema` | Sets `schema_version=1` |
+| Subsequent extensions | Increment `schema_version` by 1 |
+| NFT `schema_version` | Set once at creation (mint or distribution), immutable after |
+| Instance distribution | Gets the collection's **current** `schema_version`, not the seed's |
+| `set_data` validation | Validates against the collection's **current** schema, not the NFT's birth schema |
+
+Each schema version is recorded in the `schema_versions` table with a hash chain (`prev_hash` points to the previous version's `schema_hash`).
 
 ### Supported Field Types
 
@@ -254,6 +268,41 @@ For minting multiple seeds at once, provide an array:
 **Valid:** `enrique89`, `ragnarok-admin`, `my.account`
 
 **Invalid:** `ab` (too short), `My_Account` (uppercase, underscore), `123user` (starts with digit)
+
+---
+
+## Ownership Provenance
+
+The `owner_tx_id` field on each NFT tracks how the current owner obtained the NFT.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ownerTxId` | string | Transaction ID that gave the current owner their ownership |
+
+**Behavior:**
+
+- Set to the creation transaction ID on `mint` and `bulk_distribute`.
+- Updated on every `transfer`, `buy`, and `nft_transfer_from`.
+- With `ownerTxId`, anyone can query HafAH (Hive Account History API) to see the exact transaction, including any associated HIVE/HBD transfers.
+
+---
+
+## Sales Record
+
+Each `buy` operation creates an append-only record in the `sales` table.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nftId` | string | NFT that was sold |
+| `collectionId` | string | Collection the NFT belongs to |
+| `listingId` | string | Listing that was fulfilled |
+| `seller` | string | Previous owner |
+| `buyer` | string | New owner |
+| `grossAmount` | string | Total sale price (Hive decimal format) |
+| `currency` | string | `"HIVE"` or `"HBD"` |
+| `royaltyAmount` | string | Royalty paid to royalty recipient |
+| `protocolFee` | string | Fee paid to co-signing node |
+| `sellerNet` | string | Net amount received by seller |
 
 ---
 

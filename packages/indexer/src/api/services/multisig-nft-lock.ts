@@ -1,76 +1,60 @@
-/**
- * In-memory NFT lock for multisig signing.
- *
- * Prevents two buyers from obtaining co-signatures for the same NFT
- * simultaneously. The lock auto-expires after the transaction expiration
- * window, ensuring no permanent locks on stale requests.
- *
- * Uses closures — no classes, no `this`.
- */
-
-const CLEANUP_INTERVAL_MS = 60_000;
-
-type LockEntry = {
-	readonly buyer: string;
-	readonly expiresAt: number;
-};
+import { sql } from "@/db/client.ts";
 
 type AcquireResult =
 	| { readonly acquired: true }
 	| { readonly acquired: false; readonly heldBy: string; readonly retryAfterMs: number };
 
 export function createMultisigNftLock(): {
-	readonly acquire: (nftId: string, buyer: string, expirationMs: number) => AcquireResult;
-	readonly release: (nftId: string) => void;
+	readonly acquire: (nftId: string, buyer: string, expirationMs: number) => Promise<AcquireResult>;
+	readonly release: (nftId: string) => Promise<void>;
+	readonly cleanupExpired: () => Promise<void>;
 	readonly destroy: () => void;
 } {
-	const locks = new Map<string, LockEntry>();
-
 	const cleanupTimer = setInterval(() => {
-		const now = Date.now();
-		for (const [nftId, entry] of locks) {
-			if (now >= entry.expiresAt) {
-				locks.delete(nftId);
-			}
-		}
-	}, CLEANUP_INTERVAL_MS);
+		cleanupExpired().catch(() => {});
+	}, 60_000);
 	cleanupTimer.unref();
 
-	const acquire = (nftId: string, buyer: string, expirationMs: number): AcquireResult => {
-		const now = Date.now();
-		const existing = locks.get(nftId);
+	const acquire = async (nftId: string, buyer: string, expirationMs: number): Promise<AcquireResult> => {
+		const expiresAt = new Date(Date.now() + expirationMs).toISOString();
 
-		// Evict expired lock on access
-		if (existing && now >= existing.expiresAt) {
-			locks.delete(nftId);
+		await sql`DELETE FROM multisig_locks WHERE nft_id = ${nftId} AND expires_at < NOW()`;
+
+		const [inserted] = await sql`
+			INSERT INTO multisig_locks (nft_id, buyer, expires_at)
+			VALUES (${nftId}, ${buyer}, ${expiresAt})
+			ON CONFLICT (nft_id) DO UPDATE
+				SET buyer = ${buyer}, expires_at = ${expiresAt}
+				WHERE multisig_locks.buyer = ${buyer}
+			RETURNING nft_id
+		`;
+
+		if (inserted) {
+			return { acquired: true };
 		}
 
-		const current = locks.get(nftId);
-		if (current) {
-			// Same buyer re-requesting is allowed (idempotent retry)
-			if (current.buyer === buyer) {
-				locks.set(nftId, { buyer, expiresAt: now + expirationMs });
-				return { acquired: true };
-			}
-			return {
-				acquired: false,
-				heldBy: current.buyer,
-				retryAfterMs: current.expiresAt - now,
-			};
+		const [existing] = await sql`
+			SELECT buyer, expires_at FROM multisig_locks WHERE nft_id = ${nftId}
+		`;
+		if (!existing) {
+			return acquire(nftId, buyer, expirationMs);
 		}
 
-		locks.set(nftId, { buyer, expiresAt: now + expirationMs });
-		return { acquired: true };
+		const retryAfterMs = Math.max(0, new Date(String(existing.expires_at)).getTime() - Date.now());
+		return { acquired: false, heldBy: String(existing.buyer), retryAfterMs };
 	};
 
-	const release = (nftId: string): void => {
-		locks.delete(nftId);
+	const release = async (nftId: string): Promise<void> => {
+		await sql`DELETE FROM multisig_locks WHERE nft_id = ${nftId}`;
+	};
+
+	const cleanupExpired = async (): Promise<void> => {
+		await sql`DELETE FROM multisig_locks WHERE expires_at < NOW()`;
 	};
 
 	const destroy = (): void => {
 		clearInterval(cleanupTimer);
-		locks.clear();
 	};
 
-	return { acquire, release, destroy } as const;
+	return { acquire, release, cleanupExpired, destroy } as const;
 }
