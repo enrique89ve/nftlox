@@ -73,15 +73,15 @@ const RETENTION_MS = 24 * 60 * 60 * 1000; // 1 day
 
 export async function cleanupExpiredOperations(): Promise<number> {
 	const cutoff = new Date(Date.now() - RETENTION_MS).toISOString();
-	const [invalid] = await sql`
+	const invalid = await sql`
 		DELETE FROM invalid_operations WHERE indexed_at < ${cutoff}
-		RETURNING COUNT(*)::int AS count
+		RETURNING 1
 	`;
-	const [orphaned] = await sql`
+	const orphaned = await sql`
 		DELETE FROM orphaned_buys WHERE created_at < ${cutoff}
-		RETURNING COUNT(*)::int AS count
+		RETURNING 1
 	`;
-	return (invalid?.count ?? 0) + (orphaned?.count ?? 0);
+	return invalid.length + orphaned.length;
 }
 
 // ============ OPERATION STATUS ============
