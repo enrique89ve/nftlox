@@ -1,12 +1,34 @@
 import { config } from "@/config.ts";
 import {
 	MIN_PROTOCOL_VERSION,
+	PROTOCOL_VERSION,
 	ALL_ACTIONS,
 	type ProtocolAction,
 } from "@/protocol.ts";
+import { createLogger } from "@/utils/logger.ts";
 import type { HafAHOperation } from "./hive-client.ts";
 
+const log = createLogger("parser");
+
 export type AuthLevel = "active" | "posting";
+
+export interface TransferDetail {
+	from: string;
+	to: string;
+	amount: number;
+	currency: string;
+	memo: string;
+}
+
+/**
+ * Pool of transfers shared across operations within the same Hive transaction.
+ * The `consumed` set tracks indices already claimed by prior ops, preventing
+ * a single transfer from satisfying multiple payment validations.
+ */
+export interface TransferPool {
+	readonly transfers: ReadonlyArray<TransferDetail>;
+	readonly consumed: Set<number>;
+}
 
 export interface ParsedOperation {
 	blockNum: number;
@@ -18,13 +40,8 @@ export interface ParsedOperation {
 	action: ProtocolAction;
 	version: string;
 	data: Record<string, unknown>;
-	pairedTransfers?: Array<{
-		from: string;
-		to: string;
-		amount: number;
-		currency: string;
-		memo: string;
-	}>;
+	pairedTransfers?: Array<TransferDetail>;
+	transferPool?: TransferPool;
 }
 
 const protocolId = config.protocolId;
@@ -152,6 +169,15 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 				rawPayload: payload,
 			});
 			continue;
+		}
+
+		// Warn about operations from SDK versions newer than this indexer
+		if (compareVersions(payload.version, PROTOCOL_VERSION) > 0) {
+			log.warn("Operation version ahead of indexer", {
+				version: payload.version,
+				indexerVersion: PROTOCOL_VERSION,
+				txId: hafOp.trx_id,
+			});
 		}
 
 		const hasActiveAuth = value.required_auths.length > 0;

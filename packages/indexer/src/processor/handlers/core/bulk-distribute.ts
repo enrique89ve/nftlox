@@ -84,17 +84,20 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const distributed = Number(seed.distributed) || 0;
 		const maxReplicas = Number(seed.max_replicas) || 0;
 
-		// Idempotency: count instances already created by THIS Hive transaction.
-		// Multiple instances share the same tx_id (Hive txIds are per-transaction,
-		// not per-operation). On replay, `distributed` reflects prior runs.
-		// Subtracting instances from the same txId recovers the pre-tx baseline
-		// so instance numbers remain deterministic across replays.
-		const [existingFromTx] = await txn`
+		// Idempotency: count instances already created by THIS operation.
+		// Uses operation_id (unique per custom_json within a tx) to correctly
+		// handle multiple bulk_distribute ops in the same Hive transaction.
+		// Falls back to tx_id for pre-migration data where operation_id is NULL.
+		const [existingFromOp] = await txn`
 			SELECT COUNT(*)::int AS count FROM nfts
-			WHERE seed_id = ${seedId} AND tx_id = ${op.txId}
+			WHERE seed_id = ${seedId}
+				AND CASE WHEN operation_id IS NOT NULL
+					THEN operation_id = ${op.operationId}
+					ELSE tx_id = ${op.txId}
+				END
 		`;
-		const alreadyMintedThisTx = existingFromTx?.count ?? 0;
-		const baseDistributed = computeInstanceBaseline(distributed, alreadyMintedThisTx);
+		const alreadyMintedThisOp = existingFromOp?.count ?? 0;
+		const baseDistributed = computeInstanceBaseline(distributed, alreadyMintedThisOp);
 
 		validateSeedSupplyForDistribution(seedId, maxReplicas, baseDistributed, quantity);
 
@@ -142,6 +145,8 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				mutableData,
 				mutableDataHash,
 				schemaVersion: seed.schema_version,
+				operationId: op.operationId,
+				sourceAction: op.action,
 				blockNum: op.blockNum,
 				txId: op.txId,
 				createdAt: op.timestamp,

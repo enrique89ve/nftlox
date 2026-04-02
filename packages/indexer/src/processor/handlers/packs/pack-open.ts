@@ -67,6 +67,7 @@ function tryParseJson(raw: string): unknown {
 async function buildMintPlan(
 	selectedSeeds: ReadonlyArray<string>,
 	packId: string,
+	operationId: string,
 	txId: string,
 	localMintedPerSeed: ReadonlyMap<string, number>,
 	txn: Queryable,
@@ -82,12 +83,17 @@ async function buildMintPlan(
 		const maxReplicas = Number(seed.max_replicas) || 0;
 		const distributed = Number(seed.distributed) || 0;
 
-		// Idempotency: multiple instances share the same tx_id (Hive txId is per-transaction)
-		const [existingFromTx] = await txn`
+		// Idempotency: uses operation_id to correctly isolate multiple pack_open
+		// ops within the same Hive transaction. Falls back to tx_id for pre-migration data.
+		const [existingFromOp] = await txn`
 			SELECT COUNT(*)::int AS count FROM nfts
-			WHERE seed_id = ${seedId} AND tx_id = ${txId}
+			WHERE seed_id = ${seedId}
+				AND CASE WHEN operation_id IS NOT NULL
+					THEN operation_id = ${operationId}
+					ELSE tx_id = ${txId}
+				END
 		`;
-		const baseDistributed = computeInstanceBaseline(distributed, existingFromTx?.count ?? 0);
+		const baseDistributed = computeInstanceBaseline(distributed, existingFromOp?.count ?? 0);
 
 		const globalOffset = localMintedPerSeed.get(seedId) ?? 0;
 		const packOffset = packOffsets.get(seedId) ?? 0;
@@ -152,6 +158,8 @@ async function executeMintPlan(
 			mutableData: null,
 			mutableDataHash: null,
 			schemaVersion: item.seed.schema_version,
+			operationId: op.operationId,
+			sourceAction: op.action,
 			blockNum: op.blockNum,
 			txId: op.txId,
 			createdAt: op.timestamp,
@@ -185,14 +193,14 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 	const localMintedPerSeed = new Map<string, number>();
 
 	for (let packIndex = 0; packIndex < quantity; packIndex++) {
-		const rngSeed = `${op.txId}:${op.blockNum}:${op.signer}:${packId}:${packIndex}`;
+		const rngSeed = `${op.txId}:${op.operationId}:${op.blockNum}:${op.signer}:${packId}:${packIndex}`;
 		const selectedSeeds = resolveDropTable(
 			dropTable as Array<DropEntry>,
 			pack.items_per_pack,
 			rngSeed,
 		);
 
-		const mintPlan = await buildMintPlan(selectedSeeds, packId, op.txId, localMintedPerSeed, txn);
+		const mintPlan = await buildMintPlan(selectedSeeds, packId, op.operationId, op.txId, localMintedPerSeed, txn);
 		if (!mintPlan) continue;
 
 		await executeMintPlan(mintPlan, op, localMintedPerSeed, txn);
@@ -204,7 +212,11 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 		// If so, return silently (idempotent). Otherwise, seeds are genuinely exhausted.
 		const [existing] = await txn`
 			SELECT COUNT(*)::int AS count FROM nfts
-			WHERE tx_id = ${op.txId} AND seed_id IS NOT NULL
+			WHERE seed_id IS NOT NULL
+				AND CASE WHEN operation_id IS NOT NULL
+					THEN operation_id = ${op.operationId}
+					ELSE tx_id = ${op.txId}
+				END
 		`;
 		if (existing && existing.count > 0) return;
 

@@ -13,6 +13,7 @@ const log = createLogger("sync");
 const MASSIVE_THRESHOLD = 100;
 const SYNC_TOLERANCE = 10;
 const MAX_CONTINUITY_FAILURES = 3;
+const MAX_CONSECUTIVE_HANDLER_FAILURES = 10;
 
 let running = false;
 
@@ -155,15 +156,24 @@ export async function syncCycle(): Promise<void> {
 		// Parse validated protocol operations + collect rejected payloads
 		const { ops, rejected } = parseHafAHOperations(hafOps);
 
-		// Enrich buy and pack_buy ops with paired transfers for payment verification
+		// Enrich buy and pack_buy ops with paired transfers for payment verification.
+		// A shared TransferPool per txId tracks which transfers have been consumed,
+		// preventing a single payment from satisfying multiple operations (CVE: payment reuse).
 		const buyOps = ops.filter(op =>
 			op.action === ACTION_BUY || op.action === ACTION_PACK_BUY
 		);
+		const transferPools = new Map<string, { transfers: Array<{ from: string; to: string; amount: number; currency: string; memo: string }>; consumed: Set<number> }>();
 		await Promise.all(
-			buyOps.map(async (op) => {
-				op.pairedTransfers = await getTransfersInTransaction(op.txId);
+			[...new Set(buyOps.map(op => op.txId))].map(async (txId) => {
+				const transfers = await getTransfersInTransaction(txId);
+				transferPools.set(txId, { transfers, consumed: new Set() });
 			})
 		);
+		for (const op of buyOps) {
+			const pool = transferPools.get(op.txId)!;
+			op.pairedTransfers = pool.transfers;
+			op.transferPool = pool;
+		}
 
 		// Process operations in a transaction.
 		// routeOperation is infallible — individual handler errors are caught and recorded
@@ -186,8 +196,19 @@ export async function syncCycle(): Promise<void> {
 						rawPayload: rej.rawPayload,
 					}, txn);
 				}
+				let consecutiveFailures = 0;
 				for (const op of ops) {
-					await routeOperation(op, txn);
+					const success = await routeOperation(op, txn);
+					if (success) {
+						consecutiveFailures = 0;
+					} else {
+						consecutiveFailures++;
+						if (consecutiveFailures >= MAX_CONSECUTIVE_HANDLER_FAILURES) {
+							throw new Error(
+								`Circuit breaker: ${consecutiveFailures} consecutive handler failures in block range ${current}-${rangeEnd}`,
+							);
+						}
+					}
 				}
 				await updateLastBlock(rangeEnd, txn);
 			});

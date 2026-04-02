@@ -42,6 +42,7 @@ export async function handlePackBuy(op: ParsedOperation, txn: Queryable): Promis
 			pricePerUnit: parseFloat(pack.price_amount),
 			currency: pack.price_currency ?? "",
 			quantity,
+			consumedIndices: op.transferPool?.consumed,
 		});
 	}
 

@@ -69,6 +69,26 @@ export async function insertInvalidOperation(
 	`;
 }
 
+// ============ CONFIRMED OPERATIONS ============
+
+export async function insertConfirmedOperation(
+	op: {
+		operationId: string;
+		txId: string;
+		blockNum: number;
+		signer: string;
+		action: string;
+		createdAt: string;
+	},
+	txn: Queryable = sql,
+): Promise<void> {
+	await txn`
+		INSERT INTO confirmed_operations (operation_id, tx_id, block_num, signer, action, created_at)
+		VALUES (${op.operationId}, ${op.txId}, ${op.blockNum}, ${op.signer}, ${op.action}, ${op.createdAt})
+		ON CONFLICT (operation_id) DO NOTHING
+	`;
+}
+
 // ============ EXPIRED OPERATIONS CLEANUP ============
 
 const RETENTION_MS = 24 * 60 * 60 * 1000; // 1 day
@@ -146,16 +166,19 @@ export async function getOperationStatus(txId: string): Promise<OperationStatusE
 		});
 	}
 
-	// 3. Check state tables for successful operations
-	const nfts = await sql`
-		SELECT minted_by, nft_type AS action, block_num, created_at
-		FROM nfts WHERE tx_id = ${txId}
+	// 3. Check confirmed_operations for successful handler executions.
+	// This is the authoritative source: tracks operationId and the real protocol action.
+	const confirmed = await sql`
+		SELECT operation_id, signer, action, block_num, created_at
+		FROM confirmed_operations WHERE tx_id = ${txId}
 	`;
-	for (const row of nfts) {
+	const confirmedOpIds = new Set<string>();
+	for (const row of confirmed) {
+		confirmedOpIds.add(row.operation_id);
 		results.push({
 			status: "confirmed",
-			operationId: null,
-			signer: row.minted_by ?? null,
+			operationId: row.operation_id ?? null,
+			signer: row.signer ?? null,
 			action: row.action ?? null,
 			reason: null,
 			blockNum: Number(row.block_num),
@@ -163,20 +186,44 @@ export async function getOperationStatus(txId: string): Promise<OperationStatusE
 		});
 	}
 
-	const collections = await sql`
-		SELECT creator, block_num, created_at
-		FROM collections WHERE tx_id = ${txId}
-	`;
-	for (const row of collections) {
-		results.push({
-			status: "confirmed",
-			operationId: null,
-			signer: row.creator ?? null,
-			action: "create_collection",
-			reason: null,
-			blockNum: Number(row.block_num),
-			timestamp: String(row.created_at),
-		});
+	// 4. Fallback: check state tables for pre-migration data (before confirmed_operations existed)
+	if (confirmedOpIds.size === 0) {
+		const nfts = await sql`
+			SELECT minted_by, nft_type, source_action, operation_id, block_num, created_at
+			FROM nfts WHERE tx_id = ${txId}
+		`;
+		const seenOps = new Set<string>();
+		for (const row of nfts) {
+			const opId = row.operation_id ?? null;
+			const key = opId ?? `nft-${row.block_num}`;
+			if (seenOps.has(key)) continue;
+			seenOps.add(key);
+			results.push({
+				status: "confirmed",
+				operationId: opId,
+				signer: row.minted_by ?? null,
+				action: row.source_action ?? row.nft_type ?? null,
+				reason: null,
+				blockNum: Number(row.block_num),
+				timestamp: String(row.created_at),
+			});
+		}
+
+		const collections = await sql`
+			SELECT creator, block_num, created_at
+			FROM collections WHERE tx_id = ${txId}
+		`;
+		for (const row of collections) {
+			results.push({
+				status: "confirmed",
+				operationId: null,
+				signer: row.creator ?? null,
+				action: "create_collection",
+				reason: null,
+				blockNum: Number(row.block_num),
+				timestamp: String(row.created_at),
+			});
+		}
 	}
 
 	if (results.length === 0) {

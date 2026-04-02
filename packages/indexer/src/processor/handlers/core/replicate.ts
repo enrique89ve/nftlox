@@ -59,6 +59,7 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 		immutableData: null, immutableDataHash: null,
 		mutableData: null, mutableDataHash: null,
 		schemaVersion: rules.schema_version,
+		operationId: op.operationId, sourceAction: op.action,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
 	}, txn);
 

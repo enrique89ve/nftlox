@@ -26,15 +26,19 @@ export interface VerifyTransfersParams {
 	royaltyRecipient: string | null;
 	feeAccount: string;
 	nftId: string;
+	consumedIndices?: Set<number>;
 }
 
 /**
  * Verify that a set of transfers satisfies the payment split.
  * Source-agnostic: works with pairedTransfers, getTransfersInTransaction, or any transfer array.
  * Reusable for multisig pre-signing verification.
+ *
+ * When `consumedIndices` is provided (from a TransferPool), matched transfers are marked
+ * as consumed so other operations in the same tx cannot reuse them.
  */
 export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
-	const { transfers, buyer, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, nftId } = params;
+	const { transfers, buyer, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, nftId, consumedIndices } = params;
 
 	if (transfers.length === 0) {
 		throw new Error("No transfers found. Payment split is required.");
@@ -45,18 +49,20 @@ export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 	const AMOUNT_TOLERANCE = 0.0005;
 
 	function expectTransfer(to: string, expectedAmount: number, label: string, expectedMemo: string): void {
-		const found = transfers.find(t =>
+		const matchIndex = transfers.findIndex((t, idx) =>
+			(!consumedIndices || !consumedIndices.has(idx)) &&
 			t.from === buyer &&
 			t.to === to &&
 			t.currency === currency &&
 			Math.abs(t.amount - expectedAmount) < AMOUNT_TOLERANCE &&
 			t.memo === expectedMemo
 		);
-		if (!found) {
+		if (matchIndex === -1) {
 			throw new Error(
 				`Missing ${label}: expected ${expectedAmount} ${currency} from @${buyer} to @${to} with memo '${expectedMemo}'`
 			);
 		}
+		consumedIndices?.add(matchIndex);
 	}
 
 	if (split.sellerAmount > 0) {

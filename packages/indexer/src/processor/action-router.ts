@@ -1,7 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { createLogger } from "@/utils/logger.ts";
-import { insertInvalidOperation, insertOrphanedBuy } from "@/db/queries/sync.ts";
+import { insertInvalidOperation, insertOrphanedBuy, insertConfirmedOperation } from "@/db/queries/sync.ts";
 import {
 	ACTION_BUY,
 	ACTION_PACK_BUY,
@@ -120,8 +120,11 @@ const handlers: Record<string, Handler> = {
  * If a handler fails, the error is recorded in invalid_operations and processing continues.
  * This guarantees that a single bad operation can never stall the sync loop or cause block gaps.
  * Pattern inspired by nft-tracker's `process_action` EXCEPTION WHEN OTHERS handler.
+ *
+ * Returns true if the handler executed successfully, false otherwise.
+ * Used by the sync engine's circuit breaker to detect systematic failures.
  */
-export async function routeOperation(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function routeOperation(op: ParsedOperation, txn: Queryable): Promise<boolean> {
 	try {
 		const handler = handlers[op.action];
 
@@ -135,7 +138,7 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 				reason: `Unknown action: ${op.action}`,
 				rawPayload: op.data,
 			}, txn);
-			return;
+			return false;
 		}
 
 		// Enforce canonical auth level before dispatching
@@ -149,11 +152,20 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 				reason: `Action '${op.action}' requires active key authority, got posting`,
 				rawPayload: op.data,
 			}, txn);
-			return;
+			return false;
 		}
 
 		try {
 			await handler(op, txn);
+			await insertConfirmedOperation({
+				operationId: op.operationId,
+				txId: op.txId,
+				blockNum: op.blockNum,
+				signer: op.signer,
+				action: op.action,
+				createdAt: op.timestamp,
+			}, txn);
+			return true;
 		} catch (err) {
 			const reason = err instanceof Error ? err.message : String(err);
 			log.warn(`Handler failed: ${op.action}`, { blockNum: op.blockNum, txId: op.txId, reason });
@@ -190,6 +202,7 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 					transfers,
 				}, txn);
 			}
+			return false;
 		}
 	} catch (fatal) {
 		// Last-resort catch: even insertInvalidOperation/insertOrphanedBuy failed.
@@ -200,5 +213,6 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 			action: op.action,
 			error: fatal instanceof Error ? fatal.message : String(fatal),
 		});
+		return false;
 	}
 }

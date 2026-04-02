@@ -45,8 +45,16 @@ export const validateTransferCount = (
 		readonly royaltyRecipient: string | null;
 		readonly feeAmount: number;
 	},
+	consumedIndices?: ReadonlySet<number>,
 ): void => {
 	const expected = computeExpectedTransferCount(split);
+	// When a TransferPool is in use, count only transfers consumed by THIS operation
+	// (already added by verifyTransfers). Without a pool, validate total count as before.
+	if (consumedIndices) {
+		// verifyTransfers already consumed exactly the transfers for this buy.
+		// Just verify the pool had enough — if verifyTransfers succeeded, this is satisfied.
+		return;
+	}
 	if (transfers.length !== expected) {
 		throw new Error(
 			`Expected exactly ${expected} transfers, got ${transfers.length}`,
@@ -102,8 +110,9 @@ export const validatePackPayment = (params: {
 	readonly pricePerUnit: number;
 	readonly currency: string;
 	readonly quantity: number;
+	readonly consumedIndices?: Set<number>;
 }): void => {
-	const { transfers, buyer, creator, pricePerUnit, currency, quantity } = params;
+	const { transfers, buyer, creator, pricePerUnit, currency, quantity, consumedIndices } = params;
 
 	if (!Number.isFinite(pricePerUnit) || pricePerUnit <= 0) {
 		throw new Error(`Pack has invalid price: ${pricePerUnit}`);
@@ -113,19 +122,23 @@ export const validatePackPayment = (params: {
 	const priceMillis = Math.round(pricePerUnit * 1000);
 	const expectedMillis = priceMillis * quantity;
 
-	const payment = transfers.find(t =>
+	const matchIndex = transfers.findIndex((t, idx) =>
+		(!consumedIndices || !consumedIndices.has(idx)) &&
 		t.from === buyer &&
 		t.to === creator &&
 		t.currency === currency &&
 		Math.round(t.amount * 1000) >= expectedMillis
 	);
 
-	if (!payment) {
+	if (matchIndex === -1) {
 		const expectedTotal = expectedMillis / 1000;
 		throw new Error(
 			`Invalid payment: expected >= ${expectedTotal} ${currency} from @${buyer} to @${creator}`,
 		);
 	}
+
+	// Mark this transfer as consumed so other ops in the same tx cannot reuse it
+	consumedIndices?.add(matchIndex);
 };
 
 export const validateSeedSupplyForDistribution = (

@@ -76,7 +76,8 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	}
 	const royaltyRecipient = nft.royalty_recipient ?? null;
 
-	// Protocol fee always goes to the co-signing node
+	// Protocol fee always goes to the co-signing node.
+	// consumedIndices prevents multi-buy in the same tx from sharing transfers.
 	const transfers = op.pairedTransfers ?? [];
 	const split = verifyTransfers({
 		transfers,
@@ -88,9 +89,10 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 		royaltyRecipient,
 		feeAccount: config.hiveAccount,
 		nftId,
+		consumedIndices: op.transferPool?.consumed,
 	});
 
-	validateTransferCount(transfers, split);
+	validateTransferCount(transfers, split, op.transferPool?.consumed);
 
 	await insertSale({
 		nftId,

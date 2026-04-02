@@ -99,6 +99,8 @@ CREATE TABLE IF NOT EXISTS nfts (
 	listing_currency TEXT,
 	listing_expires_at TIMESTAMPTZ,
 	listing_marketplace TEXT,
+	operation_id TEXT,
+	source_action TEXT,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
@@ -121,6 +123,18 @@ CREATE TABLE IF NOT EXISTS invalid_operations (
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invalid_ops_unique ON invalid_operations(tx_id, COALESCE(operation_id, '')) WHERE tx_id IS NOT NULL;
+
+-- Confirmed operations (append-only tracking of successful handler executions)
+-- Enables per-operation status lookups and maps operationId → action for the API.
+CREATE TABLE IF NOT EXISTS confirmed_operations (
+	operation_id TEXT PRIMARY KEY,
+	tx_id TEXT NOT NULL,
+	block_num BIGINT NOT NULL,
+	signer TEXT NOT NULL,
+	action TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_confirmed_ops_tx ON confirmed_operations(tx_id);
 
 -- Orphaned buys
 CREATE TABLE IF NOT EXISTS orphaned_buys (
@@ -298,6 +312,8 @@ CREATE INDEX IF NOT EXISTS idx_nfts_collection ON nfts(collection_id);
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_created ON nfts(owner, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_nfts_seed_instances ON nfts(seed_id, instance_number) WHERE seed_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_seed_tx ON nfts(seed_id, tx_id) WHERE seed_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nfts_operation_id ON nfts(operation_id) WHERE operation_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nfts_seed_operation ON nfts(seed_id, operation_id) WHERE seed_id IS NOT NULL AND operation_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_type_status ON nfts(owner, nft_type, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_active_instances ON nfts(owner, created_at DESC) WHERE nft_type = 'instance' AND status = 'active';
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_active_seeds ON nfts(owner, collection_id) WHERE nft_type = 'seed' AND status = 'active';

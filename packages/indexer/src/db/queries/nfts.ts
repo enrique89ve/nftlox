@@ -42,6 +42,8 @@ export interface InsertNftParams {
 	mutableData: unknown | null;
 	mutableDataHash: string | null;
 	schemaVersion?: number | null;
+	operationId?: string | null;
+	sourceAction?: string | null;
 	blockNum: number;
 	txId: string;
 	createdAt: string;
@@ -59,6 +61,7 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			immutable_data, immutable_data_hash,
 			mutable_data, mutable_data_hash, mutable_data_tx, mutable_data_block,
 			schema_version, owner_tx_id,
+			operation_id, source_action,
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.collectionId}, ${params.nftType},
@@ -76,6 +79,8 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			${params.mutableData ? params.blockNum : null},
 			${params.schemaVersion ?? null},
 			${params.txId},  /* owner_tx_id: mint tx = first ownership */
+			${params.operationId ?? null},
+			${params.sourceAction ?? null},
 			${params.blockNum}, ${params.txId}, ${params.createdAt}
 		)
 		ON CONFLICT (id) DO NOTHING
