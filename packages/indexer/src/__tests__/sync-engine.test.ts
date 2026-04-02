@@ -47,6 +47,7 @@ mock.module("@/scanner/hive-client.ts", () => ({
 	getCustomJsonInRange: mockGetCustomJsonInRange,
 	getHafAHBlockRange: mockGetHafAHBlockRange,
 	getTransfersInTransaction: mockGetTransfersInTransaction,
+	checkClockDrift: mock(() => Promise.resolve()),
 }));
 
 mock.module("@/scanner/operation-parser.ts", () => ({

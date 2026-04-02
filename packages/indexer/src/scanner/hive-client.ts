@@ -165,6 +165,11 @@ export interface BlockchainHead {
 	readonly irreversibleBlock: number;
 }
 
+// Maximum acceptable drift between server clock and blockchain time.
+// Beyond this threshold, listing expiration checks in the multisig service
+// could diverge from the blockchain, causing incorrect accept/reject decisions.
+const MAX_CLOCK_DRIFT_MS = 15_000;
+
 export async function getBlockchainHead(): Promise<BlockchainHead> {
 	const result = await callWithFailover<Record<string, unknown>>(
 		"condenser_api.get_dynamic_global_properties", [],
@@ -180,6 +185,38 @@ export async function getBlockchainHead(): Promise<BlockchainHead> {
 	}
 
 	return { headBlock, irreversibleBlock };
+}
+
+/**
+ * Checks server clock against Hive blockchain time.
+ * Logs a warning if drift exceeds threshold.
+ * Call once at startup to detect misconfigured NTP.
+ */
+export async function checkClockDrift(): Promise<void> {
+	try {
+		const result = await callWithFailover<Record<string, unknown>>(
+			"condenser_api.get_dynamic_global_properties", [],
+		);
+		const blockTime = new Date(result.time + "Z").getTime();
+		const serverTime = Date.now();
+		const driftMs = Math.abs(serverTime - blockTime);
+
+		if (driftMs > MAX_CLOCK_DRIFT_MS) {
+			log.error("CLOCK DRIFT DETECTED — server time diverges from blockchain", {
+				serverTime: new Date(serverTime).toISOString(),
+				blockchainTime: new Date(blockTime).toISOString(),
+				driftMs,
+				driftSec: Math.round(driftMs / 1000),
+				recommendation: "Verify NTP is running: timedatectl status",
+			});
+		} else {
+			log.info("Clock sync OK", { driftMs });
+		}
+	} catch (err) {
+		log.warn("Could not verify clock drift", {
+			error: err instanceof Error ? err.message : String(err),
+		});
+	}
 }
 
 export async function getHeadBlockNum(): Promise<number> {

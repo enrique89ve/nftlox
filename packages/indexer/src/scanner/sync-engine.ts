@@ -1,7 +1,7 @@
 import { config } from "@/config.ts";
 import { withTransaction } from "@/db/client.ts";
 import { getLastBlock, updateLastBlock, cleanupExpiredOperations, acquireSyncLock, releaseSyncLock, insertInvalidOperation } from "@/db/queries/sync.ts";
-import { getBlockchainHead, getCustomJsonInRange, getHafAHBlockRange, getTransfersInTransaction } from "./hive-client.ts";
+import { getBlockchainHead, getCustomJsonInRange, getHafAHBlockRange, getTransfersInTransaction, checkClockDrift } from "./hive-client.ts";
 import { ACTION_BUY, ACTION_PACK_BUY } from "nftlox-sdk";
 import { parseHafAHOperations } from "./operation-parser.ts";
 import { routeOperation } from "@/processor/action-router.ts";
@@ -29,6 +29,8 @@ export function startSync(): void {
 		method: "HafAH",
 	});
 
+	checkClockDrift().catch(() => {});
+
 	syncLoop().catch((err) => {
 		log.error("Sync loop fatal error", {
 			error: err instanceof Error ? err.message : String(err),
@@ -43,7 +45,9 @@ export async function stopSync(): Promise<void> {
 }
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+const CLOCK_CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 let lastCleanup = 0;
+let lastClockCheck = 0;
 
 async function syncLoop(): Promise<void> {
 	const lockAcquired = await acquireSyncLock();
@@ -62,6 +66,10 @@ async function syncLoop(): Promise<void> {
 				if (deleted > 0) {
 					log.info(`Cleanup: removed ${deleted} expired invalid/orphaned operations`);
 				}
+			}
+			if (Date.now() - lastClockCheck > CLOCK_CHECK_INTERVAL_MS) {
+				lastClockCheck = Date.now();
+				await checkClockDrift().catch(() => {});
 			}
 		} catch (err) {
 			log.error("Sync cycle error", {
