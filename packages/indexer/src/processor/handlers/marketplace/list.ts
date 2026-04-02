@@ -4,7 +4,7 @@ import { getNftForProcessing, updateNftListing, NFT_STATUS_LISTED } from "@/db/q
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireHiveAmount, optionalNumber, optionalString } from "@/utils/validation.ts";
 import { assertActionable, assertSeedNotDistributed, isListingExpired } from "@/utils/status-checks.ts";
-import { generateListingId, LISTING_ID_PREFIX } from "nftlox-sdk";
+import { generateListingId, LISTING_ID_PREFIX, MIN_PRICE_AMOUNT } from "nftlox-sdk";
 
 export async function handleList(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");
@@ -53,5 +53,10 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<v
 	}
 
 	const priceAmount = parseFloat(price.amount);
+	const minPrice = parseFloat(MIN_PRICE_AMOUNT);
+	if (priceAmount < minPrice) {
+		throw new Error(`Price ${price.amount} ${price.currency} is below minimum ${MIN_PRICE_AMOUNT}`);
+	}
+
 	await updateNftListing(nftId, priceAmount, price.currency, expiresAt, marketplace, listingId, op.txId, txn);
 }

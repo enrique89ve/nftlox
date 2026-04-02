@@ -7,7 +7,7 @@ import {
 	incrementDistributedBy,
 } from "@/db/queries/nfts.ts";
 import { assertActionable } from "@/utils/status-checks.ts";
-import { requireString, requireNumber, requireObject, requireArray, optionalString, optionalObject } from "@/utils/validation.ts";
+import { requireString, requirePositiveInt, requireObject, requireArray, optionalString, optionalObject } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { computeInstanceBaseline, validateSeedSupplyForDistribution } from "@/utils/nft-rules.ts";
 import {
@@ -46,9 +46,8 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	for (const item of items) {
 		const raw = requireObject(item, "items[]");
 		const seedId = requireString(raw.seedId, "seedId");
-		const quantity = requireNumber(raw.quantity, "quantity");
+		const quantity = requirePositiveInt(raw.quantity, "quantity");
 		const seedTxId = requireString(raw.seedTxId, "seedTxId");
-		if (quantity < 1) throw new Error(`Invalid quantity for seed ${seedId}`);
 		if (seenSeeds.has(seedId)) throw new Error(`Duplicate seedId in items: ${seedId}`);
 		seenSeeds.add(seedId);
 		parsedItems.push({ seedId, quantity, seedTxId });

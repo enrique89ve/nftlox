@@ -127,10 +127,18 @@ export function requireHiveAmount(value: unknown, fieldName: string): { amount: 
 }
 
 export function requireNumber(value: unknown, fieldName: string): number {
-	if (typeof value !== "number" || Number.isNaN(value)) {
-		throw new Error(`Missing or invalid ${fieldName}: expected number`);
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		throw new Error(`Missing or invalid ${fieldName}: expected finite number`);
 	}
 	return value;
+}
+
+export function requirePositiveInt(value: unknown, fieldName: string): number {
+	const n = requireNumber(value, fieldName);
+	if (!Number.isInteger(n) || n < 1) {
+		throw new Error(`${fieldName} must be a positive integer, got ${n}`);
+	}
+	return n;
 }
 
 export function optionalString(value: unknown): string | null {
@@ -149,7 +157,7 @@ export function optionalBoundedString(value: unknown, fieldName: string, maxLeng
 
 export function optionalNumber(value: unknown, fallback?: number): number | null {
 	if (value === undefined || value === null) return fallback ?? null;
-	if (typeof value !== "number" || Number.isNaN(value)) return fallback ?? null;
+	if (typeof value !== "number" || !Number.isFinite(value)) return fallback ?? null;
 	return value;
 }
 

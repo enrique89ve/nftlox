@@ -5,14 +5,12 @@ import {
 	upsertPackBalance,
 	getPackBalance,
 } from "@/db/queries/packs.ts";
-import { requireString, requireNumber, requireUsername } from "@/utils/validation.ts";
+import { requireString, requirePositiveInt, requireUsername } from "@/utils/validation.ts";
 
 export async function handlePackTransfer(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const packId = requireString(op.data.packId, "packId");
 	const to = requireUsername(op.data.to, "to");
-	const quantity = requireNumber(op.data.quantity, "quantity");
-
-	if (quantity < 1) throw new Error("Quantity must be positive");
+	const quantity = requirePositiveInt(op.data.quantity, "quantity");
 	if (to === op.signer) throw new Error("Cannot transfer to yourself");
 
 	const pack = await getPackForProcessing(packId, txn);

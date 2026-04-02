@@ -13,7 +13,7 @@ import {
 	incrementDistributed,
 	type SeedWithDnaRow,
 } from "@/db/queries/nfts.ts";
-import { requireString, requireNumber } from "@/utils/validation.ts";
+import { requireString, requirePositiveInt } from "@/utils/validation.ts";
 import { assertActionable } from "@/utils/status-checks.ts";
 import { computeInstanceBaseline } from "@/utils/nft-rules.ts";
 import {
@@ -166,9 +166,7 @@ async function executeMintPlan(
 
 export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const packId = requireString(op.data.packId, "packId");
-	const quantity = requireNumber(op.data.quantity, "quantity");
-
-	if (quantity < 1) throw new Error("Quantity must be positive");
+	const quantity = requirePositiveInt(op.data.quantity, "quantity");
 	if (quantity > MAX_PACK_OPEN_BATCH) {
 		throw new Error(`Cannot open more than ${MAX_PACK_OPEN_BATCH} packs at once, got ${quantity}`);
 	}
@@ -202,6 +200,14 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 	}
 
 	if (deliveredPacks === 0) {
+		// Check if this is a clean replay: all expected instances already exist from a prior run.
+		// If so, return silently (idempotent). Otherwise, seeds are genuinely exhausted.
+		const [existing] = await txn`
+			SELECT COUNT(*)::int AS count FROM nfts
+			WHERE tx_id = ${op.txId} AND seed_id IS NOT NULL
+		`;
+		if (existing && existing.count > 0) return;
+
 		throw new Error(`No packs could be delivered for ${packId}: all seeds exhausted`);
 	}
 

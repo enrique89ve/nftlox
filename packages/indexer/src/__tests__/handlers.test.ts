@@ -344,7 +344,9 @@ describe("Handlers (integration)", () => {
 	describe("archive_collection", () => {
 		test("archives an empty collection, clears collection-scoped permissions, and hides it from lists", async () => {
 			await seedCollection();
+			await seedMint();
 
+			// approveAll requires ownership — alice has seed_test1
 			await handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
 				spender: "bob",
 				collectionId: COL_ID,
@@ -355,6 +357,9 @@ describe("Handlers (integration)", () => {
 				operator: "carol",
 				approved: true,
 			}), sql);
+
+			// Delete the NFT directly so collection appears empty for archive
+			await sql`DELETE FROM nfts WHERE collection_id = ${COL_ID}`;
 
 			await handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
 				collectionId: COL_ID,

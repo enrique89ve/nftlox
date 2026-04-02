@@ -5,11 +5,11 @@ import {
 	getCollectionRules,
 } from "@/db/queries/collections.ts";
 import { upsertDataOperator, deleteDataOperator } from "@/db/queries/allowances.ts";
-import { requireString, requireBoolean } from "@/utils/validation.ts";
+import { requireString, requireBoolean, requireUsername } from "@/utils/validation.ts";
 
 export async function handleDataOperatorApprove(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const collectionId = requireString(op.data.collectionId, "collectionId");
-	const operator = requireString(op.data.operator, "operator");
+	const operator = requireUsername(op.data.operator, "operator");
 	const approved = requireBoolean(op.data.approved, "approved");
 
 	if (operator === op.signer) throw new Error("Cannot approve yourself as operator");

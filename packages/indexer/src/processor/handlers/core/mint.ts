@@ -2,7 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { COLLECTION_STATUS_ARCHIVED, getCollectionRules } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
-import { requireString, requireBoundedString, optionalString, optionalBoundedString, optionalNumber, optionalObject } from "@/utils/validation.ts";
+import { requireString, requireBoundedString, requireUsername, optionalString, optionalBoundedString, optionalNumber, optionalObject } from "@/utils/validation.ts";
 import { resolveNftType, validateSeedCap } from "@/utils/nft-rules.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import {
@@ -58,7 +58,8 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 	const imageHash = optionalString(metadata.imageHash) ?? "";
 	const originDna = await generateOriginDna(collectionId);
 	const instanceDna = await generateInstanceDna(id, originDna, edition, imageHash);
-	const owner = optionalString(d.owner) ?? op.signer;
+	const ownerRaw = optionalString(d.owner);
+	const owner = ownerRaw ? requireUsername(ownerRaw, "owner") : op.signer;
 	const uniqueAccessKey = await generateDeterministicAccessKey(instanceDna, owner, op.txId);
 
 	const maxReplicas = optionalNumber(d.maxReplicas) ?? 1;

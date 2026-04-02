@@ -51,7 +51,7 @@ export function buildPackTransferFrom(input: PackTransferFromBuilderInput): Buil
 	const data = parsed.data;
 
 	const payload = createPackTransferFromPayload(data);
-	const operation: HiveOperation = ["custom_json", { required_auths: [], required_posting_auths: [data.operator], id: PROTOCOL_ID, json: JSON.stringify(payload) }];
+	const operation: HiveOperation = ["custom_json", { required_auths: [data.operator], required_posting_auths: [], id: PROTOCOL_ID, json: JSON.stringify(payload) }];
 
 	return { success: true, payload, operation };
 }
@@ -105,7 +105,7 @@ export function buildNftTransferFrom(input: NftTransferFromBuilderInput): BuildR
 	const data = parsed.data;
 
 	const payload = createNftTransferFromPayload(data);
-	const operation: HiveOperation = ["custom_json", { required_auths: [], required_posting_auths: [data.operator], id: PROTOCOL_ID, json: JSON.stringify(payload) }];
+	const operation: HiveOperation = ["custom_json", { required_auths: [data.operator], required_posting_auths: [], id: PROTOCOL_ID, json: JSON.stringify(payload) }];
 
 	return { success: true, payload, operation };
 }
