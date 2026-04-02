@@ -43,7 +43,7 @@ export function stopPolling(): void {
 
 export function startApiServer(): void {
 	const STATS_PATHS = new Set(["/api/stats", "/api/health"]);
-	const ALLOWED_DURING_SYNC = new Set(["/api/health", "/api/status"]);
+	const ALLOWED_DURING_SYNC = new Set(["/api/health", "/api/status", "/swagger", "/swagger/json"]);
 
 	const app = new Elysia()
 		.use(cors())
