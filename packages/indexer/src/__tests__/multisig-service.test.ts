@@ -39,6 +39,7 @@ const TEST_ACTIVE_KEY = "5JdeC9P7Pbd1uGdFVEsJ41EkEnADbbHGq6p1BwFxm6txNBsQnsw";
 
 // ============ HELPERS ============
 
+let opCounter = 0;
 function makeOp(
 	action: string,
 	data: Record<string, unknown>,
@@ -46,10 +47,12 @@ function makeOp(
 	pairedTransfers?: ParsedOperation["pairedTransfers"],
 	authLevel: AuthLevel = ACTIVE_SET.has(action) ? "active" : "posting",
 ): ParsedOperation {
+	const id = ++opCounter;
 	return {
 		blockNum: 90000100,
 		timestamp: "2024-01-01T00:00:00",
 		txId: `tx_${action}_${Date.now()}`,
+		operationId: `op_ms_${id}`,
 		signer,
 		authLevel,
 		action: action as ParsedOperation["action"],

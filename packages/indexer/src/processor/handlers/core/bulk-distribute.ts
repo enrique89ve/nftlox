@@ -6,7 +6,7 @@ import {
 	getSeedWithSchemaForUpdate,
 	incrementDistributedBy,
 } from "@/db/queries/nfts.ts";
-import { assertNotBurned, assertNotLent } from "@/utils/status-checks.ts";
+import { assertActionable } from "@/utils/status-checks.ts";
 import { requireString, requireNumber, requireObject, requireArray, optionalString, optionalObject } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { computeInstanceBaseline, validateSeedSupplyForDistribution } from "@/utils/nft-rules.ts";
@@ -60,8 +60,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	for (const { seedId, quantity, seedTxId } of parsedItems) {
 		const seed = await getSeedWithSchemaForUpdate(seedId, txn);
 		if (!seed) throw new Error(`Seed not found: ${seedId}`);
-		assertNotBurned(seed, seedId);
-		assertNotLent(seed, seedId);
+		assertActionable(seed, seedId);
 		if (seed.nft_type !== "seed") throw new Error(`${seedId} is not a seed`);
 
 		if (seed.tx_id !== seedTxId) {

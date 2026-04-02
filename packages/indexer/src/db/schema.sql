@@ -107,30 +107,34 @@ CREATE TABLE IF NOT EXISTS nfts (
 );
 
 -- Invalid operations (audit trail)
+-- operation_id is the HafAH-assigned unique ID per custom_json within a transaction.
+-- This allows distinguishing multiple protocol ops in the same Hive tx.
 CREATE TABLE IF NOT EXISTS invalid_operations (
 	id BIGSERIAL PRIMARY KEY,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT,
+	operation_id TEXT,
 	signer TEXT,
 	action TEXT,
 	reason TEXT NOT NULL,
 	raw_payload JSONB,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_invalid_ops_tx_action_unique ON invalid_operations(tx_id, COALESCE(action, '')) WHERE tx_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invalid_ops_unique ON invalid_operations(tx_id, COALESCE(operation_id, '')) WHERE tx_id IS NOT NULL;
 
 -- Orphaned buys
 CREATE TABLE IF NOT EXISTS orphaned_buys (
 	id BIGSERIAL PRIMARY KEY,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
+	operation_id TEXT,
 	buyer TEXT NOT NULL,
 	nft_id TEXT,
 	reason TEXT NOT NULL,
 	transfers JSONB NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_orphaned_buys_tx_unique ON orphaned_buys(tx_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orphaned_buys_unique ON orphaned_buys(tx_id, COALESCE(operation_id, ''));
 
 -- Packs
 CREATE TABLE IF NOT EXISTS packs (
@@ -239,11 +243,11 @@ CREATE TABLE IF NOT EXISTS sales (
 	listing_id TEXT NOT NULL,
 	seller TEXT NOT NULL,
 	buyer TEXT NOT NULL,
-	gross_amount NUMERIC(18,3) NOT NULL,
+	gross_amount NUMERIC(18,3) NOT NULL CHECK (gross_amount > 0),
 	currency TEXT NOT NULL,
-	royalty_amount NUMERIC(18,3) NOT NULL DEFAULT 0,
-	protocol_fee NUMERIC(18,3) NOT NULL DEFAULT 0,
-	seller_net NUMERIC(18,3) NOT NULL,
+	royalty_amount NUMERIC(18,3) NOT NULL DEFAULT 0 CHECK (royalty_amount >= 0),
+	protocol_fee NUMERIC(18,3) NOT NULL DEFAULT 0 CHECK (protocol_fee >= 0),
+	seller_net NUMERIC(18,3) NOT NULL CHECK (seller_net >= 0),
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
@@ -311,10 +315,12 @@ CREATE INDEX IF NOT EXISTS idx_nfts_mutable_data ON nfts USING GIN (mutable_data
 CREATE INDEX IF NOT EXISTS idx_invalid_block ON invalid_operations(block_num);
 CREATE INDEX IF NOT EXISTS idx_invalid_tx ON invalid_operations(tx_id) WHERE tx_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_invalid_signer ON invalid_operations(signer) WHERE signer IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_invalid_op_id ON invalid_operations(operation_id) WHERE operation_id IS NOT NULL;
 
 -- Orphaned buys
 CREATE INDEX IF NOT EXISTS idx_orphaned_buys_buyer ON orphaned_buys(buyer);
 CREATE INDEX IF NOT EXISTS idx_orphaned_buys_tx ON orphaned_buys(tx_id);
+CREATE INDEX IF NOT EXISTS idx_orphaned_buys_op_id ON orphaned_buys(operation_id) WHERE operation_id IS NOT NULL;
 
 -- Packs
 CREATE INDEX IF NOT EXISTS idx_packs_collection ON packs(collection_id);

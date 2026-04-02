@@ -62,13 +62,21 @@ export function assertSeedNotDistributed(nft: HasKindAndDistributed, nftId: stri
 }
 
 /**
+ * Base validation: rejects burned and lent NFTs.
+ * Every handler that operates on an NFT should call this first.
+ */
+export function assertActionable(nft: HasStatus, nftId: string): void {
+	assertNotBurned(nft, nftId);
+	assertNotLent(nft, nftId);
+}
+
+/**
  * Asserts the NFT can be transferred/replicated.
  * Rejects: burned, lent, listed (unless listing has expired).
  * Returns true if the listing was expired (caller should clean up listing fields).
  */
 export function assertTransferable(nft: HasListingExpiry, nftId: string, blockTimestamp: string): { hadExpiredListing: boolean } {
-	assertNotBurned(nft, nftId);
-	assertNotLent(nft, nftId);
+	assertActionable(nft, nftId);
 
 	if (nft.status === NFT_STATUS_LISTED) {
 		if (!isListingExpired(nft.listing_expires_at, blockTimestamp)) {
@@ -78,4 +86,19 @@ export function assertTransferable(nft: HasListingExpiry, nftId: string, blockTi
 	}
 
 	return { hadExpiredListing: false };
+
+}
+
+/**
+ * Full ownership-change guard: actionable + not a distributed seed.
+ * Use for transfer, burn, buy — any operation that changes the NFT owner.
+ */
+export function assertOwnershipChangeable(
+	nft: HasListingExpiry & HasKindAndDistributed,
+	nftId: string,
+	blockTimestamp: string,
+): { hadExpiredListing: boolean } {
+	const result = assertTransferable(nft, nftId, blockTimestamp);
+	assertSeedNotDistributed(nft, nftId);
+	return result;
 }

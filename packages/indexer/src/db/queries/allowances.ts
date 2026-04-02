@@ -95,6 +95,25 @@ export async function deleteCollectionAllowancesByCollection(
 	`;
 }
 
+export async function cleanupCollectionAllowancesIfEmpty(
+	owner: string,
+	collectionId: string,
+	txn: Queryable = sql,
+): Promise<void> {
+	const [row] = await txn`
+		SELECT 1 FROM nfts
+		WHERE owner = ${owner} AND collection_id = ${collectionId}
+			AND status NOT IN ('burned')
+		LIMIT 1
+	`;
+	if (!row) {
+		await txn`
+			DELETE FROM collection_allowances
+			WHERE owner = ${owner} AND collection_id = ${collectionId}
+		`;
+	}
+}
+
 // ============ DATA OPERATORS ============
 
 export async function upsertDataOperator(

@@ -366,16 +366,3 @@ export const nftReturnInputSchema = seedProvenanceSchema.extend({
 	instanceId: z.string().min(1),
 });
 export type NftReturnInput = z.infer<typeof nftReturnInputSchema>;
-
-export const atomicTransferInputSchema = seedProvenanceSchema.extend({
-	nftId: z.string().min(1),
-	collectionId: z.string().min(1),
-	edition: z.number().int().min(1),
-	instanceDna: z.string().min(1),
-	from: usernameSchema,
-	to: usernameSchema,
-	memo: z.string().optional(),
-	imageUrl: httpUrlSchema.optional(),
-	imageHash: z.string().optional(),
-});
-export type AtomicTransferInput = z.infer<typeof atomicTransferInputSchema>;

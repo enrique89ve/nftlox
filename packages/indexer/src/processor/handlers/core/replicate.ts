@@ -2,17 +2,20 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { insertNft, nftExists, getNftForProcessing, updateNftListing } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
-import { requireString, requireUsername, optionalString } from "@/utils/validation.ts";
+import { requireBoundedString, requireUsername, optionalString } from "@/utils/validation.ts";
 import { assertTransferable, assertNotBurned } from "@/utils/status-checks.ts";
+// NOTE: replicate uses assertTransferable (not assertOwnershipChangeable) because
+// replication doesn't change ownership of the original — it creates a copy.
 import {
 	generateReplicaInstanceDna,
 	generateDeterministicAccessKey,
+	MAX_ID_LENGTH,
 } from "nftlox-sdk";
 
 export async function handleReplicate(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
-	const id = requireString(d.id, "id");
-	const originalId = requireString(d.originalId, "originalId");
+	const id = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
+	const originalId = requireBoundedString(d.originalId, "originalId", MAX_ID_LENGTH);
 	const newOwner = requireUsername(d.newOwner, "newOwner");
 
 	if (await nftExists(id, txn)) throw new Error(`Replica already exists: ${id}`);

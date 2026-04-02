@@ -28,6 +28,7 @@ import {
 	ACTION_SET_OWNER_DATA,
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
+	ACTIVE_AUTH_ACTIONS,
 } from "nftlox-sdk";
 
 // Core
@@ -70,20 +71,8 @@ import { handleNftReturn } from "./handlers/lending/nft-return.ts";
 
 const log = createLogger("router");
 
-// Actions that MUST be signed with active key (required_auths).
-// All other actions accept posting key (required_posting_auths).
-// Mirrors ACTIVE_AUTH_ACTIONS from SDK constants.
-const ACTIVE_AUTH_ACTIONS = new Set<string>([
-	ACTION_BUY,
-	ACTION_TRANSFER,
-	ACTION_LIST,
-	ACTION_PACK_BUY,
-	ACTION_PACK_TRANSFER,
-	ACTION_NFT_APPROVE,
-	ACTION_NFT_APPROVE_ALL,
-	ACTION_PACK_APPROVE,
-	ACTION_DATA_OPERATOR_APPROVE,
-]);
+// Single source of truth: SDK defines which actions require active key.
+const ACTIVE_AUTH_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 
 type Handler = (op: ParsedOperation, txn: Queryable) => Promise<void>;
 
@@ -140,6 +129,7 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 			await insertInvalidOperation({
 				blockNum: op.blockNum,
 				txId: op.txId,
+				operationId: op.operationId,
 				signer: op.signer,
 				action: op.action,
 				reason: `Unknown action: ${op.action}`,
@@ -149,10 +139,11 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 		}
 
 		// Enforce canonical auth level before dispatching
-		if (ACTIVE_AUTH_ACTIONS.has(op.action) && op.authLevel !== "active") {
+		if (ACTIVE_AUTH_SET.has(op.action) && op.authLevel !== "active") {
 			await insertInvalidOperation({
 				blockNum: op.blockNum,
 				txId: op.txId,
+				operationId: op.operationId,
 				signer: op.signer,
 				action: op.action,
 				reason: `Action '${op.action}' requires active key authority, got posting`,
@@ -170,6 +161,7 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 			await insertInvalidOperation({
 				blockNum: op.blockNum,
 				txId: op.txId,
+				operationId: op.operationId,
 				signer: op.signer,
 				action: op.action,
 				reason,
@@ -185,11 +177,13 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 				log.error("ORPHANED BUY DETECTED — funds transferred but ownership NOT updated", {
 					blockNum: op.blockNum,
 					txId: op.txId,
+					operationId: op.operationId,
 					transfers,
 				});
 				await insertOrphanedBuy({
 					blockNum: op.blockNum,
 					txId: op.txId,
+					operationId: op.operationId,
 					buyer: firstTransfer.from,
 					nftId: typeof op.data.nftId === "string" ? op.data.nftId : null,
 					reason,

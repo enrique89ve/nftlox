@@ -98,11 +98,12 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 		},
 	})
 	.get("/api/operation-status/:txId", async ({ params }) => {
-		return getOperationStatus(params.txId);
+		const entries = await getOperationStatus(params.txId);
+		return { txId: params.txId, operations: entries };
 	}, {
 		params: t.Object({ txId: t.String() }),
 		detail: {
 			summary: "Operation status by transaction ID",
-			description: "Returns whether a Hive transaction was confirmed, invalid, orphaned, or unknown by the indexer.",
+			description: "Returns per-operation status for all protocol operations in a Hive transaction. A single tx can contain multiple custom_json ops, each tracked independently.",
 		},
 	})

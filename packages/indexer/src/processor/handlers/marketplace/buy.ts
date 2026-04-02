@@ -1,11 +1,11 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftWithCollectionRules, updateNftOwner, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
-import { deleteNftAllowance } from "@/db/queries/allowances.ts";
+import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { insertSale } from "@/db/queries/marketplace-history.ts";
 import { requireString, requireUsername, verifyTransfers } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
-import { assertNotBurned, assertNotLent, assertSeedNotDistributed, isListingExpired } from "@/utils/status-checks.ts";
+import { assertActionable, assertSeedNotDistributed, isListingExpired } from "@/utils/status-checks.ts";
 import { config } from "@/config.ts";
 
 /**
@@ -37,8 +37,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 
 	const nft = await getNftWithCollectionRules(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
-	assertNotBurned(nft, nftId);
-	assertNotLent(nft, nftId);
+	assertActionable(nft, nftId);
 	assertSeedNotDistributed(nft, nftId);
 	if (nft.status !== NFT_STATUS_LISTED) throw new Error(`NFT not listed: ${nftId}`);
 	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
@@ -72,6 +71,9 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	}
 
 	const royaltyPct = Number(nft.royalty_pct ?? 0);
+	if (royaltyPct < 0 || royaltyPct > 50) {
+		throw new Error(`Corrupted royalty_pct for collection ${nft.collection_id}: ${royaltyPct}`);
+	}
 	const royaltyRecipient = nft.royalty_recipient ?? null;
 
 	// Protocol fee always goes to the co-signing node
@@ -106,6 +108,8 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 		createdAt: op.timestamp,
 	}, txn);
 
+	const previousOwner = nft.owner;
 	await updateNftOwner(nftId, buyer, op.txId, txn);
 	await deleteNftAllowance(nftId, txn);
+	await cleanupCollectionAllowancesIfEmpty(previousOwner, nft.collection_id, txn);
 }

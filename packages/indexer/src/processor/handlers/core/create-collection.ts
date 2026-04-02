@@ -4,11 +4,13 @@ import { insertCollection, collectionExists, symbolTakenByCreator } from "@/db/q
 import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
 import {
 	requireString,
+	requireBoundedString,
 	requireSymbol,
 	requireNumber,
 	requireObject,
 	requireBoolean,
 	optionalString,
+	optionalBoundedString,
 	optionalObject,
 } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
@@ -17,13 +19,18 @@ import {
 	computeDataHash,
 	generateDeterministicCollectionId,
 	generateOriginDna,
+	MAX_NAME_LENGTH,
+	MAX_DESCRIPTION_LENGTH,
+	MAX_IMAGE_URL_LENGTH,
+	MAX_URL_LENGTH,
+	MAX_ID_LENGTH,
 	type CollectionSchema,
 } from "nftlox-sdk";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
-	const payloadId = requireString(d.id, "id");
-	const name = requireString(d.name, "name");
+	const payloadId = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
+	const name = requireBoundedString(d.name, "name", MAX_NAME_LENGTH);
 	const symbol = requireSymbol(d.symbol, "symbol");
 
 	// C4: Recalculate canonical collectionId and reject mismatch
@@ -42,8 +49,8 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 
 	// H3: Require metadata with mandatory fields
 	const metadata = requireObject(d.metadata, "metadata");
-	const description = requireString(metadata.description, "metadata.description");
-	const imageUrl = requireString(metadata.image, "metadata.image");
+	const description = requireBoundedString(metadata.description, "metadata.description", MAX_DESCRIPTION_LENGTH);
+	const imageUrl = requireBoundedString(metadata.image, "metadata.image", MAX_IMAGE_URL_LENGTH);
 
 	// H4: Require rules with explicit boolean fields
 	const rules = requireObject(d.rules, "rules");
@@ -84,7 +91,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		originDna,
 		description,
 		imageUrl,
-		externalUrl: optionalString(metadata.externalUrl),
+		externalUrl: optionalBoundedString(metadata.externalUrl, "metadata.externalUrl", MAX_URL_LENGTH),
 		transferable,
 		burnable,
 		replicable,

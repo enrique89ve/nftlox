@@ -7,11 +7,13 @@ import {
 import { getNftForProcessing } from "@/db/queries/nfts.ts";
 import { insertPack, packExists } from "@/db/queries/packs.ts";
 import {
-	requireString,
+	requireBoundedString,
 	requireHiveAmount,
 	optionalString,
+	optionalBoundedString,
 	optionalNumber,
 } from "@/utils/validation.ts";
+import { MAX_ID_LENGTH, MAX_NAME_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_IMAGE_URL_LENGTH } from "nftlox-sdk";
 import { validateSeedDemand } from "@/utils/nft-rules.ts";
 
 type DropEntry = { seedId: string; weight: number };
@@ -75,9 +77,9 @@ async function validateSeedSupply(
 
 export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
-	const id = requireString(d.id, "id");
-	const collectionId = requireString(d.collectionId, "collectionId");
-	const name = requireString(d.name, "name");
+	const id = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
+	const collectionId = requireBoundedString(d.collectionId, "collectionId", MAX_ID_LENGTH);
+	const name = requireBoundedString(d.name, "name", MAX_NAME_LENGTH);
 
 	if (await packExists(id, txn)) return;
 
@@ -106,8 +108,8 @@ export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Pro
 		collectionId,
 		creator: op.signer,
 		name,
-		description: optionalString(d.description),
-		imageUrl: optionalString(d.imageUrl),
+		description: optionalBoundedString(d.description, "description", MAX_DESCRIPTION_LENGTH),
+		imageUrl: optionalBoundedString(d.imageUrl, "imageUrl", MAX_IMAGE_URL_LENGTH),
 		dropTable,
 		itemsPerPack,
 		priceAmount,

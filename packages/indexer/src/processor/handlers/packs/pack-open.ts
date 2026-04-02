@@ -14,7 +14,7 @@ import {
 	type SeedWithDnaRow,
 } from "@/db/queries/nfts.ts";
 import { requireString, requireNumber } from "@/utils/validation.ts";
-import { assertNotBurned, assertNotLent } from "@/utils/status-checks.ts";
+import { assertActionable } from "@/utils/status-checks.ts";
 import { computeInstanceBaseline } from "@/utils/nft-rules.ts";
 import {
 	resolveDropTable,
@@ -77,8 +77,7 @@ async function buildMintPlan(
 	for (const seedId of selectedSeeds) {
 		const seed = await getSeedWithDnaForUpdate(seedId, txn);
 		if (!seed) throw new Error(`Seed ${seedId} not found during pack opening (pack: ${packId})`);
-		assertNotBurned(seed, seedId);
-		assertNotLent(seed, seedId);
+		assertActionable(seed, seedId);
 
 		const maxReplicas = Number(seed.max_replicas) || 0;
 		const distributed = Number(seed.distributed) || 0;

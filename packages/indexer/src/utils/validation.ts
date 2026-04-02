@@ -93,6 +93,14 @@ export function requireSymbol(value: unknown, fieldName: string): string {
 	return str;
 }
 
+export function requireBoundedString(value: unknown, fieldName: string, maxLength: number): string {
+	const str = requireString(value, fieldName);
+	if (str.length > maxLength) {
+		throw new Error(`${fieldName} exceeds max length: ${str.length} > ${maxLength}`);
+	}
+	return str;
+}
+
 export function requireUsername(value: unknown, fieldName: string): string {
 	const str = requireString(value, fieldName);
 	const error = validateHiveUsername(str);
@@ -129,6 +137,14 @@ export function optionalString(value: unknown): string | null {
 	if (value === undefined || value === null) return null;
 	if (typeof value !== "string") return null;
 	return value;
+}
+
+export function optionalBoundedString(value: unknown, fieldName: string, maxLength: number): string | null {
+	const str = optionalString(value);
+	if (str && str.length > maxLength) {
+		throw new Error(`${fieldName} exceeds max length: ${str.length} > ${maxLength}`);
+	}
+	return str;
 }
 
 export function optionalNumber(value: unknown, fallback?: number): number | null {

@@ -2,7 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { COLLECTION_STATUS_ARCHIVED, getCollectionRules } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
-import { requireString, optionalString, optionalNumber, optionalObject } from "@/utils/validation.ts";
+import { requireString, requireBoundedString, optionalString, optionalBoundedString, optionalNumber, optionalObject } from "@/utils/validation.ts";
 import { resolveNftType, validateSeedCap } from "@/utils/nft-rules.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import {
@@ -11,13 +11,17 @@ import {
 	generateOriginDna,
 	generateInstanceDna,
 	generateDeterministicAccessKey,
+	MAX_ID_LENGTH,
+	MAX_NAME_LENGTH,
+	MAX_DESCRIPTION_LENGTH,
+	MAX_IMAGE_URL_LENGTH,
 	type CollectionSchema,
 } from "nftlox-sdk";
 
 export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
-	const id = requireString(d.id, "id");
-	const collectionId = requireString(d.collectionId, "collectionId");
+	const id = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
+	const collectionId = requireBoundedString(d.collectionId, "collectionId", MAX_ID_LENGTH);
 
 	if (await nftExists(id, txn)) return;
 	const collection = await getCollectionRules(collectionId, txn);
@@ -70,9 +74,9 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		instanceDna,
 		uniqueAccessKey,
 		mintedBy: op.signer,
-		name: optionalString(metadata.name) ?? optionalString(d.name) ?? "",
-		description: optionalString(metadata.description),
-		imageUrl: optionalString(metadata.imageUrl),
+		name: optionalBoundedString(metadata.name, "metadata.name", MAX_NAME_LENGTH) ?? optionalBoundedString(d.name, "name", MAX_NAME_LENGTH) ?? "",
+		description: optionalBoundedString(metadata.description, "metadata.description", MAX_DESCRIPTION_LENGTH),
+		imageUrl: optionalBoundedString(metadata.imageUrl, "metadata.imageUrl", MAX_IMAGE_URL_LENGTH),
 		imageHash: optionalString(metadata.imageHash),
 		maxReplicas,
 		seedId: null, instanceNumber: null, originalId: null,

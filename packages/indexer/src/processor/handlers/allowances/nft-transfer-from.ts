@@ -6,9 +6,10 @@ import {
 	getNftAllowance,
 	hasCollectionAllowance,
 	deleteNftAllowance,
+	cleanupCollectionAllowancesIfEmpty,
 } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
-import { assertTransferable, assertSeedNotDistributed } from "@/utils/status-checks.ts";
+import { assertOwnershipChangeable } from "@/utils/status-checks.ts";
 import { createLogger } from "@/utils/logger.ts";
 
 const log = createLogger("handler:nft-transfer-from");
@@ -23,11 +24,10 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 	const nft = await getNftForProcessing(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
 
-	const { hadExpiredListing } = assertTransferable(nft, instanceId, op.timestamp);
+	const { hadExpiredListing } = assertOwnershipChangeable(nft, instanceId, op.timestamp);
 	if (hadExpiredListing) {
 		log.info("TransferFrom auto-cleared expired listing", { instanceId, block: op.blockNum });
 	}
-	assertSeedNotDistributed(nft, instanceId);
 
 	if (nft.owner !== from) throw new Error(`Account ${from} is not owner of ${instanceId}`);
 
@@ -49,4 +49,5 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 
 	await updateNftOwner(instanceId, to, op.txId, txn);
 	await deleteNftAllowance(instanceId, txn);
+	await cleanupCollectionAllowancesIfEmpty(from, nft.collection_id, txn);
 }

@@ -12,7 +12,7 @@ export interface ValidationError {
 }
 
 export type BuildResult<T> =
-	| { success: true; payload: ProtocolPayload<T>; operation?: HiveOperation; hiveOperations?: AtomicOperation[]; warnings?: string[]; generatedId?: string; generatedIds?: Record<string, string> }
+	| { success: true; payload: ProtocolPayload<T>; operation?: HiveOperation; hiveOperations?: Array<HiveOperation | HiveTransferOperation>; warnings?: string[]; generatedId?: string; generatedIds?: Record<string, string> }
 	| { success: false; errors: ValidationError[] };
 
 export type HiveOperation = [
@@ -215,18 +215,6 @@ export interface SetDataFromData extends SeedProvenance {
 	mutableData?: Record<string, unknown>;
 }
 
-// ============ ATOMIC TRANSFER TYPES (Dual-registro) ============
-
-export type TransferMemoAction = "transfer" | "mint" | "sale" | "burn" | "replicate";
-
-export interface TransferMemo {
-	action: TransferMemoAction;
-	nftId: string;
-	collectionId: string;
-	edition: number;
-	instanceDna: string;
-}
-
 // ============ HIVE TRANSFER OPERATION TYPE ============
 
 export type HiveTransferOperation = [
@@ -238,8 +226,6 @@ export type HiveTransferOperation = [
 		memo: string;
 	},
 ];
-
-export type AtomicOperation = HiveTransferOperation | HiveOperation;
 
 // ============ MARKETPLACE TYPES ============
 
@@ -351,14 +337,6 @@ export interface NftReturnData extends SeedProvenance {
 	instanceId: string;
 }
 
-// ============ DATA TRACKING (blockchain provenance) ============
-
-export type DataProof = {
-	readonly hash: string;
-	readonly txId: string;
-	readonly blockNum: number;
-};
-
 // ============ PROTOCOL PAYLOAD ============
 
 export interface ProtocolPayload<T = unknown> {
@@ -380,34 +358,6 @@ export interface SeedNFTWithArtId {
 	brief?: string;
 	imageUrl: string;
 	maxSupply: number;
-}
-
-/**
- * Result of pre-mint validation.
- */
-export interface PreMintValidationResult {
-	valid: boolean;
-	stage?: "format" | "uniqueness" | "blockchain";
-	collectionId?: string;
-	collectionExists?: boolean;
-	summary?: {
-		total: number;
-		new: number;
-		existing: number;
-	};
-	seeds?: Array<{
-		artId: string;
-		seedId: string;
-		exists: boolean;
-		name: string;
-	}>;
-	formatErrors?: Array<{
-		index: number;
-		artId: string;
-		error: string;
-	}>;
-	duplicates?: string[];
-	canProceed?: boolean;
 }
 
 /**

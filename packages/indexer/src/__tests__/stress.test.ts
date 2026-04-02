@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeAll, afterAll, beforeEach } from "bun:test";
-import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import type { ParsedOperation, ParseResult } from "@/scanner/operation-parser.ts";
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
 import { ACTION_TRANSFER } from "nftlox-sdk";
 
@@ -25,7 +25,7 @@ const mockGetTransfersInTransaction = mock(async () => {
 	await new Promise(r => setTimeout(r, 10));
 	return [];
 });
-const mockParseHafAHOperations = mock(() => [] as ParsedOperation[]);
+const mockParseHafAHOperations = mock((): ParseResult => ({ ops: [], rejected: [] }));
 const mockRouteOperation = mock(async () => {
 	await new Promise(r => setTimeout(r, 2));
 });
@@ -42,6 +42,9 @@ mock.module("@/db/queries/sync.ts", () => ({
 	getLastBlock: mockGetLastBlock,
 	updateLastBlock: mockUpdateLastBlock,
 	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
+	insertInvalidOperation: mock(() => Promise.resolve()),
+	acquireSyncLock: mock(() => Promise.resolve(true)),
+	releaseSyncLock: mock(() => Promise.resolve()),
 }));
 
 mock.module("@/scanner/hive-client.ts", () => ({
@@ -226,7 +229,7 @@ describe("stress: API responsiveness during sync", () => {
 			await new Promise(r => setTimeout(r, 20 + Math.random() * 30));
 			return [];
 		});
-		mockParseHafAHOperations.mockImplementation(() => []);
+		mockParseHafAHOperations.mockImplementation((): ParseResult => ({ ops: [], rejected: [] }));
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		setRunning(true);
 	});
@@ -240,11 +243,11 @@ describe("stress: API responsiveness during sync", () => {
 			await new Promise(r => setTimeout(r, 30)); // simulate network
 			return [];
 		});
-		mockParseHafAHOperations.mockImplementation(() => {
+		mockParseHafAHOperations.mockImplementation((): ParseResult => {
 			// ~5ms CPU block per batch (realistic parsing simulation)
 			const start = performance.now();
 			while (performance.now() - start < 5) { /* CPU work */ }
-			return [];
+			return { ops: [], rejected: [] };
 		});
 
 		// Run sync and API concurrently
@@ -302,7 +305,7 @@ describe("stress: API responsiveness during sync", () => {
 			await new Promise(r => setTimeout(r, 20));
 			return [];
 		});
-		mockParseHafAHOperations.mockImplementation(() => []);
+		mockParseHafAHOperations.mockImplementation((): ParseResult => ({ ops: [], rejected: [] }));
 
 		const syncPromise = syncCycle();
 		const underLoad = await fireConcurrentRequests(`${baseUrl}/api/health`, 500);

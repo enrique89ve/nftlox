@@ -2,9 +2,9 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftOwner, updateNftBurned } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
-import { deleteNftAllowance } from "@/db/queries/allowances.ts";
+import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
-import { assertTransferable, assertSeedNotDistributed, assertNotBurned, assertNotLent, assertNotListed } from "@/utils/status-checks.ts";
+import { assertOwnershipChangeable, assertActionable, assertNotListed, assertSeedNotDistributed } from "@/utils/status-checks.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { MAX_TRANSFER_BATCH_SIZE } from "nftlox-sdk";
 
@@ -47,11 +47,10 @@ async function processSingleTransfer(op: ParsedOperation, nftId: string, to: str
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
-	const { hadExpiredListing } = assertTransferable(nft, nftId, op.timestamp);
+	const { hadExpiredListing } = assertOwnershipChangeable(nft, nftId, op.timestamp);
 	if (hadExpiredListing) {
 		log.info("Transfer auto-cleared expired listing", { nftId, block: op.blockNum });
 	}
-	assertSeedNotDistributed(nft, nftId);
 
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 
@@ -62,14 +61,14 @@ async function processSingleTransfer(op: ParsedOperation, nftId: string, to: str
 
 	await updateNftOwner(nftId, to, op.txId, txn);
 	await deleteNftAllowance(nftId, txn);
+	await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
 }
 
 async function processBurn(op: ParsedOperation, nftId: string, txn: Queryable): Promise<void> {
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
-	assertNotBurned(nft, nftId);
-	assertNotLent(nft, nftId);
+	assertActionable(nft, nftId);
 	assertNotListed(nft, nftId);
 	assertSeedNotDistributed(nft, nftId);
 
@@ -83,4 +82,5 @@ async function processBurn(op: ParsedOperation, nftId: string, txn: Queryable): 
 	log.info("Burn via transfer to null", { nftId, block: op.blockNum });
 	await updateNftBurned(nftId, op.signer, op.blockNum, txn);
 	await deleteNftAllowance(nftId, txn);
+	await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
 }

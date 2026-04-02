@@ -5,7 +5,6 @@ import {
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
 	SAFE_PAYLOAD_MAX_BYTES,
-	ATOMIC_TRACKING_AMOUNT,
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
@@ -84,10 +83,6 @@ import type {
 	BurnInput,
 	UnlistInput,
 	HiveOperation,
-	TransferMemo,
-	AtomicTransferInput,
-	HiveTransferOperation,
-	AtomicOperation,
 	SchemaFieldType,
 } from "./types";
 
@@ -647,97 +642,6 @@ export function createUnlistOperation(
 			json: safeStringify(payload),
 		},
 	];
-}
-
-// ============ ATOMIC TRANSFER (DUAL-REGISTRO) ============
-
-export function buildTransferMemo(data: TransferMemo): string {
-	return `nftlox:${data.action}:${data.nftId}:${data.collectionId}:${data.edition}:${data.instanceDna}`;
-}
-
-const VALID_MEMO_ACTIONS = new Set<TransferMemo["action"]>(["transfer", "mint", "sale", "burn", "replicate"]);
-
-export function parseTransferMemo(memo: string): TransferMemo | null {
-	const parts = memo.split(":");
-	if (parts.length < 6 || parts[0] !== "nftlox") {
-		return null;
-	}
-
-	const action = parts[1];
-	const nftId = parts[2];
-	const collectionId = parts[3];
-	const editionStr = parts[4];
-	const instanceDna = parts[5];
-
-	if (!action || !nftId || !collectionId || !editionStr || !instanceDna) {
-		return null;
-	}
-
-	if (!VALID_MEMO_ACTIONS.has(action as TransferMemo["action"])) {
-		return null;
-	}
-
-	const edition = parseInt(editionStr, 10);
-	if (isNaN(edition)) {
-		return null;
-	}
-
-	return {
-		action: action as TransferMemo["action"],
-		nftId,
-		collectionId,
-		edition,
-		instanceDna,
-	};
-}
-
-export function createAtomicTransferOperations(
-	input: AtomicTransferInput,
-): AtomicOperation[] {
-	const memo =
-		input.memo ||
-		buildTransferMemo({
-			action: "transfer",
-			nftId: input.nftId,
-			collectionId: input.collectionId,
-			edition: input.edition,
-			instanceDna: input.instanceDna,
-		});
-
-	const hiveTransfer: HiveTransferOperation = [
-		"transfer",
-		{
-			from: input.from,
-			to: input.to,
-			amount: ATOMIC_TRACKING_AMOUNT,
-			memo: memo,
-		},
-	];
-
-	// Active key required for atomicity with the transfer above
-	const payload = createTransferPayload(
-		input.nftId,
-		input.from,
-		input.to,
-		input.imageUrl,
-		input.imageHash,
-		input,
-	);
-	const customJson: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [input.from],
-			required_posting_auths: [],
-			id: PROTOCOL_ID,
-			json: safeStringify(payload),
-		},
-	];
-
-	return [hiveTransfer, customJson];
-}
-
-export function getTrackingAmount(): string {
-	return ATOMIC_TRACKING_AMOUNT;
 }
 
 // ============ DETERMINISTIC PAYLOAD CREATION (ANTI-DUPLICATION) ============

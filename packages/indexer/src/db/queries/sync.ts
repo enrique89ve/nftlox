@@ -46,6 +46,7 @@ export async function insertInvalidOperation(
 	op: {
 		blockNum: number;
 		txId: string | null;
+		operationId: string | null;
 		signer: string | null;
 		action: string | null;
 		reason: string;
@@ -54,10 +55,11 @@ export async function insertInvalidOperation(
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
-		INSERT INTO invalid_operations (block_num, tx_id, signer, action, reason, raw_payload)
+		INSERT INTO invalid_operations (block_num, tx_id, operation_id, signer, action, reason, raw_payload)
 		VALUES (
 			${op.blockNum},
 			${op.txId},
+			${op.operationId},
 			${op.signer},
 			${op.action},
 			${op.reason},
@@ -88,8 +90,9 @@ export async function cleanupExpiredOperations(): Promise<number> {
 
 export type OperationStatus = "confirmed" | "invalid" | "orphaned" | "pending" | "unknown";
 
-export interface OperationStatusResult {
+export interface OperationStatusEntry {
 	status: OperationStatus;
+	operationId: string | null;
 	signer: string | null;
 	action: string | null;
 	reason: string | null;
@@ -97,78 +100,98 @@ export interface OperationStatusResult {
 	timestamp: string | null;
 }
 
-export async function getOperationStatus(txId: string): Promise<OperationStatusResult> {
-	// 1. Check invalid_operations
-	const [invalid] = await sql`
-		SELECT signer, action, reason, block_num, indexed_at
-		FROM invalid_operations WHERE tx_id = ${txId} LIMIT 1
+/**
+ * Returns all protocol operation statuses for a given Hive transaction.
+ *
+ * A single Hive tx can contain multiple custom_json operations (up to 5).
+ * This function returns one entry per operation, so the caller can distinguish
+ * mixed results (e.g., 1 confirmed + 1 invalid within the same tx).
+ *
+ * If no operations are found, returns a single "unknown" entry.
+ */
+export async function getOperationStatus(txId: string): Promise<OperationStatusEntry[]> {
+	const results: OperationStatusEntry[] = [];
+
+	// 1. Check invalid_operations (may have multiple per tx)
+	const invalids = await sql`
+		SELECT operation_id, signer, action, reason, block_num, indexed_at
+		FROM invalid_operations WHERE tx_id = ${txId}
 	`;
-	if (invalid) {
-		return {
+	for (const row of invalids) {
+		results.push({
 			status: "invalid",
-			signer: invalid.signer ?? null,
-			action: invalid.action ?? null,
-			reason: invalid.reason ?? null,
-			blockNum: Number(invalid.block_num),
-			timestamp: String(invalid.indexed_at),
-		};
+			operationId: row.operation_id ?? null,
+			signer: row.signer ?? null,
+			action: row.action ?? null,
+			reason: row.reason ?? null,
+			blockNum: Number(row.block_num),
+			timestamp: String(row.indexed_at),
+		});
 	}
 
-	// 2. Check orphaned_buys
-	const [orphaned] = await sql`
-		SELECT buyer, reason, block_num, created_at
-		FROM orphaned_buys WHERE tx_id = ${txId} LIMIT 1
+	// 2. Check orphaned_buys (may have multiple per tx)
+	const orphaneds = await sql`
+		SELECT operation_id, buyer, reason, block_num, created_at
+		FROM orphaned_buys WHERE tx_id = ${txId}
 	`;
-	if (orphaned) {
-		return {
+	for (const row of orphaneds) {
+		results.push({
 			status: "orphaned",
-			signer: orphaned.buyer ?? null,
+			operationId: row.operation_id ?? null,
+			signer: row.buyer ?? null,
 			action: "buy",
-			reason: orphaned.reason ?? null,
-			blockNum: Number(orphaned.block_num),
-			timestamp: String(orphaned.created_at),
-		};
+			reason: row.reason ?? null,
+			blockNum: Number(row.block_num),
+			timestamp: String(row.created_at),
+		});
 	}
 
 	// 3. Check state tables for successful operations
-	const [nft] = await sql`
+	const nfts = await sql`
 		SELECT minted_by, nft_type AS action, block_num, created_at
-		FROM nfts WHERE tx_id = ${txId} LIMIT 1
+		FROM nfts WHERE tx_id = ${txId}
 	`;
-	if (nft) {
-		return {
+	for (const row of nfts) {
+		results.push({
 			status: "confirmed",
-			signer: nft.minted_by ?? null,
-			action: nft.action ?? null,
+			operationId: null,
+			signer: row.minted_by ?? null,
+			action: row.action ?? null,
 			reason: null,
-			blockNum: Number(nft.block_num),
-			timestamp: String(nft.created_at),
-		};
+			blockNum: Number(row.block_num),
+			timestamp: String(row.created_at),
+		});
 	}
 
-	const [collection] = await sql`
+	const collections = await sql`
 		SELECT creator, block_num, created_at
-		FROM collections WHERE tx_id = ${txId} LIMIT 1
+		FROM collections WHERE tx_id = ${txId}
 	`;
-	if (collection) {
-		return {
+	for (const row of collections) {
+		results.push({
 			status: "confirmed",
-			signer: collection.creator ?? null,
+			operationId: null,
+			signer: row.creator ?? null,
 			action: "create_collection",
 			reason: null,
-			blockNum: Number(collection.block_num),
-			timestamp: String(collection.created_at),
-		};
+			blockNum: Number(row.block_num),
+			timestamp: String(row.created_at),
+		});
 	}
 
-	return {
-		status: "unknown",
-		signer: null,
-		action: null,
-		reason: null,
-		blockNum: null,
-		timestamp: null,
-	};
+	if (results.length === 0) {
+		return [{
+			status: "unknown",
+			operationId: null,
+			signer: null,
+			action: null,
+			reason: null,
+			blockNum: null,
+			timestamp: null,
+		}];
+	}
+
+	return results;
 }
 
 // ============ ORPHANED BUYS ============
@@ -185,6 +208,7 @@ export async function insertOrphanedBuy(
 	op: {
 		blockNum: number;
 		txId: string;
+		operationId: string | null;
 		buyer: string;
 		nftId: string | null;
 		reason: string;
@@ -193,15 +217,16 @@ export async function insertOrphanedBuy(
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
-		INSERT INTO orphaned_buys (block_num, tx_id, buyer, nft_id, reason, transfers)
+		INSERT INTO orphaned_buys (block_num, tx_id, operation_id, buyer, nft_id, reason, transfers)
 		VALUES (
 			${op.blockNum},
 			${op.txId},
+			${op.operationId},
 			${op.buyer},
 			${op.nftId},
 			${op.reason},
 			${JSON.stringify(op.transfers)}
 		)
-		ON CONFLICT (tx_id) DO NOTHING
+		ON CONFLICT DO NOTHING
 	`;
 }

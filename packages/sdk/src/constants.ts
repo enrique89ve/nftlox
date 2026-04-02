@@ -13,6 +13,8 @@ export const TX_DELAY_MS = 4000;
 export const MAX_NAME_LENGTH = 100;
 export const MAX_DESCRIPTION_LENGTH = 250;
 export const MAX_IMAGE_URL_LENGTH = 500;
+export const MAX_URL_LENGTH = 500;
+export const MAX_ID_LENGTH = 128;
 export const MIN_SYMBOL_LENGTH = 3;
 export const MAX_SYMBOL_LENGTH = 10;
 export const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;
@@ -75,6 +77,10 @@ export function calculatePaymentSplit(
 	seller: string,
 	feeAccount: string,
 ): PaymentSplit {
+	if (royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
+		throw new Error(`royaltyPct out of range: ${royaltyPct} (max ${MAX_ROYALTY_PCT})`);
+	}
+
 	const feeAmount = roundHive(totalPrice * PROTOCOL_FEE_PCT / 100);
 
 	let royaltyAmount = 0;
@@ -94,7 +100,7 @@ export function calculatePaymentSplit(
 		effectiveFee = 0;
 	}
 
-	const sellerAmount = totalPrice - royaltyAmount - effectiveFee;
+	const sellerAmount = roundHive(Math.max(0, totalPrice - royaltyAmount - effectiveFee));
 
 	return {
 		sellerAmount,
@@ -143,12 +149,6 @@ export const ACTION_ARCHIVE_COLLECTION = "archive_collection";
 export const ACTION_LIST = "list";
 export const ACTION_UNLIST = "unlist";
 export const ACTION_BUY = "buy" as const;
-
-// Atomic Transfer (dual-registro) Constants
-// Canonical tracking amount for on-chain transfer+memo verification channel.
-// Any atomic NFT transfer pairs a 0.001 HIVE transfer (with structured memo)
-// alongside the custom_json, both signed with active key for atomicity.
-export const ATOMIC_TRACKING_AMOUNT = "0.001 HIVE";
 
 // Multisig Constants
 export const MULTISIG_EXPIRATION_MS = 125_000;

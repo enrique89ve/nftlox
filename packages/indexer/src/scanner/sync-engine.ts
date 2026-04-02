@@ -1,6 +1,6 @@
 import { config } from "@/config.ts";
 import { withTransaction } from "@/db/client.ts";
-import { getLastBlock, updateLastBlock, cleanupExpiredOperations, acquireSyncLock, releaseSyncLock } from "@/db/queries/sync.ts";
+import { getLastBlock, updateLastBlock, cleanupExpiredOperations, acquireSyncLock, releaseSyncLock, insertInvalidOperation } from "@/db/queries/sync.ts";
 import { getBlockchainHead, getCustomJsonInRange, getHafAHBlockRange, getTransfersInTransaction } from "./hive-client.ts";
 import { ACTION_BUY, ACTION_PACK_BUY } from "nftlox-sdk";
 import { parseHafAHOperations } from "./operation-parser.ts";
@@ -144,8 +144,8 @@ export async function syncCycle(): Promise<void> {
 		// Fetch custom_json ops in this range via HafAH (pre-filtered by protocol ID)
 		const hafOps = await getCustomJsonInRange(current, rangeEnd, config.protocolId, behind);
 
-		// Parse validated protocol operations
-		const ops = parseHafAHOperations(hafOps);
+		// Parse validated protocol operations + collect rejected payloads
+		const { ops, rejected } = parseHafAHOperations(hafOps);
 
 		// Enrich buy and pack_buy ops with paired transfers for payment verification
 		const buyOps = ops.filter(op =>
@@ -160,10 +160,23 @@ export async function syncCycle(): Promise<void> {
 		// Process operations in a transaction.
 		// routeOperation is infallible — individual handler errors are caught and recorded
 		// as invalid_operations, so a single bad op never aborts the batch.
-		if (ops.length > 0) {
+		if (ops.length > 0 || rejected.length > 0) {
 			await withTransaction(async (txn) => {
 				if (isMassive) {
 					await txn`SET LOCAL synchronous_commit = OFF`;
+				}
+				// Record malformed payloads that matched our protocol ID but failed validation.
+				// Previously these were silently discarded — now they're auditable.
+				for (const rej of rejected) {
+					await insertInvalidOperation({
+						blockNum: rej.blockNum,
+						txId: rej.txId,
+						operationId: rej.operationId,
+						signer: rej.signer,
+						action: null,
+						reason: rej.reason,
+						rawPayload: rej.rawPayload,
+					}, txn);
 				}
 				for (const op of ops) {
 					await routeOperation(op, txn);
@@ -186,11 +199,12 @@ export async function syncCycle(): Promise<void> {
 
 		updateSyncProgress(rangeEnd, headBlock);
 
-		if (ops.length > 0) {
+		if (ops.length > 0 || rejected.length > 0) {
 			log.info("Processed ops", {
 				range: `${current}-${rangeEnd}`,
 				customJson: hafOps.length,
 				protocolOps: ops.length,
+				...(rejected.length > 0 ? { rejectedOps: rejected.length } : {}),
 			});
 		}
 

@@ -12,6 +12,7 @@ export interface ParsedOperation {
 	blockNum: number;
 	timestamp: string;
 	txId: string;
+	operationId: string;
 	signer: string;
 	authLevel: AuthLevel;
 	action: ProtocolAction;
@@ -87,44 +88,93 @@ function isValidPayload(payload: unknown): payload is {
 	return true;
 }
 
+// ─── Rejected Operation ───────────────────────────
+
+export interface RejectedOperation {
+	blockNum: number;
+	txId: string;
+	operationId: string;
+	signer: string | null;
+	reason: string;
+	rawPayload: unknown;
+}
+
+export interface ParseResult {
+	ops: ParsedOperation[];
+	rejected: RejectedOperation[];
+}
+
 // ─── HafAH Parser ──────────────────────────────────
 
 /**
  * Parse HafAH operations directly — much faster than parsing full blocks.
  * HafAH already filters to custom_json (op_type=18), we just filter by protocol ID.
  *
+ * Returns both valid ops and rejected ops (malformed payloads that match our
+ * protocol ID but fail validation). Rejected ops should be recorded in
+ * invalid_operations for observability — silently discarding them hides failures.
+ *
  * NOTE: Paired transfers are enriched separately by the sync engine via
  * getTransfersInBlock() for actions that require payment verification.
  */
-export function parseHafAHOperations(hafOps: HafAHOperation[]): ParsedOperation[] {
+export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 	const ops: ParsedOperation[] = [];
+	const rejected: RejectedOperation[] = [];
 
 	for (const hafOp of hafOps) {
 		const value = hafOp.op.value;
 		if (value.id !== protocolId) continue;
 
+		const signer = value.required_auths[0] ?? value.required_posting_auths[0] ?? null;
+
 		let payload: unknown;
 		try {
 			payload = JSON.parse(value.json);
 		} catch {
+			rejected.push({
+				blockNum: hafOp.block,
+				txId: hafOp.trx_id,
+				operationId: hafOp.operation_id,
+				signer,
+				reason: "Malformed JSON payload",
+				rawPayload: value.json,
+			});
 			continue;
 		}
 
-		if (!isValidPayload(payload)) continue;
+		if (!isValidPayload(payload)) {
+			rejected.push({
+				blockNum: hafOp.block,
+				txId: hafOp.trx_id,
+				operationId: hafOp.operation_id,
+				signer,
+				reason: describePayloadRejection(payload),
+				rawPayload: payload,
+			});
+			continue;
+		}
 
 		const hasActiveAuth = value.required_auths.length > 0;
-		const signer = hasActiveAuth
-			? value.required_auths[0]
-			: value.required_posting_auths[0];
 		const authLevel: AuthLevel = hasActiveAuth ? "active" : "posting";
 
 		// Reject operations without a valid signer — cannot authorize anything
-		if (!signer) continue;
+		if (!signer) {
+			rejected.push({
+				blockNum: hafOp.block,
+				txId: hafOp.trx_id,
+				operationId: hafOp.operation_id,
+				signer: null,
+				reason: "No valid signer (empty required_auths and required_posting_auths)",
+				rawPayload: payload,
+			});
+			continue;
+		}
 
 		ops.push({
 			blockNum: hafOp.block,
 			timestamp: hafOp.timestamp,
 			txId: hafOp.trx_id,
+			operationId: hafOp.operation_id,
 			signer,
 			authLevel,
 			action: payload.action,
@@ -133,5 +183,18 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParsedOperation[
 		});
 	}
 
-	return ops;
+	return { ops, rejected };
+}
+
+function describePayloadRejection(payload: unknown): string {
+	if (!isNonNullObject(payload)) return "Payload is not a valid object";
+	if (payload.protocol !== protocolId) return `Wrong protocol: ${String(payload.protocol)}`;
+	if (typeof payload.version !== "string") return "Missing or invalid version";
+	if (compareVersions(payload.version, MIN_PROTOCOL_VERSION) < 0) {
+		return `Version ${payload.version} below minimum ${MIN_PROTOCOL_VERSION}`;
+	}
+	if (typeof payload.action !== "string") return "Missing or invalid action field";
+	if (!isProtocolAction(payload.action)) return `Unknown action: ${payload.action}`;
+	if (!isNonNullObject(payload.data)) return "Missing or invalid data field";
+	return "Invalid payload structure";
 }

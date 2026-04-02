@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from "bun:test";
-import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import type { ParsedOperation, ParseResult } from "@/scanner/operation-parser.ts";
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
 import { ACTION_TRANSFER, ACTION_BUY, ACTION_PACK_BUY, ACTIVE_AUTH_ACTIONS } from "nftlox-sdk";
 
@@ -20,7 +20,7 @@ const mockGetHafAHBlockRange = mock(() => 2000);
 const mockGetTransfersInTransaction = mock((_txId: string) => Promise.resolve([] as Array<{
 	from: string; to: string; amount: number; currency: string; memo: string;
 }>));
-const mockParseHafAHOperations = mock((_ops: HafAHOperation[]) => [] as ParsedOperation[]);
+const mockParseHafAHOperations = mock((_ops: HafAHOperation[]): ParseResult => ({ ops: [], rejected: [] }));
 const mockRouteOperation = mock((_op: ParsedOperation, _txn: unknown) => Promise.resolve());
 
 const mockTxn = Object.assign(
@@ -36,6 +36,9 @@ mock.module("@/db/queries/sync.ts", () => ({
 	getLastBlock: mockGetLastBlock,
 	updateLastBlock: mockUpdateLastBlock,
 	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
+	insertInvalidOperation: mock(() => Promise.resolve()),
+	acquireSyncLock: mock(() => Promise.resolve(true)),
+	releaseSyncLock: mock(() => Promise.resolve()),
 }));
 
 mock.module("@/scanner/hive-client.ts", () => ({
@@ -103,12 +106,17 @@ function fakeParsedOp(block: number, action = ACTION_TRANSFER): ParsedOperation 
 		blockNum: block,
 		timestamp: "2024-01-01T00:00:00",
 		txId: `tx_${block}`,
+		operationId: `op_${block}`,
 		signer: "alice",
 		authLevel: ACTIVE_SET.has(action) ? "active" : "posting",
 		action: action as ParsedOperation["action"],
 		version: "0.2.1",
 		data: {},
 	};
+}
+
+function wrapOps(ops: ParsedOperation[]): ParseResult {
+	return { ops, rejected: [] };
 }
 
 function setupChainHead(irreversible: number, head?: number): void {
@@ -139,7 +147,7 @@ function resetAllMocks(): void {
 	mockGetCustomJsonInRange.mockImplementation(() => Promise.resolve([]));
 	mockGetHafAHBlockRange.mockImplementation(() => 2000);
 	mockGetTransfersInTransaction.mockImplementation(() => Promise.resolve([]));
-	mockParseHafAHOperations.mockImplementation(() => []);
+	mockParseHafAHOperations.mockImplementation(() => ({ ops: [], rejected: [] }));
 	mockRouteOperation.mockImplementation(() => Promise.resolve());
 	mockWithTransaction.mockImplementation(async (fn: (txn: unknown) => Promise<void>) => {
 		await fn(mockTxn);
@@ -160,7 +168,7 @@ describe("block processing never stops", () => {
 		setupChainHead(6000);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
-		mockParseHafAHOperations.mockReturnValue([fakeParsedOp(1001)]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([fakeParsedOp(1001)]));
 
 		let routeCalls = 0;
 		mockRouteOperation.mockImplementation(async () => { routeCalls++; });
@@ -177,7 +185,7 @@ describe("block processing never stops", () => {
 		setupChainHead(8000);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([]);
-		mockParseHafAHOperations.mockReturnValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
 
 		await syncCycle();
 
@@ -197,7 +205,7 @@ describe("block processing never stops", () => {
 		setupChainHead(3000);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([]);
-		mockParseHafAHOperations.mockReturnValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
 
 		await syncCycle();
 		expect(trackedLastBlock).toBe(3000);
@@ -214,7 +222,7 @@ describe("block processing never stops", () => {
 		setupChainHead(8000);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([]);
-		mockParseHafAHOperations.mockReturnValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
 
 		mockUpdateLastBlock.mockImplementation((block: number) => {
 			trackedLastBlock = block;
@@ -245,7 +253,7 @@ describe("event loop yields during massive sync", () => {
 		setupChainHead(6000); // 5000 behind → massive
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([]);
-		mockParseHafAHOperations.mockReturnValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
 
 		let yieldCount = 0;
 		const originalSetTimeout = globalThis.setTimeout;
@@ -265,7 +273,7 @@ describe("event loop yields during massive sync", () => {
 		setupChainHead(1050); // 50 behind → NOT massive (< 100)
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([]);
-		mockParseHafAHOperations.mockReturnValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
 
 		let yieldCount = 0;
 		const originalSetTimeout = globalThis.setTimeout;
@@ -286,7 +294,7 @@ describe("event loop yields during massive sync", () => {
 		setupChainHead(4000); // massive
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([]);
-		mockParseHafAHOperations.mockReturnValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
 
 		let apiRequestResolved = false;
 
@@ -316,7 +324,7 @@ describe("buy enrichment runs in parallel", () => {
 		setupChainHead(1020);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
-		mockParseHafAHOperations.mockReturnValue(buyOps);
+		mockParseHafAHOperations.mockReturnValue(wrapOps(buyOps));
 
 		let concurrentCalls = 0;
 		let maxConcurrent = 0;
@@ -349,7 +357,7 @@ describe("buy enrichment runs in parallel", () => {
 		setupChainHead(1020);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
-		mockParseHafAHOperations.mockReturnValue(buyOps);
+		mockParseHafAHOperations.mockReturnValue(wrapOps(buyOps));
 
 		let callCount = 0;
 		mockGetTransfersInTransaction.mockImplementation(async () => {
@@ -379,7 +387,7 @@ describe("buy enrichment runs in parallel", () => {
 		setupChainHead(1020);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
-		mockParseHafAHOperations.mockReturnValue(ops);
+		mockParseHafAHOperations.mockReturnValue(wrapOps(ops));
 
 		await syncCycle();
 
@@ -395,7 +403,7 @@ describe("sync progress tracking", () => {
 		setupChainHead(6000);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([]);
-		mockParseHafAHOperations.mockReturnValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
 
 		const progressSnapshots: Array<{ lastBlock: number; headBlock: number }> = [];
 
@@ -420,7 +428,7 @@ describe("sync progress tracking", () => {
 		setupChainHead(4000); // massive
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([]);
-		mockParseHafAHOperations.mockReturnValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
 
 		setSynced(true);
 
