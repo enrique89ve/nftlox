@@ -1,7 +1,7 @@
 // SPV "Boleto Suizo" - Lightweight Hive L1 Client
 // Uses HAFAH REST API with fetch (zero dependencies, browser-compatible)
 
-import { PROTOCOL_ID } from "../constants.ts";
+import { getProtocolId } from "../protocol-state.ts";
 import {
 	DEFAULT_HIVE_ENDPOINTS,
 	DEFAULT_HIVE_TIMEOUT_MS,
@@ -199,7 +199,7 @@ export function parseNftloxOperation(
 			required_posting_auths?: string[];
 		};
 
-		if (value.id !== PROTOCOL_ID) continue;
+		if (value.id !== getProtocolId()) continue;
 
 		let parsed: {
 			protocol?: string;

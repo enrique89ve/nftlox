@@ -17,7 +17,7 @@ The NFTLox API and SDK return raw Hive operations in this format:
 	"required_auths": [],
 	"required_posting_auths": ["myaccount"],
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.4.0\",\"action\":\"mint\",\"data\":{...}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.4.1\",\"action\":\"mint\",\"data\":{...}}"
 }]
 ```
 
@@ -80,7 +80,7 @@ async function broadcastSingleOperation() {
 		id: "nftlox_testnet",
 		json: JSON.stringify({
 			protocol: "nftlox_testnet",
-			version: "0.4.0",
+			version: "0.4.1",
 			action: "mint",
 			data: {
 				id: "seed_abc123",
@@ -199,7 +199,7 @@ const operation = ["custom_json", {
 	id: "nftlox_testnet",
 	json: JSON.stringify({
 		protocol: "nftlox_testnet",
-		version: "0.4.0",
+		version: "0.4.1",
 		action: "mint",
 		data: {
 			id: "seed_abc123",
@@ -302,7 +302,7 @@ async function broadcastManual() {
 				id: "nftlox_testnet",
 				json: JSON.stringify({
 					protocol: "nftlox_testnet",
-					version: "0.4.0",
+					version: "0.4.1",
 					action: "mint",
 					data: { /* ... */ },
 				}),
@@ -376,7 +376,7 @@ async function broadcastSingleOperation() {
 			id: "nftlox_testnet",
 			json: JSON.stringify({
 				protocol: "nftlox_testnet",
-				version: "0.4.0",
+				version: "0.4.1",
 				action: "mint",
 				data: {
 					id: "seed_abc123",
@@ -425,7 +425,7 @@ async function broadcastWithManualSigning() {
 			id: "nftlox_testnet",
 			json: JSON.stringify({
 				protocol: "nftlox_testnet",
-				version: "0.4.0",
+				version: "0.4.1",
 				action: "mint",
 				data: {
 					id: "seed_abc123",

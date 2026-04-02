@@ -26,10 +26,23 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 
 ---
 
+## Protocol State
+
+| Function | Description |
+|----------|-------------|
+| `initProtocol(baseUrl?)` | Initialize SDK protocol state from the indexer API. Fetches version and ID from `/api/status`. Falls back to constants if not called. |
+| `makePayload(action, data)` | Create a protocol payload envelope with protocol ID and version injected automatically from runtime state. |
+| `getProtocolVersion()` | Get current protocol version (from API if initialized, from constants otherwise). |
+| `getProtocolId()` | Get current protocol ID (from API if initialized, from constants otherwise). |
+| `isInitialized()` | Check if `initProtocol()` has been called successfully. |
+
+---
+
 ## Payload Creators
 
 | Function | Description |
 |----------|-------------|
+| `makePayload(action, data)` | Create a protocol payload envelope with protocol ID and version injected automatically from runtime state. |
 | `createDeterministicCollectionPayload()` | Create collection (deterministic ID) |
 | `createDeterministicMintPayload()` | Mint seed/NFT (deterministic ID) |
 | `createBulkDistributePayload()` | Bulk distribute instances from seed |

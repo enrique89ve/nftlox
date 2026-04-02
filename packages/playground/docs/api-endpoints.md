@@ -744,7 +744,7 @@ The API sets `Cache-Control` headers on all `GET` responses:
 
 The Build API constructs unsigned Hive `custom_json` operations for the NFTLox protocol. It does **not** broadcast transactions -- the client is responsible for signing the returned operations with the appropriate Hive key and broadcasting them to the blockchain.
 
-**Protocol version:** `0.4.0`
+**Protocol version:** `0.4.1`
 
 ---
 
@@ -757,7 +757,7 @@ All Build API endpoints return JSON with the following standard shape:
 	"success": true,
 	"protocolVersion": "0.4.1",
 	"operation": ["custom_json", { ... }],
-	"payload": { "protocol": "nftlox_testnet", "version": "0.4.0", "action": "...", "data": { ... } },
+	"payload": { "protocol": "nftlox_testnet", "version": "0.4.1", "action": "...", "data": { ... } },
 	"keyType": "Posting"
 }
 ```
@@ -765,7 +765,7 @@ All Build API endpoints return JSON with the following standard shape:
 | Field             | Type       | Description                                                                 |
 |-------------------|------------|-----------------------------------------------------------------------------|
 | `success`         | `boolean`  | Whether the build succeeded.                                                |
-| `protocolVersion` | `string`   | Protocol version used (`0.4.0`).                                            |
+| `protocolVersion` | `string`   | Protocol version used (`0.4.1`).                                            |
 | `hashVersion`     | `string`   | Hash version (present on collection/seed endpoints): `v1`.                  |
 | `operation`       | `array`    | Hive operation tuple `["custom_json", {...}]`, ready to sign.               |
 | `payload`         | `object`   | The decoded protocol payload embedded inside the operation's `json` field.  |

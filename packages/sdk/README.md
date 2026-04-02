@@ -70,6 +70,37 @@ const report = await runAudit(config);
 console.log(report.verified, "of", report.samplesChecked, "verified");
 ```
 
+## Protocol Initialization
+
+Before creating payloads, initialize the SDK from the indexer API to ensure the correct protocol version and ID are used:
+
+```typescript
+import { initProtocol, createIndexerClient } from "nftlox-sdk";
+
+// Initialize protocol state from the indexer API (call once at startup)
+await initProtocol("https://api-nftlox.hivecreators.co");
+
+// Or use default URL:
+await initProtocol();
+```
+
+- `initProtocol(baseUrl?)` fetches the current protocol version and ID from the indexer's `/api/status` endpoint.
+- Must be called **once at startup**, before creating any payloads, to ensure the SDK uses the correct on-chain version.
+- If not called, the SDK falls back to the built-in `PROTOCOL_ID` and `PROTOCOL_VERSION` constants (offline mode).
+- Default URL: `https://api-nftlox.hivecreators.co/api/status`
+
+After initialization, use `makePayload()` to create protocol payload envelopes -- it injects the correct protocol ID and version automatically:
+
+```typescript
+import { makePayload } from "nftlox-sdk";
+
+const payload = makePayload("transfer", {
+	instanceId: "nft_abc123",
+	to: "bob",
+});
+// payload.protocol and payload.version are set automatically
+```
+
 ## API Reference
 
 ### Constants
@@ -88,6 +119,16 @@ console.log(report.verified, "of", report.samplesChecked, "verified");
 | `SUPPORTED_CURRENCIES` | `["HIVE", "HBD"]` |
 | `PROTOCOL_FEE_PCT` | `1.0` (protocol fee percentage, 1% on sales) |
 | `calculatePaymentSplit()` | Compute seller/royalty/fee split for a sale |
+
+### Protocol State
+
+| Function | Description |
+|----------|-------------|
+| `initProtocol(baseUrl?)` | Initialize SDK from indexer API (fetches version/ID from `/api/status`) |
+| `makePayload(action, data)` | Create a protocol payload envelope with protocol ID and version injected automatically |
+| `getProtocolVersion()` | Get current protocol version (from API if initialized, built-in constants otherwise) |
+| `getProtocolId()` | Get current protocol ID (from API if initialized, built-in constants otherwise) |
+| `isInitialized()` | Check if `initProtocol()` has been called |
 
 ### Payload Creators
 
@@ -119,6 +160,8 @@ console.log(report.verified, "of", report.samplesChecked, "verified");
 | `createSetDataFromPayload()` | Write data as operator |
 
 Each payload creator has a matching `create*Operation()` that wraps it in a `custom_json` Hive operation tuple.
+
+> **Note:** For direct payload construction, prefer `makePayload(action, data)` over manually setting `PROTOCOL_ID` and `PROTOCOL_VERSION`. It automatically uses the correct values from the initialized state (or falls back to built-in constants).
 
 ### Builders (Zod-validated, standalone pure functions)
 

@@ -27,7 +27,7 @@ Response:
 
 ```json
 {
-	"protocolVersion": "0.4.0",
+	"protocolVersion": "0.4.1",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -128,14 +128,14 @@ Response:
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.0",
+	"protocolVersion": "0.4.1",
 	"hashVersion": "v1",
 	"collectionId": "deterministic-id-here",
 	"generatedIds": { "collectionId": "..." },
 	"operation": ["custom_json", { ... }],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.4.0",
+		"version": "0.4.1",
 		"action": "create_collection",
 		"data": { ... }
 	}

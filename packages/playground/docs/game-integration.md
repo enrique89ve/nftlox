@@ -177,7 +177,7 @@ The SDK also exports pre-built templates for Ragnarok-style card types: `RAGNARO
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.0",
+	"protocolVersion": "0.4.1",
 	"hashVersion": "v1",
 	"collectionId": "col_abc123def456",
 	"generatedIds": { "collectionId": "col_abc123def456", "originDna": "A1B2C3D4E5F6G7H8" },
@@ -357,7 +357,7 @@ For 2,134 cards at 5 per transaction, this requires 427 transactions. At ~3 seco
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.0",
+	"protocolVersion": "0.4.1",
 	"collectionId": "col_abc123def456",
 	"generatedIds": {
 		"odin-allfather": "seed_a1b2c3d4",
