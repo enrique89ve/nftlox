@@ -74,8 +74,14 @@ export function startApiServer(): void {
 		.onAfterHandle(({ request, set }) => {
 			set.headers["X-Content-Type-Options"] = "nosniff";
 			set.headers["X-Frame-Options"] = "DENY";
-			set.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
 			set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+
+			const url = new URL(request.url);
+			if (url.pathname.startsWith("/swagger")) {
+				set.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;";
+			} else {
+				set.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+			}
 
 			if (request.method !== "GET") return;
 
