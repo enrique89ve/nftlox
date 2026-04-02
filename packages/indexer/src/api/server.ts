@@ -78,7 +78,7 @@ export function startApiServer(): void {
 
 			const url = new URL(request.url);
 			if (url.pathname.startsWith("/swagger")) {
-				set.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;";
+				set.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; script-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self';";
 			} else {
 				set.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
 			}
