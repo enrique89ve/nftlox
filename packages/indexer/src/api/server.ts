@@ -72,14 +72,14 @@ export function startApiServer(): void {
 			}
 		})
 		.onAfterHandle(({ request, set }) => {
+			const url = new URL(request.url);
+			const isSwagger = url.pathname.startsWith("/swagger");
+
 			set.headers["X-Content-Type-Options"] = "nosniff";
-			set.headers["X-Frame-Options"] = "DENY";
 			set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
 
-			const url = new URL(request.url);
-			if (url.pathname.startsWith("/swagger")) {
-				set.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; script-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self';";
-			} else {
+			if (!isSwagger) {
+				set.headers["X-Frame-Options"] = "DENY";
 				set.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
 			}
 
@@ -91,7 +91,6 @@ export function startApiServer(): void {
 				return;
 			}
 
-			const url = new URL(request.url);
 			const isStats = STATS_PATHS.has(url.pathname) || url.pathname.endsWith("/stats");
 			set.headers["Cache-Control"] = `public, max-age=${isStats ? 10 : 2}`;
 		});
