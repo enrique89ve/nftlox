@@ -277,7 +277,16 @@ export {
 	createNftReturnPayload,
 	createNftReturnOperation,
 	PayloadTooLargeError,
+	makePayload,
 } from "./payloads";
+
+// ============ PROTOCOL STATE ============
+export {
+	initProtocol,
+	getProtocolVersion,
+	getProtocolId,
+	isInitialized,
+} from "./protocol-state";
 
 // ============ SCHEMAS ============
 export * from "./schemas";

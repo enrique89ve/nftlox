@@ -340,10 +340,10 @@ export interface NftReturnData extends SeedProvenance {
 // ============ PROTOCOL PAYLOAD ============
 
 export interface ProtocolPayload<T = unknown> {
-	protocol: string;
-	version: string;
-	action: ProtocolAction;
-	data: T;
+	readonly protocol: string;
+	readonly version: string;
+	readonly action: ProtocolAction;
+	readonly data: T;
 }
 
 // ============ SEED NFT WITH ART ID (Anti-Duplication) ============

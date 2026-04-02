@@ -9,7 +9,8 @@ import {
 	createNftLendPayload,
 	createNftReturnPayload,
 } from "../payloads";
-import { PROTOCOL_ID, ACTION_SET_DATA, ACTION_SET_DATA_FROM, ACTION_NFT_LEND, ACTION_NFT_RETURN } from "../constants";
+import { ACTION_SET_DATA, ACTION_SET_DATA_FROM, ACTION_NFT_LEND, ACTION_NFT_RETURN } from "../constants";
+import { getProtocolId } from "../protocol-state";
 import type { BuildResult, TransferData, SetDataData, SetDataFromData, NftLendData, NftReturnData, HiveOperation } from "../types";
 import { usernameSchema } from "../schemas";
 
@@ -33,7 +34,7 @@ export function buildBurn(input: BurnBuilderInput): BuildResult<TransferData> {
 		{
 			required_auths: [data.owner],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: JSON.stringify(payload),
 		},
 	];
@@ -59,7 +60,7 @@ export function buildSetData(input: SetDataBuilderInput): BuildResult<SetDataDat
 		{
 			required_auths: [],
 			required_posting_auths: [data.owner],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: JSON.stringify(payload),
 		},
 	];
@@ -85,7 +86,7 @@ export function buildSetDataFrom(input: SetDataFromBuilderInput): BuildResult<Se
 		{
 			required_auths: [],
 			required_posting_auths: [data.operator],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: JSON.stringify(payload),
 		},
 	];
@@ -115,7 +116,7 @@ export function buildNftLend(input: NftLendBuilderInput): BuildResult<NftLendDat
 		{
 			required_auths: [],
 			required_posting_auths: [data.owner],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: JSON.stringify(payload),
 		},
 	];
@@ -141,7 +142,7 @@ export function buildNftReturn(input: NftReturnBuilderInput): BuildResult<NftRet
 		{
 			required_auths: [],
 			required_posting_auths: [data.owner],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: JSON.stringify(payload),
 		},
 	];

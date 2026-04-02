@@ -2,7 +2,9 @@ import { z } from "zod";
 import { usernameSchema, seedProvenanceSchema } from "../schemas";
 import { formatZodError } from "./helpers";
 import { generateImageHash } from "../dna";
-import { PROTOCOL_ID, PROTOCOL_VERSION, ACTION_TRANSFER } from "../constants";
+import { ACTION_TRANSFER } from "../constants";
+import { getProtocolId } from "../protocol-state";
+import { makePayload } from "../payloads";
 import type { BuildResult, TransferData, ProtocolPayload, HiveOperation } from "../types";
 
 export const transferBuilderSchema = seedProvenanceSchema.extend({
@@ -33,27 +35,22 @@ export async function buildTransfer(input: TransferBuilderInput): Promise<BuildR
 
 	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
 
-	const payload: ProtocolPayload<TransferData> = {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_TRANSFER,
-		data: {
-			nftId: data.nftId,
-			from: data.from,
-			to: data.to,
-			...(data.imageUrl && { imageUrl: data.imageUrl }),
-			...(imageHash && { imageHash }),
-			...(data.seedId && { seedId: data.seedId }),
-			...(data.seedTxId && { seedTxId: data.seedTxId }),
-		},
-	};
+	const payload: ProtocolPayload<TransferData> = makePayload(ACTION_TRANSFER, {
+		nftId: data.nftId,
+		from: data.from,
+		to: data.to,
+		...(data.imageUrl && { imageUrl: data.imageUrl }),
+		...(imageHash && { imageHash }),
+		...(data.seedId && { seedId: data.seedId }),
+		...(data.seedTxId && { seedTxId: data.seedTxId }),
+	});
 
 	const operation: HiveOperation = [
 		"custom_json",
 		{
 			required_auths: [data.from],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: JSON.stringify(payload),
 		},
 	];

@@ -2,7 +2,9 @@ import { z } from "zod";
 import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema } from "../schemas";
 import { formatZodError } from "./helpers";
 import { generateImageHash, generateListingNonce, generateListingId } from "../dna";
-import { PROTOCOL_ID, PROTOCOL_VERSION, ACTION_LIST, ACTION_BUY, ACTION_UNLIST, MEMO_PREFIX_BUY, MEMO_PREFIX_ROYALTY, MEMO_PREFIX_FEE } from "../constants";
+import { ACTION_LIST, ACTION_BUY, ACTION_UNLIST, MEMO_PREFIX_BUY, MEMO_PREFIX_ROYALTY, MEMO_PREFIX_FEE } from "../constants";
+import { getProtocolId } from "../protocol-state";
+import { makePayload } from "../payloads";
 import type { BuildResult, ListingData, UnlistData, ProtocolPayload, HiveOperation, BuyData, HiveTransferOperation } from "../types";
 
 export const listBuilderSchema = listInputSchema.extend({
@@ -49,19 +51,14 @@ export async function buildList(input: ListBuilderInput): Promise<BuildResult<Li
 		...(data.marketplace && { marketplace: data.marketplace }),
 	};
 
-	const payload: ProtocolPayload<ListingData> = {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_LIST,
-		data: payloadData,
-	};
+	const payload: ProtocolPayload<ListingData> = makePayload(ACTION_LIST, payloadData);
 
 	const operation: HiveOperation = [
 		"custom_json",
 		{
 			required_auths: [data.owner],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: JSON.stringify(payload),
 		},
 	];
@@ -102,19 +99,14 @@ export async function buildUnlist(input: UnlistBuilderInput): Promise<BuildResul
 		...(data.seedTxId && { seedTxId: data.seedTxId }),
 	};
 
-	const payload: ProtocolPayload<UnlistData> = {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_UNLIST,
-		data: payloadData,
-	};
+	const payload: ProtocolPayload<UnlistData> = makePayload(ACTION_UNLIST, payloadData);
 
 	const operation: HiveOperation = [
 		"custom_json",
 		{
 			required_auths: [],
 			required_posting_auths: [data.owner],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: JSON.stringify(payload),
 		},
 	];
@@ -158,26 +150,21 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 		return { success: false, errors: [{ field: "buyer", message: "Cannot buy your own NFT", code: "CANNOT_BUY_OWN" }] };
 	}
 
-	const payload: ProtocolPayload<BuyData> = {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_BUY,
-		data: {
-			nftId: data.nftId,
-			listingId: data.listingId,
-			listTxId: data.listTxId,
-			txId: data.txId,
-			...(data.seedId && { seedId: data.seedId }),
-			...(data.seedTxId && { seedTxId: data.seedTxId }),
-		},
-	};
+	const payload: ProtocolPayload<BuyData> = makePayload(ACTION_BUY, {
+		nftId: data.nftId,
+		listingId: data.listingId,
+		listTxId: data.listTxId,
+		txId: data.txId,
+		...(data.seedId && { seedId: data.seedId }),
+		...(data.seedTxId && { seedTxId: data.seedTxId }),
+	});
 
 	const payloadOperation: HiveOperation = [
 		"custom_json",
 		{
 			required_auths: [data.nodeAccount],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: JSON.stringify(payload),
 		},
 	];

@@ -13,7 +13,8 @@ import {
 	type DeterministicMintInput,
 } from "../payloads";
 import type { BuildResult, NFTData, ProtocolPayload, ValidationError } from "../types";
-import { MAX_NAME_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_IMAGE_URL_LENGTH, PROTOCOL_ID, PROTOCOL_VERSION, ACTION_MINT } from "../constants";
+import { MAX_NAME_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_IMAGE_URL_LENGTH, ACTION_MINT } from "../constants";
+import { makePayload } from "../payloads";
 
 // We keep SeedInput internal to builders as per old architecture, or export it.
 export const seedInputSchema = z.object({
@@ -149,16 +150,11 @@ export async function buildSeedBatch(input: SeedBatchInput): Promise<BuildResult
 		};
 	}));
 
-	const payload: ProtocolPayload<SeedBatchPayload> = {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_MINT,
-		data: {
-			collectionId: data.collectionId,
-			owner: batchOwner,
-			seeds: processedSeeds,
-		},
-	};
+	const payload: ProtocolPayload<SeedBatchPayload> = makePayload(ACTION_MINT, {
+		collectionId: data.collectionId,
+		owner: batchOwner,
+		seeds: processedSeeds,
+	});
 
 	const seedIds: Record<string, string> = {};
 	for (const seed of processedSeeds) {

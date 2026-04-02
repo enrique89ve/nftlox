@@ -2,8 +2,6 @@
 // Creates JSON payloads for all protocol actions
 
 import {
-	PROTOCOL_ID,
-	PROTOCOL_VERSION,
 	SAFE_PAYLOAD_MAX_BYTES,
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
@@ -30,6 +28,7 @@ import {
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
 	ACTION_BUY,
+	type ProtocolAction,
 } from "./constants";
 
 import type {
@@ -97,6 +96,16 @@ import {
 	generateDeterministicPackId,
 } from "./dna";
 
+import { getProtocolVersion, getProtocolId } from "./protocol-state";
+
+/**
+ * Creates a protocol payload envelope with protocol ID and version injected automatically.
+ * Uses runtime state from initProtocol() if initialized, otherwise falls back to constants.
+ */
+export function makePayload<T>(action: ProtocolAction, data: T): ProtocolPayload<T> {
+	return { protocol: getProtocolId(), version: getProtocolVersion(), action, data };
+}
+
 export class PayloadTooLargeError extends Error {
 	readonly payloadBytes: number;
 	readonly maxBytes: number;
@@ -135,7 +144,7 @@ export function toHiveOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [signer],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -156,14 +165,9 @@ function spreadProvenance(p?: SeedProvenance): Record<string, string> {
 export function createArchiveCollectionPayload(
 	input: ArchiveCollectionInput,
 ): ProtocolPayload<ArchiveCollectionData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_ARCHIVE_COLLECTION,
-		data: {
-			collectionId: input.collectionId,
-		},
-	};
+	return makePayload(ACTION_ARCHIVE_COLLECTION, {
+		collectionId: input.collectionId,
+	});
 }
 
 export function createArchiveCollectionOperation(
@@ -176,7 +180,7 @@ export function createArchiveCollectionOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [creator],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -194,19 +198,14 @@ export async function createReplicatePayload(
 		input.originalInstanceDna,
 	);
 
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_REPLICATE,
-		data: {
-			id: await generateReplicaId(input.originalId),
-			originalId: input.originalId,
-			newOwner: input.newOwner,
-			originDna: input.originDna,
-			instanceDna,
-			...spreadProvenance(input),
-		},
-	};
+	return makePayload(ACTION_REPLICATE, {
+		id: await generateReplicaId(input.originalId),
+		originalId: input.originalId,
+		newOwner: input.newOwner,
+		originDna: input.originDna,
+		instanceDna,
+		...spreadProvenance(input),
+	});
 }
 
 // ============ BULK DISTRIBUTE PAYLOADS ============
@@ -214,22 +213,17 @@ export async function createReplicatePayload(
 export function createBulkDistributePayload(
 	input: BulkDistributeInput,
 ): ProtocolPayload<BulkDistributeData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_BULK_DISTRIBUTE,
-		data: {
-			...(input.to && { to: input.to }),
-			items: input.items.map(item => ({
-				seedId: item.seedId,
-				quantity: item.quantity,
-				seedTxId: item.seedTxId,
-			})),
-			...(input.imageOverrides && { imageOverrides: input.imageOverrides }),
-			...(input.data && { data: input.data }),
-			...(input.mutableData && { mutableData: input.mutableData }),
-		},
-	};
+	return makePayload(ACTION_BULK_DISTRIBUTE, {
+		...(input.to && { to: input.to }),
+		items: input.items.map(item => ({
+			seedId: item.seedId,
+			quantity: item.quantity,
+			seedTxId: item.seedTxId,
+		})),
+		...(input.imageOverrides && { imageOverrides: input.imageOverrides }),
+		...(input.data && { data: input.data }),
+		...(input.mutableData && { mutableData: input.mutableData }),
+	});
 }
 
 export function createBulkDistributeOperation(
@@ -242,7 +236,7 @@ export function createBulkDistributeOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [signer],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload, input.items.length),
 		},
 	];
@@ -259,19 +253,14 @@ export function createTransferPayload(
 	imageHash?: string,
 	provenance?: SeedProvenance,
 ): ProtocolPayload<TransferData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_TRANSFER,
-		data: {
-			nftId,
-			from,
-			to,
-			...(imageUrl && { imageUrl }),
-			...(imageHash && { imageHash }),
-			...spreadProvenance(provenance),
-		},
-	};
+	return makePayload(ACTION_TRANSFER, {
+		nftId,
+		from,
+		to,
+		...(imageUrl && { imageUrl }),
+		...(imageHash && { imageHash }),
+		...spreadProvenance(provenance),
+	});
 }
 
 export function createBulkTransferPayload(
@@ -279,12 +268,7 @@ export function createBulkTransferPayload(
 	from: string,
 	to: string,
 ): ProtocolPayload<TransferData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_TRANSFER,
-		data: { nftIds, from, to },
-	};
+	return makePayload(ACTION_TRANSFER, { nftIds, from, to });
 }
 
 // ============ BURN PAYLOADS (via transfer to null) ============
@@ -312,18 +296,13 @@ export function createBulkBurnPayload(
 export function createSetDataPayload(
 	input: SetDataInput,
 ): ProtocolPayload<SetDataData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_SET_DATA,
-		data: {
-			nftId: input.nftId,
-			instanceDna: input.instanceDna,
-			...(input.data && { data: input.data }),
-			...(input.mutableData && { mutableData: input.mutableData }),
-			...spreadProvenance(input),
-		},
-	};
+	return makePayload(ACTION_SET_DATA, {
+		nftId: input.nftId,
+		instanceDna: input.instanceDna,
+		...(input.data && { data: input.data }),
+		...(input.mutableData && { mutableData: input.mutableData }),
+		...spreadProvenance(input),
+	});
 }
 
 export function createSetDataOperation(
@@ -336,7 +315,7 @@ export function createSetDataOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [issuer],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -347,16 +326,11 @@ export function createSetDataOperation(
 export function createDataOperatorApprovePayload(
 	input: DataOperatorApproveInput,
 ): ProtocolPayload<DataOperatorApproveData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_DATA_OPERATOR_APPROVE,
-		data: {
-			collectionId: input.collectionId,
-			operator: input.operator,
-			approved: input.approved,
-		},
-	};
+	return makePayload(ACTION_DATA_OPERATOR_APPROVE, {
+		collectionId: input.collectionId,
+		operator: input.operator,
+		approved: input.approved,
+	});
 }
 
 export function createDataOperatorApproveOperation(
@@ -369,7 +343,7 @@ export function createDataOperatorApproveOperation(
 		{
 			required_auths: [creator],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -378,18 +352,13 @@ export function createDataOperatorApproveOperation(
 export function createSetDataFromPayload(
 	input: SetDataFromInput,
 ): ProtocolPayload<SetDataFromData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_SET_DATA_FROM,
-		data: {
-			nftId: input.nftId,
-			instanceDna: input.instanceDna,
-			...(input.data && { data: input.data }),
-			...(input.mutableData && { mutableData: input.mutableData }),
-			...spreadProvenance(input),
-		},
-	};
+	return makePayload(ACTION_SET_DATA_FROM, {
+		nftId: input.nftId,
+		instanceDna: input.instanceDna,
+		...(input.data && { data: input.data }),
+		...(input.mutableData && { mutableData: input.mutableData }),
+		...spreadProvenance(input),
+	});
 }
 
 export function createSetDataFromOperation(
@@ -402,7 +371,7 @@ export function createSetDataFromOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [operator],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -413,17 +382,12 @@ export function createSetDataFromOperation(
 export function createSetOwnerDataPayload(
 	input: SetOwnerDataInput,
 ): ProtocolPayload<SetOwnerDataData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_SET_OWNER_DATA,
-		data: {
-			nftId: input.nftId,
-			instanceDna: input.instanceDna,
-			data: input.data,
-			...spreadProvenance(input),
-		},
-	};
+	return makePayload(ACTION_SET_OWNER_DATA, {
+		nftId: input.nftId,
+		instanceDna: input.instanceDna,
+		data: input.data,
+		...spreadProvenance(input),
+	});
 }
 
 export function createSetOwnerDataOperation(
@@ -436,7 +400,7 @@ export function createSetOwnerDataOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [owner],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -447,16 +411,11 @@ export function createSetOwnerDataOperation(
 export function createExtendSchemaPayload(
 	input: ExtendSchemaInput,
 ): ProtocolPayload<ExtendSchemaData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_EXTEND_SCHEMA,
-		data: {
-			collectionId: input.collectionId,
-			...(input.newImmutableFields && { newImmutableFields: input.newImmutableFields }),
-			...(input.newMutableFields && { newMutableFields: input.newMutableFields }),
-		},
-	};
+	return makePayload(ACTION_EXTEND_SCHEMA, {
+		collectionId: input.collectionId,
+		...(input.newImmutableFields && { newImmutableFields: input.newImmutableFields }),
+		...(input.newMutableFields && { newMutableFields: input.newMutableFields }),
+	});
 }
 
 export function createExtendSchemaOperation(
@@ -469,7 +428,7 @@ export function createExtendSchemaOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [creator],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -482,22 +441,17 @@ export function createListPayload(
 	listingId: string,
 	listingNonce: string,
 ): ProtocolPayload<ListingData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_LIST,
-		data: {
-			nftId: input.nftId,
-			listingId,
-			listingNonce,
-			price: input.price,
-			...(input.expiresAt && { expiresAt: input.expiresAt }),
-			...(input.imageUrl && { imageUrl: input.imageUrl }),
-			...(input.imageHash && { imageHash: input.imageHash }),
-			...(input.marketplace && { marketplace: input.marketplace }),
-			...spreadProvenance(input),
-		},
-	};
+	return makePayload(ACTION_LIST, {
+		nftId: input.nftId,
+		listingId,
+		listingNonce,
+		price: input.price,
+		...(input.expiresAt && { expiresAt: input.expiresAt }),
+		...(input.imageUrl && { imageUrl: input.imageUrl }),
+		...(input.imageHash && { imageHash: input.imageHash }),
+		...(input.marketplace && { marketplace: input.marketplace }),
+		...spreadProvenance(input),
+	});
 }
 
 export function createUnlistPayload(
@@ -506,26 +460,16 @@ export function createUnlistPayload(
 	imageHash?: string,
 	provenance?: SeedProvenance,
 ): ProtocolPayload<UnlistData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_UNLIST,
-		data: {
-			nftId,
-			...(imageUrl && { imageUrl }),
-			...(imageHash && { imageHash }),
-			...spreadProvenance(provenance),
-		},
-	};
+	return makePayload(ACTION_UNLIST, {
+		nftId,
+		...(imageUrl && { imageUrl }),
+		...(imageHash && { imageHash }),
+		...spreadProvenance(provenance),
+	});
 }
 
 export function createBuyPayload(data: BuyData): ProtocolPayload<BuyData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_BUY,
-		data,
-	};
+	return makePayload(ACTION_BUY, data);
 }
 
 export function createBuyOperation(data: BuyData, nodeAccount: string): HiveOperation {
@@ -534,7 +478,7 @@ export function createBuyOperation(data: BuyData, nodeAccount: string): HiveOper
 		{
 			required_auths: [nodeAccount],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(createBuyPayload(data)),
 		},
 	];
@@ -549,7 +493,7 @@ export async function createReplicateOperation(input: ReplicateInput): Promise<H
 		{
 			required_auths: [],
 			required_posting_auths: [input.currentOwner],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -569,7 +513,7 @@ export function createTransferOperation(
 		{
 			required_auths: [from],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -585,7 +529,7 @@ export function createBurnOperation(
 		{
 			required_auths: [owner],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -601,7 +545,7 @@ export function createBulkBurnOperation(
 		{
 			required_auths: [owner],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -619,7 +563,7 @@ export function createListOperation(
 		{
 			required_auths: [owner],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -638,7 +582,7 @@ export function createUnlistOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [owner],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -683,22 +627,17 @@ export async function createDeterministicCollectionPayload(
 	);
 	const originDna = await generateOriginDna(id);
 
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_CREATE_COLLECTION,
-		data: {
-			id,
-			name: input.name,
-			symbol: input.symbol.toUpperCase(),
-			creator: input.creator,
-			totalPotential: input.totalPotential,
-			originDna,
-			metadata: input.metadata,
-			rules: input.rules,
-			...(input.schema && { schema: input.schema }),
-		},
-	};
+	return makePayload(ACTION_CREATE_COLLECTION, {
+		id,
+		name: input.name,
+		symbol: input.symbol.toUpperCase(),
+		creator: input.creator,
+		totalPotential: input.totalPotential,
+		originDna,
+		metadata: input.metadata,
+		rules: input.rules,
+		...(input.schema && { schema: input.schema }),
+	});
 }
 
 export async function createDeterministicCollectionOperation(
@@ -740,31 +679,26 @@ export async function createDeterministicMintPayload(
 		input.edition,
 		imageHash,
 	);
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_MINT,
-		data: {
-			id: seedId,
-			collectionId: input.collectionId,
-			edition: input.edition,
-			owner: input.owner,
-			originDna: input.collectionOriginDna,
-			instanceDna,
-			mintedBy: input.owner,
-			...(input.collectionBlock !== undefined && { collectionBlock: input.collectionBlock }),
-			metadata: {
-				name: input.name,
-				description: input.description,
-				imageUrl: input.imageUrl,
-				imageHash,
-			},
-			maxReplicas: input.maxReplicas ?? 1,
-			...(input.nftType && { nftType: input.nftType }),
-			...(input.immutableData && { immutableData: input.immutableData }),
-			...(input.mutableData && { mutableData: input.mutableData }),
+	return makePayload(ACTION_MINT, {
+		id: seedId,
+		collectionId: input.collectionId,
+		edition: input.edition,
+		owner: input.owner,
+		originDna: input.collectionOriginDna,
+		instanceDna,
+		mintedBy: input.owner,
+		...(input.collectionBlock !== undefined && { collectionBlock: input.collectionBlock }),
+		metadata: {
+			name: input.name,
+			description: input.description,
+			imageUrl: input.imageUrl,
+			imageHash,
 		},
-	};
+		maxReplicas: input.maxReplicas ?? 1,
+		...(input.nftType && { nftType: input.nftType }),
+		...(input.immutableData && { immutableData: input.immutableData }),
+		...(input.mutableData && { mutableData: input.mutableData }),
+	});
 }
 
 export async function createDeterministicMintOperation(
@@ -782,65 +716,45 @@ export async function createPackCreatePayload(
 	creator: string,
 ): Promise<ProtocolPayload<PackCreateData>> {
 	const id = await generateDeterministicPackId(input.collectionId, input.name);
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_PACK_CREATE,
-		data: {
-			id,
-			collectionId: input.collectionId,
-			name: input.name,
-			...(input.description && { description: input.description }),
-			...(input.imageUrl && { imageUrl: input.imageUrl }),
-			dropTable: input.dropTable,
-			itemsPerPack: input.itemsPerPack,
-			...(input.price && { price: input.price }),
-			maxSupply: input.maxSupply,
-		},
-	};
+	return makePayload(ACTION_PACK_CREATE, {
+		id,
+		collectionId: input.collectionId,
+		name: input.name,
+		...(input.description && { description: input.description }),
+		...(input.imageUrl && { imageUrl: input.imageUrl }),
+		dropTable: input.dropTable,
+		itemsPerPack: input.itemsPerPack,
+		...(input.price && { price: input.price }),
+		maxSupply: input.maxSupply,
+	});
 }
 
 export function createPackBuyPayload(
 	input: PackBuyInput,
 ): ProtocolPayload<PackBuyData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_PACK_BUY,
-		data: {
-			packId: input.packId,
-			quantity: input.quantity,
-		},
-	};
+	return makePayload(ACTION_PACK_BUY, {
+		packId: input.packId,
+		quantity: input.quantity,
+	});
 }
 
 export function createPackTransferPayload(
 	input: PackTransferInput,
 ): ProtocolPayload<PackTransferData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_PACK_TRANSFER,
-		data: {
-			packId: input.packId,
-			to: input.to,
-			quantity: input.quantity,
-		},
-	};
+	return makePayload(ACTION_PACK_TRANSFER, {
+		packId: input.packId,
+		to: input.to,
+		quantity: input.quantity,
+	});
 }
 
 export function createPackOpenPayload(
 	input: PackOpenInput,
 ): ProtocolPayload<PackOpenData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_PACK_OPEN,
-		data: {
-			packId: input.packId,
-			quantity: input.quantity,
-		},
-	};
+	return makePayload(ACTION_PACK_OPEN, {
+		packId: input.packId,
+		quantity: input.quantity,
+	});
 }
 
 // ============ PACK HIVE OPERATIONS ============
@@ -855,7 +769,7 @@ export async function createPackCreateOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [creator],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -871,7 +785,7 @@ export function createPackBuyOperation(
 		{
 			required_auths: [buyer],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -887,7 +801,7 @@ export function createPackTransferOperation(
 		{
 			required_auths: [from],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -903,7 +817,7 @@ export function createPackOpenOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [opener],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -914,79 +828,54 @@ export function createPackOpenOperation(
 export function createPackApprovePayload(
 	input: PackApproveInput,
 ): ProtocolPayload<PackApproveData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_PACK_APPROVE,
-		data: {
-			spender: input.spender,
-			packId: input.packId,
-			quantity: input.quantity,
-			approved: input.approved,
-		},
-	};
+	return makePayload(ACTION_PACK_APPROVE, {
+		spender: input.spender,
+		packId: input.packId,
+		quantity: input.quantity,
+		approved: input.approved,
+	});
 }
 
 export function createPackTransferFromPayload(
 	input: PackTransferFromInput,
 ): ProtocolPayload<PackTransferFromData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_PACK_TRANSFER_FROM,
-		data: {
-			from: input.from,
-			to: input.to,
-			packId: input.packId,
-			quantity: input.quantity,
-		},
-	};
+	return makePayload(ACTION_PACK_TRANSFER_FROM, {
+		from: input.from,
+		to: input.to,
+		packId: input.packId,
+		quantity: input.quantity,
+	});
 }
 
 export function createNftApprovePayload(
 	input: NftApproveInput,
 ): ProtocolPayload<NftApproveData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_NFT_APPROVE,
-		data: {
-			spender: input.spender,
-			instanceId: input.instanceId,
-			approved: input.approved,
-		},
-	};
+	return makePayload(ACTION_NFT_APPROVE, {
+		spender: input.spender,
+		instanceId: input.instanceId,
+		approved: input.approved,
+	});
 }
 
 export function createNftApproveAllPayload(
 	input: NftApproveAllInput,
 ): ProtocolPayload<NftApproveAllData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_NFT_APPROVE_ALL,
-		data: {
-			spender: input.spender,
-			collectionId: input.collectionId,
-			approved: input.approved,
-		},
-	};
+	return makePayload(ACTION_NFT_APPROVE_ALL, {
+		spender: input.spender,
+		collectionId: input.collectionId,
+		approved: input.approved,
+	});
 }
 
 export function createNftTransferFromPayload(
 	input: NftTransferFromInput,
 ): ProtocolPayload<NftTransferFromData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_NFT_TRANSFER_FROM,
-		data: {
-			from: input.from,
-			to: input.to,
-			instanceId: input.instanceId,
-			...spreadProvenance(input),
-		},
-	};
+	return makePayload(ACTION_NFT_TRANSFER_FROM, {
+		from: input.from,
+		to: input.to,
+		instanceId: input.instanceId,
+		...spreadProvenance(input),
+	});
 }
 
 // ============ APPROVE & TRANSFER_FROM OPERATIONS ============
@@ -1002,7 +891,7 @@ export function createPackApproveOperation(
 		{
 			required_auths: [owner],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -1018,7 +907,7 @@ export function createPackTransferFromOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [spender],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -1034,7 +923,7 @@ export function createNftApproveOperation(
 		{
 			required_auths: [owner],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -1050,7 +939,7 @@ export function createNftApproveAllOperation(
 		{
 			required_auths: [owner],
 			required_posting_auths: [],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -1066,7 +955,7 @@ export function createNftTransferFromOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [spender],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -1077,30 +966,20 @@ export function createNftTransferFromOperation(
 export function createNftLendPayload(
 	input: NftLendInput,
 ): ProtocolPayload<NftLendData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_NFT_LEND,
-		data: {
-			instanceId: input.instanceId,
-			borrower: input.borrower,
-			...spreadProvenance(input),
-		},
-	};
+	return makePayload(ACTION_NFT_LEND, {
+		instanceId: input.instanceId,
+		borrower: input.borrower,
+		...spreadProvenance(input),
+	});
 }
 
 export function createNftReturnPayload(
 	input: NftReturnInput,
 ): ProtocolPayload<NftReturnData> {
-	return {
-		protocol: PROTOCOL_ID,
-		version: PROTOCOL_VERSION,
-		action: ACTION_NFT_RETURN,
-		data: {
-			instanceId: input.instanceId,
-			...spreadProvenance(input),
-		},
-	};
+	return makePayload(ACTION_NFT_RETURN, {
+		instanceId: input.instanceId,
+		...spreadProvenance(input),
+	});
 }
 
 export function createNftLendOperation(
@@ -1113,7 +992,7 @@ export function createNftLendOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [owner],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
@@ -1129,7 +1008,7 @@ export function createNftReturnOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [signer],
-			id: PROTOCOL_ID,
+			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
 	];
