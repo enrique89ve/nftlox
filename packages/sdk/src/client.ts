@@ -190,7 +190,11 @@ async function get<T>(baseUrl: string, path: string, params?: QueryParams): Prom
 	if (!response.ok) {
 		throw new IndexerError(response.status, await response.text());
 	}
-	return response.json() as Promise<T>;
+	const data = await response.json();
+	if (data === null || data === undefined) {
+		throw new IndexerError(502, "Invalid response: null or undefined body");
+	}
+	return data as T;
 }
 
 async function post<T>(baseUrl: string, path: string, body: unknown): Promise<T> {
@@ -203,7 +207,11 @@ async function post<T>(baseUrl: string, path: string, body: unknown): Promise<T>
 	if (!response.ok) {
 		throw new IndexerError(response.status, await response.text());
 	}
-	return response.json() as Promise<T>;
+	const data = await response.json();
+	if (data === null || data === undefined) {
+		throw new IndexerError(502, "Invalid response: null or undefined body");
+	}
+	return data as T;
 }
 
 // ============ CLIENT FACTORY ============
@@ -244,6 +252,12 @@ export interface IndexerClient {
 	getPack(id: string): Promise<IndexerPack>;
 }
 
+/**
+ * Creates an indexer API client.
+ *
+ * SECURITY: When used server-side (Node.js/Bun), ensure baseUrl points to a trusted
+ * indexer to prevent SSRF. Do not pass user-controlled URLs.
+ */
 export function createIndexerClient(baseUrl: string): IndexerClient {
 	return {
 		// ---- Status ----

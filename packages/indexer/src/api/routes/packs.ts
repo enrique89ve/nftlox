@@ -6,8 +6,8 @@ export const packsRoutes = new Elysia({ prefix: "/api/packs", tags: ["Packs"] })
 		return listPacks(query.collectionId, query.creator, query.limit, query.offset);
 	}, {
 		query: t.Object({
-			collectionId: t.Optional(t.String({ description: "Filter by collection ID" })),
-			creator: t.Optional(t.String({ description: "Filter by creator account" })),
+			collectionId: t.Optional(t.String({ maxLength: 128, description: "Filter by collection ID" })),
+			creator: t.Optional(t.String({ maxLength: 16, description: "Filter by creator account" })),
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
@@ -26,6 +26,6 @@ export const packsRoutes = new Elysia({ prefix: "/api/packs", tags: ["Packs"] })
 		}
 		return pack;
 	}, {
-		params: t.Object({ id: t.String() }),
+		params: t.Object({ id: t.String({ minLength: 1, maxLength: 128 }) }),
 		detail: { summary: "Get pack by ID" },
 	});

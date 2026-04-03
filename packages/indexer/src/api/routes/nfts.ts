@@ -12,13 +12,13 @@ export const nftsRoutes = new Elysia({ prefix: "/api/nfts", tags: ["NFTs"] })
 		}
 		return row;
 	}, {
-		params: t.Object({ id: t.String() }),
+		params: t.Object({ id: t.String({ minLength: 1, maxLength: 128 }) }),
 		detail: { summary: "Get NFT by ID", description: "Returns full NFT details including metadata, ownership, and listing info" },
 	})
 	.get("/:id/instances", async ({ params, query }) => {
 		return queryNfts({ by: "seed", seedId: params.id }, { limit: query.limit, offset: query.offset });
 	}, {
-		params: t.Object({ id: t.String() }),
+		params: t.Object({ id: t.String({ minLength: 1, maxLength: 128 }) }),
 		query: t.Object({
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),

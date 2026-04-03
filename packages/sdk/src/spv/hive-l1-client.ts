@@ -134,8 +134,13 @@ export async function fetchFromHiveRpc<T>(
 				throw new Error("RPC response missing 'result' field");
 			}
 
+			const result = json.result;
+			if (result === null || (typeof result !== "object" && typeof result !== "string" && typeof result !== "number")) {
+				throw new Error("RPC response has invalid 'result' type");
+			}
+
 			// Caller is responsible for validating the shape of T
-			return json.result as T;
+			return result as T;
 		} catch (err) {
 			errors.push({ endpoint, error: err });
 		}

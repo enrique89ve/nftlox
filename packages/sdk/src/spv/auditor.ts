@@ -62,15 +62,24 @@ export async function fetchRecentPackOpenEvents(
 
 	for (const pack of packs) {
 		const packId = pack.id;
-		if (typeof packId !== "string") continue;
+		if (typeof packId !== "string") {
+			console.warn(`SPV audit: skipping pack with non-string id: ${String(packId)}`);
+			continue;
+		}
 
 		const historyResponse = await fetch(
 			`${config.indexerBaseUrl}/api/packs/${packId}/history?limit=50`,
 		);
-		if (!historyResponse.ok) continue;
+		if (!historyResponse.ok) {
+			console.warn(`SPV audit: failed to fetch history for pack ${packId} (HTTP ${historyResponse.status})`);
+			continue;
+		}
 
 		const historyRaw = await historyResponse.json() as unknown;
-		if (!Array.isArray(historyRaw)) continue;
+		if (!Array.isArray(historyRaw)) {
+			console.warn(`SPV audit: unexpected non-array history response for pack ${packId}`);
+			continue;
+		}
 
 		const history = historyRaw as Array<{
 			event_type: string;

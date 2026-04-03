@@ -31,7 +31,7 @@ const toLogLevel = (val: string | undefined, fallback: LogLevel): LogLevel => {
 
 export const config = {
 	port: toInt(process.env.INDEXER_PORT, 3050),
-	databaseUrl: process.env.DATABASE_URL ?? "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer",
+	databaseUrl: process.env.DATABASE_URL ?? (process.env.NODE_ENV === "production" ? "" : "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer"),
 	genesisBlock: toInt(process.env.GENESIS_BLOCK, 0),
 	protocolId: process.env.PROTOCOL_ID ?? "nftlox_testnet",
 	batchSize: toInt(process.env.BATCH_SIZE, 1000),
@@ -44,9 +44,9 @@ export const config = {
 	nodeEnv: process.env.NODE_ENV ?? "development",
 	enableSwagger: toBool(process.env.ENABLE_SWAGGER, process.env.NODE_ENV !== "production"),
 	healthPort: toInt(process.env.HEALTH_PORT, 0),
-	postgresPassword: process.env.POSTGRES_PASSWORD ?? "nftlox_dev",
-	postgresUser: process.env.POSTGRES_USER ?? "nftlox",
-	postgresDb: process.env.POSTGRES_DB ?? "nftlox_indexer",
+	postgresPassword: process.env.POSTGRES_PASSWORD ?? (process.env.NODE_ENV === "production" ? "" : "nftlox_dev"),
+	postgresUser: process.env.POSTGRES_USER ?? (process.env.NODE_ENV === "production" ? "" : "nftlox"),
+	postgresDb: process.env.POSTGRES_DB ?? (process.env.NODE_ENV === "production" ? "" : "nftlox_indexer"),
 	// Cuenta del nodo: firma operaciones y recibe el fee 2.5% en ventas.
 	hiveAccount: process.env.HIVE_ACCOUNT ?? DEFAULT_FEE_ACCOUNT,
 	indexerRole: toIndexerRole(process.env.INDEXER_ROLE),
@@ -70,8 +70,13 @@ if (!config.hiveAccount) {
 	throw new Error("HIVE_ACCOUNT must be a valid non-empty account name");
 }
 
-if (config.nodeEnv === "production" && process.env.POSTGRES_PASSWORD === undefined) {
-	throw new Error("POSTGRES_PASSWORD must be set in production");
+if (config.nodeEnv === "production") {
+	if (!process.env.DATABASE_URL) {
+		throw new Error("DATABASE_URL must be set in production");
+	}
+	if (!process.env.POSTGRES_PASSWORD) {
+		throw new Error("POSTGRES_PASSWORD must be set in production");
+	}
 }
 
 export type Config = typeof config;

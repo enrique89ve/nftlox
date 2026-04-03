@@ -101,7 +101,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 		const entries = await getOperationStatus(params.txId);
 		return { txId: params.txId, operations: entries };
 	}, {
-		params: t.Object({ txId: t.String() }),
+		params: t.Object({ txId: t.String({ minLength: 40, maxLength: 40 }) }),
 		detail: {
 			summary: "Operation status by transaction ID",
 			description: "Returns per-operation status for all protocol operations in a Hive transaction. A single tx can contain multiple custom_json ops, each tracked independently.",

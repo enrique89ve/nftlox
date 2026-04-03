@@ -37,6 +37,8 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 
 	const nft = await getNftWithCollectionRules(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
+	// assertActionable rejects burned + lent; status check below rejects anything not listed.
+	// Combined: only NFTs with status=listed pass through.
 	assertActionable(nft, nftId);
 	assertSeedNotDistributed(nft, nftId);
 	if (nft.status !== NFT_STATUS_LISTED) throw new Error(`NFT not listed: ${nftId}`);

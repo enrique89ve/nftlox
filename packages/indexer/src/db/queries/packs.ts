@@ -87,12 +87,17 @@ export async function upsertPackBalance(
 	txn: Queryable = sql,
 ): Promise<void> {
 	if (delta < 0) {
-		// UPDATE only — avoids CHECK constraint violation on INSERT with negative value
-		await txn`
+		// Atomic deduction with underflow guard — rejects if balance would go negative
+		const result = await txn`
 			UPDATE user_pack_balances
 			SET balance = balance + ${delta}
 			WHERE account = ${account} AND pack_id = ${packId}
+				AND balance >= ${-delta}
+			RETURNING balance
 		`;
+		if (result.count === 0) {
+			throw new Error(`Insufficient pack balance for ${account}/${packId} (attempted deduction: ${-delta})`);
+		}
 	} else {
 		await txn`
 			INSERT INTO user_pack_balances (account, pack_id, balance)

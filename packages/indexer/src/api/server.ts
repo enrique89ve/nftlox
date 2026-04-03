@@ -45,8 +45,14 @@ export function startApiServer(): void {
 	const STATS_PATHS = new Set(["/api/stats", "/api/health"]);
 	const ALLOWED_DURING_SYNC = new Set(["/api/health", "/api/status", "/swagger", "/swagger/json"]);
 
+	const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",").map(s => s.trim()).filter(Boolean);
+
 	const app = new Elysia()
-		.use(cors())
+		.use(cors({
+			origin: allowedOrigins ?? true,
+			methods: ["GET", "POST", "OPTIONS"],
+			allowedHeaders: ["content-type"],
+		}))
 		.onBeforeHandle(({ request, set }) => {
 			// Rate limiting
 			const rateLimited = checkRateLimit(request, set.headers);

@@ -13,7 +13,7 @@ export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 		);
 		return { ...result, offset: query.offset, limit: query.limit };
 	}, {
-		params: t.Object({ username: t.String() }),
+		params: t.Object({ username: t.String({ minLength: 3, maxLength: 16 }) }),
 		query: t.Object({
 			status: t.Optional(t.String({ description: "Filter: active, listed, burned" })),
 			type: t.Optional(t.String({ description: "Filter: seed, instance, replica" })),
@@ -25,13 +25,13 @@ export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 	.get("/:username/nfts/count", async ({ params }) => {
 		return getUserNftCounts(params.username);
 	}, {
-		params: t.Object({ username: t.String() }),
+		params: t.Object({ username: t.String({ minLength: 3, maxLength: 16 }) }),
 		detail: { summary: "Get user's NFT counts", description: "Total counts by type (seeds, instances, replicas) excluding burned" },
 	})
 	.get("/:username/collections", async ({ params, query }) => {
 		return getCollectionsByCreator(params.username, query.limit, query.offset);
 	}, {
-		params: t.Object({ username: t.String() }),
+		params: t.Object({ username: t.String({ minLength: 3, maxLength: 16 }) }),
 		query: t.Object({
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
@@ -41,7 +41,7 @@ export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 	.get("/:username/packs", async ({ params, query }) => {
 		return getUserPackBalances(params.username, query.limit, query.offset);
 	}, {
-		params: t.Object({ username: t.String() }),
+		params: t.Object({ username: t.String({ minLength: 3, maxLength: 16 }) }),
 		query: t.Object({
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),

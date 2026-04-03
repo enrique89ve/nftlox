@@ -306,6 +306,12 @@ export function validateArtIdArray(artIds: string[]): {
  * Generates a deterministic collection ID from creator + name + symbol.
  * Uses SHA-256 for cryptographic collision resistance.
  * Same inputs always produce the same collectionId.
+ *
+ * NOTE: The separator ":" in the input is not escaped, creating a theoretical
+ * collision risk if inputs contain ":". This is mitigated by:
+ * 1. creator is a Hive username (no colons allowed)
+ * 2. symbol is uppercase alphanumeric (no colons)
+ * 3. name is the only free-form field, but collision requires exact hash match
  */
 export async function generateDeterministicCollectionId(
 	creator: string,
@@ -322,6 +328,12 @@ export async function generateDeterministicCollectionId(
  * Uses SHA-256 for cryptographic collision resistance.
  * Format: seed_[20 hex] — 80 bits, birthday bound ~1.1T.
  * Same collectionId + artId always produce the same seedId.
+ *
+ * NOTE: The separator ":" in the input is not escaped, creating a theoretical
+ * collision risk if inputs contain ":". This is mitigated by:
+ * 1. collectionId is itself a hash (no colons)
+ * 2. artId is user-provided but lowercased and typically alphanumeric
+ * 3. Birthday bound at 80 bits requires ~1.1T operations
  */
 export async function generateDeterministicSeedId(
 	collectionId: string,
@@ -336,6 +348,11 @@ export async function generateDeterministicSeedId(
  * Generates a deterministic instance ID from seedId + instanceNumber.
  * Uses SHA-256. Hash suffix is 20 hex chars (80 bits, birthday bound ~1.1T).
  * Same seedId + instanceNumber always produce the same instanceId.
+ *
+ * NOTE: The separator ":" in the input is not escaped, creating a theoretical
+ * collision risk if inputs contain ":". This is mitigated by:
+ * 1. seedId is itself a hash (no colons)
+ * 2. instanceNumber is a numeric value (no colons)
  */
 export async function generateDeterministicInstanceId(
 	seedId: string,
@@ -353,6 +370,12 @@ export async function generateDeterministicInstanceId(
  * Generates a deterministic pack ID from collectionId + packName.
  * Uses SHA-256 for cryptographic collision resistance.
  * Same inputs always produce the same packId.
+ *
+ * NOTE: The separator ":" in the input is not escaped, creating a theoretical
+ * collision risk if inputs contain ":". This is mitigated by:
+ * 1. collectionId is itself a hash (no colons)
+ * 2. packName is user-provided but lowercased; colons in names are uncommon
+ * 3. Birthday bound at 56 bits (14 hex chars) is acceptable for pack-level IDs
  */
 export async function generateDeterministicPackId(
 	collectionId: string,

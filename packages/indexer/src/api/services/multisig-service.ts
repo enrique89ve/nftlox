@@ -6,6 +6,7 @@
  */
 
 import { Transaction, PrivateKey, type TransactionType, type OperationName, type OperationBody } from "hive-tx";
+import { createLogger } from "@/utils/logger.ts";
 import type { Queryable } from "@/db/client.ts";
 import { getNftWithCollectionRules, type NftProcessingRow } from "@/db/queries/nfts.ts";
 import type { CollectionRulesRow } from "@/db/queries/collections.ts";
@@ -21,6 +22,7 @@ import {
 
 // ============ CONSTANTS ============
 
+const log = createLogger("multisig-service");
 const MIN_EXPIRATION_MS = 30_000;
 const MAX_EXPIRATION_MS = 120_000;
 const MIN_OPERATIONS = 2; // minimum: 1 transfer (seller) + 1 custom_json
@@ -556,7 +558,8 @@ function mapErrorToMultisigResponse(err: unknown): MultisigResponse {
 		return { ok: false, code: err.code, message: err.message };
 	}
 
-	// Unknown error — never leak sensitive details
-	const message = err instanceof Error ? err.message : "An unexpected error occurred";
+	// Unknown error — never leak sensitive details to the client
+	log.error("Unexpected multisig error", { error: err instanceof Error ? err.message : String(err) });
+	const message = "An unexpected error occurred";
 	return { ok: false, code: "INTERNAL_ERROR", message };
 }

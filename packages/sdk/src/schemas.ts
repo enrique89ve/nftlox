@@ -126,7 +126,10 @@ export type ArchiveCollectionInput = z.infer<typeof archiveCollectionInputSchema
 export const setOwnerDataInputSchema = z.object({
 	nftId: z.string().min(1),
 	instanceDna: z.string().min(1),
-	data: z.record(z.string(), z.unknown()),
+	data: z.record(z.string(), z.unknown()).refine(
+		(obj) => Object.keys(obj).length <= 64,
+		"Data object cannot exceed 64 fields",
+	),
 	seedId: z.string().optional(),
 	seedTxId: z.string().optional(),
 });
@@ -166,9 +169,18 @@ export const mintInputSchema = z.object({
 	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH),
 	imageHash: z.string().optional(),
 	maxReplicas: z.number().int().min(1, "Max replicas must be at least 1").optional(),
-	data: z.record(z.string(), z.unknown()).optional(),
-	immutableData: z.record(z.string(), z.unknown()).optional(),
-	mutableData: z.record(z.string(), z.unknown()).optional(),
+	data: z.record(z.string(), z.unknown()).optional().refine(
+		(obj) => !obj || Object.keys(obj).length <= 64,
+		"Data object cannot exceed 64 fields",
+	),
+	immutableData: z.record(z.string(), z.unknown()).optional().refine(
+		(obj) => !obj || Object.keys(obj).length <= 64,
+		"Data object cannot exceed 64 fields",
+	),
+	mutableData: z.record(z.string(), z.unknown()).optional().refine(
+		(obj) => !obj || Object.keys(obj).length <= 64,
+		"Data object cannot exceed 64 fields",
+	),
 	collectionBlock: z.number().int().nonnegative("collectionBlock must be a non-negative integer").optional(),
 });
 export type MintInput = z.infer<typeof mintInputSchema>;
@@ -258,9 +270,18 @@ export const bulkDistributeInputSchema = z.object({
 			},
 			{ message: "Duplicate seedId: aggregate quantities instead" }
 		),
-	imageOverrides: z.record(z.string(), z.object({ imageUrl: z.string().optional(), imageHash: z.string().optional() })).optional(),
-	data: z.record(z.string(), z.unknown()).optional(),
-	mutableData: z.record(z.string(), z.unknown()).optional(),
+	imageOverrides: z.record(z.string(), z.object({ imageUrl: z.string().optional(), imageHash: z.string().optional() })).refine(
+		(obj) => Object.keys(obj).length <= 50,
+		"imageOverrides cannot exceed 50 entries",
+	).optional(),
+	data: z.record(z.string(), z.unknown()).optional().refine(
+		(obj) => !obj || Object.keys(obj).length <= 64,
+		"Data object cannot exceed 64 fields",
+	),
+	mutableData: z.record(z.string(), z.unknown()).optional().refine(
+		(obj) => !obj || Object.keys(obj).length <= 64,
+		"Data object cannot exceed 64 fields",
+	),
 });
 export type BulkDistributeInput = z.infer<typeof bulkDistributeInputSchema>;
 
@@ -334,8 +355,14 @@ export type NftTransferFromInput = z.infer<typeof nftTransferFromInputSchema>;
 export const setDataInputSchema = z.object({
 	nftId: z.string().min(1),
 	instanceDna: z.string().min(1),
-	data: z.record(z.string(), z.unknown()).optional(),
-	mutableData: z.record(z.string(), z.unknown()).optional(),
+	data: z.record(z.string(), z.unknown()).optional().refine(
+		(obj) => !obj || Object.keys(obj).length <= 64,
+		"Data object cannot exceed 64 fields",
+	),
+	mutableData: z.record(z.string(), z.unknown()).optional().refine(
+		(obj) => !obj || Object.keys(obj).length <= 64,
+		"Data object cannot exceed 64 fields",
+	),
 	seedId: z.string().optional(),
 	seedTxId: z.string().optional(),
 });
@@ -351,8 +378,14 @@ export type DataOperatorApproveInput = z.infer<typeof dataOperatorApproveInputSc
 export const setDataFromInputSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1),
 	instanceDna: z.string().min(1),
-	data: z.record(z.string(), z.unknown()).optional(),
-	mutableData: z.record(z.string(), z.unknown()).optional(),
+	data: z.record(z.string(), z.unknown()).optional().refine(
+		(obj) => !obj || Object.keys(obj).length <= 64,
+		"Data object cannot exceed 64 fields",
+	),
+	mutableData: z.record(z.string(), z.unknown()).optional().refine(
+		(obj) => !obj || Object.keys(obj).length <= 64,
+		"Data object cannot exceed 64 fields",
+	),
 });
 export type SetDataFromInput = z.infer<typeof setDataFromInputSchema>;
 

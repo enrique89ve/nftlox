@@ -15,7 +15,7 @@ export const marketplaceRoutes = new Elysia({ prefix: "/api/marketplace", tags: 
 				t.Literal("price_desc"),
 				t.Literal("recent"),
 			], { default: "recent", description: "Sort order" })),
-			currency: t.Optional(t.String({ description: "Filter by currency: HIVE, HBD" })),
+			currency: t.Optional(t.String({ maxLength: 4, description: "Filter by currency: HIVE, HBD" })),
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
@@ -29,10 +29,10 @@ export const marketplaceRoutes = new Elysia({ prefix: "/api/marketplace", tags: 
 		return getRecentSales(query.limit, query.offset);
 	}, {
 		query: t.Object({
-			nftId: t.Optional(t.String({ description: "Filter by NFT ID" })),
-			collectionId: t.Optional(t.String({ description: "Filter by collection ID" })),
-			seller: t.Optional(t.String({ description: "Filter by seller account" })),
-			buyer: t.Optional(t.String({ description: "Filter by buyer account" })),
+			nftId: t.Optional(t.String({ maxLength: 128, description: "Filter by NFT ID" })),
+			collectionId: t.Optional(t.String({ maxLength: 128, description: "Filter by collection ID" })),
+			seller: t.Optional(t.String({ maxLength: 16, description: "Filter by seller account" })),
+			buyer: t.Optional(t.String({ maxLength: 16, description: "Filter by buyer account" })),
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
@@ -42,7 +42,7 @@ export const marketplaceRoutes = new Elysia({ prefix: "/api/marketplace", tags: 
 		return getSalesVolume(query.collectionId);
 	}, {
 		query: t.Object({
-			collectionId: t.Optional(t.String({ description: "Filter by collection ID" })),
+			collectionId: t.Optional(t.String({ maxLength: 128, description: "Filter by collection ID" })),
 		}),
 		detail: { summary: "Get sales volume", description: "Aggregated volume by currency with royalties and fees breakdown" },
 	});

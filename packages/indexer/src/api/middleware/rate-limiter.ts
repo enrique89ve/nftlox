@@ -1,3 +1,6 @@
+// NOTE: In-memory rate limiter — not shared across instances.
+// For multi-node deployments, replace with Redis-backed or PostgreSQL-backed rate limiting.
+
 const MAX_REQUESTS_PER_WINDOW = 1000;
 const WINDOW_MS = 60_000; // 1 minute
 const CLEANUP_INTERVAL_MS = 300_000; // 5 minutes
