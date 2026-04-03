@@ -6,14 +6,18 @@ import {
 	updateCollectionSchema,
 } from "@/db/queries/collections.ts";
 import { getLatestSchemaVersion, insertSchemaVersion } from "@/db/queries/schema-versions.ts";
-import { requireString } from "@/utils/validation.ts";
+import {
+	requireString,
+	optionalCollectionSchema,
+	optionalSchemaFieldArray,
+	collectionSchemaToRecord,
+} from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import {
 	mergeSchemas,
 	validateSchemaDefinition,
 	computeDataHash,
 	type CollectionSchema,
-	type SchemaField,
 } from "nftlox-sdk";
 
 export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -26,14 +30,16 @@ export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): P
 	}
 	if (collection.status === COLLECTION_STATUS_ARCHIVED) throw new Error(`Collection ${collectionId} is archived`);
 
-	const newImmutableFields = Array.isArray(op.data.newImmutableFields)
-		? op.data.newImmutableFields as SchemaField[]
-		: undefined;
-	const newMutableFields = Array.isArray(op.data.newMutableFields)
-		? op.data.newMutableFields as SchemaField[]
-		: undefined;
+	const newImmutableFields = optionalSchemaFieldArray(
+		op.data.newImmutableFields,
+		"newImmutableFields",
+	);
+	const newMutableFields = optionalSchemaFieldArray(
+		op.data.newMutableFields,
+		"newMutableFields",
+	);
 
-	const existingSchema = collection.schema as CollectionSchema | null;
+	const existingSchema = optionalCollectionSchema(collection.schema);
 	let finalSchema: CollectionSchema;
 
 	if (existingSchema) {
@@ -55,7 +61,7 @@ export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): P
 
 	const prev = await getLatestSchemaVersion(collectionId, txn);
 	const newVersion = (prev?.version ?? 0) + 1;
-	const schemaHash = await computeDataHash(finalSchema as unknown as Record<string, unknown>);
+	const schemaHash = await computeDataHash(collectionSchemaToRecord(finalSchema));
 
 	await insertSchemaVersion({
 		collectionId,

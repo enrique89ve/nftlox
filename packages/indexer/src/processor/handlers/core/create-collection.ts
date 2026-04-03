@@ -4,7 +4,6 @@ import { insertCollection, collectionExists, symbolTakenByCreator, countCollecti
 import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
-	requireString,
 	requireBoundedString,
 	requireSymbol,
 	requireNumber,
@@ -12,7 +11,8 @@ import {
 	requireBoolean,
 	optionalString,
 	optionalBoundedString,
-	optionalObject,
+	optionalCollectionSchema,
+	collectionSchemaToRecord,
 } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import {
@@ -25,7 +25,6 @@ import {
 	MAX_IMAGE_URL_LENGTH,
 	MAX_URL_LENGTH,
 	MAX_ID_LENGTH,
-	type CollectionSchema,
 } from "nftlox-sdk";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -75,7 +74,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const originDna = await generateOriginDna(canonicalId);
 
 	// Validate schema if provided
-	const rawSchema = optionalObject(d.schema) as CollectionSchema | null;
+	const rawSchema = optionalCollectionSchema(d.schema);
 	if (rawSchema) {
 		const schemaErrors = validateSchemaDefinition(rawSchema);
 		if (schemaErrors.length > 0) {
@@ -109,7 +108,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	}, txn);
 
 	if (rawSchema) {
-		const schemaHash = await computeDataHash(rawSchema as unknown as Record<string, unknown>);
+		const schemaHash = await computeDataHash(collectionSchemaToRecord(rawSchema));
 		await insertSchemaVersion({
 			collectionId: canonicalId,
 			version: 1,

@@ -69,7 +69,7 @@ export interface CollectionRulesRow {
 	transferable: boolean;
 	burnable: boolean;
 	replicable: boolean;
-	royalty_pct: number;
+	royalty_pct: string;
 	royalty_recipient: string | null;
 	schema: unknown | null;
 	schema_version: number;

@@ -4,7 +4,17 @@
  */
 
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { calculatePaymentSplit, validateHiveUsername, MEMO_PREFIX_BUY, MEMO_PREFIX_ROYALTY, MEMO_PREFIX_FEE, type PaymentSplit } from "nftlox-sdk";
+import {
+	calculatePaymentSplit,
+	validateHiveUsername,
+	MEMO_PREFIX_BUY,
+	MEMO_PREFIX_ROYALTY,
+	MEMO_PREFIX_FEE,
+	type PaymentSplit,
+	type CollectionSchema,
+	type SchemaField,
+	type SchemaFieldType,
+} from "nftlox-sdk";
 
 // ============ TRANSFER VERIFICATION (source-agnostic) ============
 
@@ -120,6 +130,33 @@ const HIVE_DECIMAL_REGEX = /^(0|[1-9]\d*)\.\d{3}$/;
 
 type HiveCurrency = "HIVE" | "HBD";
 
+const SCHEMA_FIELD_TYPE_LOOKUP: Readonly<Record<SchemaFieldType, true>> = {
+	string: true,
+	bool: true,
+	uint8: true,
+	uint16: true,
+	uint32: true,
+	uint64: true,
+	int8: true,
+	int16: true,
+	int32: true,
+	int64: true,
+	float: true,
+	double: true,
+	"string[]": true,
+	"bool[]": true,
+	"uint8[]": true,
+	"uint16[]": true,
+	"uint32[]": true,
+	"uint64[]": true,
+	"int8[]": true,
+	"int16[]": true,
+	"int32[]": true,
+	"int64[]": true,
+	"float[]": true,
+	"double[]": true,
+};
+
 export function requireHiveAmount(value: unknown, fieldName: string): { amount: string; currency: HiveCurrency } {
 	const price = requirePrice(value, fieldName);
 	if (!HIVE_DECIMAL_REGEX.test(price.amount)) {
@@ -203,5 +240,66 @@ export function requirePrice(value: unknown, fieldName: string): { amount: strin
 	return {
 		amount: requireString(obj.amount, `${fieldName}.amount`),
 		currency: requireString(obj.currency, `${fieldName}.currency`),
+	};
+}
+
+function isSchemaFieldType(value: string): value is SchemaFieldType {
+	return value in SCHEMA_FIELD_TYPE_LOOKUP;
+}
+
+function requireSchemaFieldType(value: unknown, fieldName: string): SchemaFieldType {
+	const fieldType = requireString(value, fieldName);
+	if (!isSchemaFieldType(fieldType)) {
+		throw new Error(`Invalid ${fieldName}: "${fieldType}" is not a supported schema field type`);
+	}
+	return fieldType;
+}
+
+export function requireSchemaField(value: unknown, fieldName: string): SchemaField {
+	const field = requireObject(value, fieldName);
+	return {
+		name: requireString(field.name, `${fieldName}.name`),
+		type: requireSchemaFieldType(field.type, `${fieldName}.type`),
+	};
+}
+
+export function requireSchemaFieldArray(value: unknown, fieldName: string): SchemaField[] {
+	const fields = requireArray(value, fieldName);
+	return fields.map((field, index) => requireSchemaField(field, `${fieldName}[${index}]`));
+}
+
+export function optionalSchemaFieldArray(
+	value: unknown,
+	fieldName: string,
+): SchemaField[] | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	return requireSchemaFieldArray(value, fieldName);
+}
+
+export function optionalCollectionSchema(value: unknown): CollectionSchema | null {
+	if (value === undefined || value === null) {
+		return null;
+	}
+
+	const schema = requireObject(value, "schema");
+
+	return {
+		immutable: requireSchemaFieldArray(schema.immutable, "schema.immutable"),
+		mutable: requireSchemaFieldArray(schema.mutable, "schema.mutable"),
+	};
+}
+
+export function collectionSchemaToRecord(schema: CollectionSchema): Record<string, unknown> {
+	return {
+		immutable: schema.immutable.map((field) => ({
+			name: field.name,
+			type: field.type,
+		})),
+		mutable: schema.mutable.map((field) => ({
+			name: field.name,
+			type: field.type,
+		})),
 	};
 }

@@ -2,7 +2,16 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { COLLECTION_STATUS_ARCHIVED, getCollectionRules } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
-import { requireString, requireBoundedString, requireUsername, optionalString, optionalBoundedString, optionalNumber, optionalObject } from "@/utils/validation.ts";
+import {
+	requireString,
+	requireBoundedString,
+	requireUsername,
+	optionalString,
+	optionalBoundedString,
+	optionalNumber,
+	optionalObject,
+	optionalCollectionSchema,
+} from "@/utils/validation.ts";
 import { resolveNftType, validateSeedCap } from "@/utils/nft-rules.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { createLogger } from "@/utils/logger.ts";
@@ -16,7 +25,6 @@ import {
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
-	type CollectionSchema,
 } from "nftlox-sdk";
 
 const log = createLogger("mint");
@@ -44,7 +52,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 	validateSeedCap(collectionId, collection.seed_count, collection.total_potential);
 
 	// Schema-based validation
-	const schema = collection.schema as CollectionSchema | null;
+	const schema = optionalCollectionSchema(collection.schema);
 	const immutableData = optionalObject(d.immutableData);
 	const mutableData = optionalObject(d.mutableData);
 

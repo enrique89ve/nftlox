@@ -37,12 +37,22 @@ interface ValidatedRequest {
 	readonly transaction: HiveTransactionObject;
 }
 
+type RequestShape = Readonly<{
+	readonly buyer: string;
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
+	readonly transaction: Record<string, unknown>;
+}>;
+
 interface ParsedAmount {
 	readonly amount: number;
 	readonly currency: string;
 }
 
 type MultisigRules = Pick<CollectionRulesRow, "id" | "creator" | "transferable" | "burnable" | "replicable" | "royalty_pct" | "royalty_recipient">;
+
+type TransactionOperation = readonly [string, Record<string, unknown>];
 
 interface NftStateResult {
 	readonly nft: NftProcessingRow;
@@ -60,8 +70,16 @@ export async function processMultisigRequest(
 	activeKey: string,
 ): Promise<MultisigResponse> {
 	try {
-		const request = validateRequestShape(rawBody);
-		validateTransactionStructure(request.transaction, request.buyer, nodeAccount, protocolId);
+		const requestShape = validateRequestShape(rawBody);
+		const request: ValidatedRequest = {
+			...requestShape,
+			transaction: validateTransactionStructure(
+				requestShape.transaction,
+				requestShape.buyer,
+				nodeAccount,
+				protocolId,
+			),
+		};
 
 		const { nft, rules, nftTxId } = await validateNftState(request.nftId, request.buyer, db);
 
@@ -99,7 +117,7 @@ export async function processMultisigRequest(
 
 // ============ REQUEST VALIDATION ============
 
-function validateRequestShape(raw: unknown): ValidatedRequest {
+function validateRequestShape(raw: unknown): RequestShape {
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
 		throw createMultisigError("INVALID_TX_STRUCTURE", "Request body must be a JSON object");
 	}
@@ -136,33 +154,85 @@ function validateRequestShape(raw: unknown): ValidatedRequest {
 		nftId: body.nftId,
 		listingId: body.listingId,
 		listTxId: body.listTxId,
-		transaction: body.transaction as HiveTransactionObject,
+		transaction: body.transaction as Record<string, unknown>,
 	};
 }
 
 // ============ TRANSACTION STRUCTURE VALIDATION ============
 
 function validateTransactionStructure(
-	tx: HiveTransactionObject,
+	tx: Record<string, unknown>,
 	buyer: string,
 	nodeAccount: string,
 	protocolId: string,
-): void {
-	validateOperationsArray(tx);
-	validateExpiration(tx.expiration);
-	validateSignaturesEmpty(tx);
-	validateOperationCount(tx.operations);
-	validateTransferOperations(tx.operations, buyer);
-	validateCustomJsonOperation(tx.operations, nodeAccount, protocolId);
+): HiveTransactionObject {
+	const refBlockNum = validateUnsignedInteger(tx.ref_block_num, "Transaction 'ref_block_num'");
+	const refBlockPrefix = validateUnsignedInteger(tx.ref_block_prefix, "Transaction 'ref_block_prefix'");
+	const operations = validateOperationsArray(tx.operations);
+	const expiration = validateExpiration(tx.expiration);
+	const signatures = validateSignaturesEmpty(tx.signatures);
+	const extensions = validateExtensions(tx.extensions);
+
+	validateOperationCount(operations);
+	validateTransferOperations(operations, buyer);
+	validateCustomJsonOperation(operations, nodeAccount, protocolId);
+
+	return {
+		ref_block_num: refBlockNum,
+		ref_block_prefix: refBlockPrefix,
+		expiration,
+		operations,
+		extensions,
+		signatures,
+	};
 }
 
-function validateOperationsArray(tx: HiveTransactionObject): void {
-	if (!Array.isArray(tx.operations)) {
+function validateUnsignedInteger(value: unknown, fieldName: string): number {
+	if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+		throw createMultisigError(
+			"INVALID_TX_STRUCTURE",
+			`${fieldName} must be a non-negative integer`,
+		);
+	}
+
+	return value;
+}
+
+function validateOperationsArray(value: unknown): ReadonlyArray<TransactionOperation> {
+	if (!Array.isArray(value)) {
 		throw createMultisigError("INVALID_TX_STRUCTURE", "Transaction 'operations' must be an array");
 	}
+
+	return value.map((operation, index) => validateOperationTuple(operation, index));
 }
 
-function validateExpiration(expiration: unknown): void {
+function validateOperationTuple(value: unknown, index: number): TransactionOperation {
+	if (!Array.isArray(value) || value.length !== 2) {
+		throw createMultisigError(
+			"INVALID_TX_STRUCTURE",
+			`Operation at index ${index} must be a [name, body] tuple`,
+		);
+	}
+
+	const [name, body] = value;
+	if (typeof name !== "string") {
+		throw createMultisigError(
+			"INVALID_TX_STRUCTURE",
+			`Operation at index ${index} must have a string name`,
+		);
+	}
+
+	if (!body || typeof body !== "object" || Array.isArray(body)) {
+		throw createMultisigError(
+			"INVALID_TX_STRUCTURE",
+			`Operation at index ${index} must have an object body`,
+		);
+	}
+
+	return [name, body as Record<string, unknown>] as const;
+}
+
+function validateExpiration(expiration: unknown): string {
 	if (typeof expiration !== "string") {
 		throw createMultisigError("INVALID_TX_STRUCTURE", "Transaction 'expiration' must be a string");
 	}
@@ -188,15 +258,31 @@ function validateExpiration(expiration: unknown): void {
 			`Transaction expiration too far in the future (${Math.round(diffMs / 1000)}s). Maximum: ${MAX_EXPIRATION_MS / 1000}s`,
 		);
 	}
+
+	return expiration;
 }
 
-function validateSignaturesEmpty(tx: HiveTransactionObject): void {
-	if (!Array.isArray(tx.signatures) || tx.signatures.length !== 0) {
+function validateSignaturesEmpty(signatures: unknown): readonly string[] {
+	if (!Array.isArray(signatures) || signatures.length !== 0) {
 		throw createMultisigError("INVALID_TX_STRUCTURE", "Transaction must have an empty signatures array");
 	}
+
+	return [];
 }
 
-function validateOperationCount(ops: ReadonlyArray<unknown>): void {
+function validateExtensions(extensions: unknown): ReadonlyArray<unknown> {
+	if (extensions === undefined) {
+		return [];
+	}
+
+	if (!Array.isArray(extensions)) {
+		throw createMultisigError("INVALID_TX_STRUCTURE", "Transaction 'extensions' must be an array");
+	}
+
+	return extensions;
+}
+
+function validateOperationCount(ops: ReadonlyArray<TransactionOperation>): void {
 	if (ops.length < MIN_OPERATIONS || ops.length > MAX_MULTISIG_OPERATIONS) {
 		throw createMultisigError(
 			"INVALID_TX_STRUCTURE",
@@ -206,7 +292,7 @@ function validateOperationCount(ops: ReadonlyArray<unknown>): void {
 }
 
 function validateTransferOperations(
-	ops: ReadonlyArray<readonly [string, Record<string, unknown>]>,
+	ops: ReadonlyArray<TransactionOperation>,
 	buyer: string,
 ): void {
 	const transferOps = ops.slice(0, -1);
@@ -243,7 +329,7 @@ function validateTransferOperations(
 }
 
 function validateCustomJsonOperation(
-	ops: ReadonlyArray<readonly [string, Record<string, unknown>]>,
+	ops: ReadonlyArray<TransactionOperation>,
 	nodeAccount: string,
 	protocolId: string,
 ): void {
@@ -328,7 +414,7 @@ function validateCustomJsonProtocol(cj: Record<string, unknown>, protocolId: str
  * which guarantees: lastOp exists, is custom_json, has valid JSON, has data object.
  */
 function validateBuyPayloadData(
-	ops: ReadonlyArray<readonly [string, Record<string, unknown>]>,
+	ops: ReadonlyArray<TransactionOperation>,
 	expectedNftId: string,
 	expectedTxId: string,
 	expectedListingId: string,
@@ -396,7 +482,7 @@ function parseHiveAmount(amountStr: string): ParsedAmount {
 // ============ TRANSFER EXTRACTION ============
 
 function extractTransfers(
-	ops: ReadonlyArray<readonly [string, Record<string, unknown>]>,
+	ops: ReadonlyArray<TransactionOperation>,
 	buyer: string,
 ): ReadonlyArray<TransferRecord> {
 	const transferOps = ops.slice(0, -1);
@@ -483,6 +569,11 @@ function validatePaymentSplit(
 		throw createMultisigError("INTERNAL_ERROR", "NFT listing price is invalid");
 	}
 
+	const royaltyPct = Number(rules.royalty_pct);
+	if (Number.isNaN(royaltyPct) || royaltyPct < 0 || royaltyPct > 50) {
+		throw createMultisigError("INTERNAL_ERROR", "Collection royalty_pct is invalid");
+	}
+
 	try {
 		const split = verifyTransfers({
 			transfers: transfers as TransferRecord[],
@@ -490,7 +581,7 @@ function validatePaymentSplit(
 			seller: nft.owner,
 			totalPrice,
 			currency: nft.listing_currency,
-			royaltyPct: rules.royalty_pct,
+			royaltyPct,
 			royaltyRecipient: rules.royalty_recipient,
 			feeAccount: nodeAccount,
 			nftId,

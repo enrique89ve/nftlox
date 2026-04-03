@@ -7,9 +7,8 @@ import {
 } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { hasDataOperatorApproval } from "@/db/queries/allowances.ts";
-import { requireString, optionalObject } from "@/utils/validation.ts";
+import { requireString, optionalObject, optionalCollectionSchema } from "@/utils/validation.ts";
 import { validateAndMergeMutableData } from "@/utils/data-transforms.ts";
-import type { CollectionSchema } from "nftlox-sdk";
 
 export async function handleSetDataFrom(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");
@@ -26,7 +25,7 @@ export async function handleSetDataFrom(op: ParsedOperation, txn: Queryable): Pr
 	}
 
 	const collection = await getCollectionRules(nft.collection_id, txn);
-	const schema = collection?.schema as CollectionSchema | null;
+	const schema = optionalCollectionSchema(collection?.schema);
 
 	if (schema) {
 		const mutableData = optionalObject(op.data.mutableData) as Record<string, unknown> | null;

@@ -6,9 +6,8 @@ import {
 	NFT_STATUS_BURNED,
 } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
-import { requireString, optionalObject } from "@/utils/validation.ts";
+import { requireString, optionalObject, optionalCollectionSchema } from "@/utils/validation.ts";
 import { validateAndMergeMutableData } from "@/utils/data-transforms.ts";
-import type { CollectionSchema } from "nftlox-sdk";
 
 export async function handleSetData(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");
@@ -20,7 +19,7 @@ export async function handleSetData(op: ParsedOperation, txn: Queryable): Promis
 	if (nft.instance_dna !== instanceDna) throw new Error(`Instance DNA mismatch for ${nftId}`);
 
 	const collection = await getCollectionRules(nft.collection_id, txn);
-	const schema = collection?.schema as CollectionSchema | null;
+	const schema = optionalCollectionSchema(collection?.schema);
 
 	if (schema) {
 		// Schema-based: only creator can write mutable_data

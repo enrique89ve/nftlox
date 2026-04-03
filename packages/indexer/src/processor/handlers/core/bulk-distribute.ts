@@ -7,7 +7,15 @@ import {
 	incrementDistributedBy,
 } from "@/db/queries/nfts.ts";
 import { assertActionable } from "@/utils/status-checks.ts";
-import { requireString, requirePositiveInt, requireObject, requireArray, optionalString, optionalObject } from "@/utils/validation.ts";
+import {
+	requireString,
+	requirePositiveInt,
+	requireObject,
+	requireArray,
+	optionalString,
+	optionalObject,
+	optionalCollectionSchema,
+} from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { computeInstanceBaseline, validateSeedSupplyForDistribution } from "@/utils/nft-rules.ts";
 import {
@@ -19,7 +27,6 @@ import {
 	validateHiveUsername,
 	computeDataHash,
 	validateMutableUpdate,
-	type CollectionSchema,
 } from "nftlox-sdk";
 
 export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable): Promise<void> {
@@ -72,7 +79,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 		if (!validatedSchemas.has(seed.collection_id)) {
 			validatedSchemas.add(seed.collection_id);
-			const schema = seed.schema as CollectionSchema | null;
+			const schema = optionalCollectionSchema(seed.schema);
 			if (schema && mutableData) {
 				const errors = validateMutableUpdate(schema, mutableData);
 				if (errors.length > 0) {

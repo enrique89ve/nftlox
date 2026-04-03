@@ -147,7 +147,7 @@ export interface NftWithRulesRow extends NftProcessingRow {
 	transferable: boolean;
 	burnable: boolean;
 	replicable: boolean;
-	royalty_pct: number;
+	royalty_pct: string;
 	royalty_recipient: string | null;
 	tx_id: string;
 	seed_tx_id: string | null;
