@@ -190,14 +190,15 @@ function normalizeHafahResponse(raw: Record<string, unknown>): HafahTransaction 
 const CUSTOM_JSON_OP_TYPE = 18;
 
 /**
- * Fetches the HafAH operation_id for a specific NFTLox custom_json in a block.
- * Uses the HafAH operations endpoint which returns per-operation IDs.
+ * Fetches ALL HafAH operation_ids for NFTLox custom_json ops in a given tx.
+ * Returns them in the same order they appear on-chain, so they can be matched
+ * positionally with parseAllNftloxOperations().
  */
-export async function fetchOperationId(
+export async function fetchOperationIds(
 	config: HiveL1Config,
 	txId: string,
 	blockNum: number,
-): Promise<string> {
+): Promise<string[]> {
 	const protocolId = getProtocolId();
 	const errors: Array<{ endpoint: string; error: unknown }> = [];
 
@@ -213,23 +214,19 @@ export async function fetchOperationId(
 			const data = await response.json() as Record<string, unknown>;
 			const ops = Array.isArray(data.ops) ? data.ops : [];
 
+			const ids: string[] = [];
 			for (const op of ops) {
 				const entry = op as Record<string, unknown>;
 				if (entry.trx_id !== txId) continue;
 				const opValue = (entry.op as Record<string, unknown>)?.value as Record<string, unknown> | undefined;
 				if (opValue?.id !== protocolId) continue;
-				if (typeof entry.operation_id === "string") return entry.operation_id;
-				if (typeof entry.operation_id === "number") return String(entry.operation_id);
+				if (typeof entry.operation_id === "string") ids.push(entry.operation_id);
+				else if (typeof entry.operation_id === "number") ids.push(String(entry.operation_id));
 			}
 
-			// Data error — retrying another endpoint won't help (same blockchain)
-			throw new HiveRpcError(
-				`No NFTLox operation found for tx ${txId} in block ${blockNum}`,
-				endpoint,
-			);
+			// Data result — don't retry on other endpoints (same blockchain data)
+			return ids;
 		} catch (err) {
-			// Data errors (HiveRpcError from us) should not be retried
-			if (err instanceof HiveRpcError) throw err;
 			errors.push({ endpoint, error: err });
 		}
 	}
@@ -237,22 +234,42 @@ export async function fetchOperationId(
 	const details = errors
 		.map((e) => `${e.endpoint}: ${e.error instanceof Error ? e.error.message : String(e.error)}`)
 		.join("; ");
-	throw new HiveRpcError(`All endpoints failed for operationId: ${details}`, config.endpoints[0] ?? "unknown");
+	throw new HiveRpcError(`All endpoints failed for operationIds: ${details}`, config.endpoints[0] ?? "unknown");
+}
+
+/** Backward-compatible: returns the first operation_id. */
+export async function fetchOperationId(
+	config: HiveL1Config,
+	txId: string,
+	blockNum: number,
+): Promise<string> {
+	const ids = await fetchOperationIds(config, txId, blockNum);
+	if (ids.length === 0) {
+		throw new HiveRpcError(
+			`No NFTLox operation found for tx ${txId} in block ${blockNum}`,
+			config.endpoints[0] ?? "unknown",
+		);
+	}
+	return ids[0]!;
 }
 
 // ============ OPERATION PARSER ============
 
 /**
- * Parses an NFTLox custom_json operation from a HAFAH transaction.
- * Returns null if no NFTLox operation is found.
+ * Parses ALL NFTLox custom_json operations from a HAFAH transaction.
+ * Returns an array (empty if none found). Each entry includes its index
+ * within the NFTLox operations of the tx (not the raw operation index).
  *
- * @param operationId — The HafAH operation_id, fetched separately via fetchOperationId().
- *                       Required for SPV pack_open verification (RNG seed reproducibility).
+ * @param operationIds — HafAH operation_ids fetched via fetchOperationIds(),
+ *                        matched positionally with parsed operations.
  */
-export function parseNftloxOperation(
+export function parseAllNftloxOperations(
 	tx: HafahTransaction,
-	operationId = "",
-): L1ParsedOperation | null {
+	operationIds: ReadonlyArray<string> = [],
+): L1ParsedOperation[] {
+	const results: L1ParsedOperation[] = [];
+	let nftloxIndex = 0;
+
 	for (const op of tx.operations) {
 		if (op.type !== "custom_json_operation") continue;
 
@@ -274,10 +291,12 @@ export function parseNftloxOperation(
 		try {
 			parsed = JSON.parse(value.json ?? "{}") as typeof parsed;
 		} catch {
+			nftloxIndex++;
 			continue;
 		}
 
 		if (!parsed.protocol || !parsed.version || !parsed.action || !parsed.data) {
+			nftloxIndex++;
 			continue;
 		}
 
@@ -286,17 +305,33 @@ export function parseNftloxOperation(
 			?? value.required_posting_auths?.[0]
 			?? "";
 
-		if (!signer) continue;
+		if (!signer) {
+			nftloxIndex++;
+			continue;
+		}
 
-		return {
+		results.push({
 			txId: tx.transaction_id,
 			blockNum: tx.block_num,
 			signer,
 			action: parsed.action,
 			data: parsed.data,
-			operationId,
-		};
+			operationId: operationIds[nftloxIndex] ?? "",
+		});
+		nftloxIndex++;
 	}
 
-	return null;
+	return results;
+}
+
+/**
+ * Backward-compatible: returns the first NFTLox operation in the tx.
+ * For multi-op transactions, prefer parseAllNftloxOperations().
+ */
+export function parseNftloxOperation(
+	tx: HafahTransaction,
+	operationId = "",
+): L1ParsedOperation | null {
+	const all = parseAllNftloxOperations(tx, operationId ? [operationId] : []);
+	return all[0] ?? null;
 }

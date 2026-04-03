@@ -58,16 +58,26 @@ export function checkRateLimit(
 	}
 }
 
+const PRIVATE_IP_PREFIXES = ["10.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "192.168.", "127.", "::1", "::ffff:127."];
+
+function isPrivateIp(ip: string): boolean {
+	return PRIVATE_IP_PREFIXES.some(prefix => ip.startsWith(prefix));
+}
+
 /**
- * Extracts the real client IP from proxy headers, with socket IP as safe fallback.
- * Priority: CF-Connecting-IP > X-Real-IP > X-Forwarded-For > Socket IP
+ * Extracts the real client IP.
  *
- * IMPORTANT: Proxy headers (cf-connecting-ip, x-real-ip, x-forwarded-for) are
- * only trustworthy when running behind a reverse proxy (nginx, Cloudflare) that
- * overwrites them. Without a proxy, clients can spoof these headers to bypass
- * rate limiting. The socketIp fallback uses the actual TCP connection address.
+ * When socketIp is a private/loopback address, a reverse proxy is in front —
+ * trust proxy headers (CF-Connecting-IP > X-Real-IP > X-Forwarded-For).
+ *
+ * When socketIp is public, the client connects directly — use socketIp
+ * (proxy headers are spoofable and MUST be ignored).
  */
 function extractIp(request: Request, socketIp?: string): string {
+	if (socketIp && !isPrivateIp(socketIp)) {
+		return socketIp;
+	}
+
 	return request.headers.get("cf-connecting-ip")
 		?? request.headers.get("x-real-ip")
 		?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()

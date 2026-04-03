@@ -9,6 +9,7 @@ import {
 	PROTOCOL_FEE_PCT,
 	MAX_ROYALTY_PCT,
 	SUPPORTED_CURRENCIES,
+	ALL_ACTIONS,
 } from "nftlox-sdk";
 
 const STALE_THRESHOLD_MS = 60_000; // 1 minute without processing = stale
@@ -97,13 +98,21 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			description: "Aggregate counts: collections, NFTs, sales, etc.",
 		},
 	})
-	.get("/api/operation-status/:txId", async ({ params }) => {
+	.get("/api/operation-status/:txId", async ({ params, query }) => {
 		const entries = await getOperationStatus(params.txId);
-		return { txId: params.txId, operations: entries };
+		const filtered = entries.filter(e =>
+			(!query.operationId || e.operationId === query.operationId)
+			&& (!query.action || e.action === query.action),
+		);
+		return { txId: params.txId, operations: filtered };
 	}, {
 		params: t.Object({ txId: t.String({ minLength: 40, maxLength: 40 }) }),
+		query: t.Object({
+			operationId: t.Optional(t.String()),
+			action: t.Optional(t.Union(ALL_ACTIONS.map(a => t.Literal(a)))),
+		}),
 		detail: {
 			summary: "Operation status by transaction ID",
-			description: "Returns per-operation status for all protocol operations in a Hive transaction. A single tx can contain multiple custom_json ops, each tracked independently.",
+			description: "Returns per-operation status for all protocol operations in a Hive transaction. A single tx can contain multiple custom_json ops, each tracked independently. Use ?operationId= or ?action= to filter.",
 		},
 	})

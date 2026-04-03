@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS nfts (
 	mutable_data_hash TEXT,
 	mutable_data_tx TEXT,
 	mutable_data_block BIGINT,
+	mutable_data_first_block BIGINT,
 	owner_data JSONB,
 	owner_data_hash TEXT,
 	owner_data_tx TEXT,

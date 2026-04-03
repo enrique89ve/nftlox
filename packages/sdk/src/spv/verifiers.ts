@@ -22,7 +22,8 @@ import {
 import { buildRngSeed, selectRandomSample } from "./constants.ts";
 import {
 	fetchTransaction,
-	fetchOperationId,
+	fetchOperationIds,
+	parseAllNftloxOperations,
 	parseNftloxOperation,
 } from "./hive-l1-client.ts";
 import type {
@@ -116,6 +117,8 @@ export interface PackOpenVerifyParams {
 	blockNum: number;
 	indexerBaseUrl: string;
 	l1Config: HiveL1Config;
+	/** Required for multi-op transactions to identify the correct pack_open. */
+	packId?: string;
 }
 
 /**
@@ -134,30 +137,26 @@ export async function verifyPackOpen(
 	const allReportedNfts: ReportedMintedNft[] = [];
 
 	try {
-		// Step 1: Fetch tx from Hive L1
+		// Step 1: Fetch tx + all operation IDs from Hive L1
 		const tx = await fetchTransaction(params.l1Config, params.txId);
+		const operationIds = await fetchOperationIds(params.l1Config, params.txId, params.blockNum);
 
-		// Step 1b: Fetch operationId from HafAH (required for RNG seed reproducibility)
-		const operationId = await fetchOperationId(params.l1Config, params.txId, params.blockNum);
+		// Step 2: Parse ALL NFTLox operations (multi-op safe)
+		const allOps = parseAllNftloxOperations(tx, operationIds);
+		const packOpenOps = allOps.filter(op => op.action === ACTION_PACK_OPEN);
 
-		// Step 2: Parse NFTLox operation
-		const l1Op = parseNftloxOperation(tx, operationId);
-		if (!l1Op) {
+		if (packOpenOps.length === 0) {
 			return buildResult("not_found", startTime, {
 				txId: params.txId,
 				blockNum: params.blockNum,
-				message: "No NFTLox operation found in transaction",
+				message: "No pack_open operation found in transaction",
 			});
 		}
 
-		if (l1Op.action !== ACTION_PACK_OPEN) {
-			return buildResult("mismatch", startTime, {
-				txId: params.txId,
-				blockNum: params.blockNum,
-				signer: l1Op.signer,
-				message: `Expected pack_open, found ${l1Op.action}`,
-			});
-		}
+		// Match by packId if specified, otherwise take the first pack_open
+		const l1Op = params.packId
+			? packOpenOps.find(op => op.data.packId === params.packId) ?? packOpenOps[0]!
+			: packOpenOps[0]!;
 
 		const packId = l1Op.data.packId;
 		const quantity = l1Op.data.quantity;

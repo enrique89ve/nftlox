@@ -332,7 +332,8 @@ export async function updateNftMutableData(
 		SET mutable_data = ${JSON.stringify(mergedData)}::jsonb,
 			mutable_data_hash = ${dataHash},
 			mutable_data_tx = ${txId},
-			mutable_data_block = ${blockNum}
+			mutable_data_block = ${blockNum},
+			mutable_data_first_block = COALESCE(mutable_data_first_block, ${blockNum})
 		WHERE id = ${nftId}
 	`;
 }

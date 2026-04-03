@@ -31,8 +31,10 @@ export {
 	createDefaultL1Config,
 	fetchTransaction,
 	fetchOperationId,
+	fetchOperationIds,
 	fetchFromHiveRpc,
 	parseNftloxOperation,
+	parseAllNftloxOperations,
 } from "./hive-l1-client.ts";
 
 export {
