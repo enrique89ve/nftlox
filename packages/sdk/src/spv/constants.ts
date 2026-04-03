@@ -14,16 +14,17 @@ export const DEFAULT_AUDIT_SAMPLE_SIZE = 3;
 
 /**
  * Builds the RNG seed for pack_open verification.
- * Must match exactly: pack-open.ts line 49.
+ * Must match exactly: pack-open.ts rngSeed construction.
  */
 export function buildRngSeed(
 	txId: string,
+	operationId: string,
 	blockNum: number,
 	signer: string,
 	packId: string,
 	packIndex: number,
 ): string {
-	return `${txId}:${blockNum}:${signer}:${packId}:${packIndex}`;
+	return `${txId}:${operationId}:${blockNum}:${signer}:${packId}:${packIndex}`;
 }
 
 /**

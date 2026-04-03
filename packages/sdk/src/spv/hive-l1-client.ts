@@ -185,14 +185,73 @@ function normalizeHafahResponse(raw: Record<string, unknown>): HafahTransaction 
 	};
 }
 
+// ============ OPERATION ID FETCHER ============
+
+const CUSTOM_JSON_OP_TYPE = 18;
+
+/**
+ * Fetches the HafAH operation_id for a specific NFTLox custom_json in a block.
+ * Uses the HafAH operations endpoint which returns per-operation IDs.
+ */
+export async function fetchOperationId(
+	config: HiveL1Config,
+	txId: string,
+	blockNum: number,
+): Promise<string> {
+	const protocolId = getProtocolId();
+	const errors: Array<{ endpoint: string; error: unknown }> = [];
+
+	for (const endpoint of config.endpoints) {
+		try {
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
+			const url = `${endpoint}/hafah-api/operations?from-block=${blockNum}&to-block=${blockNum + 1}&operation-types=${CUSTOM_JSON_OP_TYPE}&page-size=1000&operation-begin=-1`;
+			const response = await fetch(url, { signal: controller.signal });
+			clearTimeout(timeoutId);
+
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			const data = await response.json() as Record<string, unknown>;
+			const ops = Array.isArray(data.ops) ? data.ops : [];
+
+			for (const op of ops) {
+				const entry = op as Record<string, unknown>;
+				if (entry.trx_id !== txId) continue;
+				const opValue = (entry.op as Record<string, unknown>)?.value as Record<string, unknown> | undefined;
+				if (opValue?.id !== protocolId) continue;
+				if (typeof entry.operation_id === "string") return entry.operation_id;
+				if (typeof entry.operation_id === "number") return String(entry.operation_id);
+			}
+
+			// Data error — retrying another endpoint won't help (same blockchain)
+			throw new HiveRpcError(
+				`No NFTLox operation found for tx ${txId} in block ${blockNum}`,
+				endpoint,
+			);
+		} catch (err) {
+			// Data errors (HiveRpcError from us) should not be retried
+			if (err instanceof HiveRpcError) throw err;
+			errors.push({ endpoint, error: err });
+		}
+	}
+
+	const details = errors
+		.map((e) => `${e.endpoint}: ${e.error instanceof Error ? e.error.message : String(e.error)}`)
+		.join("; ");
+	throw new HiveRpcError(`All endpoints failed for operationId: ${details}`, config.endpoints[0] ?? "unknown");
+}
+
 // ============ OPERATION PARSER ============
 
 /**
  * Parses an NFTLox custom_json operation from a HAFAH transaction.
  * Returns null if no NFTLox operation is found.
+ *
+ * @param operationId — The HafAH operation_id, fetched separately via fetchOperationId().
+ *                       Required for SPV pack_open verification (RNG seed reproducibility).
  */
 export function parseNftloxOperation(
 	tx: HafahTransaction,
+	operationId = "",
 ): L1ParsedOperation | null {
 	for (const op of tx.operations) {
 		if (op.type !== "custom_json_operation") continue;
@@ -235,6 +294,7 @@ export function parseNftloxOperation(
 			signer,
 			action: parsed.action,
 			data: parsed.data,
+			operationId,
 		};
 	}
 

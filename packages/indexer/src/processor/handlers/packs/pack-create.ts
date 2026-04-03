@@ -5,7 +5,8 @@ import {
 	getCollectionRules,
 } from "@/db/queries/collections.ts";
 import { getNftForProcessing } from "@/db/queries/nfts.ts";
-import { insertPack, packExists } from "@/db/queries/packs.ts";
+import { insertPack, packExists, countPacksByCollection } from "@/db/queries/packs.ts";
+import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	requireBoundedString,
 	requireHiveAmount,
@@ -89,6 +90,9 @@ export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Pro
 		throw new Error(`Signer ${op.signer} is not creator of collection ${collectionId}`);
 	}
 	if (collection.status === COLLECTION_STATUS_ARCHIVED) throw new Error(`Collection ${collectionId} is archived`);
+
+	const packCount = await countPacksByCollection(collectionId, txn);
+	await assertWithinLimit("packsPerCollection", collectionId, packCount);
 
 	const dropTable = parseDropTable(d.dropTable);
 	const maxSupply = optionalNumber(d.maxSupply) ?? 0;

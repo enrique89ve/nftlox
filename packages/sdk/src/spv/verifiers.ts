@@ -22,6 +22,7 @@ import {
 import { buildRngSeed, selectRandomSample } from "./constants.ts";
 import {
 	fetchTransaction,
+	fetchOperationId,
 	parseNftloxOperation,
 } from "./hive-l1-client.ts";
 import type {
@@ -42,6 +43,7 @@ import type {
 
 export interface DropTableReplayParams {
 	txId: string;
+	operationId: string;
 	blockNum: number;
 	signer: string;
 	packId: string;
@@ -59,6 +61,7 @@ export function replayDropTableResolution(
 ): string[] {
 	const rngSeed = buildRngSeed(
 		params.txId,
+		params.operationId,
 		params.blockNum,
 		params.signer,
 		params.packId,
@@ -134,8 +137,11 @@ export async function verifyPackOpen(
 		// Step 1: Fetch tx from Hive L1
 		const tx = await fetchTransaction(params.l1Config, params.txId);
 
+		// Step 1b: Fetch operationId from HafAH (required for RNG seed reproducibility)
+		const operationId = await fetchOperationId(params.l1Config, params.txId, params.blockNum);
+
 		// Step 2: Parse NFTLox operation
-		const l1Op = parseNftloxOperation(tx);
+		const l1Op = parseNftloxOperation(tx, operationId);
 		if (!l1Op) {
 			return buildResult("not_found", startTime, {
 				txId: params.txId,
@@ -236,6 +242,7 @@ export async function verifyPackOpen(
 		for (let packIndex = 0; packIndex < quantity; packIndex++) {
 			const expectedSeeds = replayDropTableResolution({
 				txId: params.txId,
+				operationId: l1Op.operationId,
 				blockNum: params.blockNum,
 				signer: l1Op.signer,
 				packId,

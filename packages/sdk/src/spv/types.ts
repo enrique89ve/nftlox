@@ -30,6 +30,7 @@ export interface L1ParsedOperation {
 	signer: string;
 	action: string;
 	data: Record<string, unknown>;
+	operationId: string;
 }
 
 // ============ VERIFICATION RESULTS ============

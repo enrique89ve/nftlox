@@ -323,6 +323,7 @@ CREATE INDEX IF NOT EXISTS idx_nfts_listed ON nfts(listing_price, listing_curren
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_recent ON nfts(created_at DESC) WHERE status = 'listed';
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_marketplace ON nfts(listing_marketplace) WHERE status = 'listed' AND listing_marketplace IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_listing_id ON nfts(listing_id) WHERE listing_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nfts_listing_expires ON nfts(listing_expires_at) WHERE status = 'listed' AND listing_expires_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_schema_version ON nfts(collection_id, schema_version);
 CREATE INDEX IF NOT EXISTS idx_nfts_immutable_data ON nfts USING GIN (immutable_data) WHERE immutable_data IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_mutable_data ON nfts USING GIN (mutable_data) WHERE mutable_data IS NOT NULL;

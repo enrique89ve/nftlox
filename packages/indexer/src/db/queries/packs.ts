@@ -65,6 +65,11 @@ export async function packExists(id: string, txn: Queryable = sql): Promise<bool
 	return !!row;
 }
 
+export async function countPacksByCollection(collectionId: string, txn: Queryable = sql): Promise<number> {
+	const [row] = await txn`SELECT COUNT(*)::int AS count FROM packs WHERE collection_id = ${collectionId}`;
+	return row?.count ?? 0;
+}
+
 export async function getPackForProcessing(
 	id: string,
 	txn: Queryable = sql,

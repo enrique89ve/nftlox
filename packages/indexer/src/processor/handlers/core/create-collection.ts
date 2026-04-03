@@ -1,7 +1,8 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { insertCollection, collectionExists, symbolTakenByCreator } from "@/db/queries/collections.ts";
+import { insertCollection, collectionExists, symbolTakenByCreator, countCollectionsByCreator } from "@/db/queries/collections.ts";
 import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
+import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	requireString,
 	requireBoundedString,
@@ -42,6 +43,9 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	}
 
 	if (await collectionExists(canonicalId, txn)) return;
+
+	const creatorCollectionCount = await countCollectionsByCreator(op.signer, txn);
+	await assertWithinLimit("collectionsPerCreator", op.signer, creatorCollectionCount);
 
 	if (await symbolTakenByCreator(op.signer, symbol, txn)) {
 		throw new Error(`Symbol ${symbol} already used by @${op.signer}`);

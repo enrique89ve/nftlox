@@ -157,6 +157,11 @@ export async function symbolTakenByCreator(creator: string, symbol: string, txn:
 	return !!row;
 }
 
+export async function countCollectionsByCreator(creator: string, txn: Queryable = sql): Promise<number> {
+	const [row] = await txn`SELECT COUNT(*)::int AS count FROM collections WHERE creator = ${creator}`;
+	return row?.count ?? 0;
+}
+
 export async function listCollections(limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
 	return sql`
@@ -194,7 +199,7 @@ export async function getCollectionStats(collectionId: string) {
 			COALESCE(cs.listed, 0) AS total_listed,
 			COALESCE(cs.burned, 0) AS total_burned,
 			COALESCE((SELECT COUNT(DISTINCT owner) FROM nfts WHERE collection_id = ${collectionId} AND status != 'burned'), 0) AS unique_owners,
-			(SELECT MIN(listing_price) FROM nfts WHERE collection_id = ${collectionId} AND status = 'listed') AS floor_price
+			(SELECT MIN(listing_price) FROM nfts WHERE collection_id = ${collectionId} AND status = 'listed' AND (listing_expires_at IS NULL OR listing_expires_at > NOW())) AS floor_price
 		FROM collection_stats cs
 		WHERE cs.collection_id = ${collectionId}
 	`;

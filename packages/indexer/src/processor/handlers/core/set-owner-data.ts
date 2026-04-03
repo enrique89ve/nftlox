@@ -15,6 +15,14 @@ export async function handleSetOwnerData(op: ParsedOperation, txn: Queryable): P
 	if (nft.instance_dna !== instanceDna) throw new Error(`Instance DNA mismatch for ${nftId}`);
 
 	const ownerData = requireObject(op.data.data, "data") as Record<string, unknown>;
+
+	const MAX_OWNER_DATA_BYTES = 4096;
+	const serialized = JSON.stringify(ownerData);
+	const byteLength = Buffer.byteLength(serialized, "utf8");
+	if (byteLength > MAX_OWNER_DATA_BYTES) {
+		throw new Error(`owner_data exceeds maximum size of ${MAX_OWNER_DATA_BYTES} bytes (got ${byteLength})`);
+	}
+
 	const dataHash = await computeDataHash(ownerData);
 
 	await updateNftOwnerData(nftId, ownerData, dataHash, op.txId, op.blockNum, txn);

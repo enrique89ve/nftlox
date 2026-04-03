@@ -54,8 +54,9 @@ export function startApiServer(): void {
 			allowedHeaders: ["content-type"],
 		}))
 		.onBeforeHandle(({ request, set }) => {
-			// Rate limiting
-			const rateLimited = checkRateLimit(request, set.headers);
+			// Rate limiting — pass socket IP as safe fallback against header spoofing
+			const socketIp = app.server?.requestIP(request)?.address;
+			const rateLimited = checkRateLimit(request, set.headers, socketIp);
 			if (rateLimited) {
 				set.status = 429;
 				return rateLimited;
@@ -130,7 +131,7 @@ export function startApiServer(): void {
 		.use(packsRoutes)
 		.use(statusRoutes)
 		.use(multisigRoutes)
-		.listen({ port: config.port, idleTimeout: 30 });
+		.listen({ port: config.port, idleTimeout: 30, maxRequestBodySize: 64 * 1024 });
 
 	log.info(`API server listening on port ${config.port}`);
 	if (config.enableSwagger) {

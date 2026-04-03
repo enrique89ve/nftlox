@@ -369,8 +369,8 @@ export function createSetDataFromOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [],
-			required_posting_auths: [operator],
+			required_auths: [operator],
+			required_posting_auths: [],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},

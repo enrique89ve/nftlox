@@ -15,12 +15,16 @@ export function createMultisigNftLock(): {
 	}, 60_000);
 	cleanupTimer.unref();
 
-	const acquire = async (nftId: string, buyer: string, expirationMs: number): Promise<AcquireResult> => {
+	const MAX_ACQUIRE_RETRIES = 2;
+
+	const acquire = async (nftId: string, buyer: string, expirationMs: number, attempt = 0): Promise<AcquireResult> => {
 		const expiresAt = new Date(Date.now() + expirationMs).toISOString();
 
-		await sql`DELETE FROM multisig_locks WHERE nft_id = ${nftId} AND expires_at < NOW()`;
-
+		// Atomic: delete expired + insert/update in a single statement to avoid TOCTOU
 		const [inserted] = await sql`
+			WITH cleanup AS (
+				DELETE FROM multisig_locks WHERE nft_id = ${nftId} AND expires_at < NOW()
+			)
 			INSERT INTO multisig_locks (nft_id, buyer, expires_at)
 			VALUES (${nftId}, ${buyer}, ${expiresAt})
 			ON CONFLICT (nft_id) DO UPDATE
@@ -36,8 +40,11 @@ export function createMultisigNftLock(): {
 		const [existing] = await sql`
 			SELECT buyer, expires_at FROM multisig_locks WHERE nft_id = ${nftId}
 		`;
+		if (!existing && attempt < MAX_ACQUIRE_RETRIES) {
+			return acquire(nftId, buyer, expirationMs, attempt + 1);
+		}
 		if (!existing) {
-			return acquire(nftId, buyer, expirationMs);
+			return { acquired: false, heldBy: "unknown", retryAfterMs: 1000 };
 		}
 
 		const retryAfterMs = Math.max(0, new Date(String(existing.expires_at)).getTime() - Date.now());

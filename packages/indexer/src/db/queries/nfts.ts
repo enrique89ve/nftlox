@@ -97,7 +97,10 @@ export async function getNftById(id: string) {
 			COALESCE(n.origin_dna, s.origin_dna) AS origin_dna,
 			COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
 			COALESCE(n.immutable_data_hash, s.immutable_data_hash) AS immutable_data_hash,
-			s.tx_id AS seed_tx_id
+			s.tx_id AS seed_tx_id,
+			CASE WHEN n.listing_expires_at IS NOT NULL AND n.listing_expires_at <= NOW()
+				THEN true ELSE false
+			END AS listing_expired
 		FROM nfts n
 		LEFT JOIN nfts s ON s.id = n.seed_id
 		WHERE n.id = ${id}
@@ -490,11 +493,14 @@ export async function queryNftsWithCounts(
 	const offset = page?.offset ?? 0;
 	const statusFilter = status ? sql`AND n.status = ${status}` : sql``;
 	const typeFilter = type ? sql`AND n.nft_type = ${type}` : sql``;
+	const expirationFilter = status === NFT_STATUS_LISTED
+		? sql`AND (n.listing_expires_at IS NULL OR n.listing_expires_at > NOW())`
+		: sql``;
 
 	const [nfts, counts] = await Promise.all([
 		sql<NftListRow[]>`
 			SELECT ${LIST_COLUMNS} FROM nfts n LEFT JOIN nfts s ON s.id = n.seed_id
-			WHERE n.owner = ${owner} ${statusFilter} ${typeFilter}
+			WHERE n.owner = ${owner} ${statusFilter} ${typeFilter} ${expirationFilter}
 			ORDER BY n.created_at DESC LIMIT ${safeLimit} OFFSET ${offset}
 		`,
 		getUserNftCounts(owner),

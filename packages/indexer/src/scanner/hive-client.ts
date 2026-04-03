@@ -189,10 +189,10 @@ export async function getBlockchainHead(): Promise<BlockchainHead> {
 
 /**
  * Checks server clock against Hive blockchain time.
- * Logs a warning if drift exceeds threshold.
- * Call once at startup to detect misconfigured NTP.
+ * Returns whether the drift is within acceptable limits.
+ * The caller should disable the multisig service if drift is excessive.
  */
-export async function checkClockDrift(): Promise<void> {
+export async function checkClockDrift(): Promise<{ ok: boolean; driftMs: number }> {
 	try {
 		const result = await callWithFailover<Record<string, unknown>>(
 			"condenser_api.get_dynamic_global_properties", [],
@@ -202,20 +202,23 @@ export async function checkClockDrift(): Promise<void> {
 		const driftMs = Math.abs(serverTime - blockTime);
 
 		if (driftMs > MAX_CLOCK_DRIFT_MS) {
-			log.error("CLOCK DRIFT DETECTED — server time diverges from blockchain", {
+			log.error("CLOCK DRIFT DETECTED — multisig should be disabled", {
 				serverTime: new Date(serverTime).toISOString(),
 				blockchainTime: new Date(blockTime).toISOString(),
 				driftMs,
 				driftSec: Math.round(driftMs / 1000),
 				recommendation: "Verify NTP is running: timedatectl status",
 			});
-		} else {
-			log.info("Clock sync OK", { driftMs });
+			return { ok: false, driftMs };
 		}
+
+		log.info("Clock sync OK", { driftMs });
+		return { ok: true, driftMs };
 	} catch (err) {
-		log.warn("Could not verify clock drift", {
+		log.warn("Could not verify clock drift — assuming OK", {
 			error: err instanceof Error ? err.message : String(err),
 		});
+		return { ok: true, driftMs: -1 };
 	}
 }
 

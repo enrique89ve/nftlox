@@ -5,6 +5,7 @@ import { insertNft, nftExists } from "@/db/queries/nfts.ts";
 import { requireString, requireBoundedString, requireUsername, optionalString, optionalBoundedString, optionalNumber, optionalObject } from "@/utils/validation.ts";
 import { resolveNftType, validateSeedCap } from "@/utils/nft-rules.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
+import { createLogger } from "@/utils/logger.ts";
 import {
 	validateMintData,
 	computeDataHash,
@@ -18,12 +19,17 @@ import {
 	type CollectionSchema,
 } from "nftlox-sdk";
 
+const log = createLogger("mint");
+
 export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;
 	const id = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
 	const collectionId = requireBoundedString(d.collectionId, "collectionId", MAX_ID_LENGTH);
 
-	if (await nftExists(id, txn)) return;
+	if (await nftExists(id, txn)) {
+		log.info("Mint skipped: NFT already exists", { nftId: id, signer: op.signer, txId: op.txId });
+		return;
+	}
 	const collection = await getCollectionRules(collectionId, txn);
 	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
 	if (collection.creator !== op.signer) throw new Error(`Only the collection creator can mint in ${collectionId}`);

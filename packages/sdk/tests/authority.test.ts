@@ -57,9 +57,9 @@ describe("Authority exhaustiveness", () => {
 		}
 	});
 
-	test("counts match: 11 active + 14 posting = 25 total", () => {
-		expect(ACTIVE_AUTH_ACTIONS.length).toBe(11);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(14);
+	test("counts match: 12 active + 13 posting = 25 total", () => {
+		expect(ACTIVE_AUTH_ACTIONS.length).toBe(12);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(13);
 		expect(ALL_ACTIONS.length).toBe(25);
 	});
 });
@@ -146,6 +146,15 @@ describe("Active key operations use required_auths", () => {
 		expect(op[1].required_auths).toEqual(["alice"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
+
+	test("set_data_from", () => {
+		const op = createSetDataFromOperation(
+			{ nftId: "nft_1", instanceDna: "dna_1" },
+			"alice",
+		);
+		expect(op[1].required_auths).toEqual(["alice"]);
+		expect(op[1].required_posting_auths).toEqual([]);
+	});
 });
 
 // ============ POSTING KEY OPERATIONS ============
@@ -181,15 +190,6 @@ describe("Posting key operations use required_posting_auths", () => {
 	test("archive_collection", () => {
 		const op = createArchiveCollectionOperation(
 			{ collectionId: "col_1" },
-			"alice",
-		);
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
-	});
-
-	test("set_data_from", () => {
-		const op = createSetDataFromOperation(
-			{ nftId: "nft_1", instanceDna: "dna_1" },
 			"alice",
 		);
 		expect(op[1].required_auths).toEqual([]);

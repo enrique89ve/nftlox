@@ -47,6 +47,7 @@ type MultisigRules = Pick<CollectionRulesRow, "id" | "creator" | "transferable" 
 interface NftStateResult {
 	readonly nft: NftProcessingRow;
 	readonly rules: MultisigRules;
+	readonly nftTxId: string;
 }
 
 // ============ PUBLIC API ============
@@ -62,7 +63,7 @@ export async function processMultisigRequest(
 		const request = validateRequestShape(rawBody);
 		validateTransactionStructure(request.transaction, request.buyer, nodeAccount, protocolId);
 
-		const { nft, rules } = await validateNftState(request.nftId, request.buyer, db);
+		const { nft, rules, nftTxId } = await validateNftState(request.nftId, request.buyer, db);
 
 		// Validate listingId and listTxId match the active listing
 		if (nft.listing_id !== request.listingId) {
@@ -78,8 +79,8 @@ export async function processMultisigRequest(
 			);
 		}
 
-		// Validate the custom_json payload contains matching listingId and listTxId
-		validateBuyPayloadData(request.transaction.operations, request.listingId, request.listTxId);
+		// Validate the custom_json payload contains matching nftId, txId, listingId, and listTxId
+		validateBuyPayloadData(request.transaction.operations, request.nftId, nftTxId, request.listingId, request.listTxId);
 
 		const transfers = extractTransfers(request.transaction.operations, request.buyer);
 		validatePaymentSplit(transfers, nft, request.nftId, rules, nodeAccount);
@@ -319,12 +320,17 @@ function validateCustomJsonProtocol(cj: Record<string, unknown>, protocolId: str
 }
 
 /**
- * Validates that the custom_json buy payload contains matching listingId and listTxId.
+ * Validates that the custom_json buy payload contains matching nftId, txId, listingId, and listTxId.
+ * Prevents co-signing a transaction where the payload was tampered after the multisig request,
+ * which would cause transfers to execute but handleBuy to reject (orphaned buy).
+ *
  * SAFETY: This function MUST only be called after validateCustomJsonOperation(),
  * which guarantees: lastOp exists, is custom_json, has valid JSON, has data object.
  */
 function validateBuyPayloadData(
 	ops: ReadonlyArray<readonly [string, Record<string, unknown>]>,
+	expectedNftId: string,
+	expectedTxId: string,
 	expectedListingId: string,
 	expectedListTxId: string,
 ): void {
@@ -335,6 +341,20 @@ function validateBuyPayloadData(
 	const cj = lastOp[1] as Record<string, unknown>;
 	const parsed = JSON.parse(cj.json as string) as Record<string, unknown>;
 	const data = parsed.data as Record<string, unknown>;
+
+	if (data.nftId !== expectedNftId) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload nftId mismatch: expected '${expectedNftId}', got '${String(data.nftId)}'`,
+		);
+	}
+
+	if (data.txId !== expectedTxId) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload txId mismatch: expected '${expectedTxId}', got '${String(data.txId)}'`,
+		);
+	}
 
 	if (data.listingId !== expectedListingId) {
 		throw createMultisigError(
@@ -442,7 +462,7 @@ async function validateNftState(
 		royalty_recipient: nftWithRules.royalty_recipient,
 	} satisfies MultisigRules;
 
-	return { nft, rules };
+	return { nft, rules, nftTxId: nftWithRules.tx_id };
 }
 
 // ============ PAYMENT SPLIT VALIDATION ============
