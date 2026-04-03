@@ -1,25 +1,32 @@
 {
-	"_description": "Sample data for a custodial game scenario. The game server owns all NFTs on-chain and tracks in-game ownership via mutableData.",
-	"gameAccount": "game-server",
-	"collectionName": "Dragon Masters TCG",
-	"collectionSymbol": "DMTCG",
-	"schema": {
-		"immutable": [
-			{ "name": "card_type", "type": "string" },
-			{ "name": "element", "type": "string" },
-			{ "name": "rarity", "type": "string" },
-			{ "name": "base_attack", "type": "uint16" },
-			{ "name": "base_defense", "type": "uint16" }
-		],
-		"mutable": [
-			{ "name": "game_owner", "type": "string" },
-			{ "name": "level", "type": "uint8" },
-			{ "name": "xp", "type": "uint32" },
-			{ "name": "wins", "type": "uint32" },
-			{ "name": "lent_to", "type": "string" },
-			{ "name": "equipped", "type": "bool" },
-			{ "name": "custom_name", "type": "string" }
-		]
+	"collection": {
+		"name": "Dragon Masters TCG",
+		"symbol": "DMTCG",
+		"description": "Dragon Masters Trading Card Game — fully on-chain card game with typed schema",
+		"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/2458Ywc656oqQ6dLVq9VJKbRrFocRLNuBSfanqkh9x6NdzUTTxiEZgK9PnWYUAaEfVwKP.png",
+		"totalPotential": 52750,
+		"transferable": true,
+		"burnable": true,
+		"replicable": false,
+		"royaltyPct": 5,
+		"schema": {
+			"immutable": [
+				{ "name": "card_type", "type": "string" },
+				{ "name": "element", "type": "string" },
+				{ "name": "rarity", "type": "string" },
+				{ "name": "base_attack", "type": "uint16" },
+				{ "name": "base_defense", "type": "uint16" }
+			],
+			"mutable": [
+				{ "name": "game_owner", "type": "string" },
+				{ "name": "level", "type": "uint8" },
+				{ "name": "xp", "type": "uint32" },
+				{ "name": "wins", "type": "uint32" },
+				{ "name": "lent_to", "type": "string" },
+				{ "name": "equipped", "type": "bool" },
+				{ "name": "custom_name", "type": "string" }
+			]
+		}
 	},
 	"seeds": [
 		{
@@ -92,11 +99,5 @@
 				"base_defense": 1000
 			}
 		}
-	],
-	"samplePlayers": {
-		"_note": "These are in-game player IDs (hashes), NOT Hive accounts",
-		"player1": "p_a1b2c3d4e5f6",
-		"player2": "p_f6e5d4c3b2a1",
-		"player3": "p_x7y8z9w0v1u2"
-	}
+	]
 }

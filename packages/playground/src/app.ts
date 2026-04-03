@@ -956,8 +956,28 @@ fileInput?.addEventListener("change", () => {
 async function handleFileUpload(file: File) {
 	try {
 		const text = await file.text();
-		uploadedSeeds = JSON.parse(text);
-		log(`Loaded ${uploadedSeeds.length} seeds from ${file.name}`, "success");
+		const parsed = JSON.parse(text);
+
+		// Support both formats: unified { collection, seeds } or plain array
+		if (parsed.collection && parsed.seeds) {
+			uploadedSeeds = parsed.seeds;
+			const col = parsed.collection;
+			const nameInput = $("col-name") as HTMLInputElement;
+			const symbolInput = $("col-symbol") as HTMLInputElement;
+			const imageInput = $("col-image") as HTMLInputElement;
+			const descInput = $("col-description") as HTMLTextAreaElement;
+			if (nameInput) nameInput.value = col.name || "";
+			if (symbolInput) symbolInput.value = col.symbol || "";
+			if (imageInput) imageInput.value = col.imageUrl || "";
+			if (descInput) descInput.value = col.description || "";
+			log(`Loaded collection "${col.name}" with ${uploadedSeeds.length} seeds from ${file.name}`, "success");
+		} else if (Array.isArray(parsed)) {
+			uploadedSeeds = parsed;
+			log(`Loaded ${uploadedSeeds.length} seeds from ${file.name}`, "success");
+		} else {
+			log("Invalid JSON format: expected array of seeds or { collection, seeds }", "error");
+			return;
+		}
 
 		const uploadText = uploadArea?.querySelector(".upload-text");
 		if (uploadText) uploadText.textContent = `Loaded: ${file.name} (${uploadedSeeds.length} seeds)`;
@@ -974,6 +994,67 @@ async function handleFileUpload(file: File) {
 		log(`Error parsing JSON: ${(e as Error).message}`, "error");
 	}
 }
+
+// ============ LOAD SAMPLE COLLECTION ============
+
+async function loadSampleCollection() {
+	const select = $("sample-select") as HTMLSelectElement;
+	const sampleFile = select?.value;
+
+	if (!sampleFile) {
+		// "Start from scratch" selected — clear sample banner
+		const banner = $("sample-loaded-banner");
+		if (banner) banner.style.display = "none";
+		return;
+	}
+
+	try {
+		const response = await fetch(sampleFile);
+		const data = await response.json();
+
+		// New unified format: { collection: {...}, seeds: [...] }
+		const collection = data.collection;
+		const seeds = data.seeds;
+
+		if (!collection || !seeds) {
+			log("Invalid sample format", "error");
+			return;
+		}
+
+		// Auto-fill Step 1 fields
+		const nameInput = $("col-name") as HTMLInputElement;
+		const symbolInput = $("col-symbol") as HTMLInputElement;
+		const imageInput = $("col-image") as HTMLInputElement;
+		const descInput = $("col-description") as HTMLTextAreaElement;
+
+		if (nameInput) nameInput.value = collection.name || "";
+		if (symbolInput) symbolInput.value = collection.symbol || "";
+		if (imageInput) imageInput.value = collection.imageUrl || "";
+		if (descInput) descInput.value = collection.description || "";
+
+		// Load seeds into uploadedSeeds
+		uploadedSeeds = seeds;
+
+		// Reset validation state
+		validationPassed = false;
+		hideValidationResults();
+
+		// Show banner in Step 2
+		const banner = $("sample-loaded-banner");
+		if (banner) banner.style.display = "block";
+
+		// Update upload area text
+		const uploadText = uploadArea?.querySelector(".upload-text");
+		if (uploadText) uploadText.textContent = `Sample loaded: ${seeds.length} seeds from ${collection.name}`;
+
+		const totalSupply = seeds.reduce((sum: number, s: any) => sum + (s.maxSupply || 0), 0);
+		log(`Loaded "${collection.name}" (${collection.symbol}) — ${seeds.length} seeds, ${totalSupply.toLocaleString()} total supply`, "success");
+	} catch (e) {
+		log(`Error loading sample: ${(e as Error).message}`, "error");
+	}
+}
+
+(window as any).loadSampleCollection = loadSampleCollection;
 
 // ============ VALIDATION ============
 
@@ -1038,8 +1119,6 @@ async function validateSeeds() {
 	const colSymbol = ($("col-symbol") as HTMLInputElement)?.value.trim().toUpperCase() ||
 		colName?.slice(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, "");
 	const creator = ($("col-creator") as HTMLInputElement)?.value.trim().toLowerCase() || connectedUser;
-	const sampleFile = ($("sample-select") as HTMLSelectElement)?.value;
-
 	// Reset validate button to default state
 	const validateBtn = $("btn-validate") as HTMLButtonElement;
 	if (validateBtn) {
@@ -1059,23 +1138,10 @@ async function validateSeeds() {
 		return;
 	}
 
-	let seedsToValidate = uploadedSeeds;
-
-	// Load from sample file if selected
-	if (sampleFile && seedsToValidate.length === 0) {
-		showValidationStatus("Loading sample file...", "info");
-		try {
-			const response = await fetch(sampleFile);
-			seedsToValidate = await response.json();
-			uploadedSeeds = seedsToValidate;
-		} catch (e) {
-			showValidationStatus(`Error loading sample: ${(e as Error).message}`, "error");
-			return;
-		}
-	}
+	const seedsToValidate = uploadedSeeds;
 
 	if (seedsToValidate.length === 0) {
-		showValidationStatus("Please upload a JSON file or select a sample", "error");
+		showValidationStatus("Please upload a JSON file or select an example in Step 1", "error");
 		return;
 	}
 
@@ -1932,7 +1998,8 @@ let sampleBulls: any[] = [];
 async function loadSampleBulls() {
 	try {
 		const response = await fetch("/playground/sample-bulls.json");
-		sampleBulls = await response.json();
+		const raw = await response.json();
+		sampleBulls = raw.seeds || raw;
 
 		// Pre-fill Register form
 		const creator = connectedUser || "enrique89";

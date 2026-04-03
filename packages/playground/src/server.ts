@@ -33,9 +33,8 @@ const ALLOWED_SAMPLE_FILES = new Set([
 	"sample-bulls.json",
 	"sample-seeds.json",
 	"sample-nfts.json",
-	"sample-nfts-200.json",
-	"template-seeds.json",
 	"sample-game-cards.json",
+	"template-seeds.json",
 ]);
 
 const server = Bun.serve({
@@ -196,7 +195,10 @@ Game Scenarios (custodial examples):
   GET  /api/scenarios/level-up           (update stats after matches)
   GET  /api/scenarios/graduation         (player gets real Web3 ownership)
 
-Sample Data:
+Sample Collections (unified format):
+  GET  /playground/sample-bulls.json
+  GET  /playground/sample-seeds.json
+  GET  /playground/sample-nfts.json
   GET  /playground/sample-game-cards.json
 
 Protocol Info:

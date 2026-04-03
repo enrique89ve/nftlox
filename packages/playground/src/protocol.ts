@@ -131,9 +131,11 @@ export function validateOperationsVersion(
  */
 export async function loadSampleNFTs(filePath: string): Promise<SeedNFTWithArtId[]> {
 	const file = Bun.file(filePath);
-	const data = await file.json();
+	const raw = await file.json();
 
-	// Convertir formato antiguo (maxReplicas) a nuevo (maxSupply)
+	// Support unified format { collection, seeds } or plain array
+	const data = Array.isArray(raw) ? raw : raw.seeds;
+
 	return data.map((item: ImportedNFT & { maxSupply?: number }) => ({
 		nftId: item.nftId,
 		name: item.name,
@@ -299,7 +301,10 @@ export async function createDeterministicSeedMintOperations(
  */
 export async function loadSampleNFTsWithArtId(filePath: string): Promise<SeedNFTWithArtId[]> {
 	const file = Bun.file(filePath);
-	const data = await file.json();
+	const raw = await file.json();
+
+	// Support unified format { collection, seeds } or plain array
+	const data = Array.isArray(raw) ? raw : raw.seeds;
 
 	return data.map((item: ImportedNFT & { artId?: string; maxSupply?: number }) => ({
 		artId: item.artId || "",
