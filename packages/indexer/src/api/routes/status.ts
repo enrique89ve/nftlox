@@ -109,7 +109,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 		params: t.Object({ txId: t.String({ minLength: 40, maxLength: 40 }) }),
 		query: t.Object({
 			operationId: t.Optional(t.String()),
-			action: t.Optional(t.Union(ALL_ACTIONS.map(a => t.Literal(a)))),
+			action: t.Optional(t.String({ enum: [...ALL_ACTIONS] })),
 		}),
 		detail: {
 			summary: "Operation status by transaction ID",
