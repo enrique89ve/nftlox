@@ -2504,15 +2504,16 @@ describe("Handlers (integration)", () => {
 		test("collection_allowances persist after nft_transfer_from", async () => {
 			await seedCollection();
 			await seedMint();
+			const instId = await seedInstance();
 
 			// Approve gameshop for entire collection
 			await handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
 				spender: "gameshop", collectionId: COL_ID, approved: true,
 			}), sql);
 
-			// gameshop transfers alice's NFT to bob
+			// gameshop transfers alice's instance to bob
 			await handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
-				from: "alice", to: "bob", instanceId: "seed_test1",
+				from: "alice", to: "bob", instanceId: instId,
 			}, "gameshop"), sql);
 
 			// Collection-level allowance must still exist
