@@ -344,8 +344,8 @@ export function createDataOperatorApproveOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [creator],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [creator],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
@@ -514,8 +514,8 @@ export function createTransferOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [from],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [from],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
@@ -530,8 +530,8 @@ export function createBurnOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [owner],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
@@ -546,8 +546,8 @@ export function createBulkBurnOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [owner],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
@@ -564,8 +564,8 @@ export function createListOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [owner],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
@@ -802,8 +802,8 @@ export function createPackTransferOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [from],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [from],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
@@ -916,8 +916,8 @@ export function createPackApproveOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [owner],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
@@ -948,8 +948,8 @@ export function createNftApproveOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [owner],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},
@@ -964,8 +964,8 @@ export function createNftApproveAllOperation(
 	return [
 		"custom_json",
 		{
-			required_auths: [owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [owner],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},

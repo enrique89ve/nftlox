@@ -56,8 +56,8 @@ export async function buildList(input: ListBuilderInput): Promise<BuildResult<Li
 	const operation: HiveOperation = [
 		"custom_json",
 		{
-			required_auths: [data.owner],
-			required_posting_auths: [],
+			required_auths: [],
+			required_posting_auths: [data.owner],
 			id: getProtocolId(),
 			json: JSON.stringify(payload),
 		},

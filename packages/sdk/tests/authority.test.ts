@@ -57,39 +57,16 @@ describe("Authority exhaustiveness", () => {
 		}
 	});
 
-	test("counts match: 11 active + 15 posting = 26 total", () => {
-		expect(ACTIVE_AUTH_ACTIONS.length).toBe(11);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(15);
+	test("counts match: 2 active + 24 posting = 26 total", () => {
+		expect(ACTIVE_AUTH_ACTIONS.length).toBe(2);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(24);
 		expect(ALL_ACTIONS.length).toBe(26);
 	});
 });
 
 // ============ ACTIVE KEY OPERATIONS ============
 
-describe("Active key operations use required_auths", () => {
-	test("transfer", () => {
-		const op = createTransferOperation("nft_1", "alice", "bob");
-		expect(op[1].required_auths).toEqual(["alice"]);
-		expect(op[1].required_posting_auths).toEqual([]);
-	});
-
-	test("burn", () => {
-		const op = createBurnOperation("nft_1", "alice");
-		expect(op[1].required_auths).toEqual(["alice"]);
-		expect(op[1].required_posting_auths).toEqual([]);
-	});
-
-	test("list", () => {
-		const op = createListOperation(
-			{ nftId: "nft_1", price: { amount: "10.000", currency: "HIVE" } },
-			"alice",
-			"list_1",
-			"nonce_1",
-		);
-		expect(op[1].required_auths).toEqual(["alice"]);
-		expect(op[1].required_posting_auths).toEqual([]);
-	});
-
+describe("Active key operations use required_auths (only buy/pack_buy)", () => {
 	test("buy (node account)", () => {
 		const op = createBuyOperation(
 			{ nftId: "nft_1", listingId: "list_1", listTxId: "a".repeat(40), txId: "b".repeat(40) },
@@ -104,11 +81,38 @@ describe("Active key operations use required_auths", () => {
 		expect(op[1].required_auths).toEqual(["alice"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
+});
+
+// ============ POSTING KEY OPERATIONS ============
+
+describe("Posting key operations use required_posting_auths", () => {
+	test("transfer", () => {
+		const op = createTransferOperation("nft_1", "alice", "bob");
+		expect(op[1].required_auths).toEqual([]);
+		expect(op[1].required_posting_auths).toEqual(["alice"]);
+	});
+
+	test("burn", () => {
+		const op = createBurnOperation("nft_1", "alice");
+		expect(op[1].required_auths).toEqual([]);
+		expect(op[1].required_posting_auths).toEqual(["alice"]);
+	});
+
+	test("list", () => {
+		const op = createListOperation(
+			{ nftId: "nft_1", price: { amount: "10.000", currency: "HIVE" } },
+			"alice",
+			"list_1",
+			"nonce_1",
+		);
+		expect(op[1].required_auths).toEqual([]);
+		expect(op[1].required_posting_auths).toEqual(["alice"]);
+	});
 
 	test("pack_transfer", () => {
 		const op = createPackTransferOperation({ packId: "pack_1", to: "bob", quantity: 1 }, "alice");
-		expect(op[1].required_auths).toEqual(["alice"]);
-		expect(op[1].required_posting_auths).toEqual([]);
+		expect(op[1].required_auths).toEqual([]);
+		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("pack_approve", () => {
@@ -116,8 +120,8 @@ describe("Active key operations use required_auths", () => {
 			{ spender: "bob", packId: "pack_1", quantity: 5, approved: true },
 			"alice",
 		);
-		expect(op[1].required_auths).toEqual(["alice"]);
-		expect(op[1].required_posting_auths).toEqual([]);
+		expect(op[1].required_auths).toEqual([]);
+		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("nft_approve", () => {
@@ -125,8 +129,8 @@ describe("Active key operations use required_auths", () => {
 			{ spender: "bob", instanceId: "nft_1", approved: true },
 			"alice",
 		);
-		expect(op[1].required_auths).toEqual(["alice"]);
-		expect(op[1].required_posting_auths).toEqual([]);
+		expect(op[1].required_auths).toEqual([]);
+		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("nft_approve_all", () => {
@@ -134,8 +138,8 @@ describe("Active key operations use required_auths", () => {
 			{ spender: "bob", collectionId: "col_1", approved: true },
 			"alice",
 		);
-		expect(op[1].required_auths).toEqual(["alice"]);
-		expect(op[1].required_posting_auths).toEqual([]);
+		expect(op[1].required_auths).toEqual([]);
+		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("data_operator_approve", () => {
@@ -143,15 +147,10 @@ describe("Active key operations use required_auths", () => {
 			{ collectionId: "col_1", operator: "bob", approved: true },
 			"alice",
 		);
-		expect(op[1].required_auths).toEqual(["alice"]);
-		expect(op[1].required_posting_auths).toEqual([]);
+		expect(op[1].required_auths).toEqual([]);
+		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
-});
-
-// ============ POSTING KEY OPERATIONS ============
-
-describe("Posting key operations use required_posting_auths", () => {
 	test("bulk_distribute", () => {
 		const op = createBulkDistributeOperation(
 			{ items: [{ seedId: "seed_1", quantity: 1, seedTxId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }] },
