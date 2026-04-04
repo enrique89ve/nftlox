@@ -1,6 +1,5 @@
 import {
-	createAtomicTransferOperations,
-	getTrackingAmount,
+	buildTransfer,
 	createBulkDistributePayload,
 	PROTOCOL_ID,
 	type SeedNFTWithArtId,
@@ -2094,23 +2093,25 @@ async function nftDetailTransfer() {
 	}
 
 	const nft = validation.nft!;
-	const ops = createAtomicTransferOperations({
+	const buildResult = await buildTransfer({
 		nftId: nft.id,
-		collectionId: nft.collectionId,
-		edition: nft.edition,
-		instanceDna: nft.instanceDna || nft.dna || "",
 		from: connectedUser,
 		to,
 		imageUrl: nft.imageUrl ?? undefined,
 		imageHash: nft.imageHash ?? undefined,
 	});
 
+	if (!buildResult.success) {
+		log(`Build transfer failed: ${buildResult.errors.join(", ")}`, "error");
+		return;
+	}
+
 	log(`Transferring to @${to}...`);
 	(window as any).hive_keychain.requestBroadcast(
-		connectedUser, ops, "Active",
+		connectedUser, [buildResult.operation], "Active",
 		(res: any) => {
 			if (res.success) {
-				log(`Transfer successful! ${getTrackingAmount()} sent`, "success");
+				log(`Transfer successful!`, "success");
 				loadNftDetail(currentNftId!);
 				loadInventory();
 			} else {
@@ -2157,20 +2158,22 @@ async function nftDetailTransferSeed() {
 		return;
 	}
 
-	const ops = createAtomicTransferOperations({
+	const buildResult = await buildTransfer({
 		nftId: nft.id,
-		collectionId: nft.collectionId,
-		edition: nft.edition,
-		instanceDna: nft.instanceDna || nft.dna,
 		from: connectedUser,
 		to,
-		imageUrl: nft.imageUrl,
-		imageHash: nft.imageHash,
+		imageUrl: nft.imageUrl ?? undefined,
+		imageHash: nft.imageHash ?? undefined,
 	});
+
+	if (!buildResult.success) {
+		log(`Build transfer failed: ${buildResult.errors.join(", ")}`, "error");
+		return;
+	}
 
 	log(`Transferring seed ownership to @${to}...`);
 	(window as any).hive_keychain.requestBroadcast(
-		connectedUser, ops, "Active",
+		connectedUser, [buildResult.operation], "Active",
 		(res: any) => {
 			if (res.success) {
 				log(`Seed transferred to @${to}!`, "success");

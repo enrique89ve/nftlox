@@ -212,7 +212,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				description: "Pre-mint instances WITHOUT a recipient. The game server becomes the owner of all instances.",
 				endpoint: "POST /api/build/bulk-distribute",
 				payload: {
-					owner: GAME_ACCOUNT,
+					signer: GAME_ACCOUNT,
 					items: [
 						{ seedId: SEED_IDS.starterWolf, quantity: 100, seedTxId: "<seed mint txid>" },
 						{ seedId: SEED_IDS.fireDragon, quantity: 10, seedTxId: "<seed mint txid>" },

@@ -147,7 +147,7 @@ Query API (via Indexer):
   GET  /api/status
   GET  /api/health
 
-Build API (24 endpoints):
+Build API (27 endpoints):
   POST /api/build/collection       POST /api/build/seeds
   POST /api/build/bulk-distribute  POST /api/build/transfer
   POST /api/build/list             POST /api/build/unlist
@@ -162,6 +162,8 @@ Build API (24 endpoints):
   POST /api/build/nft-lend         POST /api/build/nft-return
   POST /api/build/data-operator-approve
   POST /api/build/set-data-from
+  POST /api/build/archive-collection
+  POST /api/build/set-owner-data   POST /api/build/extend-schema
 
 SPV Verification:
   POST /api/spv/verify-ownership

@@ -1016,7 +1016,7 @@ Transfer an NFT instance to another Hive account.
 | `seedId`   | `string` | No       | Seed provenance ID.                                  |
 | `seedTxId`  | `string` | No       | Seed parent's tx_id (for L1 traceability).                                |
 
-**Key type:** Posting
+**Key type:** Active
 
 ---
 
@@ -1162,7 +1162,7 @@ Approve or revoke a data operator for a collection. Only the collection creator 
 
 Note: The `creator` field in the request body maps to `owner` internally.
 
-**Key type:** Posting
+**Key type:** Active
 
 ---
 
@@ -1219,7 +1219,7 @@ List an NFT for sale on the marketplace.
 | `seedId`     | `string` | No       | Seed provenance ID.                                             |
 | `seedTxId`    | `string` | No       | Seed parent's tx_id (for L1 traceability).                                           |
 
-**Key type:** Posting
+**Key type:** Active
 
 **curl example:**
 
@@ -1359,7 +1359,7 @@ Buy packs from a collection.
 | `buyer`    | `string` | Yes      | Hive username of the buyer.            |
 | `quantity` | `number` | Yes      | Number of packs to buy (1-50).         |
 
-**Key type:** Posting
+**Key type:** Active
 
 ---
 
@@ -1392,7 +1392,7 @@ Transfer packs to another account.
 | `to`       | `string` | Yes      | Recipient (Hive username). Must differ from `from`.|
 | `quantity` | `number` | Yes      | Number of packs to transfer (>= 1).               |
 
-**Key type:** Posting
+**Key type:** Active
 
 ---
 
@@ -1411,7 +1411,7 @@ Approve or revoke a spender for a specific NFT instance.
 | `instanceId` | `string`  | Yes      | NFT instance ID.                               |
 | `approved`   | `boolean` | Yes      | `true` to approve, `false` to revoke.          |
 
-**Key type:** Posting
+**Key type:** Active
 
 ---
 
@@ -1428,7 +1428,7 @@ Approve or revoke a spender for all NFTs in a collection owned by the signer.
 | `collectionId` | `string`  | Yes      | Collection ID scope.                           |
 | `approved`     | `boolean` | Yes      | `true` to approve, `false` to revoke.          |
 
-**Key type:** Posting
+**Key type:** Active
 
 ---
 
@@ -1449,7 +1449,7 @@ Transfer an NFT as an approved spender (operator).
 
 Note: The `spender` field in the request body maps to `operator` internally.
 
-**Key type:** Posting
+**Key type:** Active
 
 ---
 
@@ -1467,7 +1467,7 @@ Approve or revoke a spender for packs.
 | `quantity` | `number`  | Yes      | Number of packs approved (>= 1).               |
 | `approved` | `boolean` | Yes      | `true` to approve, `false` to revoke.          |
 
-**Key type:** Posting
+**Key type:** Active
 
 ---
 
@@ -1487,7 +1487,7 @@ Transfer packs as an approved spender (operator).
 
 Note: The `spender` field in the request body maps to `operator` internally.
 
-**Key type:** Posting
+**Key type:** Active
 
 ---
 

@@ -50,7 +50,7 @@ export async function createTestCollection(
 		totalPotential,
 		metadata: {
 			description: options?.description || `${name} - NFTLox Protocol Collection`,
-			image: options?.image || "",
+			image: options?.image || "https://placehold.co/400x400?text=NFT",
 		},
 		rules: {
 			transferable: true,
@@ -204,7 +204,7 @@ export async function createDeterministicCollection(
 		totalPotential,
 		metadata: {
 			description: options?.description || `${name} - NFTLox Protocol Collection`,
-			image: options?.image || "",
+			image: options?.image || "https://placehold.co/400x400?text=NFT",
 		},
 		rules: {
 			transferable: true,

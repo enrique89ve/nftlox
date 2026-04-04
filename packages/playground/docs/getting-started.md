@@ -5,8 +5,8 @@ This guide walks you through making your first API calls to the NFTLox protocol 
 ## Prerequisites
 
 - **Hive account** -- You need a Hive blockchain account. Create one at [signup.hive.io](https://signup.hive.io).
-- **Active key** -- Required for operations that move value: `transfer`, `burn`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `pack_approve`, and `data_operator_approve`.
-- **Posting key** -- Required for the remaining operations: `create_collection`, `mint`, `replicate`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `unlist`, `pack_create`, `pack_open`, `nft_transfer_from`, `pack_transfer_from`, `set_data_from`, `nft_lend`, and `nft_return`.
+- **Active key** -- Required for operations that move value (11 ops): `transfer`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `pack_transfer_from`, `pack_approve`, and `data_operator_approve`.
+- **Posting key** -- Required for the remaining operations (14 ops): `create_collection`, `mint`, `replicate`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `archive_collection`, `unlist`, `pack_create`, `pack_open`, `set_data_from`, `nft_lend`, and `nft_return`.
 - Your private keys never leave your client; the API only builds unsigned payloads.
 
 ## Your First API Call
@@ -168,9 +168,9 @@ All build endpoints accept `POST` with a JSON body:
 | `/api/build/pack-transfer` | Transfer packs | Active |
 | `/api/build/nft-approve` | Approve NFT operator | Active |
 | `/api/build/nft-approve-all` | Approve operator for collection | Active |
-| `/api/build/nft-transfer-from` | Operator transfers NFT | Posting |
+| `/api/build/nft-transfer-from` | Operator transfers NFT | Active |
 | `/api/build/pack-approve` | Approve pack operator | Active |
-| `/api/build/pack-transfer-from` | Operator transfers packs | Posting |
+| `/api/build/pack-transfer-from` | Operator transfers packs | Active |
 | `/api/build/nft-lend` | Lend an NFT | Posting |
 | `/api/build/nft-return` | Return a lent NFT | Posting |
 | `/api/build/data-operator-approve` | Approve data operator | Active |

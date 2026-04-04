@@ -21,6 +21,8 @@ import { handlePackBuy } from "@/processor/handlers/packs/pack-buy.ts";
 import { handlePackOpen } from "@/processor/handlers/packs/pack-open.ts";
 import { handlePackApprove } from "@/processor/handlers/allowances/pack-approve.ts";
 import { handleDataOperatorApprove } from "@/processor/handlers/allowances/data-operator-approve.ts";
+import { handleSetOwnerData } from "@/processor/handlers/core/set-owner-data.ts";
+import { handleSetDataFrom } from "@/processor/handlers/allowances/set-data-from.ts";
 import { listCollections } from "@/db/queries/collections.ts";
 import {
 	ACTION_CREATE_COLLECTION,
@@ -42,6 +44,8 @@ import {
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
 	ACTION_DATA_OPERATOR_APPROVE,
+	ACTION_SET_OWNER_DATA,
+	ACTION_SET_DATA_FROM,
 	ACTION_BUY,
 	calculatePaymentSplit,
 	ACTIVE_AUTH_ACTIONS,
@@ -2522,6 +2526,52 @@ describe("Handlers (integration)", () => {
 				WHERE collection_id = ${COL_ID} AND owner = 'alice' AND spender = 'gameshop'
 			`;
 			expect(allowance).toBeDefined();
+		});
+	});
+
+	// ─── I-02: data operator cannot write owner_data ──────
+
+	describe("data operator boundary enforcement", () => {
+		test("data operator cannot write owner_data", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+
+			// Approve carol as data operator for the collection
+			await handleDataOperatorApprove(makeOp(ACTION_DATA_OPERATOR_APPROVE, {
+				collectionId: COL_ID,
+				operator: "carol",
+				approved: true,
+			}), sql);
+
+			// Get instance DNA for the operation
+			const [nft] = await sql`SELECT instance_dna FROM nfts WHERE id = ${instId}`;
+
+			// carol (operator, not owner) tries set_owner_data — must fail
+			const op = makeOp(ACTION_SET_OWNER_DATA, {
+				nftId: instId,
+				instanceDna: nft!.instance_dna,
+				data: { notes: "hacked" },
+			}, "carol");
+
+			await expect(handleSetOwnerData(op, sql)).rejects.toThrow("not owner");
+		});
+
+		test("non-operator cannot write mutable_data via set_data_from", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+
+			const [nft] = await sql`SELECT instance_dna FROM nfts WHERE id = ${instId}`;
+
+			// bob (not an operator) tries set_data_from — must fail
+			const op = makeOp(ACTION_SET_DATA_FROM, {
+				nftId: instId,
+				instanceDna: nft!.instance_dna,
+				mutableData: { level: 99 },
+			}, "bob");
+
+			await expect(handleSetDataFrom(op, sql)).rejects.toThrow("not an approved data operator");
 		});
 	});
 
