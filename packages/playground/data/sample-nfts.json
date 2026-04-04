@@ -12,70 +12,70 @@
 	},
 	"seeds": [
 		{
-			"artId": "COSMIC-001",
+			"artId": "cosmic-001",
 			"name": "Cosmic Nebula",
 			"brief": "A swirling nebula captured in digital form",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/2458Ywc656oqQ6dLVq9VJKbRrFocRLNuBSfanqkh9x6NdzUTTxiEZgK9PnWYUAaEfVwKP.png",
 			"maxSupply": 100
 		},
 		{
-			"artId": "COSMIC-002",
+			"artId": "cosmic-002",
 			"name": "Solar Flare",
 			"brief": "An explosive burst of solar energy",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yJP8FwGQ1mtBAijkxqGGbPmv2fcg135VTxnxHnh2nWokHE7qcKEDjonro55wUGzkeDH.png",
 			"maxSupply": 200
 		},
 		{
-			"artId": "COSMIC-003",
+			"artId": "cosmic-003",
 			"name": "Black Hole Pulse",
 			"brief": "The rhythmic heartbeat of a cosmic void",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/244AAyHiwU7kjGDQFM2nXiHTWnJetsGtG7okyhdg2E9oEGFjapaDkGueMePVUZb2EfY5K.png",
 			"maxSupply": 50
 		},
 		{
-			"artId": "COSMIC-004",
+			"artId": "cosmic-004",
 			"name": "Quantum Drift",
 			"brief": "Particles dancing at the edge of reality",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yTmHF4uoo6ZRyk2trWSAgqwpG4kDjRY3VhLBnKfxLkpTp6zAQjQnS1oFyky7yQ51eRZ.png",
 			"maxSupply": 500
 		},
 		{
-			"artId": "COSMIC-005",
+			"artId": "cosmic-005",
 			"name": "Starfield Echo",
 			"brief": "The last light from a dying star",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23zkrwARsCeyekADuopVGaSTRGokezX8uBCbMzpN9NfPauy5s295oAQnNVBHMhFTTK4pY.png",
 			"maxSupply": 1000
 		},
 		{
-			"artId": "COSMIC-006",
+			"artId": "cosmic-006",
 			"name": "Aurora Wave",
 			"brief": "Northern lights captured in digital canvas",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/2458Ywc656oqQ6dLVq9VJKbRrFocRLNuBSfanqkh9x6NdzUTTxiEZgK9PnWYUAaEfVwKP.png",
 			"maxSupply": 300
 		},
 		{
-			"artId": "COSMIC-007",
+			"artId": "cosmic-007",
 			"name": "Void Walker",
 			"brief": "A traveler between dimensions",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yJP8FwGQ1mtBAijkxqGGbPmv2fcg135VTxnxHnh2nWokHE7qcKEDjonro55wUGzkeDH.png",
 			"maxSupply": 25
 		},
 		{
-			"artId": "COSMIC-008",
+			"artId": "cosmic-008",
 			"name": "Gravity Lens",
 			"brief": "Light bent by impossible mass",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/244AAyHiwU7kjGDQFM2nXiHTWnJetsGtG7okyhdg2E9oEGFjapaDkGueMePVUZb2EfY5K.png",
 			"maxSupply": 150
 		},
 		{
-			"artId": "COSMIC-009",
+			"artId": "cosmic-009",
 			"name": "Plasma Storm",
 			"brief": "A violent eruption of charged particles",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yTmHF4uoo6ZRyk2trWSAgqwpG4kDjRY3VhLBnKfxLkpTp6zAQjQnS1oFyky7yQ51eRZ.png",
 			"maxSupply": 75
 		},
 		{
-			"artId": "COSMIC-010",
+			"artId": "cosmic-010",
 			"name": "Photon Cascade",
 			"brief": "An infinite waterfall of pure light",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23zkrwARsCeyekADuopVGaSTRGokezX8uBCbMzpN9NfPauy5s295oAQnNVBHMhFTTK4pY.png",

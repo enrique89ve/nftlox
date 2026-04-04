@@ -12,35 +12,35 @@
 	},
 	"seeds": [
 		{
-			"artId": "BULL001",
+			"artId": "bull001",
 			"name": "Sir MuuTron the Furious",
 			"brief": "A hot-headed warrior bull who charges first and thinks later.",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/2458Ywc656oqQ6dLVq9VJKbRrFocRLNuBSfanqkh9x6NdzUTTxiEZgK9PnWYUAaEfVwKP.png",
 			"maxSupply": 5000
 		},
 		{
-			"artId": "BULL002",
+			"artId": "bull002",
 			"name": "Laser Moo-X 9000",
 			"brief": "A futuristic bull with more lasers than common sense.",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yJP8FwGQ1mtBAijkxqGGbPmv2fcg135VTxnxHnh2nWokHE7qcKEDjonro55wUGzkeDH.png",
 			"maxSupply": 4000
 		},
 		{
-			"artId": "BULL003",
+			"artId": "bull003",
 			"name": "Inferno Hornz McBeef",
 			"brief": "A fiery bull born in flames and raised in chaos.",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/244AAyHiwU7kjGDQFM2nXiHTWnJetsGtG7okyhdg2E9oEGFjapaDkGueMePVUZb2EfY5K.png",
 			"maxSupply": 2000
 		},
 		{
-			"artId": "BULL004",
+			"artId": "bull004",
 			"name": "Samurai Moozashi",
 			"brief": "A disciplined blade master who never misses leg day.",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yTmHF4uoo6ZRyk2trWSAgqwpG4kDjRY3VhLBnKfxLkpTp6zAQjQnS1oFyky7yQ51eRZ.png",
 			"maxSupply": 300
 		},
 		{
-			"artId": "BULL005",
+			"artId": "bull005",
 			"name": "Bjorn MooHammer",
 			"brief": "A Viking bull who raids fridges and kingdoms alike.",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23zkrwARsCeyekADuopVGaSTRGokezX8uBCbMzpN9NfPauy5s295oAQnNVBHMhFTTK4pY.png",

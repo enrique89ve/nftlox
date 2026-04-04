@@ -30,7 +30,7 @@
 	},
 	"seeds": [
 		{
-			"artId": "FIRE-DRG-001",
+			"artId": "fire-drg-001",
 			"name": "Inferno Drake",
 			"brief": "Legendary fire dragon with devastating flame attacks",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/2458Ywc656oqQ6dLVq9VJKbRrFocRLNuBSfanqkh9x6NdzUTTxiEZgK9PnWYUAaEfVwKP.png",
@@ -44,7 +44,7 @@
 			}
 		},
 		{
-			"artId": "ICE-GOLEM-001",
+			"artId": "ice-golem-001",
 			"name": "Frost Sentinel",
 			"brief": "Epic ice golem that freezes enemies on contact",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yJP8FwGQ1mtBAijkxqGGbPmv2fcg135VTxnxHnh2nWokHE7qcKEDjonro55wUGzkeDH.png",
@@ -58,7 +58,7 @@
 			}
 		},
 		{
-			"artId": "WIND-SPELL-001",
+			"artId": "wind-spell-001",
 			"name": "Gale Force",
 			"brief": "Rare wind spell that boosts allied speed",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/244AAyHiwU7kjGDQFM2nXiHTWnJetsGtG7okyhdg2E9oEGFjapaDkGueMePVUZb2EfY5K.png",
@@ -72,7 +72,7 @@
 			}
 		},
 		{
-			"artId": "ERTH-SHLD-001",
+			"artId": "erth-shld-001",
 			"name": "Stone Barrier",
 			"brief": "Common earth trap that blocks one attack",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23yTmHF4uoo6ZRyk2trWSAgqwpG4kDjRY3VhLBnKfxLkpTp6zAQjQnS1oFyky7yQ51eRZ.png",
@@ -86,7 +86,7 @@
 			}
 		},
 		{
-			"artId": "STRT-WOLF-001",
+			"artId": "strt-wolf-001",
 			"name": "Shadow Wolf",
 			"brief": "Free starter card given to all new players",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23zkrwARsCeyekADuopVGaSTRGokezX8uBCbMzpN9NfPauy5s295oAQnNVBHMhFTTK4pY.png",
