@@ -13,7 +13,7 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-	CREATE TYPE pack_status AS ENUM ('active', 'paused', 'depleted');
+	CREATE TYPE pack_status AS ENUM ('active', 'paused', 'depleted', 'destroyed');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -75,7 +75,8 @@ CREATE TABLE IF NOT EXISTS nfts (
 	image_hash TEXT,
 	max_replicas INTEGER NOT NULL DEFAULT 1 CHECK (max_replicas >= 0),
 	distributed INTEGER NOT NULL DEFAULT 0 CHECK (distributed >= 0),
-	supply_exhausted BOOLEAN GENERATED ALWAYS AS (max_replicas > 0 AND distributed >= max_replicas) STORED,
+	reserved_by_packs INTEGER NOT NULL DEFAULT 0,
+	supply_exhausted BOOLEAN GENERATED ALWAYS AS (max_replicas > 0 AND (distributed + reserved_by_packs) >= max_replicas) STORED,
 	seed_id TEXT REFERENCES nfts(id),
 	instance_number INTEGER,
 	original_id TEXT REFERENCES nfts(id),
@@ -166,7 +167,11 @@ CREATE TABLE IF NOT EXISTS packs (
 	max_supply INTEGER NOT NULL DEFAULT 0,
 	current_supply INTEGER NOT NULL DEFAULT 0,
 	total_opened INTEGER NOT NULL DEFAULT 0,
+	reserved_supply JSONB,
 	status pack_status NOT NULL DEFAULT 'active',
+	destroyed_at TIMESTAMPTZ,
+	destroyed_tx_id TEXT,
+	destroyed_balance INTEGER,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,

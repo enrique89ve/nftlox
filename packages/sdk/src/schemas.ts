@@ -252,6 +252,11 @@ export const packOpenInputSchema = z.object({
 });
 export type PackOpenInput = z.infer<typeof packOpenInputSchema>;
 
+export const packDestroyInputSchema = z.object({
+	packId: z.string().min(1, "Pack ID is required"),
+});
+export type PackDestroyInput = z.infer<typeof packDestroyInputSchema>;
+
 export const bulkDistributeItemSchema = z.object({
 	seedId: z.string().min(1, "seedId is required"),
 	quantity: z.number().int().min(1, "Quantity must be positive"),

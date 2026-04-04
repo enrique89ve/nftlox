@@ -4,7 +4,7 @@ import {
 	COLLECTION_STATUS_ARCHIVED,
 	getCollectionRules,
 } from "@/db/queries/collections.ts";
-import { getNftForProcessing } from "@/db/queries/nfts.ts";
+import { getNftForProcessing, incrementReservedByPacks } from "@/db/queries/nfts.ts";
 import {
 	insertPack,
 	packExists,
@@ -76,6 +76,7 @@ async function validateSeedSupply(
 		totalWeight,
 		maxReplicas: seed.max_replicas,
 		distributed: seed.distributed,
+		reservedByPacks: seed.reserved_by_packs,
 		maxSupply,
 		itemsPerPack,
 	});
@@ -117,6 +118,17 @@ export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Pro
 		throw new Error(`Pack price ${priceAmount} is below minimum ${MIN_PRICE_AMOUNT}`);
 	}
 
+	// Calculate reserved supply per seed for finite packs
+	let reservedSupply: Record<string, number> | null = null;
+	if (maxSupply > 0) {
+		reservedSupply = {};
+		const totalDemand = maxSupply * itemsPerPack;
+		for (const entry of dropTable) {
+			const expectedDemand = Math.ceil((totalDemand * entry.weight) / totalWeight);
+			reservedSupply[entry.seedId] = expectedDemand;
+		}
+	}
+
 	await insertPack({
 		id,
 		collectionId,
@@ -129,6 +141,7 @@ export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Pro
 		priceAmount,
 		priceCurrency,
 		maxSupply,
+		reservedSupply,
 		blockNum: op.blockNum,
 		txId: op.txId,
 		createdAt: op.timestamp,
@@ -137,5 +150,10 @@ export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Pro
 	if (maxSupply > 0) {
 		await upsertPackBalance(op.signer, id, maxSupply, txn);
 		await incrementPackSupply(id, maxSupply, txn);
+
+		// Reserve supply on each seed so other packs/mints see accurate availability
+		for (const [seedId, demand] of Object.entries(reservedSupply!)) {
+			await incrementReservedByPacks(seedId, demand, txn);
+		}
 	}
 }

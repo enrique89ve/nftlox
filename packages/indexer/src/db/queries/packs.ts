@@ -14,6 +14,7 @@ export interface InsertPackParams {
 	priceAmount: number | null;
 	priceCurrency: string | null;
 	maxSupply: number;
+	reservedSupply: Record<string, number> | null;
 	blockNum: number;
 	txId: string;
 	createdAt: string;
@@ -31,7 +32,11 @@ export interface PackProcessingRow {
 	max_supply: number;
 	current_supply: number;
 	total_opened: number;
+	reserved_supply: Record<string, number> | null;
 	status: string;
+	destroyed_at: string | null;
+	destroyed_tx_id: string | null;
+	destroyed_balance: number | null;
 }
 
 // ============ CORE QUERIES ============
@@ -42,13 +47,15 @@ export async function insertPack(params: InsertPackParams, txn: Queryable = sql)
 			id, collection_id, creator, name, description, image_url,
 			drop_table, items_per_pack,
 			price_amount, price_currency,
-			max_supply, block_num, tx_id, created_at
+			max_supply, reserved_supply, block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.collectionId}, ${params.creator},
 			${params.name}, ${params.description}, ${params.imageUrl},
 			${JSON.stringify(params.dropTable)}, ${params.itemsPerPack},
 			${params.priceAmount}, ${params.priceCurrency},
-			${params.maxSupply}, ${params.blockNum}, ${params.txId}, ${params.createdAt}
+			${params.maxSupply},
+			${params.reservedSupply ? JSON.stringify(params.reservedSupply) : null},
+			${params.blockNum}, ${params.txId}, ${params.createdAt}
 		)
 		ON CONFLICT (id) DO NOTHING
 	`;
@@ -77,7 +84,9 @@ export async function getPackForProcessing(
 	const [row] = await txn<PackProcessingRow[]>`
 		SELECT id, collection_id, creator, name, drop_table,
 			items_per_pack, price_amount, price_currency,
-			max_supply, current_supply, total_opened, status
+			max_supply, current_supply, total_opened,
+			reserved_supply, status,
+			destroyed_at, destroyed_tx_id, destroyed_balance
 		FROM packs WHERE id = ${id}
 	`;
 	return row ?? null;
@@ -158,6 +167,49 @@ export async function updatePackStatus(
 ): Promise<void> {
 	await txn`
 		UPDATE packs SET status = ${status} WHERE id = ${packId}
+	`;
+}
+
+// ============ DESTROY QUERIES ============
+
+export async function getTotalPackBalance(
+	packId: string,
+	txn: Queryable = sql,
+): Promise<number> {
+	const [row] = await txn`
+		SELECT COALESCE(SUM(balance), 0)::int AS total
+		FROM user_pack_balances
+		WHERE pack_id = ${packId} AND balance > 0
+	`;
+	return row?.total ?? 0;
+}
+
+export async function deleteAllPackBalances(
+	packId: string,
+	txn: Queryable = sql,
+): Promise<void> {
+	await txn`DELETE FROM user_pack_balances WHERE pack_id = ${packId}`;
+}
+
+export async function deleteAllPackAllowances(
+	packId: string,
+	txn: Queryable = sql,
+): Promise<void> {
+	await txn`DELETE FROM pack_allowances WHERE pack_id = ${packId}`;
+}
+
+export async function destroyPack(
+	packId: string,
+	params: { destroyedAt: string; destroyedTxId: string; destroyedBalance: number },
+	txn: Queryable = sql,
+): Promise<void> {
+	await txn`
+		UPDATE packs
+		SET status = 'destroyed',
+			destroyed_at = ${params.destroyedAt},
+			destroyed_tx_id = ${params.destroyedTxId},
+			destroyed_balance = ${params.destroyedBalance}
+		WHERE id = ${packId}
 	`;
 }
 

@@ -4,7 +4,7 @@ import { getNftForProcessing, updateNftOwner, updateNftBurned } from "@/db/queri
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
-import { assertOwnershipChangeable, assertActionable, assertNotListed, assertSeedNotDistributed } from "@/utils/status-checks.ts";
+import { assertOwnershipChangeable, assertActionable, assertNotListed, assertSeedNotDistributed, assertSeedNotReserved } from "@/utils/status-checks.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { MAX_TRANSFER_BATCH_SIZE } from "nftlox-sdk";
 
@@ -71,6 +71,7 @@ async function processBurn(op: ParsedOperation, nftId: string, txn: Queryable): 
 	assertActionable(nft, nftId);
 	assertNotListed(nft, nftId);
 	assertSeedNotDistributed(nft, nftId);
+	assertSeedNotReserved(nft, nftId);
 
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 

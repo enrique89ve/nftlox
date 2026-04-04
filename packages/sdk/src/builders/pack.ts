@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { usernameSchema, packCreateInputSchema, packBuyInputSchema, packTransferInputSchema, packOpenInputSchema } from "../schemas";
+import { usernameSchema, packCreateInputSchema, packBuyInputSchema, packTransferInputSchema, packOpenInputSchema, packDestroyInputSchema } from "../schemas";
 import { formatZodError } from "./helpers";
 import { generateDeterministicPackId } from "../dna";
 import {
@@ -7,12 +7,14 @@ import {
 	createPackBuyPayload,
 	createPackTransferPayload,
 	createPackOpenPayload,
+	createPackDestroyPayload,
 	createPackBuyOperation,
 	createPackTransferOperation,
 	createPackOpenOperation,
+	createPackDestroyOperation,
 	toHiveOperation,
 } from "../payloads";
-import type { BuildResult, PackCreateData, PackBuyData, PackTransferData, PackOpenData } from "../types";
+import type { BuildResult, PackCreateData, PackBuyData, PackTransferData, PackOpenData, PackDestroyData } from "../types";
 
 export const packCreateBuilderSchema = packCreateInputSchema.extend({
 	creator: usernameSchema,
@@ -100,6 +102,24 @@ export function buildPackOpen(input: PackOpenBuilderInput): BuildResult<PackOpen
 
 	const payload = createPackOpenPayload(data);
 	const operation = createPackOpenOperation(data, data.owner);
+
+	return { success: true, payload, operation };
+}
+
+export const packDestroyBuilderSchema = packDestroyInputSchema.extend({
+	creator: usernameSchema,
+});
+export type PackDestroyBuilderInput = z.infer<typeof packDestroyBuilderSchema>;
+
+export function buildPackDestroy(input: PackDestroyBuilderInput): BuildResult<PackDestroyData> {
+	const parsed = packDestroyBuilderSchema.safeParse(input);
+	if (!parsed.success) {
+		return { success: false, errors: formatZodError(parsed.error) };
+	}
+	const data = parsed.data;
+
+	const payload = createPackDestroyPayload(data);
+	const operation = createPackDestroyOperation(data, data.creator);
 
 	return { success: true, payload, operation };
 }

@@ -122,6 +122,7 @@ export interface NftProcessingRow {
 	seed_id: string | null;
 	max_replicas: number;
 	distributed: number;
+	reserved_by_packs: number;
 	collection_id: string;
 	instance_dna: string | null;
 	listing_id: string | null;
@@ -135,7 +136,8 @@ export interface NftProcessingRow {
 
 export async function getNftForProcessing(id: string, txn: Queryable = sql): Promise<NftProcessingRow | null> {
 	const [row] = await txn<NftProcessingRow[]>`
-		SELECT id, owner, status, nft_type, name, seed_id, max_replicas, distributed, collection_id, instance_dna,
+		SELECT id, owner, status, nft_type, name, seed_id, max_replicas, distributed, COALESCE(reserved_by_packs, 0) AS reserved_by_packs,
+		       collection_id, instance_dna,
 		       listing_id, listing_tx_id, listing_price, listing_currency, listing_expires_at, listing_marketplace, mutable_data
 		FROM nfts WHERE id = ${id}
 	`;
@@ -160,8 +162,9 @@ export async function getNftWithCollectionRules(
 	const [row] = await txn<NftWithRulesRow[]>`
 		SELECT
 			n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			COALESCE(n.reserved_by_packs, 0) AS reserved_by_packs,
 			n.collection_id, n.instance_dna, n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
-			n.listing_expires_at, n.listing_marketplace, n.tx_id,
+			n.listing_expires_at, n.listing_marketplace, n.mutable_data, n.tx_id,
 			c.creator, c.transferable, c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient,
 			s.tx_id AS seed_tx_id
 		FROM nfts n
@@ -181,6 +184,7 @@ export interface SeedWithDnaRow {
 	seed_id: string | null;
 	max_replicas: number;
 	distributed: number;
+	reserved_by_packs: number;
 	collection_id: string;
 	instance_dna: string | null;
 	origin_dna: string | null;
@@ -194,6 +198,7 @@ export interface SeedWithDnaRow {
 export async function getSeedWithDna(id: string, txn: Queryable = sql): Promise<SeedWithDnaRow | null> {
 	const [row] = await txn<SeedWithDnaRow[]>`
 		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			COALESCE(n.reserved_by_packs, 0) AS reserved_by_packs,
 			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data, n.tx_id,
 			c.schema_version  /* collection's current version — used to stamp child instances */
 		FROM nfts n
@@ -206,6 +211,7 @@ export async function getSeedWithDna(id: string, txn: Queryable = sql): Promise<
 export async function getSeedWithDnaForUpdate(id: string, txn: Queryable): Promise<SeedWithDnaRow | null> {
 	const [row] = await txn<SeedWithDnaRow[]>`
 		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			COALESCE(n.reserved_by_packs, 0) AS reserved_by_packs,
 			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data, n.tx_id,
 			c.schema_version
 		FROM nfts n
@@ -224,6 +230,7 @@ export interface SeedWithSchemaRow extends SeedWithDnaRow {
 export async function getSeedWithSchema(id: string, txn: Queryable = sql): Promise<SeedWithSchemaRow | null> {
 	const [row] = await txn<SeedWithSchemaRow[]>`
 		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			COALESCE(n.reserved_by_packs, 0) AS reserved_by_packs,
 			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data, n.tx_id,
 			c.schema, c.schema_version
 		FROM nfts n
@@ -236,6 +243,7 @@ export async function getSeedWithSchema(id: string, txn: Queryable = sql): Promi
 export async function getSeedWithSchemaForUpdate(id: string, txn: Queryable): Promise<SeedWithSchemaRow | null> {
 	const [row] = await txn<SeedWithSchemaRow[]>`
 		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			COALESCE(n.reserved_by_packs, 0) AS reserved_by_packs,
 			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.image_hash, n.immutable_data, n.tx_id,
 			c.schema, c.schema_version
 		FROM nfts n
@@ -316,7 +324,13 @@ export async function incrementDistributedBy(seedId: string, quantity: number, t
 	await txn`UPDATE nfts SET distributed = distributed + ${quantity} WHERE id = ${seedId}`;
 }
 
+export async function incrementReservedByPacks(seedId: string, quantity: number, txn: Queryable = sql) {
+	await txn`UPDATE nfts SET reserved_by_packs = reserved_by_packs + ${quantity} WHERE id = ${seedId}`;
+}
 
+export async function decrementReservedByPacks(seedId: string, quantity: number, txn: Queryable = sql) {
+	await txn`UPDATE nfts SET reserved_by_packs = reserved_by_packs - ${quantity} WHERE id = ${seedId}`;
+}
 
 export async function updateNftMutableData(
 	nftId: string,

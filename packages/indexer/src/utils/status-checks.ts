@@ -62,6 +62,16 @@ export function assertSeedNotDistributed(nft: HasKindAndDistributed, nftId: stri
 }
 
 /**
+ * Asserts a seed with supply reserved by packs cannot change ownership or be burned.
+ * Even if distributed === 0, packs have committed to this seed's supply.
+ */
+export function assertSeedNotReserved(nft: { nft_type: string; reserved_by_packs?: number }, nftId: string): void {
+	if (nft.nft_type === "seed" && (nft.reserved_by_packs ?? 0) > 0) {
+		throw new Error(`Seed ${nftId} has supply reserved by packs — cannot transfer or burn`);
+	}
+}
+
+/**
  * Base validation: rejects burned and lent NFTs.
  * Every handler that operates on an NFT should call this first.
  */
@@ -100,5 +110,6 @@ export function assertOwnershipChangeable(
 ): { hadExpiredListing: boolean } {
 	const result = assertTransferable(nft, nftId, blockTimestamp);
 	assertSeedNotDistributed(nft, nftId);
+	assertSeedNotReserved(nft, nftId);
 	return result;
 }

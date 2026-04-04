@@ -5,7 +5,7 @@ import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/que
 import { insertSale } from "@/db/queries/marketplace-history.ts";
 import { requireString, requireUsername, verifyTransfers } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
-import { assertActionable, assertSeedNotDistributed, isListingExpired } from "@/utils/status-checks.ts";
+import { assertActionable, assertSeedNotDistributed, assertSeedNotReserved, isListingExpired } from "@/utils/status-checks.ts";
 import { config } from "@/config.ts";
 
 /**
@@ -41,6 +41,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	// Combined: only NFTs with status=listed pass through.
 	assertActionable(nft, nftId);
 	assertSeedNotDistributed(nft, nftId);
+	assertSeedNotReserved(nft, nftId);
 	if (nft.status !== NFT_STATUS_LISTED) throw new Error(`NFT not listed: ${nftId}`);
 	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
 		throw new Error(`Listing has expired for NFT: ${nftId}`);

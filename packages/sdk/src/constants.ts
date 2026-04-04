@@ -159,6 +159,7 @@ export const ACTION_PACK_CREATE = "pack_create";
 export const ACTION_PACK_BUY = "pack_buy";
 export const ACTION_PACK_TRANSFER = "pack_transfer";
 export const ACTION_PACK_OPEN = "pack_open";
+export const ACTION_PACK_DESTROY = "pack_destroy";
 
 // Protocol Actions (Approve & TransferFrom)
 export const ACTION_PACK_APPROVE = "pack_approve";
@@ -199,6 +200,7 @@ export const PACK_ACTIONS = [
 	ACTION_PACK_BUY,
 	ACTION_PACK_TRANSFER,
 	ACTION_PACK_OPEN,
+	ACTION_PACK_DESTROY,
 ] as const;
 
 export const APPROVE_ACTIONS = [
@@ -250,6 +252,7 @@ export const POSTING_AUTH_ACTIONS = [
 	ACTION_UNLIST,
 	ACTION_PACK_CREATE,
 	ACTION_PACK_OPEN,
+	ACTION_PACK_DESTROY,
 	ACTION_SET_DATA_FROM,
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,

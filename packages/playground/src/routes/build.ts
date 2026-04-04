@@ -28,6 +28,7 @@ import {
 	buildPackBuy,
 	buildPackOpen,
 	buildPackTransfer,
+	buildPackDestroy,
 	buildNftApprove,
 	buildNftApproveAll,
 	buildNftTransferFrom,
@@ -271,6 +272,18 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			operation: result.operation,
 			payload: result.payload,
 			keyType: "Active",
+		});
+	}),
+
+	"/api/build/pack-destroy": buildRoute((body) => {
+		const result = buildPackDestroy(body);
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
+		return json({
+			success: true,
+			protocolVersion: PROTOCOL_VERSION,
+			operation: result.operation,
+			payload: result.payload,
+			keyType: "Posting",
 		});
 	}),
 

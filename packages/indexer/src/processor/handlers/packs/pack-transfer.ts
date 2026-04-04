@@ -15,6 +15,7 @@ export async function handlePackTransfer(op: ParsedOperation, txn: Queryable): P
 
 	const pack = await getPackForProcessing(packId, txn);
 	if (!pack) throw new Error(`Pack not found: ${packId}`);
+	if (pack.status === "destroyed") throw new Error(`Pack ${packId} has been destroyed`);
 
 	// Pre-check balance before deduction (prevents raw Postgres CHECK violation)
 	const senderBalance = await getPackBalance(op.signer, packId, txn);

@@ -106,7 +106,8 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const alreadyMintedThisOp = existingFromOp?.count ?? 0;
 		const baseDistributed = computeInstanceBaseline(distributed, alreadyMintedThisOp);
 
-		validateSeedSupplyForDistribution(seedId, maxReplicas, baseDistributed, quantity);
+		const reservedByPacks = Number(seed.reserved_by_packs) || 0;
+		validateSeedSupplyForDistribution(seedId, maxReplicas, baseDistributed, quantity, reservedByPacks);
 
 		const originDna = seed.origin_dna
 			?? await generateOriginDna(seed.collection_id);

@@ -72,15 +72,16 @@ export const validateSeedDemand = (params: {
 	readonly totalWeight: number;
 	readonly maxReplicas: number;
 	readonly distributed: number;
+	readonly reservedByPacks?: number;
 	readonly maxSupply: number;
 	readonly itemsPerPack: number;
 }): SeedDemandResult => {
-	const { seedId, weight, totalWeight, maxReplicas, distributed, maxSupply, itemsPerPack } = params;
+	const { seedId, weight, totalWeight, maxReplicas, distributed, reservedByPacks = 0, maxSupply, itemsPerPack } = params;
 
 	if (maxSupply > 0) {
 		const totalDemand = maxSupply * itemsPerPack;
 		const expectedDemand = Math.ceil((totalDemand * weight) / totalWeight);
-		const remaining = maxReplicas > 0 ? maxReplicas - distributed : Infinity;
+		const remaining = maxReplicas > 0 ? maxReplicas - distributed - reservedByPacks : Infinity;
 
 		if (maxReplicas > 0 && remaining < expectedDemand) {
 			return {
@@ -146,10 +147,14 @@ export const validateSeedSupplyForDistribution = (
 	maxReplicas: number,
 	baseDistributed: number,
 	requestedQuantity: number,
+	reservedByPacks: number = 0,
 ): void => {
-	if (maxReplicas > 0 && baseDistributed + requestedQuantity > maxReplicas) {
-		throw new Error(
-			`Seed ${seedId} insufficient supply: needs ${requestedQuantity}, available ${maxReplicas - baseDistributed}`,
-		);
+	if (maxReplicas > 0) {
+		const available = maxReplicas - baseDistributed - reservedByPacks;
+		if (requestedQuantity > available) {
+			throw new Error(
+				`Seed ${seedId} insufficient supply: needs ${requestedQuantity}, available ${available}`,
+			);
+		}
 	}
 };

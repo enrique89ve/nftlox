@@ -15,6 +15,7 @@ import {
 	ACTION_PACK_BUY,
 	ACTION_PACK_TRANSFER,
 	ACTION_PACK_OPEN,
+	ACTION_PACK_DESTROY,
 	ACTION_PACK_APPROVE,
 	ACTION_PACK_TRANSFER_FROM,
 	ACTION_NFT_APPROVE,
@@ -58,10 +59,12 @@ import type {
 	PackBuyData,
 	PackTransferData,
 	PackOpenData,
+	PackDestroyData,
 	PackCreateInput,
 	PackBuyInput,
 	PackTransferInput,
 	PackOpenInput,
+	PackDestroyInput,
 	PackApproveData,
 	PackApproveInput,
 	PackTransferFromData,
@@ -817,6 +820,30 @@ export function createPackOpenOperation(
 		{
 			required_auths: [],
 			required_posting_auths: [opener],
+			id: getProtocolId(),
+			json: safeStringify(payload),
+		},
+	];
+}
+
+export function createPackDestroyPayload(
+	input: PackDestroyInput,
+): ProtocolPayload<PackDestroyData> {
+	return makePayload(ACTION_PACK_DESTROY, {
+		packId: input.packId,
+	});
+}
+
+export function createPackDestroyOperation(
+	input: PackDestroyInput,
+	creator: string,
+): HiveOperation {
+	const payload = createPackDestroyPayload(input);
+	return [
+		"custom_json",
+		{
+			required_auths: [],
+			required_posting_auths: [creator],
 			id: getProtocolId(),
 			json: safeStringify(payload),
 		},

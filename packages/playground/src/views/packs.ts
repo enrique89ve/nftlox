@@ -124,11 +124,14 @@ async function buildPackActionButtons(packId: string, creator: string): Promise<
 	const isCreator = user.toLowerCase() === creator.toLowerCase();
 
 	if (isCreator) {
+		const balance = await fetchUserPackBalance(user, packId);
 		return `
 			<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
 				<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('transfer', '${escapeHtml(packId)}')">Transfer</button>
 				<button class="btn btn-primary btn-sm" onclick="showPackActionForm('distribute', '${escapeHtml(packId)}')">Distribute</button>
+				<button class="btn btn-danger btn-sm" onclick="destroyPack('${escapeHtml(packId)}')">Destroy Pack</button>
 			</div>
+			<p style="font-size: 12px; color: var(--text-muted); margin-bottom: 0;">Your balance: <strong>${balance}</strong></p>
 		`;
 	}
 
@@ -770,6 +773,48 @@ async function submitPackCreate() {
 	}
 }
 
+async function destroyPack(packId: string) {
+	const user = getConnectedUser();
+	if (!user) {
+		log("Connect wallet first", "error");
+		return;
+	}
+
+	const confirmed = confirm(
+		`Are you sure you want to destroy this pack?\n\nAll remaining balances will be invalidated and reserved seed supply will be released. This cannot be undone.`
+	);
+	if (!confirmed) return;
+
+	try {
+		const response = await fetch("/api/build/pack-destroy", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ packId, creator: user }),
+		});
+		const result = await response.json();
+
+		if (!result.success) {
+			const msg = result.errors?.map((e: any) => e.message).join(", ") || result.error;
+			log(`Destroy error: ${msg}`, "error");
+			return;
+		}
+
+		broadcastOperation(
+			user,
+			[result.operation],
+			result.keyType || "Posting",
+			() => {
+				log(`Pack destroyed successfully`, "success");
+				loadPacks();
+			},
+			(err) => log(`Destroy failed: ${err}`, "error"),
+		);
+	} catch (e) {
+		log(`Error: ${(e as Error).message}`, "error");
+	}
+}
+
+(window as any).destroyPack = destroyPack;
 (window as any).loadPacks = loadPacks;
 (window as any).loadPackDetail = loadPackDetail;
 (window as any).showPackActionForm = showPackActionForm;

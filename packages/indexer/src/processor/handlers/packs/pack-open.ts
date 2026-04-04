@@ -11,6 +11,7 @@ import {
 	getSeedWithDnaForUpdate,
 	nftExists,
 	incrementDistributed,
+	decrementReservedByPacks,
 	type SeedWithDnaRow,
 } from "@/db/queries/nfts.ts";
 import { requireString, requirePositiveInt } from "@/utils/validation.ts";
@@ -166,6 +167,7 @@ async function executeMintPlan(
 		}, txn);
 
 		await incrementDistributed(item.seedId, txn);
+		await decrementReservedByPacks(item.seedId, 1, txn);
 		localMintedPerSeed.set(item.seedId, (localMintedPerSeed.get(item.seedId) ?? 0) + 1);
 	}
 }
@@ -181,6 +183,7 @@ export async function handlePackOpen(op: ParsedOperation, txn: Queryable): Promi
 
 	const pack = await getPackForProcessing(packId, txn);
 	if (!pack) throw new Error(`Pack not found: ${packId}`);
+	if (pack.status === "destroyed") throw new Error(`Pack ${packId} has been destroyed`);
 
 	const dropTable = parseDropTable(pack.drop_table, packId);
 

@@ -292,6 +292,10 @@ export interface PackOpenData {
 	quantity: number;
 }
 
+export interface PackDestroyData {
+	packId: string;
+}
+
 // ============ APPROVE & TRANSFER_FROM TYPES ============
 
 export interface PackApproveData {

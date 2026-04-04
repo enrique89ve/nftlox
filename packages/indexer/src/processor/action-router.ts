@@ -21,6 +21,7 @@ import {
 	ACTION_NFT_TRANSFER_FROM,
 	ACTION_PACK_APPROVE,
 	ACTION_PACK_TRANSFER_FROM,
+	ACTION_PACK_DESTROY,
 	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_SET_DATA_FROM,
 	ACTION_NFT_LEND,
@@ -53,6 +54,7 @@ import { handlePackCreate } from "./handlers/packs/pack-create.ts";
 import { handlePackBuy } from "./handlers/packs/pack-buy.ts";
 import { handlePackTransfer } from "./handlers/packs/pack-transfer.ts";
 import { handlePackOpen } from "./handlers/packs/pack-open.ts";
+import { handlePackDestroy } from "./handlers/packs/pack-destroy.ts";
 
 // Allowances (Approve & TransferFrom)
 import { handleNftApprove } from "./handlers/allowances/nft-approve.ts";
@@ -98,6 +100,7 @@ const handlers: Record<string, Handler> = {
 	[ACTION_PACK_BUY]: handlePackBuy,
 	[ACTION_PACK_TRANSFER]: handlePackTransfer,
 	[ACTION_PACK_OPEN]: handlePackOpen,
+	[ACTION_PACK_DESTROY]: handlePackDestroy,
 
 	// Allowances
 	[ACTION_NFT_APPROVE]: handleNftApprove,
