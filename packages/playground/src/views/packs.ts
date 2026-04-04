@@ -79,7 +79,10 @@ async function loadPackDetail(packId: string) {
 
 		// Drop table — may come as JSON string from DB
 		const rawDrop = pack.drop_table || pack.dropTable || [];
-		const dropEntries = typeof rawDrop === "string" ? JSON.parse(rawDrop) : rawDrop;
+		let dropEntries: any[] = [];
+		try {
+			dropEntries = typeof rawDrop === "string" ? JSON.parse(rawDrop) : rawDrop;
+		} catch { /* invalid JSON, leave empty */ }
 		if (dropTableEl && dropEntries.length > 0) {
 			const totalWeight = dropEntries.reduce((sum: number, e: any) => sum + e.weight, 0);
 			dropTableEl.innerHTML = `<table class="data-table">
@@ -163,7 +166,7 @@ async function executePackAction(action: "buy" | "open" | "transfer", packId: st
 		body = { packId, buyer: user, quantity };
 	} else if (action === "open") {
 		endpoint = "/api/build/pack-open";
-		body = { packId, opener: user, quantity };
+		body = { packId, owner: user, quantity };
 	} else if (action === "transfer") {
 		const to = ($("pack-action-recipient") as HTMLInputElement)?.value.trim().toLowerCase();
 		if (!to) {
