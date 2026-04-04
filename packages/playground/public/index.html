@@ -1973,6 +1973,40 @@
 							</div>
 						</div>
 
+						<!-- Set Mutable Data (visible when creator) -->
+						<div class="detail-section" id="nft-set-data-section" style="display: none;">
+							<div class="detail-section-title">
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+								Set Mutable Data
+							</div>
+							<div style="background: var(--surface-2); border-radius: 12px; padding: 18px; border: 1px solid var(--border);">
+								<div class="form-group" style="margin-bottom: 10px;">
+									<label class="form-label" style="color: var(--text-dim); font-size: 12px;">NFT ID</label>
+									<input type="text" class="form-input" id="nft-set-data-id" readonly style="background: var(--surface); opacity: 0.7;">
+								</div>
+								<div class="form-group" style="margin-bottom: 12px;">
+									<label class="form-label" style="color: var(--text-dim); font-size: 12px;">Mutable Data (JSON)</label>
+									<textarea class="form-input" id="nft-set-data-json" rows="5" placeholder='{"level": 5, "xp": 1200}' style="background: var(--surface); resize: vertical; font-family: monospace; font-size: 13px;"></textarea>
+									<div id="nft-set-data-error" class="field-error" style="display: none; margin-top: 6px;"></div>
+								</div>
+								<button class="btn btn-primary" onclick="nftDetailSetData()" style="width: 100%;">Update Mutable Data</button>
+								<small style="display: block; margin-top: 10px; color: var(--text-dim); font-size: 11px; text-align: center; font-weight: 500;">Posting key &middot; Only the creator can update mutable data</small>
+							</div>
+						</div>
+
+						<!-- Burn NFT (visible when owner) -->
+						<div class="detail-section" id="nft-burn-section" style="display: none;">
+							<div class="detail-section-title" style="color: var(--danger, #ef4444);">
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+								Destructive Actions
+							</div>
+							<div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 12px; padding: 18px;">
+								<p style="font-size: 13px; color: var(--text-dim); margin-bottom: 12px;">Burning permanently destroys this NFT. This action is irreversible.</p>
+								<button class="btn btn-secondary" onclick="nftDetailBurn()" style="width: 100%; border-color: rgba(239, 68, 68, 0.5); color: var(--danger, #ef4444); font-weight: 600;">Burn NFT</button>
+								<small style="display: block; margin-top: 10px; color: var(--text-dim); font-size: 11px; text-align: center; font-weight: 500;">Posting key &middot; Irreversible</small>
+							</div>
+						</div>
+
 						<div class="detail-section">
 							<div class="detail-section-title">Provenance</div>
 							<div class="detail-grid">
@@ -2006,6 +2040,8 @@
 					<button class="advanced-tab active" data-tab="tab-permissions">Permissions</button>
 					<button class="advanced-tab" data-tab="tab-spv">SPV Verify</button>
 					<button class="advanced-tab" data-tab="tab-nft-tracker">NFT Tracker</button>
+					<button class="advanced-tab" data-tab="tab-collection-ops">Collection Ops</button>
+					<button class="advanced-tab" data-tab="tab-advanced-ops">Advanced Ops</button>
 					<button class="advanced-tab" data-tab="tab-debug">Debug</button>
 				</div>
 
@@ -2441,6 +2477,156 @@
 					</div>
 				</div>
 
+				<!-- ===== Tab: Collection Ops ===== -->
+				<div class="advanced-tab-content" id="tab-collection-ops">
+					<!-- Bulk Distribute -->
+					<div class="card">
+						<div class="card-header">
+							<span class="card-title">Bulk Distribute</span>
+							<span class="nft-badge replica">POSTING KEY</span>
+						</div>
+						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Distribute NFT instances from seeds to multiple recipients at once.</p>
+
+						<div class="form-row">
+							<div class="form-group" style="flex: 3;">
+								<label class="form-label">Collection ID</label>
+								<input class="form-input" id="bulk-dist-collection" placeholder="col_abc123">
+							</div>
+							<div class="form-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;">
+								<button class="btn btn-secondary btn-sm" id="btn-load-seeds">Load Seeds</button>
+							</div>
+						</div>
+
+						<div style="margin-bottom: 12px;">
+							<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+								<label class="form-label" style="margin: 0;">Seed Items</label>
+								<button class="btn btn-secondary btn-sm" id="btn-add-dist-item">+ Add Item</button>
+							</div>
+							<div id="bulk-dist-items"></div>
+						</div>
+
+						<div class="form-group">
+							<label class="form-label">Recipients (one username per line)</label>
+							<textarea class="form-input" id="bulk-dist-recipients" rows="4" placeholder="alice&#10;bob&#10;charlie" style="resize: vertical; font-family: var(--mono); font-size: 13px;"></textarea>
+						</div>
+
+						<button class="btn btn-primary" id="btn-bulk-distribute">Distribute via Keychain</button>
+
+						<div id="bulk-dist-preview" style="display: none; margin-top: 16px;">
+							<div class="card-header" style="margin-bottom: 8px;">
+								<span class="card-title" style="font-size: 13px;">Operation Preview</span>
+							</div>
+							<pre id="bulk-dist-json" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: var(--mono); font-size: 12px; overflow-x: auto; max-height: 300px; overflow-y: auto;"></pre>
+						</div>
+					</div>
+
+					<!-- Extend Schema -->
+					<div class="card">
+						<div class="card-header">
+							<span class="card-title">Extend Schema</span>
+							<span class="nft-badge replica">POSTING KEY</span>
+						</div>
+						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Add new fields to an existing collection's schema. Only the collection creator can do this.</p>
+
+						<div class="form-row">
+							<div class="form-group" style="flex: 3;">
+								<label class="form-label">Collection ID</label>
+								<input class="form-input" id="extend-schema-collection" placeholder="col_abc123">
+							</div>
+							<div class="form-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;">
+								<button class="btn btn-secondary btn-sm" id="btn-load-schema">Load Current Schema</button>
+							</div>
+						</div>
+
+						<div id="extend-schema-current" style="display: none; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 12px;"></div>
+
+						<div style="margin-bottom: 12px;">
+							<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+								<label class="form-label" style="margin: 0;">New Fields</label>
+								<button class="btn btn-secondary btn-sm" id="btn-add-schema-field">+ Add Field</button>
+							</div>
+							<div id="extend-schema-fields"></div>
+						</div>
+
+						<button class="btn btn-primary" id="btn-extend-schema">Extend Schema via Keychain</button>
+
+						<div id="extend-schema-preview" style="display: none; margin-top: 16px;">
+							<div class="card-header" style="margin-bottom: 8px;">
+								<span class="card-title" style="font-size: 13px;">Operation Preview</span>
+							</div>
+							<pre id="extend-schema-json" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: var(--mono); font-size: 12px; overflow-x: auto; max-height: 300px; overflow-y: auto;"></pre>
+						</div>
+					</div>
+				</div>
+
+				<!-- ===== Tab: Advanced Ops ===== -->
+				<div class="advanced-tab-content" id="tab-advanced-ops">
+					<!-- Replicate NFT -->
+					<div class="card">
+						<div class="card-header">
+							<span class="card-title">Replicate NFT</span>
+							<span class="nft-badge replica">POSTING KEY</span>
+						</div>
+						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Create a replica (copy) of an existing NFT for a new owner.</p>
+						<div class="form-row">
+							<div class="form-group" style="flex: 1;">
+								<label class="form-label">Original NFT ID</label>
+								<input class="form-input" id="adv-replicate-nft-id" placeholder="seed_abc123">
+							</div>
+							<div class="form-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;">
+								<button class="btn btn-secondary btn-sm" id="btn-replicate-load-nft">Load NFT</button>
+							</div>
+						</div>
+						<div class="form-row">
+							<div class="form-group">
+								<label class="form-label">Origin DNA</label>
+								<input class="form-input" id="adv-replicate-origin-dna" placeholder="Auto-filled on Load NFT">
+							</div>
+							<div class="form-group">
+								<label class="form-label">Original Instance DNA</label>
+								<input class="form-input" id="adv-replicate-instance-dna" placeholder="Auto-filled on Load NFT">
+							</div>
+						</div>
+						<div class="form-group">
+							<label class="form-label">New Owner</label>
+							<input class="form-input" id="adv-replicate-new-owner" placeholder="bob">
+						</div>
+						<button class="btn btn-primary" id="btn-replicate-submit">Replicate via Keychain</button>
+					</div>
+
+					<!-- Set Owner Data -->
+					<div class="card">
+						<div class="card-header">
+							<span class="card-title">Set Owner Data</span>
+							<span class="nft-badge replica">POSTING KEY</span>
+						</div>
+						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Set owner-specific data on a collection you own.</p>
+						<div class="form-row">
+							<div class="form-group">
+								<label class="form-label">Collection ID</label>
+								<input class="form-input" id="adv-owner-data-collection" placeholder="col_abc123">
+							</div>
+							<div class="form-group">
+								<label class="form-label">Key</label>
+								<input class="form-input" id="adv-owner-data-key" placeholder="display_name, website, etc.">
+							</div>
+						</div>
+						<div class="form-group">
+							<label class="form-label">Value (plain text or valid JSON)</label>
+							<textarea class="form-input" id="adv-owner-data-value" rows="3" placeholder='e.g. "My Collection" or {"url": "https://..."}'></textarea>
+						</div>
+						<button class="btn btn-primary" id="btn-owner-data-submit">Set Owner Data via Keychain</button>
+					</div>
+
+					<!-- Preview -->
+					<div class="card" id="advanced-ops-preview" style="display: none;">
+						<div class="card-header">
+							<span class="card-title">Generated Operation</span>
+						</div>
+						<pre id="advanced-ops-json" style="background: var(--bg); padding: 16px; border-radius: 6px; font-family: var(--mono); font-size: 12px; overflow-x: auto; color: var(--accent); max-height: 300px; overflow-y: auto;"></pre>
+					</div>
+				</div>
+
 				<!-- ===== Tab: Debug ===== -->
 				<div class="advanced-tab-content" id="tab-debug">
 					<div class="card">
@@ -2510,7 +2696,95 @@
 			<div class="page" id="page-packs">
 				<div class="page-header">
 					<h1 class="page-title">Packs</h1>
-					<p class="page-desc">Browse, buy, open, and transfer packs</p>
+					<p class="page-desc">Create, browse, buy, open, and transfer packs</p>
+				</div>
+
+				<!-- Create Pack -->
+				<div class="card" id="pack-create-card">
+					<div class="card-header">
+						<span class="card-title">Create Pack</span>
+						<button class="btn btn-sm btn-secondary" id="btn-toggle-pack-form" onclick="togglePackCreateForm()">Show Form</button>
+					</div>
+					<div id="pack-create-form" style="display: none;">
+						<div class="form-row">
+							<div class="form-group">
+								<label class="form-label">Collection ID</label>
+								<div style="display: flex; gap: 8px;">
+									<input type="text" class="form-input" id="pack-collection-id" placeholder="e.g., col_abc123...">
+									<button class="btn btn-sm btn-secondary" onclick="loadCollectionsForPack()" title="Load your collections">Load</button>
+								</div>
+								<select class="form-input" id="pack-collection-select" style="display: none; margin-top: 8px;" onchange="selectCollectionForPack()">
+									<option value="">Select a collection...</option>
+								</select>
+								<span class="field-error" id="pack-collection-id-error"></span>
+							</div>
+							<div class="form-group">
+								<label class="form-label">Pack Name</label>
+								<input type="text" class="form-input" id="pack-name" placeholder="e.g., Starter Pack">
+								<span class="field-error" id="pack-name-error"></span>
+							</div>
+						</div>
+
+						<div class="form-group">
+							<label class="form-label">Description <span style="color: var(--text-dim); font-weight: normal;">(optional)</span></label>
+							<textarea class="form-input" id="pack-description" placeholder="A brief description of this pack..." rows="2" style="resize: vertical;"></textarea>
+						</div>
+
+						<div class="form-group">
+							<label class="form-label">Image URL <span style="color: var(--text-dim); font-weight: normal;">(optional)</span></label>
+							<input type="url" class="form-input" id="pack-image-url" placeholder="https://example.com/pack-cover.png">
+						</div>
+
+						<div class="form-row">
+							<div class="form-group">
+								<label class="form-label">Items per Pack</label>
+								<input type="number" class="form-input" id="pack-items-per-pack" placeholder="e.g., 5" min="1" max="20" value="3">
+							</div>
+							<div class="form-group">
+								<label class="form-label">Max Supply</label>
+								<input type="number" class="form-input" id="pack-max-supply" placeholder="e.g., 1000" min="0" value="100">
+							</div>
+						</div>
+
+						<div class="form-row">
+							<div class="form-group">
+								<label class="form-label">Price <span style="color: var(--text-dim); font-weight: normal;">(optional, leave empty for free)</span></label>
+								<div style="display: flex; gap: 8px;">
+									<input type="text" class="form-input" id="pack-price-amount" placeholder="e.g., 1.000" style="flex: 1;">
+									<select class="form-input" id="pack-price-currency" style="width: 100px;">
+										<option value="HIVE">HIVE</option>
+										<option value="HBD">HBD</option>
+									</select>
+								</div>
+							</div>
+						</div>
+
+						<!-- Drop Table -->
+						<div class="form-group">
+							<label class="form-label">Drop Table</label>
+							<small style="color: var(--text-dim); font-size: 12px; display: block; margin-bottom: 8px;">
+								Define which seeds can drop from this pack and their relative weights (higher weight = more likely)
+							</small>
+							<div style="display: flex; gap: 8px; margin-bottom: 8px;">
+								<button class="btn btn-sm btn-secondary" id="btn-load-seeds-for-pack" onclick="loadSeedsForDropTable()">Load Seeds from Collection</button>
+							</div>
+							<div id="pack-drop-table-entries" style="display: flex; flex-direction: column; gap: 8px;"></div>
+							<button class="btn btn-sm btn-secondary" style="margin-top: 8px;" onclick="addDropTableEntry()">+ Add Entry</button>
+						</div>
+
+						<!-- Drop Table Preview -->
+						<div id="pack-drop-preview" style="display: none; margin-top: 12px;">
+							<small style="color: var(--text-dim); font-size: 12px;">Probability Preview</small>
+							<div id="pack-drop-preview-content" style="margin-top: 4px;"></div>
+						</div>
+
+						<div class="btn-group" style="margin-top: 20px;">
+							<button class="btn btn-primary" id="btn-create-pack" onclick="submitPackCreate()">Create Pack</button>
+						</div>
+
+						<!-- Result -->
+						<div id="pack-create-result" style="display: none; margin-top: 16px; padding: 12px 16px; border-radius: 8px; background: var(--success-dim); border: 1px solid var(--success); font-size: 13px;"></div>
+					</div>
 				</div>
 
 				<div class="card">

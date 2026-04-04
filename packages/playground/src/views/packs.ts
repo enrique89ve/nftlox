@@ -3,6 +3,8 @@ import { $, log, escapeHtml, PLACEHOLDER_SM } from "../shared/dom";
 import { getConnectedUser } from "../shared/state";
 import { broadcastOperation } from "../shared/keychain";
 
+let dropTableEntryCount = 0;
+
 export function initPacks() {
 	loadPacks();
 	$("btn-load-packs")?.addEventListener("click", loadPacks);
@@ -227,8 +229,259 @@ async function loadUserPacksOnPacksPage() {
 	await renderUserPacks("packs-page-user-container");
 }
 
+// ============ PACK CREATION ============
+
+function togglePackCreateForm() {
+	const form = $("pack-create-form");
+	const btn = $("btn-toggle-pack-form");
+	if (!form || !btn) return;
+
+	const isHidden = form.style.display === "none";
+	form.style.display = isHidden ? "block" : "none";
+	btn.textContent = isHidden ? "Hide Form" : "Show Form";
+
+	if (isHidden && dropTableEntryCount === 0) {
+		addDropTableEntry();
+	}
+}
+
+function addDropTableEntry(seedId = "", weight = 100, seedName = "") {
+	const container = $("pack-drop-table-entries");
+	if (!container) return;
+
+	const index = dropTableEntryCount++;
+	const row = document.createElement("div");
+	row.style.cssText = "display: flex; gap: 8px; align-items: center;";
+	row.id = `drop-entry-${index}`;
+	row.innerHTML = `
+		<input type="text" class="form-input" id="drop-seed-${index}" placeholder="Seed ID" value="${escapeHtml(seedId)}" style="flex: 2;">
+		${seedName ? `<span style="color: var(--text-muted); font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(seedName)}">${escapeHtml(seedName)}</span>` : ""}
+		<input type="number" class="form-input" id="drop-weight-${index}" placeholder="Weight" value="${weight}" min="1" max="10000" style="width: 100px;">
+		<button class="btn btn-sm" style="color: var(--error); padding: 4px 8px;" onclick="removeDropTableEntry(${index})">x</button>
+	`;
+	container.appendChild(row);
+	updateDropPreview();
+}
+
+function removeDropTableEntry(index: number) {
+	const row = $(`drop-entry-${index}`);
+	if (row) row.remove();
+	updateDropPreview();
+}
+
+function updateDropPreview() {
+	const entries = getDropTableEntries();
+	const preview = $("pack-drop-preview");
+	const content = $("pack-drop-preview-content");
+	if (!preview || !content) return;
+
+	if (entries.length === 0) {
+		preview.style.display = "none";
+		return;
+	}
+
+	const totalWeight = entries.reduce((sum, e) => sum + e.weight, 0);
+	preview.style.display = "block";
+	content.innerHTML = entries.map(e => {
+		const pct = ((e.weight / totalWeight) * 100).toFixed(1);
+		return `<div style="display: flex; justify-content: space-between; font-size: 12px; font-family: var(--mono); padding: 2px 0;">
+			<span style="color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; max-width: 70%;">${escapeHtml(e.seedId)}</span>
+			<span style="color: var(--accent);">${pct}%</span>
+		</div>`;
+	}).join("");
+}
+
+function getDropTableEntries(): Array<{ seedId: string; weight: number }> {
+	const entries: Array<{ seedId: string; weight: number }> = [];
+	for (let i = 0; i < dropTableEntryCount; i++) {
+		const seedEl = $(`drop-seed-${i}`) as HTMLInputElement | null;
+		const weightEl = $(`drop-weight-${i}`) as HTMLInputElement | null;
+		if (!seedEl || !weightEl) continue;
+		const seedId = seedEl.value.trim();
+		const weight = parseInt(weightEl.value, 10);
+		if (seedId && weight > 0) {
+			entries.push({ seedId, weight });
+		}
+	}
+	return entries;
+}
+
+async function loadCollectionsForPack() {
+	const user = getConnectedUser();
+	if (!user) {
+		log("Connect wallet first", "error");
+		return;
+	}
+
+	try {
+		const response = await fetch(`/api/user/${encodeURIComponent(user)}/collections`);
+		const data = await response.json();
+		const collections = data.collections || [];
+
+		const select = $("pack-collection-select") as HTMLSelectElement | null;
+		if (!select) return;
+
+		select.innerHTML = '<option value="">Select a collection...</option>';
+		for (const col of collections) {
+			const opt = document.createElement("option");
+			opt.value = col.id;
+			opt.textContent = `${col.name} (${col.symbol})`;
+			select.appendChild(opt);
+		}
+		select.style.display = "block";
+		log(`Loaded ${collections.length} collections`, "success");
+	} catch (e) {
+		log(`Error loading collections: ${(e as Error).message}`, "error");
+	}
+}
+
+function selectCollectionForPack() {
+	const select = $("pack-collection-select") as HTMLSelectElement | null;
+	const input = $("pack-collection-id") as HTMLInputElement | null;
+	if (!select || !input) return;
+
+	if (select.value) {
+		input.value = select.value;
+	}
+}
+
+async function loadSeedsForDropTable() {
+	const collectionId = ($("pack-collection-id") as HTMLInputElement | null)?.value.trim();
+	if (!collectionId) {
+		log("Enter a Collection ID first", "error");
+		return;
+	}
+
+	try {
+		const response = await fetch(`/api/collection/${encodeURIComponent(collectionId)}/nfts?limit=50`);
+		const data = await response.json();
+		const nfts = (data.nfts || []).filter((n: any) => n.nft_type === "seed");
+
+		if (nfts.length === 0) {
+			log("No seeds found in this collection", "error");
+			return;
+		}
+
+		// Clear existing entries
+		const container = $("pack-drop-table-entries");
+		if (container) container.innerHTML = "";
+		dropTableEntryCount = 0;
+
+		for (const seed of nfts) {
+			addDropTableEntry(seed.id, 100, seed.name);
+		}
+		log(`Loaded ${nfts.length} seeds into drop table`, "success");
+	} catch (e) {
+		log(`Error loading seeds: ${(e as Error).message}`, "error");
+	}
+}
+
+async function submitPackCreate() {
+	const user = getConnectedUser();
+	if (!user) {
+		log("Connect wallet first", "error");
+		return;
+	}
+
+	const collectionId = ($("pack-collection-id") as HTMLInputElement)?.value.trim();
+	const name = ($("pack-name") as HTMLInputElement)?.value.trim();
+	const description = ($("pack-description") as HTMLTextAreaElement)?.value.trim();
+	const imageUrl = ($("pack-image-url") as HTMLInputElement)?.value.trim();
+	const itemsPerPack = parseInt(($("pack-items-per-pack") as HTMLInputElement)?.value, 10);
+	const maxSupply = parseInt(($("pack-max-supply") as HTMLInputElement)?.value, 10);
+	const priceAmount = ($("pack-price-amount") as HTMLInputElement)?.value.trim();
+	const priceCurrency = ($("pack-price-currency") as HTMLSelectElement)?.value;
+
+	const dropTable = getDropTableEntries();
+
+	if (!collectionId || !name) {
+		log("Collection ID and Pack Name are required", "error");
+		return;
+	}
+	if (dropTable.length === 0) {
+		log("Add at least one entry to the drop table", "error");
+		return;
+	}
+	if (isNaN(itemsPerPack) || itemsPerPack < 1) {
+		log("Items per pack must be at least 1", "error");
+		return;
+	}
+
+	const body: Record<string, unknown> = {
+		collectionId,
+		name,
+		dropTable,
+		itemsPerPack,
+		maxSupply: isNaN(maxSupply) ? 0 : maxSupply,
+		creator: user,
+	};
+
+	if (description) body.description = description;
+	if (imageUrl) body.imageUrl = imageUrl;
+	if (priceAmount) {
+		body.price = { amount: priceAmount, currency: priceCurrency || "HIVE" };
+	}
+
+	try {
+		const response = await fetch("/api/build/pack-create", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		const result = await response.json();
+
+		if (!result.success) {
+			const msg = result.errors?.map((e: any) => e.message).join(", ") || "Unknown error";
+			log(`Pack create error: ${msg}`, "error");
+			return;
+		}
+
+		const resultDiv = $("pack-create-result");
+		if (resultDiv) {
+			resultDiv.style.display = "block";
+			resultDiv.innerHTML = `
+				<strong>Pack ID:</strong> <span style="font-family: var(--mono); font-size: 12px;">${escapeHtml(result.packId)}</span><br>
+				<span style="color: var(--text-muted);">Broadcasting via Keychain...</span>
+			`;
+		}
+
+		broadcastOperation(
+			user,
+			[result.operation],
+			result.keyType || "Posting",
+			() => {
+				log(`Pack "${name}" created! ID: ${result.packId}`, "success");
+				if (resultDiv) {
+					resultDiv.innerHTML = `
+						<strong>Pack created successfully!</strong><br>
+						<strong>Pack ID:</strong> <span style="font-family: var(--mono); font-size: 12px;">${escapeHtml(result.packId)}</span>
+					`;
+				}
+				loadPacks();
+			},
+			(err) => {
+				log(`Pack create broadcast failed: ${err}`, "error");
+				if (resultDiv) {
+					resultDiv.style.background = "rgba(239, 68, 68, 0.15)";
+					resultDiv.style.borderColor = "var(--error)";
+					resultDiv.innerHTML = `<strong>Broadcast failed:</strong> ${escapeHtml(String(err))}`;
+				}
+			},
+		);
+	} catch (e) {
+		log(`Error: ${(e as Error).message}`, "error");
+	}
+}
+
 (window as any).loadPacks = loadPacks;
 (window as any).loadPackDetail = loadPackDetail;
 (window as any).packAction = packAction;
 (window as any).loadUserPacks = loadUserPacks;
 (window as any).loadUserPacksOnPacksPage = loadUserPacksOnPacksPage;
+(window as any).togglePackCreateForm = togglePackCreateForm;
+(window as any).addDropTableEntry = addDropTableEntry;
+(window as any).removeDropTableEntry = removeDropTableEntry;
+(window as any).loadCollectionsForPack = loadCollectionsForPack;
+(window as any).selectCollectionForPack = selectCollectionForPack;
+(window as any).loadSeedsForDropTable = loadSeedsForDropTable;
+(window as any).submitPackCreate = submitPackCreate;

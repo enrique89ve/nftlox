@@ -502,9 +502,13 @@ async function loadNftDetail(nftId: string) {
 	const parentSection = $("parent-section");
 	const replicasSection = $("replicas-section");
 	const seedInfoSection = $("seed-info-section");
+	const burnSection = $("nft-burn-section");
+	const setDataSection = $("nft-set-data-section");
 	if (parentSection) parentSection.style.display = "none";
 	if (replicasSection) replicasSection.style.display = "none";
 	if (seedInfoSection) seedInfoSection.style.display = "none";
+	if (burnSection) burnSection.style.display = "none";
+	if (setDataSection) setDataSection.style.display = "none";
 
 	try {
 		const response = await fetch(`/api/nft/${nftId}/details`);
@@ -631,6 +635,19 @@ async function loadNftDetail(nftId: string) {
 			} else {
 				actionsSection.style.display = "none";
 			}
+		}
+
+		// Burn section (visible when owner)
+		if (burnSection && isOwner) {
+			burnSection.style.display = "block";
+		}
+
+		// Set Mutable Data section (visible when user is the creator)
+		const isCreator = connectedUser && nft.mintedBy && nft.mintedBy.toLowerCase() === connectedUser.toLowerCase();
+		if (setDataSection && isCreator) {
+			setDataSection.style.display = "block";
+			const setDataIdEl = $("nft-set-data-id") as HTMLInputElement;
+			if (setDataIdEl) setDataIdEl.value = nft.id;
 		}
 
 		// Provenance
@@ -2280,6 +2297,120 @@ async function nftDetailUnlist() {
 (window as any).nftDetailList = nftDetailList;
 (window as any).nftDetailUnlist = nftDetailUnlist;
 
+async function nftDetailBurn() {
+	if (!connectedUser || !currentNftId) {
+		log("Connect wallet first", "error");
+		return;
+	}
+
+	const confirmed = confirm(
+		`Are you sure you want to burn NFT ${currentNftId}?\n\nThis action is IRREVERSIBLE. The NFT will be permanently destroyed.`
+	);
+	if (!confirmed) return;
+
+	try {
+		const response = await fetch("/api/build/burn", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ nftId: currentNftId, owner: connectedUser }),
+		});
+		const result = await response.json();
+		if (!result.success) {
+			log(`Error: ${result.errors?.[0]?.message || result.error}`, "error");
+			return;
+		}
+
+		log(`Burning ${currentNftId}...`);
+		(window as any).hive_keychain.requestBroadcast(
+			connectedUser, [result.operation], "Posting",
+			(res: any) => {
+				if (res.success) {
+					log("NFT burned successfully!", "success");
+					loadInventory();
+				} else {
+					const err = typeof res.error === "object" ? JSON.stringify(res.error) : res.error;
+					log(`Burn failed: ${err}`, "error");
+				}
+			}
+		);
+	} catch (e) {
+		log(`Error: ${(e as Error).message}`, "error");
+	}
+}
+
+async function nftDetailSetData() {
+	if (!connectedUser || !currentNftId) {
+		log("Connect wallet first", "error");
+		return;
+	}
+
+	const jsonInput = ($("nft-set-data-json") as HTMLTextAreaElement)?.value.trim();
+	const errorEl = $("nft-set-data-error");
+
+	if (!jsonInput) {
+		showSetDataError(errorEl, "Please enter JSON data");
+		return;
+	}
+
+	let parsedData: Record<string, unknown>;
+	try {
+		parsedData = JSON.parse(jsonInput);
+	} catch {
+		showSetDataError(errorEl, "Invalid JSON format");
+		return;
+	}
+
+	if (typeof parsedData !== "object" || parsedData === null || Array.isArray(parsedData)) {
+		showSetDataError(errorEl, "Data must be a JSON object (key-value pairs)");
+		return;
+	}
+
+	hideSetDataError(errorEl);
+
+	try {
+		const response = await fetch("/api/build/set-data", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ nftId: currentNftId, issuer: connectedUser, data: parsedData }),
+		});
+		const result = await response.json();
+		if (!result.success) {
+			log(`Error: ${result.errors?.[0]?.message || result.error}`, "error");
+			return;
+		}
+
+		log(`Setting mutable data on ${currentNftId}...`);
+		(window as any).hive_keychain.requestBroadcast(
+			connectedUser, [result.operation], "Posting",
+			(res: any) => {
+				if (res.success) {
+					log("Mutable data updated!", "success");
+					setTimeout(() => loadNftDetail(currentNftId!), 5000);
+				} else {
+					const err = typeof res.error === "object" ? JSON.stringify(res.error) : res.error;
+					log(`Set data failed: ${err}`, "error");
+				}
+			}
+		);
+	} catch (e) {
+		log(`Error: ${(e as Error).message}`, "error");
+	}
+}
+
+function showSetDataError(el: HTMLElement | null, message: string) {
+	if (!el) return;
+	el.textContent = message;
+	el.style.display = "block";
+}
+
+function hideSetDataError(el: HTMLElement | null) {
+	if (!el) return;
+	el.style.display = "none";
+}
+
+(window as any).nftDetailBurn = nftDetailBurn;
+(window as any).nftDetailSetData = nftDetailSetData;
+
 // ============ ADVANCED TABS ============
 
 document.querySelectorAll(".advanced-tab").forEach(tab => {
@@ -2302,6 +2433,8 @@ import { initPacks } from "./views/packs";
 import { initPermissions } from "./views/permissions";
 import { initDebug } from "./views/debug";
 import { initSpv } from "./views/spv";
+import { initAdvancedOps } from "./views/advanced-ops";
+import { initCollectionOps } from "./views/collection-ops";
 
 
 // ============ DASHBOARD STATS ============
@@ -2407,4 +2540,6 @@ initPacks();
 initPermissions();
 initDebug();
 initSpv();
+initAdvancedOps();
+initCollectionOps();
 log("Console ready");
