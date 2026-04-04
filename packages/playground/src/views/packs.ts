@@ -99,14 +99,11 @@ async function loadPackDetail(packId: string) {
 			dropTableEl.innerHTML = '<p style="color: var(--text-dim); font-size: 13px;">No drop table data</p>';
 		}
 
-		// Actions — always render, check connection on click
+		// Actions — context-aware based on user role
 		if (actionsEl) {
+			const actionButtons = await buildPackActionButtons(packId, pack.creator);
 			actionsEl.innerHTML = `
-				<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-					<button class="btn btn-primary btn-sm" onclick="showPackActionForm('buy', '${packId}')">Buy</button>
-					<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('open', '${packId}')">Open</button>
-					<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('transfer', '${packId}')">Transfer</button>
-				</div>
+				${actionButtons}
 				<div id="pack-action-form" style="display: none; padding: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;"></div>
 			`;
 		}
@@ -117,9 +114,78 @@ async function loadPackDetail(packId: string) {
 	}
 }
 
-function showPackActionForm(action: "buy" | "open" | "transfer", packId: string) {
+async function buildPackActionButtons(packId: string, creator: string): Promise<string> {
+	const user = getConnectedUser();
+
+	if (!user) {
+		return '<p style="color: var(--text-dim); font-size: 13px;">Connect wallet to see actions</p>';
+	}
+
+	const isCreator = user.toLowerCase() === creator.toLowerCase();
+
+	if (isCreator) {
+		return `
+			<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+				<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('transfer', '${escapeHtml(packId)}')">Transfer</button>
+				<button class="btn btn-primary btn-sm" onclick="showPackActionForm('distribute', '${escapeHtml(packId)}')">Distribute</button>
+			</div>
+		`;
+	}
+
+	// Regular user — check balance
+	const balance = await fetchUserPackBalance(user, packId);
+
+	if (balance <= 0) {
+		return '<p style="color: var(--text-dim); font-size: 13px;">No packs owned</p>';
+	}
+
+	return `
+		<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+			<button class="btn btn-primary btn-sm" onclick="showPackActionForm('open', '${escapeHtml(packId)}')">Open</button>
+			<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('transfer', '${escapeHtml(packId)}')">Transfer</button>
+		</div>
+		<p style="font-size: 12px; color: var(--text-muted); margin-bottom: 0;">Balance: <strong>${balance}</strong></p>
+	`;
+}
+
+async function fetchUserPackBalance(username: string, packId: string): Promise<number> {
+	try {
+		const response = await fetch(`/api/user/${encodeURIComponent(username)}/packs`);
+		const data = await response.json();
+		const packs = data.packs || [];
+		const match = packs.find((p: any) => p.pack_id === packId);
+		return match?.balance ?? 0;
+	} catch {
+		return 0;
+	}
+}
+
+function showPackActionForm(action: "buy" | "open" | "transfer" | "distribute", packId: string) {
 	const formEl = $("pack-action-form");
 	if (!formEl) return;
+
+	formEl.style.display = "block";
+
+	if (action === "distribute") {
+		formEl.innerHTML = `
+			<div style="font-size: 13px; font-weight: 500; margin-bottom: 10px; color: var(--text);">Distribute Packs</div>
+			<div class="form-group" style="margin-bottom: 10px;">
+				<label class="form-label">Recipients (one username per line)</label>
+				<textarea class="form-input" id="pack-distribute-recipients" rows="5" placeholder="user1&#10;user2&#10;user3" style="font-size: 12px; padding: 8px 10px; resize: vertical;"></textarea>
+			</div>
+			<div class="form-group" style="margin-bottom: 10px;">
+				<label class="form-label">Quantity per user</label>
+				<input type="number" class="form-input" id="pack-distribute-qty" value="1" min="1" style="width: 100px; font-size: 12px; padding: 8px 10px;">
+			</div>
+			<div style="display: flex; gap: 8px;">
+				<button class="btn btn-primary btn-sm" onclick="distributePacksToUsers('${escapeHtml(packId)}')">Distribute</button>
+				<button class="btn btn-secondary btn-sm" onclick="document.getElementById('pack-action-form').style.display='none'">Cancel</button>
+			</div>
+			<div id="pack-distribute-progress" style="margin-top: 10px; display: none;"></div>
+		`;
+		formEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+		return;
+	}
 
 	const labels: Record<string, string> = { buy: "Buy Packs", open: "Open Packs", transfer: "Transfer Packs" };
 	const transferFields = action === "transfer"
@@ -129,7 +195,6 @@ function showPackActionForm(action: "buy" | "open" | "transfer", packId: string)
 			</div>`
 		: "";
 
-	formEl.style.display = "block";
 	formEl.innerHTML = `
 		<div style="font-size: 13px; font-weight: 500; margin-bottom: 10px; color: var(--text);">${labels[action]}</div>
 		${transferFields}
@@ -206,6 +271,98 @@ async function executePackAction(action: "buy" | "open" | "transfer", packId: st
 	} catch (e) {
 		log(`Error: ${(e as Error).message}`, "error");
 	}
+}
+
+async function distributePacksToUsers(packId: string) {
+	const user = getConnectedUser();
+	if (!user) {
+		log("Connect wallet first", "error");
+		return;
+	}
+
+	const recipientsRaw = ($("pack-distribute-recipients") as HTMLTextAreaElement)?.value ?? "";
+	const quantity = parseInt(($("pack-distribute-qty") as HTMLInputElement)?.value || "1", 10);
+
+	const recipients = recipientsRaw
+		.split("\n")
+		.map((line) => line.trim().toLowerCase())
+		.filter((line) => line.length > 0);
+
+	if (recipients.length === 0) {
+		log("Enter at least one recipient", "error");
+		return;
+	}
+	if (isNaN(quantity) || quantity < 1) {
+		log("Quantity must be at least 1", "error");
+		return;
+	}
+
+	const progressEl = $("pack-distribute-progress");
+	if (progressEl) {
+		progressEl.style.display = "block";
+		progressEl.innerHTML = `<p style="font-size: 12px; color: var(--text-muted);">Starting distribution to ${recipients.length} users...</p>`;
+	}
+
+	let successCount = 0;
+	let failCount = 0;
+
+	for (const recipient of recipients) {
+		try {
+			const response = await fetch("/api/build/pack-transfer", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ packId, from: user, to: recipient, quantity }),
+			});
+			const result = await response.json();
+
+			if (!result.success) {
+				const msg = result.errors?.[0]?.message || result.error || "Unknown error";
+				log(`Distribute to @${recipient} failed: ${msg}`, "error");
+				failCount++;
+				continue;
+			}
+
+			await broadcastOperationAsync(
+				user,
+				[result.operation],
+				result.keyType || "Posting",
+			);
+
+			successCount++;
+			log(`Transferred ${quantity} pack(s) to @${recipient}`, "success");
+		} catch (e) {
+			failCount++;
+			log(`Distribute to @${recipient} error: ${(e as Error).message}`, "error");
+		}
+
+		if (progressEl) {
+			const done = successCount + failCount;
+			progressEl.innerHTML = `<p style="font-size: 12px; color: var(--text-muted);">Progress: ${done}/${recipients.length} (${successCount} ok, ${failCount} failed)</p>`;
+		}
+	}
+
+	log(`Distribution complete: ${successCount} succeeded, ${failCount} failed`, successCount > 0 ? "success" : "error");
+
+	const formEl = $("pack-action-form");
+	if (formEl) formEl.style.display = "none";
+
+	loadPackDetail(packId);
+}
+
+function broadcastOperationAsync(
+	user: string,
+	operations: unknown[],
+	keyType: "Posting" | "Active",
+): Promise<void> {
+	return new Promise((resolve, reject) => {
+		broadcastOperation(
+			user,
+			operations,
+			keyType,
+			() => resolve(),
+			(err) => reject(new Error(err)),
+		);
+	});
 }
 
 async function renderUserPacks(containerId: string) {
@@ -617,6 +774,7 @@ async function submitPackCreate() {
 (window as any).loadPackDetail = loadPackDetail;
 (window as any).showPackActionForm = showPackActionForm;
 (window as any).executePackAction = executePackAction;
+(window as any).distributePacksToUsers = distributePacksToUsers;
 (window as any).loadUserPacks = loadUserPacks;
 (window as any).loadUserPacksOnPacksPage = loadUserPacksOnPacksPage;
 (window as any).togglePackCreateForm = togglePackCreateForm;

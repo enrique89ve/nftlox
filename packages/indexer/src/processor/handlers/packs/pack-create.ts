@@ -5,7 +5,13 @@ import {
 	getCollectionRules,
 } from "@/db/queries/collections.ts";
 import { getNftForProcessing } from "@/db/queries/nfts.ts";
-import { insertPack, packExists, countPacksByCollection } from "@/db/queries/packs.ts";
+import {
+	insertPack,
+	packExists,
+	countPacksByCollection,
+	upsertPackBalance,
+	incrementPackSupply,
+} from "@/db/queries/packs.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	requireBoundedString,
@@ -127,4 +133,9 @@ export async function handlePackCreate(op: ParsedOperation, txn: Queryable): Pro
 		txId: op.txId,
 		createdAt: op.timestamp,
 	}, txn);
+
+	if (maxSupply > 0) {
+		await upsertPackBalance(op.signer, id, maxSupply, txn);
+		await incrementPackSupply(id, maxSupply, txn);
+	}
 }
