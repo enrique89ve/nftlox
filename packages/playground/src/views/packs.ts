@@ -4,6 +4,7 @@ import { getConnectedUser } from "../shared/state";
 import { broadcastOperation } from "../shared/keychain";
 
 let dropTableEntryCount = 0;
+let loadedSeedData: Array<{ id: string; name: string; maxSupply: number; distributed: number }> = [];
 
 export function initPacks() {
 	loadPacks();
@@ -250,45 +251,133 @@ function addDropTableEntry(seedId = "", weight = 100, seedName = "") {
 	if (!container) return;
 
 	const index = dropTableEntryCount++;
+	const seed = loadedSeedData.find(s => s.id === seedId);
+	const available = seed ? seed.maxSupply - seed.distributed : 0;
+	const supplyLabel = seed ? `${available.toLocaleString()} avail` : "";
+	const displayName = seedName || (seed?.name ?? "");
+
 	const row = document.createElement("div");
-	row.style.cssText = "display: flex; gap: 8px; align-items: center;";
 	row.id = `drop-entry-${index}`;
+	row.style.cssText = "display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; transition: border-color 0.15s;";
+
 	row.innerHTML = `
-		<input type="text" class="form-input" id="drop-seed-${index}" placeholder="Seed ID" value="${escapeHtml(seedId)}" style="flex: 2;">
-		${seedName ? `<span style="color: var(--text-muted); font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(seedName)}">${escapeHtml(seedName)}</span>` : ""}
-		<input type="number" class="form-input" id="drop-weight-${index}" placeholder="Weight" value="${weight}" min="1" max="10000" style="width: 100px;">
-		<button class="btn btn-sm" style="color: var(--error); padding: 4px 8px;" onclick="removeDropTableEntry(${index})">x</button>
+		<div style="min-width: 0;">
+			<input type="text" class="form-input" id="drop-seed-${index}" value="${escapeHtml(seedId)}" placeholder="Seed ID" style="font-size: 12px; padding: 6px 10px; margin-bottom: 2px;" oninput="recalculateSupply()">
+			${displayName ? `<div style="font-size: 11px; color: var(--text-muted); padding-left: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>` : ""}
+		</div>
+		<div style="text-align: center;">
+			<input type="number" class="form-input" id="drop-weight-${index}" value="${weight}" min="1" max="10000" style="width: 80px; font-size: 12px; padding: 6px 8px; text-align: center;" oninput="recalculateSupply()">
+			<div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">weight</div>
+		</div>
+		${supplyLabel ? `<div style="font-family: var(--mono); font-size: 11px; color: var(--accent); white-space: nowrap; padding: 0 4px;">${supplyLabel}</div>` : '<div></div>'}
+		<button class="btn btn-sm" style="color: var(--text-dim); padding: 4px 6px; font-size: 14px; line-height: 1;" onclick="removeDropTableEntry(${index})" title="Remove">&times;</button>
 	`;
 	container.appendChild(row);
-	updateDropPreview();
+	recalculateSupply();
 }
 
 function removeDropTableEntry(index: number) {
 	const row = $(`drop-entry-${index}`);
 	if (row) row.remove();
-	updateDropPreview();
+	recalculateSupply();
 }
 
-function updateDropPreview() {
+function recalculateSupply() {
 	const entries = getDropTableEntries();
-	const preview = $("pack-drop-preview");
-	const content = $("pack-drop-preview-content");
-	if (!preview || !content) return;
+	const panel = $("pack-supply-analysis");
+	const barsEl = $("pack-supply-bars");
+	const summaryEl = $("pack-supply-summary");
+	const statusEl = $("pack-supply-status");
+	const hintEl = $("pack-max-supply-hint");
 
-	if (entries.length === 0) {
-		preview.style.display = "none";
+	if (!panel || !barsEl || !summaryEl || !statusEl) return;
+
+	if (entries.length === 0 || loadedSeedData.length === 0) {
+		panel.style.display = "none";
+		if (hintEl) hintEl.textContent = "";
 		return;
 	}
 
+	const itemsPerPack = parseInt(($("pack-items-per-pack") as HTMLInputElement)?.value, 10) || 3;
+	const maxSupply = parseInt(($("pack-max-supply") as HTMLInputElement)?.value, 10) || 0;
 	const totalWeight = entries.reduce((sum, e) => sum + e.weight, 0);
-	preview.style.display = "block";
-	content.innerHTML = entries.map(e => {
-		const pct = ((e.weight / totalWeight) * 100).toFixed(1);
-		return `<div style="display: flex; justify-content: space-between; font-size: 12px; font-family: var(--mono); padding: 2px 0;">
-			<span style="color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; max-width: 70%;">${escapeHtml(e.seedId)}</span>
-			<span style="color: var(--accent);">${pct}%</span>
+
+	if (totalWeight === 0) {
+		panel.style.display = "none";
+		return;
+	}
+
+	panel.style.display = "block";
+
+	let bottleneckMax = Infinity;
+	let bottleneckName = "";
+	let hasError = false;
+
+	const bars = entries.map(entry => {
+		const seed = loadedSeedData.find(s => s.id === entry.seedId);
+		if (!seed) return "";
+
+		const maxReplicas = seed.maxSupply;
+		const remaining = maxReplicas > 0 ? maxReplicas - seed.distributed : Infinity;
+		const probability = entry.weight / totalWeight;
+		const expectedDemand = maxSupply > 0 ? Math.ceil(maxSupply * itemsPerPack * probability) : 0;
+
+		// How many packs this seed can support
+		const seedMaxPacks = maxReplicas > 0
+			? Math.floor((remaining * totalWeight) / (entry.weight * itemsPerPack))
+			: Infinity;
+
+		if (seedMaxPacks < bottleneckMax) {
+			bottleneckMax = seedMaxPacks;
+			bottleneckName = seed.name || seed.id;
+		}
+
+		const isOverflow = maxReplicas > 0 && expectedDemand > remaining;
+		if (isOverflow) hasError = true;
+
+		const barPct = maxReplicas > 0 ? Math.min(100, (expectedDemand / maxReplicas) * 100) : 0;
+		const usedPct = maxReplicas > 0 ? Math.min(100, (seed.distributed / maxReplicas) * 100) : 0;
+		const barColor = isOverflow ? "var(--error)" : "var(--accent)";
+
+		return `<div style="margin-bottom: 10px;">
+			<div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px;">
+				<span style="font-size: 12px; color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%;">${escapeHtml(seed.name || seed.id)}</span>
+				<span style="font-family: var(--mono); font-size: 11px; color: ${isOverflow ? 'var(--error)' : 'var(--text-muted)'};">
+					${expectedDemand > 0 ? `~${expectedDemand.toLocaleString()} needed` : ""} / ${remaining === Infinity ? "unlimited" : remaining.toLocaleString() + " avail"}
+				</span>
+			</div>
+			<div style="height: 6px; background: var(--surface); border-radius: 3px; overflow: hidden; position: relative;">
+				<div style="position: absolute; left: 0; top: 0; height: 100%; width: ${usedPct}%; background: var(--text-dim); border-radius: 3px; opacity: 0.4;"></div>
+				<div style="position: absolute; left: ${usedPct}%; top: 0; height: 100%; width: ${Math.min(barPct, 100 - usedPct)}%; background: ${barColor}; border-radius: 3px; transition: width 0.3s, background 0.3s;"></div>
+			</div>
+			<div style="display: flex; justify-content: space-between; margin-top: 2px;">
+				<span style="font-size: 10px; color: var(--text-dim);">${(probability * 100).toFixed(1)}% chance</span>
+				<span style="font-size: 10px; color: var(--text-dim);">cap: ${maxReplicas > 0 ? maxReplicas.toLocaleString() : "unlimited"}</span>
+			</div>
 		</div>`;
-	}).join("");
+	}).filter(Boolean).join("");
+
+	barsEl.innerHTML = bars;
+
+	if (hasError) {
+		statusEl.textContent = "OVER CAPACITY";
+		statusEl.style.cssText = "font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: rgba(239,68,68,0.15); color: var(--error);";
+		summaryEl.innerHTML = `<span style="color: var(--error);">Reduce max supply or adjust weights. Some seeds don't have enough remaining supply.</span>`;
+	} else {
+		statusEl.textContent = "OK";
+		statusEl.style.cssText = "font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: var(--accent-dim); color: var(--accent);";
+		if (bottleneckMax < Infinity) {
+			summaryEl.innerHTML = `Bottleneck: <strong style="color: var(--text);">${escapeHtml(bottleneckName)}</strong> limits to <strong style="color: var(--accent);">${bottleneckMax.toLocaleString()}</strong> packs max.`;
+		} else {
+			summaryEl.innerHTML = `All seeds have unlimited supply.`;
+		}
+	}
+
+	if (hintEl && bottleneckMax < Infinity && bottleneckMax > 0) {
+		hintEl.textContent = `(max ${bottleneckMax.toLocaleString()})`;
+	} else if (hintEl) {
+		hintEl.textContent = "";
+	}
 }
 
 function getDropTableEntries(): Array<{ seedId: string; weight: number }> {
@@ -362,39 +451,51 @@ async function loadSeedsForDropTable() {
 			return;
 		}
 
+		// Store seed data for supply analysis
+		loadedSeedData = seeds.map((s: any) => ({
+			id: s.id,
+			name: s.name || s.id,
+			maxSupply: s.maxSupply ?? 0,
+			distributed: s.distributed ?? 0,
+		}));
+
 		// Clear existing entries
 		const container = $("pack-drop-table-entries");
 		if (container) container.innerHTML = "";
 		dropTableEntryCount = 0;
 
-		for (const seed of seeds) {
-			const available = (seed.maxSupply ?? 0) - (seed.distributed ?? 0);
-			const label = `${seed.name} (${available}/${seed.maxSupply ?? "inf"} available)`;
-			addDropTableEntry(seed.id, 100, label);
+		for (const seed of loadedSeedData) {
+			addDropTableEntry(seed.id, 100, seed.name);
 		}
 
-		suggestPackMaxSupply(seeds);
+		// Auto-set max supply to bottleneck value
+		autoSetMaxSupply();
 		log(`Loaded ${seeds.length} seeds into drop table`, "success");
 	} catch (e) {
 		log(`Error loading seeds: ${(e as Error).message}`, "error");
 	}
 }
 
-function suggestPackMaxSupply(seeds: any[]) {
+function autoSetMaxSupply() {
+	const entries = getDropTableEntries();
 	const itemsPerPack = parseInt(($("pack-items-per-pack") as HTMLInputElement)?.value, 10) || 3;
+	const totalWeight = entries.reduce((sum, e) => sum + e.weight, 0);
+	if (totalWeight === 0 || entries.length === 0) return;
 
-	const totalAvailable = seeds.reduce((sum: number, s: any) => {
-		const available = (s.maxSupply ?? 0) - (s.distributed ?? 0);
-		return sum + available;
-	}, 0);
-
-	const suggestedMax = Math.floor(totalAvailable / itemsPerPack);
-	const maxSupplyInput = $("pack-max-supply") as HTMLInputElement | null;
-
-	if (maxSupplyInput && suggestedMax > 0) {
-		maxSupplyInput.value = String(suggestedMax);
-		log(`Suggested max supply: ${suggestedMax} packs (${totalAvailable} items / ${itemsPerPack} per pack)`, "info");
+	let bottleneck = Infinity;
+	for (const entry of entries) {
+		const seed = loadedSeedData.find(s => s.id === entry.seedId);
+		if (!seed || seed.maxSupply === 0) continue;
+		const remaining = seed.maxSupply - seed.distributed;
+		const maxPacks = Math.floor((remaining * totalWeight) / (entry.weight * itemsPerPack));
+		if (maxPacks < bottleneck) bottleneck = maxPacks;
 	}
+
+	const maxSupplyInput = $("pack-max-supply") as HTMLInputElement | null;
+	if (maxSupplyInput && bottleneck > 0 && bottleneck < Infinity) {
+		maxSupplyInput.value = String(bottleneck);
+	}
+	recalculateSupply();
 }
 
 async function submitPackCreate() {
@@ -505,4 +606,5 @@ async function submitPackCreate() {
 (window as any).loadCollectionsForPack = loadCollectionsForPack;
 (window as any).selectCollectionForPack = selectCollectionForPack;
 (window as any).loadSeedsForDropTable = loadSeedsForDropTable;
+(window as any).recalculateSupply = recalculateSupply;
 (window as any).submitPackCreate = submitPackCreate;
