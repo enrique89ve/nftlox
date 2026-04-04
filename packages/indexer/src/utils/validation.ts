@@ -235,6 +235,17 @@ export function requireArray(value: unknown, fieldName: string): unknown[] {
 	return value;
 }
 
+export function requireBoundedArray(value: unknown, fieldName: string, maxLength: number): unknown[] {
+	const arr = requireArray(value, fieldName);
+	if (arr.length === 0) {
+		throw new Error(`${fieldName} cannot be empty`);
+	}
+	if (arr.length > maxLength) {
+		throw new Error(`${fieldName} exceeds maximum length: ${arr.length} > ${maxLength}`);
+	}
+	return arr;
+}
+
 export function requirePrice(value: unknown, fieldName: string): { amount: string; currency: string } {
 	const obj = requireObject(value, fieldName);
 	return {

@@ -73,6 +73,22 @@ function isCustomJsonValue(value: unknown): value is CustomJsonOperationValue {
 	);
 }
 
+// ─── Format Validators ──────────────────────────────
+
+/** Hive transaction ID: first 20 bytes of SHA256 = 40 hex chars */
+const TX_ID_REGEX = /^[0-9a-f]{40}$/;
+
+function isValidTxId(txId: string): boolean {
+	return TX_ID_REGEX.test(txId);
+}
+
+/** HafAH operation_id is a bigint (numeric string or number) */
+function isValidOperationId(opId: unknown): boolean {
+	if (typeof opId === "number") return Number.isInteger(opId) && opId >= 0;
+	if (typeof opId === "string") return /^\d+$/.test(opId);
+	return false;
+}
+
 // ─── Payload Validation ─────────────────────────────
 
 function compareVersions(a: string, b: string): number {
@@ -143,6 +159,32 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 		if (value.id !== protocolId) continue;
 
 		const signer = value.required_auths[0] ?? value.required_posting_auths[0] ?? null;
+
+		// Validate txId format (40 hex chars = first 20 bytes of SHA256)
+		if (!isValidTxId(hafOp.trx_id)) {
+			rejected.push({
+				blockNum: hafOp.block,
+				txId: hafOp.trx_id,
+				operationId: hafOp.operation_id,
+				signer,
+				reason: `Invalid transaction ID format: ${hafOp.trx_id}`,
+				rawPayload: value.json,
+			});
+			continue;
+		}
+
+		// Validate operationId format (positive integer from HafAH)
+		if (!isValidOperationId(hafOp.operation_id)) {
+			rejected.push({
+				blockNum: hafOp.block,
+				txId: hafOp.trx_id,
+				operationId: String(hafOp.operation_id),
+				signer,
+				reason: `Invalid operation ID format: ${hafOp.operation_id}`,
+				rawPayload: value.json,
+			});
+			continue;
+		}
 
 		let payload: unknown;
 		try {
