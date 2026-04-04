@@ -1,6 +1,7 @@
 import { config } from "@/config.ts";
 import { withTransaction } from "@/db/client.ts";
-import { getLastBlock, updateLastBlock, cleanupExpiredOperations, acquireSyncLock, releaseSyncLock, insertInvalidOperation } from "@/db/queries/sync.ts";
+import { getLastBlock, updateLastBlock, cleanupExpiredOperations, insertInvalidOperation } from "@/db/queries/sync.ts";
+import { acquireSyncLock, releaseSyncLock, verifyLockHeld } from "./sync-lock.ts";
 import { getBlockchainHead, getCustomJsonInRange, getHafAHBlockRange, getTransfersInTransaction, checkClockDrift } from "./hive-client.ts";
 import { ACTION_BUY, ACTION_PACK_BUY } from "nftlox-sdk";
 import { parseHafAHOperations } from "./operation-parser.ts";
@@ -45,20 +46,49 @@ export async function stopSync(): Promise<void> {
 	log.info("Sync engine stopping");
 }
 
-const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
-const CLOCK_CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const CLOCK_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+const LOCK_RETRY_INTERVAL_MS = 10_000;
+const LOCK_VERIFY_INTERVAL_MS = 30_000;
+
 let lastCleanup = 0;
 let lastClockCheck = 0;
+let lastLockVerify = 0;
+
+/**
+ * Blocks until the advisory lock is acquired or `running` becomes false.
+ * Retries every LOCK_RETRY_INTERVAL_MS if another instance holds the lock.
+ */
+async function waitForLock(): Promise<boolean> {
+	while (running) {
+		const acquired = await acquireSyncLock();
+		if (acquired) return true;
+		log.warn("Another instance holds the sync lock — retrying", {
+			retryMs: LOCK_RETRY_INTERVAL_MS,
+		});
+		await sleep(LOCK_RETRY_INTERVAL_MS);
+	}
+	return false;
+}
 
 async function syncLoop(): Promise<void> {
-	const lockAcquired = await acquireSyncLock();
-	if (!lockAcquired) {
-		log.warn("Another instance is already syncing — skipping sync loop");
-		return;
-	}
+	if (!await waitForLock()) return;
 
 	while (running) {
 		try {
+			// Verify the dedicated lock connection is still alive.
+			// If the connection dropped, the advisory lock was auto-released by PG.
+			// We must re-acquire before processing any blocks.
+			if (Date.now() - lastLockVerify > LOCK_VERIFY_INTERVAL_MS) {
+				lastLockVerify = Date.now();
+				const held = await verifyLockHeld();
+				if (!held) {
+					log.error("Advisory lock lost — connection dropped. Re-acquiring...");
+					if (!await waitForLock()) return;
+					lastLockVerify = Date.now();
+				}
+			}
+
 			await syncCycle();
 
 			if (Date.now() - lastCleanup > CLEANUP_INTERVAL_MS) {

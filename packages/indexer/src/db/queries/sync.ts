@@ -1,16 +1,5 @@
 import { sql, type Queryable } from "@/db/client.ts";
 
-const SYNC_LOCK_ID = 1;
-
-export async function acquireSyncLock(): Promise<boolean> {
-	const [row] = await sql`SELECT pg_try_advisory_lock(${SYNC_LOCK_ID}) AS acquired`;
-	return row?.acquired === true;
-}
-
-export async function releaseSyncLock(): Promise<void> {
-	await sql`SELECT pg_advisory_unlock(${SYNC_LOCK_ID})`;
-}
-
 export async function getLastBlockForUpdate(txn: Queryable): Promise<number> {
 	const [row] = await txn`SELECT last_block FROM sync_state WHERE id = 1 FOR UPDATE`;
 	return Number(row?.last_block ?? 0);
