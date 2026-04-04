@@ -353,11 +353,11 @@ async function loadSeedsForDropTable() {
 	}
 
 	try {
-		const response = await fetch(`/api/collection/${encodeURIComponent(collectionId)}/nfts?limit=50`);
+		const response = await fetch(`/api/collection/${encodeURIComponent(collectionId)}/nfts`);
 		const data = await response.json();
-		const nfts = (data.nfts || []).filter((n: any) => n.nft_type === "seed");
+		const seeds = data.seeds?.items || [];
 
-		if (nfts.length === 0) {
+		if (seeds.length === 0) {
 			log("No seeds found in this collection", "error");
 			return;
 		}
@@ -367,12 +367,33 @@ async function loadSeedsForDropTable() {
 		if (container) container.innerHTML = "";
 		dropTableEntryCount = 0;
 
-		for (const seed of nfts) {
-			addDropTableEntry(seed.id, 100, seed.name);
+		for (const seed of seeds) {
+			const available = (seed.maxSupply ?? 0) - (seed.distributed ?? 0);
+			const label = `${seed.name} (${available}/${seed.maxSupply ?? "inf"} available)`;
+			addDropTableEntry(seed.id, 100, label);
 		}
-		log(`Loaded ${nfts.length} seeds into drop table`, "success");
+
+		suggestPackMaxSupply(seeds);
+		log(`Loaded ${seeds.length} seeds into drop table`, "success");
 	} catch (e) {
 		log(`Error loading seeds: ${(e as Error).message}`, "error");
+	}
+}
+
+function suggestPackMaxSupply(seeds: any[]) {
+	const itemsPerPack = parseInt(($("pack-items-per-pack") as HTMLInputElement)?.value, 10) || 3;
+
+	const totalAvailable = seeds.reduce((sum: number, s: any) => {
+		const available = (s.maxSupply ?? 0) - (s.distributed ?? 0);
+		return sum + available;
+	}, 0);
+
+	const suggestedMax = Math.floor(totalAvailable / itemsPerPack);
+	const maxSupplyInput = $("pack-max-supply") as HTMLInputElement | null;
+
+	if (maxSupplyInput && suggestedMax > 0) {
+		maxSupplyInput.value = String(suggestedMax);
+		log(`Suggested max supply: ${suggestedMax} packs (${totalAvailable} items / ${itemsPerPack} per pack)`, "info");
 	}
 }
 

@@ -82,14 +82,14 @@ function collectDistributeItems(): SeedItem[] {
 }
 
 async function loadSeedsForDistribute() {
-	const collectionId = ($ ("bulk-dist-collection") as HTMLInputElement)?.value.trim();
+	const collectionId = ($("bulk-dist-collection") as HTMLInputElement)?.value.trim();
 	if (!collectionId) {
 		log("Enter a collection ID first", "error");
 		return;
 	}
 
 	try {
-		const response = await fetch(`/api/collection/${encodeURIComponent(collectionId)}/nfts?limit=50`);
+		const response = await fetch(`/api/collection/${encodeURIComponent(collectionId)}/nfts`);
 		const data = await response.json();
 
 		if (!response.ok) {
@@ -97,10 +97,8 @@ async function loadSeedsForDistribute() {
 			return;
 		}
 
-		const nfts: any[] = data.nfts || [];
-		loadedSeeds = nfts
-			.filter((n: any) => n.type === "seed")
-			.map((n: any) => ({ nft_id: n.nft_id, tx_id: n.tx_id, name: n.name }));
+		const seeds: any[] = data.seeds?.items || [];
+		loadedSeeds = seeds.map((s: any) => ({ nft_id: s.id, tx_id: s.originDna || "", name: s.name }));
 
 		if (loadedSeeds.length === 0) {
 			log("No seeds found in this collection", "error");
