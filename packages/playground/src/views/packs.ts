@@ -77,8 +77,9 @@ async function loadPackDetail(packId: string) {
 			`;
 		}
 
-		// Drop table
-		const dropEntries = pack.drop_table || pack.dropTable || [];
+		// Drop table — may come as JSON string from DB
+		const rawDrop = pack.drop_table || pack.dropTable || [];
+		const dropEntries = typeof rawDrop === "string" ? JSON.parse(rawDrop) : rawDrop;
 		if (dropTableEl && dropEntries.length > 0) {
 			const totalWeight = dropEntries.reduce((sum: number, e: any) => sum + e.weight, 0);
 			dropTableEl.innerHTML = `<table class="data-table">
