@@ -55,12 +55,8 @@ async function loadPackDetail(packId: string) {
 	detailCard.scrollIntoView({ behavior: "smooth", block: "start" });
 
 	try {
-		const [packRes, historyRes] = await Promise.all([
-			fetch(`/api/pack/${packId}`),
-			fetch(`/api/pack/${packId}/history?limit=20`),
-		]);
+		const packRes = await fetch(`/api/pack/${packId}`);
 		const pack = await packRes.json();
-		const historyData = await historyRes.json();
 
 		// Pack info
 		const nameEl = $("pack-detail-name");
@@ -68,7 +64,6 @@ async function loadPackDetail(packId: string) {
 		const statsEl = $("pack-detail-stats");
 		const dropTableEl = $("pack-drop-table");
 		const actionsEl = $("pack-detail-actions");
-		const historyEl = $("pack-detail-history");
 
 		if (nameEl) nameEl.textContent = pack.name;
 		if (creatorEl) creatorEl.textContent = `@${pack.creator}`;
@@ -107,26 +102,6 @@ async function loadPackDetail(packId: string) {
 				</div>
 				<div id="pack-action-form" style="display: none; padding: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;"></div>
 			`;
-		}
-
-		// History
-		if (historyEl) {
-			const history = historyData.history || [];
-			if (history.length > 0) {
-				historyEl.innerHTML = `<table class="data-table">
-					<thead><tr><th>Event</th><th>Account</th><th>Qty</th><th>Date</th></tr></thead>
-					<tbody>${history.map((h: any) => `
-						<tr>
-							<td>${escapeHtml(h.event_type)}</td>
-							<td>@${escapeHtml(h.account)}</td>
-							<td>${h.quantity}</td>
-							<td style="color: var(--text-dim);">${new Date(h.timestamp).toLocaleDateString()}</td>
-						</tr>
-					`).join("")}</tbody>
-				</table>`;
-			} else {
-				historyEl.innerHTML = '<p style="color: var(--text-dim);">No history yet</p>';
-			}
 		}
 
 		log(`Loaded pack: ${pack.name}`, "success");
