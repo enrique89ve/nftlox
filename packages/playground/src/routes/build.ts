@@ -84,7 +84,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/seeds": buildRoute(async (body) => {
-		const result = await buildSeedBatch(body);
+		const signer = body.signer ?? body.owner;
+		const result = await buildSeedBatch({ ...body, signer });
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 
 		const operations = await Promise.all(body.seeds.map(async (seed: any) => {
@@ -94,7 +95,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 				name: seed.name,
 				imageUrl: seed.imageUrl,
 				maxSupply: seed.maxSupply,
-				signer: body.signer ?? body.owner,
+				signer,
 				owner: body.owner,
 				edition: 1,
 				brief: seed.brief,
