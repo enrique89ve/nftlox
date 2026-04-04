@@ -78,22 +78,25 @@ async function loadPackDetail(packId: string) {
 		}
 
 		// Drop table
-		if (dropTableEl && pack.drop_table) {
-			const totalWeight = pack.drop_table.reduce((sum: number, e: any) => sum + e.weight, 0);
+		const dropEntries = pack.drop_table || pack.dropTable || [];
+		if (dropTableEl && dropEntries.length > 0) {
+			const totalWeight = dropEntries.reduce((sum: number, e: any) => sum + e.weight, 0);
 			dropTableEl.innerHTML = `<table class="data-table">
 				<thead><tr><th>Seed ID</th><th>Weight</th><th>Probability</th></tr></thead>
-				<tbody>${pack.drop_table.map((entry: any) => `
+				<tbody>${dropEntries.map((entry: any) => `
 					<tr>
-						<td style="font-family: var(--mono); font-size: 12px;">${escapeHtml(entry.seedId)}</td>
+						<td style="font-family: var(--mono); font-size: 12px;">${escapeHtml(entry.seedId || entry.seed_id)}</td>
 						<td>${entry.weight}</td>
 						<td style="color: var(--accent);">${((entry.weight / totalWeight) * 100).toFixed(1)}%</td>
 					</tr>
 				`).join("")}</tbody>
 			</table>`;
+		} else if (dropTableEl) {
+			dropTableEl.innerHTML = '<p style="color: var(--text-dim); font-size: 13px;">No drop table data</p>';
 		}
 
-		// Actions
-		if (actionsEl && getConnectedUser()) {
+		// Actions — always render, check connection on click
+		if (actionsEl) {
 			actionsEl.innerHTML = `
 				<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
 					<button class="btn btn-primary btn-sm" onclick="showPackActionForm('buy', '${packId}')">Buy</button>
