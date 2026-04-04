@@ -52,6 +52,7 @@ async function loadPackDetail(packId: string) {
 	if (!detailCard) return;
 
 	detailCard.style.display = "block";
+	detailCard.scrollIntoView({ behavior: "smooth", block: "start" });
 
 	try {
 		const [packRes, historyRes] = await Promise.all([
@@ -99,11 +100,12 @@ async function loadPackDetail(packId: string) {
 		// Actions
 		if (actionsEl && getConnectedUser()) {
 			actionsEl.innerHTML = `
-				<div style="display: flex; gap: 8px; flex-wrap: wrap;">
-					<button class="btn btn-primary btn-sm" onclick="packAction('buy', '${packId}')">Buy</button>
-					<button class="btn btn-secondary btn-sm" onclick="packAction('open', '${packId}')">Open</button>
-					<button class="btn btn-secondary btn-sm" onclick="packAction('transfer', '${packId}')">Transfer</button>
+				<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+					<button class="btn btn-primary btn-sm" onclick="showPackActionForm('buy', '${packId}')">Buy</button>
+					<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('open', '${packId}')">Open</button>
+					<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('transfer', '${packId}')">Transfer</button>
 				</div>
+				<div id="pack-action-form" style="display: none; padding: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;"></div>
 			`;
 		}
 
@@ -133,10 +135,44 @@ async function loadPackDetail(packId: string) {
 	}
 }
 
-async function packAction(action: "buy" | "open" | "transfer", packId: string) {
+function showPackActionForm(action: "buy" | "open" | "transfer", packId: string) {
+	const formEl = $("pack-action-form");
+	if (!formEl) return;
+
+	const labels: Record<string, string> = { buy: "Buy Packs", open: "Open Packs", transfer: "Transfer Packs" };
+	const transferFields = action === "transfer"
+		? `<div class="form-group" style="margin-bottom: 10px;">
+				<label class="form-label">Recipient</label>
+				<input type="text" class="form-input" id="pack-action-recipient" placeholder="username" style="font-size: 12px; padding: 8px 10px;">
+			</div>`
+		: "";
+
+	formEl.style.display = "block";
+	formEl.innerHTML = `
+		<div style="font-size: 13px; font-weight: 500; margin-bottom: 10px; color: var(--text);">${labels[action]}</div>
+		${transferFields}
+		<div class="form-group" style="margin-bottom: 10px;">
+			<label class="form-label">Quantity</label>
+			<input type="number" class="form-input" id="pack-action-qty" value="1" min="1" style="width: 100px; font-size: 12px; padding: 8px 10px;">
+		</div>
+		<div style="display: flex; gap: 8px;">
+			<button class="btn btn-primary btn-sm" onclick="executePackAction('${action}', '${packId}')">Confirm</button>
+			<button class="btn btn-secondary btn-sm" onclick="document.getElementById('pack-action-form').style.display='none'">Cancel</button>
+		</div>
+	`;
+	formEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function executePackAction(action: "buy" | "open" | "transfer", packId: string) {
 	const user = getConnectedUser();
 	if (!user) {
 		log("Connect wallet first", "error");
+		return;
+	}
+
+	const quantity = parseInt(($("pack-action-qty") as HTMLInputElement)?.value || "1", 10);
+	if (isNaN(quantity) || quantity < 1) {
+		log("Quantity must be at least 1", "error");
 		return;
 	}
 
@@ -144,22 +180,19 @@ async function packAction(action: "buy" | "open" | "transfer", packId: string) {
 	let body: Record<string, unknown> = {};
 
 	if (action === "buy") {
-		const quantity = parseInt(prompt("Quantity to buy:") || "1", 10);
-		if (isNaN(quantity) || quantity < 1) return;
 		endpoint = "/api/build/pack-buy";
 		body = { packId, buyer: user, quantity };
 	} else if (action === "open") {
-		const quantity = parseInt(prompt("Quantity to open:") || "1", 10);
-		if (isNaN(quantity) || quantity < 1) return;
 		endpoint = "/api/build/pack-open";
 		body = { packId, opener: user, quantity };
 	} else if (action === "transfer") {
-		const to = prompt("Transfer to (username):");
-		if (!to) return;
-		const quantity = parseInt(prompt("Quantity:") || "1", 10);
-		if (isNaN(quantity) || quantity < 1) return;
+		const to = ($("pack-action-recipient") as HTMLInputElement)?.value.trim().toLowerCase();
+		if (!to) {
+			log("Enter a recipient username", "error");
+			return;
+		}
 		endpoint = "/api/build/pack-transfer";
-		body = { packId, from: user, to: to.toLowerCase(), quantity };
+		body = { packId, from: user, to, quantity };
 	}
 
 	try {
@@ -174,6 +207,9 @@ async function packAction(action: "buy" | "open" | "transfer", packId: string) {
 			log(`Error: ${result.errors?.[0]?.message || result.error}`, "error");
 			return;
 		}
+
+		const formEl = $("pack-action-form");
+		if (formEl) formEl.style.display = "none";
 
 		broadcastOperation(
 			user,
@@ -597,7 +633,8 @@ async function submitPackCreate() {
 
 (window as any).loadPacks = loadPacks;
 (window as any).loadPackDetail = loadPackDetail;
-(window as any).packAction = packAction;
+(window as any).showPackActionForm = showPackActionForm;
+(window as any).executePackAction = executePackAction;
 (window as any).loadUserPacks = loadUserPacks;
 (window as any).loadUserPacksOnPacksPage = loadUserPacksOnPacksPage;
 (window as any).togglePackCreateForm = togglePackCreateForm;
