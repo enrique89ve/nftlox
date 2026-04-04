@@ -14,7 +14,7 @@ import {
 	type CollectionSchema,
 	type SchemaField,
 	type SchemaFieldType,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 // ============ TRANSFER VERIFICATION (source-agnostic) ============
 

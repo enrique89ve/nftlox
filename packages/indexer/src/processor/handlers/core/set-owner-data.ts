@@ -2,7 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftOwnerData, NFT_STATUS_BURNED } from "@/db/queries/nfts.ts";
 import { requireString, requireObject } from "@/utils/validation.ts";
-import { computeDataHash } from "nftlox-sdk";
+import { computeDataHash } from "@/protocol/index.ts";
 
 export async function handleSetOwnerData(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");

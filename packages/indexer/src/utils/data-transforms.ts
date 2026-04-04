@@ -1,7 +1,7 @@
 // Pure data transformation functions.
 // Zero I/O — testable with plain objects.
 
-import { computeDataHash, validateMutableUpdate, type CollectionSchema } from "nftlox-sdk";
+import { computeDataHash, validateMutableUpdate, type CollectionSchema } from "@/protocol/index.ts";
 
 export const formatSchemaErrors = (
 	errors: ReadonlyArray<{ readonly field: string; readonly message: string }>,

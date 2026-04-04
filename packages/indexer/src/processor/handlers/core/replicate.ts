@@ -10,7 +10,7 @@ import {
 	generateReplicaInstanceDna,
 	generateDeterministicAccessKey,
 	MAX_ID_LENGTH,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 export async function handleReplicate(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;

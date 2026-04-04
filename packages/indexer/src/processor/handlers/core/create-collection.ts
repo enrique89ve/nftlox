@@ -25,7 +25,7 @@ import {
 	MAX_IMAGE_URL_LENGTH,
 	MAX_URL_LENGTH,
 	MAX_ID_LENGTH,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const d = op.data;

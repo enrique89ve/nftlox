@@ -37,7 +37,7 @@ import {
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_FEE,
 	generateDeterministicCollectionId,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 const NODE_ACCOUNT = config.hiveAccount;

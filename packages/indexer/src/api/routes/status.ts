@@ -10,7 +10,7 @@ import {
 	MAX_ROYALTY_PCT,
 	SUPPORTED_CURRENCIES,
 	ALL_ACTIONS,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 const STALE_THRESHOLD_MS = 60_000; // 1 minute without processing = stale
 const SYNC_TOLERANCE = 10; // blocks behind threshold to consider "in sync"

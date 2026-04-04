@@ -1,7 +1,7 @@
 import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from "bun:test";
 import type { ParsedOperation, ParseResult } from "@/scanner/operation-parser.ts";
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
-import { ACTION_TRANSFER, ACTION_BUY, ACTION_PACK_BUY, ACTIVE_AUTH_ACTIONS } from "nftlox-sdk";
+import { ACTION_TRANSFER, ACTION_BUY, ACTION_PACK_BUY, ACTIVE_AUTH_ACTIONS } from "@/protocol/index.ts";
 
 // ─── Mocks ──────────────────────────────────────────
 

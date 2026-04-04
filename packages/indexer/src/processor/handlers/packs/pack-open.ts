@@ -24,7 +24,7 @@ import {
 	generateDeterministicInstanceDna,
 	generateDeterministicAccessKey,
 	MAX_PACK_OPEN_BATCH,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 // ============ TYPES ============
 

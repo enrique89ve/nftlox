@@ -25,7 +25,7 @@ import {
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 const log = createLogger("mint");
 

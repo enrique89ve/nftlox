@@ -27,7 +27,7 @@ import {
 	validateHiveUsername,
 	computeDataHash,
 	validateMutableUpdate,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const toRaw = optionalString(op.data.to);

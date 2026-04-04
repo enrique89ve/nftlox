@@ -27,7 +27,7 @@ import {
 	generateDeterministicCollectionId,
 	type MultisigResponse,
 	type MultisigErrorCode,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 // ============ CONSTANTS ============
 

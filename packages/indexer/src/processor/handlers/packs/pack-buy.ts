@@ -8,7 +8,7 @@ import {
 } from "@/db/queries/packs.ts";
 import { requireString, requirePositiveInt } from "@/utils/validation.ts";
 import { validatePackPayment } from "@/utils/nft-rules.ts";
-import { MAX_PACK_OPEN_BATCH } from "nftlox-sdk";
+import { MAX_PACK_OPEN_BATCH } from "@/protocol/index.ts";
 
 export async function handlePackBuy(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const packId = requireString(op.data.packId, "packId");

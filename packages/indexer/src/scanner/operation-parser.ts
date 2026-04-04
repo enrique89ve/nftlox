@@ -4,7 +4,7 @@ import {
 	PROTOCOL_VERSION,
 	ALL_ACTIONS,
 	type ProtocolAction,
-} from "@/protocol.ts";
+} from "@/protocol/index.ts";
 import { createLogger } from "@/utils/logger.ts";
 import type { HafAHOperation } from "./hive-client.ts";
 

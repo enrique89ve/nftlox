@@ -34,7 +34,7 @@ import {
 	generateListingNonce,
 	generateListingId,
 	generateDeterministicCollectionId,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 const SHARED_BLOCK = 90000200;

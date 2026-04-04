@@ -5,7 +5,7 @@ import { processMultisigRequest } from "@/api/services/multisig-service.ts";
 import { createMultisigRateLimiter } from "@/api/services/multisig-rate-limiter.ts";
 import { createMultisigNftLock } from "@/api/services/multisig-nft-lock.ts";
 import { getNftWithCollectionRules, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
-import { calculatePaymentSplit, MULTISIG_EXPIRATION_MS } from "nftlox-sdk";
+import { calculatePaymentSplit, MULTISIG_EXPIRATION_MS } from "@/protocol/index.ts";
 
 const rateLimiter = createMultisigRateLimiter(
 	config.multisigRateLimitMax,

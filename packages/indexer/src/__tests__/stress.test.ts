@@ -1,7 +1,7 @@
 import { describe, test, expect, mock, beforeAll, afterAll, beforeEach } from "bun:test";
 import type { ParsedOperation, ParseResult } from "@/scanner/operation-parser.ts";
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
-import { ACTION_TRANSFER } from "nftlox-sdk";
+import { ACTION_TRANSFER } from "@/protocol/index.ts";
 
 // ─── Sync Engine Mocks (simulates heavy block processing) ──────────
 

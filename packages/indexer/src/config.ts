@@ -1,4 +1,4 @@
-import { DEFAULT_FEE_ACCOUNT } from "nftlox-sdk";
+import { DEFAULT_FEE_ACCOUNT } from "@/protocol/index.ts";
 
 const toInt = (val: string | undefined, fallback: number): number => {
 	const parsed = Number(val);

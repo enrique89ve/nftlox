@@ -6,7 +6,7 @@ import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/que
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertOwnershipChangeable, assertActionable, assertNotListed, assertSeedNotDistributed, assertSeedNotReserved } from "@/utils/status-checks.ts";
 import { createLogger } from "@/utils/logger.ts";
-import { MAX_TRANSFER_BATCH_SIZE } from "nftlox-sdk";
+import { MAX_TRANSFER_BATCH_SIZE } from "@/protocol/index.ts";
 
 const HIVE_NULL_ACCOUNT = "null";
 const log = createLogger("handler:transfer");

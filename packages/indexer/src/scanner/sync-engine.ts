@@ -3,7 +3,7 @@ import { withTransaction } from "@/db/client.ts";
 import { getLastBlock, updateLastBlock, cleanupExpiredOperations, insertInvalidOperation } from "@/db/queries/sync.ts";
 import { acquireSyncLock, releaseSyncLock, verifyLockHeld } from "./sync-lock.ts";
 import { getBlockchainHead, getCustomJsonInRange, getHafAHBlockRange, getTransfersInTransaction, checkClockDrift } from "./hive-client.ts";
-import { ACTION_BUY, ACTION_PACK_BUY } from "nftlox-sdk";
+import { ACTION_BUY, ACTION_PACK_BUY } from "@/protocol/index.ts";
 import { parseHafAHOperations } from "./operation-parser.ts";
 import { routeOperation } from "@/processor/action-router.ts";
 import { setSynced, updateSyncProgress } from "./sync-state.ts";

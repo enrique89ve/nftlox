@@ -18,7 +18,7 @@ import {
 	type MultisigResponse,
 	type MultisigErrorCode,
 	type HiveTransactionObject,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 // ============ CONSTANTS ============
 

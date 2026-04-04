@@ -4,7 +4,7 @@ import { getNftForProcessing, updateNftListing, NFT_STATUS_LISTED } from "@/db/q
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireHiveAmount, optionalNumber, optionalString } from "@/utils/validation.ts";
 import { assertActionable, assertSeedNotDistributed, assertSeedNotReserved, isListingExpired } from "@/utils/status-checks.ts";
-import { generateListingId, LISTING_ID_PREFIX, MIN_PRICE_AMOUNT } from "nftlox-sdk";
+import { generateListingId, LISTING_ID_PREFIX, MIN_PRICE_AMOUNT } from "@/protocol/index.ts";
 
 export async function handleList(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const nftId = requireString(op.data.nftId, "nftId");

@@ -30,7 +30,7 @@ import {
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTIVE_AUTH_ACTIONS,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 // Core
 import { handleCreateCollection } from "./handlers/core/create-collection.ts";

@@ -18,7 +18,7 @@ import {
 	validateSchemaDefinition,
 	computeDataHash,
 	type CollectionSchema,
-} from "nftlox-sdk";
+} from "@/protocol/index.ts";
 
 export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): Promise<void> {
 	const collectionId = requireString(op.data.collectionId, "collectionId");

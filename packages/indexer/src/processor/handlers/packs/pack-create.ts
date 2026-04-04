@@ -20,7 +20,7 @@ import {
 	optionalBoundedString,
 	optionalNumber,
 } from "@/utils/validation.ts";
-import { MAX_ID_LENGTH, MAX_NAME_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_IMAGE_URL_LENGTH, MIN_PRICE_AMOUNT } from "nftlox-sdk";
+import { MAX_ID_LENGTH, MAX_NAME_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_IMAGE_URL_LENGTH, MIN_PRICE_AMOUNT } from "@/protocol/index.ts";
 import { validateSeedDemand } from "@/utils/nft-rules.ts";
 
 type DropEntry = { seedId: string; weight: number };
