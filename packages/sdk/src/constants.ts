@@ -223,45 +223,58 @@ export const DATA_OPERATOR_ACTIONS = [
 
 export const ALL_ACTIONS = [...CORE_ACTIONS, ...MARKETPLACE_ACTIONS, ...PACK_ACTIONS, ...APPROVE_ACTIONS, ...LENDING_ACTIONS, ...DATA_OPERATOR_ACTIONS] as const;
 
-// Authority Classification — Single Source of Truth
-// Active key: custody transfers, financial ops, delegation of control
-// Posting key: creation, own-data updates, safe/protective actions
+// ============ AUTHORITY MAP — SINGLE SOURCE OF TRUTH ============
 // Active key: only operations that move native HIVE/HBD tokens
-export const ACTIVE_AUTH_ACTIONS = [
-	ACTION_BUY,
-	ACTION_PACK_BUY,
-] as const;
-
 // Posting key: all protocol operations (in-game assets, no real tokens)
-export const POSTING_AUTH_ACTIONS = [
-	ACTION_CREATE_COLLECTION,
-	ACTION_MINT,
-	ACTION_REPLICATE,
-	ACTION_BULK_DISTRIBUTE,
-	ACTION_TRANSFER,
-	ACTION_SET_DATA,
-	ACTION_SET_OWNER_DATA,
-	ACTION_EXTEND_SCHEMA,
-	ACTION_ARCHIVE_COLLECTION,
-	ACTION_LIST,
-	ACTION_UNLIST,
-	ACTION_PACK_CREATE,
-	ACTION_PACK_OPEN,
-	ACTION_PACK_DESTROY,
-	ACTION_PACK_TRANSFER,
-	ACTION_SET_DATA_FROM,
-	ACTION_NFT_APPROVE,
-	ACTION_NFT_APPROVE_ALL,
-	ACTION_NFT_TRANSFER_FROM,
-	ACTION_PACK_APPROVE,
-	ACTION_PACK_TRANSFER_FROM,
-	ACTION_DATA_OPERATOR_APPROVE,
-	ACTION_NFT_LEND,
-	ACTION_NFT_RETURN,
-] as const;
+// To change an action's auth level, update ONLY this map.
 
-export type ActiveAuthAction = (typeof ACTIVE_AUTH_ACTIONS)[number];
-export type PostingAuthAction = (typeof POSTING_AUTH_ACTIONS)[number];
+export type AuthLevel = "active" | "posting";
+
+export const ACTION_AUTH_LEVEL: Record<ProtocolAction, AuthLevel> = {
+	[ACTION_CREATE_COLLECTION]: "posting",
+	[ACTION_MINT]: "posting",
+	[ACTION_TRANSFER]: "posting",
+	[ACTION_REPLICATE]: "posting",
+	[ACTION_BULK_DISTRIBUTE]: "posting",
+	[ACTION_SET_DATA]: "posting",
+	[ACTION_SET_OWNER_DATA]: "posting",
+	[ACTION_EXTEND_SCHEMA]: "posting",
+	[ACTION_ARCHIVE_COLLECTION]: "posting",
+	[ACTION_LIST]: "posting",
+	[ACTION_UNLIST]: "posting",
+	[ACTION_BUY]: "active",
+	[ACTION_PACK_CREATE]: "posting",
+	[ACTION_PACK_BUY]: "active",
+	[ACTION_PACK_TRANSFER]: "posting",
+	[ACTION_PACK_OPEN]: "posting",
+	[ACTION_PACK_DESTROY]: "posting",
+	[ACTION_PACK_APPROVE]: "posting",
+	[ACTION_PACK_TRANSFER_FROM]: "posting",
+	[ACTION_NFT_APPROVE]: "posting",
+	[ACTION_NFT_APPROVE_ALL]: "posting",
+	[ACTION_NFT_TRANSFER_FROM]: "posting",
+	[ACTION_DATA_OPERATOR_APPROVE]: "posting",
+	[ACTION_SET_DATA_FROM]: "posting",
+	[ACTION_NFT_LEND]: "posting",
+	[ACTION_NFT_RETURN]: "posting",
+} as const;
+
+/** Get the auth level for any protocol action */
+export function getAuthLevel(action: ProtocolAction): AuthLevel {
+	return ACTION_AUTH_LEVEL[action];
+}
+
+/** Get the Keychain-compatible key type string */
+export function getKeyType(action: ProtocolAction): "Active" | "Posting" {
+	return ACTION_AUTH_LEVEL[action] === "active" ? "Active" : "Posting";
+}
+
+// Derived arrays (computed from the map, not manually maintained)
+export const ACTIVE_AUTH_ACTIONS = ALL_ACTIONS.filter(a => ACTION_AUTH_LEVEL[a] === "active");
+export const POSTING_AUTH_ACTIONS = ALL_ACTIONS.filter(a => ACTION_AUTH_LEVEL[a] === "posting");
+
+export type ActiveAuthAction = (typeof ALL_ACTIONS)[number] & string;
+export type PostingAuthAction = (typeof ALL_ACTIONS)[number] & string;
 
 // Type exports
 export type CoreAction = (typeof CORE_ACTIONS)[number];

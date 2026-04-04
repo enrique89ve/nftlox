@@ -53,6 +53,12 @@ const json = (data: unknown, status = 200) =>
 
 type RouteHandler = (req: Request) => Promise<Response>;
 
+/** Derive keyType from the SDK operation — single source of truth */
+function keyTypeFromOp(operation: unknown): "Active" | "Posting" {
+	const op = operation as [string, { required_auths?: string[] }];
+	return op[1]?.required_auths?.length ? "Active" : "Posting";
+}
+
 function buildRoute(handler: (body: any) => Response | Promise<Response>): { POST: RouteHandler } {
 	return {
 		POST: async (req: Request) => {
@@ -136,7 +142,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 			warnings: result.warnings,
 		});
 	}),
@@ -149,7 +155,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -161,7 +167,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -173,7 +179,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -185,7 +191,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -239,7 +245,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			packId: result.generatedId,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -251,7 +257,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Active",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -263,7 +269,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -275,7 +281,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -287,7 +293,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -309,7 +315,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation,
 			payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(operation),
 		});
 	}),
 
@@ -321,7 +327,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -333,7 +339,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -350,7 +356,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation,
 			payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(operation),
 		});
 	}),
 
@@ -367,7 +373,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation,
 			payload,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(operation),
 		});
 	}),
 
@@ -380,7 +386,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -391,7 +397,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -402,7 +408,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -413,7 +419,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -424,7 +430,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -437,7 +443,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -448,7 +454,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -461,7 +467,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 
@@ -472,7 +478,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
-			keyType: "Posting",
+			keyType: keyTypeFromOp(result.operation),
 		});
 	}),
 };

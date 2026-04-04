@@ -100,6 +100,7 @@ import {
 } from "./dna";
 
 import { getProtocolVersion, getProtocolId } from "./protocol-state";
+import { ACTION_AUTH_LEVEL, type AuthLevel } from "./constants";
 
 /**
  * Creates a protocol payload envelope with protocol ID and version injected automatically.
@@ -142,14 +143,25 @@ export function toHiveOperation(
 	payload: ProtocolPayload<unknown>,
 	signer: string,
 ): HiveOperation {
+	return buildHiveOperation(payload, signer);
+}
+
+/**
+ * Build a Hive custom_json operation with auth derived from ACTION_AUTH_LEVEL.
+ * Single point where auth fields are set — never hardcode required_auths elsewhere.
+ */
+function buildHiveOperation(
+	payload: ProtocolPayload<unknown>,
+	signer: string,
+	authOverride?: AuthLevel,
+): HiveOperation {
+	const level = authOverride ?? ACTION_AUTH_LEVEL[payload.action as ProtocolAction] ?? "posting";
+	const json = safeStringify(payload);
 	return [
 		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [signer],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
+		level === "active"
+			? { required_auths: [signer], required_posting_auths: [], id: getProtocolId(), json }
+			: { required_auths: [], required_posting_auths: [signer], id: getProtocolId(), json },
 	];
 }
 
@@ -178,15 +190,7 @@ export function createArchiveCollectionOperation(
 	creator: string,
 ): HiveOperation {
 	const payload = createArchiveCollectionPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [creator],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, creator);
 }
 
 // ============ MINT PAYLOADS ============
@@ -234,15 +238,7 @@ export function createBulkDistributeOperation(
 	signer: string,
 ): HiveOperation {
 	const payload = createBulkDistributePayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [signer],
-			id: getProtocolId(),
-			json: safeStringify(payload, input.items.length),
-		},
-	];
+	return buildHiveOperation(payload, signer);
 }
 
 // ============ TRANSFER PAYLOADS ============
@@ -313,15 +309,7 @@ export function createSetDataOperation(
 	issuer: string,
 ): HiveOperation {
 	const payload = createSetDataPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [issuer],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, issuer);
 }
 
 // ============ DATA OPERATOR PAYLOADS ============
@@ -341,15 +329,7 @@ export function createDataOperatorApproveOperation(
 	creator: string,
 ): HiveOperation {
 	const payload = createDataOperatorApprovePayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [creator],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, creator);
 }
 
 export function createSetDataFromPayload(
@@ -369,15 +349,7 @@ export function createSetDataFromOperation(
 	operator: string,
 ): HiveOperation {
 	const payload = createSetDataFromPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [operator],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, operator);
 }
 
 // ============ SET_OWNER_DATA PAYLOADS ============
@@ -398,15 +370,7 @@ export function createSetOwnerDataOperation(
 	owner: string,
 ): HiveOperation {
 	const payload = createSetOwnerDataPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, owner);
 }
 
 // ============ EXTEND_SCHEMA PAYLOADS ============
@@ -426,15 +390,7 @@ export function createExtendSchemaOperation(
 	creator: string,
 ): HiveOperation {
 	const payload = createExtendSchemaPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [creator],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, creator);
 }
 
 // ============ MARKETPLACE PAYLOADS ============
@@ -476,30 +432,15 @@ export function createBuyPayload(data: BuyData): ProtocolPayload<BuyData> {
 }
 
 export function createBuyOperation(data: BuyData, nodeAccount: string): HiveOperation {
-	return [
-		"custom_json",
-		{
-			required_auths: [nodeAccount],
-			required_posting_auths: [],
-			id: getProtocolId(),
-			json: safeStringify(createBuyPayload(data)),
-		},
-	];
+	const payload = createBuyPayload(data);
+	return buildHiveOperation(payload, nodeAccount);
 }
 
 // ============ HIVE OPERATION CREATION ============
 
 export async function createReplicateOperation(input: ReplicateInput): Promise<HiveOperation> {
 	const payload = await createReplicatePayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [input.currentOwner],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, input.currentOwner);
 }
 
 export function createTransferOperation(
@@ -511,15 +452,7 @@ export function createTransferOperation(
 	provenance?: SeedProvenance,
 ): HiveOperation {
 	const payload = createTransferPayload(nftId, from, to, imageUrl, imageHash, provenance);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [from],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, from);
 }
 
 export function createBurnOperation(
@@ -527,15 +460,7 @@ export function createBurnOperation(
 	owner: string,
 ): HiveOperation {
 	const payload = createBurnPayload(nftId, owner);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, owner);
 }
 
 export function createBulkBurnOperation(
@@ -543,15 +468,7 @@ export function createBulkBurnOperation(
 	owner: string,
 ): HiveOperation {
 	const payload = createBulkBurnPayload(nftIds, owner);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, owner);
 }
 
 export function createListOperation(
@@ -561,15 +478,7 @@ export function createListOperation(
 	listingNonce: string,
 ): HiveOperation {
 	const payload = createListPayload(input, listingId, listingNonce);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, owner);
 }
 
 export function createUnlistOperation(
@@ -580,15 +489,7 @@ export function createUnlistOperation(
 	provenance?: SeedProvenance,
 ): HiveOperation {
 	const payload = createUnlistPayload(nftId, imageUrl, imageHash, provenance);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, owner);
 }
 
 // ============ DETERMINISTIC PAYLOAD CREATION (ANTI-DUPLICATION) ============
@@ -767,15 +668,7 @@ export async function createPackCreateOperation(
 	creator: string,
 ): Promise<HiveOperation> {
 	const payload = await createPackCreatePayload(input, creator);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [creator],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, creator);
 }
 
 export function createPackBuyOperation(
@@ -783,15 +676,7 @@ export function createPackBuyOperation(
 	buyer: string,
 ): HiveOperation {
 	const payload = createPackBuyPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [buyer],
-			required_posting_auths: [],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, buyer);
 }
 
 export function createPackTransferOperation(
@@ -799,15 +684,7 @@ export function createPackTransferOperation(
 	from: string,
 ): HiveOperation {
 	const payload = createPackTransferPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [from],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, from);
 }
 
 export function createPackOpenOperation(
@@ -815,15 +692,7 @@ export function createPackOpenOperation(
 	opener: string,
 ): HiveOperation {
 	const payload = createPackOpenPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [opener],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, opener);
 }
 
 export function createPackDestroyPayload(
@@ -839,15 +708,7 @@ export function createPackDestroyOperation(
 	creator: string,
 ): HiveOperation {
 	const payload = createPackDestroyPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [creator],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, creator);
 }
 
 // ============ APPROVE & TRANSFER_FROM PAYLOADS ============
@@ -913,15 +774,7 @@ export function createPackApproveOperation(
 	owner: string,
 ): HiveOperation {
 	const payload = createPackApprovePayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, owner);
 }
 
 export function createPackTransferFromOperation(
@@ -929,15 +782,7 @@ export function createPackTransferFromOperation(
 	spender: string,
 ): HiveOperation {
 	const payload = createPackTransferFromPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [spender],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, spender);
 }
 
 export function createNftApproveOperation(
@@ -945,15 +790,7 @@ export function createNftApproveOperation(
 	owner: string,
 ): HiveOperation {
 	const payload = createNftApprovePayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, owner);
 }
 
 export function createNftApproveAllOperation(
@@ -961,15 +798,7 @@ export function createNftApproveAllOperation(
 	owner: string,
 ): HiveOperation {
 	const payload = createNftApproveAllPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, owner);
 }
 
 export function createNftTransferFromOperation(
@@ -977,15 +806,7 @@ export function createNftTransferFromOperation(
 	spender: string,
 ): HiveOperation {
 	const payload = createNftTransferFromPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [spender],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, spender);
 }
 
 // ============ LENDING PAYLOADS & OPERATIONS ============
@@ -1014,15 +835,7 @@ export function createNftLendOperation(
 	owner: string,
 ): HiveOperation {
 	const payload = createNftLendPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [owner],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, owner);
 }
 
 export function createNftReturnOperation(
@@ -1030,13 +843,5 @@ export function createNftReturnOperation(
 	signer: string,
 ): HiveOperation {
 	const payload = createNftReturnPayload(input);
-	return [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [signer],
-			id: getProtocolId(),
-			json: safeStringify(payload),
-		},
-	];
+	return buildHiveOperation(payload, signer);
 }
