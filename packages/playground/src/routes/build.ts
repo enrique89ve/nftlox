@@ -246,7 +246,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: "Active",
 		});
 	}),
 
@@ -270,7 +270,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			operation: result.operation,
 			payload: result.payload,
-			keyType: "Posting",
+			keyType: "Active",
 		});
 	}),
 
