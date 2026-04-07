@@ -161,13 +161,14 @@ Copy `.env.example` to `.env` to customize (defaults work out of the box):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `INDEXER_PORT` | 3050 | REST API port |
-| `GENESIS_BLOCK` | 104838076 | First block to scan |
+| `GENESIS_BLOCK` | 103484900 | First block to scan |
 | `PROTOCOL_ID` | nftlox_testnet | Protocol ID to filter |
 | `BATCH_SIZE` | 1000 | Blocks per API request |
 | `SYNC_INTERVAL_MS` | 3000 | Polling interval when caught up |
 | `LOG_LEVEL` | info | debug, info, warn, error |
 | `NODE_ENV` | development | Set to `production` for hardened mode |
 | `ENABLE_SWAGGER` | true | Disabled automatically in production |
+| `ALLOWED_ORIGINS` | (empty) | Comma-separated CORS allowlist. Set this in production |
 | `POSTGRES_DB` | nftlox_indexer | PostgreSQL database name |
 | `POSTGRES_USER` | nftlox | PostgreSQL user |
 | `POSTGRES_PASSWORD` | nftlox_dev | PostgreSQL password (required in production) |
@@ -183,6 +184,7 @@ Copy `.env.example` to `.env` to customize (defaults work out of the box):
 ## Production Deployment
 
 Two deployment modes are available. Both use the same base `docker-compose.yml`.
+In production, the base compose keeps PostgreSQL and the indexer on the internal Docker network. Traffic should enter through your platform proxy or the optional Nginx overlay.
 
 ### Option A: PaaS (Dokploy / Coolify / Traefik)
 
@@ -192,7 +194,7 @@ For platforms that provide their own reverse proxy with automatic TLS:
 docker compose up -d
 ```
 
-The platform's Traefik/Caddy handles SSL certificates, routing, and HTTPS redirection. The indexer exposes port `3050` directly and the platform proxies traffic to it.
+The platform's Traefik/Caddy handles SSL certificates, routing, and HTTPS redirection. Route traffic to the indexer service on internal port `3050`.
 
 ### Option B: Standalone with Nginx
 
@@ -208,6 +210,8 @@ This adds an Nginx reverse proxy container that provides:
 - **Request buffering** to protect the indexer from slow clients
 - **Security headers** (X-Frame-Options, X-Content-Type-Options, Referrer-Policy)
 - **Health endpoint** on port `8081` (separate from public traffic)
+
+With this mode, only Nginx is published to the host. PostgreSQL and the indexer stay private inside the Docker network.
 
 #### Enabling TLS
 

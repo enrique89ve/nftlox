@@ -6,9 +6,218 @@ import { broadcastOperation } from "../shared/keychain";
 let dropTableEntryCount = 0;
 let loadedSeedData: Array<{ id: string; name: string; maxSupply: number; distributed: number }> = [];
 
+interface PackDropEntry {
+	seedId?: string;
+	seed_id?: string;
+	weight: number;
+}
+
+interface PackRecord {
+	id: string;
+	creator: string;
+	name: string;
+	description: string | null;
+	image_url: string | null;
+	items_per_pack: number;
+	price_amount: string | null;
+	price_currency: string | null;
+	max_supply: number;
+	current_supply: number;
+	total_opened: number;
+	status: string;
+	drop_table?: PackDropEntry[] | string | null;
+	dropTable?: PackDropEntry[] | string | null;
+}
+
+interface UserPackBalanceRecord {
+	pack_id: string;
+	balance: number;
+	name: string;
+	description: string | null;
+	image_url: string | null;
+	collection_id: string;
+	items_per_pack: number;
+	price_amount: string | null;
+	price_currency: string | null;
+	max_supply: number;
+	current_supply: number;
+	status: string;
+}
+
+interface PacksResponse {
+	packs?: PackRecord[];
+}
+
+interface UserPacksResponse {
+	packs?: UserPackBalanceRecord[];
+}
+
+type PackAction = "buy" | "open" | "transfer" | "distribute";
+
+const USER_PACK_CONTAINER_IDS = ["user-packs-container", "packs-page-user-container"] as const;
+const CONNECT_WALLET_PACKS_MESSAGE = "Connect wallet to view your pack balances";
+const EMPTY_PACK_WALLET_MESSAGE = "No packs in your wallet";
+
 export function initPacks() {
-	loadPacks();
-	$("btn-load-packs")?.addEventListener("click", loadPacks);
+	void refreshPackViews();
+	$("btn-load-packs")?.addEventListener("click", () => void refreshPackViews());
+}
+
+export async function refreshPackViews(activePackId?: string) {
+	await Promise.all([
+		loadPacks(),
+		syncUserPackSections(),
+		...(activePackId ? [loadPackDetail(activePackId)] : []),
+	]);
+}
+
+function getCurrentUser(): string | null {
+	return getConnectedUser()?.trim().toLowerCase() ?? null;
+}
+
+function renderPackImage(imageUrl: string | null, packName: string): string {
+	if (!imageUrl) {
+		return `<div class="nft-image" style="background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 32px;" aria-label="Pack placeholder">📦</div>`;
+	}
+
+	return `<img class="nft-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(packName)} pack cover" onerror="this.src='${PLACEHOLDER_SM}'">`;
+}
+
+function getPackSupplyLabel(pack: Pick<PackRecord, "current_supply" | "max_supply">): string {
+	return pack.max_supply > 0
+		? `${pack.current_supply}/${pack.max_supply}`
+		: `${pack.current_supply}/unlimited`;
+}
+
+function getPackUnopenedSupply(pack: Pick<PackRecord, "current_supply" | "total_opened">): number {
+	return Math.max(pack.current_supply - pack.total_opened, 0);
+}
+
+function getPackPriceText(pack: Pick<PackRecord, "price_amount" | "price_currency">): string {
+	return pack.price_amount
+		? `${pack.price_amount} ${pack.price_currency ?? ""}`.trim()
+		: "Free";
+}
+
+function createUserPackLookup(packs: UserPackBalanceRecord[]): Map<string, UserPackBalanceRecord> {
+	return new Map(packs.map((pack) => [pack.pack_id, pack]));
+}
+
+async function fetchUserPackBalances(username: string): Promise<UserPackBalanceRecord[]> {
+	const response = await fetch(`/api/user/${encodeURIComponent(username)}/packs`);
+	if (!response.ok) {
+		throw new Error(`Pack balance request failed (${response.status})`);
+	}
+
+	const data = await response.json() as UserPacksResponse;
+	return Array.isArray(data.packs) ? data.packs : [];
+}
+
+function setUserPackContainersMessage(message: string) {
+	for (const containerId of USER_PACK_CONTAINER_IDS) {
+		const container = $(containerId);
+		if (!container) continue;
+
+		container.innerHTML = `<div class="empty-state"><p class="empty-state-text">${escapeHtml(message)}</p></div>`;
+	}
+}
+
+async function syncUserPackSections() {
+	const user = getCurrentUser();
+	if (!user) {
+		setUserPackContainersMessage(CONNECT_WALLET_PACKS_MESSAGE);
+		return;
+	}
+
+	await Promise.all([
+		renderUserPacks("user-packs-container"),
+		renderUserPacks("packs-page-user-container"),
+	]);
+}
+
+function renderPackCard(pack: PackRecord, currentUser: string | null, walletPack?: UserPackBalanceRecord): string {
+	const walletBalance = walletPack?.balance ?? 0;
+	const unopenedSupply = getPackUnopenedSupply(pack);
+	const isCreator = currentUser !== null && currentUser === pack.creator.toLowerCase();
+
+	const balanceBanner = walletBalance > 0
+		? `
+			<div style="margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: ${isCreator ? "rgba(59, 130, 246, 0.12)" : "rgba(34, 197, 94, 0.12)"}; border: 1px solid ${isCreator ? "rgba(59, 130, 246, 0.24)" : "rgba(34, 197, 94, 0.24)"};">
+				<div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">${isCreator ? "Available to transfer" : "In your wallet"}</div>
+				<div style="font-size: 18px; font-weight: 700; color: var(--text);">${walletBalance}</div>
+			</div>
+		`
+		: isCreator
+			? `
+				<div style="margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(148, 163, 184, 0.08); border: 1px solid var(--border);">
+					<div style="font-size: 12px; color: var(--text-muted);">Your transferable balance is 0 right now</div>
+				</div>
+			`
+			: "";
+
+	return `
+		<div class="nft-card pack-card" data-id="${escapeHtml(pack.id)}" onclick="loadPackDetail('${escapeHtml(pack.id)}')">
+			${renderPackImage(pack.image_url, pack.name)}
+			<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+				<div class="nft-name" style="margin-bottom: 0;">${escapeHtml(pack.name)}</div>
+				${isCreator ? '<span style="font-size: 10px; padding: 4px 8px; border-radius: 999px; background: rgba(59, 130, 246, 0.12); color: var(--accent); border: 1px solid rgba(59, 130, 246, 0.24);">Creator</span>' : ""}
+			</div>
+			<div class="nft-owner">@${escapeHtml(pack.creator)}</div>
+			${balanceBanner}
+			<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px;">
+				<div style="padding: 8px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border);">
+					<div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em;">Unopened</div>
+					<div style="font-size: 15px; font-weight: 600; color: var(--text); margin-top: 2px;">${unopenedSupply}</div>
+				</div>
+				<div style="padding: 8px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border);">
+					<div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em;">Items/Pack</div>
+					<div style="font-size: 15px; font-weight: 600; color: var(--text); margin-top: 2px;">${pack.items_per_pack}</div>
+				</div>
+			</div>
+			<div class="nft-id" style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 10px;">
+				<span>${escapeHtml(getPackSupplyLabel(pack))} minted</span>
+				<span style="color: ${pack.price_amount ? "var(--accent)" : "var(--text-dim)"};">${escapeHtml(getPackPriceText(pack))}</span>
+			</div>
+		</div>
+	`;
+}
+
+function renderUserPackCard(pack: UserPackBalanceRecord): string {
+	const totalItemsInside = pack.balance * pack.items_per_pack;
+
+	return `
+		<article class="nft-card" onclick="loadPackDetail('${escapeHtml(pack.pack_id)}')">
+			${renderPackImage(pack.image_url, pack.name)}
+			<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+				<div class="nft-name" style="margin-bottom: 0;">${escapeHtml(pack.name)}</div>
+				<span style="font-size: 11px; padding: 4px 8px; border-radius: 999px; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.24); color: var(--text);">
+					${pack.balance} pack${pack.balance === 1 ? "" : "s"}
+				</span>
+			</div>
+			<div style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">Available to transfer or open right now</div>
+			<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px;">
+				<div style="padding: 8px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border);">
+					<div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em;">Wallet Balance</div>
+					<div style="font-size: 15px; font-weight: 600; color: var(--text); margin-top: 2px;">${pack.balance}</div>
+				</div>
+				<div style="padding: 8px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border);">
+					<div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em;">Items Inside</div>
+					<div style="font-size: 15px; font-weight: 600; color: var(--text); margin-top: 2px;">${totalItemsInside}</div>
+				</div>
+			</div>
+			<div class="nft-id" style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 10px;">
+				<span>${pack.items_per_pack} items/pack</span>
+				<span style="color: ${pack.price_amount ? "var(--accent)" : "var(--text-dim)"};">${escapeHtml(getPackPriceText(pack))}</span>
+			</div>
+		</article>
+	`;
+}
+
+function isPackDropEntry(value: unknown): value is PackDropEntry {
+	if (typeof value !== "object" || value === null) return false;
+
+	const candidate = value as Partial<PackDropEntry>;
+	return typeof candidate.weight === "number";
 }
 
 async function loadPacks() {
@@ -18,27 +227,27 @@ async function loadPacks() {
 	container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Loading...</p></div>';
 
 	try {
-		const response = await fetch("/api/packs?limit=50");
-		const data = await response.json();
-		const packs = data.packs || [];
+		const currentUser = getCurrentUser();
+		const [response, userPacks] = await Promise.all([
+			fetch("/api/packs?limit=50"),
+			currentUser ? fetchUserPackBalances(currentUser) : Promise.resolve([]),
+		]);
+		if (!response.ok) {
+			throw new Error(`Pack request failed (${response.status})`);
+		}
+
+		const data = await response.json() as PacksResponse;
+		const packs = Array.isArray(data.packs) ? data.packs : [];
+		const userPackLookup = createUserPackLookup(userPacks);
 
 		if (packs.length === 0) {
 			container.innerHTML = '<div class="empty-state"><p class="empty-state-text">No packs available</p></div>';
 			return;
 		}
 
-		container.innerHTML = packs.map((pack: any) => `
-			<div class="nft-card pack-card" data-id="${escapeHtml(pack.id)}" onclick="loadPackDetail('${escapeHtml(pack.id)}')">
-				${pack.image_url ? `<img class="nft-image" src="${escapeHtml(pack.image_url)}" onerror="this.src='${PLACEHOLDER_SM}'">` : `<div class="nft-image" style="background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 32px;">📦</div>`}
-				<div class="nft-name">${escapeHtml(pack.name)}</div>
-				<div class="nft-owner">@${escapeHtml(pack.creator)}</div>
-				<div class="nft-id" style="display: flex; justify-content: space-between; font-size: 12px;">
-					<span>${pack.current_supply}/${pack.max_supply} minted</span>
-					${pack.price_amount ? `<span style="color: var(--accent);">${escapeHtml(pack.price_amount)} ${escapeHtml(pack.price_currency)}</span>` : '<span style="color: var(--text-dim);">Free</span>'}
-				</div>
-				<div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">${pack.items_per_pack} items/pack</div>
-			</div>
-		`).join("");
+		container.innerHTML = packs
+			.map((pack) => renderPackCard(pack, currentUser, userPackLookup.get(pack.id)))
+			.join("");
 
 		log(`Loaded ${packs.length} packs`, "success");
 	} catch (e) {
@@ -55,8 +264,19 @@ async function loadPackDetail(packId: string) {
 	detailCard.scrollIntoView({ behavior: "smooth", block: "start" });
 
 	try {
-		const packRes = await fetch(`/api/pack/${packId}`);
-		const pack = await packRes.json();
+		const currentUser = getCurrentUser();
+		const [packRes, userPacks] = await Promise.all([
+			fetch(`/api/pack/${packId}`),
+			currentUser ? fetchUserPackBalances(currentUser) : Promise.resolve([]),
+		]);
+		if (!packRes.ok) {
+			throw new Error(`Pack detail request failed (${packRes.status})`);
+		}
+
+		const pack = await packRes.json() as PackRecord;
+		const walletBalance = createUserPackLookup(userPacks).get(packId)?.balance ?? 0;
+		const unopenedSupply = getPackUnopenedSupply(pack);
+		const isCreator = currentUser !== null && currentUser === pack.creator.toLowerCase();
 
 		// Pack info
 		const nameEl = $("pack-detail-name");
@@ -66,32 +286,41 @@ async function loadPackDetail(packId: string) {
 		const actionsEl = $("pack-detail-actions");
 
 		if (nameEl) nameEl.textContent = pack.name;
-		if (creatorEl) creatorEl.textContent = `@${pack.creator}`;
+		if (creatorEl) {
+			creatorEl.innerHTML = `
+				<span>@${escapeHtml(pack.creator)}</span>
+				${walletBalance > 0 ? `<span style="margin-left: 10px; color: var(--accent);">Wallet balance: ${walletBalance}</span>` : ""}
+			`;
+		}
 
 		if (statsEl) {
 			statsEl.innerHTML = `
-				<div class="stat-box"><div class="stat-label">Supply</div><div class="stat-value">${pack.current_supply}/${pack.max_supply}</div></div>
+				<div class="stat-box"><div class="stat-label">Minted</div><div class="stat-value">${escapeHtml(getPackSupplyLabel(pack))}</div></div>
+				<div class="stat-box"><div class="stat-label">Unopened</div><div class="stat-value">${unopenedSupply}</div></div>
 				<div class="stat-box"><div class="stat-label">Opened</div><div class="stat-value">${pack.total_opened}</div></div>
 				<div class="stat-box"><div class="stat-label">Items/Pack</div><div class="stat-value">${pack.items_per_pack}</div></div>
-				${pack.price_amount ? `<div class="stat-box"><div class="stat-label">Price</div><div class="stat-value">${pack.price_amount} ${pack.price_currency}</div></div>` : ""}
+				<div class="stat-box"><div class="stat-label">Price</div><div class="stat-value">${escapeHtml(getPackPriceText(pack))}</div></div>
 			`;
 		}
 
 		// Drop table — may come as JSON string from DB
-		const rawDrop = pack.drop_table || pack.dropTable || [];
-		let dropEntries: any[] = [];
+		const rawDrop = pack.drop_table ?? pack.dropTable ?? [];
+		let dropEntries: PackDropEntry[] = [];
 		try {
-			dropEntries = typeof rawDrop === "string" ? JSON.parse(rawDrop) : rawDrop;
+			const parsed = typeof rawDrop === "string" ? JSON.parse(rawDrop) as unknown : rawDrop;
+			if (Array.isArray(parsed)) {
+				dropEntries = parsed.filter(isPackDropEntry);
+			}
 		} catch { /* invalid JSON, leave empty */ }
 		if (dropTableEl && dropEntries.length > 0) {
-			const totalWeight = dropEntries.reduce((sum: number, e: any) => sum + e.weight, 0);
+			const totalWeight = dropEntries.reduce((sum, entry) => sum + entry.weight, 0);
 			dropTableEl.innerHTML = `<table class="data-table">
 				<thead><tr><th>Seed ID</th><th>Weight</th><th>Probability</th></tr></thead>
-				<tbody>${dropEntries.map((entry: any) => `
+				<tbody>${dropEntries.map((entry) => `
 					<tr>
-						<td style="font-family: var(--mono); font-size: 12px;">${escapeHtml(entry.seedId || entry.seed_id)}</td>
+						<td style="font-family: var(--mono); font-size: 12px;">${escapeHtml(entry.seedId ?? entry.seed_id ?? "")}</td>
 						<td>${entry.weight}</td>
-						<td style="color: var(--accent);">${((entry.weight / totalWeight) * 100).toFixed(1)}%</td>
+						<td style="color: var(--accent);">${totalWeight > 0 ? `${((entry.weight / totalWeight) * 100).toFixed(1)}%` : "0.0%"}</td>
 					</tr>
 				`).join("")}</tbody>
 			</table>`;
@@ -101,7 +330,7 @@ async function loadPackDetail(packId: string) {
 
 		// Actions — context-aware based on user role
 		if (actionsEl) {
-			const actionButtons = await buildPackActionButtons(packId, pack.creator);
+			const actionButtons = buildPackActionButtons(packId, walletBalance, isCreator, currentUser !== null);
 			actionsEl.innerHTML = `
 				${actionButtons}
 				<div id="pack-action-form" style="display: none; padding: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;"></div>
@@ -114,74 +343,80 @@ async function loadPackDetail(packId: string) {
 	}
 }
 
-async function buildPackActionButtons(packId: string, creator: string): Promise<string> {
-	const user = getConnectedUser();
-
-	if (!user) {
-		return '<p style="color: var(--text-dim); font-size: 13px;">Connect wallet to see actions</p>';
+function buildPackActionButtons(packId: string, walletBalance: number, isCreator: boolean, isConnected: boolean): string {
+	const escapedPackId = escapeHtml(packId);
+	if (!isConnected) {
+		return '<p style="font-size: 13px; color: var(--text-muted);">Connect wallet to see your transferable balance for this pack</p>';
 	}
 
-	const isCreator = user.toLowerCase() === creator.toLowerCase();
+	const walletLabel = isCreator ? "Available to transfer or distribute" : "Available to open or transfer";
+	const walletDescription = walletBalance > 0
+		? walletLabel
+		: isCreator
+			? "Your creator wallet does not have packs available to transfer right now"
+			: "This wallet does not currently hold any packs from this drop";
+
+	const actionButtons: string[] = [];
+	if (walletBalance > 0) {
+		if (isCreator) {
+			actionButtons.push(
+				`<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('transfer', '${escapedPackId}', ${walletBalance})">Transfer</button>`,
+				`<button class="btn btn-primary btn-sm" onclick="showPackActionForm('distribute', '${escapedPackId}', ${walletBalance})">Distribute</button>`,
+			);
+		} else {
+			actionButtons.push(
+				`<button class="btn btn-primary btn-sm" onclick="showPackActionForm('open', '${escapedPackId}', ${walletBalance})">Open</button>`,
+				`<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('transfer', '${escapedPackId}', ${walletBalance})">Transfer</button>`,
+			);
+		}
+	}
 
 	if (isCreator) {
-		const balance = await fetchUserPackBalance(user, packId);
-		return `
-			<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-				<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('transfer', '${escapeHtml(packId)}')">Transfer</button>
-				<button class="btn btn-primary btn-sm" onclick="showPackActionForm('distribute', '${escapeHtml(packId)}')">Distribute</button>
-				<button class="btn btn-danger btn-sm" onclick="destroyPack('${escapeHtml(packId)}')">Destroy Pack</button>
-			</div>
-			<p style="font-size: 12px; color: var(--text-muted); margin-bottom: 0;">Your balance: <strong>${balance}</strong></p>
-		`;
-	}
-
-	// Regular user — check balance
-	const balance = await fetchUserPackBalance(user, packId);
-
-	if (balance <= 0) {
-		return '<p style="color: var(--text-dim); font-size: 13px;">No packs owned</p>';
+		actionButtons.push(`<button class="btn btn-danger btn-sm" onclick="destroyPack('${escapedPackId}')">Destroy Pack</button>`);
 	}
 
 	return `
-		<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-			<button class="btn btn-primary btn-sm" onclick="showPackActionForm('open', '${escapeHtml(packId)}')">Open</button>
-			<button class="btn btn-secondary btn-sm" onclick="showPackActionForm('transfer', '${escapeHtml(packId)}')">Transfer</button>
+		<div style="display: grid; gap: 12px;">
+			<div style="padding: 14px 16px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border);">
+				<div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 6px;">
+					${isCreator ? "Creator Wallet" : "Connected Wallet"}
+				</div>
+				<div style="font-size: 26px; font-weight: 700; line-height: 1; color: ${walletBalance > 0 ? "var(--accent)" : "var(--text)"};">${walletBalance}</div>
+				<div style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">${walletDescription}</div>
+			</div>
+			${actionButtons.length > 0 ? `<div style="display: flex; gap: 8px; flex-wrap: wrap;">${actionButtons.join("")}</div>` : ""}
 		</div>
-		<p style="font-size: 12px; color: var(--text-muted); margin-bottom: 0;">Balance: <strong>${balance}</strong></p>
 	`;
 }
 
-async function fetchUserPackBalance(username: string, packId: string): Promise<number> {
-	try {
-		const response = await fetch(`/api/user/${encodeURIComponent(username)}/packs`);
-		const data = await response.json();
-		const packs = data.packs || [];
-		const match = packs.find((p: any) => p.pack_id === packId);
-		return match?.balance ?? 0;
-	} catch {
-		return 0;
-	}
-}
-
-function showPackActionForm(action: "buy" | "open" | "transfer" | "distribute", packId: string) {
+function showPackActionForm(action: PackAction, packId: string, availableBalance = 0) {
 	const formEl = $("pack-action-form");
 	if (!formEl) return;
+	const escapedPackId = escapeHtml(packId);
+
+	if (action !== "buy" && availableBalance < 1) {
+		log("No pack balance available for this action", "error");
+		return;
+	}
 
 	formEl.style.display = "block";
 
 	if (action === "distribute") {
 		formEl.innerHTML = `
 			<div style="font-size: 13px; font-weight: 500; margin-bottom: 10px; color: var(--text);">Distribute Packs</div>
+			<div style="margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.24); font-size: 12px; color: var(--text);">
+				Available to transfer now: <strong>${availableBalance}</strong>
+			</div>
 			<div class="form-group" style="margin-bottom: 10px;">
 				<label class="form-label">Recipients (one username per line)</label>
 				<textarea class="form-input" id="pack-distribute-recipients" rows="5" placeholder="user1&#10;user2&#10;user3" style="font-size: 12px; padding: 8px 10px; resize: vertical;"></textarea>
 			</div>
 			<div class="form-group" style="margin-bottom: 10px;">
 				<label class="form-label">Quantity per user</label>
-				<input type="number" class="form-input" id="pack-distribute-qty" value="1" min="1" style="width: 100px; font-size: 12px; padding: 8px 10px;">
+				<input type="number" class="form-input" id="pack-distribute-qty" value="1" min="1" max="${availableBalance}" style="width: 100px; font-size: 12px; padding: 8px 10px;">
 			</div>
 			<div style="display: flex; gap: 8px;">
-				<button class="btn btn-primary btn-sm" onclick="distributePacksToUsers('${escapeHtml(packId)}')">Distribute</button>
+				<button class="btn btn-primary btn-sm" onclick="distributePacksToUsers('${escapedPackId}', ${availableBalance})">Distribute</button>
 				<button class="btn btn-secondary btn-sm" onclick="document.getElementById('pack-action-form').style.display='none'">Cancel</button>
 			</div>
 			<div id="pack-distribute-progress" style="margin-top: 10px; display: none;"></div>
@@ -191,6 +426,13 @@ function showPackActionForm(action: "buy" | "open" | "transfer" | "distribute", 
 	}
 
 	const labels: Record<string, string> = { buy: "Buy Packs", open: "Open Packs", transfer: "Transfer Packs" };
+	const balanceSummary = action === "buy"
+		? ""
+		: `
+			<div style="margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.24); font-size: 12px; color: var(--text);">
+				Available right now: <strong>${availableBalance}</strong>
+			</div>
+		`;
 	const transferFields = action === "transfer"
 		? `<div class="form-group" style="margin-bottom: 10px;">
 				<label class="form-label">Recipient</label>
@@ -200,20 +442,21 @@ function showPackActionForm(action: "buy" | "open" | "transfer" | "distribute", 
 
 	formEl.innerHTML = `
 		<div style="font-size: 13px; font-weight: 500; margin-bottom: 10px; color: var(--text);">${labels[action]}</div>
+		${balanceSummary}
 		${transferFields}
 		<div class="form-group" style="margin-bottom: 10px;">
 			<label class="form-label">Quantity</label>
-			<input type="number" class="form-input" id="pack-action-qty" value="1" min="1" style="width: 100px; font-size: 12px; padding: 8px 10px;">
+			<input type="number" class="form-input" id="pack-action-qty" value="1" min="1" ${action === "buy" ? "" : `max="${availableBalance}"`} style="width: 100px; font-size: 12px; padding: 8px 10px;">
 		</div>
 		<div style="display: flex; gap: 8px;">
-			<button class="btn btn-primary btn-sm" onclick="executePackAction('${action}', '${packId}')">Confirm</button>
+			<button class="btn btn-primary btn-sm" onclick="executePackAction('${action}', '${escapedPackId}', ${availableBalance})">Confirm</button>
 			<button class="btn btn-secondary btn-sm" onclick="document.getElementById('pack-action-form').style.display='none'">Cancel</button>
 		</div>
 	`;
 	formEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-async function executePackAction(action: "buy" | "open" | "transfer", packId: string) {
+async function executePackAction(action: "buy" | "open" | "transfer", packId: string, availableBalance = 0) {
 	const user = getConnectedUser();
 	if (!user) {
 		log("Connect wallet first", "error");
@@ -223,6 +466,10 @@ async function executePackAction(action: "buy" | "open" | "transfer", packId: st
 	const quantity = parseInt(($("pack-action-qty") as HTMLInputElement)?.value || "1", 10);
 	if (isNaN(quantity) || quantity < 1) {
 		log("Quantity must be at least 1", "error");
+		return;
+	}
+	if (action !== "buy" && quantity > availableBalance) {
+		log(`Only ${availableBalance} pack(s) are available for this action`, "error");
 		return;
 	}
 
@@ -265,10 +512,11 @@ async function executePackAction(action: "buy" | "open" | "transfer", packId: st
 			user,
 			[result.operation],
 			result.keyType || "Posting",
-			() => {
+			() => void refreshPackViews(packId).then(() => {
 				log(`Pack ${action} successful!`, "success");
-				loadPackDetail(packId);
-			},
+			}).catch((error: Error) => {
+				log(`Pack ${action} succeeded, but refresh failed: ${error.message}`, "error");
+			}),
 			(err) => log(`Pack ${action} failed: ${err}`, "error"),
 		);
 	} catch (e) {
@@ -276,7 +524,7 @@ async function executePackAction(action: "buy" | "open" | "transfer", packId: st
 	}
 }
 
-async function distributePacksToUsers(packId: string) {
+async function distributePacksToUsers(packId: string, availableBalance = 0) {
 	const user = getConnectedUser();
 	if (!user) {
 		log("Connect wallet first", "error");
@@ -297,6 +545,12 @@ async function distributePacksToUsers(packId: string) {
 	}
 	if (isNaN(quantity) || quantity < 1) {
 		log("Quantity must be at least 1", "error");
+		return;
+	}
+
+	const totalRequired = recipients.length * quantity;
+	if (totalRequired > availableBalance) {
+		log(`Need ${totalRequired} packs to distribute, but only ${availableBalance} are available`, "error");
 		return;
 	}
 
@@ -349,7 +603,7 @@ async function distributePacksToUsers(packId: string) {
 	const formEl = $("pack-action-form");
 	if (formEl) formEl.style.display = "none";
 
-	loadPackDetail(packId);
+	await refreshPackViews(packId);
 }
 
 function broadcastOperationAsync(
@@ -370,29 +624,29 @@ function broadcastOperationAsync(
 
 async function renderUserPacks(containerId: string) {
 	const container = $(containerId);
-	if (!container || !getConnectedUser()) return;
+	if (!container) return;
+
+	const user = getCurrentUser();
+	if (!user) {
+		container.innerHTML = `<div class="empty-state"><p class="empty-state-text">${escapeHtml(CONNECT_WALLET_PACKS_MESSAGE)}</p></div>`;
+		return;
+	}
 
 	container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Loading...</p></div>';
 
 	try {
-		const response = await fetch(`/api/user/${getConnectedUser()}/packs`);
-		const data = await response.json();
-		const packs = data.packs || [];
+		const packs = await fetchUserPackBalances(user);
 
 		if (packs.length === 0) {
-			container.innerHTML = '<div class="empty-state"><p class="empty-state-text">No packs owned</p></div>';
+			container.innerHTML = `<div class="empty-state"><p class="empty-state-text">${EMPTY_PACK_WALLET_MESSAGE}</p></div>`;
 			return;
 		}
 
-		container.innerHTML = packs.map((p: any) => `
-			<div class="nft-card" onclick="loadPackDetail('${escapeHtml(p.pack_id)}')">
-				<div class="nft-name">${escapeHtml(p.name)}</div>
-				<div class="nft-id" style="display: flex; justify-content: space-between;">
-					<span>Balance: <strong>${p.balance}</strong></span>
-					<span style="color: var(--accent);">${p.items_per_pack} items/pack</span>
-				</div>
+		container.innerHTML = `
+			<div class="nft-grid">
+				${packs.map((pack) => renderUserPackCard(pack)).join("")}
 			</div>
-		`).join("");
+		`;
 
 		log(`Loaded ${packs.length} pack balances`, "success");
 	} catch (e) {
@@ -731,7 +985,12 @@ async function submitPackCreate() {
 		const result = await response.json();
 
 		if (!result.success) {
-			const msg = result.errors?.map((e: any) => e.message).join(", ") || "Unknown error";
+			const errors = Array.isArray(result.errors)
+				? result.errors
+					.map((error: { message?: string }) => error.message)
+					.filter((message: string | undefined): message is string => typeof message === "string" && message.length > 0)
+				: [];
+			const msg = errors.join(", ") || "Unknown error";
 			log(`Pack create error: ${msg}`, "error");
 			return;
 		}
@@ -757,7 +1016,7 @@ async function submitPackCreate() {
 						<strong>Pack ID:</strong> <span style="font-family: var(--mono); font-size: 12px;">${escapeHtml(result.packId)}</span>
 					`;
 				}
-				loadPacks();
+				void refreshPackViews();
 			},
 			(err) => {
 				log(`Pack create broadcast failed: ${err}`, "error");
@@ -794,7 +1053,12 @@ async function destroyPack(packId: string) {
 		const result = await response.json();
 
 		if (!result.success) {
-			const msg = result.errors?.map((e: any) => e.message).join(", ") || result.error;
+			const errors = Array.isArray(result.errors)
+				? result.errors
+					.map((error: { message?: string }) => error.message)
+					.filter((message: string | undefined): message is string => typeof message === "string" && message.length > 0)
+				: [];
+			const msg = errors.join(", ") || result.error;
 			log(`Destroy error: ${msg}`, "error");
 			return;
 		}
@@ -805,7 +1069,9 @@ async function destroyPack(packId: string) {
 			result.keyType || "Posting",
 			() => {
 				log(`Pack destroyed successfully`, "success");
-				loadPacks();
+				const detailCard = $("pack-detail-card");
+				if (detailCard) detailCard.style.display = "none";
+				void refreshPackViews();
 			},
 			(err) => log(`Destroy failed: ${err}`, "error"),
 		);
@@ -822,6 +1088,7 @@ async function destroyPack(packId: string) {
 (window as any).distributePacksToUsers = distributePacksToUsers;
 (window as any).loadUserPacks = loadUserPacks;
 (window as any).loadUserPacksOnPacksPage = loadUserPacksOnPacksPage;
+(window as any).refreshPackViews = refreshPackViews;
 (window as any).togglePackCreateForm = togglePackCreateForm;
 (window as any).addDropTableEntry = addDropTableEntry;
 (window as any).removeDropTableEntry = removeDropTableEntry;

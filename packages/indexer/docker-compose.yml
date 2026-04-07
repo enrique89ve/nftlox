@@ -10,8 +10,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./src/db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nftlox} -d ${POSTGRES_DB:-nftlox_indexer}"]
       interval: 5s
@@ -36,8 +36,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "${INDEXER_PORT:-3050}:3050"
+    expose:
+      - "3050"
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-nftlox}:${POSTGRES_PASSWORD:-nftlox_dev}@postgres:5432/${POSTGRES_DB:-nftlox_indexer}
       INDEXER_PORT: 3050

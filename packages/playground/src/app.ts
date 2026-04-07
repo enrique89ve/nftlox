@@ -169,6 +169,7 @@ $("btn-connect")?.addEventListener("click", () => {
 			showConnectedUI(connectedUser);
 			log(`Connected as @${connectedUser}`, "success");
 			loadInventory();
+			void refreshPackViews();
 		}
 	});
 });
@@ -206,6 +207,7 @@ $("btn-disconnect")?.addEventListener("click", () => {
 	clearUser();
 	resetDisconnectedUI();
 	log("Disconnected", "info");
+	void refreshPackViews();
 });
 
 // Restore session from localStorage on load
@@ -2429,7 +2431,7 @@ document.querySelectorAll(".advanced-tab").forEach(tab => {
 // ============ NEW VIEW MODULES ============
 
 import { initMarketplace } from "./views/marketplace";
-import { initPacks } from "./views/packs";
+import { initPacks, refreshPackViews } from "./views/packs";
 import { initPermissions } from "./views/permissions";
 import { initDebug } from "./views/debug";
 import { initSpv } from "./views/spv";
