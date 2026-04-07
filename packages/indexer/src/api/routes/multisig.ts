@@ -1,19 +1,59 @@
 import { Elysia, t } from "elysia";
 import { sql } from "@/db/client.ts";
 import { config } from "@/config.ts";
+import { createLogger } from "@/utils/logger.ts";
 import { processMultisigRequest } from "@/api/services/multisig-service.ts";
 import { createMultisigRateLimiter } from "@/api/services/multisig-rate-limiter.ts";
 import { createMultisigNftLock } from "@/api/services/multisig-nft-lock.ts";
-import { isBeekeeperReady } from "@/api/services/beekeeper-signer.ts";
+import { getMultisigHealth } from "@/api/services/multisig-health.ts";
+import { resolveClientIp } from "@/api/middleware/client-ip.ts";
 import { getNftWithCollectionRules, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import { calculatePaymentSplit, MULTISIG_EXPIRATION_MS } from "@/protocol/index.ts";
 
-const rateLimiter = createMultisigRateLimiter(
+const log = createLogger("multisig-route");
+
+const buyerRateLimiter = createMultisigRateLimiter(
 	config.multisigRateLimitMax,
 	config.multisigRateLimitWindowMs,
 );
 
+const ipRateLimiter = createMultisigRateLimiter(
+	config.multisigIpRateLimitMax,
+	config.multisigIpRateLimitWindowMs,
+);
+
 const nftLock = createMultisigNftLock();
+
+type RejectionCode =
+	| "MULTISIG_DISABLED"
+	| "RATE_LIMITED"
+	| "NFT_LOCKED"
+	| "INTERNAL_ERROR"
+	| string;
+
+function logRejection(params: {
+	buyer: string;
+	nftId: string;
+	clientIp: string;
+	code: RejectionCode;
+	retryAfterMs?: number;
+}): void {
+	const { buyer, nftId, clientIp, code, retryAfterMs } = params;
+	log.warn("Multisig request rejected", {
+		buyer,
+		nftId,
+		clientIp,
+		code,
+		retryAfterMs,
+	});
+}
+
+function getDisabledMessage(): string {
+	const health = getMultisigHealth();
+	return health.disabledReason === "clock_drift"
+		? "Multisig signing is temporarily disabled due to clock drift"
+		: "Multisig signing is not enabled on this node";
+}
 
 export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 
@@ -73,23 +113,61 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 	})
 
 	// POST /api/multisig — validate and multisig-sign a buy transaction
-	.post("/api/multisig", async ({ body, set }) => {
-		if (!isBeekeeperReady()) {
+	.post("/api/multisig", async ({ body, request, server, set }) => {
+		const socketIp = server?.requestIP(request)?.address;
+		const clientIp = resolveClientIp(request, socketIp);
+		const health = getMultisigHealth();
+
+		if (!health.multisigEnabled) {
 			set.status = 503;
-			return { ok: false, code: "MULTISIG_DISABLED", message: "Multisig signing is not enabled on this node" };
+			const message = getDisabledMessage();
+			logRejection({
+				buyer: body.buyer,
+				nftId: body.nftId,
+				clientIp,
+				code: "MULTISIG_DISABLED",
+			});
+			return { ok: false, code: "MULTISIG_DISABLED", message };
 		}
 
 		// Elysia validates body schema, so buyer and nftId are typed strings.
 		// Always apply rate limiting — no silent skip on empty values.
-		const rateResult = rateLimiter.check(body.buyer);
-		if (!rateResult.allowed) {
+		const buyerRateResult = buyerRateLimiter.check(body.buyer);
+		if (!buyerRateResult.allowed) {
+			logRejection({
+				buyer: body.buyer,
+				nftId: body.nftId,
+				clientIp,
+				code: "RATE_LIMITED",
+				retryAfterMs: buyerRateResult.retryAfterMs,
+			});
 			set.status = 429;
-			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${rateResult.retryAfterMs}ms` };
+			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${buyerRateResult.retryAfterMs}ms` };
+		}
+
+		const ipRateResult = ipRateLimiter.check(clientIp);
+		if (!ipRateResult.allowed) {
+			logRejection({
+				buyer: body.buyer,
+				nftId: body.nftId,
+				clientIp,
+				code: "RATE_LIMITED",
+				retryAfterMs: ipRateResult.retryAfterMs,
+			});
+			set.status = 429;
+			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${ipRateResult.retryAfterMs}ms` };
 		}
 
 		// Acquire per-NFT lock to prevent two buyers co-signing the same NFT
 		const lockResult = await nftLock.acquire(body.nftId, body.buyer, MULTISIG_EXPIRATION_MS);
 		if (!lockResult.acquired) {
+			logRejection({
+				buyer: body.buyer,
+				nftId: body.nftId,
+				clientIp,
+				code: "NFT_LOCKED",
+				retryAfterMs: lockResult.retryAfterMs,
+			});
 			set.status = 409;
 			return {
 				ok: false,
@@ -101,10 +179,22 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		try {
 			const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId);
 			if (!result.ok) {
+				logRejection({
+					buyer: body.buyer,
+					nftId: body.nftId,
+					clientIp,
+					code: result.code,
+				});
 				set.status = 400;
 			}
 			return result;
 		} catch (err) {
+			log.error("Unexpected multisig route error", {
+				buyer: body.buyer,
+				nftId: body.nftId,
+				clientIp,
+				error: err instanceof Error ? err.message : String(err),
+			});
 			set.status = 500;
 			return { ok: false, code: "INTERNAL_ERROR" as const, message: "Unexpected signing error" };
 		} finally {
@@ -132,4 +222,3 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			description: "Validates NFT state, payment split, and signs the transaction with the node's active key",
 		},
 	});
-

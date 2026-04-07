@@ -3,6 +3,7 @@ import { startApiServer } from "./api/server.ts";
 import { setStartupTime, setSynced, updateSyncProgress, getSyncProgress, isSynced } from "./scanner/sync-state.ts";
 import { connectWithRetry } from "./bootstrap.ts";
 import { initBeekeeperSigner, closeBeekeeperSigner } from "./api/services/beekeeper-signer.ts";
+import { startMultisigHealthMonitor, stopMultisigHealthMonitor } from "./api/services/multisig-health.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 import { dns } from "bun";
@@ -81,6 +82,7 @@ async function main(): Promise<void> {
 		delete process.env.BEEKEEPER_PASSWORD;
 	}
 
+	await startMultisigHealthMonitor();
 	// API server runs on main thread — event loop stays free
 	startApiServer();
 
@@ -117,6 +119,7 @@ async function main(): Promise<void> {
 async function shutdown(): Promise<void> {
 	log.info("Shutting down...");
 	stopSyncWorker();
+	stopMultisigHealthMonitor();
 	await closeBeekeeperSigner();
 	await closePool();
 	process.exit(0);

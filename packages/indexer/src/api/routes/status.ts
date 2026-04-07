@@ -5,7 +5,7 @@ import { getProtocolStats } from "@/db/queries/stats.ts";
 import { getStartupTime } from "@/scanner/sync-state.ts";
 import { SYNC_TOLERANCE_BLOCKS } from "@/scanner/sync-engine.ts";
 import { config } from "@/config.ts";
-import { isBeekeeperReady } from "@/api/services/beekeeper-signer.ts";
+import { getMultisigHealth } from "@/api/services/multisig-health.ts";
 import {
 	PROTOCOL_VERSION,
 	PROTOCOL_FEE_PCT,
@@ -22,6 +22,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			getLastBlock(),
 			getBlockchainHead().catch(() => ({ headBlock: 0, irreversibleBlock: 0 })),
 		]);
+		const multisig = getMultisigHealth();
 		const blocksBehind = Math.max(0, chain.irreversibleBlock - lastBlock);
 		const inSync = chain.irreversibleBlock > 0 && blocksBehind <= SYNC_TOLERANCE_BLOCKS;
 		return {
@@ -30,7 +31,10 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			genesisBlock: config.genesisBlock,
 			nodeAccount: config.hiveAccount,
 			nodeUrl: config.nodeUrl || null,
-			multisigEnabled: isBeekeeperReady(),
+			multisigEnabled: multisig.multisigEnabled,
+			multisigSignerReady: multisig.multisigSignerReady,
+			multisigClockDriftOk: multisig.multisigClockDriftOk,
+			multisigClockDriftMs: multisig.multisigClockDriftMs,
 			protocolFee: PROTOCOL_FEE_PCT,
 			maxRoyalty: MAX_ROYALTY_PCT,
 			supportedCurrencies: SUPPORTED_CURRENCIES,

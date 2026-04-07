@@ -97,6 +97,7 @@ export type ValidatedTransaction = Readonly<{
 }>;
 
 export type MultisigErrorCode =
+	| "NFT_LOCKED"
 	| "RATE_LIMITED"
 	| "INVALID_TX_STRUCTURE"
 	| "NFT_NOT_FOUND"

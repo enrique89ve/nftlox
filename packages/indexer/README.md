@@ -179,6 +179,8 @@ Copy `.env.example` to `.env` to customize (defaults work out of the box):
 | `INDEXER_ROLE` | both | `sync`, `api`, or `both` |
 | `MULTISIG_RATE_LIMIT_MAX` | 10 | Max multisig requests per window |
 | `MULTISIG_RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window in milliseconds |
+| `MULTISIG_IP_RATE_LIMIT_MAX` | 30 | Max multisig requests per IP and window |
+| `MULTISIG_IP_RATE_LIMIT_WINDOW_MS` | 60000 | Per-IP multisig rate limit window in milliseconds |
 | `HEALTH_PORT` | 0 | Separate health check port (0 = disabled) |
 
 ## Production Deployment
@@ -244,7 +246,8 @@ bun run dev
 ## Security
 
 - **Rate limiting**: 1000 requests/min per IP (CF-Connecting-IP > X-Real-IP > X-Forwarded-For)
-- **Multisig rate limiting**: Configurable per-buyer rate limit for `/api/multisig`
+- **Multisig rate limiting**: Independent per-buyer and per-IP rate limits for `/api/multisig`
+- **Clock drift guard**: Multisig signing is disabled automatically if server time drifts too far from Hive
 - **Security headers**: X-Content-Type-Options, Referrer-Policy, Cache-Control
 - **Query hard caps**: Max 1000 rows per query regardless of client input
 - **Swagger**: Disabled when `NODE_ENV=production`

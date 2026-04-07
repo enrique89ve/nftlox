@@ -2,6 +2,7 @@ import { closePool } from "./db/client.ts";
 import { startApiServer, stopPolling } from "./api/server.ts";
 import { connectWithRetry } from "./bootstrap.ts";
 import { initBeekeeperSigner, closeBeekeeperSigner } from "./api/services/beekeeper-signer.ts";
+import { startMultisigHealthMonitor, stopMultisigHealthMonitor } from "./api/services/multisig-health.ts";
 import { createLogger } from "./utils/logger.ts";
 
 const log = createLogger("api");
@@ -21,12 +22,14 @@ async function main(): Promise<void> {
 		delete process.env.BEEKEEPER_PASSWORD;
 	}
 
+	await startMultisigHealthMonitor();
 	startApiServer();
 }
 
 async function shutdown(): Promise<void> {
 	log.info("Shutting down...");
 	stopPolling();
+	stopMultisigHealthMonitor();
 	await closeBeekeeperSigner();
 	await closePool();
 	process.exit(0);

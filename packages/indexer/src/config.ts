@@ -58,6 +58,8 @@ export const config = {
 	// from lingering in V8 heap as a frozen string after beekeeper import.
 	multisigRateLimitMax: toInt(process.env.MULTISIG_RATE_LIMIT_MAX, 10),
 	multisigRateLimitWindowMs: toInt(process.env.MULTISIG_RATE_LIMIT_WINDOW_MS, 60_000),
+	multisigIpRateLimitMax: toInt(process.env.MULTISIG_IP_RATE_LIMIT_MAX, 30),
+	multisigIpRateLimitWindowMs: toInt(process.env.MULTISIG_IP_RATE_LIMIT_WINDOW_MS, 60_000),
 } as const;
 
 if (!config.genesisBlock) {

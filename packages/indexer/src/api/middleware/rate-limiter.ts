@@ -1,6 +1,8 @@
 // NOTE: In-memory rate limiter — not shared across instances.
 // For multi-node deployments, replace with Redis-backed or PostgreSQL-backed rate limiting.
 
+import { resolveClientIp } from "./client-ip.ts";
+
 const MAX_REQUESTS_PER_WINDOW = 1000;
 const WINDOW_MS = 60_000; // 1 minute
 const CLEANUP_INTERVAL_MS = 300_000; // 5 minutes
@@ -34,7 +36,7 @@ export function checkRateLimit(
 	headers: Record<string, string | number>,
 	socketIp?: string,
 ): { error: string; retryAfterSec: number } | undefined {
-	const ip = extractIp(request, socketIp);
+	const ip = resolveClientIp(request, socketIp);
 	const now = Date.now();
 
 	let bucket = buckets.get(ip);
@@ -56,31 +58,4 @@ export function checkRateLimit(
 		headers["Retry-After"] = String(retryAfterSec);
 		return { error: "Too many requests", retryAfterSec };
 	}
-}
-
-const PRIVATE_IP_PREFIXES = ["10.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "192.168.", "127.", "::1", "::ffff:127."];
-
-function isPrivateIp(ip: string): boolean {
-	return PRIVATE_IP_PREFIXES.some(prefix => ip.startsWith(prefix));
-}
-
-/**
- * Extracts the real client IP.
- *
- * When socketIp is a private/loopback address, a reverse proxy is in front —
- * trust proxy headers (CF-Connecting-IP > X-Real-IP > X-Forwarded-For).
- *
- * When socketIp is public, the client connects directly — use socketIp
- * (proxy headers are spoofable and MUST be ignored).
- */
-function extractIp(request: Request, socketIp?: string): string {
-	if (socketIp && !isPrivateIp(socketIp)) {
-		return socketIp;
-	}
-
-	return request.headers.get("cf-connecting-ip")
-		?? request.headers.get("x-real-ip")
-		?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-		?? socketIp
-		?? "unknown";
 }
