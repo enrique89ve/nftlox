@@ -22,7 +22,7 @@ export interface EndpointHealthSnapshot {
 // Set to 8 so intermittent WSL/network socket resets don't open the circuit
 // within a single failover cycle (6 attempts across 3 endpoints).
 // A truly dead endpoint will still open reliably across 2+ cycles.
-const OPEN_AFTER_FAILURES = 8;
+export const OPEN_AFTER_FAILURES = 8;
 const COOLDOWN_BASE_MS = 10_000;
 const COOLDOWN_MAX_MS = 120_000;
 const COOLDOWN_MULTIPLIER = 2;

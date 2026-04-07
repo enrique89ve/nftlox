@@ -8,8 +8,13 @@ import {
 	getBackoffMs,
 	getHealthSnapshot,
 	resetHealth,
-	type ErrorCategory,
+	OPEN_AFTER_FAILURES,
 } from "../scanner/endpoint-health.ts";
+
+// Convenience helper: open a circuit by hitting the exact failure threshold
+function openCircuit(endpoint: string): void {
+	for (let i = 0; i < OPEN_AFTER_FAILURES; i++) recordFailure(endpoint, "transient");
+}
 
 const EP_A = "https://a.example.com";
 const EP_B = "https://b.example.com";
@@ -28,19 +33,20 @@ describe("circuit breaker", () => {
 		expect(snap.every(s => s.state === "closed")).toBe(true);
 	});
 
-	test("opens circuit after 3 consecutive failures", () => {
+	test("opens circuit after OPEN_AFTER_FAILURES consecutive failures", () => {
 		initEndpointHealth([EP_A, EP_B]);
-		recordFailure(EP_A, "transient");
-		recordFailure(EP_A, "transient");
 
+		// N-1 failures: still closed
+		for (let i = 0; i < OPEN_AFTER_FAILURES - 1; i++) recordFailure(EP_A, "transient");
 		let snap = getHealthSnapshot().find(s => s.endpoint === EP_A)!;
 		expect(snap.state).toBe("closed");
-		expect(snap.consecutiveFailures).toBe(2);
+		expect(snap.consecutiveFailures).toBe(OPEN_AFTER_FAILURES - 1);
 
+		// Nth failure: opens circuit
 		recordFailure(EP_A, "transient");
 		snap = getHealthSnapshot().find(s => s.endpoint === EP_A)!;
 		expect(snap.state).toBe("open");
-		expect(snap.consecutiveFailures).toBe(3);
+		expect(snap.consecutiveFailures).toBe(OPEN_AFTER_FAILURES);
 		expect(snap.openUntil).toBeGreaterThan(Date.now());
 	});
 
@@ -48,7 +54,7 @@ describe("circuit breaker", () => {
 		initEndpointHealth([EP_A, EP_B]);
 
 		// Open the circuit
-		for (let i = 0; i < 3; i++) recordFailure(EP_A, "transient");
+		openCircuit(EP_A);
 
 		// Simulate cooldown expiry by selecting after time passes
 		const snap = getHealthSnapshot().find(s => s.endpoint === EP_A)!;
@@ -64,7 +70,7 @@ describe("circuit breaker", () => {
 		initEndpointHealth([EP_A]);
 
 		// Open circuit
-		for (let i = 0; i < 3; i++) recordFailure(EP_A, "transient");
+		openCircuit(EP_A);
 		expect(getHealthSnapshot()[0]!.state).toBe("open");
 
 		// selectEndpoint forces open → half_open (only endpoint)
@@ -81,7 +87,7 @@ describe("circuit breaker", () => {
 		initEndpointHealth([EP_A]);
 
 		// Open circuit (base cooldown = 10s)
-		for (let i = 0; i < 3; i++) recordFailure(EP_A, "transient");
+		openCircuit(EP_A);
 
 		const baseCooldown = getHealthSnapshot()[0]!.cooldownMs;
 
@@ -101,7 +107,7 @@ describe("circuit breaker", () => {
 
 		// Repeatedly open/half_open/fail to escalate cooldown
 		for (let cycle = 0; cycle < 10; cycle++) {
-			for (let i = 0; i < 3; i++) recordFailure(EP_A, "transient");
+			openCircuit(EP_A);
 			selectEndpoint(); // force half_open
 			recordFailure(EP_A, "transient"); // back to open
 		}
@@ -114,7 +120,7 @@ describe("circuit breaker", () => {
 		initEndpointHealth([EP_A]);
 
 		// Escalate cooldown
-		for (let i = 0; i < 3; i++) recordFailure(EP_A, "transient");
+		openCircuit(EP_A);
 		selectEndpoint();
 		recordFailure(EP_A, "transient"); // cooldown doubled
 
@@ -142,7 +148,7 @@ describe("selectEndpoint", () => {
 		initEndpointHealth([EP_A, EP_B]);
 
 		// Open A, leave B closed
-		for (let i = 0; i < 3; i++) recordFailure(EP_A, "transient");
+		openCircuit(EP_A);
 		selectEndpoint(); // forces A to half_open (only open one)
 
 		// Now A is half_open, B is closed
@@ -155,8 +161,8 @@ describe("selectEndpoint", () => {
 		initEndpointHealth([EP_A, EP_B]);
 
 		// Open both
-		for (let i = 0; i < 3; i++) recordFailure(EP_A, "transient");
-		for (let i = 0; i < 3; i++) recordFailure(EP_B, "transient");
+		openCircuit(EP_A);
+		openCircuit(EP_B);
 
 		// Should still return an endpoint
 		const result = selectEndpoint();
@@ -168,12 +174,12 @@ describe("selectEndpoint", () => {
 		initEndpointHealth([EP_A, EP_B]);
 
 		// Open both, but A was opened earlier (lower openUntil)
-		for (let i = 0; i < 3; i++) recordFailure(EP_A, "transient");
+		openCircuit(EP_A);
 
 		// Small delay so B has a later openUntil
 		const snap1 = getHealthSnapshot().find(s => s.endpoint === EP_A)!;
 
-		for (let i = 0; i < 3; i++) recordFailure(EP_B, "transient");
+		openCircuit(EP_B);
 
 		const snap2 = getHealthSnapshot().find(s => s.endpoint === EP_B)!;
 		expect(snap2.openUntil).toBeGreaterThanOrEqual(snap1.openUntil);
@@ -214,7 +220,7 @@ describe("selectEndpoint", () => {
 		expect(selectEndpoint()).toBe(EP_A);
 
 		// Even after failures
-		for (let i = 0; i < 3; i++) recordFailure(EP_A, "transient");
+		openCircuit(EP_A);
 		expect(selectEndpoint()).toBe(EP_A);
 	});
 });
