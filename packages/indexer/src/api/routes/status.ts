@@ -3,6 +3,7 @@ import { getLastBlock, getSyncStatus, getOperationStatus } from "@/db/queries/sy
 import { getBlockchainHead } from "@/scanner/hive-client.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
 import { getStartupTime } from "@/scanner/sync-state.ts";
+import { SYNC_TOLERANCE_BLOCKS } from "@/scanner/sync-engine.ts";
 import { config } from "@/config.ts";
 import { isBeekeeperReady } from "@/api/services/beekeeper-signer.ts";
 import {
@@ -22,7 +23,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			getBlockchainHead().catch(() => ({ headBlock: 0, irreversibleBlock: 0 })),
 		]);
 		const blocksBehind = Math.max(0, chain.irreversibleBlock - lastBlock);
-		const inSync = chain.irreversibleBlock > 0 && lastBlock >= chain.irreversibleBlock;
+		const inSync = chain.irreversibleBlock > 0 && blocksBehind <= SYNC_TOLERANCE_BLOCKS;
 		return {
 			protocolVersion: PROTOCOL_VERSION,
 			protocolId: config.protocolId,
@@ -63,7 +64,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			const updatedAfterStartup = isApiRole ? true : (startupTime > 0 && lastUpdateMs > startupTime);
 			const syncActive = secondsSinceUpdate < STALE_THRESHOLD_MS / 1000 && updatedAfterStartup;
 			const hiveReachable = chain.irreversibleBlock > 0;
-			const inSync = hiveReachable && sync.lastBlock >= chain.irreversibleBlock;
+			const inSync = hiveReachable && blocksBehind <= SYNC_TOLERANCE_BLOCKS;
 			const healthy = dbAlive && hiveReachable && inSync;
 			const syncState = inSync ? "ready" : (syncActive ? "catching-up" : "stale");
 

@@ -12,6 +12,11 @@ import { createLogger } from "@/utils/logger.ts";
 const log = createLogger("sync");
 
 const MASSIVE_THRESHOLD = 100;
+// Hive produces 1 block every 3s. With syncIntervalMs=3s and ~1s HafAH round-trip,
+// the indexer is typically 1-2 blocks behind the irreversible head during normal
+// operation. Treating this as synced avoids constant micro-syncs that briefly
+// flip the API to 503. Exported so health/status endpoints use the same definition.
+export const SYNC_TOLERANCE_BLOCKS = 2;
 const MAX_CONTINUITY_FAILURES = 3;
 const MAX_CONSECUTIVE_HANDLER_FAILURES = 10;
 
@@ -172,7 +177,7 @@ export async function syncCycle(): Promise<void> {
 
 	updateSyncProgress({ lastBlock, headBlock, irreversibleBlock });
 
-	if (behind <= 0) {
+	if (behind <= SYNC_TOLERANCE_BLOCKS) {
 		setSynced(true);
 		await sleep(config.syncIntervalMs);
 		return;
