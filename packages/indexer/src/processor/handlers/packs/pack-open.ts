@@ -127,8 +127,7 @@ async function executeMintPlan(
 			continue;
 		}
 
-		const originDna = item.seed.origin_dna
-			?? await generateOriginDna(item.seed.collection_id);
+		const originDna = await generateOriginDna(item.seed.collection_id);
 		const instanceDna = await generateDeterministicInstanceDna(
 			item.seedId, item.instanceNumber, op.txId, op.blockNum,
 		);
@@ -160,7 +159,6 @@ async function executeMintPlan(
 			mutableDataHash: null,
 			schemaVersion: item.seed.schema_version,
 			operationId: op.operationId,
-			sourceAction: op.action,
 			blockNum: op.blockNum,
 			txId: op.txId,
 			createdAt: op.timestamp,

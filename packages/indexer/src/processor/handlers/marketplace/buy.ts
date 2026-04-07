@@ -1,6 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftWithCollectionRules, updateNftOwner, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import type { OwnerChangeCtx } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { insertSale } from "@/db/queries/marketplace-history.ts";
 import { requireString, requireUsername, verifyTransfers } from "@/utils/validation.ts";
@@ -17,7 +18,7 @@ import { config } from "@/config.ts";
  * Security: the router enforces active key auth; this handler enforces the signer
  * is the configured node account — matching multisig-service.ts validation.
  *
- * v0.3.0: Now validates listingId + listTxId to prevent stale listing replays.
+ * Validates listingId + listTxId to prevent stale listing replays.
  */
 export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<void> {
 	if (op.signer !== config.hiveAccount) {
@@ -114,7 +115,13 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	}, txn);
 
 	const previousOwner = nft.owner;
-	await updateNftOwner(nftId, buyer, op.txId, txn);
+	const ctx: OwnerChangeCtx = {
+		oldOwner: previousOwner,
+		nftType: nft.nft_type,
+		collectionId: nft.collection_id,
+		wasListed: true, // buy always transitions from status='listed'
+	};
+	await updateNftOwner(nftId, buyer, op.txId, ctx, txn);
 	await deleteNftAllowance(nftId, txn);
 	await cleanupCollectionAllowancesIfEmpty(previousOwner, nft.collection_id, txn);
 }

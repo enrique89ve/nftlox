@@ -1,6 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftOwner, updateNftBurned } from "@/db/queries/nfts.ts";
+import type { OwnerChangeCtx, BurnCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
@@ -59,7 +60,13 @@ async function processSingleTransfer(op: ParsedOperation, nftId: string, to: str
 		throw new Error(`Collection ${nft.collection_id} is not transferable`);
 	}
 
-	await updateNftOwner(nftId, to, op.txId, txn);
+	const ctx: OwnerChangeCtx = {
+		oldOwner: nft.owner,
+		nftType: nft.nft_type,
+		collectionId: nft.collection_id,
+		wasListed: hadExpiredListing,
+	};
+	await updateNftOwner(nftId, to, op.txId, ctx, txn);
 	await deleteNftAllowance(nftId, txn);
 	await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
 }
@@ -81,7 +88,12 @@ async function processBurn(op: ParsedOperation, nftId: string, txn: Queryable): 
 	}
 
 	log.info("Burn via transfer to null", { nftId, block: op.blockNum });
-	await updateNftBurned(nftId, op.signer, op.blockNum, txn);
+	const ctx: BurnCtx = {
+		owner: nft.owner,
+		nftType: nft.nft_type,
+		collectionId: nft.collection_id,
+	};
+	await updateNftBurned(nftId, op.signer, op.blockNum, ctx, txn);
 	await deleteNftAllowance(nftId, txn);
 	await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
 }

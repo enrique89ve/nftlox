@@ -161,9 +161,7 @@ export async function getOperationStatus(txId: string): Promise<OperationStatusE
 		SELECT operation_id, signer, action, block_num, created_at
 		FROM confirmed_operations WHERE tx_id = ${txId}
 	`;
-	const confirmedOpIds = new Set<string>();
 	for (const row of confirmed) {
-		confirmedOpIds.add(row.operation_id);
 		results.push({
 			status: "confirmed",
 			operationId: row.operation_id ?? null,
@@ -173,46 +171,6 @@ export async function getOperationStatus(txId: string): Promise<OperationStatusE
 			blockNum: Number(row.block_num),
 			timestamp: String(row.created_at),
 		});
-	}
-
-	// 4. Fallback: check state tables for pre-migration data (before confirmed_operations existed)
-	if (confirmedOpIds.size === 0) {
-		const nfts = await sql`
-			SELECT minted_by, nft_type, source_action, operation_id, block_num, created_at
-			FROM nfts WHERE tx_id = ${txId}
-		`;
-		const seenOps = new Set<string>();
-		for (const row of nfts) {
-			const opId = row.operation_id ?? null;
-			const key = opId ?? `nft-${row.block_num}`;
-			if (seenOps.has(key)) continue;
-			seenOps.add(key);
-			results.push({
-				status: "confirmed",
-				operationId: opId,
-				signer: row.minted_by ?? null,
-				action: row.source_action ?? row.nft_type ?? null,
-				reason: null,
-				blockNum: Number(row.block_num),
-				timestamp: String(row.created_at),
-			});
-		}
-
-		const collections = await sql`
-			SELECT creator, block_num, created_at
-			FROM collections WHERE tx_id = ${txId}
-		`;
-		for (const row of collections) {
-			results.push({
-				status: "confirmed",
-				operationId: null,
-				signer: row.creator ?? null,
-				action: "create_collection",
-				reason: null,
-				blockNum: Number(row.block_num),
-				timestamp: String(row.created_at),
-			});
-		}
 	}
 
 	if (results.length === 0) {

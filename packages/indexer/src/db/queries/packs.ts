@@ -220,6 +220,45 @@ export async function destroyPack(
 
 // ============ API QUERIES ============
 
+export type PackSummaryRow = {
+	readonly id: string;
+	readonly name: string;
+	readonly description: string | null;
+	readonly image_url: string | null;
+	readonly status: string;
+	readonly price_amount: string | null;
+	readonly price_currency: string | null;
+	readonly max_supply: number;
+	readonly current_supply: number;
+	readonly total_opened: number;
+	readonly in_circulation: number;
+	readonly creator_remaining: number;
+	readonly created_at: string;
+};
+
+export async function getPacksSummaryByCollection(
+	collectionId: string,
+	limit = 50,
+	offset = 0,
+): Promise<ReadonlyArray<PackSummaryRow>> {
+	const safeLimit = clampLimit(limit);
+	return sql<PackSummaryRow[]>`
+		SELECT
+			p.id, p.name, p.description, p.image_url, p.status,
+			p.price_amount, p.price_currency,
+			p.max_supply, p.current_supply, p.total_opened,
+			(p.current_supply - p.total_opened) AS in_circulation,
+			COALESCE(upb.balance, 0) AS creator_remaining,
+			p.created_at
+		FROM packs p
+		LEFT JOIN user_pack_balances upb
+			ON upb.pack_id = p.id AND upb.account = p.creator
+		WHERE p.collection_id = ${collectionId}
+		ORDER BY p.created_at DESC
+		LIMIT ${safeLimit} OFFSET ${offset}
+	`;
+}
+
 export async function listPacks(collectionId?: string, creator?: string, limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
 	const collectionFilter = collectionId ? sql`AND collection_id = ${collectionId}` : sql``;

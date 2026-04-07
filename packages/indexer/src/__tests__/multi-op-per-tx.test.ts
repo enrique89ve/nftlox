@@ -86,6 +86,7 @@ async function cleanDb() {
 	await sql`DELETE FROM user_pack_balances`;
 	await sql`DELETE FROM packs`;
 	await sql`DELETE FROM nfts`;
+	await sql`DELETE FROM owner_nft_counts`;
 	await sql`DELETE FROM collection_stats`;
 	await sql`DELETE FROM collections`;
 	await sql`DELETE FROM invalid_operations`;

@@ -1,0 +1,26 @@
+{
+	"name": "nftlox-packs-engine",
+	"version": "0.1.0",
+	"description": "Pure packs logic extension for NFTLox",
+	"module": "src/index.ts",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "bunx tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	},
+	"dependencies": {
+		"nftlox-sdk": "workspace:*"
+	}
+}

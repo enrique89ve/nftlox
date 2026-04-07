@@ -1,4 +1,4 @@
-// NFTLox Protocol Types - v0.3.0
+// NFTLox Protocol Types
 
 import type { ProtocolAction, SupportedCurrency } from "./constants";
 export type * from "./schemas";

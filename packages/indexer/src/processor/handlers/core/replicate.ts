@@ -1,6 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { insertNft, nftExists, getNftForProcessing, updateNftListing } from "@/db/queries/nfts.ts";
+import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireBoundedString, requireUsername, optionalString } from "@/utils/validation.ts";
 import { assertTransferable, assertNotBurned } from "@/utils/status-checks.ts";
@@ -59,11 +60,12 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 		immutableData: null, immutableDataHash: null,
 		mutableData: null, mutableDataHash: null,
 		schemaVersion: rules.schema_version,
-		operationId: op.operationId, sourceAction: op.action,
+		operationId: op.operationId,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
 	}, txn);
 
 	if (hadExpiredListing) {
-		await updateNftListing(originalId, null, null, null, null, null, null, txn);
+		const ctx: ListingCtx = { collectionId: original.collection_id, wasListed: true };
+		await updateNftListing(originalId, null, null, null, null, null, null, ctx, txn);
 	}
 }

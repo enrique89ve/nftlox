@@ -109,8 +109,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const reservedByPacks = Number(seed.reserved_by_packs) || 0;
 		validateSeedSupplyForDistribution(seedId, maxReplicas, baseDistributed, quantity, reservedByPacks);
 
-		const originDna = seed.origin_dna
-			?? await generateOriginDna(seed.collection_id);
+		const originDna = await generateOriginDna(seed.collection_id);
 		const override = imageOverrides[seedId];
 
 		let minted = 0;
@@ -154,7 +153,6 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				mutableDataHash,
 				schemaVersion: seed.schema_version,
 				operationId: op.operationId,
-				sourceAction: op.action,
 				blockNum: op.blockNum,
 				txId: op.txId,
 				createdAt: op.timestamp,

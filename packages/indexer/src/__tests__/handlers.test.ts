@@ -94,6 +94,7 @@ async function cleanDb() {
 	await sql`DELETE FROM user_pack_balances`;
 	await sql`DELETE FROM packs`;
 	await sql`DELETE FROM nfts`;
+	await sql`DELETE FROM owner_nft_counts`;
 	await sql`DELETE FROM collection_stats`;
 	await sql`DELETE FROM collections`;
 }
@@ -2699,6 +2700,162 @@ describe("Handlers (integration)", () => {
 			// Advance forward — should work
 			await updateLastBlock(6000);
 			expect(await getLastBlock()).toBe(6000);
+		});
+	});
+
+	// ─── Counter management ─────────────────────────────────────────────────────
+	// Verifies that owner_nft_counts and collection_stats are maintained correctly
+	// by the application layer (no DB triggers). Each test exercises a distinct
+	// state transition and asserts exact counter values.
+
+	describe("Counter management", () => {
+		async function ownerCounts(owner: string) {
+			const [r] = await sql`
+				SELECT total, seeds, instances, replicas
+				FROM owner_nft_counts WHERE owner = ${owner}
+			`;
+			return {
+				total:     Number(r?.total ?? 0),
+				seeds:     Number(r?.seeds ?? 0),
+				instances: Number(r?.instances ?? 0),
+				replicas:  Number(r?.replicas ?? 0),
+			};
+		}
+
+		async function collStats(collectionId: string) {
+			const [r] = await sql`
+				SELECT total, seeds, instances, replicas, listed, burned
+				FROM collection_stats WHERE collection_id = ${collectionId}
+			`;
+			return {
+				total:     Number(r?.total ?? 0),
+				seeds:     Number(r?.seeds ?? 0),
+				instances: Number(r?.instances ?? 0),
+				replicas:  Number(r?.replicas ?? 0),
+				listed:    Number(r?.listed ?? 0),
+				burned:    Number(r?.burned ?? 0),
+			};
+		}
+
+		test("mint increments owner and collection counters", async () => {
+			await seedCollection();
+			await seedMint();
+
+			expect(await ownerCounts("alice")).toMatchObject({ total: 1, seeds: 1, instances: 0, replicas: 0 });
+			expect(await collStats(COL_ID)).toMatchObject({ total: 1, seeds: 1, instances: 0, listed: 0, burned: 0 });
+		});
+
+		test("duplicate mint (idempotent) does not double-increment counters", async () => {
+			await seedCollection();
+			await seedMint();
+			await seedMint(); // ON CONFLICT DO NOTHING — counters must not increment twice
+
+			expect(await ownerCounts("alice")).toMatchObject({ total: 1, seeds: 1 });
+			expect(await collStats(COL_ID)).toMatchObject({ total: 1, seeds: 1 });
+		});
+
+		test("bulk_distribute increments instance counters for recipient", async () => {
+			await seedCollection();
+			await seedMint();
+			const seedTxId = await getSeedTxId("seed_test1");
+			await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+				to: "bob",
+				items: [{ seedId: "seed_test1", quantity: 3, seedTxId }],
+			}), sql);
+
+			expect(await ownerCounts("bob")).toMatchObject({ total: 3, instances: 3, seeds: 0 });
+			expect(await ownerCounts("alice")).toMatchObject({ total: 1, seeds: 1 }); // seed stays with alice
+			expect(await collStats(COL_ID)).toMatchObject({ total: 4, seeds: 1, instances: 3 });
+		});
+
+		test("transfer shifts owner counters, collection total unchanged", async () => {
+			await seedCollection();
+			await seedMint();
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "bob" }), sql);
+
+			expect(await ownerCounts("alice")).toMatchObject({ total: 0, seeds: 0 });
+			expect(await ownerCounts("bob")).toMatchObject({ total: 1, seeds: 1 });
+			expect(await collStats(COL_ID)).toMatchObject({ total: 1, seeds: 1, listed: 0 });
+		});
+
+		test("transfer of expired-listed NFT decrements listed and shifts owner", async () => {
+			await seedCollection();
+			await seedMint();
+			const blockTime = new Date("2024-01-01T00:00:00").getTime();
+			const pastExpiry = blockTime - 60_000;
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: "seed_test1", expiresAt: pastExpiry })), sql);
+			expect(await collStats(COL_ID)).toMatchObject({ listed: 1 });
+
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "bob" }), sql);
+
+			expect(await collStats(COL_ID)).toMatchObject({ listed: 0 });
+			expect(await ownerCounts("alice")).toMatchObject({ total: 0 });
+			expect(await ownerCounts("bob")).toMatchObject({ total: 1 });
+		});
+
+		test("burn decrements owner counter and increments collection burned", async () => {
+			await seedCollection();
+			await seedMint();
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
+
+			expect(await ownerCounts("alice")).toMatchObject({ total: 0, seeds: 0 });
+			expect(await collStats(COL_ID)).toMatchObject({ total: 1, seeds: 1, burned: 1 });
+		});
+
+		test("list increments listed counter without changing owner count", async () => {
+			await seedCollection();
+			await seedMint();
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: "seed_test1" })), sql);
+
+			expect(await collStats(COL_ID)).toMatchObject({ listed: 1 });
+			expect(await ownerCounts("alice")).toMatchObject({ total: 1, seeds: 1 });
+		});
+
+		test("unlist decrements listed counter", async () => {
+			await seedCollection();
+			await seedMint();
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: "seed_test1" })), sql);
+			await handleUnlist(makeOp(ACTION_UNLIST, { nftId: "seed_test1" }), sql);
+
+			expect(await collStats(COL_ID)).toMatchObject({ listed: 0 });
+		});
+
+		test("re-listing an expired listing keeps listed counter at 1", async () => {
+			await seedCollection();
+			await seedMint();
+			const blockTime = new Date("2024-01-01T00:00:00").getTime();
+			const pastExpiry = blockTime - 60_000;
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: "seed_test1", expiresAt: pastExpiry })), sql);
+			expect(await collStats(COL_ID)).toMatchObject({ listed: 1 });
+
+			// Re-list (overwriting expired) — must stay at 1, not go to 2
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: "seed_test1" })), sql);
+			expect(await collStats(COL_ID)).toMatchObject({ listed: 1 });
+		});
+
+		test("buy shifts owner counters and decrements listed", async () => {
+			await seedCollection();
+			await seedMint();
+			const listData = await makeListData({ nftId: "seed_test1" });
+			await handleList(makeOp(ACTION_LIST, listData), sql);
+
+			const [nftRow] = await sql`SELECT listing_id, listing_tx_id, tx_id FROM nfts WHERE id = 'seed_test1'`;
+			const nodeAccount = config.hiveAccount;
+			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
+			const transfers = [
+				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}seed_test1` },
+				...(split.feeAmount > 0 ? [{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}seed_test1` }] : []),
+			];
+			await handleBuy(makeOp(ACTION_BUY, {
+				nftId: "seed_test1",
+				listingId: nftRow!.listing_id,
+				listTxId: nftRow!.listing_tx_id,
+				txId: nftRow!.tx_id,
+			}, nodeAccount, transfers), sql);
+
+			expect(await ownerCounts("alice")).toMatchObject({ total: 0, seeds: 0 });
+			expect(await ownerCounts("bob")).toMatchObject({ total: 1, seeds: 1 });
+			expect(await collStats(COL_ID)).toMatchObject({ listed: 0 });
 		});
 	});
 

@@ -31,12 +31,10 @@ INSERT INTO sync_state (last_block) VALUES (0) ON CONFLICT (id) DO NOTHING;
 -- Collections
 CREATE TABLE IF NOT EXISTS collections (
 	id TEXT PRIMARY KEY,
-	json_id TEXT,
 	name TEXT NOT NULL,
 	symbol VARCHAR(10) NOT NULL CHECK (symbol ~ '^[A-Z][A-Z0-9]{2,9}$'),
 	creator TEXT NOT NULL,
 	total_potential INTEGER NOT NULL DEFAULT 0,
-	origin_dna TEXT,
 	description TEXT,
 	image_url TEXT,
 	external_url TEXT,
@@ -102,7 +100,6 @@ CREATE TABLE IF NOT EXISTS nfts (
 	listing_expires_at TIMESTAMPTZ,
 	listing_marketplace TEXT,
 	operation_id TEXT,
-	source_action TEXT,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
@@ -347,10 +344,12 @@ CREATE INDEX IF NOT EXISTS idx_orphaned_buys_op_id ON orphaned_buys(operation_id
 
 -- Packs
 CREATE INDEX IF NOT EXISTS idx_packs_collection ON packs(collection_id);
+CREATE INDEX IF NOT EXISTS idx_packs_collection_created ON packs(collection_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_packs_creator ON packs(creator);
 CREATE INDEX IF NOT EXISTS idx_packs_status ON packs(status);
 CREATE INDEX IF NOT EXISTS idx_pack_balances_account ON user_pack_balances(account);
 CREATE INDEX IF NOT EXISTS idx_pack_balances_pack ON user_pack_balances(pack_id);
+CREATE INDEX IF NOT EXISTS idx_pack_balances_pack_account ON user_pack_balances(pack_id, account);
 CREATE INDEX IF NOT EXISTS idx_pack_balances_positive ON user_pack_balances(account, pack_id) WHERE balance > 0;
 
 -- Allowances
@@ -382,178 +381,13 @@ CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_currency_date ON sales(currency, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_block ON sales(block_num);
 
--- ============ TRIGGER FUNCTION ============
-
-CREATE OR REPLACE FUNCTION update_owner_nft_counts() RETURNS TRIGGER AS $$
-DECLARE
-	old_counted BOOLEAN;
-	new_counted BOOLEAN;
-BEGIN
-	IF TG_OP = 'INSERT' THEN
-		IF NEW.status != 'burned' THEN
-			INSERT INTO owner_nft_counts (owner, total, seeds, instances, replicas)
-			VALUES (
-				NEW.owner, 1,
-				(NEW.nft_type = 'seed')::int,
-				(NEW.nft_type = 'instance')::int,
-				(NEW.nft_type = 'replica')::int
-			)
-			ON CONFLICT (owner) DO UPDATE SET
-				total = owner_nft_counts.total + 1,
-				seeds = owner_nft_counts.seeds + (NEW.nft_type = 'seed')::int,
-				instances = owner_nft_counts.instances + (NEW.nft_type = 'instance')::int,
-				replicas = owner_nft_counts.replicas + (NEW.nft_type = 'replica')::int;
-		END IF;
-		RETURN NEW;
-
-	ELSIF TG_OP = 'UPDATE' THEN
-		old_counted := (OLD.status != 'burned');
-		new_counted := (NEW.status != 'burned');
-
-		IF OLD.owner = NEW.owner AND OLD.nft_type = NEW.nft_type AND old_counted = new_counted THEN
-			RETURN NEW;
-		END IF;
-
-		IF old_counted THEN
-			UPDATE owner_nft_counts SET
-				total = total - 1,
-				seeds = seeds - (OLD.nft_type = 'seed')::int,
-				instances = instances - (OLD.nft_type = 'instance')::int,
-				replicas = replicas - (OLD.nft_type = 'replica')::int
-			WHERE owner = OLD.owner;
-		END IF;
-
-		IF new_counted THEN
-			INSERT INTO owner_nft_counts (owner, total, seeds, instances, replicas)
-			VALUES (
-				NEW.owner, 1,
-				(NEW.nft_type = 'seed')::int,
-				(NEW.nft_type = 'instance')::int,
-				(NEW.nft_type = 'replica')::int
-			)
-			ON CONFLICT (owner) DO UPDATE SET
-				total = owner_nft_counts.total + 1,
-				seeds = owner_nft_counts.seeds + (NEW.nft_type = 'seed')::int,
-				instances = owner_nft_counts.instances + (NEW.nft_type = 'instance')::int,
-				replicas = owner_nft_counts.replicas + (NEW.nft_type = 'replica')::int;
-		END IF;
-		RETURN NEW;
-
-	ELSIF TG_OP = 'DELETE' THEN
-		IF OLD.status != 'burned' THEN
-			UPDATE owner_nft_counts SET
-				total = total - 1,
-				seeds = seeds - (OLD.nft_type = 'seed')::int,
-				instances = instances - (OLD.nft_type = 'instance')::int,
-				replicas = replicas - (OLD.nft_type = 'replica')::int
-			WHERE owner = OLD.owner;
-		END IF;
-		RETURN OLD;
-	END IF;
-
-	RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
+-- ============ DROP LEGACY TRIGGERS ============
+-- owner_nft_counts and collection_stats are maintained explicitly by the
+-- application layer (db/queries/nfts.ts) within the same transaction as
+-- each NFT mutation. Triggers are removed to eliminate write amplification
+-- opacity, hidden concurrency complexity, and drift risk.
 
 DROP TRIGGER IF EXISTS trg_owner_nft_counts ON nfts;
-CREATE TRIGGER trg_owner_nft_counts
-	AFTER INSERT OR UPDATE OF owner, status, nft_type OR DELETE
-	ON nfts
-	FOR EACH ROW
-	EXECUTE FUNCTION update_owner_nft_counts();
-
--- ============ COLLECTION STATS TRIGGER ============
--- Maintains denormalized counts per collection.
--- Uses single-UPDATE delta pattern when collection_id unchanged (common case: list/unlist/burn).
--- Falls back to decrement-old + increment-new when collection_id changes (should never happen).
-
-CREATE OR REPLACE FUNCTION update_collection_stats() RETURNS TRIGGER AS $$
-BEGIN
-	IF TG_OP = 'INSERT' THEN
-		INSERT INTO collection_stats (collection_id, total, seeds, instances, replicas, listed, burned)
-		VALUES (
-			NEW.collection_id, 1,
-			(NEW.nft_type = 'seed')::int,
-			(NEW.nft_type = 'instance')::int,
-			(NEW.nft_type = 'replica')::int,
-			(NEW.status = 'listed')::int,
-			(NEW.status = 'burned')::int
-		)
-		ON CONFLICT (collection_id) DO UPDATE SET
-			total = collection_stats.total + 1,
-			seeds = collection_stats.seeds + (NEW.nft_type = 'seed')::int,
-			instances = collection_stats.instances + (NEW.nft_type = 'instance')::int,
-			replicas = collection_stats.replicas + (NEW.nft_type = 'replica')::int,
-			listed = collection_stats.listed + (NEW.status = 'listed')::int,
-			burned = collection_stats.burned + (NEW.status = 'burned')::int;
-		RETURN NEW;
-
-	ELSIF TG_OP = 'UPDATE' THEN
-		-- Short-circuit: nothing relevant changed
-		IF OLD.collection_id = NEW.collection_id
-			AND OLD.nft_type = NEW.nft_type
-			AND OLD.status = NEW.status THEN
-			RETURN NEW;
-		END IF;
-
-		IF OLD.collection_id = NEW.collection_id THEN
-			-- Same collection: single UPDATE with delta (common case)
-			UPDATE collection_stats SET
-				seeds = seeds + (NEW.nft_type = 'seed')::int - (OLD.nft_type = 'seed')::int,
-				instances = instances + (NEW.nft_type = 'instance')::int - (OLD.nft_type = 'instance')::int,
-				replicas = replicas + (NEW.nft_type = 'replica')::int - (OLD.nft_type = 'replica')::int,
-				listed = listed + (NEW.status = 'listed')::int - (OLD.status = 'listed')::int,
-				burned = burned + (NEW.status = 'burned')::int - (OLD.status = 'burned')::int
-			WHERE collection_id = NEW.collection_id;
-		ELSE
-			-- Different collection: decrement old, increment new
-			UPDATE collection_stats SET
-				total = total - 1,
-				seeds = seeds - (OLD.nft_type = 'seed')::int,
-				instances = instances - (OLD.nft_type = 'instance')::int,
-				replicas = replicas - (OLD.nft_type = 'replica')::int,
-				listed = listed - (OLD.status = 'listed')::int,
-				burned = burned - (OLD.status = 'burned')::int
-			WHERE collection_id = OLD.collection_id;
-
-			INSERT INTO collection_stats (collection_id, total, seeds, instances, replicas, listed, burned)
-			VALUES (
-				NEW.collection_id, 1,
-				(NEW.nft_type = 'seed')::int,
-				(NEW.nft_type = 'instance')::int,
-				(NEW.nft_type = 'replica')::int,
-				(NEW.status = 'listed')::int,
-				(NEW.status = 'burned')::int
-			)
-			ON CONFLICT (collection_id) DO UPDATE SET
-				total = collection_stats.total + 1,
-				seeds = collection_stats.seeds + (NEW.nft_type = 'seed')::int,
-				instances = collection_stats.instances + (NEW.nft_type = 'instance')::int,
-				replicas = collection_stats.replicas + (NEW.nft_type = 'replica')::int,
-				listed = collection_stats.listed + (NEW.status = 'listed')::int,
-				burned = collection_stats.burned + (NEW.status = 'burned')::int;
-		END IF;
-		RETURN NEW;
-
-	ELSIF TG_OP = 'DELETE' THEN
-		UPDATE collection_stats SET
-			total = total - 1,
-			seeds = seeds - (OLD.nft_type = 'seed')::int,
-			instances = instances - (OLD.nft_type = 'instance')::int,
-			replicas = replicas - (OLD.nft_type = 'replica')::int,
-			listed = listed - (OLD.status = 'listed')::int,
-			burned = burned - (OLD.status = 'burned')::int
-		WHERE collection_id = OLD.collection_id;
-		RETURN OLD;
-	END IF;
-
-	RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
+DROP FUNCTION IF EXISTS update_owner_nft_counts();
 DROP TRIGGER IF EXISTS trg_collection_stats ON nfts;
-CREATE TRIGGER trg_collection_stats
-	AFTER INSERT OR UPDATE OF collection_id, nft_type, status OR DELETE
-	ON nfts
-	FOR EACH ROW
-	EXECUTE FUNCTION update_collection_stats();
+DROP FUNCTION IF EXISTS update_collection_stats();

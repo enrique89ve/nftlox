@@ -98,7 +98,7 @@ Working code for common workflows:
 |----------|-------|
 | Protocol ID | `nftlox_testnet` |
 | Version | `0.4.1` |
-| Min Version | `0.3.0` |
+| Min Version | `0.4.1` |
 | Blockchain | Hive L1 |
 | Finality | ~3 seconds |
 | Auth | Posting key (15 ops) / Active key (10 ops) |

@@ -1,5 +1,5 @@
 // NFTLox Protocol - Public API
-// v0.3.0 - Typed Schemas + Data Tracking
+// Typed schemas + data tracking
 
 // ============ CONSTANTS ============
 export {

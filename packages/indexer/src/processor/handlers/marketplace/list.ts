@@ -1,6 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftListing, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireHiveAmount, optionalNumber, optionalString } from "@/utils/validation.ts";
 import { assertActionable, assertSeedNotDistributed, assertSeedNotReserved, isListingExpired } from "@/utils/status-checks.ts";
@@ -59,5 +60,9 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<v
 		throw new Error(`Price ${price.amount} ${price.currency} is below minimum ${MIN_PRICE_AMOUNT}`);
 	}
 
-	await updateNftListing(nftId, priceAmount, price.currency, expiresAt, marketplace, listingId, op.txId, txn);
+	const ctx: ListingCtx = {
+		collectionId: nft.collection_id,
+		wasListed: hadExpiredListing, // re-listing expired → net 0; fresh listing → +1
+	};
+	await updateNftListing(nftId, priceAmount, price.currency, expiresAt, marketplace, listingId, op.txId, ctx, txn);
 }

@@ -8,12 +8,10 @@ export type CollectionStatus =
 
 export interface InsertCollectionParams {
 	id: string;
-	jsonId: string | null;
 	name: string;
 	symbol: string;
 	creator: string;
 	totalPotential: number;
-	originDna: string | null;
 	description: string | null;
 	imageUrl: string | null;
 	externalUrl: string | null;
@@ -32,14 +30,14 @@ export interface InsertCollectionParams {
 export async function insertCollection(params: InsertCollectionParams, txn: Queryable = sql): Promise<boolean> {
 	const result = await txn`
 		INSERT INTO collections (
-			id, json_id, name, symbol, creator, total_potential,
-			origin_dna, description, image_url, external_url,
+			id, name, symbol, creator, total_potential,
+			description, image_url, external_url,
 			transferable, burnable, replicable, royalty_pct, royalty_recipient,
 			schema, schema_version,
 			block_num, tx_id, created_at
 		) VALUES (
-			${params.id}, ${params.jsonId}, ${params.name}, ${params.symbol},
-			${params.creator}, ${params.totalPotential}, ${params.originDna},
+			${params.id}, ${params.name}, ${params.symbol},
+			${params.creator}, ${params.totalPotential},
 			${params.description}, ${params.imageUrl}, ${params.externalUrl},
 			${params.transferable}, ${params.burnable}, ${params.replicable}, ${params.royaltyPct},
 			${params.royaltyRecipient},

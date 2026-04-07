@@ -1,6 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessing, updateNftOwner } from "@/db/queries/nfts.ts";
+import type { OwnerChangeCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import {
 	getNftAllowance,
@@ -47,7 +48,13 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 		throw new Error(`Signer ${op.signer} is not approved to transfer ${instanceId}`);
 	}
 
-	await updateNftOwner(instanceId, to, op.txId, txn);
+	const ctx: OwnerChangeCtx = {
+		oldOwner: nft.owner,
+		nftType: nft.nft_type,
+		collectionId: nft.collection_id,
+		wasListed: hadExpiredListing,
+	};
+	await updateNftOwner(instanceId, to, op.txId, ctx, txn);
 	await deleteNftAllowance(instanceId, txn);
 	// NOTE: collection_allowances are NOT cleaned here — the owner explicitly
 	// granted collection-wide approval and a spender action should not revoke it.

@@ -1,5 +1,91 @@
 import { sql, type Queryable, clampLimit } from "@/db/client.ts";
 
+// ============ CONTEXT TYPES FOR EXPLICIT COUNTER MANAGEMENT ============
+// Counter tables (owner_nft_counts, collection_stats) are maintained explicitly
+// by the application — NOT by DB triggers — for correctness under concurrency
+// and full visibility in handler code. All mutations that affect counts MUST
+// pass the corresponding context so counters stay in sync within the same txn.
+
+export type OwnerChangeCtx = {
+	readonly oldOwner: string;
+	readonly nftType: NftKind;
+	readonly collectionId: string;
+	/** True when the NFT was in 'listed' status before this operation. */
+	readonly wasListed: boolean;
+};
+
+export type BurnCtx = {
+	readonly owner: string;
+	readonly nftType: NftKind;
+	readonly collectionId: string;
+	// wasListed is always false — assertNotListed guards burns.
+};
+
+export type ListingCtx = {
+	readonly collectionId: string;
+	/** True when the NFT was already in 'listed' status (re-listing expired or unlisting). */
+	readonly wasListed: boolean;
+};
+
+// ============ COUNTER HELPERS ============
+
+async function adjustOwnerNftCount(
+	owner: string,
+	nftType: NftKind,
+	delta: 1 | -1,
+	txn: Queryable,
+): Promise<void> {
+	const seedDelta     = nftType === "seed"     ? delta : 0;
+	const instanceDelta = nftType === "instance" ? delta : 0;
+	const replicaDelta  = nftType === "replica"  ? delta : 0;
+	await txn`
+		INSERT INTO owner_nft_counts (owner, total, seeds, instances, replicas)
+		VALUES (${owner}, ${delta}, ${seedDelta}, ${instanceDelta}, ${replicaDelta})
+		ON CONFLICT (owner) DO UPDATE SET
+			total     = owner_nft_counts.total     + ${delta},
+			seeds     = owner_nft_counts.seeds     + ${seedDelta},
+			instances = owner_nft_counts.instances + ${instanceDelta},
+			replicas  = owner_nft_counts.replicas  + ${replicaDelta}
+	`;
+}
+
+async function recordCollectionMint(
+	collectionId: string,
+	nftType: NftKind,
+	txn: Queryable,
+): Promise<void> {
+	const seedInc     = nftType === "seed"     ? 1 : 0;
+	const instanceInc = nftType === "instance" ? 1 : 0;
+	const replicaInc  = nftType === "replica"  ? 1 : 0;
+	await txn`
+		INSERT INTO collection_stats (collection_id, total, seeds, instances, replicas, listed, burned)
+		VALUES (${collectionId}, 1, ${seedInc}, ${instanceInc}, ${replicaInc}, 0, 0)
+		ON CONFLICT (collection_id) DO UPDATE SET
+			total     = collection_stats.total     + 1,
+			seeds     = collection_stats.seeds     + ${seedInc},
+			instances = collection_stats.instances + ${instanceInc},
+			replicas  = collection_stats.replicas  + ${replicaInc}
+	`;
+}
+
+async function adjustCollectionListed(
+	collectionId: string,
+	delta: 1 | -1,
+	txn: Queryable,
+): Promise<void> {
+	await txn`
+		UPDATE collection_stats SET listed = listed + ${delta}
+		WHERE collection_id = ${collectionId}
+	`;
+}
+
+async function recordCollectionBurn(collectionId: string, txn: Queryable): Promise<void> {
+	await txn`
+		UPDATE collection_stats SET burned = burned + 1
+		WHERE collection_id = ${collectionId}
+	`;
+}
+
 export type NftKind = "seed" | "instance" | "replica";
 export type NftStatus = "active" | "listed" | "burned" | "lent";
 
@@ -43,7 +129,6 @@ export interface InsertNftParams {
 	mutableDataHash: string | null;
 	schemaVersion?: number | null;
 	operationId?: string | null;
-	sourceAction?: string | null;
 	blockNum: number;
 	txId: string;
 	createdAt: string;
@@ -61,7 +146,7 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			immutable_data, immutable_data_hash,
 			mutable_data, mutable_data_hash, mutable_data_tx, mutable_data_block,
 			schema_version, owner_tx_id,
-			operation_id, source_action,
+			operation_id,
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.collectionId}, ${params.nftType},
@@ -80,11 +165,14 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			${params.schemaVersion ?? null},
 			${params.txId},  /* owner_tx_id: mint tx = first ownership */
 			${params.operationId ?? null},
-			${params.sourceAction ?? null},
 			${params.blockNum}, ${params.txId}, ${params.createdAt}
 		)
 		ON CONFLICT (id) DO NOTHING
 	`;
+	if (result.count > 0) {
+		await adjustOwnerNftCount(params.owner, params.nftType, 1, txn);
+		await recordCollectionMint(params.collectionId, params.nftType, txn);
+	}
 	return result.count > 0;
 }
 
@@ -258,8 +346,9 @@ export async function updateNftOwner(
 	nftId: string,
 	newOwner: string,
 	ownerTxId: string,
+	ctx: OwnerChangeCtx,
 	txn: Queryable = sql,
-) {
+): Promise<void> {
 	await txn`
 		UPDATE nfts
 		SET owner = ${newOwner}, status = ${NFT_STATUS_ACTIVE},
@@ -268,13 +357,24 @@ export async function updateNftOwner(
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
 	`;
+	await adjustOwnerNftCount(ctx.oldOwner, ctx.nftType, -1, txn);
+	await adjustOwnerNftCount(newOwner, ctx.nftType, 1, txn);
+	if (ctx.wasListed) {
+		await adjustCollectionListed(ctx.collectionId, -1, txn);
+	}
 }
 
 export async function updateNftStatus(nftId: string, status: NftStatus, txn: Queryable = sql) {
 	await txn`UPDATE nfts SET status = ${status} WHERE id = ${nftId}`;
 }
 
-export async function updateNftBurned(nftId: string, burnedBy: string, blockNum: number, txn: Queryable = sql) {
+export async function updateNftBurned(
+	nftId: string,
+	burnedBy: string,
+	blockNum: number,
+	ctx: BurnCtx,
+	txn: Queryable = sql,
+): Promise<void> {
 	await txn`
 		UPDATE nfts
 		SET status = ${NFT_STATUS_BURNED},
@@ -283,6 +383,8 @@ export async function updateNftBurned(nftId: string, burnedBy: string, blockNum:
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
 	`;
+	await adjustOwnerNftCount(ctx.owner, ctx.nftType, -1, txn);
+	await recordCollectionBurn(ctx.collectionId, txn);
 }
 
 export async function updateNftListing(
@@ -293,8 +395,9 @@ export async function updateNftListing(
 	marketplace: string | null,
 	listingId: string | null,
 	listingTxId: string | null,
+	ctx: ListingCtx,
 	txn: Queryable = sql,
-) {
+): Promise<void> {
 	if (price === null) {
 		await txn`
 			UPDATE nfts
@@ -303,6 +406,9 @@ export async function updateNftListing(
 			    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 			WHERE id = ${nftId}
 		`;
+		if (ctx.wasListed) {
+			await adjustCollectionListed(ctx.collectionId, -1, txn);
+		}
 	} else {
 		const expiresIso = expiresAt ? new Date(expiresAt).toISOString() : null;
 		await txn`
@@ -313,6 +419,10 @@ export async function updateNftListing(
 			    listing_expires_at = ${expiresIso}, listing_marketplace = ${marketplace}
 			WHERE id = ${nftId}
 		`;
+		// Fresh listing: +1. Re-listing an expired one (wasListed=true): net 0, already counted.
+		if (!ctx.wasListed) {
+			await adjustCollectionListed(ctx.collectionId, 1, txn);
+		}
 	}
 }
 
@@ -389,59 +499,6 @@ export async function getUserNftCounts(owner: string, txn: Queryable = sql): Pro
 		instances: row?.instances ?? 0,
 		replicas: row?.replicas ?? 0,
 	};
-}
-
-export async function repairOwnerNftCounts(txn: Queryable = sql): Promise<number> {
-	const result = await txn`
-		WITH expected AS (
-			SELECT owner,
-				COUNT(*)::int AS total,
-				COUNT(*) FILTER (WHERE nft_type = 'seed')::int AS seeds,
-				COUNT(*) FILTER (WHERE nft_type = 'instance')::int AS instances,
-				COUNT(*) FILTER (WHERE nft_type = 'replica')::int AS replicas
-			FROM nfts WHERE status != 'burned'
-			GROUP BY owner
-		)
-		INSERT INTO owner_nft_counts (owner, total, seeds, instances, replicas)
-		SELECT * FROM expected
-		ON CONFLICT (owner) DO UPDATE SET
-			total = EXCLUDED.total, seeds = EXCLUDED.seeds,
-			instances = EXCLUDED.instances, replicas = EXCLUDED.replicas
-		WHERE owner_nft_counts.total != EXCLUDED.total
-			OR owner_nft_counts.seeds != EXCLUDED.seeds
-			OR owner_nft_counts.instances != EXCLUDED.instances
-			OR owner_nft_counts.replicas != EXCLUDED.replicas
-	`;
-	return result.count;
-}
-
-export async function repairCollectionStats(txn: Queryable = sql): Promise<number> {
-	const result = await txn`
-		WITH expected AS (
-			SELECT collection_id,
-				COUNT(*)::int AS total,
-				COUNT(*) FILTER (WHERE nft_type = 'seed')::int AS seeds,
-				COUNT(*) FILTER (WHERE nft_type = 'instance')::int AS instances,
-				COUNT(*) FILTER (WHERE nft_type = 'replica')::int AS replicas,
-				COUNT(*) FILTER (WHERE status = 'listed')::int AS listed,
-				COUNT(*) FILTER (WHERE status = 'burned')::int AS burned
-			FROM nfts
-			GROUP BY collection_id
-		)
-		INSERT INTO collection_stats (collection_id, total, seeds, instances, replicas, listed, burned)
-		SELECT * FROM expected
-		ON CONFLICT (collection_id) DO UPDATE SET
-			total = EXCLUDED.total, seeds = EXCLUDED.seeds,
-			instances = EXCLUDED.instances, replicas = EXCLUDED.replicas,
-			listed = EXCLUDED.listed, burned = EXCLUDED.burned
-		WHERE collection_stats.total != EXCLUDED.total
-			OR collection_stats.seeds != EXCLUDED.seeds
-			OR collection_stats.instances != EXCLUDED.instances
-			OR collection_stats.replicas != EXCLUDED.replicas
-			OR collection_stats.listed != EXCLUDED.listed
-			OR collection_stats.burned != EXCLUDED.burned
-	`;
-	return result.count;
 }
 
 export type ListSort = "price_asc" | "price_desc" | "recent";

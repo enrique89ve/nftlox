@@ -19,7 +19,6 @@ import {
 	validateSchemaDefinition,
 	computeDataHash,
 	generateDeterministicCollectionId,
-	generateOriginDna,
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
@@ -70,9 +69,6 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		throw new Error(`totalPotential must be a non-negative integer, got ${totalPotential}`);
 	}
 
-	// C5: Always compute canonical originDna — ignore payload value
-	const originDna = await generateOriginDna(canonicalId);
-
 	// Validate schema if provided
 	const rawSchema = optionalCollectionSchema(d.schema);
 	if (rawSchema) {
@@ -86,12 +82,10 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 
 	await insertCollection({
 		id: canonicalId,
-		jsonId: null,
 		name,
 		symbol,
 		creator: op.signer,
 		totalPotential,
-		originDna,
 		description,
 		imageUrl,
 		externalUrl: optionalBoundedString(metadata.externalUrl, "metadata.externalUrl", MAX_URL_LENGTH),
