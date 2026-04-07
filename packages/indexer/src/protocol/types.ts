@@ -63,6 +63,39 @@ export type HiveTransactionObject = Readonly<{
 	signatures: ReadonlyArray<string>;
 }>;
 
+export type ValidatedTransaction = Readonly<{
+	ref_block_num: number;
+	ref_block_prefix: number;
+	expiration: string;
+	transferOperations: ReadonlyArray<Readonly<{
+		from: string;
+		to: string;
+		amount: string;
+		memo: string;
+		parsedAmount: Readonly<{
+			amount: number;
+			currency: string;
+		}>;
+	}>>;
+	customJsonOperation: Readonly<{
+		required_auths: readonly [string];
+		required_posting_auths: readonly [];
+		id: string;
+		json: string;
+		payload: Readonly<{
+			action: "buy";
+			data: Readonly<{
+				nftId: string;
+				txId: string;
+				listingId: string;
+				listTxId: string;
+			}>;
+		}>;
+	}>;
+	extensions: ReadonlyArray<unknown>;
+	signatures: readonly [];
+}>;
+
 export type MultisigErrorCode =
 	| "RATE_LIMITED"
 	| "INVALID_TX_STRUCTURE"

@@ -18,7 +18,11 @@ export interface EndpointHealthSnapshot {
 
 // ============ CONSTANTS ============
 
-const OPEN_AFTER_FAILURES = 3;
+// Circuit opens after this many consecutive failures.
+// Set to 8 so intermittent WSL/network socket resets don't open the circuit
+// within a single failover cycle (6 attempts across 3 endpoints).
+// A truly dead endpoint will still open reliably across 2+ cycles.
+const OPEN_AFTER_FAILURES = 8;
 const COOLDOWN_BASE_MS = 10_000;
 const COOLDOWN_MAX_MS = 120_000;
 const COOLDOWN_MULTIPLIER = 2;
@@ -199,6 +203,12 @@ export function classifyError(err: unknown): ErrorCategory {
 
 	// TypeError from fetch = network error (DNS, connection refused, etc.)
 	if (err instanceof TypeError) return "transient";
+
+	// Bun throws plain Error (not TypeError) for TCP socket resets.
+	// Detect by message pattern — these are transient network events, not server errors.
+	if (err instanceof Error && err.message.includes("socket connection was closed")) {
+		return "transient";
+	}
 
 	return "unknown";
 }
