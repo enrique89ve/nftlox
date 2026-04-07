@@ -12,7 +12,7 @@ const mockUpdateLastBlock = mock((block: number, _txn?: unknown) => {
 	trackedLastBlock = block;
 	return Promise.resolve();
 });
-const mockGetBlockchainHead = mock(() =>
+const mockGetBlockchainHead = mock((_consistency?: "fast" | "strict") =>
 	Promise.resolve({ headBlock: 100000, irreversibleBlock: 100000 }),
 );
 const mockGetCustomJsonInRange = mock(async () => {
@@ -89,17 +89,26 @@ const { setSynced, updateSyncProgress } = await import("@/scanner/sync-state.ts"
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
 
+// Port 0 (OS-assigned) is unreliable in some WSL environments ("Is port 0 in use?").
+// Try port 0 first, fall back to fixed high ports that are unlikely to conflict.
+function bindTestServer(fetch: (req: Request) => Promise<Response>): ReturnType<typeof Bun.serve> {
+	for (const port of [0, 47291, 47292, 47293]) {
+		try {
+			return Bun.serve({ port, fetch });
+		} catch { /* port unavailable, try next */ }
+	}
+	throw new Error("No available port for stress test server");
+}
+
 const FAKE_NFT = { id: "nft_1", collection_id: "col_test", owner: "alice", status: "active" };
 const FAKE_STATS = { total_collections: 10, total_nfts: 500, total_seeds: 50 };
 
 beforeAll(() => {
 	setSynced(true);
-	updateSyncProgress(99990, 100000);
+	updateSyncProgress({ lastBlock: 99990, headBlock: 100000, irreversibleBlock: 100000 });
 	setRunning(true);
 
-	server = Bun.serve({
-		port: 0, // random port
-		async fetch(req) {
+	server = bindTestServer(async (req) => {
 			const url = new URL(req.url);
 			const path = url.pathname;
 
@@ -123,7 +132,6 @@ beforeAll(() => {
 				return Response.json({ status: "healthy", inSync: true });
 			}
 			return Response.json({ error: "Not found" }, { status: 404 });
-		},
 	});
 
 	baseUrl = `http://localhost:${server.port}`;

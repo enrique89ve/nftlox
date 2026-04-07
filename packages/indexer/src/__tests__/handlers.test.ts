@@ -2292,7 +2292,7 @@ describe("Handlers (integration)", () => {
 				approved: true,
 				quantity: 5,
 			}, "eve");
-			await expect(handlePackApprove(approveOp, sql)).rejects.toThrow("no balance");
+			await expect(handlePackApprove(approveOp, sql)).rejects.toThrow("Insufficient balance");
 		});
 	});
 
@@ -2572,6 +2572,133 @@ describe("Handlers (integration)", () => {
 			}, "bob");
 
 			await expect(handleSetDataFrom(op, sql)).rejects.toThrow("not an approved data operator");
+		});
+	});
+
+	// ─── atomic supply & approve guards (DB integration) ─────
+
+	describe("atomic supply and approve guards", () => {
+		beforeEach(cleanDb);
+
+		async function mintSeed(seedId: string) {
+			const op = makeOp(ACTION_MINT, {
+				id: seedId,
+				collectionId: COL_ID,
+				maxReplicas: 10000,
+				metadata: { name: `Seed ${seedId}` },
+			});
+			await handleMint(op, sql);
+		}
+
+		test("incrementPackSupply rejects when exceeding max_supply", async () => {
+			await seedCollection();
+			await mintSeed("seed_supply");
+
+			const createOp = makeOp(ACTION_PACK_CREATE, {
+				id: "pack_supply_test",
+				collectionId: COL_ID,
+				name: "Supply Test Pack",
+				dropTable: [{ seedId: "seed_supply", weight: 1 }],
+				itemsPerPack: 1,
+				maxSupply: 3,
+			});
+			await handlePackCreate(createOp, sql);
+
+			// pack_create with maxSupply=3 sets current_supply=3 and gives creator 3 balance
+			const [pack] = await sql`SELECT current_supply, max_supply FROM packs WHERE id = 'pack_supply_test'`;
+			expect(pack!.current_supply).toBe(3);
+			expect(pack!.max_supply).toBe(3);
+
+			// Directly attempt to increment beyond max — should fail atomically
+			const { incrementPackSupply } = await import("@/db/queries/packs.ts");
+			await expect(incrementPackSupply("pack_supply_test", 1, sql)).rejects.toThrow("supply overflow");
+		});
+
+		test("pack_approve rejects quantity exceeding balance", async () => {
+			await seedCollection();
+			await mintSeed("seed_approve_qty");
+
+			const createOp = makeOp(ACTION_PACK_CREATE, {
+				id: "pack_approve_qty",
+				collectionId: COL_ID,
+				name: "Approve Qty Test",
+				dropTable: [{ seedId: "seed_approve_qty", weight: 1 }],
+				itemsPerPack: 1,
+				maxSupply: 5,
+			});
+			await handlePackCreate(createOp, sql);
+
+			// Creator (alice) has balance=5 from pack_create. Approve 5 → should work
+			const approveOk = makeOp(ACTION_PACK_APPROVE, {
+				spender: "bob",
+				packId: "pack_approve_qty",
+				approved: true,
+				quantity: 5,
+			}, "alice");
+			await handlePackApprove(approveOk, sql);
+
+			// Approve 6 → should fail (only has 5)
+			const approveTooMany = makeOp(ACTION_PACK_APPROVE, {
+				spender: "charlie",
+				packId: "pack_approve_qty",
+				approved: true,
+				quantity: 6,
+			}, "alice");
+			await expect(handlePackApprove(approveTooMany, sql)).rejects.toThrow("Insufficient balance");
+		});
+
+		test("pack_approve allows revoking (approved=false) without balance check", async () => {
+			await seedCollection();
+			await mintSeed("seed_revoke");
+
+			const createOp = makeOp(ACTION_PACK_CREATE, {
+				id: "pack_revoke",
+				collectionId: COL_ID,
+				name: "Revoke Test",
+				dropTable: [{ seedId: "seed_revoke", weight: 1 }],
+				itemsPerPack: 1,
+				maxSupply: 2,
+			});
+			await handlePackCreate(createOp, sql);
+
+			// Approve first
+			const approveOp = makeOp(ACTION_PACK_APPROVE, {
+				spender: "bob",
+				packId: "pack_revoke",
+				approved: true,
+				quantity: 1,
+			}, "alice");
+			await handlePackApprove(approveOp, sql);
+
+			// Revoke
+			const revokeOp = makeOp(ACTION_PACK_APPROVE, {
+				spender: "bob",
+				packId: "pack_revoke",
+				approved: false,
+			}, "alice");
+			await handlePackApprove(revokeOp, sql);
+
+			// Verify allowance is gone
+			const [row] = await sql`
+				SELECT quantity FROM pack_allowances
+				WHERE owner = 'alice' AND spender = 'bob' AND pack_id = 'pack_revoke'
+			`;
+			expect(row).toBeUndefined();
+		});
+
+		test("updateLastBlock never regresses cursor", async () => {
+			const { updateLastBlock, getLastBlock } = await import("@/db/queries/sync.ts");
+
+			await updateLastBlock(5000);
+			expect(await getLastBlock()).toBe(5000);
+
+			// Try to set it backwards — should be ignored
+			await updateLastBlock(3000);
+			expect(await getLastBlock()).toBe(5000);
+
+			// Advance forward — should work
+			await updateLastBlock(6000);
+			expect(await getLastBlock()).toBe(6000);
 		});
 	});
 

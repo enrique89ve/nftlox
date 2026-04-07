@@ -12,9 +12,11 @@ const mockUpdateLastBlock = mock((block: number, _txn?: unknown) => {
 	trackedLastBlock = block;
 	return Promise.resolve();
 });
-const mockGetBlockchainHead = mock(() => Promise.resolve({ headBlock: 0, irreversibleBlock: 0 }));
+const mockGetBlockchainHead = mock((_consistency?: "fast" | "strict") =>
+	Promise.resolve({ headBlock: 0, irreversibleBlock: 0 }),
+);
 const mockGetCustomJsonInRange = mock(
-	(_from: number, _to: number, _id: string) => Promise.resolve([] as HafAHOperation[]),
+	(_from: number, _to: number, _id: string, _behind?: number) => Promise.resolve([] as HafAHOperation[]),
 );
 const mockGetHafAHBlockRange = mock(() => 2000);
 const mockGetTransfersInTransaction = mock((_txId: string) => Promise.resolve([] as Array<{
@@ -155,7 +157,7 @@ function resetAllMocks(): void {
 	});
 
 	setSynced(false);
-	updateSyncProgress(0, 0);
+	updateSyncProgress({ lastBlock: 0, headBlock: 0, irreversibleBlock: 0 });
 	setRunning(true);
 }
 
@@ -194,7 +196,8 @@ describe("block processing never stops", () => {
 
 		for (let i = 1; i < blocks.length; i++) {
 			const gap = (blocks[i] as number) - (blocks[i - 1] as number);
-			expect(gap).toBeLessThanOrEqual(2000);
+			// With parallel fetch, each iteration may advance up to 2 ranges (4000 blocks)
+			expect(gap).toBeLessThanOrEqual(4000);
 			expect(gap).toBeGreaterThan(0);
 		}
 
@@ -233,8 +236,10 @@ describe("block processing never stops", () => {
 
 		await syncCycle();
 
-		expect(trackedLastBlock).toBe(3000);
-		expect(mockGetCustomJsonInRange).toHaveBeenCalledTimes(1);
+		// With parallel fetch, first iteration fetches 2 ranges (1001-3000 + 3001-5000).
+		// updateLastBlock(5000) triggers stop. Loop exits after this iteration.
+		expect(trackedLastBlock).toBe(5000);
+		expect(mockGetCustomJsonInRange).toHaveBeenCalledTimes(2);
 	});
 });
 
@@ -259,14 +264,14 @@ describe("event loop yields during massive sync", () => {
 		let yieldCount = 0;
 		const originalSetTimeout = globalThis.setTimeout;
 		setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
-			if (ms === 0) yieldCount++;
+			if (ms === 5) yieldCount++;
 			return originalSetTimeout(fn, ms);
 		}) as unknown as typeof setTimeout);
 
 		await syncCycle();
 
-		// 3 ranges in massive sync → 3 yields (one per batch)
-		expect(yieldCount).toBeGreaterThanOrEqual(3);
+		// With parallel fetch (2 ranges per iteration), 5000 blocks = 2 iterations, 2 yields
+		expect(yieldCount).toBeGreaterThanOrEqual(2);
 	});
 
 	test("should NOT yield when sync is not massive", async () => {
@@ -406,7 +411,7 @@ describe("sync progress tracking", () => {
 		mockGetCustomJsonInRange.mockResolvedValue([]);
 		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
 
-		const progressSnapshots: Array<{ lastBlock: number; headBlock: number }> = [];
+		const progressSnapshots: Array<{ lastBlock: number; headBlock: number; irreversibleBlock: number }> = [];
 
 		const baseImpl = mockUpdateLastBlock.getMockImplementation()!;
 		mockUpdateLastBlock.mockImplementation((block: number, txn?: unknown) => {
@@ -417,7 +422,8 @@ describe("sync progress tracking", () => {
 
 		await syncCycle();
 
-		expect(progressSnapshots).toHaveLength(3);
+		// With parallel fetch, 5000 blocks = 2 iterations (2x2000 + 1x1000)
+		expect(progressSnapshots.length).toBeGreaterThanOrEqual(2);
 
 		for (let i = 1; i < progressSnapshots.length; i++) {
 			expect(progressSnapshots[i]!.lastBlock).toBeGreaterThan(progressSnapshots[i - 1]!.lastBlock);

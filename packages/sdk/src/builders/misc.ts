@@ -9,7 +9,6 @@ import {
 	createNftLendPayload,
 	createNftReturnPayload,
 } from "../payloads";
-import { ACTION_SET_DATA, ACTION_SET_DATA_FROM, ACTION_NFT_LEND, ACTION_NFT_RETURN } from "../constants";
 import { getProtocolId } from "../protocol-state";
 import type { BuildResult, TransferData, SetDataData, SetDataFromData, NftLendData, NftReturnData, HiveOperation } from "../types";
 import { usernameSchema } from "../schemas";

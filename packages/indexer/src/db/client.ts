@@ -1,4 +1,3 @@
-import type postgres from "postgres";
 import pgClient from "postgres";
 import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
@@ -27,11 +26,20 @@ export const sql = pgClient(config.databaseUrl, {
 export type Queryable = typeof sql;
 
 /**
- * Wraps sql.begin() with Queryable-typed callback. The cast is safe because
- * TransactionSql inherits all tagged-template callable behavior from Sql.
+ * Wraps sql.begin() with Queryable-typed callback.
+ *
+ * postgres.TransactionSql and Sql<{}> share the same tagged-template callable interface —
+ * all query functions in this codebase use only that interface, never pool-only methods.
+ * The single cast (TransactionSql → Queryable) is structurally sound and contained here
+ * so callers and query functions never see the postgres internals.
  */
 export async function withTransaction<T>(fn: (txn: Queryable) => Promise<T>): Promise<T> {
-	const result = await sql.begin(fn as unknown as (sql: postgres.TransactionSql) => Promise<T>);
+	// TransactionSql and Sql<{}> share the same tagged-template callable interface.
+	// The cast (TransactionSql → Queryable) is structurally sound — all query functions
+	// in this codebase use only that interface, never pool-only methods (begin/end).
+	// The outer `as T` is needed because sql.begin() returns UnwrapPromiseArray<T>
+	// which TypeScript cannot resolve to T in generic contexts.
+	const result = await sql.begin(txSql => fn(txSql as unknown as Queryable));
 	return result as T;
 }
 

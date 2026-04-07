@@ -141,11 +141,16 @@ export async function incrementPackSupply(
 	quantity: number,
 	txn: Queryable = sql,
 ): Promise<void> {
-	await txn`
+	const result = await txn`
 		UPDATE packs
 		SET current_supply = current_supply + ${quantity}
 		WHERE id = ${packId}
+			AND (max_supply = 0 OR current_supply + ${quantity} <= max_supply)
+		RETURNING current_supply
 	`;
+	if (result.count === 0) {
+		throw new Error(`Pack supply overflow: cannot add ${quantity} to pack ${packId}`);
+	}
 }
 
 export async function incrementPackOpened(

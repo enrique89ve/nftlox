@@ -4,6 +4,7 @@ import { config } from "@/config.ts";
 import { processMultisigRequest } from "@/api/services/multisig-service.ts";
 import { createMultisigRateLimiter } from "@/api/services/multisig-rate-limiter.ts";
 import { createMultisigNftLock } from "@/api/services/multisig-nft-lock.ts";
+import { isBeekeeperReady } from "@/api/services/beekeeper-signer.ts";
 import { getNftWithCollectionRules, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import { calculatePaymentSplit, MULTISIG_EXPIRATION_MS } from "@/protocol/index.ts";
 
@@ -73,7 +74,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 
 	// POST /api/multisig — validate and multisig-sign a buy transaction
 	.post("/api/multisig", async ({ body, set }) => {
-		if (!config.activeKey) {
+		if (!isBeekeeperReady()) {
 			set.status = 503;
 			return { ok: false, code: "MULTISIG_DISABLED", message: "Multisig signing is not enabled on this node" };
 		}
@@ -97,15 +98,20 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			};
 		}
 
-		const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId, config.activeKey);
-
-		// Release lock on validation failure so the NFT is available again
-		if (!result.ok) {
-			await nftLock.release(body.nftId);
-			set.status = 400;
+		try {
+			const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId);
+			if (!result.ok) {
+				set.status = 400;
+			}
 			return result;
+		} catch (err) {
+			set.status = 500;
+			return { ok: false, code: "INTERNAL_ERROR" as const, message: "Unexpected signing error" };
+		} finally {
+			// Always release lock — on success it expires naturally via MULTISIG_EXPIRATION_MS,
+			// but on any failure (validation or unexpected) we free the NFT immediately.
+			await nftLock.release(body.nftId);
 		}
-		return result;
 	}, {
 		body: t.Object({
 			buyer: t.String({ description: "Hive username of the buyer" }),

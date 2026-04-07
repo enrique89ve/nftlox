@@ -30,6 +30,7 @@ import {
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTIVE_AUTH_ACTIONS,
+	type ProtocolAction,
 } from "@/protocol/index.ts";
 
 // Core
@@ -78,7 +79,12 @@ const ACTIVE_AUTH_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 
 type Handler = (op: ParsedOperation, txn: Queryable) => Promise<void>;
 
-const handlers: Record<string, Handler> = {
+// Typed as Record<ProtocolAction, Handler> (finite union key, not index signature):
+// - TypeScript enforces at compile time that every ProtocolAction has a handler.
+// - Adding a new action to ALL_ACTIONS without registering a handler here is a compile error.
+// - noUncheckedIndexedAccess does NOT add | undefined for mapped types, so lookups
+//   with a ProtocolAction key are guaranteed non-optional — no runtime !handler guard needed.
+const handlers: Record<ProtocolAction, Handler> = {
 	// Core
 	[ACTION_CREATE_COLLECTION]: handleCreateCollection,
 	[ACTION_MINT]: handleMint,
@@ -129,20 +135,10 @@ const handlers: Record<string, Handler> = {
  */
 export async function routeOperation(op: ParsedOperation, txn: Queryable): Promise<boolean> {
 	try {
+		// op.action: ProtocolAction — validated by the parser (isProtocolAction guard).
+		// handlers: Record<ProtocolAction, Handler> — compile-time exhaustiveness enforced.
+		// Lookup is non-optional: if this compiles, the handler exists.
 		const handler = handlers[op.action];
-
-		if (!handler) {
-			await insertInvalidOperation({
-				blockNum: op.blockNum,
-				txId: op.txId,
-				operationId: op.operationId,
-				signer: op.signer,
-				action: op.action,
-				reason: `Unknown action: ${op.action}`,
-				rawPayload: op.data,
-			}, txn);
-			return false;
-		}
 
 		// Enforce canonical auth level before dispatching
 		if (ACTIVE_AUTH_SET.has(op.action) && op.authLevel !== "active") {

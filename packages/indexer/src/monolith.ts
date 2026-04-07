@@ -2,6 +2,7 @@ import { closePool } from "./db/client.ts";
 import { startApiServer } from "./api/server.ts";
 import { setStartupTime, setSynced, updateSyncProgress, getSyncProgress, isSynced } from "./scanner/sync-state.ts";
 import { connectWithRetry } from "./bootstrap.ts";
+import { initBeekeeperSigner, closeBeekeeperSigner } from "./api/services/beekeeper-signer.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 import { dns } from "bun";
@@ -29,7 +30,7 @@ function startSyncWorker(): void {
 
 		switch (msg.type) {
 			case "progress":
-				updateSyncProgress(msg.lastBlock, msg.headBlock);
+				updateSyncProgress(msg.progress);
 				break;
 			case "synced":
 				setSynced(msg.synced);
@@ -71,6 +72,15 @@ async function main(): Promise<void> {
 	// Main thread connects to DB for API queries
 	await connectWithRetry();
 
+	// Read key from env, init beekeeper, then wipe from JS memory.
+	const activeKey = process.env.ACTIVE_KEY ?? "";
+	const bkPassword = process.env.BEEKEEPER_PASSWORD ?? "";
+	if (activeKey) {
+		await initBeekeeperSigner(activeKey, bkPassword);
+		delete process.env.ACTIVE_KEY;
+		delete process.env.BEEKEEPER_PASSWORD;
+	}
+
 	// API server runs on main thread — event loop stays free
 	startApiServer();
 
@@ -107,6 +117,7 @@ async function main(): Promise<void> {
 async function shutdown(): Promise<void> {
 	log.info("Shutting down...");
 	stopSyncWorker();
+	await closeBeekeeperSigner();
 	await closePool();
 	process.exit(0);
 }

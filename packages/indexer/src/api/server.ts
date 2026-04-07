@@ -13,6 +13,7 @@ import { multisigRoutes } from "./routes/multisig.ts";
 import { checkRateLimit } from "./middleware/rate-limiter.ts";
 import { getSyncStatus } from "@/db/queries/sync.ts";
 import { isSynced as _isSynced, getSyncProgress } from "@/scanner/sync-state.ts";
+import { getBlockchainHead } from "@/scanner/hive-client.ts";
 
 const log = createLogger("api");
 
@@ -20,17 +21,30 @@ const isApiRole = config.indexerRole === "api";
 
 let apiSynced = isApiRole ? false : _isSynced();
 let apiLastBlock = 0;
+let apiHeadBlock = 0;
+let apiIrreversibleBlock = 0;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+async function pollApiSyncState(): Promise<void> {
+	try {
+		const [st, chain] = await Promise.all([
+			getSyncStatus(),
+			getBlockchainHead(),
+		]);
+		apiLastBlock = st.lastBlock;
+		apiHeadBlock = chain.headBlock;
+		apiIrreversibleBlock = chain.irreversibleBlock;
+		apiSynced = st.lastBlock >= chain.irreversibleBlock;
+	} catch (err) {
+		apiSynced = false;
+		log.warn("Sync polling failed", { error: err instanceof Error ? err.message : String(err) });
+	}
+}
+
 if (isApiRole) {
-	pollTimer = setInterval(async () => {
-		try {
-			const st = await getSyncStatus();
-			apiLastBlock = st.lastBlock;
-			apiSynced = st.updatedAt !== null && Date.now() - st.updatedAt.getTime() < 15_000;
-		} catch (err) {
-			log.warn("Sync polling failed", { error: err instanceof Error ? err.message : String(err) });
-		}
+	void pollApiSyncState();
+	pollTimer = setInterval(() => {
+		void pollApiSyncState();
 	}, 2000);
 }
 
@@ -42,14 +56,19 @@ export function stopPolling(): void {
 }
 
 export function startApiServer(): void {
-	const STATS_PATHS = new Set(["/api/stats", "/api/health"]);
+	const STATS_PATHS = new Set(["/api/stats"]);
+	const UNCACHED_PATHS = new Set(["/api/health", "/api/status"]);
 	const ALLOWED_DURING_SYNC = new Set(["/api/health", "/api/status", "/swagger", "/swagger/json"]);
 
 	const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",").map(s => s.trim()).filter(Boolean);
 
+	if (config.nodeEnv === "production" && !allowedOrigins?.length) {
+		log.warn("ALLOWED_ORIGINS not set in production — all origins allowed. Set ALLOWED_ORIGINS to restrict CORS.");
+	}
+
 	const app = new Elysia()
 		.use(cors({
-			origin: allowedOrigins ?? true,
+			origin: allowedOrigins?.length ? allowedOrigins : true,
 			methods: ["GET", "POST", "OPTIONS"],
 			allowedHeaders: ["content-type"],
 		}))
@@ -73,8 +92,9 @@ export function startApiServer(): void {
 				return {
 					error: "Indexer is syncing — data not yet available",
 					lastBlock: isApiRole ? apiLastBlock : progress.lastBlock,
-					headBlock: progress.headBlock,
-					blocksBehind: isApiRole ? "unknown" : progress.behind,
+					headBlock: isApiRole ? apiHeadBlock : progress.headBlock,
+					irreversibleBlock: isApiRole ? apiIrreversibleBlock : progress.irreversibleBlock,
+					blocksBehind: isApiRole ? Math.max(0, apiIrreversibleBlock - apiLastBlock) : progress.behind,
 				};
 			}
 		})
@@ -84,6 +104,9 @@ export function startApiServer(): void {
 
 			set.headers["X-Content-Type-Options"] = "nosniff";
 			set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+			if (config.nodeEnv === "production") {
+				set.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+			}
 
 			if (!isSwagger) {
 				set.headers["X-Frame-Options"] = "DENY";
@@ -94,6 +117,11 @@ export function startApiServer(): void {
 
 			const status = typeof set.status === "number" ? set.status : 200;
 			if (status >= 400) {
+				set.headers["Cache-Control"] = "no-store";
+				return;
+			}
+
+			if (UNCACHED_PATHS.has(url.pathname)) {
 				set.headers["Cache-Control"] = "no-store";
 				return;
 			}

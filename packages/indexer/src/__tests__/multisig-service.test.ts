@@ -7,9 +7,16 @@
  * Uses real DB (same pattern as handlers.test.ts) — no mocks.
  */
 
-import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { describe, test, expect, beforeAll, afterAll, beforeEach, mock } from "bun:test";
 import { sql } from "@/db/client.ts";
 import { processMultisigRequest } from "@/api/services/multisig-service.ts";
+
+// Mock beekeeper signer — rejection tests never reach signing
+mock.module("@/api/services/beekeeper-signer.ts", () => ({
+	signWithBeekeeper: () => "mock_signature",
+	isBeekeeperReady: () => true,
+	getSignerPublicKey: () => "STM_mock_pubkey",
+}));
 import { handleCreateCollection } from "@/processor/handlers/core/create-collection.ts";
 import { handleMint } from "@/processor/handlers/core/mint.ts";
 import { handleList } from "@/processor/handlers/marketplace/list.ts";
@@ -35,8 +42,6 @@ const NODE_ACCOUNT = config.hiveAccount;
 const PROTOCOL_ID = config.protocolId;
 const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 
-// Dummy WIF — never reaches signing in rejection tests
-const TEST_ACTIVE_KEY = "5JdeC9P7Pbd1uGdFVEsJ41EkEnADbbHGq6p1BwFxm6txNBsQnsw";
 
 // ============ HELPERS ============
 
@@ -272,7 +277,7 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 
 			assertRejected(result, "NFT_NOT_TRANSFERABLE");
 			if (!result.ok) {
@@ -296,7 +301,7 @@ describe("Multisig service (regression)", () => {
 				royaltyRecipient: "alice",
 			});
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 
 			assertRejected(result, "NFT_NOT_TRANSFERABLE");
 		});
@@ -314,7 +319,7 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "NFT_NOT_FOUND");
 		});
 
@@ -330,7 +335,7 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "NFT_NOT_LISTED");
 		});
 
@@ -348,7 +353,7 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "CANNOT_BUY_OWN");
 		});
 
@@ -376,7 +381,7 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "NFT_EXPIRED_LISTING");
 		});
 	});
@@ -394,7 +399,7 @@ describe("Multisig service (regression)", () => {
 			});
 			delete (body as Record<string, unknown>).buyer;
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_TX_STRUCTURE");
 		});
 
@@ -408,24 +413,24 @@ describe("Multisig service (regression)", () => {
 			});
 			(body as Record<string, unknown>).buyer = "A";
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_TX_STRUCTURE");
 		});
 
 		test("rejects missing transaction field", async () => {
 			const body = { buyer: "bob", nftId: "seed_test1", listingId: "list_1", listTxId: "tx_1" };
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_TX_STRUCTURE");
 		});
 
 		test("rejects non-object request body", async () => {
-			const result = await processMultisigRequest("not-an-object", sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest("not-an-object", sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_TX_STRUCTURE");
 		});
 
 		test("rejects null request body", async () => {
-			const result = await processMultisigRequest(null, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(null, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_TX_STRUCTURE");
 		});
 	});
@@ -453,7 +458,7 @@ describe("Multisig service (regression)", () => {
 			const lastOp = ops[ops.length - 1]!;
 			(lastOp[1] as Record<string, unknown>).required_auths = ["impostor"];
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "NODE_ACCOUNT_MISMATCH");
 		});
 
@@ -476,7 +481,7 @@ describe("Multisig service (regression)", () => {
 			const lastOp = ops[ops.length - 1]!;
 			(lastOp[1] as Record<string, unknown>).id = "wrong_protocol";
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
 		});
 
@@ -499,7 +504,7 @@ describe("Multisig service (regression)", () => {
 			const ops = tx.operations as Array<[string, Record<string, unknown>]>;
 			(ops[0]![1] as Record<string, unknown>).from = "charlie";
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "MISSING_BUYER_AUTH");
 		});
 
@@ -519,7 +524,7 @@ describe("Multisig service (regression)", () => {
 
 			(body.transaction as Record<string, unknown>).signatures = ["fake_sig"];
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_TX_STRUCTURE");
 		});
 
@@ -537,7 +542,7 @@ describe("Multisig service (regression)", () => {
 				expirationOffsetMs: 5_000, // 5s < 30s minimum
 			});
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_TX_STRUCTURE");
 			if (!result.ok) {
 				expect(result.message).toContain("expires too soon");
@@ -558,7 +563,7 @@ describe("Multisig service (regression)", () => {
 				expirationOffsetMs: 300_000, // 5min > 120s maximum
 			});
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_TX_STRUCTURE");
 			if (!result.ok) {
 				expect(result.message).toContain("too far in the future");
@@ -583,7 +588,7 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
 			if (!result.ok) {
 				expect(result.message).toContain("listingId mismatch");
@@ -603,7 +608,7 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
 			if (!result.ok) {
 				expect(result.message).toContain("listTxId mismatch");
@@ -634,7 +639,7 @@ describe("Multisig service (regression)", () => {
 			const ops = tx.operations as Array<[string, Record<string, unknown>]>;
 			(ops[0]![1] as Record<string, unknown>).amount = "50.000 HIVE";
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PAYMENT_SPLIT");
 		});
 
@@ -659,7 +664,7 @@ describe("Multisig service (regression)", () => {
 			ops.push(["transfer", { from: "bob", to: "eve", amount: "1.000 HIVE", memo: "" }]);
 			ops.push(customJson);
 
-			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID, TEST_ACTIVE_KEY);
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PAYMENT_SPLIT");
 		});
 	});

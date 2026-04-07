@@ -1,9 +1,10 @@
 import { Elysia, t } from "elysia";
 import { getLastBlock, getSyncStatus, getOperationStatus } from "@/db/queries/sync.ts";
-import { getHeadBlockNum } from "@/scanner/hive-client.ts";
+import { getBlockchainHead } from "@/scanner/hive-client.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
 import { getStartupTime } from "@/scanner/sync-state.ts";
 import { config } from "@/config.ts";
+import { isBeekeeperReady } from "@/api/services/beekeeper-signer.ts";
 import {
 	PROTOCOL_VERSION,
 	PROTOCOL_FEE_PCT,
@@ -13,28 +14,28 @@ import {
 } from "@/protocol/index.ts";
 
 const STALE_THRESHOLD_MS = 60_000; // 1 minute without processing = stale
-const SYNC_TOLERANCE = 10; // blocks behind threshold to consider "in sync"
 
 export const statusRoutes = new Elysia({ tags: ["Status"] })
 	.get("/api/status", async () => {
-		const [lastBlock, headBlock] = await Promise.all([
+		const [lastBlock, chain] = await Promise.all([
 			getLastBlock(),
-			getHeadBlockNum().catch(() => 0),
+			getBlockchainHead().catch(() => ({ headBlock: 0, irreversibleBlock: 0 })),
 		]);
-		const blocksBehind = Math.max(0, headBlock - lastBlock);
-		const inSync = blocksBehind <= SYNC_TOLERANCE;
+		const blocksBehind = Math.max(0, chain.irreversibleBlock - lastBlock);
+		const inSync = chain.irreversibleBlock > 0 && lastBlock >= chain.irreversibleBlock;
 		return {
 			protocolVersion: PROTOCOL_VERSION,
 			protocolId: config.protocolId,
 			genesisBlock: config.genesisBlock,
 			nodeAccount: config.hiveAccount,
 			nodeUrl: config.nodeUrl || null,
-			multisigEnabled: !!config.activeKey,
+			multisigEnabled: isBeekeeperReady(),
 			protocolFee: PROTOCOL_FEE_PCT,
 			maxRoyalty: MAX_ROYALTY_PCT,
 			supportedCurrencies: SUPPORTED_CURRENCIES,
 			lastBlock,
-			headBlock,
+			headBlock: chain.headBlock,
+			irreversibleBlock: chain.irreversibleBlock,
 			blocksBehind,
 			inSync,
 		};
@@ -46,24 +47,25 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 	})
 	.get("/api/health", async ({ set }) => {
 		try {
-			const [sync, headBlock] = await Promise.all([
+			const [sync, chain] = await Promise.all([
 				getSyncStatus(),
-				getHeadBlockNum().catch(() => 0),
+				getBlockchainHead().catch(() => ({ headBlock: 0, irreversibleBlock: 0 })),
 			]);
 
 			const now = Date.now();
 			const lastUpdateMs = sync.updatedAt ? sync.updatedAt.getTime() : 0;
 			const secondsSinceUpdate = Math.floor((now - lastUpdateMs) / 1000);
-			const blocksBehind = Math.max(0, headBlock - sync.lastBlock);
+			const blocksBehind = Math.max(0, chain.irreversibleBlock - sync.lastBlock);
 
-			const dbAlive = sync.lastBlock > 0;
+			const dbAlive = true;
 			const startupTime = getStartupTime();
 			const isApiRole = config.indexerRole === "api";
 			const updatedAfterStartup = isApiRole ? true : (startupTime > 0 && lastUpdateMs > startupTime);
 			const syncActive = secondsSinceUpdate < STALE_THRESHOLD_MS / 1000 && updatedAfterStartup;
-			const hiveReachable = headBlock > 0;
-			const inSync = hiveReachable && blocksBehind <= SYNC_TOLERANCE;
-			const healthy = dbAlive && (syncActive || inSync);
+			const hiveReachable = chain.irreversibleBlock > 0;
+			const inSync = hiveReachable && sync.lastBlock >= chain.irreversibleBlock;
+			const healthy = dbAlive && hiveReachable && inSync;
+			const syncState = inSync ? "ready" : (syncActive ? "catching-up" : "stale");
 
 			if (!healthy) {
 				set.status = 503;
@@ -73,10 +75,12 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 				status: healthy ? "healthy" : "unhealthy",
 				db: dbAlive ? "ok" : "unreachable",
 				hive: hiveReachable ? "ok" : "unreachable",
-				sync: syncActive ? "active" : "stale",
+				sync: syncState,
+				syncActive,
 				inSync,
 				lastBlock: sync.lastBlock,
-				headBlock,
+				headBlock: chain.headBlock,
+				irreversibleBlock: chain.irreversibleBlock,
 				blocksBehind,
 				secondsSinceUpdate,
 			};
@@ -86,8 +90,8 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 		}
 	}, {
 		detail: {
-			summary: "Health check (sync-aware)",
-			description: "Returns 200 if DB is reachable and sync processed a block within the last 60s. Returns 503 otherwise. Use for Docker HEALTHCHECK / load balancer probes.",
+			summary: "Health check (readiness)",
+			description: "Returns 200 only when DB is reachable, Hive is reachable, and the indexer has caught up to the latest irreversible block. Returns 503 otherwise. Use for Docker HEALTHCHECK / load balancer readiness probes.",
 		},
 	})
 	.get("/api/stats", async () => {

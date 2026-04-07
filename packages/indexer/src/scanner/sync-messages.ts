@@ -1,32 +1,33 @@
 // Message types for communication between main thread and sync worker.
 // Uses simple objects for Bun's postMessage fast path (2-241x faster).
 
-export interface SyncProgressMessage {
-	readonly type: "progress";
-	readonly lastBlock: number;
-	readonly headBlock: number;
-}
+import type { SyncProgressSnapshot } from "./sync-state.ts";
 
-export interface SyncStatusMessage {
+export type SyncProgressMessage = {
+	readonly type: "progress";
+	readonly progress: SyncProgressSnapshot;
+};
+
+export type SyncStatusMessage = {
 	readonly type: "synced";
 	readonly synced: boolean;
-}
+};
 
-export interface SyncLogMessage {
+export type SyncLogMessage = {
 	readonly type: "log";
 	readonly level: "info" | "warn" | "error";
 	readonly message: string;
 	readonly data?: Record<string, unknown>;
-}
+};
 
-export interface SyncReadyMessage {
+export type SyncReadyMessage = {
 	readonly type: "ready";
-}
+};
 
-export interface SyncErrorMessage {
+export type SyncErrorMessage = {
 	readonly type: "fatal";
 	readonly error: string;
-}
+};
 
 export type WorkerMessage =
 	| SyncProgressMessage
@@ -35,6 +36,6 @@ export type WorkerMessage =
 	| SyncReadyMessage
 	| SyncErrorMessage;
 
-export interface MainToWorkerMessage {
+export type MainToWorkerMessage = {
 	readonly type: "stop";
-}
+};

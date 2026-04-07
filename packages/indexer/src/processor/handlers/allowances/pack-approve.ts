@@ -18,7 +18,9 @@ export async function handlePackApprove(op: ParsedOperation, txn: Queryable): Pr
 
 	if (approved) {
 		const balance = await getPackBalance(op.signer, packId, txn);
-		if (balance < 1) throw new Error(`Signer ${op.signer} has no balance for pack ${packId}`);
+		if (balance < quantity) {
+			throw new Error(`Insufficient balance: has ${balance}, approving ${quantity} for pack ${packId}`);
+		}
 	}
 
 	await upsertPackAllowance(

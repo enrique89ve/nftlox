@@ -1,22 +1,43 @@
-// Hive L1 Client — HafAH REST API + JSON-RPC fallback
+// Hive L1 Client — HafAH REST API + JSON-RPC failover
+// Uses circuit breaker + health-aware selection via endpoint-health.ts
 
 import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
+import { selectConsensusSample } from "./head-consensus.ts";
+import {
+	initEndpointHealth,
+	selectEndpoint,
+	recordSuccess,
+	recordFailure,
+	classifyError,
+	getBackoffMs,
+} from "./endpoint-health.ts";
 
 const log = createLogger("hive-client");
 
-let currentEndpointIndex = 0;
+// Initialize health tracking for all configured endpoints
+initEndpointHealth(config.hiveEndpoints);
 
-function getCurrentEndpoint(): string {
-	// config.ts validates hiveEndpoints is non-empty at startup
-	return config.hiveEndpoints[currentEndpointIndex] ?? config.hiveEndpoints[0] ?? "";
+// ============ FETCH ERROR ============
+
+class FetchError extends Error {
+	constructor(
+		readonly status: number,
+		readonly endpoint: string,
+		statusText: string,
+		readonly retryAfterMs?: number,
+	) {
+		super(`HTTP ${status}: ${statusText}`);
+		this.name = "FetchError";
+	}
 }
 
-function rotateEndpoint(): string {
-	currentEndpointIndex = (currentEndpointIndex + 1) % config.hiveEndpoints.length;
-	const next = getCurrentEndpoint();
-	log.warn("Rotating endpoint", { endpoint: next });
-	return next;
+function parseRetryAfterHeader(response: Response): number | undefined {
+	const header = response.headers.get("Retry-After");
+	if (!header) return undefined;
+	const seconds = Number(header);
+	if (!Number.isNaN(seconds) && seconds > 0) return seconds * 1000;
+	return undefined;
 }
 
 // ============ JSON-RPC (for head block only) ============
@@ -30,8 +51,9 @@ async function rpcCall<T>(endpoint: string, method: string, params: Record<strin
 	});
 
 	if (!response.ok) {
+		const retryAfterMs = parseRetryAfterHeader(response);
 		await response.text().catch(() => {}); // drain body to release connection
-		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+		throw new FetchError(response.status, endpoint, response.statusText, retryAfterMs);
 	}
 
 	const json = await response.json() as Record<string, unknown>;
@@ -49,23 +71,25 @@ async function rpcCall<T>(endpoint: string, method: string, params: Record<strin
 }
 
 async function callWithFailover<T>(method: string, params: Record<string, unknown> | unknown[]): Promise<T> {
-	const maxRetries = config.hiveEndpoints.length * 2;
+	const maxAttempts = config.hiveEndpoints.length * 2;
 
-	for (let attempt = 0; attempt < maxRetries; attempt++) {
-		const endpoint = getCurrentEndpoint();
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		const endpoint = selectEndpoint();
+		const start = performance.now();
 		try {
-			return await rpcCall<T>(endpoint, method, params);
+			const result = await rpcCall<T>(endpoint, method, params);
+			recordSuccess(endpoint, performance.now() - start);
+			return result;
 		} catch (err) {
-			log.warn(`RPC failed: ${endpoint} (${attempt + 1}/${maxRetries})`, {
+			const category = classifyError(err);
+			const retryAfterMs = err instanceof FetchError ? err.retryAfterMs : undefined;
+			recordFailure(endpoint, category, retryAfterMs);
+			log.warn(`RPC failed: ${endpoint} (${attempt + 1}/${maxAttempts})`, {
 				error: err instanceof Error ? err.message : String(err),
+				category,
 			});
-
-			rotateEndpoint();
-
-			if (attempt === maxRetries - 1) throw err;
-
-			const delay = Math.min(1000 * (attempt + 1), 5000);
-			await new Promise(r => setTimeout(r, delay));
+			if (attempt === maxAttempts - 1) throw err;
+			await new Promise(r => setTimeout(r, getBackoffMs(attempt, category)));
 		}
 	}
 
@@ -101,7 +125,7 @@ interface HafAHResponse {
 // During massive sync we request more ops per page to reduce round-trips.
 // Near the head, fewer custom_json ops exist so a smaller page suffices.
 const HAFAH_PAGE_SIZE_NORMAL = 1000;
-const HAFAH_PAGE_SIZE_MASSIVE = 5000;
+const HAFAH_PAGE_SIZE_MASSIVE = 1000;
 const MASSIVE_SYNC_THRESHOLD = 100;
 
 // HafAH enforces a hard limit of 2000 blocks per request (server-side assert)
@@ -110,16 +134,18 @@ const HAFAH_BLOCK_RANGE = 2000;
 const CUSTOM_JSON_OP_TYPE = 18;
 
 async function hafahFetch(endpoint: string, fromBlock: number, toBlock: number, operationBegin: string, pageSize: number): Promise<HafAHResponse> {
-	// Adaptive timeout: larger pages need more time for server-side query + transfer
-	const timeoutMs = pageSize > HAFAH_PAGE_SIZE_NORMAL ? 45_000 : 15_000;
+	// Adaptive timeout: larger pages need more time but 10-15s is plenty
+	// (benchmarks show 2-4s for 2000 blocks with pageSize 5000)
+	const timeoutMs = pageSize > HAFAH_PAGE_SIZE_NORMAL ? 15_000 : 10_000;
 
 	const url = `${endpoint}/hafah-api/operations?from-block=${fromBlock}&to-block=${toBlock}&operation-types=${CUSTOM_JSON_OP_TYPE}&page-size=${pageSize}&operation-begin=${operationBegin}`;
 
 	const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
 
 	if (!response.ok) {
+		const retryAfterMs = parseRetryAfterHeader(response);
 		await response.text().catch(() => {}); // drain body to release connection
-		throw new Error(`HafAH HTTP ${response.status}: ${response.statusText}`);
+		throw new FetchError(response.status, endpoint, response.statusText, retryAfterMs);
 	}
 
 	const data = await response.json() as Record<string, unknown>;
@@ -137,21 +163,25 @@ async function hafahFetch(endpoint: string, fromBlock: number, toBlock: number, 
 }
 
 async function hafahWithFailover(fromBlock: number, toBlock: number, operationBegin: string, pageSize: number): Promise<HafAHResponse> {
-	const maxRetries = config.hiveEndpoints.length;
+	const maxAttempts = config.hiveEndpoints.length * 2;
 
-	for (let attempt = 0; attempt < maxRetries; attempt++) {
-		const endpoint = getCurrentEndpoint();
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		const endpoint = selectEndpoint();
+		const start = performance.now();
 		try {
-			return await hafahFetch(endpoint, fromBlock, toBlock, operationBegin, pageSize);
+			const result = await hafahFetch(endpoint, fromBlock, toBlock, operationBegin, pageSize);
+			recordSuccess(endpoint, performance.now() - start);
+			return result;
 		} catch (err) {
-			log.warn(`HafAH failed: ${endpoint} (${attempt + 1}/${maxRetries})`, {
+			const category = classifyError(err);
+			const retryAfterMs = err instanceof FetchError ? err.retryAfterMs : undefined;
+			recordFailure(endpoint, category, retryAfterMs);
+			log.warn(`HafAH failed: ${endpoint} (${attempt + 1}/${maxAttempts})`, {
 				error: err instanceof Error ? err.message : String(err),
+				category,
 			});
-
-			rotateEndpoint();
-
-			if (attempt === maxRetries - 1) throw err;
-			await new Promise(r => setTimeout(r, 1000));
+			if (attempt === maxAttempts - 1) throw err;
+			await new Promise(r => setTimeout(r, getBackoffMs(attempt, category)));
 		}
 	}
 
@@ -165,16 +195,12 @@ export interface BlockchainHead {
 	readonly irreversibleBlock: number;
 }
 
-// Maximum acceptable drift between server clock and blockchain time.
-// Beyond this threshold, listing expiration checks in the multisig service
-// could diverge from the blockchain, causing incorrect accept/reject decisions.
-const MAX_CLOCK_DRIFT_MS = 15_000;
+export type EndpointHeadSample = Readonly<{
+	endpoint: string;
+	head: BlockchainHead;
+}>;
 
-export async function getBlockchainHead(): Promise<BlockchainHead> {
-	const result = await callWithFailover<Record<string, unknown>>(
-		"condenser_api.get_dynamic_global_properties", [],
-	);
-
+function parseBlockchainHead(result: Record<string, unknown>): BlockchainHead {
 	const headBlock = Number(result.head_block_number);
 	const irreversibleBlock = Number(result.last_irreversible_block_num);
 
@@ -185,6 +211,90 @@ export async function getBlockchainHead(): Promise<BlockchainHead> {
 	}
 
 	return { headBlock, irreversibleBlock };
+}
+
+/** @internal — exported for unit tests only */
+export function selectConsensusHead(samples: readonly EndpointHeadSample[]): BlockchainHead {
+	if (samples.length === 0) {
+		throw new Error("Cannot select blockchain head from an empty sample set");
+	}
+
+	const selected = selectConsensusSample(samples, sample => sample.head);
+
+	let minIrreversible = Infinity;
+	let maxIrreversible = -Infinity;
+	for (const s of samples) {
+		if (s.head.irreversibleBlock < minIrreversible) minIrreversible = s.head.irreversibleBlock;
+		if (s.head.irreversibleBlock > maxIrreversible) maxIrreversible = s.head.irreversibleBlock;
+	}
+
+	if (maxIrreversible !== minIrreversible) {
+		log.warn("Hive irreversible block mismatch across endpoints", {
+			samples: samples.map(({ endpoint, head }) => ({
+				endpoint,
+				headBlock: head.headBlock,
+				irreversibleBlock: head.irreversibleBlock,
+			})),
+			selectedEndpoint: selected.endpoint,
+			selectedHeadBlock: selected.head.headBlock,
+			selectedIrreversibleBlock: selected.head.irreversibleBlock,
+			minIrreversible,
+			maxIrreversible,
+			spread: maxIrreversible - minIrreversible,
+			strategy: samples.length === 2 ? "lower-of-two" : "lower-median",
+		});
+	}
+
+	return selected.head;
+}
+
+// Maximum acceptable drift between server clock and blockchain time.
+// Beyond this threshold, listing expiration checks in the multisig service
+// could diverge from the blockchain, causing incorrect accept/reject decisions.
+const MAX_CLOCK_DRIFT_MS = 15_000;
+
+export async function getBlockchainHead(consistency: "fast" | "strict" = "strict"): Promise<BlockchainHead> {
+	if (consistency === "fast" || config.hiveEndpoints.length === 1) {
+		const result = await callWithFailover<Record<string, unknown>>(
+			"condenser_api.get_dynamic_global_properties", [],
+		);
+		return parseBlockchainHead(result);
+	}
+
+	const results = await Promise.allSettled(
+		config.hiveEndpoints.map(async (endpoint) => {
+			const start = performance.now();
+			const result = await rpcCall<Record<string, unknown>>(
+				endpoint,
+				"condenser_api.get_dynamic_global_properties",
+				[],
+			);
+			recordSuccess(endpoint, performance.now() - start);
+			return { endpoint, head: parseBlockchainHead(result) };
+		}),
+	);
+
+	const successes = results.flatMap((result, idx) => {
+		if (result.status === "fulfilled") {
+			return [result.value];
+		}
+		const endpoint = config.hiveEndpoints[idx] ?? "";
+		const category = classifyError(result.reason);
+		const retryAfterMs = result.reason instanceof FetchError ? result.reason.retryAfterMs : undefined;
+		recordFailure(endpoint, category, retryAfterMs);
+		log.warn("RPC head probe failed", {
+			endpoint,
+			error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+			category,
+		});
+		return [];
+	});
+
+	if (successes.length === 0) {
+		throw new Error("All Hive endpoints exhausted");
+	}
+
+	return selectConsensusHead(successes);
 }
 
 /**
@@ -223,23 +333,32 @@ export async function checkClockDrift(): Promise<{ ok: boolean; driftMs: number 
 }
 
 export async function getHeadBlockNum(): Promise<number> {
-	// Use HafAH headblock endpoint (faster + more reliable than JSON-RPC)
-	const maxRetries = config.hiveEndpoints.length;
-	for (let attempt = 0; attempt < maxRetries; attempt++) {
-		const endpoint = getCurrentEndpoint();
+	const maxAttempts = config.hiveEndpoints.length * 2;
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		const endpoint = selectEndpoint();
+		const start = performance.now();
 		try {
-			const response = await fetch(`${endpoint}/hafah-api/headblock`, { signal: AbortSignal.timeout(30_000) });
+			const response = await fetch(`${endpoint}/hafah-api/headblock`, { signal: AbortSignal.timeout(10_000) });
+			if (!response.ok) {
+				const retryAfterMs = parseRetryAfterHeader(response);
+				await response.text().catch(() => {});
+				throw new FetchError(response.status, endpoint, response.statusText, retryAfterMs);
+			}
 			const text = await response.text();
 			const blockNum = parseInt(text, 10);
 			if (Number.isNaN(blockNum)) throw new Error(`Invalid headblock: ${text}`);
+			recordSuccess(endpoint, performance.now() - start);
 			return blockNum;
 		} catch (err) {
-			log.warn(`HafAH headblock failed: ${endpoint} (${attempt + 1}/${maxRetries})`, {
+			const category = classifyError(err);
+			const retryAfterMs = err instanceof FetchError ? err.retryAfterMs : undefined;
+			recordFailure(endpoint, category, retryAfterMs);
+			log.warn(`HafAH headblock failed: ${endpoint} (${attempt + 1}/${maxAttempts})`, {
 				error: err instanceof Error ? err.message : String(err),
+				category,
 			});
-			rotateEndpoint();
-			if (attempt === maxRetries - 1) throw err;
-			await new Promise(r => setTimeout(r, 1000));
+			if (attempt === maxAttempts - 1) throw err;
+			await new Promise(r => setTimeout(r, getBackoffMs(attempt, category)));
 		}
 	}
 	throw new Error("All endpoints exhausted for headblock");
@@ -281,7 +400,11 @@ export async function getCustomJsonInRange(fromBlock: number, toBlock: number, p
 		}
 	}
 
-	if (allOps.length > 0) {
+	if (pages >= maxPages) {
+		log.error("HafAH pagination safety limit reached — ops may be missing", {
+			fromBlock, toBlock, pages, maxPages, protocolOps: allOps.length,
+		});
+	} else if (allOps.length > 0) {
 		log.debug("HafAH found", { fromBlock, toBlock, pages, protocolOps: allOps.length });
 	}
 

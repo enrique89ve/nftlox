@@ -11,9 +11,9 @@ import {
 
 describe("sync-state", () => {
 	beforeEach(() => {
-		setSyncReporter(null as any);
+		setSyncReporter(null);
 		setSynced(false);
-		updateSyncProgress(0, 0);
+		updateSyncProgress({ lastBlock: 0, headBlock: 0, irreversibleBlock: 0 });
 	});
 
 	test("starts as not synced", () => {
@@ -28,18 +28,19 @@ describe("sync-state", () => {
 	});
 
 	test("getSyncProgress returns correct values", () => {
-		updateSyncProgress(100, 200);
+		updateSyncProgress({ lastBlock: 100, headBlock: 220, irreversibleBlock: 200 });
 		const progress = getSyncProgress();
 		expect(progress.lastBlock).toBe(100);
-		expect(progress.headBlock).toBe(200);
+		expect(progress.headBlock).toBe(220);
+		expect(progress.irreversibleBlock).toBe(200);
 		expect(progress.behind).toBe(100);
 	});
 
-	test("behind is clamped to 0 when lastBlock >= headBlock", () => {
-		updateSyncProgress(200, 200);
+	test("behind is clamped to 0 when lastBlock >= irreversibleBlock", () => {
+		updateSyncProgress({ lastBlock: 200, headBlock: 220, irreversibleBlock: 200 });
 		expect(getSyncProgress().behind).toBe(0);
 
-		updateSyncProgress(201, 200);
+		updateSyncProgress({ lastBlock: 201, headBlock: 220, irreversibleBlock: 200 });
 		expect(getSyncProgress().behind).toBe(0);
 	});
 
@@ -54,9 +55,9 @@ describe("sync-state", () => {
 
 describe("sync-state reporter (worker mode)", () => {
 	beforeEach(() => {
-		setSyncReporter(null as any);
+		setSyncReporter(null);
 		setSynced(false);
-		updateSyncProgress(0, 0);
+		updateSyncProgress({ lastBlock: 0, headBlock: 0, irreversibleBlock: 0 });
 	});
 
 	test("should call onProgress when updateSyncProgress is called", () => {
@@ -64,9 +65,10 @@ describe("sync-state reporter (worker mode)", () => {
 		const onSyncedChange = mock(() => {});
 		setSyncReporter({ onProgress, onSyncedChange });
 
-		updateSyncProgress(100, 200);
+		const progress = { lastBlock: 100, headBlock: 220, irreversibleBlock: 200 };
+		updateSyncProgress(progress);
 
-		expect(onProgress).toHaveBeenCalledWith(100, 200);
+		expect(onProgress).toHaveBeenCalledWith(progress);
 		expect(onProgress).toHaveBeenCalledTimes(1);
 	});
 
@@ -84,10 +86,10 @@ describe("sync-state reporter (worker mode)", () => {
 	});
 
 	test("should not fail when no reporter is set", () => {
-		setSyncReporter(null as any);
+		setSyncReporter(null);
 
 		expect(() => {
-			updateSyncProgress(100, 200);
+			updateSyncProgress({ lastBlock: 100, headBlock: 220, irreversibleBlock: 200 });
 			setSynced(true);
 		}).not.toThrow();
 	});

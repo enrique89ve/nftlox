@@ -13,16 +13,18 @@ const mockUpdateLastBlock = mock((block: number, _txn?: unknown) => {
 	trackedLastBlock = block;
 	return Promise.resolve();
 });
-const mockGetBlockchainHead = mock(() => Promise.resolve({ headBlock: 0, irreversibleBlock: 0 }));
+const mockGetBlockchainHead = mock((_consistency?: "fast" | "strict") =>
+	Promise.resolve({ headBlock: 0, irreversibleBlock: 0 }),
+);
 const mockGetCustomJsonInRange = mock(
-	(_from: number, _to: number, _id: string) => Promise.resolve([] as HafAHOperation[]),
+	(_from: number, _to: number, _id: string, _behind?: number) => Promise.resolve([] as HafAHOperation[]),
 );
 const mockGetHafAHBlockRange = mock(() => 2000);
 const mockGetTransfersInTransaction = mock((_txId: string) => Promise.resolve([] as Array<{
 	from: string; to: string; amount: number; currency: string; memo: string;
 }>));
 const mockParseHafAHOperations = mock((_ops: HafAHOperation[]): ParseResult => ({ ops: [], rejected: [] }));
-const mockRouteOperation = mock((_op: ParsedOperation, _txn: unknown) => Promise.resolve());
+const mockRouteOperation = mock((_op: ParsedOperation, _txn: unknown) => Promise.resolve(true));
 const mockWithTransaction = mock(async (fn: (txn: unknown) => Promise<void>) => {
 	await fn(mockTxn);
 });
@@ -78,7 +80,7 @@ mock.module("@/db/client.ts", () => ({
 
 // Import AFTER mocks so they take effect
 const { syncCycle, setRunning } = await import("@/scanner/sync-engine.ts");
-const { isSynced, setSynced, getSyncProgress, updateSyncProgress } = await import("@/scanner/sync-state.ts");
+const { isSynced, setSynced, getSyncProgress, updateSyncProgress, setSyncReporter } = await import("@/scanner/sync-state.ts");
 
 // ─── Helpers ────────────────────────────────────────
 
@@ -149,14 +151,18 @@ function resetAllMocks(): void {
 	mockGetHafAHBlockRange.mockImplementation(() => 2000);
 	mockGetTransfersInTransaction.mockImplementation(() => Promise.resolve([]));
 	mockParseHafAHOperations.mockImplementation(() => ({ ops: [], rejected: [] }));
-	mockRouteOperation.mockImplementation(() => Promise.resolve());
+	mockRouteOperation.mockImplementation(() => Promise.resolve(true));
 	mockWithTransaction.mockImplementation(async (fn: (txn: unknown) => Promise<void>) => {
 		await fn(mockTxn);
 	});
 
 	// Reset sync state
+	setSyncReporter({
+		onProgress: () => {},
+		onSyncedChange: () => {},
+	});
 	setSynced(false);
-	updateSyncProgress(0, 0);
+	updateSyncProgress({ lastBlock: 0, headBlock: 0, irreversibleBlock: 0 });
 	setRunning(true);
 }
 
@@ -183,14 +189,15 @@ describe("syncCycle", () => {
 		expect(firstCall![0]).toBeGreaterThan(0);
 	});
 
-	test("sets synced=true when within tolerance", async () => {
+	test("processes remaining irreversible blocks even when only a few behind", async () => {
 		trackedLastBlock = 1000;
-		setupChainHead(1005, 1010); // 5 blocks behind irreversible (< SYNC_TOLERANCE=10)
+		setupChainHead(1005, 1010); // 5 blocks behind irreversible
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([]);
 
 		await syncCycle();
 
+		expect(mockGetCustomJsonInRange).toHaveBeenCalledTimes(1);
 		expect(isSynced()).toBe(true);
 	});
 
@@ -241,6 +248,29 @@ describe("syncCycle", () => {
 		expect(mockWithTransaction).not.toHaveBeenCalled();
 	});
 
+	test("toggles synced around non-massive catch-up in the same cycle", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(1050); // 50 behind (< massive)
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockResolvedValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
+
+		setSynced(true);
+
+		const transitions: boolean[] = [];
+		setSyncReporter({
+			onProgress: () => {},
+			onSyncedChange: (value) => {
+				transitions.push(value);
+			},
+		});
+
+		await syncCycle();
+
+		expect(transitions).toEqual([false, true]);
+		expect(isSynced()).toBe(true);
+	});
+
 	test("sets synced=false during massive sync", async () => {
 		trackedLastBlock = 1000;
 		setupChainHead(2000); // 1000 behind (> MASSIVE_THRESHOLD=100)
@@ -284,25 +314,104 @@ describe("syncCycle", () => {
 		// Should have updated progress to the range end
 		expect(progress.lastBlock).toBeGreaterThanOrEqual(1020);
 		expect(progress.headBlock).toBe(1020);
+		expect(progress.irreversibleBlock).toBe(1020);
 	});
 
-	test("processes multiple ranges when behind exceeds blockRange", async () => {
+	test("revalidates chain head exactly when catch-up is near live", async () => {
 		trackedLastBlock = 1000;
-		setupChainHead(6000); // 5000 behind, blockRange=2000 → ~3 iterations
+		setupChainHead(1050, 1065);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([]);
 		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
 
 		await syncCycle();
 
-		// Should call getCustomJsonInRange 3 times: 1001-3000, 3001-5000, 5001-6000
-		expect(mockGetCustomJsonInRange.mock.calls.length).toBe(3);
-		expect(mockGetCustomJsonInRange.mock.calls[0]![0]).toBe(1001);
-		expect(mockGetCustomJsonInRange.mock.calls[0]![1]).toBe(3000);
-		expect(mockGetCustomJsonInRange.mock.calls[1]![0]).toBe(3001);
-		expect(mockGetCustomJsonInRange.mock.calls[1]![1]).toBe(5000);
-		expect(mockGetCustomJsonInRange.mock.calls[2]![0]).toBe(5001);
-		expect(mockGetCustomJsonInRange.mock.calls[2]![1]).toBe(6000);
+		expect(mockGetBlockchainHead.mock.calls).toHaveLength(2);
+		expect(mockGetBlockchainHead.mock.calls[0]?.[0]).toBe("fast");
+		expect(mockGetBlockchainHead.mock.calls[1]).toEqual([]);
+	});
+
+	test("skips exact head revalidation during massive sync", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(6000);
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockResolvedValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
+
+		await syncCycle();
+
+		expect(mockGetBlockchainHead.mock.calls).toHaveLength(1);
+		expect(mockGetBlockchainHead.mock.calls[0]?.[0]).toBe("fast");
+	});
+
+	test("processes multiple ranges with parallel fetch during massive sync", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(6000); // 5000 behind (massive), blockRange=2000
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockResolvedValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
+
+		await syncCycle();
+
+		// Parallel: iter1 fetches 1001-3000 + 3001-5000, iter2 fetches 5001-6000
+		// Total: 3 calls to getCustomJsonInRange
+		const calls = mockGetCustomJsonInRange.mock.calls;
+		expect(calls.length).toBe(3);
+		expect(calls[0]![0]).toBe(1001);
+		expect(calls[0]![1]).toBe(3000);
+		expect(calls[1]![0]).toBe(3001);
+		expect(calls[1]![1]).toBe(5000);
+		expect(calls[2]![0]).toBe(5001);
+		expect(calls[2]![1]).toBe(6000);
+	});
+
+	test("parallel fetch: range 2 failure falls back to range 1 only", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(6000); // massive
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
+
+		let callCount = 0;
+		mockGetCustomJsonInRange.mockImplementation(() => {
+			callCount++;
+			// Fail every second call (range 2 in each parallel pair)
+			if (callCount % 2 === 0) return Promise.reject(new Error("endpoint down"));
+			return Promise.resolve([]);
+		});
+
+		await syncCycle();
+
+		// Range 2 fails each time → processes only range 1 per iteration
+		// 5000 blocks / 2000 per range = ~3 single-range iterations (with retries of range 2)
+		expect(trackedLastBlock).toBe(6000);
+	});
+
+	test("no parallel fetch when not in massive sync", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(1050); // 50 behind (< MASSIVE_THRESHOLD=100)
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockResolvedValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
+
+		await syncCycle();
+
+		// Only 1 call — no parallel fetch for non-massive sync
+		expect(mockGetCustomJsonInRange.mock.calls.length).toBe(1);
+		// No endpointOffset argument (default 0)
+	});
+
+	test("circuit breaker spans across batches in parallel", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(6000); // massive
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+
+		const failingOps = Array.from({ length: 12 }, (_, i) => fakeParsedOp(1001 + i));
+
+		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps(failingOps));
+		mockRouteOperation.mockResolvedValue(false); // all ops fail
+
+		await expect(syncCycle()).rejects.toThrow("Circuit breaker");
 	});
 
 	test("disables synchronous_commit during massive sync", async () => {
@@ -358,5 +467,88 @@ describe("syncCycle", () => {
 
 		// Should have processed ranges correctly despite the mock complexity
 		expect(mockGetCustomJsonInRange).toHaveBeenCalled();
+	});
+
+	// ─── block skipping / filtering ───────────────────
+
+	test("skips blocks with no protocol ops — cursor advances, no routeOperation", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(3000); // 2000 behind (massive)
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+
+		// HafAH returns custom_json ops but parser says none are ours
+		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1500), fakeHafOp(2000)]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([])); // no protocol ops
+
+		await syncCycle();
+
+		// Cursor advanced to 3000
+		expect(trackedLastBlock).toBe(3000);
+		// No ops processed
+		expect(mockRouteOperation).not.toHaveBeenCalled();
+		// No transaction needed
+		expect(mockWithTransaction).not.toHaveBeenCalled();
+	});
+
+	test("processes only protocol ops when mixed with foreign custom_json", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(1020); // 20 behind (not massive)
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+
+		// HafAH returns 3 ops but only 1 is ours
+		const foreignOps = [fakeHafOp(1005), fakeHafOp(1010), fakeHafOp(1015)];
+		const onlyOurs = [fakeParsedOp(1010)];
+
+		mockGetCustomJsonInRange.mockResolvedValue(foreignOps);
+		mockParseHafAHOperations.mockReturnValue(wrapOps(onlyOurs));
+
+		await syncCycle();
+
+		// Only 1 op routed (the protocol one), not 3
+		expect(mockRouteOperation).toHaveBeenCalledTimes(1);
+		expect(trackedLastBlock).toBe(1020);
+	});
+
+	test("parallel fetch: empty batch 1 + ops in batch 2 — both advance cursor", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(6000); // massive
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+
+		let fetchCount = 0;
+		mockGetCustomJsonInRange.mockImplementation(() => {
+			fetchCount++;
+			// Batch 2 (second call) has ops, batch 1 (first call) is empty
+			if (fetchCount === 2) return Promise.resolve([fakeHafOp(3500)]);
+			return Promise.resolve([]);
+		});
+
+		mockParseHafAHOperations.mockImplementation((ops: any) => {
+			if (ops.length > 0) return wrapOps([fakeParsedOp(3500)]);
+			return wrapOps([]);
+		});
+
+		await syncCycle();
+
+		// Ops from batch 2 were processed
+		expect(mockRouteOperation).toHaveBeenCalled();
+		// Cursor advanced past both batches
+		expect(trackedLastBlock).toBe(6000);
+	});
+
+	test("1000 empty blocks advance cursor without processing", async () => {
+		trackedLastBlock = 50000;
+		setupChainHead(51000); // 1000 behind (massive)
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockResolvedValue([]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([]));
+
+		await syncCycle();
+
+		// Cursor advanced fully
+		expect(trackedLastBlock).toBe(51000);
+		// Zero ops processed
+		expect(mockRouteOperation).not.toHaveBeenCalled();
+		// No transactions opened
+		expect(mockWithTransaction).not.toHaveBeenCalled();
 	});
 });

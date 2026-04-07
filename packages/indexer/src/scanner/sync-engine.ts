@@ -4,7 +4,7 @@ import { getLastBlock, updateLastBlock, cleanupExpiredOperations, insertInvalidO
 import { acquireSyncLock, releaseSyncLock, verifyLockHeld } from "./sync-lock.ts";
 import { getBlockchainHead, getCustomJsonInRange, getHafAHBlockRange, getTransfersInTransaction, checkClockDrift } from "./hive-client.ts";
 import { ACTION_BUY, ACTION_PACK_BUY } from "@/protocol/index.ts";
-import { parseHafAHOperations } from "./operation-parser.ts";
+import { parseHafAHOperations, type RejectedOperation, type ParsedOperation } from "./operation-parser.ts";
 import { routeOperation } from "@/processor/action-router.ts";
 import { setSynced, updateSyncProgress } from "./sync-state.ts";
 import { createLogger } from "@/utils/logger.ts";
@@ -12,9 +12,47 @@ import { createLogger } from "@/utils/logger.ts";
 const log = createLogger("sync");
 
 const MASSIVE_THRESHOLD = 100;
-const SYNC_TOLERANCE = 10;
 const MAX_CONTINUITY_FAILURES = 3;
 const MAX_CONSECUTIVE_HANDLER_FAILURES = 10;
+
+// ============ BATCH FETCH ============
+
+interface FetchedBatch {
+	readonly from: number;
+	readonly to: number;
+	readonly ops: ParsedOperation[];
+	readonly rejected: RejectedOperation[];
+	readonly rawCount: number;
+}
+
+/**
+ * Fetch, parse, and enrich a single block range.
+ * Read-only I/O + in-memory enrichment — no DB writes, safe to run in parallel.
+ */
+async function fetchBatch(from: number, to: number, protocolId: string, behind: number): Promise<FetchedBatch> {
+	const hafOps = await getCustomJsonInRange(from, to, protocolId, behind);
+	const { ops, rejected } = parseHafAHOperations(hafOps);
+
+	// Enrich buy/pack_buy ops with paired transfers
+	const buyOps = ops.filter(op =>
+		op.action === ACTION_BUY || op.action === ACTION_PACK_BUY
+	);
+	const transferPools = new Map<string, { transfers: Array<{ from: string; to: string; amount: number; currency: string; memo: string }>; consumed: Set<number> }>();
+	await Promise.all(
+		[...new Set(buyOps.map(op => op.txId))].map(async (txId) => {
+			const transfers = await getTransfersInTransaction(txId);
+			transferPools.set(txId, { transfers, consumed: new Set() });
+		})
+	);
+	for (const op of buyOps) {
+		const pool = transferPools.get(op.txId);
+		if (!pool) throw new Error(`Transfer pool missing for txId ${op.txId}`);
+		op.pairedTransfers = pool.transfers;
+		op.transferPool = pool;
+	}
+
+	return { from, to, ops, rejected, rawCount: hafOps.length };
+}
 
 let running = false;
 
@@ -119,32 +157,37 @@ export async function syncCycle(): Promise<void> {
 		log.info("Initialized from genesis block", { genesisBlock: config.genesisBlock });
 	}
 
-	const chain = await getBlockchainHead();
+	let chain = await getBlockchainHead("fast");
+	if (chain.irreversibleBlock - lastBlock <= MASSIVE_THRESHOLD) {
+		chain = await getBlockchainHead();
+	}
 
 	// Process only up to the last irreversible block to prevent reorg-induced state divergence.
 	// This adds ~45s delay (Hive finality = ~15 blocks × 3s) but guarantees all processed
 	// operations are final and cannot be reverted by a chain reorganization.
-	const headBlock = chain.irreversibleBlock;
-	const behind = headBlock - lastBlock;
+	const irreversibleBlock = chain.irreversibleBlock;
+	const headBlock = chain.headBlock;
+	const behind = irreversibleBlock - lastBlock;
+	const startedOutOfSync = behind > 0;
 
-	updateSyncProgress(lastBlock, chain.headBlock);
+	updateSyncProgress({ lastBlock, headBlock, irreversibleBlock });
 
-	if (behind <= SYNC_TOLERANCE) {
+	if (behind <= 0) {
 		setSynced(true);
-		if (behind <= 0) {
-			await sleep(config.syncIntervalMs);
-			return;
-		}
+		await sleep(config.syncIntervalMs);
+		return;
+	} else {
+		setSynced(false);
 	}
 
 	const isMassive = behind > MASSIVE_THRESHOLD;
 	const blockRange = getHafAHBlockRange();
 
 	if (isMassive) {
-		setSynced(false);
 		log.info("MASSIVE SYNC started (HafAH)", {
 			lastBlock,
 			headBlock,
+			irreversibleBlock,
 			behind,
 			blockRange,
 		});
@@ -156,12 +199,10 @@ export async function syncCycle(): Promise<void> {
 	let continuityFailures = 0;
 	const startTime = Date.now();
 
-	while (current <= headBlock && running) {
-		const rangeEnd = Math.min(current + blockRange - 1, headBlock);
+	while (current <= irreversibleBlock && running) {
+		const range1End = Math.min(current + blockRange - 1, irreversibleBlock);
 
 		// --- Block continuity assertion ---
-		// Verify the DB cursor matches our in-memory cursor before each batch.
-		// Catches any divergence between memory and persisted state.
 		const dbLastBlock = await getLastBlock();
 		const expectedStart = dbLastBlock + 1;
 		if (current !== expectedStart) {
@@ -180,123 +221,149 @@ export async function syncCycle(): Promise<void> {
 		}
 		continuityFailures = 0;
 
-		// Fetch custom_json ops in this range via HafAH (pre-filtered by protocol ID)
-		const hafOps = await getCustomJsonInRange(current, rangeEnd, config.protocolId, behind);
+		// During massive sync, fetch 2 ranges in parallel to halve HTTP latency.
+		// Range 2 is optional — if it fails we still process range 1.
+		const batches: FetchedBatch[] = [];
+		const hasRange2 = isMassive && range1End < irreversibleBlock;
+		const range2Start = range1End + 1;
+		const range2End = hasRange2 ? Math.min(range2Start + blockRange - 1, irreversibleBlock) : 0;
 
-		// Parse validated protocol operations + collect rejected payloads
-		const { ops, rejected } = parseHafAHOperations(hafOps);
+		if (hasRange2) {
+			const results = await Promise.allSettled([
+				fetchBatch(current, range1End, config.protocolId, behind),
+				fetchBatch(range2Start, range2End, config.protocolId, behind),
+			]);
 
-		// Enrich buy and pack_buy ops with paired transfers for payment verification.
-		// A shared TransferPool per txId tracks which transfers have been consumed,
-		// preventing a single payment from satisfying multiple operations (CVE: payment reuse).
-		const buyOps = ops.filter(op =>
-			op.action === ACTION_BUY || op.action === ACTION_PACK_BUY
-		);
-		const transferPools = new Map<string, { transfers: Array<{ from: string; to: string; amount: number; currency: string; memo: string }>; consumed: Set<number> }>();
-		await Promise.all(
-			[...new Set(buyOps.map(op => op.txId))].map(async (txId) => {
-				const transfers = await getTransfersInTransaction(txId);
-				transferPools.set(txId, { transfers, consumed: new Set() });
-			})
-		);
-		for (const op of buyOps) {
-			const pool = transferPools.get(op.txId)!;
-			op.pairedTransfers = pool.transfers;
-			op.transferPool = pool;
+			// Range 1 must succeed — it's the current cursor position
+			if (results[0].status === "rejected") {
+				const reason = results[0].reason;
+				throw reason instanceof Error ? reason : new Error(String(reason));
+			}
+			batches.push(results[0].value);
+
+			// Range 2 is best-effort — skip if it fails, we'll retry next iteration
+			if (results[1].status === "fulfilled") {
+				batches.push(results[1].value);
+			} else {
+				log.warn("Parallel fetch for range 2 failed, continuing with range 1 only", {
+					range2: `${range2Start}-${range2End}`,
+					error: results[1].reason instanceof Error ? results[1].reason.message : String(results[1].reason),
+				});
+			}
+		} else {
+			batches.push(await fetchBatch(current, range1End, config.protocolId, behind));
 		}
 
-		// Process operations in a transaction.
-		// routeOperation is infallible — individual handler errors are caught and recorded
-		// as invalid_operations, so a single bad op never aborts the batch.
-		if (ops.length > 0 || rejected.length > 0) {
+		// Process all batches in strict block order within a single transaction.
+		const lastBatch = batches[batches.length - 1] ?? batches[0];
+		if (!lastBatch) throw new Error("No batches produced — logic error");
+		const hasOps = batches.some(b => b.ops.length > 0 || b.rejected.length > 0);
+
+		if (hasOps) {
 			await withTransaction(async (txn) => {
 				if (isMassive) {
 					await txn`SET LOCAL synchronous_commit = OFF`;
 				}
-				// Record malformed payloads that matched our protocol ID but failed validation.
-				// Previously these were silently discarded — now they're auditable.
-				for (const rej of rejected) {
-					await insertInvalidOperation({
-						blockNum: rej.blockNum,
-						txId: rej.txId,
-						operationId: rej.operationId,
-						signer: rej.signer,
-						action: null,
-						reason: rej.reason,
-						rawPayload: rej.rawPayload,
-					}, txn);
-				}
+
 				let consecutiveFailures = 0;
-				for (const op of ops) {
-					const success = await routeOperation(op, txn);
-					if (success) {
-						consecutiveFailures = 0;
-					} else {
-						consecutiveFailures++;
-						if (consecutiveFailures >= MAX_CONSECUTIVE_HANDLER_FAILURES) {
-							throw new Error(
-								`Circuit breaker: ${consecutiveFailures} consecutive handler failures in block range ${current}-${rangeEnd}`,
-							);
+				for (const batch of batches) {
+					for (const rej of batch.rejected) {
+						await insertInvalidOperation({
+							blockNum: rej.blockNum,
+							txId: rej.txId,
+							operationId: rej.operationId,
+							signer: rej.signer,
+							action: null,
+							reason: rej.reason,
+							rawPayload: rej.rawPayload,
+						}, txn);
+					}
+					for (const op of batch.ops) {
+						const success = await routeOperation(op, txn);
+						if (success) {
+							consecutiveFailures = 0;
+						} else {
+							consecutiveFailures++;
+							if (consecutiveFailures >= MAX_CONSECUTIVE_HANDLER_FAILURES) {
+								throw new Error(
+									`Circuit breaker: ${consecutiveFailures} consecutive handler failures in block range ${batch.from}-${batch.to}`,
+								);
+							}
 						}
 					}
 				}
-				await updateLastBlock(rangeEnd, txn);
+
+				await updateLastBlock(lastBatch.to, txn);
 			});
 		} else {
-			// No ops in range — just advance the cursor
-			await updateLastBlock(rangeEnd);
+			await updateLastBlock(lastBatch.to);
 		}
 
-		// Yield to event loop during massive sync so the API server can handle requests
+		// Yield between batches during massive sync so Postgres can serve API queries.
 		if (isMassive) {
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await new Promise(resolve => setTimeout(resolve, 5));
 		}
 
-		const blocksInRange = rangeEnd - current + 1;
-		totalOps += ops.length;
-		totalBlocks += blocksInRange;
+		const blocksProcessed = lastBatch.to - current + 1;
+		const opsProcessed = batches.reduce((sum, b) => sum + b.ops.length, 0);
+		totalOps += opsProcessed;
+		totalBlocks += blocksProcessed;
 
-		updateSyncProgress(rangeEnd, headBlock);
+		updateSyncProgress({
+			lastBlock: lastBatch.to,
+			headBlock,
+			irreversibleBlock,
+		});
 
-		if (ops.length > 0 || rejected.length > 0) {
-			log.info("Processed ops", {
-				range: `${current}-${rangeEnd}`,
-				customJson: hafOps.length,
-				protocolOps: ops.length,
-				...(rejected.length > 0 ? { rejectedOps: rejected.length } : {}),
-			});
+		if (opsProcessed > 0 || batches.some(b => b.rejected.length > 0)) {
+			for (const batch of batches) {
+				if (batch.ops.length > 0 || batch.rejected.length > 0) {
+					log.info("Processed ops", {
+						range: `${batch.from}-${batch.to}`,
+						customJson: batch.rawCount,
+						protocolOps: batch.ops.length,
+						...(batch.rejected.length > 0 ? { rejectedOps: batch.rejected.length } : {}),
+					});
+				}
+			}
 		}
 
 		// Progress log every ~10k blocks
-		if (isMassive && totalBlocks % 10000 < blockRange) {
+		if (isMassive && totalBlocks % 10000 < blockRange * batches.length) {
 			const elapsedSec = Math.max((Date.now() - startTime) / 1000, 0.001);
-			const pct = ((rangeEnd - lastBlock) / behind * 100).toFixed(2);
+			const pct = ((lastBatch.to - lastBlock) / behind * 100).toFixed(2);
 			const bps = Math.round(totalBlocks / elapsedSec);
-			const remaining = headBlock - rangeEnd;
+			const remaining = irreversibleBlock - lastBatch.to;
 			const eta = bps > 0 ? Math.ceil(remaining / bps / 60) : 0;
 			log.info("Progress", {
-				block: rangeEnd,
+				block: lastBatch.to,
 				scanned: totalBlocks,
 				protocolOps: totalOps,
 				pct: `${pct}%`,
 				elapsed: `${elapsedSec.toFixed(1)}s`,
 				blocksPerSec: bps,
 				etaMinutes: eta,
+				parallel: batches.length > 1,
 			});
 		}
 
-		current = rangeEnd + 1;
+		current = lastBatch.to + 1;
 	}
 
-	if (isMassive && totalBlocks > 0) {
-		const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-		log.info("MASSIVE SYNC complete", {
-			blocks: totalBlocks,
-			protocolOps: totalOps,
-			elapsed: `${elapsed}s`,
-		});
-		setSynced(true);
-		log.info("Indexer is now IN SYNC — API accepting requests");
+	if (totalBlocks > 0 && current > irreversibleBlock) {
+		if (isMassive) {
+			const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+			log.info("MASSIVE SYNC complete", {
+				blocks: totalBlocks,
+				protocolOps: totalOps,
+				elapsed: `${elapsed}s`,
+			});
+		}
+
+		if (startedOutOfSync) {
+			setSynced(true);
+			log.info("Indexer is now IN SYNC — API accepting requests");
+		}
 	}
 }
 

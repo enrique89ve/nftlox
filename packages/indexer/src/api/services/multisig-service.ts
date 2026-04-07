@@ -2,10 +2,12 @@
  * Multisig service — validates and co-signs multisig buy transactions.
  *
  * Pure functions with explicit dependencies. No module-level state.
- * The PrivateKey is created per-request and never stored.
+ * Signing is delegated to beekeeper (WASM) — the private key never
+ * lives in JS heap memory after initialization.
  */
 
-import { Transaction, PrivateKey, type TransactionType, type OperationName, type OperationBody } from "hive-tx";
+import { Transaction, type TransactionType, type OperationName, type OperationBody } from "hive-tx";
+import { signWithBeekeeper } from "@/api/services/beekeeper-signer.ts";
 import { createLogger } from "@/utils/logger.ts";
 import type { Queryable } from "@/db/client.ts";
 import { getNftWithCollectionRules, type NftProcessingRow } from "@/db/queries/nfts.ts";
@@ -67,7 +69,6 @@ export async function processMultisigRequest(
 	db: Queryable,
 	nodeAccount: string,
 	protocolId: string,
-	activeKey: string,
 ): Promise<MultisigResponse> {
 	try {
 		const requestShape = validateRequestShape(rawBody);
@@ -103,7 +104,7 @@ export async function processMultisigRequest(
 		const transfers = extractTransfers(request.transaction.operations, request.buyer);
 		validatePaymentSplit(transfers, nft, request.nftId, rules, nodeAccount);
 
-		const signResult = signTransaction(request.transaction, activeKey);
+		const signResult = signTransaction(request.transaction);
 		return {
 			ok: true,
 			signature: signResult.signature,
@@ -613,14 +614,14 @@ interface SignResult {
 	readonly digest: string;
 }
 
-function signTransaction(tx: HiveTransactionObject, activeKey: string): SignResult {
+function signTransaction(tx: HiveTransactionObject): SignResult {
 	const hiveTx = new Transaction();
 
-	// Set the internal transaction object directly.
-	// The tx already has ref_block_num, ref_block_prefix, expiration, and operations
-	// from the client. We reconstruct it with mutable signatures for signing.
-	// Cast operations to the hive-tx expected type.
-	// We have already validated the structure above, so this narrowing is safe.
+	// tx.operations: ReadonlyArray<readonly [string, Record<string, unknown>]>
+	// The double cast (as unknown as) is unavoidable: OperationBody<N> is a discriminated
+	// union of specific operation structs that TypeScript cannot prove overlaps with
+	// Record<string, unknown>, even though it does structurally. The validation above
+	// (validateOperations) has already proven the structure correct at runtime.
 	const operations = tx.operations as unknown as [OperationName, OperationBody<OperationName>][];
 
 	const txData: TransactionType = {
@@ -633,17 +634,10 @@ function signTransaction(tx: HiveTransactionObject, activeKey: string): SignResu
 	};
 	hiveTx.transaction = txData;
 
-	// Create key per-request, never store
-	const key = PrivateKey.from(activeKey);
-	hiveTx.sign(key);
-
-	const signed = hiveTx.transaction;
-	if (!signed || signed.signatures.length === 0) {
-		throw createMultisigError("INTERNAL_ERROR", "Signing produced no signature");
-	}
-
-	const signature = signed.signatures[0]!;
-	const { txId } = hiveTx.digest();
+	// Get the digest and sign via beekeeper (key lives in WASM, not JS heap)
+	const { digest, txId } = hiveTx.digest();
+	const sigDigestHex = Buffer.from(digest).toString("hex");
+	const signature = signWithBeekeeper(sigDigestHex);
 
 	return { signature, digest: txId };
 }

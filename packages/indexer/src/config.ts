@@ -53,7 +53,9 @@ export const config = {
 	// Node public info
 	nodeUrl: process.env.NODE_URL ?? "",
 	// Multisig (buy transaction signing)
-	activeKey: process.env.ACTIVE_KEY ?? "",
+	// NOTE: ACTIVE_KEY and BEEKEEPER_PASSWORD are read directly from process.env
+	// at startup (monolith.ts / api.ts), never stored in config — prevents the WIF
+	// from lingering in V8 heap as a frozen string after beekeeper import.
 	multisigRateLimitMax: toInt(process.env.MULTISIG_RATE_LIMIT_MAX, 10),
 	multisigRateLimitWindowMs: toInt(process.env.MULTISIG_RATE_LIMIT_WINDOW_MS, 60_000),
 } as const;

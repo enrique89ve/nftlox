@@ -8,6 +8,7 @@ import { connectWithRetry } from "@/bootstrap.ts";
 import { startSync, stopSync } from "./sync-engine.ts";
 import { setSyncReporter } from "./sync-state.ts";
 import type { WorkerMessage, MainToWorkerMessage } from "./sync-messages.ts";
+import type { SyncProgressSnapshot } from "./sync-state.ts";
 
 function send(msg: WorkerMessage): void {
 	postMessage(msg);
@@ -15,8 +16,8 @@ function send(msg: WorkerMessage): void {
 
 // Wire sync-state reporters to postMessage so the main thread stays updated
 setSyncReporter({
-	onProgress(lastBlock: number, headBlock: number) {
-		send({ type: "progress", lastBlock, headBlock });
+	onProgress(progress: SyncProgressSnapshot) {
+		send({ type: "progress", progress });
 	},
 	onSyncedChange(synced: boolean) {
 		send({ type: "synced", synced });

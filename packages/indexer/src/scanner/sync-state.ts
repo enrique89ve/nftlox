@@ -5,17 +5,28 @@
 let synced = false;
 let lastBlock = 0;
 let headBlock = 0;
+let irreversibleBlock = 0;
 let startupTime = 0;
 
 // Optional reporter for forwarding state changes to the main thread (worker mode)
-export interface SyncReporter {
-	onProgress(lastBlock: number, headBlock: number): void;
+export type SyncProgressSnapshot = Readonly<{
+	lastBlock: number;
+	headBlock: number;
+	irreversibleBlock: number;
+}>;
+
+export type SyncProgress = SyncProgressSnapshot & Readonly<{
+	behind: number;
+}>;
+
+export type SyncReporter = {
+	onProgress(progress: SyncProgressSnapshot): void;
 	onSyncedChange(synced: boolean): void;
-}
+};
 
 let reporter: SyncReporter | null = null;
 
-export function setSyncReporter(r: SyncReporter): void {
+export function setSyncReporter(r: SyncReporter | null): void {
 	reporter = r;
 }
 
@@ -36,16 +47,18 @@ export function setSynced(value: boolean): void {
 	reporter?.onSyncedChange(value);
 }
 
-export function getSyncProgress(): { lastBlock: number; headBlock: number; behind: number } {
+export function getSyncProgress(): SyncProgress {
 	return {
 		lastBlock,
 		headBlock,
-		behind: Math.max(0, headBlock - lastBlock),
+		irreversibleBlock,
+		behind: Math.max(0, irreversibleBlock - lastBlock),
 	};
 }
 
-export function updateSyncProgress(last: number, head: number): void {
-	lastBlock = last;
-	headBlock = head;
-	reporter?.onProgress(last, head);
+export function updateSyncProgress(progress: SyncProgressSnapshot): void {
+	lastBlock = progress.lastBlock;
+	headBlock = progress.headBlock;
+	irreversibleBlock = progress.irreversibleBlock;
+	reporter?.onProgress(progress);
 }
