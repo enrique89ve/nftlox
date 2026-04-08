@@ -219,6 +219,8 @@ Compose files inject only explicit environment variables per service. This keeps
 
 The container image is also built from `packages/indexer` itself. It no longer copies SDK runtime sources into the image, and it uses the package-local `bun.lock` for reproducible installs.
 
+If your platform builds from the monorepo root instead of `packages/indexer`, use `packages/indexer/Dockerfile.dokploy`. This is the expected setup for Dokploy when the app points at the repository root, because `packages/indexer/Dockerfile` assumes the build context is already `packages/indexer`.
+
 Examples:
 
 ```bash
