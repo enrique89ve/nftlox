@@ -1,8 +1,8 @@
-// NFTLox Protocol Constants - v0.4.1
+// NFTLox Protocol Constants - v0.5.0
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.4.1";
-export const MIN_PROTOCOL_VERSION = "0.4.1";
+export const PROTOCOL_VERSION = "0.5.0";
+export const MIN_PROTOCOL_VERSION = "0.5.0";
 export const HASH_VERSION = "v1";
 // Transaction Limits
 export const MAX_JSON_SIZE = 8000;
@@ -30,7 +30,8 @@ export const INSTANCE_ID_HASH_LENGTH = 20;
 export const SUPPORTED_CURRENCIES = ["HIVE", "HBD"] as const;
 export const MAX_ROYALTY_PCT = 50;
 export const MIN_PRICE_AMOUNT = "0.001";
-export const PROTOCOL_FEE_PCT = 1.0;
+export const BASIS_POINTS_DENOMINATOR = 10_000;
+export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 
 // Memo Prefixes (Marketplace) — strict format: `${PREFIX}${nftId}`
@@ -60,10 +61,18 @@ export function roundHive(n: number): number {
 	return Math.round(n * 1000) / 1000;
 }
 
+export function percentageToBasisPoints(percentage: number): number {
+	return Math.round(percentage * 100);
+}
+
+export function calculateBasisPointsAmount(totalAmount: number, basisPoints: number): number {
+	return roundHive(totalAmount * basisPoints / BASIS_POINTS_DENOMINATOR);
+}
+
 /**
  * Calculate the payment split for an NFT sale.
  *
- * Protocol fee (1.0%) always goes to the co-signing node.
+ * Protocol fee (100 bps = 1.0%) always goes to the co-signing node.
  * Marketplace fees are handled off-chain by the marketplace frontend.
  *
  * If royaltyRecipient === seller → royalty merges into seller amount.
@@ -81,7 +90,7 @@ export function calculatePaymentSplit(
 		throw new Error(`royaltyPct out of range: ${royaltyPct} (max ${MAX_ROYALTY_PCT})`);
 	}
 
-	const feeAmount = roundHive(totalPrice * PROTOCOL_FEE_PCT / 100);
+	const feeAmount = calculateBasisPointsAmount(totalPrice, PROTOCOL_FEE_BPS);
 
 	let royaltyAmount = 0;
 	let effectiveRoyaltyRecipient: string | null = null;
@@ -90,7 +99,7 @@ export function calculatePaymentSplit(
 			royaltyAmount = 0;
 			effectiveRoyaltyRecipient = null;
 		} else {
-			royaltyAmount = roundHive(totalPrice * royaltyPct / 100);
+			royaltyAmount = calculateBasisPointsAmount(totalPrice, percentageToBasisPoints(royaltyPct));
 			effectiveRoyaltyRecipient = royaltyRecipient;
 		}
 	}
@@ -141,7 +150,6 @@ export const ACTION_TRANSFER = "transfer";
 export const ACTION_REPLICATE = "replicate";
 export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
-export const ACTION_SET_OWNER_DATA = "set_owner_data";
 export const ACTION_EXTEND_SCHEMA = "extend_schema";
 export const ACTION_ARCHIVE_COLLECTION = "archive_collection";
 
@@ -184,7 +192,6 @@ export const CORE_ACTIONS = [
 	ACTION_REPLICATE,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_SET_DATA,
-	ACTION_SET_OWNER_DATA,
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 ] as const;
@@ -237,7 +244,6 @@ export const ACTION_AUTH_LEVEL: Record<ProtocolAction, AuthLevel> = {
 	[ACTION_REPLICATE]: "posting",
 	[ACTION_BULK_DISTRIBUTE]: "posting",
 	[ACTION_SET_DATA]: "posting",
-	[ACTION_SET_OWNER_DATA]: "posting",
 	[ACTION_EXTEND_SCHEMA]: "posting",
 	[ACTION_ARCHIVE_COLLECTION]: "posting",
 	[ACTION_LIST]: "posting",

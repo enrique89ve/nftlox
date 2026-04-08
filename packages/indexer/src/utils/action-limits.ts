@@ -1,7 +1,6 @@
 /** Dimension sobre la que se mide el limite. */
 export type LimitDimension =
 	| "collectionsPerCreator"
-	| "packsPerCollection"
 	| "seedsPerCollection";
 
 /** Proveedor de limites — reemplazable por strategy (e.g., creditos, DB, plan). */
@@ -11,7 +10,6 @@ export type ActionLimitsProvider = {
 
 const DEFAULT_LIMITS: Record<LimitDimension, number> = {
 	collectionsPerCreator: 100,
-	packsPerCollection: 50,
 	seedsPerCollection: 0, // 0 = delegado a totalPotential (per-collection)
 };
 

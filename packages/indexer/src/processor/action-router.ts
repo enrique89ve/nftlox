@@ -4,7 +4,6 @@ import { createLogger } from "@/utils/logger.ts";
 import { insertInvalidOperation, insertOrphanedBuy, insertConfirmedOperation } from "@/db/queries/sync.ts";
 import {
 	ACTION_BUY,
-	ACTION_PACK_BUY,
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_BULK_DISTRIBUTE,
@@ -13,20 +12,13 @@ import {
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
-	ACTION_PACK_CREATE,
-	ACTION_PACK_TRANSFER,
-	ACTION_PACK_OPEN,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
 	ACTION_NFT_TRANSFER_FROM,
-	ACTION_PACK_APPROVE,
-	ACTION_PACK_TRANSFER_FROM,
-	ACTION_PACK_DESTROY,
 	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_SET_DATA_FROM,
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
-	ACTION_SET_OWNER_DATA,
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTIVE_AUTH_ACTIONS,
@@ -40,7 +32,6 @@ import { handleBulkDistribute } from "./handlers/core/bulk-distribute.ts";
 import { handleTransfer } from "./handlers/core/transfer.ts";
 import { handleReplicate } from "./handlers/core/replicate.ts";
 import { handleSetData } from "./handlers/core/set-data.ts";
-import { handleSetOwnerData } from "./handlers/core/set-owner-data.ts";
 import { handleExtendSchema } from "./handlers/core/extend-schema.ts";
 import { handleArchiveCollection } from "./handlers/core/archive-collection.ts";
 
@@ -50,19 +41,10 @@ import { handleUnlist } from "./handlers/marketplace/unlist.ts";
 
 import { handleBuy } from "./handlers/marketplace/buy.ts";
 
-// Packs
-import { handlePackCreate } from "./handlers/packs/pack-create.ts";
-import { handlePackBuy } from "./handlers/packs/pack-buy.ts";
-import { handlePackTransfer } from "./handlers/packs/pack-transfer.ts";
-import { handlePackOpen } from "./handlers/packs/pack-open.ts";
-import { handlePackDestroy } from "./handlers/packs/pack-destroy.ts";
-
 // Allowances (Approve & TransferFrom)
 import { handleNftApprove } from "./handlers/allowances/nft-approve.ts";
 import { handleNftApproveAll } from "./handlers/allowances/nft-approve-all.ts";
 import { handleNftTransferFrom } from "./handlers/allowances/nft-transfer-from.ts";
-import { handlePackApprove } from "./handlers/allowances/pack-approve.ts";
-import { handlePackTransferFrom } from "./handlers/allowances/pack-transfer-from.ts";
 
 // Data Operators
 import { handleDataOperatorApprove } from "./handlers/allowances/data-operator-approve.ts";
@@ -92,7 +74,6 @@ const handlers: Record<ProtocolAction, Handler> = {
 	[ACTION_TRANSFER]: handleTransfer,
 	[ACTION_REPLICATE]: handleReplicate,
 	[ACTION_SET_DATA]: handleSetData,
-	[ACTION_SET_OWNER_DATA]: handleSetOwnerData,
 	[ACTION_EXTEND_SCHEMA]: handleExtendSchema,
 	[ACTION_ARCHIVE_COLLECTION]: handleArchiveCollection,
 
@@ -101,19 +82,10 @@ const handlers: Record<ProtocolAction, Handler> = {
 	[ACTION_UNLIST]: handleUnlist,
 	[ACTION_BUY]: handleBuy,
 
-	// Packs
-	[ACTION_PACK_CREATE]: handlePackCreate,
-	[ACTION_PACK_BUY]: handlePackBuy,
-	[ACTION_PACK_TRANSFER]: handlePackTransfer,
-	[ACTION_PACK_OPEN]: handlePackOpen,
-	[ACTION_PACK_DESTROY]: handlePackDestroy,
-
 	// Allowances
 	[ACTION_NFT_APPROVE]: handleNftApprove,
 	[ACTION_NFT_APPROVE_ALL]: handleNftApproveAll,
 	[ACTION_NFT_TRANSFER_FROM]: handleNftTransferFrom,
-	[ACTION_PACK_APPROVE]: handlePackApprove,
-	[ACTION_PACK_TRANSFER_FROM]: handlePackTransferFrom,
 
 	// Data Operators
 	[ACTION_DATA_OPERATOR_APPROVE]: handleDataOperatorApprove,
@@ -179,9 +151,9 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 				rawPayload: op.data,
 			}, txn);
 
-			// Flag failed buy/pack_buy operations that had HIVE transfers as orphaned buys.
+			// Flag failed buy operations that had HIVE transfers as orphaned buys.
 			// These represent cases where funds moved on-chain but NFT ownership was NOT updated.
-			const isBuyAction = op.action === ACTION_BUY || op.action === ACTION_PACK_BUY;
+			const isBuyAction = op.action === ACTION_BUY;
 			const transfers = op.pairedTransfers;
 			const firstTransfer = transfers?.[0];
 			if (isBuyAction && transfers && transfers.length > 0 && firstTransfer) {

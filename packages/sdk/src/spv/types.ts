@@ -1,7 +1,7 @@
 // SPV "Boleto Suizo" - Types
 // Trustless verification system for NFTLox pack operations
 
-import type { SupportedCurrency } from "../constants.ts";
+import type { ProtocolAction, SupportedCurrency } from "../constants.ts";
 
 // ============ L1 CLIENT CONFIG ============
 
@@ -20,6 +20,23 @@ export interface HafahTransaction {
 		type: string;
 		value: Record<string, unknown>;
 	}>;
+}
+
+export interface HafahOperationRecord {
+	operation_id: string;
+	block: number;
+	trx_id: string;
+	timestamp: string;
+	virtual_op: boolean;
+	op: {
+		type: string;
+		value: {
+			id: string;
+			json: string;
+			required_auths: string[];
+			required_posting_auths: string[];
+		};
+	};
 }
 
 // ============ PARSED OPERATION ============
@@ -75,6 +92,26 @@ export interface OnChainVerificationResult {
 	signerMatch: boolean;
 	rawPayload?: Record<string, unknown>;
 	message: string;
+}
+
+export interface ResolveMutableDataParams {
+	readonly l1Config: HiveL1Config;
+	readonly operationId: string;
+	readonly expectedHash: string;
+	readonly expectedActions?: readonly ProtocolAction[];
+	readonly protocolId?: string;
+}
+
+export interface ResolvedMutableData {
+	readonly operationId: string;
+	readonly txId: string;
+	readonly blockNum: number;
+	readonly timestamp: string;
+	readonly protocolId: string;
+	readonly action: ProtocolAction;
+	readonly signer: string;
+	readonly mutableData: Record<string, unknown>;
+	readonly hash: string;
 }
 
 // ============ OWNERSHIP VERIFICATION ============

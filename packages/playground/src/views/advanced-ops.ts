@@ -1,4 +1,4 @@
-// Advanced operations view — Replicate NFT, Set Owner Data
+// Advanced operations view — replicate previews
 import { $, log } from "../shared/dom";
 import { getConnectedUser } from "../shared/state";
 import { broadcastOperation } from "../shared/keychain";
@@ -6,7 +6,6 @@ import { broadcastOperation } from "../shared/keychain";
 export function initAdvancedOps() {
 	$("btn-replicate-load-nft")?.addEventListener("click", loadNftDetails);
 	$("btn-replicate-submit")?.addEventListener("click", submitReplicate);
-	$("btn-owner-data-submit")?.addEventListener("click", submitSetOwnerData);
 }
 
 function val(id: string): string {
@@ -95,59 +94,6 @@ async function submitReplicate() {
 			result.keyType || "Posting",
 			() => log("Replicate broadcast successful!", "success"),
 			(err) => log(`Replicate failed: ${err}`, "error"),
-		);
-	} catch (e) {
-		log(`Error: ${(e as Error).message}`, "error");
-	}
-}
-
-async function submitSetOwnerData() {
-	const user = getConnectedUser();
-	if (!user) {
-		log("Connect wallet first", "error");
-		return;
-	}
-
-	const collectionId = val("adv-owner-data-collection");
-	const key = val("adv-owner-data-key");
-	const rawValue = val("adv-owner-data-value");
-
-	if (!collectionId || !key) {
-		log("Collection ID and Key are required", "error");
-		return;
-	}
-
-	let value: unknown = rawValue;
-	try {
-		value = JSON.parse(rawValue);
-	} catch {
-		// Not JSON, use as plain string
-	}
-
-	const formData = { collectionId, key, value, owner: user };
-
-	try {
-		const response = await fetch("/api/build/set-owner-data", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(formData),
-		});
-		const result = await response.json();
-
-		if (!result.success) {
-			log(`Error: ${result.error || result.errors?.[0]?.message}`, "error");
-			return;
-		}
-
-		showPreview(result);
-		log("Set Owner Data preview generated", "success");
-
-		broadcastOperation(
-			user,
-			[result.operation],
-			result.keyType || "Posting",
-			() => log("Set Owner Data broadcast successful!", "success"),
-			(err) => log(`Set Owner Data failed: ${err}`, "error"),
 		);
 	} catch (e) {
 		log(`Error: ${(e as Error).message}`, "error");

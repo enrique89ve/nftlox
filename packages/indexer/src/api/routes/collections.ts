@@ -7,7 +7,6 @@ import {
 } from "@/db/queries/collections.ts";
 import { queryNfts, parseNftKind } from "@/db/queries/nfts.ts";
 import { getSchemaChain } from "@/db/queries/schema-versions.ts";
-import { getPacksSummaryByCollection } from "@/db/queries/packs.ts";
 
 export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: ["Collections"] })
 	.get("/", async ({ query }) => {
@@ -83,24 +82,4 @@ export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: 
 	}, {
 		params: t.Object({ id: t.String({ minLength: 1, maxLength: 128 }) }),
 		detail: { summary: "Get collection statistics", description: "Aggregated stats: seeds, instances, replicas, listed, burned, unique owners, floor price" },
-	})
-	.get("/:id/packs", async ({ params, query }) => {
-		const row = await getCollectionById(params.id);
-		if (!row) {
-			return new Response(JSON.stringify({ error: "Collection not found" }), {
-				status: 404,
-				headers: { "Content-Type": "application/json" },
-			});
-		}
-		return getPacksSummaryByCollection(params.id, query.limit, query.offset);
-	}, {
-		params: t.Object({ id: t.String({ minLength: 1, maxLength: 128 }) }),
-		query: t.Object({
-			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
-			offset: t.Number({ default: 0, minimum: 0 }),
-		}),
-		detail: {
-			summary: "Get packs for a collection",
-			description: "Distribution summary per pack: supply emitted, opened, in circulation, and creator's remaining balance",
-		},
 	});

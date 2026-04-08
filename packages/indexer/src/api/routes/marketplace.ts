@@ -14,7 +14,7 @@ export const marketplaceRoutes = new Elysia({ prefix: "/api/marketplace", tags: 
 				t.Literal("price_asc"),
 				t.Literal("price_desc"),
 				t.Literal("recent"),
-			], { default: "recent", description: "Sort order" })),
+			], { description: "Sort order: price_asc, price_desc, recent" })),
 			currency: t.Optional(t.String({ maxLength: 4, description: "Filter by currency: HIVE, HBD" })),
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),

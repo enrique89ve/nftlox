@@ -978,7 +978,7 @@ async function recordMatchResult(
 |------|---------|-------------|
 | **Collection creator** | `create_collection`, `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting (except `data_operator_approve` = Active) |
 | **Seed owner** | `bulk_distribute`, `transfer`, `burn`, `replicate`, `list`, `unlist` | Posting for `bulk_distribute`; Active for the rest |
-| **NFT owner** | `transfer`, `burn`, `list`, `unlist`, `nft_approve`, `nft_lend`, `set_owner_data` | Active (except `set_owner_data`, `unlist` = Posting) |
+| **NFT owner** | `transfer`, `burn`, `list`, `unlist`, `nft_approve`, `nft_lend` | Posting |
 | **Approved operator** | `set_data_from` | Posting |
 | **Approved spender** | `nft_transfer_from`, `pack_transfer_from` | Posting |
 

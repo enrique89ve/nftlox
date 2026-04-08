@@ -1,6 +1,6 @@
 import { closePool } from "./db/client.ts";
 import { startApiServer } from "./api/server.ts";
-import { setStartupTime, setSynced, updateSyncProgress, getSyncProgress, isSynced } from "./scanner/sync-state.ts";
+import { setStartupTime, setSynced, updateSyncProgress } from "./scanner/sync-state.ts";
 import { connectWithRetry } from "./bootstrap.ts";
 import { initBeekeeperSigner, closeBeekeeperSigner } from "./api/services/beekeeper-signer.ts";
 import { startMultisigHealthMonitor, stopMultisigHealthMonitor } from "./api/services/multisig-health.ts";
@@ -8,6 +8,7 @@ import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 import { dns } from "bun";
 import type { WorkerMessage, MainToWorkerMessage } from "./scanner/sync-messages.ts";
+import { buildInternalHealthResponse } from "./health/internal-health.ts";
 
 const log = createLogger("monolith");
 
@@ -89,19 +90,11 @@ async function main(): Promise<void> {
 	if (config.healthPort > 0) {
 		Bun.serve({
 			port: config.healthPort,
-			fetch() {
-				const progress = getSyncProgress();
-				const synced = isSynced();
-				return new Response(
-					JSON.stringify({ status: synced ? "ok" : "syncing", ...progress }),
-					{
-						status: synced ? 200 : 503,
-						headers: { "Content-Type": "application/json" },
-					},
-				);
+			fetch(request) {
+				return buildInternalHealthResponse(request);
 			},
 		});
-		log.info(`Static health endpoint on port ${config.healthPort}`);
+		log.info(`Internal health endpoints on port ${config.healthPort}`);
 	}
 
 	// Pre-resolve DNS for Hive endpoints to avoid cold-start latency

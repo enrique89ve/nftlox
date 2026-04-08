@@ -18,7 +18,6 @@ import {
 	createDataOperatorApproveOperation,
 	// Posting operations
 	createSetDataOperation,
-	createSetOwnerDataOperation,
 	createArchiveCollectionOperation,
 	createSetDataFromOperation,
 	createUnlistOperation,
@@ -57,10 +56,10 @@ describe("Authority exhaustiveness", () => {
 		}
 	});
 
-	test("counts match: 2 active + 24 posting = 26 total", () => {
+	test("counts match: 2 active + 23 posting = 25 total", () => {
 		expect(ACTIVE_AUTH_ACTIONS.length).toBe(2);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(24);
-		expect(ALL_ACTIONS.length).toBe(26);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(23);
+		expect(ALL_ACTIONS.length).toBe(25);
 	});
 });
 
@@ -163,15 +162,6 @@ describe("Posting key operations use required_posting_auths", () => {
 	test("set_data", () => {
 		const op = createSetDataOperation(
 			{ nftId: "nft_1", instanceDna: "dna_1" },
-			"alice",
-		);
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
-	});
-
-	test("set_owner_data", () => {
-		const op = createSetOwnerDataOperation(
-			{ nftId: "nft_1", instanceDna: "dna_1", data: { foo: "bar" } },
 			"alice",
 		);
 		expect(op[1].required_auths).toEqual([]);

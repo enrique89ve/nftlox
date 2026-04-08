@@ -1,4 +1,4 @@
-import { DEFAULT_FEE_ACCOUNT } from "@/protocol/index.ts";
+import { DEFAULT_FEE_ACCOUNT, PROTOCOL_ID } from "@/protocol/index.ts";
 
 const toInt = (val: string | undefined, fallback: number): number => {
 	const parsed = Number(val);
@@ -33,7 +33,7 @@ export const config = {
 	port: toInt(process.env.INDEXER_PORT, 3050),
 	databaseUrl: process.env.DATABASE_URL ?? (process.env.NODE_ENV === "production" ? "" : "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer"),
 	genesisBlock: toInt(process.env.GENESIS_BLOCK, 0),
-	protocolId: process.env.PROTOCOL_ID ?? "nftlox_testnet",
+	protocolId: PROTOCOL_ID,
 	batchSize: toInt(process.env.BATCH_SIZE, 1000),
 	syncIntervalMs: toInt(process.env.SYNC_INTERVAL_MS, 3000),
 	logLevel: toLogLevel(process.env.LOG_LEVEL, "info"),
@@ -47,7 +47,7 @@ export const config = {
 	postgresPassword: process.env.POSTGRES_PASSWORD ?? (process.env.NODE_ENV === "production" ? "" : "nftlox_dev"),
 	postgresUser: process.env.POSTGRES_USER ?? (process.env.NODE_ENV === "production" ? "" : "nftlox"),
 	postgresDb: process.env.POSTGRES_DB ?? (process.env.NODE_ENV === "production" ? "" : "nftlox_indexer"),
-	// Cuenta del nodo: firma operaciones y recibe el fee 2.5% en ventas.
+	// Cuenta del nodo: firma operaciones y recibe el fee del protocolo en ventas.
 	hiveAccount: process.env.HIVE_ACCOUNT ?? DEFAULT_FEE_ACCOUNT,
 	indexerRole: toIndexerRole(process.env.INDEXER_ROLE),
 	// Node public info

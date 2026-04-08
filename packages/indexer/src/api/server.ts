@@ -7,7 +7,6 @@ import { collectionsRoutes } from "./routes/collections.ts";
 import { nftsRoutes } from "./routes/nfts.ts";
 import { usersRoutes } from "./routes/users.ts";
 import { marketplaceRoutes } from "./routes/marketplace.ts";
-import { packsRoutes } from "./routes/packs.ts";
 import { statusRoutes } from "./routes/status.ts";
 import { multisigRoutes } from "./routes/multisig.ts";
 import { checkRateLimit } from "./middleware/rate-limiter.ts";
@@ -145,7 +144,6 @@ export function startApiServer(): void {
 					{ name: "NFTs", description: "Individual NFTs (seeds, instances, replicas)" },
 					{ name: "Users", description: "User portfolios and activity" },
 					{ name: "Marketplace", description: "Listings and sales" },
-					{ name: "Packs", description: "Semi-fungible packs (buy, transfer, open)" },
 				],
 			},
 		}));
@@ -156,7 +154,6 @@ export function startApiServer(): void {
 		.use(nftsRoutes)
 		.use(usersRoutes)
 		.use(marketplaceRoutes)
-		.use(packsRoutes)
 		.use(statusRoutes)
 		.use(multisigRoutes)
 		.listen({ port: config.port, idleTimeout: 30, maxRequestBodySize: 64 * 1024 });

@@ -1,7 +1,7 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
 import type { ParsedOperation, ParseResult } from "@/scanner/operation-parser.ts";
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
-import { ACTION_TRANSFER, ACTION_PACK_BUY } from "@/protocol/index.ts";
+import { ACTION_TRANSFER, ACTION_BUY } from "@/protocol/index.ts";
 
 // ─── Mocks ──────────────────────────────────────────
 
@@ -183,7 +183,7 @@ describe("syncCycle", () => {
 		// Should initialize to genesisBlock - 1
 		const firstCall = mockUpdateLastBlock.mock.calls[0];
 		expect(firstCall).toBeDefined();
-		// genesisBlock from config (default from SDK)
+		// genesisBlock from config
 		// First updateLastBlock call should be the genesis init
 		expect(typeof firstCall![0]).toBe("number");
 		expect(firstCall![0]).toBeGreaterThan(0);
@@ -285,15 +285,15 @@ describe("syncCycle", () => {
 		expect(isSynced()).toBe(true);
 	});
 
-	test("enriches pack_buy ops with paired transfers", async () => {
+	test("enriches buy ops with paired transfers", async () => {
 		const hafOps = [fakeHafOp(1001)];
-		const packBuyOp = fakeParsedOp(1001, ACTION_PACK_BUY);
+		const buyOp = fakeParsedOp(1001, ACTION_BUY);
 
 		trackedLastBlock = 1000;
 		setupChainHead(1020);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue(hafOps);
-		mockParseHafAHOperations.mockReturnValue(wrapOps([packBuyOp]));
+		mockParseHafAHOperations.mockReturnValue(wrapOps([buyOp]));
 		mockGetTransfersInTransaction.mockResolvedValue([]);
 
 		await syncCycle();

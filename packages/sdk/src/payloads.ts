@@ -23,7 +23,6 @@ import {
 	ACTION_NFT_TRANSFER_FROM,
 	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_SET_DATA_FROM,
-	ACTION_SET_OWNER_DATA,
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NFT_LEND,
@@ -44,8 +43,6 @@ import type {
 	DataOperatorApproveInput,
 	SetDataFromData,
 	SetDataFromInput,
-	SetOwnerDataData,
-	SetOwnerDataInput,
 	ExtendSchemaData,
 	ExtendSchemaInput,
 	ArchiveCollectionData,
@@ -350,27 +347,6 @@ export function createSetDataFromOperation(
 ): HiveOperation {
 	const payload = createSetDataFromPayload(input);
 	return buildHiveOperation(payload, operator);
-}
-
-// ============ SET_OWNER_DATA PAYLOADS ============
-
-export function createSetOwnerDataPayload(
-	input: SetOwnerDataInput,
-): ProtocolPayload<SetOwnerDataData> {
-	return makePayload(ACTION_SET_OWNER_DATA, {
-		nftId: input.nftId,
-		instanceDna: input.instanceDna,
-		data: input.data,
-		...spreadProvenance(input),
-	});
-}
-
-export function createSetOwnerDataOperation(
-	input: SetOwnerDataInput,
-	owner: string,
-): HiveOperation {
-	const payload = createSetOwnerDataPayload(input);
-	return buildHiveOperation(payload, owner);
 }
 
 // ============ EXTEND_SCHEMA PAYLOADS ============

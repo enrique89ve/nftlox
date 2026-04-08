@@ -52,7 +52,11 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 
 export async function getCollectionById(id: string): Promise<Record<string, unknown> | null> {
 	const [row] = await sql`
-		SELECT * FROM collections
+		SELECT id, name, symbol, creator, total_potential,
+			description, image_url, external_url,
+			transferable, burnable, replicable, royalty_pct, royalty_recipient,
+			schema, schema_version, status, tx_id, created_at
+		FROM collections
 		WHERE id = ${id} AND status = ${COLLECTION_STATUS_ACTIVE}
 	`;
 	return row ?? null;
@@ -78,7 +82,6 @@ export interface CollectionArchiveSnapshotRow {
 	creator: string;
 	status: CollectionStatus;
 	nft_count: number;
-	pack_count: number;
 }
 
 export async function getCollectionRules(
@@ -106,8 +109,7 @@ export async function getCollectionArchiveSnapshot(
 			c.id,
 			c.creator,
 			c.status,
-			COALESCE(cs.total, 0)::int AS nft_count,
-			COALESCE((SELECT COUNT(*)::int FROM packs p WHERE p.collection_id = c.id), 0) AS pack_count
+			COALESCE(cs.total, 0)::int AS nft_count
 		FROM collections c
 		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
 		WHERE c.id = ${id}
@@ -128,21 +130,13 @@ export async function updateCollectionSchema(
 	`;
 }
 
-export async function archiveCollection(
+export async function deleteCollection(
 	collectionId: string,
-	blockNum: number,
-	txId: string,
-	archivedAt: string,
 	txn: Queryable = sql,
 ): Promise<void> {
-	await txn`
-		UPDATE collections
-		SET status = ${COLLECTION_STATUS_ARCHIVED},
-			archived_at_block = ${blockNum},
-			archived_tx_id = ${txId},
-			archived_at = ${archivedAt}
-		WHERE id = ${collectionId}
-	`;
+	// Child tables (collection_stats, schema_versions, collection_allowances,
+	// data_operators) cascade via ON DELETE CASCADE.
+	await txn`DELETE FROM collections WHERE id = ${collectionId}`;
 }
 
 export async function collectionExists(id: string, txn: Queryable = sql): Promise<boolean> {
@@ -160,12 +154,19 @@ export async function countCollectionsByCreator(creator: string, txn: Queryable 
 	return row?.count ?? 0;
 }
 
+const COLLECTION_LIST_COLUMNS = sql`
+	c.id, c.name, c.symbol, c.creator, c.total_potential,
+	c.description, c.image_url, c.external_url,
+	c.transferable, c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient,
+	c.schema_version, c.status, c.tx_id, c.created_at,
+	COALESCE(cs.seeds, 0)::int AS seed_count,
+	COALESCE(cs.instances, 0)::int AS instance_count
+`;
+
 export async function listCollections(limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
 	return sql`
-		SELECT c.*,
-			COALESCE(cs.seeds, 0) AS seed_count,
-			COALESCE(cs.instances, 0) AS instance_count
+		SELECT ${COLLECTION_LIST_COLUMNS}
 		FROM collections c
 		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
 		WHERE c.status = ${COLLECTION_STATUS_ACTIVE}
@@ -177,9 +178,7 @@ export async function listCollections(limit = 50, offset = 0) {
 export async function getCollectionsByCreator(creator: string, limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
 	return sql`
-		SELECT c.*,
-			COALESCE(cs.seeds, 0) AS seed_count,
-			COALESCE(cs.instances, 0) AS instance_count
+		SELECT ${COLLECTION_LIST_COLUMNS}
 		FROM collections c
 		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
 		WHERE c.creator = ${creator} AND c.status = ${COLLECTION_STATUS_ACTIVE}
@@ -196,7 +195,7 @@ export async function getCollectionStats(collectionId: string) {
 			COALESCE(cs.replicas, 0) AS total_replicas,
 			COALESCE(cs.listed, 0) AS total_listed,
 			COALESCE(cs.burned, 0) AS total_burned,
-			COALESCE((SELECT COUNT(DISTINCT owner) FROM nfts WHERE collection_id = ${collectionId} AND status != 'burned'), 0) AS unique_owners,
+			COALESCE((SELECT COUNT(DISTINCT owner) FROM nfts WHERE collection_id = ${collectionId}), 0)::int AS unique_owners,
 			(SELECT MIN(listing_price) FROM nfts WHERE collection_id = ${collectionId} AND status = 'listed' AND (listing_expires_at IS NULL OR listing_expires_at > NOW())) AS floor_price
 		FROM collection_stats cs
 		WHERE cs.collection_id = ${collectionId}

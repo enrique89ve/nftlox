@@ -19,10 +19,10 @@ export async function handleNftApproveAll(op: ParsedOperation, txn: Queryable): 
 	if (collection.status === COLLECTION_STATUS_ARCHIVED) throw new Error(`Collection ${collectionId} is archived`);
 
 	if (approved) {
-		// Only allow approveAll if the signer owns at least one non-burned NFT in this collection
+		// Only allow approveAll if the signer owns at least one NFT in this collection
 		const [row] = await txn`
 			SELECT 1 FROM nfts
-			WHERE owner = ${op.signer} AND collection_id = ${collectionId} AND status != 'burned'
+			WHERE owner = ${op.signer} AND collection_id = ${collectionId}
 			LIMIT 1
 		`;
 		if (!row) throw new Error(`Signer ${op.signer} has no NFTs in collection ${collectionId}`);

@@ -38,10 +38,16 @@ export async function insertSale(params: InsertSaleParams, txn: Queryable = sql)
 
 // ============ SALES QUERIES (API) ============
 
+const SALE_COLUMNS = sql`
+	nft_id, collection_id, listing_id, seller, buyer,
+	gross_amount, currency, royalty_amount, protocol_fee, seller_net,
+	tx_id, created_at
+`;
+
 export async function getSalesByCollection(collectionId: string, limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
 	return sql`
-		SELECT * FROM sales
+		SELECT ${SALE_COLUMNS} FROM sales
 		WHERE collection_id = ${collectionId}
 		ORDER BY created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
@@ -51,7 +57,7 @@ export async function getSalesByCollection(collectionId: string, limit = 50, off
 export async function getSalesByNft(nftId: string, limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
 	return sql`
-		SELECT * FROM sales
+		SELECT ${SALE_COLUMNS} FROM sales
 		WHERE nft_id = ${nftId}
 		ORDER BY created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
@@ -64,7 +70,7 @@ export async function getSalesByAccount(account: string, role: "seller" | "buyer
 		? sql`seller = ${account}`
 		: sql`buyer = ${account}`;
 	return sql`
-		SELECT * FROM sales
+		SELECT ${SALE_COLUMNS} FROM sales
 		WHERE ${filter}
 		ORDER BY created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
@@ -74,7 +80,7 @@ export async function getSalesByAccount(account: string, role: "seller" | "buyer
 export async function getRecentSales(limit = 50, offset = 0) {
 	const safeLimit = clampLimit(limit);
 	return sql`
-		SELECT * FROM sales
+		SELECT ${SALE_COLUMNS} FROM sales
 		ORDER BY created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
 	`;

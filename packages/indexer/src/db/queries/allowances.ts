@@ -103,7 +103,6 @@ export async function cleanupCollectionAllowancesIfEmpty(
 	const [row] = await txn`
 		SELECT 1 FROM nfts
 		WHERE owner = ${owner} AND collection_id = ${collectionId}
-			AND status NOT IN ('burned')
 		LIMIT 1
 	`;
 	if (!row) {
@@ -165,66 +164,4 @@ export async function hasDataOperatorApproval(
 		WHERE collection_id = ${collectionId} AND operator = ${operator}
 	`;
 	return !!row;
-}
-
-// ============ PACK ALLOWANCES (ERC-20 style) ============
-
-export async function upsertPackAllowance(
-	owner: string,
-	spender: string,
-	packId: string,
-	quantity: number,
-	blockNum: number,
-	txId: string,
-	txn: Queryable = sql,
-): Promise<void> {
-	if (quantity === 0) {
-		await txn`
-			DELETE FROM pack_allowances
-			WHERE owner = ${owner} AND spender = ${spender} AND pack_id = ${packId}
-		`;
-		return;
-	}
-
-	await txn`
-		INSERT INTO pack_allowances (owner, spender, pack_id, quantity, block_num, tx_id)
-		VALUES (${owner}, ${spender}, ${packId}, ${quantity}, ${blockNum}, ${txId})
-		ON CONFLICT (owner, spender, pack_id)
-		DO UPDATE SET
-			quantity = ${quantity},
-			block_num = ${blockNum},
-			tx_id = ${txId},
-			updated_at = NOW()
-	`;
-}
-
-export async function getPackAllowance(
-	owner: string,
-	spender: string,
-	packId: string,
-	txn: Queryable = sql,
-): Promise<number> {
-	const [row] = await txn`
-		SELECT quantity FROM pack_allowances
-		WHERE owner = ${owner} AND spender = ${spender} AND pack_id = ${packId}
-	`;
-	return Number(row?.quantity ?? 0);
-}
-
-export async function deductPackAllowance(
-	owner: string,
-	spender: string,
-	packId: string,
-	quantity: number,
-	txn: Queryable = sql,
-): Promise<void> {
-	const result = await txn`
-		UPDATE pack_allowances
-		SET quantity = quantity - ${quantity}, updated_at = NOW()
-		WHERE owner = ${owner} AND spender = ${spender} AND pack_id = ${packId}
-			AND quantity >= ${quantity}
-	`;
-	if (result.count === 0) {
-		throw new Error("Insufficient pack allowance");
-	}
 }

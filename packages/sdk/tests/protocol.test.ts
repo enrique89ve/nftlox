@@ -48,8 +48,8 @@ import {
 } from "../src/index";
 
 describe("Protocol Version", () => {
-	test("version should be 0.4.1", () => {
-		expect(PROTOCOL_VERSION).toBe("0.4.1");
+	test("version should be 0.5.0", () => {
+		expect(PROTOCOL_VERSION).toBe("0.5.0");
 	});
 });
 
@@ -301,7 +301,7 @@ describe("Collection Payload", () => {
 		const payload = await createDeterministicCollectionPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.4.1");
+		expect(payload.version).toBe("0.5.0");
 		expect(payload.action).toBe(ACTION_CREATE_COLLECTION);
 		expect(payload.data.id.startsWith("col_")).toBe(true);
 		expect(payload.data.originDna.length).toBe(ORIGIN_DNA_LENGTH);
@@ -324,7 +324,7 @@ describe("Archive Collection Payload", () => {
 		const payload = createArchiveCollectionPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.4.1");
+		expect(payload.version).toBe("0.5.0");
 		expect(payload.action).toBe(ACTION_ARCHIVE_COLLECTION);
 		expect(payload.data.collectionId).toBe(validInput.collectionId);
 	});
@@ -354,7 +354,7 @@ describe("Mint Payload", () => {
 		const payload = await createDeterministicMintPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.4.1");
+		expect(payload.version).toBe("0.5.0");
 		expect(payload.action).toBe(ACTION_MINT);
 		expect(payload.data.id.startsWith("seed_")).toBe(true);
 		expect(payload.data.originDna).toBe("ABCD1234EFGH5678");
@@ -575,7 +575,7 @@ describe("Buy Action (Multisig)", () => {
 		const payload = createBuyPayload(data);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.4.1");
+		expect(payload.version).toBe("0.5.0");
 		expect(payload.action).toBe(ACTION_BUY);
 		expect(payload.data.nftId).toBe("nft_test123");
 		expect(payload.data.listingId).toBe("list_abc123");

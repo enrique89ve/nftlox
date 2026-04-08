@@ -97,7 +97,7 @@ export async function cleanupExpiredOperations(): Promise<number> {
 
 // ============ OPERATION STATUS ============
 
-export type OperationStatus = "confirmed" | "invalid" | "orphaned" | "pending" | "unknown";
+export type OperationStatus = "confirmed" | "invalid" | "orphaned" | "unknown";
 
 export interface OperationStatusEntry {
 	status: OperationStatus;
@@ -107,6 +107,16 @@ export interface OperationStatusEntry {
 	reason: string | null;
 	blockNum: number | null;
 	timestamp: string | null;
+	nftIds: ReadonlyArray<string>;
+}
+
+export interface OperationStatusResult {
+	txId: string;
+	totalOperations: number;
+	confirmed: number;
+	invalid: number;
+	orphaned: number;
+	operations: ReadonlyArray<OperationStatusEntry>;
 }
 
 /**
@@ -116,9 +126,14 @@ export interface OperationStatusEntry {
  * This function returns one entry per operation, so the caller can distinguish
  * mixed results (e.g., 1 confirmed + 1 invalid within the same tx).
  *
- * If no operations are found, returns a single "unknown" entry.
+ * Optionally filters by operationId and/or action.
+ * For confirmed operations, includes the IDs of NFTs created/affected.
  */
-export async function getOperationStatus(txId: string): Promise<OperationStatusEntry[]> {
+export async function getOperationStatus(
+	txId: string,
+	filterOperationId?: string,
+	filterAction?: string,
+): Promise<OperationStatusResult> {
 	const results: OperationStatusEntry[] = [];
 
 	// 1. Check invalid_operations (may have multiple per tx)
@@ -135,12 +150,13 @@ export async function getOperationStatus(txId: string): Promise<OperationStatusE
 			reason: row.reason ?? null,
 			blockNum: Number(row.block_num),
 			timestamp: String(row.indexed_at),
+			nftIds: [],
 		});
 	}
 
 	// 2. Check orphaned_buys (may have multiple per tx)
 	const orphaneds = await sql`
-		SELECT operation_id, buyer, reason, block_num, created_at
+		SELECT operation_id, buyer, nft_id, reason, block_num, created_at
 		FROM orphaned_buys WHERE tx_id = ${txId}
 	`;
 	for (const row of orphaneds) {
@@ -152,14 +168,21 @@ export async function getOperationStatus(txId: string): Promise<OperationStatusE
 			reason: row.reason ?? null,
 			blockNum: Number(row.block_num),
 			timestamp: String(row.created_at),
+			nftIds: row.nft_id ? [String(row.nft_id)] : [],
 		});
 	}
 
-	// 3. Check confirmed_operations for successful handler executions.
-	// This is the authoritative source: tracks operationId and the real protocol action.
+	// 3. Check confirmed_operations + resolve NFTs created/affected by each operation
 	const confirmed = await sql`
-		SELECT operation_id, signer, action, block_num, created_at
-		FROM confirmed_operations WHERE tx_id = ${txId}
+		SELECT c.operation_id, c.signer, c.action, c.block_num, c.created_at,
+			COALESCE(
+				ARRAY_AGG(n.id ORDER BY n.created_at) FILTER (WHERE n.id IS NOT NULL),
+				'{}'
+			) AS nft_ids
+		FROM confirmed_operations c
+		LEFT JOIN nfts n ON n.operation_id = c.operation_id
+		WHERE c.tx_id = ${txId}
+		GROUP BY c.operation_id, c.signer, c.action, c.block_num, c.created_at
 	`;
 	for (const row of confirmed) {
 		results.push({
@@ -170,22 +193,35 @@ export async function getOperationStatus(txId: string): Promise<OperationStatusE
 			reason: null,
 			blockNum: Number(row.block_num),
 			timestamp: String(row.created_at),
+			nftIds: row.nft_ids ?? [],
 		});
 	}
 
-	if (results.length === 0) {
-		return [{
-			status: "unknown",
+	// Apply filters
+	const filtered = results.filter(e =>
+		(!filterOperationId || e.operationId === filterOperationId)
+		&& (!filterAction || e.action === filterAction),
+	);
+
+	const countByStatus = (s: OperationStatus) => filtered.filter(e => e.status === s).length;
+
+	return {
+		txId,
+		totalOperations: filtered.length,
+		confirmed: countByStatus("confirmed"),
+		invalid: countByStatus("invalid"),
+		orphaned: countByStatus("orphaned"),
+		operations: filtered.length > 0 ? filtered : [{
+			status: "unknown" as OperationStatus,
 			operationId: null,
 			signer: null,
 			action: null,
 			reason: null,
 			blockNum: null,
 			timestamp: null,
-		}];
-	}
-
-	return results;
+			nftIds: [],
+		}],
+	};
 }
 
 // ============ ORPHANED BUYS ============

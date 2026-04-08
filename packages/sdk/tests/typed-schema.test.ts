@@ -4,6 +4,7 @@ import {
 	validateValueAgainstType,
 	validateMintData,
 	validateMutableUpdate,
+	validateMutableSnapshot,
 	mergeSchemas,
 	canonicalJson,
 	computeDataHash,
@@ -144,7 +145,7 @@ describe("validateSchemaDefinition", () => {
 	test("invalid type fails", () => {
 		const errors = validateSchemaDefinition({
 			immutable: [],
-			mutable: [{ name: "foo", type: "varchar" as any }],
+			mutable: [{ name: "foo", type: "varchar" as unknown as CollectionSchema["mutable"][number]["type"] }],
 		});
 		expect(errors.some((e) => e.code === "FIELD_TYPE_INVALID")).toBe(true);
 	});
@@ -326,6 +327,46 @@ describe("validateMutableUpdate", () => {
 	test("uint16 overflow fails", () => {
 		const errors = validateMutableUpdate(schema, { level: 70000 });
 		expect(errors.some((e) => e.code === "FIELD_TYPE_MISMATCH")).toBe(true);
+	});
+});
+
+describe("validateMutableSnapshot", () => {
+	const schema: CollectionSchema = {
+		immutable: [
+			{ name: "rarity", type: "string" },
+		],
+		mutable: [
+			{ name: "level", type: "uint16" },
+			{ name: "xp", type: "uint32" },
+			{ name: "equipped", type: "string[]" },
+		],
+	};
+
+	test("valid full snapshot passes", () => {
+		const errors = validateMutableSnapshot(schema, {
+			level: 5,
+			xp: 1200,
+			equipped: ["sword"],
+		});
+		expect(errors).toHaveLength(0);
+	});
+
+	test("missing mutable field fails in strict mode", () => {
+		const errors = validateMutableSnapshot(schema, {
+			level: 5,
+			xp: 1200,
+		});
+		expect(errors.some((e) => e.code === "FIELD_MISSING")).toBe(true);
+	});
+
+	test("immutable field is still rejected", () => {
+		const errors = validateMutableSnapshot(schema, {
+			rarity: "common",
+			level: 5,
+			xp: 1200,
+			equipped: ["sword"],
+		});
+		expect(errors.some((e) => e.code === "FIELD_IMMUTABLE")).toBe(true);
 	});
 });
 

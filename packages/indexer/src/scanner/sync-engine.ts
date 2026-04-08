@@ -18,14 +18,14 @@ import {
   getTransfersInTransaction,
   checkClockDrift,
 } from "./hive-client.ts";
-import { ACTION_BUY, ACTION_PACK_BUY } from "@/protocol/index.ts";
+import { ACTION_BUY } from "@/protocol/index.ts";
 import {
   parseHafAHOperations,
   type RejectedOperation,
   type ParsedOperation,
 } from "./operation-parser.ts";
 import { routeOperation } from "@/processor/action-router.ts";
-import { setSynced, updateSyncProgress } from "./sync-state.ts";
+import { markSyncActivity, setSynced, updateSyncProgress } from "./sync-state.ts";
 import { createLogger } from "@/utils/logger.ts";
 
 const log = createLogger("sync");
@@ -62,9 +62,9 @@ async function fetchBatch(
   const hafOps = await getCustomJsonInRange(from, to, protocolId, behind);
   const { ops, rejected } = parseHafAHOperations(hafOps);
 
-  // Enrich buy/pack_buy ops with paired transfers
+  // Enrich buy ops with paired transfers
   const buyOps = ops.filter(
-    (op) => op.action === ACTION_BUY || op.action === ACTION_PACK_BUY,
+    (op) => op.action === ACTION_BUY,
   );
   const transferPools = new Map<
     string,
@@ -377,6 +377,7 @@ export async function syncCycle(): Promise<void> {
       headBlock,
       irreversibleBlock,
     });
+    markSyncActivity();
 
     if (opsProcessed > 0 || batches.some((b) => b.rejected.length > 0)) {
       for (const batch of batches) {

@@ -62,95 +62,20 @@ export const validateTransferCount = (
 	}
 };
 
-type SeedDemandResult =
-	| Readonly<{ ok: true }>
-	| Readonly<{ ok: false; error: string }>;
-
-export const validateSeedDemand = (params: {
-	readonly seedId: string;
-	readonly weight: number;
-	readonly totalWeight: number;
-	readonly maxReplicas: number;
-	readonly distributed: number;
-	readonly reservedByPacks?: number;
-	readonly maxSupply: number;
-	readonly itemsPerPack: number;
-}): SeedDemandResult => {
-	const { seedId, weight, totalWeight, maxReplicas, distributed, reservedByPacks = 0, maxSupply, itemsPerPack } = params;
-
-	if (maxSupply > 0) {
-		const totalDemand = maxSupply * itemsPerPack;
-		const expectedDemand = Math.ceil((totalDemand * weight) / totalWeight);
-		const remaining = maxReplicas > 0 ? maxReplicas - distributed - reservedByPacks : Infinity;
-
-		if (maxReplicas > 0 && remaining < expectedDemand) {
-			return {
-				ok: false,
-				error: `Seed ${seedId} needs ~${expectedDemand} remaining supply but has ${remaining}`,
-			};
-		}
-	} else if (maxReplicas > 0) {
-		return {
-			ok: false,
-			error: `Unlimited pack requires unlimited seeds, but ${seedId} has max_replicas=${maxReplicas}`,
-		};
-	}
-
-	return { ok: true };
-};
-
 export const computeInstanceBaseline = (
 	distributed: number,
 	alreadyMintedThisTx: number,
 ): number => distributed - alreadyMintedThisTx;
-
-export const validatePackPayment = (params: {
-	readonly transfers: ReadonlyArray<{ readonly from: string; readonly to: string; readonly amount: number; readonly currency: string }>;
-	readonly buyer: string;
-	readonly creator: string;
-	readonly pricePerUnit: number;
-	readonly currency: string;
-	readonly quantity: number;
-	readonly consumedIndices?: Set<number>;
-}): void => {
-	const { transfers, buyer, creator, pricePerUnit, currency, quantity, consumedIndices } = params;
-
-	if (!Number.isFinite(pricePerUnit) || pricePerUnit <= 0) {
-		throw new Error(`Pack has invalid price: ${pricePerUnit}`);
-	}
-
-	// Integer arithmetic to avoid floating-point precision issues (Hive uses 3 decimal places)
-	const priceMillis = Math.round(pricePerUnit * 1000);
-	const expectedMillis = priceMillis * quantity;
-
-	const matchIndex = transfers.findIndex((t, idx) =>
-		(!consumedIndices || !consumedIndices.has(idx)) &&
-		t.from === buyer &&
-		t.to === creator &&
-		t.currency === currency &&
-		Math.round(t.amount * 1000) >= expectedMillis
-	);
-
-	if (matchIndex === -1) {
-		const expectedTotal = expectedMillis / 1000;
-		throw new Error(
-			`Invalid payment: expected >= ${expectedTotal} ${currency} from @${buyer} to @${creator}`,
-		);
-	}
-
-	// Mark this transfer as consumed so other ops in the same tx cannot reuse it
-	consumedIndices?.add(matchIndex);
-};
 
 export const validateSeedSupplyForDistribution = (
 	seedId: string,
 	maxReplicas: number,
 	baseDistributed: number,
 	requestedQuantity: number,
-	reservedByPacks: number = 0,
+	reservedSupply: number = 0,
 ): void => {
 	if (maxReplicas > 0) {
-		const available = maxReplicas - baseDistributed - reservedByPacks;
+		const available = maxReplicas - baseDistributed - reservedSupply;
 		if (requestedQuantity > available) {
 			throw new Error(
 				`Seed ${seedId} insufficient supply: needs ${requestedQuantity}, available ${available}`,

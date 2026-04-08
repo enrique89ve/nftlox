@@ -22,7 +22,6 @@ import {
 	generateDeterministicInstanceId,
 	generateOriginDna,
 	generateDeterministicInstanceDna,
-	generateDeterministicAccessKey,
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	validateHiveUsername,
 	computeDataHash,
@@ -37,10 +36,9 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	}
 	const to = toRaw ?? op.signer;
 	const items = requireArray(op.data.items, "items");
-	const imageOverrides = (optionalObject(op.data.imageOverrides) ?? {}) as Record<string, { imageUrl?: string; imageHash?: string }>;
 	const mutableData = optionalObject(op.data.mutableData);
 
-	const mutableDataHash = mutableData ? await computeDataHash(mutableData) : null;
+	const dataHash = mutableData ? await computeDataHash(mutableData) : null;
 
 	if (items.length === 0) throw new Error("Items array is empty");
 	if (items.length > MAX_BULK_DISTRIBUTE_ITEMS) {
@@ -92,9 +90,6 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const maxReplicas = Number(seed.max_replicas) || 0;
 
 		// Idempotency: count instances already created by THIS operation.
-		// Uses operation_id (unique per custom_json within a tx) to correctly
-		// handle multiple bulk_distribute ops in the same Hive transaction.
-		// Falls back to tx_id for pre-migration data where operation_id is NULL.
 		const [existingFromOp] = await txn`
 			SELECT COUNT(*)::int AS count FROM nfts
 			WHERE seed_id = ${seedId}
@@ -106,11 +101,10 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const alreadyMintedThisOp = existingFromOp?.count ?? 0;
 		const baseDistributed = computeInstanceBaseline(distributed, alreadyMintedThisOp);
 
-		const reservedByPacks = Number(seed.reserved_by_packs) || 0;
-		validateSeedSupplyForDistribution(seedId, maxReplicas, baseDistributed, quantity, reservedByPacks);
+		const reservedSupply = Number(seed.reserved_supply) || 0;
+		validateSeedSupplyForDistribution(seedId, maxReplicas, baseDistributed, quantity, reservedSupply);
 
 		const originDna = await generateOriginDna(seed.collection_id);
-		const override = imageOverrides[seedId];
 
 		let minted = 0;
 
@@ -123,12 +117,8 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 			const instanceDna = await generateDeterministicInstanceDna(
 				seedId, instanceNumber, op.txId, op.blockNum,
 			);
-			const uniqueAccessKey = await generateDeterministicAccessKey(
-				instanceDna, to, op.txId,
-			);
 
-			// Instance stores only its own data; name, image, immutable_data
-			// are inherited from seed via JOIN at query time.
+			// Instance stores only references; name, image are inherited from seed via JOIN at query time.
 			await insertNft({
 				id: instanceId,
 				collectionId: seed.collection_id,
@@ -137,20 +127,15 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				owner: to,
 				originDna,
 				instanceDna,
-				uniqueAccessKey,
-				mintedBy: op.signer,
 				name: "",
-				description: null,
-				imageUrl: override?.imageUrl ?? null,
-				imageHash: override?.imageHash ?? null,
+				imageUrl: null,
 				maxReplicas: 0,
 				seedId,
 				instanceNumber,
 				originalId: null,
 				immutableData: null,
-				immutableDataHash: null,
-				mutableData,
-				mutableDataHash,
+				dataOperationId: mutableData ? op.operationId : null,
+				dataHash,
 				schemaVersion: seed.schema_version,
 				operationId: op.operationId,
 				blockNum: op.blockNum,

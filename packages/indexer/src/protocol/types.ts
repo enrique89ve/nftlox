@@ -1,5 +1,4 @@
-// NFTLox Protocol Types (self-contained copy for indexer)
-// Source of truth: packages/sdk/src/types.ts
+// NFTLox Protocol Types used by the indexer.
 
 import type { ProtocolAction, SupportedCurrency } from "./constants.ts";
 

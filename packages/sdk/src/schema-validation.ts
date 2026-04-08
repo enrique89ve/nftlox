@@ -300,6 +300,28 @@ export function validateMutableUpdate(
 	return errors;
 }
 
+export function validateMutableSnapshot(
+	schema: CollectionSchema,
+	mutableData: Record<string, unknown>,
+): ValidationError[] {
+	const errors: ValidationError[] = [];
+
+	const immutableNames = new Set(schema.immutable.map((f) => f.name));
+	for (const key of Object.keys(mutableData)) {
+		if (immutableNames.has(key)) {
+			errors.push({
+				field: `mutableData.${key}`,
+				message: `Field "${key}" is immutable and cannot be modified`,
+				code: "FIELD_IMMUTABLE",
+			});
+		}
+	}
+
+	errors.push(...validateDataAgainstFields(mutableData, schema.mutable, "mutableData", "strict"));
+
+	return errors;
+}
+
 // ============ SCHEMA EXTENSION (APPEND-ONLY) ============
 
 export function mergeSchemas(

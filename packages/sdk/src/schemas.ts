@@ -123,18 +123,6 @@ export const archiveCollectionInputSchema = z.object({
 });
 export type ArchiveCollectionInput = z.infer<typeof archiveCollectionInputSchema>;
 
-export const setOwnerDataInputSchema = z.object({
-	nftId: z.string().min(1),
-	instanceDna: z.string().min(1),
-	data: z.record(z.string(), z.unknown()).refine(
-		(obj) => Object.keys(obj).length <= 64,
-		"Data object cannot exceed 64 fields",
-	),
-	seedId: z.string().optional(),
-	seedTxId: z.string().optional(),
-});
-export type SetOwnerDataInput = z.infer<typeof setOwnerDataInputSchema>;
-
 // ============ INPUT SCHEMAS ============
 
 export const createCollectionInputSchema = z.object({

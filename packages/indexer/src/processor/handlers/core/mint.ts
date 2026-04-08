@@ -3,7 +3,6 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { COLLECTION_STATUS_ARCHIVED, getCollectionRules } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
 import {
-	requireString,
 	requireBoundedString,
 	requireUsername,
 	optionalString,
@@ -20,10 +19,8 @@ import {
 	computeDataHash,
 	generateOriginDna,
 	generateInstanceDna,
-	generateDeterministicAccessKey,
 	MAX_ID_LENGTH,
 	MAX_NAME_LENGTH,
-	MAX_DESCRIPTION_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
 } from "@/protocol/index.ts";
 
@@ -46,14 +43,13 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 	const metadata = optionalObject(d.metadata) ?? {};
 	const nftType = resolveNftType(optionalString(d.nftType), id);
 	if (nftType !== "seed") {
-		throw new Error("Only seeds can be minted directly. Instances are created via bulk_distribute or pack_open");
+		throw new Error("Only seeds can be minted directly. Instances are created via bulk_distribute");
 	}
 
 	validateSeedCap(collectionId, collection.seed_count, collection.total_potential);
 
-	// Schema-based validation
 	const schema = optionalCollectionSchema(collection.schema);
-	const immutableData = optionalObject(d.immutableData);
+	const immutableData = optionalObject(d.immutableData) as Record<string, unknown> | null;
 	const mutableData = optionalObject(d.mutableData);
 
 	if (schema) {
@@ -63,18 +59,15 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		}
 	}
 
-	const immutableDataHash = immutableData ? await computeDataHash(immutableData) : null;
-	const mutableDataHash = mutableData ? await computeDataHash(mutableData) : null;
+	const dataHash = mutableData ? await computeDataHash(mutableData) : null;
 
 	// DNA is always computed by the indexer — never trust user-supplied values.
-	// This guarantees every NFT has a verifiable, deterministic DNA chain.
 	const edition = optionalNumber(d.edition) ?? 1;
 	const imageHash = optionalString(metadata.imageHash) ?? "";
 	const originDna = await generateOriginDna(collectionId);
 	const instanceDna = await generateInstanceDna(id, originDna, edition, imageHash);
 	const ownerRaw = optionalString(d.owner);
 	const owner = ownerRaw ? requireUsername(ownerRaw, "owner") : op.signer;
-	const uniqueAccessKey = await generateDeterministicAccessKey(instanceDna, owner, op.txId);
 
 	const maxReplicas = optionalNumber(d.maxReplicas) ?? 1;
 	if (maxReplicas < 1) {
@@ -87,16 +80,13 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		owner,
 		originDna,
 		instanceDna,
-		uniqueAccessKey,
-		mintedBy: op.signer,
 		name: optionalBoundedString(metadata.name, "metadata.name", MAX_NAME_LENGTH) ?? optionalBoundedString(d.name, "name", MAX_NAME_LENGTH) ?? "",
-		description: optionalBoundedString(metadata.description, "metadata.description", MAX_DESCRIPTION_LENGTH),
 		imageUrl: optionalBoundedString(metadata.imageUrl, "metadata.imageUrl", MAX_IMAGE_URL_LENGTH),
-		imageHash: optionalString(metadata.imageHash),
 		maxReplicas,
 		seedId: null, instanceNumber: null, originalId: null,
-		immutableData, immutableDataHash,
-		mutableData, mutableDataHash,
+		immutableData: immutableData && Object.keys(immutableData).length > 0 ? immutableData : null,
+		dataOperationId: mutableData ? op.operationId : null,
+		dataHash,
 		schemaVersion: collection.schema_version,
 		operationId: op.operationId,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,

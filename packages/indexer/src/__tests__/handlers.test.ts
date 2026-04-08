@@ -16,12 +16,7 @@ import { handleNftTransferFrom } from "@/processor/handlers/allowances/nft-trans
 import { handleReplicate } from "@/processor/handlers/core/replicate.ts";
 import { handleNftLend } from "@/processor/handlers/lending/nft-lend.ts";
 import { handleNftReturn } from "@/processor/handlers/lending/nft-return.ts";
-import { handlePackCreate } from "@/processor/handlers/packs/pack-create.ts";
-import { handlePackBuy } from "@/processor/handlers/packs/pack-buy.ts";
-import { handlePackOpen } from "@/processor/handlers/packs/pack-open.ts";
-import { handlePackApprove } from "@/processor/handlers/allowances/pack-approve.ts";
 import { handleDataOperatorApprove } from "@/processor/handlers/allowances/data-operator-approve.ts";
-import { handleSetOwnerData } from "@/processor/handlers/core/set-owner-data.ts";
 import { handleSetDataFrom } from "@/processor/handlers/allowances/set-data-from.ts";
 import { listCollections } from "@/db/queries/collections.ts";
 import {
@@ -30,21 +25,15 @@ import {
 	ACTION_MINT,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_TRANSFER,
-	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTION_REPLICATE,
-	ACTION_PACK_CREATE,
-	ACTION_PACK_BUY,
-	ACTION_PACK_OPEN,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
 	ACTION_NFT_TRANSFER_FROM,
-	ACTION_PACK_APPROVE,
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
 	ACTION_DATA_OPERATOR_APPROVE,
-	ACTION_SET_OWNER_DATA,
 	ACTION_SET_DATA_FROM,
 	ACTION_BUY,
 	calculatePaymentSplit,
@@ -90,9 +79,7 @@ async function cleanDb() {
 	await sql`DELETE FROM data_operators`;
 	await sql`DELETE FROM nft_allowances`;
 	await sql`DELETE FROM collection_allowances`;
-	await sql`DELETE FROM pack_allowances`;
-	await sql`DELETE FROM user_pack_balances`;
-	await sql`DELETE FROM packs`;
+	await sql`DELETE FROM burned_nfts`;
 	await sql`DELETE FROM nfts`;
 	await sql`DELETE FROM owner_nft_counts`;
 	await sql`DELETE FROM collection_stats`;
@@ -209,12 +196,10 @@ describe("Handlers (integration)", () => {
 		// Drop all tables to ensure clean schema (testnet only)
 		await sql.unsafe(`
 			DROP TABLE IF EXISTS nft_loans, nft_allowances, collection_allowances,
-				pack_allowances, user_pack_balances, data_operators,
-				orphaned_buys, invalid_operations, owner_nft_counts,
-				collection_stats,
-				nfts, packs, collections, sync_state CASCADE
+				data_operators, orphaned_buys, invalid_operations, owner_nft_counts,
+				collection_stats, burned_nfts, nfts, collections, sync_state CASCADE
 		`);
-		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status, pack_status CASCADE");
+		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status CASCADE");
 		const schemaFile = Bun.file(import.meta.dir + "/../db/schema.sql");
 		await sql.unsafe(await schemaFile.text());
 	});
@@ -370,24 +355,23 @@ describe("Handlers (integration)", () => {
 				collectionId: COL_ID,
 			}), sql);
 
-			const [collection] = await sql`
-				SELECT status, archived_at_block, archived_tx_id
-				FROM collections
-				WHERE id = ${COL_ID}
-			`;
-			expect(collection).toBeDefined();
-			expect(collection!.status).toBe("archived");
-			expect(Number(collection!.archived_at_block)).toBe(90000100);
-			expect(collection!.archived_tx_id).toContain("archive_collection");
+			// Collection should be hard-deleted
+			const [collection] = await sql`SELECT 1 FROM collections WHERE id = ${COL_ID}`;
+			expect(collection).toBeUndefined();
 
+			// Cascaded child tables should also be gone
 			const [allowances] = await sql`
 				SELECT COUNT(*)::int AS count FROM collection_allowances WHERE collection_id = ${COL_ID}
 			`;
 			const [operators] = await sql`
 				SELECT COUNT(*)::int AS count FROM data_operators WHERE collection_id = ${COL_ID}
 			`;
+			const [stats] = await sql`
+				SELECT 1 FROM collection_stats WHERE collection_id = ${COL_ID}
+			`;
 			expect(Number(allowances!.count)).toBe(0);
 			expect(Number(operators!.count)).toBe(0);
+			expect(stats).toBeUndefined();
 
 			const visibleCollections = await listCollections();
 			expect(visibleCollections.some((row) => row.id === COL_ID)).toBe(false);
@@ -404,31 +388,6 @@ describe("Handlers (integration)", () => {
 			).rejects.toThrow("NFTs still exist");
 		});
 
-		test("rejects archive when packs already exist", async () => {
-			await seedCollection();
-			await sql`
-				INSERT INTO packs (
-					id, collection_id, creator, name, description, image_url,
-					drop_table, items_per_pack,
-					price_amount, price_currency,
-					max_supply, current_supply, total_opened, status,
-					block_num, tx_id, created_at
-				) VALUES (
-					'pack_orphan', ${COL_ID}, 'alice', 'Pack',
-					NULL, NULL, '[]'::jsonb, 1,
-					NULL, NULL,
-					0, 0, 0, 'active',
-					90000100, 'tx_pack_orphan', '2024-01-01T00:00:00'
-				)
-			`;
-
-			await expect(
-				handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
-					collectionId: COL_ID,
-				}), sql),
-			).rejects.toThrow("packs still exist");
-		});
-
 		test("rejects archive from non-creator signer", async () => {
 			await seedCollection();
 
@@ -439,7 +398,7 @@ describe("Handlers (integration)", () => {
 			).rejects.toThrow("is not creator");
 		});
 
-		test("mint rejects archived collection", async () => {
+		test("mint rejects deleted collection", async () => {
 			await seedCollection();
 			await handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
 				collectionId: COL_ID,
@@ -451,26 +410,9 @@ describe("Handlers (integration)", () => {
 					collectionId: COL_ID,
 					metadata: { name: "After Archive" },
 				}), sql),
-			).rejects.toThrow("is archived");
+			).rejects.toThrow("not found");
 		});
 
-		test("pack_create rejects archived collection", async () => {
-			await seedCollection();
-			await handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
-				collectionId: COL_ID,
-			}), sql);
-
-			await expect(
-				handlePackCreate(makeOp(ACTION_PACK_CREATE, {
-					id: "pack_archived",
-					collectionId: COL_ID,
-					name: "Archived Pack",
-					dropTable: [{ seedId: "seed_missing", weight: 1 }],
-					itemsPerPack: 1,
-					maxSupply: 0,
-				}), sql),
-			).rejects.toThrow("is archived");
-		});
 	});
 
 	// ─── mint ───────────────────────────────────────
@@ -514,16 +456,14 @@ describe("Handlers (integration)", () => {
 			});
 			await handleMint(op, sql);
 
-			const [nft] = await sql`SELECT origin_dna, instance_dna, unique_access_key FROM nfts WHERE id = 'seed_dna_test'`;
+			const [nft] = await sql`SELECT origin_dna, instance_dna FROM nfts WHERE id = 'seed_dna_test'`;
 			expect(nft).toBeDefined();
 			// Must NOT be the fake values
 			expect(nft!.origin_dna).not.toBe("FAKE_ORIGIN_DNA");
 			expect(nft!.instance_dna).not.toBe("FAKE_INSTANCE_DNA");
-			expect(nft!.unique_access_key).not.toBe("FAKEKEY1");
 			// Must be non-null (computed)
 			expect(nft!.origin_dna).toBeTruthy();
 			expect(nft!.instance_dna).toBeTruthy();
-			expect(nft!.unique_access_key).toBeTruthy();
 		});
 
 		test("mint DNA is deterministic across replays", async () => {
@@ -581,30 +521,6 @@ describe("Handlers (integration)", () => {
 			);
 		});
 
-		test("uniqueAccessKey is derived from owner, not signer", async () => {
-			await seedCollection();
-
-			const op = makeOp(ACTION_MINT, {
-				id: "seed_owner_key",
-				collectionId: COL_ID,
-				owner: "bob",
-				metadata: { name: "Owner Key Test" },
-			});
-			await handleMint(op, sql);
-
-			// Mint same seed with signer as owner to compare
-			const op2 = makeOp(ACTION_MINT, {
-				id: "seed_signer_key",
-				collectionId: COL_ID,
-				metadata: { name: "Signer Key Test" },
-			});
-			await handleMint(op2, sql);
-
-			const [nftBob] = await sql`SELECT unique_access_key FROM nfts WHERE id = 'seed_owner_key'`;
-			const [nftAlice] = await sql`SELECT unique_access_key FROM nfts WHERE id = 'seed_signer_key'`;
-			// Keys must differ because owners differ (bob vs alice)
-			expect(nftBob!.unique_access_key).not.toBe(nftAlice!.unique_access_key);
-		});
 	});
 
 	// ─── bulk_distribute ────────────────────────────
@@ -641,13 +557,12 @@ describe("Handlers (integration)", () => {
 			await handleBulkDistribute(op, sql);
 
 			const instances = await sql`
-				SELECT origin_dna, instance_dna, unique_access_key
+				SELECT origin_dna, instance_dna
 				FROM nfts WHERE seed_id = 'seed_test1' ORDER BY instance_number
 			`;
 			for (const inst of instances) {
 				expect(inst.origin_dna).toBeTruthy();
 				expect(inst.instance_dna).toBeTruthy();
-				expect(inst.unique_access_key).toBeTruthy();
 			}
 			// Different instances should have different DNA
 			expect(instances[0]!.instance_dna).not.toBe(instances[1]!.instance_dna);
@@ -746,39 +661,6 @@ describe("Handlers (integration)", () => {
 
 			const [inst] = await sql`SELECT owner FROM nfts WHERE seed_id = 'seed_test1'`;
 			expect(inst!.owner).toBe("alice");
-		});
-
-		test("uniqueAccessKey is derived from recipient (to), not signer", async () => {
-			await seedCollection();
-			await seedMint();
-
-			// Distribute to bob (signer=alice, to=bob)
-			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
-				to: "bob",
-				items: [await makeBulkItem("seed_test1", 1)],
-			});
-			await handleBulkDistribute(op, sql);
-
-			// Distribute to alice (signer=alice, no to = defaults to alice)
-			const mintOp2 = makeOp(ACTION_MINT, {
-				id: "seed_test2",
-				collectionId: COL_ID,
-				maxReplicas: 10,
-				metadata: { name: "Seed 2" },
-			});
-			await handleMint(mintOp2, sql);
-
-			const op2 = makeOp(ACTION_BULK_DISTRIBUTE, {
-				items: [await makeBulkItem("seed_test2", 1)],
-			});
-			await handleBulkDistribute(op2, sql);
-
-			const [instBob] = await sql`SELECT unique_access_key FROM nfts WHERE seed_id = 'seed_test1' AND nft_type = 'instance'`;
-			const [instAlice] = await sql`SELECT unique_access_key FROM nfts WHERE seed_id = 'seed_test2' AND nft_type = 'instance'`;
-
-			// Keys must differ because recipients differ (bob vs alice),
-			// even though both operations were signed by alice
-			expect(instBob!.unique_access_key).not.toBe(instAlice!.unique_access_key);
 		});
 
 		test("only owner can distribute — creator without ownership is rejected", async () => {
@@ -1072,13 +954,13 @@ describe("Handlers (integration)", () => {
 			await expect(handleTransfer(op, sql)).rejects.toThrow("not owner");
 		});
 
-		test("rejects transfer of burned NFT", async () => {
+		test("rejects transfer of burned (deleted) NFT", async () => {
 			await seedCollection();
 			await seedMint();
 			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
 
 			const op = makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "bob" });
-			await expect(handleTransfer(op, sql)).rejects.toThrow("burned");
+			await expect(handleTransfer(op, sql)).rejects.toThrow("not found");
 		});
 
 		test("rejects transfer of listed NFT", async () => {
@@ -1144,14 +1026,18 @@ describe("Handlers (integration)", () => {
 	// ─── burn ───────────────────────────────────────
 
 	describe("burn", () => {
-		test("burns NFT", async () => {
+		test("burns NFT (hard delete)", async () => {
 			await seedCollection();
 			await seedMint();
 
 			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
 
-			const [nft] = await sql`SELECT status FROM nfts WHERE id = 'seed_test1'`;
-			expect(nft!.status).toBe("burned");
+			const [nft] = await sql`SELECT 1 FROM nfts WHERE id = 'seed_test1'`;
+			expect(nft).toBeUndefined();
+
+			const [burned] = await sql`SELECT * FROM burned_nfts WHERE id = 'seed_test1'`;
+			expect(burned).toBeDefined();
+			expect(burned!.burned_by).toBe("alice");
 		});
 
 		test("rejects double burn", async () => {
@@ -1160,7 +1046,7 @@ describe("Handlers (integration)", () => {
 			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
 			await expect(
 				handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql),
-			).rejects.toThrow("NFT is burned");
+			).rejects.toThrow("not found");
 		});
 
 		test("rejects burn of non-existent NFT", async () => {
@@ -1294,7 +1180,7 @@ describe("Handlers (integration)", () => {
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("not transferable");
 		});
 
-		test("rejects list of burned NFT", async () => {
+		test("rejects list of burned (deleted) NFT", async () => {
 			await seedCollection();
 			await seedMint();
 			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
@@ -1302,7 +1188,7 @@ describe("Handlers (integration)", () => {
 			const listData = await makeListData({ nftId: "seed_test1" });
 			await expect(
 				handleList(makeOp(ACTION_LIST, listData), sql),
-			).rejects.toThrow("burned");
+			).rejects.toThrow("not found");
 		});
 
 		test("rejects list of non-existent NFT", async () => {
@@ -1531,7 +1417,7 @@ describe("Handlers (integration)", () => {
 			).rejects.toThrow("lent");
 		});
 
-		test("rejects lend of burned NFT", async () => {
+		test("rejects lend of burned (deleted) NFT", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
@@ -1539,7 +1425,7 @@ describe("Handlers (integration)", () => {
 
 			await expect(
 				handleNftLend(makeOp(ACTION_NFT_LEND, { instanceId: instId, borrower: "bob" }), sql),
-			).rejects.toThrow("must be active");
+			).rejects.toThrow("not found");
 		});
 
 		test("rejects lend of non-existent NFT", async () => {
@@ -1581,365 +1467,6 @@ describe("Handlers (integration)", () => {
 			await expect(
 				handleNftReturn(makeOp(ACTION_NFT_RETURN, { instanceId: instId }), sql),
 			).rejects.toThrow("not lent");
-		});
-	});
-
-	// ─── pack_open (distributed control) ───────────
-
-	describe("pack_open", () => {
-		// Helper: create a seed with high capacity for pack testing
-		async function seedForPack(id: string, maxReplicas = 10000) {
-			const op = makeOp(ACTION_MINT, {
-				id,
-				collectionId: COL_ID,
-				maxReplicas,
-				metadata: { name: `Pack Seed ${id}` },
-			});
-			await handleMint(op, sql);
-		}
-
-		// Helper: create pack and give balance directly via SQL
-		async function setupPack(opts: {
-			packId: string;
-			seedIds: string[];
-			itemsPerPack?: number;
-			maxSupply?: number;
-			buyQuantity: number;
-			buyer?: string;
-		}) {
-			const dropTable = opts.seedIds.map(seedId => ({ seedId, weight: 1 }));
-			const createOp = makeOp(ACTION_PACK_CREATE, {
-				id: opts.packId,
-				collectionId: COL_ID,
-				name: `Pack ${opts.packId}`,
-				dropTable,
-				itemsPerPack: opts.itemsPerPack ?? 1,
-				maxSupply: opts.maxSupply ?? 10000,
-			});
-			await handlePackCreate(createOp, sql);
-
-			// Insert balance directly — avoids pack_buy payment flow in tests
-			const buyer = opts.buyer ?? "bob";
-			await sql`
-				INSERT INTO user_pack_balances (account, pack_id, balance)
-				VALUES (${buyer}, ${opts.packId}, ${opts.buyQuantity})
-				ON CONFLICT (account, pack_id)
-				DO UPDATE SET balance = user_pack_balances.balance + ${opts.buyQuantity}
-			`;
-		}
-
-		test("opens a pack and mints instances", async () => {
-			await seedCollection();
-			await seedForPack("seed_p1");
-
-			await setupPack({ packId: "pack_1", seedIds: ["seed_p1"], buyQuantity: 2 });
-
-			const openOp = makeOp(ACTION_PACK_OPEN, {
-				packId: "pack_1",
-				quantity: 2,
-			}, "bob");
-			(openOp as any).txId = "tx_open_1";
-			await handlePackOpen(openOp, sql);
-
-			const instances = await sql`
-				SELECT * FROM nfts WHERE seed_id = 'seed_p1' ORDER BY instance_number
-			`;
-			expect(instances.length).toBe(2);
-			expect(instances[0]!.owner).toBe("bob");
-			expect(instances[0]!.instance_number).toBe(1);
-			expect(instances[1]!.instance_number).toBe(2);
-		});
-
-		test("pack-opened instances have non-null deterministic DNA", async () => {
-			await seedCollection();
-			await seedForPack("seed_pdna");
-
-			await setupPack({ packId: "pack_dna", seedIds: ["seed_pdna"], buyQuantity: 2 });
-
-			const openOp = makeOp(ACTION_PACK_OPEN, {
-				packId: "pack_dna",
-				quantity: 2,
-			}, "bob");
-			(openOp as any).txId = "tx_dna_check";
-			await handlePackOpen(openOp, sql);
-
-			const instances = await sql`
-				SELECT origin_dna, instance_dna, unique_access_key
-				FROM nfts WHERE seed_id = 'seed_pdna' ORDER BY instance_number
-			`;
-			expect(instances.length).toBe(2);
-			for (const inst of instances) {
-				expect(inst.origin_dna).toBeTruthy();
-				expect(inst.instance_dna).toBeTruthy();
-				expect(inst.unique_access_key).toBeTruthy();
-			}
-			expect(instances[0]!.instance_dna).not.toBe(instances[1]!.instance_dna);
-		});
-
-		test("pack open is idempotent on replay", async () => {
-			await seedCollection();
-			await seedForPack("seed_p2");
-
-			await setupPack({ packId: "pack_2", seedIds: ["seed_p2"], buyQuantity: 3 });
-
-			const openOp = makeOp(ACTION_PACK_OPEN, {
-				packId: "pack_2",
-				quantity: 1,
-			}, "bob");
-			(openOp as any).txId = "tx_open_2";
-			await handlePackOpen(openOp, sql);
-
-			// Restore balance for replay (simulates re-indexing from scratch)
-			await sql`
-				UPDATE user_pack_balances
-				SET balance = balance + 1
-				WHERE account = 'bob' AND pack_id = 'pack_2'
-			`;
-			await sql`
-				UPDATE packs SET total_opened = total_opened - 1
-				WHERE id = 'pack_2'
-			`;
-
-			// Replay same op
-			await handlePackOpen(openOp, sql);
-
-			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_p2'`;
-			expect(instances.length).toBe(1); // not 2
-
-			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p2'`;
-			expect(seed!.distributed).toBe(1);
-		});
-
-		test("two different pack opens from same seed produce sequential instances", async () => {
-			await seedCollection();
-			await seedForPack("seed_p3");
-
-			await setupPack({ packId: "pack_3", seedIds: ["seed_p3"], buyQuantity: 4 });
-
-			const op1 = makeOp(ACTION_PACK_OPEN, { packId: "pack_3", quantity: 2 }, "bob");
-			(op1 as any).txId = "tx_open_3a";
-			await handlePackOpen(op1, sql);
-
-			const op2 = makeOp(ACTION_PACK_OPEN, { packId: "pack_3", quantity: 2 }, "bob");
-			(op2 as any).txId = "tx_open_3b";
-			await handlePackOpen(op2, sql);
-
-			const instances = await sql`
-				SELECT instance_number FROM nfts
-				WHERE seed_id = 'seed_p3'
-				ORDER BY instance_number
-			`;
-			expect(instances.length).toBe(4);
-			expect(instances.map(i => i.instance_number)).toEqual([1, 2, 3, 4]);
-
-			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p3'`;
-			expect(seed!.distributed).toBe(4);
-		});
-
-		test("concurrent pack opens + replays keep distributed accurate", async () => {
-			await seedCollection();
-			await seedForPack("seed_p4");
-
-			await setupPack({ packId: "pack_4", seedIds: ["seed_p4"], buyQuantity: 10 });
-
-			// 3 different pack opens
-			const ops = Array.from({ length: 3 }, (_, i) => {
-				const op = makeOp(ACTION_PACK_OPEN, { packId: "pack_4", quantity: 1 }, "bob");
-				(op as any).txId = `tx_open_4_${i}`;
-				return op;
-			});
-
-			for (const op of ops) await handlePackOpen(op, sql);
-
-			// Replay all 3 — restore balances to simulate re-index
-			await sql`
-				UPDATE user_pack_balances
-				SET balance = balance + 3
-				WHERE account = 'bob' AND pack_id = 'pack_4'
-			`;
-			await sql`
-				UPDATE packs SET total_opened = total_opened - 3
-				WHERE id = 'pack_4'
-			`;
-
-			for (const op of ops) await handlePackOpen(op, sql);
-
-			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_p4'`;
-			expect(instances.length).toBe(3); // not 6
-
-			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p4'`;
-			expect(seed!.distributed).toBe(3);
-		});
-
-		test("pack open respects seed max supply across multiple opens", async () => {
-			await seedCollection();
-			await seedForPack("seed_p5", 3); // max 3 replicas
-
-			const dropTable = [{ seedId: "seed_p5", weight: 1 }];
-			const createOp = makeOp(ACTION_PACK_CREATE, {
-				id: "pack_5",
-				collectionId: COL_ID,
-				name: "Pack 5",
-				dropTable,
-				itemsPerPack: 1,
-				maxSupply: 3,
-			});
-			await handlePackCreate(createOp, sql);
-			await sql`
-				INSERT INTO user_pack_balances (account, pack_id, balance)
-				VALUES ('bob', 'pack_5', 10)
-			`;
-
-			// Open 3 packs — should mint 3 instances (hitting cap)
-			const op1 = makeOp(ACTION_PACK_OPEN, { packId: "pack_5", quantity: 3 }, "bob");
-			(op1 as any).txId = "tx_open_5a";
-			await handlePackOpen(op1, sql);
-
-			const [seedAfter3] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p5'`;
-			expect(seedAfter3!.distributed).toBe(3);
-
-			// Snapshot state before the failed open
-			const [balanceBefore] = await sql`
-				SELECT balance FROM user_pack_balances
-				WHERE account = 'bob' AND pack_id = 'pack_5'
-			`;
-			const [packBefore] = await sql`SELECT total_opened FROM packs WHERE id = 'pack_5'`;
-
-			// Open 1 more — seed exhausted, must throw (no silent loss)
-			const op2 = makeOp(ACTION_PACK_OPEN, { packId: "pack_5", quantity: 1 }, "bob");
-			(op2 as any).txId = "tx_open_5b";
-			await expect(handlePackOpen(op2, sql)).rejects.toThrow("all seeds exhausted");
-
-			// Verify ALL five invariants after failed open:
-			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_p5'`;
-			expect(instances.length).toBe(3); // no new instances
-
-			const [seedFinal] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p5'`;
-			expect(seedFinal!.distributed).toBe(3); // distributed unchanged
-
-			const [balanceAfter] = await sql`
-				SELECT balance FROM user_pack_balances
-				WHERE account = 'bob' AND pack_id = 'pack_5'
-			`;
-			expect(Number(balanceAfter!.balance)).toBe(Number(balanceBefore!.balance)); // balance not deducted
-
-			const [packAfter] = await sql`SELECT total_opened FROM packs WHERE id = 'pack_5'`;
-			expect(Number(packAfter!.total_opened)).toBe(Number(packBefore!.total_opened)); // total_opened unchanged
-		});
-
-		test("partial delivery: delivers only packs whose seeds have supply", async () => {
-			await seedCollection();
-			await seedForPack("seed_partial", 2); // max 2 instances
-
-			const dropTable = [{ seedId: "seed_partial", weight: 1 }];
-			const createOp = makeOp(ACTION_PACK_CREATE, {
-				id: "pack_partial",
-				collectionId: COL_ID,
-				name: "Partial Pack",
-				dropTable,
-				itemsPerPack: 1,
-				maxSupply: 2, // matches seed capacity
-			});
-			await handlePackCreate(createOp, sql);
-			// Give more balance than seed can fulfill (simulate oversold scenario)
-			await sql`
-				INSERT INTO user_pack_balances (account, pack_id, balance)
-				VALUES ('bob', 'pack_partial', 5)
-			`;
-
-			// Open 1 pack — delivers fine, 1 instance minted
-			const op1 = makeOp(ACTION_PACK_OPEN, { packId: "pack_partial", quantity: 1 }, "bob");
-			(op1 as any).txId = "tx_partial_1a";
-			await handlePackOpen(op1, sql);
-
-			// Open 3 more — only 1 more instance can be produced
-			const op2 = makeOp(ACTION_PACK_OPEN, { packId: "pack_partial", quantity: 3 }, "bob");
-			(op2 as any).txId = "tx_partial_1b";
-			await handlePackOpen(op2, sql);
-
-			// Only 2 total instances minted (seed cap)
-			const instances = await sql`SELECT * FROM nfts WHERE seed_id = 'seed_partial'`;
-			expect(instances.length).toBe(2);
-
-			// Balance deducted for 1 + 1 = 2 delivered packs (not 1 + 3 = 4)
-			const [balance] = await sql`
-				SELECT balance FROM user_pack_balances
-				WHERE account = 'bob' AND pack_id = 'pack_partial'
-			`;
-			expect(Number(balance!.balance)).toBe(3); // 5 - 2 = 3
-
-			// total_opened reflects only delivered packs
-			const [pack] = await sql`SELECT total_opened FROM packs WHERE id = 'pack_partial'`;
-			expect(Number(pack!.total_opened)).toBe(2);
-
-			// distributed matches instances
-			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_partial'`;
-			expect(seed!.distributed).toBe(2);
-		});
-
-		test("multiple users opening packs simultaneously from same seed", async () => {
-			await seedCollection();
-			await seedForPack("seed_p6");
-
-			// Create pack and give packs to two users
-			await setupPack({ packId: "pack_6", seedIds: ["seed_p6"], buyQuantity: 3, buyer: "bob" });
-
-			// Also give packs to charlie
-			await sql`
-				INSERT INTO user_pack_balances (account, pack_id, balance)
-				VALUES ('charlie', 'pack_6', 3)
-			`;
-
-			// Bob opens 2 packs
-			const op1 = makeOp(ACTION_PACK_OPEN, { packId: "pack_6", quantity: 2 }, "bob");
-			(op1 as any).txId = "tx_open_6_bob";
-			await handlePackOpen(op1, sql);
-
-			// Charlie opens 2 packs from same seed
-			const op2 = makeOp(ACTION_PACK_OPEN, { packId: "pack_6", quantity: 2 }, "charlie");
-			(op2 as any).txId = "tx_open_6_charlie";
-			await handlePackOpen(op2, sql);
-
-			const instances = await sql`
-				SELECT instance_number, owner FROM nfts
-				WHERE seed_id = 'seed_p6'
-				ORDER BY instance_number
-			`;
-			expect(instances.length).toBe(4);
-			// Instance numbers should be sequential regardless of who opened
-			expect(instances.map(i => i.instance_number)).toEqual([1, 2, 3, 4]);
-			// First 2 belong to bob, last 2 to charlie
-			expect(instances[0]!.owner).toBe("bob");
-			expect(instances[1]!.owner).toBe("bob");
-			expect(instances[2]!.owner).toBe("charlie");
-			expect(instances[3]!.owner).toBe("charlie");
-
-			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = 'seed_p6'`;
-			expect(seed!.distributed).toBe(4);
-		});
-
-		test("rejects pack open with 0 quantity", async () => {
-			await seedCollection();
-			await seedForPack("seed_p0");
-			await setupPack({ packId: "pack_0q", seedIds: ["seed_p0"], buyQuantity: 5 });
-
-			const op = makeOp(ACTION_PACK_OPEN, { packId: "pack_0q", quantity: 0 }, "bob");
-			await expect(handlePackOpen(op, sql)).rejects.toThrow("positive");
-		});
-
-		test("rejects pack open with insufficient balance", async () => {
-			await seedCollection();
-			await seedForPack("seed_pinsuf");
-			await setupPack({ packId: "pack_insuf", seedIds: ["seed_pinsuf"], buyQuantity: 1 });
-
-			const op = makeOp(ACTION_PACK_OPEN, { packId: "pack_insuf", quantity: 5 }, "bob");
-			(op as any).txId = "tx_insuf";
-			await expect(handlePackOpen(op, sql)).rejects.toThrow("Insufficient");
-		});
-
-		test("rejects pack open for non-existent pack", async () => {
-			const op = makeOp(ACTION_PACK_OPEN, { packId: "pack_ghost", quantity: 1 }, "bob");
-			await expect(handlePackOpen(op, sql)).rejects.toThrow("not found");
 		});
 	});
 
@@ -2101,7 +1628,7 @@ describe("Handlers (integration)", () => {
 			).rejects.toThrow();
 		});
 
-		test("transferFrom rejected for burned NFT", async () => {
+		test("transferFrom rejected for burned (deleted) NFT", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
@@ -2115,7 +1642,7 @@ describe("Handlers (integration)", () => {
 				handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
 					from: "alice", to: "buyer1", instanceId: instId,
 				}, "gameshop"), sql),
-			).rejects.toThrow("burned");
+			).rejects.toThrow("not found");
 		});
 
 		test("transferFrom rejected for lent NFT", async () => {
@@ -2206,14 +1733,12 @@ describe("Handlers (integration)", () => {
 			});
 			await handleReplicate(op, sql);
 
-			const [replica] = await sql`SELECT origin_dna, instance_dna, unique_access_key FROM nfts WHERE id = 'replica_dna_test'`;
+			const [replica] = await sql`SELECT origin_dna, instance_dna FROM nfts WHERE id = 'replica_dna_test'`;
 			expect(replica).toBeDefined();
 			expect(replica!.origin_dna).not.toBe("FAKE_ORIGIN");
 			expect(replica!.instance_dna).not.toBe("FAKE_INSTANCE");
-			expect(replica!.unique_access_key).not.toBe("FAKEKEY9");
 			// DNA should be derived from original
 			expect(replica!.instance_dna).toBeTruthy();
-			expect(replica!.unique_access_key).toBeTruthy();
 		});
 
 		test("replicate rejects non-owner signer", async () => {
@@ -2273,28 +1798,6 @@ describe("Handlers (integration)", () => {
 			).rejects.toThrow();
 		});
 
-		test("pack_approve rejects signer without pack balance", async () => {
-			await seedCollection();
-			await seedMint();
-
-			const packOp = makeOp(ACTION_PACK_CREATE, {
-				id: "pack_test",
-				collectionId: COL_ID,
-				name: "Test Pack",
-				dropTable: [{ seedId: "seed_test1", weight: 1 }],
-				itemsPerPack: 1,
-				maxSupply: 5,
-			});
-			await handlePackCreate(packOp, sql);
-
-			const approveOp = makeOp(ACTION_PACK_APPROVE, {
-				spender: "bob",
-				packId: "pack_test",
-				approved: true,
-				quantity: 5,
-			}, "eve");
-			await expect(handlePackApprove(approveOp, sql)).rejects.toThrow("Insufficient balance");
-		});
 	});
 
 	// ─── buy handler guards ───────────────────────────
@@ -2349,13 +1852,13 @@ describe("Handlers (integration)", () => {
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("not found");
 		});
 
-		test("rejects buy burned NFT", async () => {
+		test("rejects buy burned (deleted) NFT", async () => {
 			await seedCollection();
 			await seedMint();
 			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
 
 			const buyOp = makeBuyOp("seed_test1", "list_fake", "tx_fake", "bob", "alice");
-			await expect(handleBuy(buyOp, sql)).rejects.toThrow("burned");
+			await expect(handleBuy(buyOp, sql)).rejects.toThrow("not found");
 		});
 
 		test("rejects buy lent NFT", async () => {
@@ -2530,34 +2033,7 @@ describe("Handlers (integration)", () => {
 		});
 	});
 
-	// ─── I-02: data operator cannot write owner_data ──────
-
 	describe("data operator boundary enforcement", () => {
-		test("data operator cannot write owner_data", async () => {
-			await seedCollection();
-			await seedMint();
-			const instId = await seedInstance();
-
-			// Approve carol as data operator for the collection
-			await handleDataOperatorApprove(makeOp(ACTION_DATA_OPERATOR_APPROVE, {
-				collectionId: COL_ID,
-				operator: "carol",
-				approved: true,
-			}), sql);
-
-			// Get instance DNA for the operation
-			const [nft] = await sql`SELECT instance_dna FROM nfts WHERE id = ${instId}`;
-
-			// carol (operator, not owner) tries set_owner_data — must fail
-			const op = makeOp(ACTION_SET_OWNER_DATA, {
-				nftId: instId,
-				instanceDna: nft!.instance_dna,
-				data: { notes: "hacked" },
-			}, "carol");
-
-			await expect(handleSetOwnerData(op, sql)).rejects.toThrow("not owner");
-		});
-
 		test("non-operator cannot write mutable_data via set_data_from", async () => {
 			await seedCollection();
 			await seedMint();
@@ -2590,102 +2066,6 @@ describe("Handlers (integration)", () => {
 			});
 			await handleMint(op, sql);
 		}
-
-		test("incrementPackSupply rejects when exceeding max_supply", async () => {
-			await seedCollection();
-			await mintSeed("seed_supply");
-
-			const createOp = makeOp(ACTION_PACK_CREATE, {
-				id: "pack_supply_test",
-				collectionId: COL_ID,
-				name: "Supply Test Pack",
-				dropTable: [{ seedId: "seed_supply", weight: 1 }],
-				itemsPerPack: 1,
-				maxSupply: 3,
-			});
-			await handlePackCreate(createOp, sql);
-
-			// pack_create with maxSupply=3 sets current_supply=3 and gives creator 3 balance
-			const [pack] = await sql`SELECT current_supply, max_supply FROM packs WHERE id = 'pack_supply_test'`;
-			expect(pack!.current_supply).toBe(3);
-			expect(pack!.max_supply).toBe(3);
-
-			// Directly attempt to increment beyond max — should fail atomically
-			const { incrementPackSupply } = await import("@/db/queries/packs.ts");
-			await expect(incrementPackSupply("pack_supply_test", 1, sql)).rejects.toThrow("supply overflow");
-		});
-
-		test("pack_approve rejects quantity exceeding balance", async () => {
-			await seedCollection();
-			await mintSeed("seed_approve_qty");
-
-			const createOp = makeOp(ACTION_PACK_CREATE, {
-				id: "pack_approve_qty",
-				collectionId: COL_ID,
-				name: "Approve Qty Test",
-				dropTable: [{ seedId: "seed_approve_qty", weight: 1 }],
-				itemsPerPack: 1,
-				maxSupply: 5,
-			});
-			await handlePackCreate(createOp, sql);
-
-			// Creator (alice) has balance=5 from pack_create. Approve 5 → should work
-			const approveOk = makeOp(ACTION_PACK_APPROVE, {
-				spender: "bob",
-				packId: "pack_approve_qty",
-				approved: true,
-				quantity: 5,
-			}, "alice");
-			await handlePackApprove(approveOk, sql);
-
-			// Approve 6 → should fail (only has 5)
-			const approveTooMany = makeOp(ACTION_PACK_APPROVE, {
-				spender: "charlie",
-				packId: "pack_approve_qty",
-				approved: true,
-				quantity: 6,
-			}, "alice");
-			await expect(handlePackApprove(approveTooMany, sql)).rejects.toThrow("Insufficient balance");
-		});
-
-		test("pack_approve allows revoking (approved=false) without balance check", async () => {
-			await seedCollection();
-			await mintSeed("seed_revoke");
-
-			const createOp = makeOp(ACTION_PACK_CREATE, {
-				id: "pack_revoke",
-				collectionId: COL_ID,
-				name: "Revoke Test",
-				dropTable: [{ seedId: "seed_revoke", weight: 1 }],
-				itemsPerPack: 1,
-				maxSupply: 2,
-			});
-			await handlePackCreate(createOp, sql);
-
-			// Approve first
-			const approveOp = makeOp(ACTION_PACK_APPROVE, {
-				spender: "bob",
-				packId: "pack_revoke",
-				approved: true,
-				quantity: 1,
-			}, "alice");
-			await handlePackApprove(approveOp, sql);
-
-			// Revoke
-			const revokeOp = makeOp(ACTION_PACK_APPROVE, {
-				spender: "bob",
-				packId: "pack_revoke",
-				approved: false,
-			}, "alice");
-			await handlePackApprove(revokeOp, sql);
-
-			// Verify allowance is gone
-			const [row] = await sql`
-				SELECT quantity FROM pack_allowances
-				WHERE owner = 'alice' AND spender = 'bob' AND pack_id = 'pack_revoke'
-			`;
-			expect(row).toBeUndefined();
-		});
 
 		test("updateLastBlock never regresses cursor", async () => {
 			const { updateLastBlock, getLastBlock } = await import("@/db/queries/sync.ts");
@@ -2793,13 +2173,13 @@ describe("Handlers (integration)", () => {
 			expect(await ownerCounts("bob")).toMatchObject({ total: 1 });
 		});
 
-		test("burn decrements owner counter and increments collection burned", async () => {
+		test("burn decrements owner and collection counters, increments burned", async () => {
 			await seedCollection();
 			await seedMint();
 			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
 
 			expect(await ownerCounts("alice")).toMatchObject({ total: 0, seeds: 0 });
-			expect(await collStats(COL_ID)).toMatchObject({ total: 1, seeds: 1, burned: 1 });
+			expect(await collStats(COL_ID)).toMatchObject({ total: 0, seeds: 0, burned: 1 });
 		});
 
 		test("list increments listed counter without changing owner count", async () => {

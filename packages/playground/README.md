@@ -60,7 +60,7 @@ Open `http://localhost:3040` in your browser.
 | `GET /api/status` | Sync status |
 | `GET /api/health` | Health check |
 
-### Build API (27 endpoints)
+### Build API (26 endpoints)
 
 All `POST` endpoints that validate input and return Hive operations ready for Keychain signing:
 
@@ -77,7 +77,6 @@ All `POST` endpoints that validate input and return Hive operations ready for Ke
 | `/api/build/replicate` | Create replica |
 | `/api/build/set-data` | Update mutable data (creator) |
 | `/api/build/archive-collection` | Archive empty collection |
-| `/api/build/set-owner-data` | Update owner-specific data |
 | `/api/build/extend-schema` | Add fields to collection schema |
 | `/api/build/preview-ids` | Preview deterministic IDs |
 | `/api/build/pack-create` | Create pack |

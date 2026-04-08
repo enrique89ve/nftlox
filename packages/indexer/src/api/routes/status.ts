@@ -7,14 +7,99 @@ import { SYNC_TOLERANCE_BLOCKS } from "@/scanner/sync-engine.ts";
 import { config } from "@/config.ts";
 import { getMultisigHealth } from "@/api/services/multisig-health.ts";
 import {
+	evaluateSyncHealth,
+	isHealthyForMode,
+	type SyncHealthMode,
+} from "@/health/sync-health.ts";
+import {
 	PROTOCOL_VERSION,
-	PROTOCOL_FEE_PCT,
+	PROTOCOL_FEE_BPS,
 	MAX_ROYALTY_PCT,
 	SUPPORTED_CURRENCIES,
 	ALL_ACTIONS,
+	percentageToBasisPoints,
 } from "@/protocol/index.ts";
 
-const STALE_THRESHOLD_MS = 60_000; // 1 minute without processing = stale
+type ApiHealthBody = Readonly<{
+	mode: SyncHealthMode;
+	status: "healthy" | "unhealthy";
+	db: "ok" | "unreachable";
+	hive: "ok" | "unreachable";
+	sync: "starting" | "catching-up" | "ready" | "stale" | "unreachable";
+	syncActive: boolean;
+	inSync: boolean;
+	lastBlock: number;
+	headBlock: number;
+	irreversibleBlock: number;
+	blocksBehind: number;
+	secondsSinceUpdate: number | null;
+}>;
+
+type AggregatedHealthBody = Readonly<{
+	status: "healthy" | "unhealthy";
+	liveness: ApiHealthBody;
+	readiness: ApiHealthBody;
+}>;
+
+function buildUnavailableHealthBody(mode: SyncHealthMode): ApiHealthBody {
+	return {
+		mode,
+		status: "unhealthy",
+		db: "unreachable",
+		hive: "unreachable",
+		sync: "unreachable",
+		syncActive: false,
+		inSync: false,
+		lastBlock: 0,
+		headBlock: 0,
+		irreversibleBlock: 0,
+		blocksBehind: 0,
+		secondsSinceUpdate: null,
+	};
+}
+
+async function buildApiHealthBody(mode: SyncHealthMode): Promise<ApiHealthBody> {
+	const [sync, chain] = await Promise.all([
+		getSyncStatus(),
+		getBlockchainHead().catch(() => ({ headBlock: 0, irreversibleBlock: 0 })),
+	]);
+	const health = evaluateSyncHealth({
+		nowMs: Date.now(),
+		startupTimeMs: getStartupTime(),
+		lastUpdateTimeMs: sync.updatedAt?.getTime() ?? 0,
+		lastBlock: sync.lastBlock,
+		headBlock: chain.headBlock,
+		irreversibleBlock: chain.irreversibleBlock,
+		toleranceBlocks: SYNC_TOLERANCE_BLOCKS,
+	});
+	const healthy = isHealthyForMode(mode, health);
+	return {
+		mode,
+		status: healthy ? "healthy" : "unhealthy",
+		db: "ok",
+		hive: health.hiveReachable ? "ok" : "unreachable",
+		sync: health.syncState,
+		syncActive: health.syncActive,
+		inSync: health.inSync,
+		lastBlock: health.lastBlock,
+		headBlock: health.headBlock,
+		irreversibleBlock: health.irreversibleBlock,
+		blocksBehind: health.blocksBehind,
+		secondsSinceUpdate: health.secondsSinceUpdate,
+	};
+}
+
+async function buildAggregatedHealthBody(): Promise<AggregatedHealthBody> {
+	const [liveness, readiness] = await Promise.all([
+		buildApiHealthBody("liveness"),
+		buildApiHealthBody("readiness"),
+	]);
+	return {
+		status: liveness.status,
+		liveness,
+		readiness,
+	};
+}
 
 export const statusRoutes = new Elysia({ tags: ["Status"] })
 	.get("/api/status", async () => {
@@ -35,8 +120,8 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			multisigSignerReady: multisig.multisigSignerReady,
 			multisigClockDriftOk: multisig.multisigClockDriftOk,
 			multisigClockDriftMs: multisig.multisigClockDriftMs,
-			protocolFee: PROTOCOL_FEE_PCT,
-			maxRoyalty: MAX_ROYALTY_PCT,
+			protocolFeeBps: PROTOCOL_FEE_BPS,
+			maxRoyaltyBps: percentageToBasisPoints(MAX_ROYALTY_PCT),
 			supportedCurrencies: SUPPORTED_CURRENCIES,
 			lastBlock,
 			headBlock: chain.headBlock,
@@ -47,56 +132,28 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 	}, {
 		detail: {
 			summary: "Sync status",
-			description: "Current indexer sync progress and block height",
+			description: "Current indexer sync progress and protocol constants. Block fields are Hive block numbers. multisigClockDriftMs is expressed in milliseconds. protocolFeeBps and maxRoyaltyBps use basis points (100 = 1%, 5000 = 50%).",
 		},
 	})
 	.get("/api/health", async ({ set }) => {
 		try {
-			const [sync, chain] = await Promise.all([
-				getSyncStatus(),
-				getBlockchainHead().catch(() => ({ headBlock: 0, irreversibleBlock: 0 })),
-			]);
-
-			const now = Date.now();
-			const lastUpdateMs = sync.updatedAt ? sync.updatedAt.getTime() : 0;
-			const secondsSinceUpdate = Math.floor((now - lastUpdateMs) / 1000);
-			const blocksBehind = Math.max(0, chain.irreversibleBlock - sync.lastBlock);
-
-			const dbAlive = true;
-			const startupTime = getStartupTime();
-			const isApiRole = config.indexerRole === "api";
-			const updatedAfterStartup = isApiRole ? true : (startupTime > 0 && lastUpdateMs > startupTime);
-			const syncActive = secondsSinceUpdate < STALE_THRESHOLD_MS / 1000 && updatedAfterStartup;
-			const hiveReachable = chain.irreversibleBlock > 0;
-			const inSync = hiveReachable && blocksBehind <= SYNC_TOLERANCE_BLOCKS;
-			const healthy = dbAlive && hiveReachable && inSync;
-			const syncState = inSync ? "ready" : (syncActive ? "catching-up" : "stale");
-
-			if (!healthy) {
+			const body = await buildAggregatedHealthBody();
+			if (body.status !== "healthy") {
 				set.status = 503;
 			}
-
-			return {
-				status: healthy ? "healthy" : "unhealthy",
-				db: dbAlive ? "ok" : "unreachable",
-				hive: hiveReachable ? "ok" : "unreachable",
-				sync: syncState,
-				syncActive,
-				inSync,
-				lastBlock: sync.lastBlock,
-				headBlock: chain.headBlock,
-				irreversibleBlock: chain.irreversibleBlock,
-				blocksBehind,
-				secondsSinceUpdate,
-			};
+			return body;
 		} catch {
 			set.status = 503;
-			return { status: "unhealthy", db: "unreachable", sync: "unknown" };
+			return {
+				status: "unhealthy",
+				liveness: buildUnavailableHealthBody("liveness"),
+				readiness: buildUnavailableHealthBody("readiness"),
+			};
 		}
 	}, {
 		detail: {
-			summary: "Health check (readiness)",
-			description: "Returns 200 only when DB is reachable, Hive is reachable, and the indexer has caught up to the latest irreversible block. Returns 503 otherwise. Use for Docker HEALTHCHECK / load balancer readiness probes.",
+			summary: "Combined health check",
+			description: "Returns aggregated liveness and readiness information. The HTTP status follows liveness, while the response body contains both checks.",
 		},
 	})
 	.get("/api/stats", async () => {
@@ -108,20 +165,15 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 		},
 	})
 	.get("/api/operation-status/:txId", async ({ params, query }) => {
-		const entries = await getOperationStatus(params.txId);
-		const filtered = entries.filter(e =>
-			(!query.operationId || e.operationId === query.operationId)
-			&& (!query.action || e.action === query.action),
-		);
-		return { txId: params.txId, operations: filtered };
+		return getOperationStatus(params.txId, query.operationId, query.action);
 	}, {
-		params: t.Object({ txId: t.String({ minLength: 40, maxLength: 40 }) }),
+		params: t.Object({ txId: t.String({ minLength: 40, maxLength: 40, pattern: "^[a-f0-9]{40}$" }) }),
 		query: t.Object({
-			operationId: t.Optional(t.String()),
-			action: t.Optional(t.String({ enum: [...ALL_ACTIONS] })),
+			operationId: t.Optional(t.String({ description: "Filter by specific operation ID" })),
+			action: t.Optional(t.String({ enum: [...ALL_ACTIONS], description: "Filter by protocol action" })),
 		}),
 		detail: {
 			summary: "Operation status by transaction ID",
-			description: "Returns per-operation status for all protocol operations in a Hive transaction. A single tx can contain multiple custom_json ops, each tracked independently. Use ?operationId= or ?action= to filter.",
+			description: "Returns per-operation status for all protocol operations in a Hive transaction. Includes NFT IDs created/affected by confirmed operations. A single tx can contain multiple custom_json ops, each tracked independently.",
 		},
 	})

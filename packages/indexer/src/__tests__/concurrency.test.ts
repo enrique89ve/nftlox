@@ -1,7 +1,7 @@
 import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from "bun:test";
 import type { ParsedOperation, ParseResult } from "@/scanner/operation-parser.ts";
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
-import { ACTION_TRANSFER, ACTION_BUY, ACTION_PACK_BUY, ACTIVE_AUTH_ACTIONS } from "@/protocol/index.ts";
+import { ACTION_TRANSFER, ACTION_BUY, ACTIVE_AUTH_ACTIONS } from "@/protocol/index.ts";
 
 // ─── Mocks ──────────────────────────────────────────
 
@@ -323,7 +323,6 @@ describe("buy enrichment runs in parallel", () => {
 		const buyOps = [
 			fakeParsedOp(1001, ACTION_BUY),
 			fakeParsedOp(1002, ACTION_BUY),
-			fakeParsedOp(1003, ACTION_PACK_BUY),
 		];
 
 		trackedLastBlock = 1000;
@@ -348,9 +347,9 @@ describe("buy enrichment runs in parallel", () => {
 
 		await syncCycle();
 
-		expect(mockGetTransfersInTransaction).toHaveBeenCalledTimes(3);
-		// All 3 should be in-flight simultaneously (Promise.all)
-		expect(maxConcurrent).toBe(3);
+		expect(mockGetTransfersInTransaction).toHaveBeenCalledTimes(2);
+		// Both should be in-flight simultaneously (Promise.all)
+		expect(maxConcurrent).toBe(2);
 	});
 
 	test("should call enrichment for both buy ops even if one fails", async () => {

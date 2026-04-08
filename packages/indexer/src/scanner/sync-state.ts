@@ -7,6 +7,7 @@ let lastBlock = 0;
 let headBlock = 0;
 let irreversibleBlock = 0;
 let startupTime = 0;
+let lastActivityTime = 0;
 
 // Optional reporter for forwarding state changes to the main thread (worker mode)
 export type SyncProgressSnapshot = Readonly<{
@@ -38,6 +39,10 @@ export function getStartupTime(): number {
 	return startupTime;
 }
 
+export function getLastActivityTime(): number {
+	return lastActivityTime;
+}
+
 export function isSynced(): boolean {
 	return synced;
 }
@@ -61,4 +66,8 @@ export function updateSyncProgress(progress: SyncProgressSnapshot): void {
 	headBlock = progress.headBlock;
 	irreversibleBlock = progress.irreversibleBlock;
 	reporter?.onProgress(progress);
+}
+
+export function markSyncActivity(): void {
+	lastActivityTime = Date.now();
 }

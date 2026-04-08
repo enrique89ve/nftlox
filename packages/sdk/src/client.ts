@@ -22,24 +22,59 @@ export class IndexerError extends Error {
 export interface SyncStatus {
 	protocolVersion: string;
 	protocolId: string;
+	genesisBlock?: number;
 	nodeAccount: string;
 	nodeUrl: string | null;
 	multisigEnabled: boolean;
+	multisigSignerReady?: boolean;
+	multisigClockDriftOk?: boolean;
+	/** Milliseconds of clock drift between the indexer host and Hive. */
+	multisigClockDriftMs?: number;
+	/** Protocol fee in basis points. 100 = 1%. */
+	protocolFeeBps?: number;
+	/** Maximum allowed royalty in basis points. 5000 = 50%. */
+	maxRoyaltyBps?: number;
+	supportedCurrencies?: string[];
 	lastBlock: number;
 	headBlock: number;
+	irreversibleBlock?: number;
 	blocksBehind: number;
 	inSync: boolean;
 }
 
+export type IndexerNftType = "seed" | "instance" | "replica";
+export type IndexerNftStatus = "active" | "listed" | "burned" | "lent";
+export type UserNftFilterStatus = "active" | "listed" | "lent";
+export type ListingSort = "price_asc" | "price_desc" | "recent";
+
+export type HealthMode = "liveness" | "readiness";
+
+export type HealthSyncState =
+	| "starting"
+	| "catching-up"
+	| "ready"
+	| "stale"
+	| "unreachable";
+
+export interface HealthCheck {
+	mode: HealthMode;
+	status: "healthy" | "unhealthy";
+	db: "ok" | "unreachable";
+	hive: "ok" | "unreachable";
+	sync: HealthSyncState;
+	syncActive: boolean;
+	inSync: boolean;
+	lastBlock: number;
+	headBlock: number;
+	irreversibleBlock: number;
+	blocksBehind: number;
+	secondsSinceUpdate: number | null;
+}
+
 export interface HealthStatus {
-	status: string;
-	db: string;
-	sync: string;
-	inSync?: boolean;
-	lastBlock?: number;
-	headBlock?: number;
-	blocksBehind?: number;
-	secondsSinceUpdate?: number;
+	status: "healthy" | "unhealthy";
+	liveness: HealthCheck;
+	readiness: HealthCheck;
 }
 
 export interface ProtocolStats {
@@ -52,6 +87,8 @@ export interface ProtocolStats {
 	total_burned: number;
 	unique_owners: number;
 	invalid_ops: number;
+	total_schema_versions: number;
+	sales: MarketplaceVolume[];
 }
 
 export interface UserNftCounts {
@@ -68,31 +105,34 @@ export interface UserNftsPage {
 	limit: number;
 }
 
-export interface IndexerCollection {
+export interface IndexerCollectionBase {
 	id: string;
 	name: string;
 	symbol: string;
 	creator: string;
 	total_potential: number;
-	origin_dna: string | null;
 	description: string | null;
 	image_url: string | null;
 	external_url: string | null;
 	transferable: boolean;
 	burnable: boolean;
 	replicable: boolean;
-	royalty_pct: number;
+	/** Whole percent value in protocol 0.5.0, serialized from PostgreSQL numeric. */
+	royalty_pct: string;
 	royalty_recipient: string | null;
-	json_id: string | null;
 	status: "active" | "archived";
-	archived_at_block: number | null;
-	archived_tx_id: string | null;
-	archived_at: string | null;
-	seed_count: number;
-	instance_count: number;
-	block_num: number;
+	schema_version: number;
 	tx_id: string;
 	created_at: string;
+}
+
+export interface IndexerCollectionSummary extends IndexerCollectionBase {
+	seed_count: number;
+	instance_count: number;
+}
+
+export interface IndexerCollection extends IndexerCollectionBase {
+	schema: unknown | null;
 }
 
 export interface CollectionStats {
@@ -102,19 +142,31 @@ export interface CollectionStats {
 	total_listed: number;
 	total_burned: number;
 	unique_owners: number;
-	floor_price: number | null;
+	/** Decimal Hive asset value serialized from PostgreSQL numeric. */
+	floor_price: string | null;
+}
+
+export interface SchemaHistoryEntry {
+	version: number;
+	schema: unknown;
+	schema_hash: string;
+	prev_hash: string | null;
+	block_num: number;
+	tx_id: string;
+	created_at: string;
 }
 
 export interface IndexerNftSummary {
 	id: string;
 	collection_id: string;
-	nft_type: "seed" | "instance" | "replica";
-	status: "active" | "listed" | "burned" | "lent";
+	nft_type: IndexerNftType;
+	status: IndexerNftStatus;
 	edition: number;
 	owner: string;
 	name: string;
 	image_url: string | null;
 	origin_dna: string | null;
+	immutable_data: Record<string, unknown> | null;
 	instance_dna: string | null;
 	seed_id: string | null;
 	seed_tx_id: string | null;
@@ -122,56 +174,119 @@ export interface IndexerNftSummary {
 	max_replicas: number;
 	distributed: number;
 	supply_exhausted: boolean;
+	schema_version: number | null;
+	owner_tx_id: string | null;
+	listing_id: string | null;
+	listing_tx_id: string | null;
 	listing_price: string | null;
 	listing_currency: string | null;
+	listing_expires_at: string | null;
 	created_at: string;
 }
 
 export interface IndexerNft extends IndexerNftSummary {
-	description: string | null;
-	image_hash: string | null;
-	unique_access_key: string | null;
 	original_id: string | null;
-	minted_by: string | null;
-	block_num: number;
+	data_hash: string | null;
 	tx_id: string;
+	listing_marketplace: string | null;
+	listing_expired: boolean;
 }
 
-export interface IndexerPack {
-	id: string;
+export interface MarketplaceSale {
+	nft_id: string;
 	collection_id: string;
-	creator: string;
-	name: string;
-	description: string | null;
-	image_url: string | null;
-	drop_table: Array<{ seedId: string; weight: number }>;
-	items_per_pack: number;
-	price_amount: string | null;
-	price_currency: string | null;
-	max_supply: number;
-	current_supply: number;
-	total_opened: number;
-	status: string;
-	block_num: number;
+	listing_id: string;
+	seller: string;
+	buyer: string;
+	/** Decimal Hive asset value serialized from PostgreSQL numeric. */
+	gross_amount: string;
+	currency: string;
+	/** Decimal Hive asset value serialized from PostgreSQL numeric. */
+	royalty_amount: string;
+	/** Decimal Hive asset value serialized from PostgreSQL numeric. */
+	protocol_fee: string;
+	/** Decimal Hive asset value serialized from PostgreSQL numeric. */
+	seller_net: string;
 	tx_id: string;
 	created_at: string;
 }
 
-export interface PackBalance {
-	account: string;
-	pack_id: string;
-	balance: number;
-	name: string;
-	description: string | null;
-	image_url: string | null;
-	collection_id: string;
-	items_per_pack: number;
-	price_amount: string | null;
-	price_currency: string | null;
-	max_supply: number;
-	current_supply: number;
-	status: string;
+export interface MarketplaceVolume {
+	currency: string;
+	total_sales: number;
+	/** Decimal Hive asset value serialized from PostgreSQL numeric. */
+	volume: string;
+	/** Decimal Hive asset value serialized from PostgreSQL numeric. */
+	total_royalties: string;
+	/** Decimal Hive asset value serialized from PostgreSQL numeric. */
+	total_fees: string;
 }
+
+export type OperationState = "confirmed" | "invalid" | "orphaned" | "unknown";
+
+export interface OperationStatusEntry {
+	status: OperationState;
+	operationId: string | null;
+	signer: string | null;
+	action: string | null;
+	reason: string | null;
+	blockNum: number | null;
+	timestamp: string | null;
+	nftIds: ReadonlyArray<string>;
+}
+
+export interface OperationStatusResult {
+	txId: string;
+	totalOperations: number;
+	confirmed: number;
+	invalid: number;
+	orphaned: number;
+	operations: ReadonlyArray<OperationStatusEntry>;
+}
+
+export type CollectionsQueryParams = QueryParams & Readonly<{
+	creator?: string;
+	limit?: number;
+	offset?: number;
+}>;
+
+export type CollectionNftsQueryParams = QueryParams & Readonly<{
+	type?: IndexerNftType;
+	limit?: number;
+	offset?: number;
+}>;
+
+export type UserNftsQueryParams = QueryParams & Readonly<{
+	status?: UserNftFilterStatus;
+	type?: IndexerNftType;
+	limit?: number;
+	offset?: number;
+}>;
+
+export type ListingsQueryParams = QueryParams & Readonly<{
+	sort?: ListingSort;
+	currency?: string;
+	limit?: number;
+	offset?: number;
+}>;
+
+export type SalesQueryParams = QueryParams & Readonly<{
+	nftId?: string;
+	collectionId?: string;
+	seller?: string;
+	buyer?: string;
+	limit?: number;
+	offset?: number;
+}>;
+
+export type SalesVolumeQueryParams = QueryParams & Readonly<{
+	collectionId?: string;
+}>;
+
+export type OperationStatusQueryParams = QueryParams & Readonly<{
+	operationId?: string;
+	action?: string;
+}>;
 
 // ============ INTERNAL HELPERS ============
 
@@ -223,9 +338,10 @@ export interface IndexerClient {
 	getStats(): Promise<ProtocolStats>;
 
 	// Collections
-	getCollections(params?: { limit?: number; offset?: number }): Promise<IndexerCollection[]>;
+	getCollections(params?: CollectionsQueryParams): Promise<IndexerCollectionSummary[]>;
 	getCollection(id: string): Promise<IndexerCollection>;
-	getCollectionNfts(id: string, params?: { type?: string; limit?: number; offset?: number }): Promise<IndexerNftSummary[]>;
+	getCollectionSchemaHistory(id: string): Promise<ReadonlyArray<SchemaHistoryEntry>>;
+	getCollectionNfts(id: string, params?: CollectionNftsQueryParams): Promise<IndexerNftSummary[]>;
 	getCollectionStats(id: string): Promise<CollectionStats>;
 
 	// NFTs
@@ -233,23 +349,26 @@ export interface IndexerClient {
 	getNftInstances(id: string, params?: { limit?: number; offset?: number }): Promise<IndexerNftSummary[]>;
 
 	// Users
-	getUserNfts(username: string, params?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<UserNftsPage>;
+	getUserNfts(username: string, params?: UserNftsQueryParams): Promise<UserNftsPage>;
 	getUserNftCounts(username: string): Promise<UserNftCounts>;
-	getUserCollections(username: string, params?: { limit?: number; offset?: number }): Promise<IndexerCollection[]>;
-	getUserPacks(username: string, params?: { limit?: number; offset?: number }): Promise<PackBalance[]>;
+	/** @deprecated Use getCollections({ creator: username, ...params }) instead. */
+	getUserCollections(username: string, params?: Omit<CollectionsQueryParams, "creator">): Promise<IndexerCollectionSummary[]>;
 
 	// Marketplace
-	getListings(params?: { sort?: string; currency?: string; limit?: number; offset?: number }): Promise<IndexerNftSummary[]>;
+	getListings(params?: ListingsQueryParams): Promise<IndexerNftSummary[]>;
+	getSales(params?: SalesQueryParams): Promise<ReadonlyArray<MarketplaceSale>>;
+	getSalesVolume(params?: SalesVolumeQueryParams): Promise<ReadonlyArray<MarketplaceVolume>>;
+	/** @deprecated Use getSalesVolume(params) instead. */
+	getVolume(params?: SalesVolumeQueryParams): Promise<ReadonlyArray<MarketplaceVolume>>;
+
+	// Operations
+	getOperationStatus(txId: string, params?: OperationStatusQueryParams): Promise<OperationStatusResult>;
 
 	// Multisig
 	/** Fetch payment split info for buying an NFT */
 	getPaymentInfo(nftId: string): Promise<PaymentInfo>;
 	/** Request multisig signing of a buy transaction */
 	multisig(request: MultisigRequest): Promise<MultisigResponse>;
-
-	// Packs
-	getPacks(params?: { collectionId?: string; limit?: number; offset?: number }): Promise<IndexerPack[]>;
-	getPack(id: string): Promise<IndexerPack>;
 }
 
 /**
@@ -267,9 +386,11 @@ export function createIndexerClient(baseUrl: string): IndexerClient {
 
 		// ---- Collections ----
 		getCollections: (params) =>
-			get<IndexerCollection[]>(baseUrl, "/api/collections", params),
+			get<IndexerCollectionSummary[]>(baseUrl, "/api/collections", params),
 		getCollection: (id) =>
 			get<IndexerCollection>(baseUrl, `/api/collections/${encodeURIComponent(id)}`),
+		getCollectionSchemaHistory: (id) =>
+			get<SchemaHistoryEntry[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/schema-history`),
 		getCollectionNfts: (id, params) =>
 			get<IndexerNftSummary[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/nfts`, params),
 		getCollectionStats: (id) =>
@@ -287,24 +408,26 @@ export function createIndexerClient(baseUrl: string): IndexerClient {
 		getUserNftCounts: (username) =>
 			get<UserNftCounts>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts/count`),
 		getUserCollections: (username, params) =>
-			get<IndexerCollection[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/collections`, params),
-		getUserPacks: (username, params) =>
-			get<PackBalance[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/packs`, params),
+			get<IndexerCollectionSummary[]>(baseUrl, "/api/collections", { ...params, creator: username }),
 
 		// ---- Marketplace ----
 		getListings: (params) =>
 			get<IndexerNftSummary[]>(baseUrl, "/api/marketplace/listings", params),
+		getSales: (params) =>
+			get<MarketplaceSale[]>(baseUrl, "/api/marketplace/sales", params),
+		getSalesVolume: (params) =>
+			get<MarketplaceVolume[]>(baseUrl, "/api/marketplace/volume", params),
+		getVolume: (params) =>
+			get<MarketplaceVolume[]>(baseUrl, "/api/marketplace/volume", params),
+
+		// ---- Operations ----
+		getOperationStatus: (txId, params) =>
+			get<OperationStatusResult>(baseUrl, `/api/operation-status/${encodeURIComponent(txId)}`, params),
 
 		// ---- Multisig ----
 		getPaymentInfo: (nftId) =>
 			get<PaymentInfo>(baseUrl, `/api/payment-info/${encodeURIComponent(nftId)}`),
 		multisig: (request) =>
 			post<MultisigResponse>(baseUrl, "/api/multisig", request),
-
-		// ---- Packs ----
-		getPacks: (params) =>
-			get<IndexerPack[]>(baseUrl, "/api/packs", params),
-		getPack: (id) =>
-			get<IndexerPack>(baseUrl, `/api/packs/${encodeURIComponent(id)}`),
 	};
 }

@@ -1,0 +1,5 @@
+.env
+node_modules
+storage_root-node
+api_test.log
+*.log

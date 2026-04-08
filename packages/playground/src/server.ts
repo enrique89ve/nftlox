@@ -130,7 +130,6 @@ Debug Routes: ${playgroundConfig.debugRoutesEnabled ? "enabled" : "disabled"}
 Query API (via Indexer):
   GET  /api/user/:username
   GET  /api/user/:username/collections
-  GET  /api/user/:username/packs
   GET  /api/nft/:nftId
   GET  /api/nft/:nftId/details
   GET  /api/collections
@@ -141,13 +140,11 @@ Query API (via Indexer):
   GET  /api/seed/:seedId/instances
   GET  /api/seed/:id/exists
   GET  /api/marketplace/listings
-  GET  /api/packs
-  GET  /api/pack/:id
   GET  /api/stats
   GET  /api/status
   GET  /api/health
 
-Build API (27 endpoints):
+Build API (26 endpoints):
   POST /api/build/collection       POST /api/build/seeds
   POST /api/build/bulk-distribute  POST /api/build/transfer
   POST /api/build/list             POST /api/build/unlist
@@ -163,7 +160,7 @@ Build API (27 endpoints):
   POST /api/build/data-operator-approve
   POST /api/build/set-data-from
   POST /api/build/archive-collection
-  POST /api/build/set-owner-data   POST /api/build/extend-schema
+  POST /api/build/extend-schema
 
 SPV Verification:
   POST /api/spv/verify-ownership

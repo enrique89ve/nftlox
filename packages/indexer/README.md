@@ -55,7 +55,7 @@ Buyer                          Indexer Node
 
 ```
 Client                         Indexer              Hive L1
-  |--- pick random pack_open --->|                      |
+  |--- pick random buy ---------->|                      |
   |<-- here's what happened -----|                      |
   |--- fetch same tx directly ---|--------------------->|
   |<-- raw transaction ----------|------- HAFAH --------|
@@ -77,13 +77,27 @@ Client                         Indexer              Hive L1
 
 ## Quick Start
 
+This quick start is the recommended local development flow on Linux, Ubuntu, and WSL:
+- PostgreSQL runs in Docker
+- the indexer runs on the host with Bun
+
+If you cloned only the indexer as a standalone repository, run `bun install` from that repository root and keep the rest of the flow the same.
+
 ```bash
 # 1. Clone and install
 git clone https://github.com/enrique89ve/nftlox.git
 cd nftlox
 bun install
 
-# 2. Start everything (auto-launches PostgreSQL via Docker)
+# 2. Configure env
+cp packages/indexer/.env.example packages/indexer/.env
+
+# 3. Start local development infra
+cd packages/indexer
+./scripts/compose.sh dev up -d
+
+# 4. Run the indexer on the host
+cd ../..
 bun run dev:indexer
 ```
 
@@ -101,7 +115,7 @@ Interactive documentation available at `http://localhost:3050/swagger` (disabled
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/status` | Sync progress (lastBlock, headBlock, blocksBehind, multisigEnabled) |
-| `GET /api/health` | Sync-aware health check (200 healthy, 503 unhealthy) |
+| `GET /api/health` | Combined health response: HTTP status follows liveness and the JSON includes both `liveness` and `readiness` |
 | `GET /api/stats` | Protocol totals (collections, NFTs, listed, burned, etc.) |
 
 ### Collections
@@ -124,7 +138,6 @@ Interactive documentation available at `http://localhost:3050/swagger` (disabled
 | `GET /api/users/:username/nfts` | User's NFTs with counts (?status=active&type=seed) |
 | `GET /api/users/:username/nfts/count` | NFT counts by type (seeds, instances, replicas) |
 | `GET /api/users/:username/collections` | User's collections |
-| `GET /api/users/:username/packs` | User's pack balances |
 
 ### Marketplace
 | Endpoint | Description |
@@ -144,25 +157,27 @@ Interactive documentation available at `http://localhost:3050/swagger` (disabled
 |----------|-------------|
 | `GET /api/collections/:id/schema-history` | Schema version history (hash chain) for a collection |
 
-### Packs
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/packs` | List packs (?collectionId=xxx) |
-| `GET /api/packs/:id` | Pack details |
-
 ### Pagination
 
 All list endpoints support `?limit=N&offset=N`.
 
+### Public API Units
+
+- `protocolFeeBps` in `GET /api/status` uses basis points: `100 = 1%`.
+- `maxRoyaltyBps` in `GET /api/status` also uses basis points: `5000 = 50%`.
+- `royalty_pct` in collection responses remains a whole percent for protocol `0.5.0`.
+- Monetary fields such as `listing_price`, `gross_amount`, `royalty_amount`, `protocol_fee`, `seller_net`, `totalPrice`, `sellerAmount`, `royaltyAmount`, and `feeAmount` are Hive asset amounts with 3 decimal places.
+- `multisigClockDriftMs` and rate-limit windows are expressed in milliseconds.
+- `lastBlock`, `headBlock`, `irreversibleBlock`, and `genesisBlock` are Hive block numbers.
+
 ## Configuration
 
-Copy `.env.example` to `.env` to customize (defaults work out of the box):
+Copy `.env.example` to `.env` and set the chain-specific required values before starting:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `INDEXER_PORT` | 3050 | REST API port |
-| `GENESIS_BLOCK` | 103484900 | First block to scan |
-| `PROTOCOL_ID` | nftlox_testnet | Protocol ID to filter |
+| `GENESIS_BLOCK` | required | First block to scan |
 | `BATCH_SIZE` | 1000 | Blocks per API request |
 | `SYNC_INTERVAL_MS` | 3000 | Polling interval when caught up |
 | `LOG_LEVEL` | info | debug, info, warn, error |
@@ -181,29 +196,88 @@ Copy `.env.example` to `.env` to customize (defaults work out of the box):
 | `MULTISIG_RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window in milliseconds |
 | `MULTISIG_IP_RATE_LIMIT_MAX` | 30 | Max multisig requests per IP and window |
 | `MULTISIG_IP_RATE_LIMIT_WINDOW_MS` | 60000 | Per-IP multisig rate limit window in milliseconds |
-| `HEALTH_PORT` | 0 | Separate health check port (0 = disabled) |
+| `HEALTH_PORT` | 0 | Separate internal health port with `/live` and `/ready` probes (0 = disabled) |
+
+`PROTOCOL_ID` is compiled from the protocol constants and is not configured via environment variables.
+
+## Operational Scripts
+
+The indexer ships small deployment scripts inspired by `docs/reference_repos/nft-tracker-temp`, but adapted to the current Bun/Compose layout:
+
+- `scripts/docker-entrypoint.sh`
+  Dispatches container startup in `start`, `monolith`, `sync`, or `api` mode.
+- `scripts/docker-healthcheck.sh`
+  Uses `/live` on `HEALTH_PORT` when enabled, otherwise falls back to `/api/health`.
+- `scripts/dev-env.sh`
+  Detects WSL, slow `/mnt/*` paths, and whether Docker is still using the legacy builder.
+- `scripts/build-image.sh`
+  Builds the standalone indexer image and prefers `docker buildx` when available.
+- `scripts/compose.sh`
+  Resolves the right compose files for `dokploy`, `server`, or `dev`.
+
+Compose files inject only explicit environment variables per service. This keeps secrets like `ACTIVE_KEY` out of unrelated containers such as PostgreSQL.
+
+The container image is also built from `packages/indexer` itself. It no longer copies SDK runtime sources into the image, and it uses the package-local `bun.lock` for reproducible installs.
+
+Examples:
+
+```bash
+cd packages/indexer
+./scripts/compose.sh dev up -d
+./scripts/compose.sh dokploy up -d
+./scripts/compose.sh server up -d
+./scripts/build-image.sh nftlox-indexer
+DOCKER_SUBNET=172.28.10.0/24 ./scripts/compose.sh dokploy up -d
+DOCKER_BUILD_NETWORK=host ./scripts/build-image.sh nftlox-indexer
+```
+
+`dev` mode means:
+- PostgreSQL in Docker
+- indexer on the host with `bun run dev:indexer`
+
+On WSL, the scripts will warn if:
+- the repo is under `/mnt/*`
+- Docker is still using the legacy builder instead of `buildx`
+
+For the fastest local workflow on WSL, prefer:
+- `./scripts/compose.sh dev up -d`
+- run the indexer on the Linux host with `bun run dev:indexer`
+
+If image builds stall on HTTPS downloads in WSL or another host with problematic Docker bridge networking, retry the image build with:
+
+```bash
+DOCKER_BUILD_NETWORK=host ./scripts/build-image.sh nftlox-indexer
+```
+
+That override is a troubleshooting fallback, not the default production configuration.
 
 ## Production Deployment
 
 Two deployment modes are available. Both use the same base `docker-compose.yml`.
 In production, the base compose keeps PostgreSQL and the indexer on the internal Docker network. Traffic should enter through your platform proxy or the optional Nginx overlay.
 
+For native Ubuntu/Linux servers, use one of these two modes:
+- `dokploy` if TLS and routing are handled by your platform
+- `server` if you want the bundled Nginx overlay in the same stack
+
 ### Option A: PaaS (Dokploy / Coolify / Traefik)
 
 For platforms that provide their own reverse proxy with automatic TLS:
 
 ```bash
-docker compose up -d
+cd packages/indexer
+./scripts/compose.sh dokploy up -d
 ```
 
-The platform's Traefik/Caddy handles SSL certificates, routing, and HTTPS redirection. Route traffic to the indexer service on internal port `3050`.
+The platform proxy handles SSL certificates, routing, and HTTPS redirection. Route traffic to the indexer service on internal port `3050`. The container healthcheck uses the internal `/live` probe on `HEALTH_PORT` when available.
 
 ### Option B: Standalone with Nginx
 
 For bare-metal or VPS deployments without a PaaS proxy:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
+cd packages/indexer
+./scripts/compose.sh server up -d
 ```
 
 This adds an Nginx reverse proxy container that provides:
@@ -224,7 +298,7 @@ With this mode, only Nginx is published to the host. PostgreSQL and the indexer 
    ```
 2. Uncomment the HTTPS server block in `nginx/nginx.conf`
 3. Uncomment the SSL port in `docker-compose.nginx.yml`
-4. Restart: `docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d`
+4. Restart: `./scripts/compose.sh server up -d`
 
 #### Nginx environment variables
 
@@ -239,8 +313,10 @@ With this mode, only Nginx is published to the host. PostgreSQL and the indexer 
 For local development, only PostgreSQL runs in Docker:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d
-bun run dev
+cd packages/indexer
+./scripts/compose.sh dev up -d
+cd ../..
+bun run dev:indexer
 ```
 
 ## Security
@@ -268,7 +344,9 @@ Main Thread (event loop free for API)
   |     Swagger UI (:3050/swagger)
   |     Rate limiting, cache headers, sync gating
   |
-  +-- Health Endpoint (:healthPort)
+  +-- Internal Health Endpoints (:healthPort)
+  |     GET /live  -> Docker/Kubernetes liveness probe
+  |     GET /ready -> strict readiness probe
   |
   +-- Worker.onmessage <-- receives progress from sync worker
         updateSyncProgress(), setSynced()
@@ -328,14 +406,14 @@ Hive Blockchain
 +-------------------+
 |  Processor        |  Validates operations
 |  (action-router)  |  Infallible: errors -> invalid_operations
-|  handlers/        |  core/ marketplace/ packs/ allowances/ lending/
+|  handlers/        |  core/ marketplace/ allowances/ lending/
 +--------+----------+
          |
          v
 +-------------------+
 |  PostgreSQL       |  Auto-reconnect with exponential backoff
 |  (postgres.js)    |  keep_alive: 60s, max_lifetime: 30min
-|                   |  collections, nfts, packs, nft_loans, sales,
+|                   |  collections, nfts, nft_loans, sales,
 |                   |  schema_versions, owner_nft_counts, invalid_operations, sync_state,
 |                   |  multisig_locks, orphaned_buys
 +--------+----------+
@@ -348,19 +426,18 @@ Hive Blockchain
 +-------------------+
 ```
 
-## Protocol Actions (25)
+## Protocol Actions (18)
 
-### Core (9)
+### Core (8)
 | Action | Description |
 |--------|-------------|
 | `create_collection` | Create NFT collection |
 | `mint` | Mint seed NFT |
 | `bulk_distribute` | Create instances from seed |
 | `transfer` | Transfer ownership |
-| `burn` | Destroy NFT |
 | `replicate` | Create replica |
 | `set_data` | Update mutable data (creator only) |
-| `set_owner_data` | Update owner-specific data |
+| `archive_collection` | Archive an empty collection |
 | `extend_schema` | Add fields to collection schema |
 
 ### Marketplace (3)
@@ -370,22 +447,12 @@ Hive Blockchain
 | `unlist` | Remove listing |
 | `buy` | Purchase listed NFT (multisig with node co-signature) |
 
-### Packs (4)
-| Action | Description |
-|--------|-------------|
-| `pack_create` | Create pack with drop table |
-| `pack_buy` | Buy pack |
-| `pack_transfer` | Transfer pack |
-| `pack_open` | Open pack (deterministic RNG) |
-
-### Allowances (5)
+### Allowances (3)
 | Action | Description |
 |--------|-------------|
 | `nft_approve` | Approve spender for single NFT |
 | `nft_approve_all` | Approve spender for entire collection |
 | `nft_transfer_from` | Transfer NFT as approved spender |
-| `pack_approve` | Approve pack spending |
-| `pack_transfer_from` | Transfer pack as approved spender |
 
 ### Lending (2)
 | Action | Description |
@@ -411,8 +478,6 @@ All business rules are extracted as pure functions in two utility modules:
 | `resolveNftType` | Determine seed vs instance from ID pattern |
 | `validateSeedCap` | Enforce collection seed limit |
 | `validateTransferCount` | Reject extra transfers in buy payment |
-| `validateSeedDemand` | Verify pack has enough seed supply (weighted math) |
-| `validatePackPayment` | Verify payment amount with integer arithmetic (no float) |
 | `computeInstanceBaseline` | Replay-safe instance numbering |
 | `validateSeedSupplyForDistribution` | Check seed supply before minting |
 
@@ -446,7 +511,7 @@ The action router (`processor/action-router.ts`) uses a `Record<string, Handler>
 The sync engine never blocks the API server:
 - **Worker thread isolation**: Sync runs on a dedicated Bun Worker (monolith mode)
 - **Event loop yields**: `setTimeout(0)` between batches during massive sync
-- **Parallel enrichment**: Buy/pack_buy transfer lookups use `Promise.all`
+- **Parallel enrichment**: Buy transfer lookups use `Promise.all`
 - **CPU-bound parsing**: ~35ms max per batch, well within acceptable limits
 
 ### Database Resilience

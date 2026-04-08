@@ -105,10 +105,10 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			seedTxId: nft.seed_tx_id ?? null,
 		};
 	}, {
-		params: t.Object({ nftId: t.String() }),
+		params: t.Object({ nftId: t.String({ minLength: 1, maxLength: 128 }) }),
 		detail: {
 			summary: "Get payment info for buying an NFT",
-			description: "Returns the payment split needed to build a buy transaction",
+			description: "Returns the payment split needed to build a buy transaction. totalPrice, sellerAmount, royaltyAmount, and feeAmount are decimal Hive asset values rounded to 3 decimals. currency is HIVE or HBD. Royalties are derived from the collection royalty_pct field, which remains a whole percent value.",
 		},
 	})
 
@@ -204,10 +204,10 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		}
 	}, {
 		body: t.Object({
-			buyer: t.String({ description: "Hive username of the buyer" }),
-			nftId: t.String({ description: "ID of the NFT being purchased" }),
-			listingId: t.String({ description: "Deterministic listing ID from the list operation" }),
-			listTxId: t.String({ description: "Transaction ID of the list operation on Hive" }),
+			buyer: t.String({ minLength: 3, maxLength: 16, description: "Hive username of the buyer" }),
+			nftId: t.String({ minLength: 1, maxLength: 128, description: "ID of the NFT being purchased" }),
+			listingId: t.String({ minLength: 1, maxLength: 128, description: "Deterministic listing ID from the list operation" }),
+			listTxId: t.String({ minLength: 1, maxLength: 40, description: "Transaction ID of the list operation on Hive" }),
 			transaction: t.Object({
 				ref_block_num: t.Number(),
 				ref_block_prefix: t.Number(),

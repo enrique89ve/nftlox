@@ -1,10 +1,11 @@
 import { closePool } from "./db/client.ts";
 import { startSync, stopSync } from "./scanner/sync-engine.ts";
-import { setStartupTime, getSyncProgress, isSynced } from "./scanner/sync-state.ts";
+import { setStartupTime } from "./scanner/sync-state.ts";
 import { connectWithRetry } from "./bootstrap.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 import { dns } from "bun";
+import { buildInternalHealthResponse } from "./health/internal-health.ts";
 
 const log = createLogger("sync");
 
@@ -28,19 +29,11 @@ async function main(): Promise<void> {
 	if (config.healthPort > 0) {
 		Bun.serve({
 			port: config.healthPort,
-			fetch() {
-				const progress = getSyncProgress();
-				const synced = isSynced();
-				return new Response(
-					JSON.stringify({ status: synced ? "ok" : "syncing", ...progress }),
-					{
-						status: synced ? 200 : 503,
-						headers: { "Content-Type": "application/json" },
-					},
-				);
+			fetch(request) {
+				return buildInternalHealthResponse(request);
 			},
 		});
-		log.info(`Static health endpoint on port ${config.healthPort}`);
+		log.info(`Internal health endpoints on port ${config.healthPort}`);
 	}
 
 	// Pre-resolve DNS for Hive endpoints

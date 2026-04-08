@@ -3,6 +3,7 @@
 export type {
 	HiveL1Config,
 	HafahTransaction,
+	HafahOperationRecord,
 	L1ParsedOperation,
 	VerificationStatus,
 	SpvMismatch,
@@ -15,6 +16,8 @@ export type {
 	ListingPriceVerifyParams,
 	ListingPriceVerificationResult,
 	OnChainPrice,
+	ResolveMutableDataParams,
+	ResolvedMutableData,
 	AuditorConfig,
 	AuditReport,
 } from "./types.ts";
@@ -30,11 +33,13 @@ export {
 	HiveRpcError,
 	createDefaultL1Config,
 	fetchTransaction,
+	fetchOperationById,
 	fetchOperationId,
 	fetchOperationIds,
 	fetchFromHiveRpc,
 	parseNftloxOperation,
 	parseAllNftloxOperations,
+	resolveMutableDataFromOperation,
 } from "./hive-l1-client.ts";
 
 export {

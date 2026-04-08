@@ -423,7 +423,7 @@ export function getHafAHBlockRange(): number {
 	return HAFAH_BLOCK_RANGE;
 }
 
-// ============ TRANSFER VERIFICATION (for pack_buy payment checks) ============
+// ============ TRANSFER VERIFICATION (for buy payment checks) ============
 
 const NAI_TO_CURRENCY: Record<string, string> = {
 	"@@000000021": "HIVE",

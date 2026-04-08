@@ -3,17 +3,16 @@ import { sql } from "@/db/client.ts";
 export async function getProtocolStats() {
 	const [nftStats] = await sql`
 		SELECT
-			(SELECT COUNT(*) FROM collections WHERE status = 'active') AS total_collections,
-			COALESCE((SELECT SUM(total) FROM collection_stats), 0) AS total_nfts,
-			COALESCE((SELECT SUM(seeds) FROM collection_stats), 0) AS total_seeds,
-			COALESCE((SELECT SUM(instances) FROM collection_stats), 0) AS total_instances,
-			COALESCE((SELECT SUM(replicas) FROM collection_stats), 0) AS total_replicas,
-			COALESCE((SELECT SUM(listed) FROM collection_stats), 0) AS total_listed,
-			COALESCE((SELECT SUM(burned) FROM collection_stats), 0) AS total_burned,
-			(SELECT COUNT(DISTINCT owner) FROM nfts WHERE status != 'burned') AS unique_owners,
-			(SELECT COUNT(*) FROM invalid_operations) AS invalid_ops,
-			(SELECT COUNT(*) FROM packs) AS total_packs,
-			(SELECT COUNT(*) FROM schema_versions) AS total_schema_versions
+			(SELECT COUNT(*)::int FROM collections WHERE status = 'active') AS total_collections,
+			COALESCE((SELECT SUM(total) FROM collection_stats), 0)::int AS total_nfts,
+			COALESCE((SELECT SUM(seeds) FROM collection_stats), 0)::int AS total_seeds,
+			COALESCE((SELECT SUM(instances) FROM collection_stats), 0)::int AS total_instances,
+			COALESCE((SELECT SUM(replicas) FROM collection_stats), 0)::int AS total_replicas,
+			COALESCE((SELECT SUM(listed) FROM collection_stats), 0)::int AS total_listed,
+			COALESCE((SELECT SUM(burned) FROM collection_stats), 0)::int AS total_burned,
+			(SELECT COUNT(DISTINCT owner)::int FROM nfts) AS unique_owners,
+			(SELECT COUNT(*)::int FROM invalid_operations) AS invalid_ops,
+			(SELECT COUNT(*)::int FROM schema_versions) AS total_schema_versions
 	`;
 
 	const salesStats = await sql`

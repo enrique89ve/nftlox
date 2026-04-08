@@ -8,6 +8,11 @@ const json = (data: unknown, status = 200) =>
 		headers: { "Content-Type": "application/json" },
 	});
 
+const packExtensionUnavailable = (): Response =>
+	json({
+		error: "Pack queries were removed from the core indexer. Use the external packs module/service instead.",
+	}, 410);
+
 async function safeHandler(fn: () => Promise<Response>): Promise<Response> {
 	try {
 		return await fn();
@@ -77,12 +82,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			});
 		}),
 
-	"/api/user/:username/packs": (req: Request) =>
-		safeHandler(async () => {
-			const username = new URL(req.url).pathname.split("/api/user/")[1]!.split("/")[0]!.toLowerCase();
-			const packs = await indexer.getUserPacks(username);
-			return json({ user: username, count: packs.length, packs });
-		}),
+	"/api/user/:username/packs": async () => packExtensionUnavailable(),
 
 	"/api/nft/:nftId": (req: Request) =>
 		safeHandler(async () => {
@@ -123,7 +123,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					originDna: nft.origin_dna,
 					instanceDna: nft.instance_dna,
 					mintedAt: nft.created_at,
-					mintedBy: nft.minted_by,
 					burned: nft.status === "burned",
 					listed: nft.status === "listed",
 					listingPrice: nft.listing_price ? { amount: nft.listing_price, currency: nft.listing_currency } : undefined,
@@ -135,7 +134,8 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					seedId: nft.seed_id,
 					seedTxId: nft.seed_tx_id ?? null,
 					instanceNumber: nft.instance_number,
-					imageHash: nft.image_hash,
+					dataOperationId: nft.data_operation_id,
+					dataHash: nft.data_hash,
 					dna: nft.instance_dna,
 					txId: nft.tx_id,
 					blockNum: nft.block_num,
@@ -275,22 +275,9 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			return json({ count: listings.length, listings });
 		}),
 
-	// Packs
-	"/api/packs": (req: Request) =>
-		safeHandler(async () => {
-			const url = new URL(req.url);
-			const collectionId = url.searchParams.get("collectionId") || undefined;
-			const limit = Number(url.searchParams.get("limit")) || 50;
-			const packs = await indexer.getPacks({ collectionId, limit });
-			return json({ count: packs.length, packs });
-		}),
-
-	"/api/pack/:id": (req: Request) =>
-		safeHandler(async () => {
-			const id = new URL(req.url).pathname.split("/api/pack/")[1]!.split("/")[0]!;
-			const pack = await indexer.getPack(id);
-			return json(pack);
-		}),
+	// Packs moved to an external module
+	"/api/packs": async () => packExtensionUnavailable(),
+	"/api/pack/:id": async () => packExtensionUnavailable(),
 
 	// Status/Stats
 	"/api/stats": () =>

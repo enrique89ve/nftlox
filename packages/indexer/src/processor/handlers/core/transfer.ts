@@ -1,11 +1,11 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, updateNftOwner, updateNftBurned } from "@/db/queries/nfts.ts";
+import { getNftForProcessing, updateNftOwner, hardDeleteNft } from "@/db/queries/nfts.ts";
 import type { OwnerChangeCtx, BurnCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
-import { assertOwnershipChangeable, assertActionable, assertNotListed, assertSeedNotDistributed, assertSeedNotReserved } from "@/utils/status-checks.ts";
+import { assertOwnershipChangeable, assertActionable, assertNotListed, assertSeedNotDistributed } from "@/utils/status-checks.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { MAX_TRANSFER_BATCH_SIZE } from "@/protocol/index.ts";
 
@@ -77,8 +77,15 @@ async function processBurn(op: ParsedOperation, nftId: string, txn: Queryable): 
 
 	assertActionable(nft, nftId);
 	assertNotListed(nft, nftId);
-	assertSeedNotDistributed(nft, nftId);
-	assertSeedNotReserved(nft, nftId);
+
+	// Seeds can only be burned if no instances reference them
+	if (nft.nft_type === "seed") {
+		assertSeedNotDistributed(nft, nftId);
+		const [row] = await txn`SELECT COUNT(*)::int AS count FROM nfts WHERE seed_id = ${nftId}`;
+		if ((row?.count ?? 0) > 0) {
+			throw new Error(`Seed ${nftId} still has ${row!.count} instance(s) — burn them first`);
+		}
+	}
 
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 
@@ -87,13 +94,12 @@ async function processBurn(op: ParsedOperation, nftId: string, txn: Queryable): 
 		throw new Error(`Collection ${nft.collection_id} does not allow burning`);
 	}
 
-	log.info("Burn via transfer to null", { nftId, block: op.blockNum });
+	log.info("Hard delete via transfer to null", { nftId, block: op.blockNum });
 	const ctx: BurnCtx = {
 		owner: nft.owner,
 		nftType: nft.nft_type,
 		collectionId: nft.collection_id,
 	};
-	await updateNftBurned(nftId, op.signer, op.blockNum, ctx, txn);
-	await deleteNftAllowance(nftId, txn);
 	await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
+	await hardDeleteNft(nftId, op.signer, op.txId, ctx, txn);
 }

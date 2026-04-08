@@ -108,16 +108,16 @@ const payload = makePayload("transfer", {
 | Export | Description |
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
-| `PROTOCOL_VERSION` | `"0.4.1"` |
-| `ALL_ACTIONS` | All 26 protocol actions |
-| `CORE_ACTIONS` | 10 core actions |
+| `PROTOCOL_VERSION` | `"0.5.0"` |
+| `ALL_ACTIONS` | All 25 protocol actions |
+| `CORE_ACTIONS` | 8 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |
 | `PACK_ACTIONS` | 4 pack actions |
 | `APPROVE_ACTIONS` | 5 approve/transferFrom actions |
 | `LENDING_ACTIONS` | 2 lending actions (nft_lend, nft_return) |
 | `DATA_OPERATOR_ACTIONS` | 2 data operator actions |
 | `SUPPORTED_CURRENCIES` | `["HIVE", "HBD"]` |
-| `PROTOCOL_FEE_PCT` | `1.0` (protocol fee percentage, 1% on sales) |
+| `PROTOCOL_FEE_BPS` | `100` (protocol fee in basis points, 1% on sales) |
 | `calculatePaymentSplit()` | Compute seller/royalty/fee split for a sale |
 
 ### Protocol State
@@ -129,6 +129,12 @@ const payload = makePayload("transfer", {
 | `getProtocolVersion()` | Get current protocol version (from API if initialized, built-in constants otherwise) |
 | `getProtocolId()` | Get current protocol ID (from API if initialized, built-in constants otherwise) |
 | `isInitialized()` | Check if `initProtocol()` has been called |
+
+`/api/status` unit notes:
+- `protocolFeeBps`: basis points, `100 = 1%`
+- `maxRoyaltyBps`: basis points, `5000 = 50%`
+- block fields are Hive block numbers
+- `multisigClockDriftMs` is expressed in milliseconds
 
 ### Payload Creators
 
@@ -213,32 +219,38 @@ Portable API client using only `fetch()` -- works in browser, Bun, and Node.
 ```typescript
 const indexer = createIndexerClient("http://localhost:3050");
 const status = await indexer.getStatus();
+console.log(status.protocolFeeBps, status.maxRoyaltyBps);
+const health = await indexer.getHealth();
+console.log(health.liveness.status, health.readiness.status);
+const schemaHistory = await indexer.getCollectionSchemaHistory("col_abc123");
+const opStatus = await indexer.getOperationStatus("506be0e61ae4dbb504397d7fb6ba59dbbab7e02e");
 const nft = await indexer.getNft("nft_abc123");
 ```
 
 | Method | Description |
 |--------|-------------|
 | `getStatus()` | Sync status |
-| `getHealth()` | Health check |
-| `getStats()` | Protocol statistics |
-| `getCollections(params?)` | List collections |
-| `getCollection(id)` | Active collection by ID |
+| `getHealth()` | Aggregated health check (`liveness` + `readiness`) |
+| `getStats()` | Protocol statistics, including schema count and sales aggregates |
+| `getCollections(params?)` | List collections, optionally filtered by `creator` |
+| `getCollection(id)` | Active collection by ID (detail view) |
+| `getCollectionSchemaHistory(id)` | Schema version history (append-only hash chain) |
 | `getCollectionNfts(id, params?)` | NFTs in collection |
 | `getCollectionStats(id)` | Collection statistics |
 | `getNft(id)` | NFT by ID |
 | `getNftInstances(id, params?)` | Instances from seed |
 | `getUserNfts(username, params?)` | User's NFTs with counts |
 | `getUserNftCounts(username)` | NFT counts by type |
-| `getUserCollections(username, params?)` | User's collections |
-| `getUserPacks(username, params?)` | User's pack balances |
 | `getListings(params?)` | Marketplace listings |
 | `getSales(params?)` | Completed sales with financial breakdown |
-| `getVolume()` | Aggregated marketplace volume statistics |
+| `getSalesVolume(params?)` | Aggregated marketplace volume statistics |
+| `getOperationStatus(txId, params?)` | Per-operation status for a Hive transaction |
 | `getPaymentInfo(nftId)` | Payment split for buy |
 | `multisig(request)` | Request multisig signing |
-| `getSchemaHistory(collectionId)` | Schema version history (hash chain) |
-| `getPacks(params?)` | List packs |
-| `getPack(id)` | Pack by ID |
+
+Compatibility helpers still available:
+- `getUserCollections(username, params?)` forwards to `getCollections({ creator: username, ...params })`
+- `getVolume(params?)` forwards to `getSalesVolume(params?)`
 
 ### Zod Schemas
 

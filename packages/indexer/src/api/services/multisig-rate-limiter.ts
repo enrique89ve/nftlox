@@ -21,7 +21,7 @@ export function createMultisigRateLimiter(
 	const cleanupTimer = setInterval(() => {
 		const now = Date.now();
 		for (const [account, timestamps] of buckets) {
-			const valid = timestamps.filter(t => now - t < windowMs);
+			const valid = timestamps.filter(t => t <= now && now - t < windowMs);
 			if (valid.length === 0) {
 				buckets.delete(account);
 			} else {
@@ -34,7 +34,7 @@ export function createMultisigRateLimiter(
 	const check = (account: string): RateLimitResult => {
 		const now = Date.now();
 		const timestamps = buckets.get(account) ?? [];
-		const valid = timestamps.filter(t => now - t < windowMs);
+		const valid = timestamps.filter(t => t <= now && now - t < windowMs);
 
 		if (valid.length >= maxRequests) {
 			const oldest = valid[0]!;

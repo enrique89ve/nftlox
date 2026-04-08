@@ -93,16 +93,10 @@ export async function processMultisigRequest(
 		const { nft, rules, nftTxId } = await validateNftState(request.nftId, request.buyer, db);
 
 		if (nft.listing_id !== request.listingId) {
-			throw createMultisigError(
-				"INVALID_PROTOCOL_PAYLOAD",
-				`listingId mismatch: expected '${nft.listing_id}', got '${request.listingId}'`,
-			);
+			throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "listingId does not match current listing");
 		}
 		if (nft.listing_tx_id !== request.listTxId) {
-			throw createMultisigError(
-				"INVALID_PROTOCOL_PAYLOAD",
-				`listTxId mismatch: expected '${nft.listing_tx_id}', got '${request.listTxId}'`,
-			);
+			throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "listTxId does not match current listing");
 		}
 
 		validateBuyPayloadData(
@@ -535,13 +529,13 @@ async function validateNftState(
 	}
 
 	if (nftWithRules.status !== "listed") {
-		throw createMultisigError("NFT_NOT_LISTED", `NFT '${nftId}' is not listed (status: ${nftWithRules.status})`);
+		throw createMultisigError("NFT_NOT_LISTED", "NFT is not currently listed for sale");
 	}
 
 	if (nftWithRules.listing_expires_at) {
 		const expiresAt = new Date(nftWithRules.listing_expires_at).getTime();
 		if (Date.now() > expiresAt) {
-			throw createMultisigError("NFT_EXPIRED_LISTING", `Listing for NFT '${nftId}' has expired`);
+			throw createMultisigError("NFT_EXPIRED_LISTING", "Listing has expired");
 		}
 	}
 
@@ -550,14 +544,11 @@ async function validateNftState(
 	}
 
 	if (!nftWithRules.transferable) {
-		throw createMultisigError("NFT_NOT_TRANSFERABLE", `Collection '${nftWithRules.collection_id}' is not transferable — co-sign rejected`);
+		throw createMultisigError("NFT_NOT_TRANSFERABLE", "NFT cannot be transferred");
 	}
 
 	if (nftWithRules.nft_type === "seed" && nftWithRules.distributed > 0) {
-		throw createMultisigError(
-			"SEED_HAS_INSTANCES",
-			`Seed '${nftId}' has ${nftWithRules.distributed} distributed instance(s) — sale blocked`,
-		);
+		throw createMultisigError("SEED_HAS_INSTANCES", "Seed with distributed instances cannot be sold");
 	}
 
 	const nft: NftProcessingRow = nftWithRules;

@@ -5,11 +5,8 @@ import {
 	// Direct operation creators for replicate (no builder exists)
 	createReplicateOperation,
 	createReplicatePayload,
-	createSetOwnerDataOperation,
-	createSetOwnerDataPayload,
 	createExtendSchemaOperation,
 	createExtendSchemaPayload,
-	setOwnerDataInputSchema,
 	extendSchemaInputSchema,
 	usernameSchema,
 	// Builders
@@ -340,23 +337,6 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			operation: result.operation,
 			payload: result.payload,
 			keyType: keyTypeFromOp(result.operation),
-		});
-	}),
-
-	"/api/build/set-owner-data": buildRoute((body) => {
-		const parsedInput = setOwnerDataInputSchema.safeParse(body);
-		if (!parsedInput.success) return json({ success: false, errors: parsedInput.error.issues }, 400);
-		const parsedOwner = usernameSchema.safeParse(body.owner);
-		if (!parsedOwner.success) return json({ success: false, errors: parsedOwner.error.issues }, 400);
-
-		const operation = createSetOwnerDataOperation(parsedInput.data, parsedOwner.data);
-		const payload = createSetOwnerDataPayload(parsedInput.data);
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation,
-			payload,
-			keyType: keyTypeFromOp(operation),
 		});
 	}),
 

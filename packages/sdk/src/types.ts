@@ -28,6 +28,7 @@ export type HiveOperation = [
 // ============ PRICE TYPE ============
 
 export interface Price {
+	/** Hive asset amount encoded with exactly 3 decimal places, for example "1.000". */
 	amount: string;
 	currency: SupportedCurrency;
 }
@@ -66,6 +67,7 @@ export interface CollectionRules {
 	transferable: boolean;
 	burnable: boolean;
 	replicable: boolean;
+	/** Royalty percentage as a whole percent value in protocol 0.5.0. Example: 5 = 5%. */
 	royaltyPct: number;
 	royaltyRecipient?: string;
 }
@@ -125,7 +127,6 @@ export interface NFTData {
 	// Structured data (schema-based collections)
 	immutableData?: Record<string, unknown>;
 	mutableData?: Record<string, unknown>;
-	ownerData?: Record<string, unknown>;
 
 	// Legacy (optional)
 	data?: Record<string, unknown>;
@@ -186,16 +187,6 @@ export interface SetDataData {
 	instanceDna: string;
 	data?: Record<string, unknown>;
 	mutableData?: Record<string, unknown>;
-	seedId?: string;
-	seedTxId?: string;
-}
-
-// ============ SET_OWNER_DATA TYPES ============
-
-export interface SetOwnerDataData {
-	nftId: string;
-	instanceDna: string;
-	data: Record<string, unknown>;
 	seedId?: string;
 	seedTxId?: string;
 }
@@ -440,11 +431,15 @@ export type PaymentInfo = Readonly<{
 	listingId: string;
 	listTxId: string;
 	seller: string;
+	/** Decimal Hive asset value rounded to 3 decimals. */
 	totalPrice: number;
 	currency: string;
+	/** Decimal Hive asset value rounded to 3 decimals. */
 	sellerAmount: number;
+	/** Decimal Hive asset value rounded to 3 decimals. */
 	royaltyAmount: number;
 	royaltyRecipient: string | null;
+	/** Decimal Hive asset value rounded to 3 decimals. */
 	feeAmount: number;
 	feeAccount: string;
 	nodeAccount: string;

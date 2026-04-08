@@ -23,6 +23,53 @@ bun run dev:indexer
 bun run dev:playground
 ```
 
+## Run Only The Indexer
+
+If you only want to operate an indexer node, work from `packages/indexer`. The package now carries its own `Dockerfile`, `compose` files, scripts, and `bun.lock`.
+If that package is later split into its own repository, the same commands apply from that repository root.
+
+For development:
+
+```bash
+cd packages/indexer
+cp .env.example .env
+./scripts/compose.sh dev up -d
+cd ../..
+bun run dev:indexer
+```
+
+For a Linux/Ubuntu server behind Dokploy, Coolify, Traefik, or another external proxy:
+
+```bash
+cd packages/indexer
+cp .env.example .env
+./scripts/compose.sh dokploy up -d
+```
+
+For a VPS with the bundled Nginx overlay:
+
+```bash
+cd packages/indexer
+cp .env.example .env
+./scripts/compose.sh server up -d
+```
+
+To build the image directly from `packages/indexer`:
+
+```bash
+cd packages/indexer
+./scripts/build-image.sh nftlox-indexer
+```
+
+If Docker bridge networking is flaky on your machine, use:
+
+```bash
+cd packages/indexer
+DOCKER_BUILD_NETWORK=host ./scripts/build-image.sh nftlox-indexer
+```
+
+The monorepo is still convenient for development, but the indexer deployment path no longer needs SDK runtime code in the container image.
+
 ## Development Workflow
 
 This is a **Bun workspaces** monorepo. Changes in the SDK are immediately available to the indexer and playground -- no publishing needed.

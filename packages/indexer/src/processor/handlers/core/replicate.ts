@@ -4,12 +4,11 @@ import { insertNft, nftExists, getNftForProcessing, updateNftListing } from "@/d
 import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireBoundedString, requireUsername, optionalString } from "@/utils/validation.ts";
-import { assertTransferable, assertNotBurned } from "@/utils/status-checks.ts";
+import { assertTransferable } from "@/utils/status-checks.ts";
 // NOTE: replicate uses assertTransferable (not assertOwnershipChangeable) because
 // replication doesn't change ownership of the original — it creates a copy.
 import {
 	generateReplicaInstanceDna,
-	generateDeterministicAccessKey,
 	MAX_ID_LENGTH,
 } from "@/protocol/index.ts";
 
@@ -26,10 +25,10 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 
 	const { hadExpiredListing } = assertTransferable(original, originalId, op.timestamp);
 
-	// If replicating an instance, verify the parent seed is not burned
+	// If replicating an instance, verify the parent seed still exists (not burned/deleted)
 	if (original.seed_id) {
 		const seed = await getNftForProcessing(original.seed_id, txn);
-		if (seed) assertNotBurned(seed, original.seed_id);
+		if (!seed) throw new Error(`Parent seed not found (burned?): ${original.seed_id}`);
 	}
 
 	const rules = await getCollectionRules(original.collection_id, txn);
@@ -39,26 +38,20 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 	}
 
 	// DNA is always computed by the indexer — never trust user-supplied values.
-	// Fetch origin_dna from DB since NftProcessingRow doesn't include it.
 	const [dnaRow] = await txn`SELECT origin_dna FROM nfts WHERE id = ${originalId}`;
 	const originDna = (dnaRow?.origin_dna as string) ?? null;
 	const instanceDna = originDna && original.instance_dna
 		? await generateReplicaInstanceDna(originDna, original.instance_dna)
 		: null;
-	const uniqueAccessKey = instanceDna
-		? await generateDeterministicAccessKey(instanceDna, newOwner, op.txId)
-		: null;
 
 	await insertNft({
 		id, collectionId: original.collection_id, nftType: "replica", edition: 1,
 		owner: newOwner, originDna,
-		instanceDna, uniqueAccessKey,
-		mintedBy: op.signer,
+		instanceDna,
 		name: optionalString(d.name) ?? `${original.name} (Replica)`,
-		description: null, imageUrl: null, imageHash: null,
+		imageUrl: null,
 		maxReplicas: 0, seedId: null, instanceNumber: null, originalId,
-		immutableData: null, immutableDataHash: null,
-		mutableData: null, mutableDataHash: null,
+		immutableData: null, dataOperationId: null, dataHash: null,
 		schemaVersion: rules.schema_version,
 		operationId: op.operationId,
 		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,

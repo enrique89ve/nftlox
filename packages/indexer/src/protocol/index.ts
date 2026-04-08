@@ -1,5 +1,4 @@
-// NFTLox Protocol Module — re-exports all protocol constants, types, and functions
-// Replaces all imports from "nftlox-sdk" in the indexer
+// NFTLox Protocol Module — self-contained re-exports for the indexer.
 
 export * from "./constants.ts";
 export * from "./auth.ts";

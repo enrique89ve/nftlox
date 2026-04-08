@@ -2,7 +2,10 @@ import { test, expect, describe } from "bun:test";
 
 import {
 	calculatePaymentSplit,
-	PROTOCOL_FEE_PCT,
+	PROTOCOL_FEE_BPS,
+	BASIS_POINTS_DENOMINATOR,
+	calculateBasisPointsAmount,
+	percentageToBasisPoints,
 	roundHive,
 	type PaymentSplit,
 } from "../src/index";
@@ -34,8 +37,15 @@ const assertSumsToTotal = (split: Readonly<PaymentSplit>): void => {
 describe("calculatePaymentSplit", () => {
 
 	describe("constants sanity check", () => {
-		test("PROTOCOL_FEE_PCT should be 1.0", () => {
-			expect(PROTOCOL_FEE_PCT).toBe(1.0);
+		test("PROTOCOL_FEE_BPS should be 100 (1%)", () => {
+			expect(PROTOCOL_FEE_BPS).toBe(100);
+			expect(calculateBasisPointsAmount(100, PROTOCOL_FEE_BPS)).toBe(1.0);
+		});
+
+		test("percentageToBasisPoints should convert percent to bps", () => {
+			expect(BASIS_POINTS_DENOMINATOR).toBe(10_000);
+			expect(percentageToBasisPoints(1)).toBe(100);
+			expect(percentageToBasisPoints(2.5)).toBe(250);
 		});
 	});
 

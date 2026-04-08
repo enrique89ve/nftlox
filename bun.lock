@@ -17,6 +17,17 @@
       },
       "devDependencies": {
         "@types/bun": "latest",
+        "typescript": "^5",
+      },
+    },
+    "packages/packs-engine": {
+      "name": "nftlox-packs-engine",
+      "version": "0.1.0",
+      "dependencies": {
+        "nftlox-sdk": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
       },
       "peerDependencies": {
         "typescript": "^5",
@@ -113,6 +124,8 @@
     "nanoid": ["nanoid@5.1.7", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-ua3NDgISf6jdwezAheMOk4mbE1LXjm1DfMUDMuJf4AqxLFK3ccGpgWizwa5YV7Yz9EpXwEaWoRXSb/BnV0t5dQ=="],
 
     "nftlox-indexer": ["nftlox-indexer@workspace:packages/indexer"],
+
+    "nftlox-packs-engine": ["nftlox-packs-engine@workspace:packages/packs-engine"],
 
     "nftlox-playground": ["nftlox-playground@workspace:packages/playground"],
 

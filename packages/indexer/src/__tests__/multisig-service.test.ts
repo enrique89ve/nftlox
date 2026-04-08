@@ -76,9 +76,7 @@ async function cleanDb() {
 	await sql`DELETE FROM data_operators`;
 	await sql`DELETE FROM nft_allowances`;
 	await sql`DELETE FROM collection_allowances`;
-	await sql`DELETE FROM pack_allowances`;
-	await sql`DELETE FROM user_pack_balances`;
-	await sql`DELETE FROM packs`;
+	await sql`DELETE FROM burned_nfts`;
 	await sql`DELETE FROM nfts`;
 	await sql`DELETE FROM owner_nft_counts`;
 	await sql`DELETE FROM collection_stats`;
@@ -282,12 +280,10 @@ describe("Multisig service (regression)", () => {
 	beforeAll(async () => {
 		await sql.unsafe(`
 			DROP TABLE IF EXISTS nft_loans, nft_allowances, collection_allowances,
-				pack_allowances, user_pack_balances, data_operators,
-				orphaned_buys, invalid_operations, owner_nft_counts,
-				collection_stats,
-				nfts, packs, collections, sync_state CASCADE
+				data_operators, orphaned_buys, invalid_operations, owner_nft_counts,
+				collection_stats, burned_nfts, nfts, collections, sync_state CASCADE
 		`);
-		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status, pack_status CASCADE");
+		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status CASCADE");
 		const schemaFile = Bun.file(import.meta.dir + "/../db/schema.sql");
 		await sql.unsafe(await schemaFile.text());
 	});

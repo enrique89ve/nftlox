@@ -1,0 +1,7 @@
+services: {}
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET:-172.28.10.0/24}

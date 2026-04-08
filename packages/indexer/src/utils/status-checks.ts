@@ -2,7 +2,7 @@
 // Inspired by ICRC-7 (consistent validation) and AtomicAssets (re-validate at execution time)
 
 import type { NftStatus, NftKind } from "@/db/queries/nfts.ts";
-import { NFT_STATUS_BURNED, NFT_STATUS_LENT, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { NFT_STATUS_LENT, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 
 /** Minimal shape needed for status assertions — any row with status qualifies. */
 type HasStatus = { readonly status: NftStatus };
@@ -17,12 +17,6 @@ type HasKindAndDistributed = HasKind & { readonly distributed: number };
 export function isListingExpired(expiresAt: string | null, blockTimestamp: string): boolean {
 	if (!expiresAt) return false;
 	return new Date(blockTimestamp).getTime() > new Date(expiresAt).getTime();
-}
-
-export function assertNotBurned(nft: HasStatus, nftId: string): void {
-	if (nft.status === NFT_STATUS_BURNED) {
-		throw new Error(`NFT is burned: ${nftId}`);
-	}
 }
 
 export function assertNotLent(nft: HasStatus, nftId: string): void {
@@ -62,21 +56,21 @@ export function assertSeedNotDistributed(nft: HasKindAndDistributed, nftId: stri
 }
 
 /**
- * Asserts a seed with supply reserved by packs cannot change ownership or be burned.
- * Even if distributed === 0, packs have committed to this seed's supply.
+ * Asserts a seed with reserved supply cannot change ownership.
+ * Even if distributed === 0, some external module has already committed this seed's supply.
  */
-export function assertSeedNotReserved(nft: { nft_type: string; reserved_by_packs?: number }, nftId: string): void {
-	if (nft.nft_type === "seed" && (nft.reserved_by_packs ?? 0) > 0) {
-		throw new Error(`Seed ${nftId} has supply reserved by packs — cannot transfer or burn`);
+export function assertSeedNotReserved(nft: { readonly nft_type: NftKind; readonly reserved_supply?: number }, nftId: string): void {
+	if (nft.nft_type === "seed" && (nft.reserved_supply ?? 0) > 0) {
+		throw new Error(`Seed ${nftId} has reserved supply — cannot transfer`);
 	}
 }
 
 /**
- * Base validation: rejects burned and lent NFTs.
+ * Base validation: rejects lent NFTs.
  * Every handler that operates on an NFT should call this first.
+ * Burned NFTs are hard-deleted so they won't reach this point (NFT not found).
  */
 export function assertActionable(nft: HasStatus, nftId: string): void {
-	assertNotBurned(nft, nftId);
 	assertNotLent(nft, nftId);
 }
 
@@ -101,7 +95,7 @@ export function assertTransferable(nft: HasListingExpiry, nftId: string, blockTi
 
 /**
  * Full ownership-change guard: actionable + not a distributed seed.
- * Use for transfer, burn, buy — any operation that changes the NFT owner.
+ * Use for transfer, buy — any operation that changes the NFT owner.
  */
 export function assertOwnershipChangeable(
 	nft: HasListingExpiry & HasKindAndDistributed,

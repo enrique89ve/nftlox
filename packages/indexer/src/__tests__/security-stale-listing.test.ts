@@ -72,9 +72,7 @@ async function cleanDb() {
 	await sql`DELETE FROM data_operators`;
 	await sql`DELETE FROM nft_allowances`;
 	await sql`DELETE FROM collection_allowances`;
-	await sql`DELETE FROM pack_allowances`;
-	await sql`DELETE FROM user_pack_balances`;
-	await sql`DELETE FROM packs`;
+	await sql`DELETE FROM burned_nfts`;
 	await sql`DELETE FROM nfts`;
 	await sql`DELETE FROM owner_nft_counts`;
 	await sql`DELETE FROM collection_stats`;
@@ -179,12 +177,10 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 		COL_ID = await generateDeterministicCollectionId("alice", "Security Test Collection", "SEC");
 		await sql.unsafe(`
 			DROP TABLE IF EXISTS nft_loans, nft_allowances, collection_allowances,
-				pack_allowances, user_pack_balances, data_operators,
-				orphaned_buys, invalid_operations, owner_nft_counts,
-				collection_stats,
-				nfts, packs, collections, sync_state CASCADE
+				data_operators, orphaned_buys, invalid_operations, owner_nft_counts,
+				collection_stats, burned_nfts, nfts, collections, sync_state CASCADE
 		`);
-		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status, pack_status CASCADE");
+		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status CASCADE");
 		const schemaFile = Bun.file(import.meta.dir + "/../db/schema.sql");
 		await sql.unsafe(await schemaFile.text());
 	});
@@ -390,37 +386,30 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 		});
 	});
 
-	// ─── Scenario 5: Burn clears everything ──────────────────────
-	// Verify burned NFTs cannot be listed or bought
+	// ─── Scenario 5: Burn (hard delete) clears everything ──────────────────────
 
 	describe("burn invalidates all marketplace state", () => {
-		test("burned NFT cannot be listed", async () => {
+		test("burned (deleted) NFT cannot be listed", async () => {
 			await seedCollection();
 			await seedMint();
 
-			// Burn (transfer to "null")
+			// Burn (transfer to "null") — hard deletes the row
 			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_sec1", to: "null" }), sql);
 
 			const listData = await makeListData({ nftId: "seed_sec1" });
 			const listOp = makeOp(ACTION_LIST, listData);
-			await expect(handleList(listOp, sql)).rejects.toThrow("burned");
+			await expect(handleList(listOp, sql)).rejects.toThrow("not found");
 		});
 
-		test("burned NFT with force-injected listing is blocked by DB constraint", async () => {
+		test("burned NFT is recorded in burned_nfts audit table", async () => {
 			await seedCollection();
 			await seedMint();
 			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_sec1", to: "null" }), sql);
 
-			// Attempt to force-inject a listing via raw SQL — CHECK constraint must block it
-			let constraintViolated = false;
-			try {
-				await sql.unsafe(
-					`UPDATE nfts SET listing_id = 'hack', listing_price = 10 WHERE id = 'seed_sec1'`,
-				);
-			} catch {
-				constraintViolated = true;
-			}
-			expect(constraintViolated).toBe(true);
+			const [burned] = await sql`SELECT * FROM burned_nfts WHERE id = 'seed_sec1'`;
+			expect(burned).toBeDefined();
+			expect(burned!.burned_by).toBe("alice");
+			expect(burned!.collection_id).toBe(COL_ID);
 		});
 	});
 

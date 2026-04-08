@@ -1,9 +1,9 @@
-// NFTLox Protocol Constants (self-contained copy for indexer)
-// Source of truth: packages/sdk/src/constants.ts
+// NFTLox Indexer protocol subset.
+// The SDK may expose extension actions that this indexer does not support.
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.4.1";
-export const MIN_PROTOCOL_VERSION = "0.4.1";
+export const PROTOCOL_VERSION = "0.5.0";
+export const MIN_PROTOCOL_VERSION = "0.5.0";
 
 // Field Limits
 export const MAX_NAME_LENGTH = 100;
@@ -22,7 +22,8 @@ export const INSTANCE_ID_HASH_LENGTH = 20;
 export const SUPPORTED_CURRENCIES = ["HIVE", "HBD"] as const;
 export const MAX_ROYALTY_PCT = 50;
 export const MIN_PRICE_AMOUNT = "0.001";
-export const PROTOCOL_FEE_PCT = 1.0;
+export const BASIS_POINTS_DENOMINATOR = 10_000;
+export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 
 // Memo Prefixes (Marketplace)
@@ -45,9 +46,6 @@ export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
 // Transfer/Burn Batch Limits
 export const MAX_TRANSFER_BATCH_SIZE = 50;
 
-// Pack Constants
-export const MAX_PACK_OPEN_BATCH = 50;
-
 // Multisig Constants
 export const MULTISIG_EXPIRATION_MS = 125_000;
 export const MAX_MULTISIG_OPERATIONS = 4;
@@ -59,7 +57,6 @@ export const ACTION_TRANSFER = "transfer";
 export const ACTION_REPLICATE = "replicate";
 export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
-export const ACTION_SET_OWNER_DATA = "set_owner_data";
 export const ACTION_EXTEND_SCHEMA = "extend_schema";
 export const ACTION_ARCHIVE_COLLECTION = "archive_collection";
 
@@ -68,16 +65,7 @@ export const ACTION_LIST = "list";
 export const ACTION_UNLIST = "unlist";
 export const ACTION_BUY = "buy" as const;
 
-// Protocol Actions (Packs)
-export const ACTION_PACK_CREATE = "pack_create";
-export const ACTION_PACK_BUY = "pack_buy";
-export const ACTION_PACK_TRANSFER = "pack_transfer";
-export const ACTION_PACK_OPEN = "pack_open";
-export const ACTION_PACK_DESTROY = "pack_destroy";
-
 // Protocol Actions (Approve & TransferFrom)
-export const ACTION_PACK_APPROVE = "pack_approve";
-export const ACTION_PACK_TRANSFER_FROM = "pack_transfer_from";
 export const ACTION_NFT_APPROVE = "nft_approve";
 export const ACTION_NFT_APPROVE_ALL = "nft_approve_all";
 export const ACTION_NFT_TRANSFER_FROM = "nft_transfer_from";
@@ -98,7 +86,6 @@ export const CORE_ACTIONS = [
 	ACTION_REPLICATE,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_SET_DATA,
-	ACTION_SET_OWNER_DATA,
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 ] as const;
@@ -109,17 +96,7 @@ export const MARKETPLACE_ACTIONS = [
 	ACTION_BUY,
 ] as const;
 
-export const PACK_ACTIONS = [
-	ACTION_PACK_CREATE,
-	ACTION_PACK_BUY,
-	ACTION_PACK_TRANSFER,
-	ACTION_PACK_OPEN,
-	ACTION_PACK_DESTROY,
-] as const;
-
 export const APPROVE_ACTIONS = [
-	ACTION_PACK_APPROVE,
-	ACTION_PACK_TRANSFER_FROM,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
 	ACTION_NFT_TRANSFER_FROM,
@@ -138,7 +115,6 @@ export const DATA_OPERATOR_ACTIONS = [
 export const ALL_ACTIONS = [
 	...CORE_ACTIONS,
 	...MARKETPLACE_ACTIONS,
-	...PACK_ACTIONS,
 	...APPROVE_ACTIONS,
 	...LENDING_ACTIONS,
 	...DATA_OPERATOR_ACTIONS,
@@ -147,7 +123,6 @@ export const ALL_ACTIONS = [
 // Type exports
 export type CoreAction = (typeof CORE_ACTIONS)[number];
 export type MarketplaceAction = (typeof MARKETPLACE_ACTIONS)[number];
-export type PackAction = (typeof PACK_ACTIONS)[number];
 export type ApproveAction = (typeof APPROVE_ACTIONS)[number];
 export type LendingAction = (typeof LENDING_ACTIONS)[number];
 export type DataOperatorAction = (typeof DATA_OPERATOR_ACTIONS)[number];
