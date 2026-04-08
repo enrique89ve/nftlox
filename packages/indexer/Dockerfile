@@ -1,4 +1,4 @@
-FROM oven/bun:1.3-debian
+FROM oven/bun:1.3.11
 WORKDIR /app
 
 # Copy the local manifest and lockfile first for dependency caching.
