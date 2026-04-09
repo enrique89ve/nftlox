@@ -1,5 +1,7 @@
 import { sql, type Queryable } from "@/db/client.ts";
 
+const PG_TEXT_OID = 25;
+
 export async function getLastBlockForUpdate(txn: Queryable): Promise<number> {
 	const [row] = await txn`SELECT last_block FROM sync_state WHERE id = 1 FOR UPDATE`;
 	return Number(row?.last_block ?? 0);
@@ -67,13 +69,22 @@ export async function insertConfirmedOperation(
 		blockNum: number;
 		signer: string;
 		action: string;
+		nftIds: ReadonlyArray<string>;
 		createdAt: string;
 	},
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
-		INSERT INTO confirmed_operations (operation_id, tx_id, block_num, signer, action, created_at)
-		VALUES (${op.operationId}, ${op.txId}, ${op.blockNum}, ${op.signer}, ${op.action}, ${op.createdAt})
+		INSERT INTO confirmed_operations (operation_id, tx_id, block_num, signer, action, nft_ids, created_at)
+		VALUES (
+			${op.operationId},
+			${op.txId},
+			${op.blockNum},
+			${op.signer},
+			${op.action},
+			${sql.array([...op.nftIds], PG_TEXT_OID)},
+			${op.createdAt}
+		)
 		ON CONFLICT (operation_id) DO NOTHING
 	`;
 }
@@ -172,19 +183,17 @@ export async function getOperationStatus(
 		});
 	}
 
-	// 3. Check confirmed_operations + resolve NFTs created/affected by each operation
+	// 3. Check confirmed_operations using the immutable nft_ids snapshot captured
+	// at confirmation time. Never derive this from mutable current state.
 	const confirmed = await sql`
-		SELECT c.operation_id, c.signer, c.action, c.block_num, c.created_at,
-			COALESCE(
-				ARRAY_AGG(n.id ORDER BY n.created_at) FILTER (WHERE n.id IS NOT NULL),
-				'{}'
-			) AS nft_ids
+		SELECT c.operation_id, c.signer, c.action, c.block_num, c.created_at, c.nft_ids
 		FROM confirmed_operations c
-		LEFT JOIN nfts n ON n.operation_id = c.operation_id
 		WHERE c.tx_id = ${txId}
-		GROUP BY c.operation_id, c.signer, c.action, c.block_num, c.created_at
 	`;
 	for (const row of confirmed) {
+		const nftIds = Array.isArray(row.nft_ids)
+			? row.nft_ids.map(nftId => String(nftId))
+			: [];
 		results.push({
 			status: "confirmed",
 			operationId: row.operation_id ?? null,
@@ -193,7 +202,7 @@ export async function getOperationStatus(
 			reason: null,
 			blockNum: Number(row.block_num),
 			timestamp: String(row.created_at),
-			nftIds: row.nft_ids ?? [],
+			nftIds,
 		});
 	}
 

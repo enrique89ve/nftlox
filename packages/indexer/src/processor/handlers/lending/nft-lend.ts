@@ -7,7 +7,7 @@ import { deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertNotSeed } from "@/utils/status-checks.ts";
 
-export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 	const borrower = requireUsername(op.data.borrower, "borrower");
 
@@ -38,4 +38,6 @@ export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promis
 
 	// Clear any existing approvals — lent NFTs cannot be transferred
 	await deleteNftAllowance(instanceId, txn);
+
+	return [instanceId];
 }

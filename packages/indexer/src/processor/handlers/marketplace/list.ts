@@ -7,7 +7,7 @@ import { requireString, requireHiveAmount, optionalNumber, optionalString } from
 import { assertActionable, assertSeedNotDistributed, assertSeedNotReserved, isListingExpired } from "@/utils/status-checks.ts";
 import { generateListingId, LISTING_ID_PREFIX, MIN_PRICE_AMOUNT } from "@/protocol/index.ts";
 
-export async function handleList(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleList(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const nftId = requireString(op.data.nftId, "nftId");
 	const listingId = requireString(op.data.listingId, "listingId");
 	const listingNonce = requireString(op.data.listingNonce, "listingNonce");
@@ -65,4 +65,6 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<v
 		wasListed: hadExpiredListing, // re-listing expired → net 0; fresh listing → +1
 	};
 	await updateNftListing(nftId, priceAmount, price.currency, expiresAt, marketplace, listingId, op.txId, ctx, txn);
+
+	return [nftId];
 }

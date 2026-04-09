@@ -57,7 +57,7 @@ export async function getCollectionById(id: string): Promise<Record<string, unkn
 			transferable, burnable, replicable, royalty_pct, royalty_recipient,
 			schema, schema_version, status, tx_id, created_at
 		FROM collections
-		WHERE id = ${id} AND status = ${COLLECTION_STATUS_ACTIVE}
+		WHERE id = ${id}
 	`;
 	return row ?? null;
 }
@@ -130,12 +130,19 @@ export async function updateCollectionSchema(
 	`;
 }
 
-export async function deleteCollection(
+export async function archiveCollection(
 	collectionId: string,
+	creator: string,
+	txId: string,
 	txn: Queryable = sql,
 ): Promise<void> {
-	// Child tables (collection_stats, schema_versions, collection_allowances,
-	// data_operators) cascade via ON DELETE CASCADE.
+	await txn`
+		INSERT INTO archived_collections (id, creator, tx_id)
+		VALUES (${collectionId}, ${creator}, ${txId})
+		ON CONFLICT (id) DO NOTHING
+	`;
+	// ON DELETE CASCADE cleans: collection_stats, schema_versions,
+	// collection_allowances, data_operators
 	await txn`DELETE FROM collections WHERE id = ${collectionId}`;
 }
 

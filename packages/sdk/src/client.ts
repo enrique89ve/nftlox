@@ -175,7 +175,8 @@ export interface IndexerNftSummary {
 	distributed: number;
 	supply_exhausted: boolean;
 	schema_version: number | null;
-	owner_tx_id: string | null;
+	previous_owner: string | null;
+	owner_operation_id: string;
 	listing_id: string | null;
 	listing_tx_id: string | null;
 	listing_price: string | null;
@@ -190,6 +191,18 @@ export interface IndexerNft extends IndexerNftSummary {
 	tx_id: string;
 	listing_marketplace: string | null;
 	listing_expired: boolean;
+}
+
+export interface IndexerNftProof {
+	id: string;
+	owner: string;
+	previous_owner: string | null;
+	owner_operation_id: string;
+	created_tx_id: string;
+	nft_type: IndexerNftType;
+	seed_id: string | null;
+	instance_number: number | null;
+	instance_dna: string | null;
 }
 
 export interface MarketplaceSale {
@@ -346,6 +359,7 @@ export interface IndexerClient {
 
 	// NFTs
 	getNft(id: string): Promise<IndexerNft>;
+	getNftProof(id: string): Promise<IndexerNftProof>;
 	getNftInstances(id: string, params?: { limit?: number; offset?: number }): Promise<IndexerNftSummary[]>;
 
 	// Users
@@ -399,6 +413,8 @@ export function createIndexerClient(baseUrl: string): IndexerClient {
 		// ---- NFTs ----
 		getNft: (id) =>
 			get<IndexerNft>(baseUrl, `/api/nfts/${encodeURIComponent(id)}`),
+		getNftProof: (id) =>
+			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/proof`),
 		getNftInstances: (id, params) =>
 			get<IndexerNftSummary[]>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/instances`, params),
 

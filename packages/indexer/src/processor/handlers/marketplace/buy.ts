@@ -20,7 +20,7 @@ import { config } from "@/config.ts";
  *
  * Validates listingId + listTxId to prevent stale listing replays.
  */
-export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	if (op.signer !== config.hiveAccount) {
 		throw new Error(
 			`Buy must be signed by node account '${config.hiveAccount}', got '${op.signer}'`,
@@ -64,8 +64,8 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 	}
 
 	// Validate txId matches the NFT's creation transaction
-	if (nft.tx_id !== txId) {
-		throw new Error(`txId mismatch: expected '${nft.tx_id}', got '${txId}'`);
+	if (nft.created_tx_id !== txId) {
+		throw new Error(`txId mismatch: expected '${nft.created_tx_id}', got '${txId}'`);
 	}
 
 	const totalPrice = Number(nft.listing_price);
@@ -121,7 +121,9 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<vo
 		collectionId: nft.collection_id,
 		wasListed: true, // buy always transitions from status='listed'
 	};
-	await updateNftOwner(nftId, buyer, op.txId, ctx, txn);
+	await updateNftOwner(nftId, buyer, op.operationId, ctx, txn);
 	await deleteNftAllowance(nftId, txn);
 	await cleanupCollectionAllowancesIfEmpty(previousOwner, nft.collection_id, txn);
+
+	return [nftId];
 }

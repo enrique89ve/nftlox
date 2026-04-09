@@ -41,9 +41,6 @@ CREATE TABLE IF NOT EXISTS collections (
 	schema JSONB,
 	schema_version INTEGER NOT NULL DEFAULT 0,
 	status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
-	archived_at_block BIGINT,
-	archived_tx_id TEXT,
-	archived_at TIMESTAMPTZ,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
@@ -73,18 +70,26 @@ CREATE TABLE IF NOT EXISTS nfts (
 	data_operation_id TEXT,
 	data_hash TEXT,
 	schema_version INTEGER,
-	owner_tx_id TEXT,
+	previous_owner TEXT,
+	owner_operation_id TEXT NOT NULL,
 	listing_id TEXT,
 	listing_tx_id TEXT,
 	listing_price NUMERIC(18,3),
 	listing_currency TEXT,
 	listing_expires_at TIMESTAMPTZ,
 	listing_marketplace TEXT,
-	operation_id TEXT,
-	block_num BIGINT NOT NULL,
-	tx_id TEXT NOT NULL,
+	created_operation_id TEXT NOT NULL,
+	created_block_num BIGINT NOT NULL,
+	created_tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Archived collections (lightweight audit — blockchain is source of truth)
+CREATE TABLE IF NOT EXISTS archived_collections (
+	id TEXT PRIMARY KEY,
+	creator TEXT NOT NULL,
+	tx_id TEXT NOT NULL
 );
 
 -- Burned NFTs (lightweight audit — blockchain is source of truth)
@@ -92,7 +97,8 @@ CREATE TABLE IF NOT EXISTS burned_nfts (
 	id TEXT PRIMARY KEY,
 	collection_id TEXT NOT NULL,
 	burned_by TEXT NOT NULL,
-	tx_id TEXT NOT NULL
+	tx_id TEXT NOT NULL,
+	operation_id TEXT NOT NULL
 );
 
 -- Invalid operations (audit trail)
@@ -112,13 +118,15 @@ CREATE TABLE IF NOT EXISTS invalid_operations (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invalid_ops_unique ON invalid_operations(tx_id, COALESCE(operation_id, '')) WHERE tx_id IS NOT NULL;
 
 -- Confirmed operations (append-only tracking of successful handler executions)
--- Enables per-operation status lookups and maps operationId → action for the API.
+-- Enables per-operation status lookups and stores the immutable NFT IDs affected
+-- by that specific protocol operation.
 CREATE TABLE IF NOT EXISTS confirmed_operations (
 	operation_id TEXT PRIMARY KEY,
 	tx_id TEXT NOT NULL,
 	block_num BIGINT NOT NULL,
 	signer TEXT NOT NULL,
 	action TEXT NOT NULL,
+	nft_ids TEXT[] NOT NULL DEFAULT '{}',
 	created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_confirmed_ops_tx ON confirmed_operations(tx_id);
@@ -258,9 +266,10 @@ CREATE INDEX IF NOT EXISTS idx_collections_status ON collections(status, created
 CREATE INDEX IF NOT EXISTS idx_nfts_collection ON nfts(collection_id);
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_created ON nfts(owner, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_nfts_seed_instances ON nfts(seed_id, instance_number) WHERE seed_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_nfts_seed_tx ON nfts(seed_id, tx_id) WHERE seed_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_nfts_operation_id ON nfts(operation_id) WHERE operation_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_nfts_seed_operation ON nfts(seed_id, operation_id) WHERE seed_id IS NOT NULL AND operation_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nfts_seed_tx ON nfts(seed_id, created_tx_id) WHERE seed_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nfts_created_operation_id ON nfts(created_operation_id);
+CREATE INDEX IF NOT EXISTS idx_nfts_owner_operation_id ON nfts(owner_operation_id);
+CREATE INDEX IF NOT EXISTS idx_nfts_seed_created_operation ON nfts(seed_id, created_operation_id) WHERE seed_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_type_status ON nfts(owner, nft_type, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_active_instances ON nfts(owner, created_at DESC) WHERE nft_type = 'instance' AND status = 'active';
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_active_seeds ON nfts(owner, collection_id) WHERE nft_type = 'seed' AND status = 'active';

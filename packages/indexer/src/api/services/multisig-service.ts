@@ -562,7 +562,7 @@ async function validateNftState(
 		royalty_recipient: nftWithRules.royalty_recipient,
 	} satisfies MultisigRules;
 
-	return { nft, rules, nftTxId: nftWithRules.tx_id };
+	return { nft, rules, nftTxId: nftWithRules.created_tx_id };
 }
 
 // ============ PAYMENT SPLIT VALIDATION ============

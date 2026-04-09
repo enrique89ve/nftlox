@@ -86,6 +86,7 @@ async function cleanDb() {
 	await sql`DELETE FROM nfts`;
 	await sql`DELETE FROM owner_nft_counts`;
 	await sql`DELETE FROM collection_stats`;
+	await sql`DELETE FROM archived_collections`;
 	await sql`DELETE FROM collections`;
 	await sql`DELETE FROM invalid_operations`;
 	await sql`DELETE FROM orphaned_buys`;
@@ -171,7 +172,7 @@ describe("Multi-operation per transaction", () => {
 
 			// Both seeds should exist with the same tx_id
 			const seeds = await sql`
-				SELECT id, tx_id FROM nfts WHERE tx_id = ${sharedTxId} ORDER BY id
+				SELECT id, created_tx_id AS tx_id FROM nfts WHERE created_tx_id = ${sharedTxId} ORDER BY id
 			`;
 			expect(seeds.length).toBe(2);
 			expect(seeds[0]!.id).toBe("seed_multi_a");
@@ -199,11 +200,11 @@ describe("Multi-operation per transaction", () => {
 
 			// First pass
 			for (const op of ops) await handleMint(op, sql);
-			const countBefore = await sql`SELECT COUNT(*)::int AS n FROM nfts WHERE tx_id = ${sharedTxId}`;
+			const countBefore = await sql`SELECT COUNT(*)::int AS n FROM nfts WHERE created_tx_id = ${sharedTxId}`;
 
 			// Replay (same ops again)
 			for (const op of ops) await handleMint(op, sql);
-			const countAfter = await sql`SELECT COUNT(*)::int AS n FROM nfts WHERE tx_id = ${sharedTxId}`;
+			const countAfter = await sql`SELECT COUNT(*)::int AS n FROM nfts WHERE created_tx_id = ${sharedTxId}`;
 
 			expect(countBefore[0]!.n).toBe(2);
 			expect(countAfter[0]!.n).toBe(2);
@@ -237,7 +238,7 @@ describe("Multi-operation per transaction", () => {
 			});
 			await handleList(listOp, sql);
 
-			const [nft] = await sql`SELECT status, listing_price, tx_id, listing_tx_id FROM nfts WHERE id = 'seed_mintlist'`;
+			const [nft] = await sql`SELECT status, listing_price, created_tx_id AS tx_id, listing_tx_id FROM nfts WHERE id = 'seed_mintlist'`;
 			expect(nft!.status).toBe("listed");
 			expect(Number(nft!.listing_price)).toBe(10);
 			// tx_id is the CREATION tx
@@ -364,7 +365,7 @@ describe("Multi-operation per transaction", () => {
 			}
 
 			// 4 valid NFTs created
-			const nfts = await sql`SELECT id FROM nfts WHERE tx_id = ${sharedTxId} ORDER BY id`;
+			const nfts = await sql`SELECT id FROM nfts WHERE created_tx_id = ${sharedTxId} ORDER BY id`;
 			expect(nfts.length).toBe(4);
 			expect(nfts.map(n => n.id)).toEqual(
 				validSeeds.map(l => `seed_5op_${l}`),
@@ -507,7 +508,7 @@ describe("Multi-operation per transaction", () => {
 			}, { txId: sharedTxId, operationId: "op_bs_mint" }), sql);
 
 			// Get the seed tx_id for bulk_distribute
-			const [seedRow] = await sql`SELECT tx_id FROM nfts WHERE id = 'seed_bulk_shared'`;
+			const [seedRow] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'seed_bulk_shared'`;
 			const seedTxId = seedRow!.tx_id as string;
 
 			// Op 2: bulk distribute from the same seed, same tx_id
@@ -517,7 +518,7 @@ describe("Multi-operation per transaction", () => {
 
 			// Should have 1 seed + 2 instances = 3 NFTs total
 			const nfts = await sql`
-				SELECT id, nft_type, tx_id FROM nfts
+				SELECT id, nft_type, created_tx_id AS tx_id FROM nfts
 				WHERE collection_id = ${COL_ID}
 				ORDER BY id
 			`;

@@ -1,12 +1,12 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import {
-	deleteCollection,
+	archiveCollection,
 	getCollectionArchiveSnapshot,
 } from "@/db/queries/collections.ts";
 import { requireString } from "@/utils/validation.ts";
 
-export async function handleArchiveCollection(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleArchiveCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const collectionId = requireString(op.data.collectionId, "collectionId");
 	const collection = await getCollectionArchiveSnapshot(collectionId, txn);
 	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
@@ -19,7 +19,7 @@ export async function handleArchiveCollection(op: ParsedOperation, txn: Queryabl
 		);
 	}
 
-	// ON DELETE CASCADE handles: collection_stats, schema_versions,
-	// collection_allowances, data_operators
-	await deleteCollection(collectionId, txn);
+	await archiveCollection(collectionId, collection.creator, op.txId, txn);
+
+	return [];
 }

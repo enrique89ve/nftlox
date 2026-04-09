@@ -4,7 +4,7 @@ import { getNftForProcessing, updateNftListing, NFT_STATUS_LISTED } from "@/db/q
 import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { requireString } from "@/utils/validation.ts";
 
-export async function handleUnlist(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleUnlist(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const nftId = requireString(op.data.nftId, "nftId");
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
@@ -13,4 +13,6 @@ export async function handleUnlist(op: ParsedOperation, txn: Queryable): Promise
 
 	const ctx: ListingCtx = { collectionId: nft.collection_id, wasListed: true };
 	await updateNftListing(nftId, null, null, null, null, null, null, ctx, txn);
+
+	return [nftId];
 }

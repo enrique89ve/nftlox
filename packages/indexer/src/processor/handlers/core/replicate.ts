@@ -12,7 +12,7 @@ import {
 	MAX_ID_LENGTH,
 } from "@/protocol/index.ts";
 
-export async function handleReplicate(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleReplicate(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const d = op.data;
 	const id = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
 	const originalId = requireBoundedString(d.originalId, "originalId", MAX_ID_LENGTH);
@@ -53,12 +53,17 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 		maxReplicas: 0, seedId: null, instanceNumber: null, originalId,
 		immutableData: null, dataOperationId: null, dataHash: null,
 		schemaVersion: rules.schema_version,
-		operationId: op.operationId,
-		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
+		ownerOperationId: op.operationId,
+		createdOperationId: op.operationId,
+		createdBlockNum: op.blockNum,
+		createdTxId: op.txId,
+		createdAt: op.timestamp,
 	}, txn);
 
 	if (hadExpiredListing) {
 		const ctx: ListingCtx = { collectionId: original.collection_id, wasListed: true };
 		await updateNftListing(originalId, null, null, null, null, null, null, ctx, txn);
 	}
+
+	return [id];
 }

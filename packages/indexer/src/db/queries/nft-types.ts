@@ -63,9 +63,10 @@ export type InsertNftParams = {
 	readonly dataOperationId: string | null;
 	readonly dataHash: string | null;
 	readonly schemaVersion?: number | null;
-	readonly operationId?: string | null;
-	readonly blockNum: number;
-	readonly txId: string;
+	readonly ownerOperationId: string;
+	readonly createdOperationId: string;
+	readonly createdBlockNum: number;
+	readonly createdTxId: string;
 	readonly createdAt: string;
 };
 
@@ -97,8 +98,8 @@ export type NftWithRulesRow = NftProcessingRow & {
 	readonly replicable: boolean;
 	readonly royalty_pct: string;
 	readonly royalty_recipient: string | null;
-	readonly tx_id: string;
-	readonly seed_tx_id: string | null;
+	readonly created_tx_id: string;
+	readonly seed_created_tx_id: string | null;
 };
 
 export type SeedWithDnaRow = {
@@ -115,7 +116,7 @@ export type SeedWithDnaRow = {
 	readonly instance_dna: string | null;
 	readonly origin_dna: string | null;
 	readonly image_url: string | null;
-	readonly tx_id: string;
+	readonly created_tx_id: string;
 	readonly schema_version: number;
 };
 
@@ -160,12 +161,14 @@ export type NftListRow = {
 	readonly distributed: number;
 	readonly supply_exhausted: boolean;
 	readonly schema_version: number | null;
-	readonly owner_tx_id: string | null;
+	readonly previous_owner: string | null;
+	readonly owner_operation_id: string;
 	readonly listing_id: string | null;
 	readonly listing_tx_id: string | null;
 	readonly listing_price: string | null;
 	readonly listing_currency: string | null;
 	readonly listing_expires_at: string | null;
+	readonly listing_marketplace: string | null;
 	readonly created_at: string;
 };
 

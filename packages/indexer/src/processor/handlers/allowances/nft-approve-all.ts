@@ -7,7 +7,7 @@ import {
 import { upsertCollectionAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireBoolean, requireUsername } from "@/utils/validation.ts";
 
-export async function handleNftApproveAll(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleNftApproveAll(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const spender = requireUsername(op.data.spender, "spender");
 	const collectionId = requireString(op.data.collectionId, "collectionId");
 	const approved = requireBoolean(op.data.approved, "approved");
@@ -32,4 +32,6 @@ export async function handleNftApproveAll(op: ParsedOperation, txn: Queryable): 
 		op.signer, spender, collectionId, approved,
 		op.blockNum, op.txId, txn,
 	);
+
+	return [];
 }

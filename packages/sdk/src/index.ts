@@ -364,6 +364,8 @@ export {
 	type ListingPriceVerifyParams,
 	type ListingPriceVerificationResult,
 	type OnChainPrice,
+	type ResolveOperationByIdParams,
+	type ResolvedOperationById,
 	type ResolveMutableDataParams,
 	type ResolvedMutableData,
 	// Constants
@@ -381,6 +383,7 @@ export {
 	fetchFromHiveRpc,
 	parseAllNftloxOperations,
 	parseNftloxOperation,
+	resolveOperationById,
 	resolveMutableDataFromOperation,
 	// Verifiers
 	replayDropTableResolution,

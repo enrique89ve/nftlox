@@ -26,7 +26,7 @@ import {
 	MAX_ID_LENGTH,
 } from "@/protocol/index.ts";
 
-export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const d = op.data;
 	const payloadId = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
 	const name = requireBoundedString(d.name, "name", MAX_NAME_LENGTH);
@@ -40,7 +40,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		);
 	}
 
-	if (await collectionExists(canonicalId, txn)) return;
+	if (await collectionExists(canonicalId, txn)) return [];
 
 	const creatorCollectionCount = await countCollectionsByCreator(op.signer, txn);
 	await assertWithinLimit("collectionsPerCreator", op.signer, creatorCollectionCount);
@@ -114,4 +114,6 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 			createdAt: op.timestamp,
 		}, txn);
 	}
+
+	return [];
 }

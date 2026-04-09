@@ -20,7 +20,7 @@ import {
 	type CollectionSchema,
 } from "@/protocol/index.ts";
 
-export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const collectionId = requireString(op.data.collectionId, "collectionId");
 
 	const collection = await getCollectionRules(collectionId, txn);
@@ -75,4 +75,6 @@ export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): P
 	}, txn);
 
 	await updateCollectionSchema(collectionId, finalSchema, newVersion, txn);
+
+	return [];
 }

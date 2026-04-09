@@ -5,7 +5,7 @@ import { upsertNftAllowance, deleteNftAllowance } from "@/db/queries/allowances.
 import { requireString, requireBoolean, requireUsername } from "@/utils/validation.ts";
 import { assertActionable, assertNotSeed } from "@/utils/status-checks.ts";
 
-export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const spender = requireUsername(op.data.spender, "spender");
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 	const approved = requireBoolean(op.data.approved, "approved");
@@ -25,4 +25,6 @@ export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Pro
 	} else {
 		await deleteNftAllowance(instanceId, txn);
 	}
+
+	return [instanceId];
 }

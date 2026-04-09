@@ -10,7 +10,7 @@ import { requireString, requireObject, optionalCollectionSchema } from "@/utils/
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { computeDataHash, validateMutableSnapshot } from "@/protocol/index.ts";
 
-export async function handleSetDataFrom(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleSetDataFrom(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const nftId = requireString(op.data.nftId, "nftId");
 	const instanceDna = requireString(op.data.instanceDna, "instanceDna");
 
@@ -44,4 +44,6 @@ export async function handleSetDataFrom(op: ParsedOperation, txn: Queryable): Pr
 	const dataHash = await computeDataHash(mutableData);
 
 	await updateNftDataRef(nftId, dataHash, op.operationId, txn);
+
+	return [nftId];
 }

@@ -177,7 +177,8 @@ Copy `.env.example` to `.env` and set the chain-specific required values before 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `INDEXER_PORT` | 3050 | REST API port |
-| `GENESIS_BLOCK` | required | First block to scan |
+| `GENESIS_BLOCK` | required | First block to scan. Must be less than or equal to the canonical protocol genesis block (`105327280`) unless you intentionally allow a partial index |
+| `ALLOW_UNSAFE_GENESIS_BLOCK` | false | Escape hatch to allow starting after the canonical genesis block. This can produce orphaned historical operations and incomplete state |
 | `BATCH_SIZE` | 1000 | Blocks per API request |
 | `SYNC_INTERVAL_MS` | 3000 | Polling interval when caught up |
 | `LOG_LEVEL` | info | debug, info, warn, error |

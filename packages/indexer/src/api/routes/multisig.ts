@@ -101,8 +101,8 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			feeAmount: split.feeAmount,
 			feeAccount: split.feeAccount,
 			nodeAccount: config.hiveAccount,
-			txId: nft.tx_id,
-			seedTxId: nft.seed_tx_id ?? null,
+			txId: nft.created_tx_id,
+			seedTxId: nft.seed_created_tx_id ?? null,
 		};
 	}, {
 		params: t.Object({ nftId: t.String({ minLength: 1, maxLength: 128 }) }),

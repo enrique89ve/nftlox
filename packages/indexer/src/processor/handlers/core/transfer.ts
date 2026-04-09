@@ -24,7 +24,7 @@ function resolveNftIds(data: Record<string, unknown>): string[] {
 	return [requireString(data.nftId, "nftId")];
 }
 
-export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const toRaw = requireString(op.data.to, "to");
 	const nftIds = resolveNftIds(op.data);
 	const isBurn = toRaw === HIVE_NULL_ACCOUNT;
@@ -33,7 +33,7 @@ export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promi
 		for (const nftId of nftIds) {
 			await processBurn(op, nftId, txn);
 		}
-		return;
+		return nftIds;
 	}
 
 	const to = requireUsername(toRaw, "to");
@@ -42,6 +42,8 @@ export async function handleTransfer(op: ParsedOperation, txn: Queryable): Promi
 	for (const nftId of nftIds) {
 		await processSingleTransfer(op, nftId, to, txn);
 	}
+
+	return nftIds;
 }
 
 async function processSingleTransfer(op: ParsedOperation, nftId: string, to: string, txn: Queryable): Promise<void> {
@@ -66,7 +68,7 @@ async function processSingleTransfer(op: ParsedOperation, nftId: string, to: str
 		collectionId: nft.collection_id,
 		wasListed: hadExpiredListing,
 	};
-	await updateNftOwner(nftId, to, op.txId, ctx, txn);
+	await updateNftOwner(nftId, to, op.operationId, ctx, txn);
 	await deleteNftAllowance(nftId, txn);
 	await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
 }
@@ -101,5 +103,5 @@ async function processBurn(op: ParsedOperation, nftId: string, txn: Queryable): 
 		collectionId: nft.collection_id,
 	};
 	await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
-	await hardDeleteNft(nftId, op.signer, op.txId, ctx, txn);
+	await hardDeleteNft(nftId, op.signer, op.txId, op.operationId, ctx, txn);
 }

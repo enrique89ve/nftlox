@@ -9,10 +9,10 @@ const LIST_COLUMNS = sql`
 	COALESCE(n.origin_dna, s.origin_dna) AS origin_dna,
 	COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
 	n.instance_dna,
-	n.seed_id, n.instance_number, s.tx_id AS seed_tx_id,
+	n.seed_id, n.instance_number, s.created_tx_id AS seed_tx_id,
 	n.max_replicas, n.distributed, n.supply_exhausted,
-	n.schema_version, n.owner_tx_id,
-	n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency, n.listing_expires_at, n.created_at
+	n.schema_version, n.previous_owner, n.owner_operation_id,
+	n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency, n.listing_expires_at, n.listing_marketplace, n.created_at
 `;
 
 export async function getUserNftCounts(owner: string, txn: Queryable = sql): Promise<UserNftCounts> {

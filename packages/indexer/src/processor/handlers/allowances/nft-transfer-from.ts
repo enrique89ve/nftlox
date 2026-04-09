@@ -14,7 +14,7 @@ import { createLogger } from "@/utils/logger.ts";
 
 const log = createLogger("handler:nft-transfer-from");
 
-export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const from = requireUsername(op.data.from, "from");
 	const to = requireUsername(op.data.to, "to");
 	const instanceId = requireString(op.data.instanceId, "instanceId");
@@ -54,9 +54,11 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 		collectionId: nft.collection_id,
 		wasListed: hadExpiredListing,
 	};
-	await updateNftOwner(instanceId, to, op.txId, ctx, txn);
+	await updateNftOwner(instanceId, to, op.operationId, ctx, txn);
 	await deleteNftAllowance(instanceId, txn);
 	// NOTE: collection_allowances are NOT cleaned here — the owner explicitly
 	// granted collection-wide approval and a spender action should not revoke it.
 	// Cleanup only happens on direct transfer/burn where the owner acts.
+
+	return [instanceId];
 }

@@ -320,10 +320,10 @@ Get full details for a single NFT.
 - `max_replicas`, `distributed`, `seed_id`, `instance_number`
 - `listing_price`, `listing_currency`, `listing_marketplace`
 - `immutable_data`, `mutable_data`, `owner_data`
-- `schema_version`, `owner_tx_id`
+- `schema_version`, `previous_owner`, `owner_operation_id`
 - `block_num`, `tx_id`, `created_at`, `seed_tx_id`
 
-> All NFT list endpoints (collection NFTs, user NFTs, marketplace listings) also include `schema_version` and `owner_tx_id` in each NFT object.
+> All NFT list endpoints (collection NFTs, user NFTs, marketplace listings) also include `schema_version`, `previous_owner`, and `owner_operation_id` in each NFT object.
 
 **Error:** `404` if the NFT does not exist.
 

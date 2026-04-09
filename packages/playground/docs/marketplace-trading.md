@@ -582,7 +582,7 @@ Beyond transaction expiration, the indexer uses a persistent lock stored in the 
 
 ## Querying Marketplace Listings
 
-Use the indexer API to browse active listings. Each listed NFT includes `schema_version` and `owner_tx_id` in the response.
+Use the indexer API to browse active listings. Each listed NFT includes `schema_version`, `previous_owner`, and `owner_operation_id` in the response.
 
 ```bash
 # All listings, sorted by price ascending
@@ -609,7 +609,8 @@ const listings = await client.getListings({
 for (const nft of listings) {
 	console.log(`${nft.name} — ${nft.listing_price} ${nft.listing_currency}`);
 	// nft.schema_version -- schema version at time of last ownership change
-	// nft.owner_tx_id -- transaction ID of the last ownership change
+	// nft.previous_owner -- previous canonical owner, or null if the NFT was created for the current owner
+	// nft.owner_operation_id -- HafAH operation ID that made the current owner the canonical owner
 }
 ```
 

@@ -13,9 +13,8 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			seed_id, instance_number, original_id,
 			immutable_data,
 			data_operation_id, data_hash,
-			schema_version, owner_tx_id,
-			operation_id,
-			block_num, tx_id, created_at
+			schema_version, previous_owner, owner_operation_id,
+			created_operation_id, created_block_num, created_tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.collectionId}, ${params.nftType},
 			${params.status ?? NFT_STATUS_ACTIVE}, ${params.edition}, ${params.owner},
@@ -26,9 +25,10 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			${params.immutableData ? JSON.stringify(params.immutableData) : null},
 			${params.dataOperationId}, ${params.dataHash},
 			${params.schemaVersion ?? null},
-			${params.txId},
-			${params.operationId ?? null},
-			${params.blockNum}, ${params.txId}, ${params.createdAt}
+			${null},
+			${params.ownerOperationId},
+			${params.createdOperationId},
+			${params.createdBlockNum}, ${params.createdTxId}, ${params.createdAt}
 		)
 		ON CONFLICT (id) DO NOTHING
 	`;
@@ -42,14 +42,15 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 export async function updateNftOwner(
 	nftId: string,
 	newOwner: string,
-	ownerTxId: string,
+	ownerOperationId: string,
 	ctx: OwnerChangeCtx,
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
 		UPDATE nfts
 		SET owner = ${newOwner}, status = ${NFT_STATUS_ACTIVE},
-		    owner_tx_id = ${ownerTxId},
+		    previous_owner = ${ctx.oldOwner},
+		    owner_operation_id = ${ownerOperationId},
 		    listing_id = NULL, listing_tx_id = NULL,
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
@@ -69,12 +70,13 @@ export async function hardDeleteNft(
 	nftId: string,
 	burnedBy: string,
 	txId: string,
+	operationId: string,
 	ctx: BurnCtx,
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
-		INSERT INTO burned_nfts (id, collection_id, burned_by, tx_id)
-		VALUES (${nftId}, ${ctx.collectionId}, ${burnedBy}, ${txId})
+		INSERT INTO burned_nfts (id, collection_id, burned_by, tx_id, operation_id)
+		VALUES (${nftId}, ${ctx.collectionId}, ${burnedBy}, ${txId}, ${operationId})
 		ON CONFLICT (id) DO NOTHING
 	`;
 	await txn`DELETE FROM nfts WHERE id = ${nftId}`;

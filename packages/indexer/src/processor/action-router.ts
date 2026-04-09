@@ -59,7 +59,7 @@ const log = createLogger("router");
 // Single source of truth: SDK defines which actions require active key.
 const ACTIVE_AUTH_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 
-type Handler = (op: ParsedOperation, txn: Queryable) => Promise<void>;
+type Handler = (op: ParsedOperation, txn: Queryable) => Promise<ReadonlyArray<string>>;
 
 // Typed as Record<ProtocolAction, Handler> (finite union key, not index signature):
 // - TypeScript enforces at compile time that every ProtocolAction has a handler.
@@ -127,13 +127,14 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 		}
 
 		try {
-			await handler(op, txn);
+			const nftIds = await handler(op, txn);
 			await insertConfirmedOperation({
 				operationId: op.operationId,
 				txId: op.txId,
 				blockNum: op.blockNum,
 				signer: op.signer,
 				action: op.action,
+				nftIds,
 				createdAt: op.timestamp,
 			}, txn);
 			return true;

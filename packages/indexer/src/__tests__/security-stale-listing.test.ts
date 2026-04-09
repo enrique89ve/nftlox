@@ -76,6 +76,7 @@ async function cleanDb() {
 	await sql`DELETE FROM nfts`;
 	await sql`DELETE FROM owner_nft_counts`;
 	await sql`DELETE FROM collection_stats`;
+	await sql`DELETE FROM archived_collections`;
 	await sql`DELETE FROM collections`;
 }
 
@@ -102,7 +103,7 @@ async function seedMint(txn: Queryable = sql) {
 }
 
 async function seedInstance(txn: Queryable = sql): Promise<string> {
-	const [row] = await txn`SELECT tx_id FROM nfts WHERE id = 'seed_sec1'`;
+	const [row] = await txn`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'seed_sec1'`;
 	const seedTxId = row!.tx_id as string;
 	await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
 		items: [{ seedId: "seed_sec1", quantity: 1, seedTxId }],
@@ -145,7 +146,7 @@ async function makeListData(params: {
 async function listNft(nftId: string, owner = "alice", priceAmount = "10.000") {
 	const listData = await makeListData({ nftId, owner, priceAmount });
 	await handleList(makeOp(ACTION_LIST, listData, owner), sql);
-	const [nft] = await sql`SELECT listing_id, listing_tx_id, tx_id FROM nfts WHERE id = ${nftId}`;
+	const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${nftId}`;
 	return {
 		listingId: nft!.listing_id as string,
 		listTxId: nft!.listing_tx_id as string,
@@ -474,7 +475,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			// Force-set an expired listing
 			const expListingId = "exp_list_valid";
 			const expListTxId = "tx_exp_valid";
-			const [nftRow] = await sql`SELECT tx_id FROM nfts WHERE id = 'seed_sec1'`;
+			const [nftRow] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'seed_sec1'`;
 			const nftTxId = nftRow!.tx_id as string;
 
 			await sql`

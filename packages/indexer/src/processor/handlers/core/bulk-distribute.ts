@@ -28,7 +28,7 @@ import {
 	validateMutableUpdate,
 } from "@/protocol/index.ts";
 
-export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const toRaw = optionalString(op.data.to);
 	if (toRaw) {
 		const error = validateHiveUsername(toRaw);
@@ -46,6 +46,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	}
 
 	const parsedItems: Array<{ seedId: string; quantity: number; seedTxId: string }> = [];
+	const affectedNftIds: string[] = [];
 	const seenSeeds = new Set<string>();
 
 	for (const item of items) {
@@ -67,8 +68,8 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		assertActionable(seed, seedId);
 		if (seed.nft_type !== "seed") throw new Error(`${seedId} is not a seed`);
 
-		if (seed.tx_id !== seedTxId) {
-			throw new Error(`Invalid seedTxId for ${seedId}: expected ${seed.tx_id}, got ${seedTxId}`);
+		if (seed.created_tx_id !== seedTxId) {
+			throw new Error(`Invalid seedTxId for ${seedId}: expected ${seed.created_tx_id}, got ${seedTxId}`);
 		}
 
 		if (seed.owner !== op.signer) {
@@ -93,10 +94,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const [existingFromOp] = await txn`
 			SELECT COUNT(*)::int AS count FROM nfts
 			WHERE seed_id = ${seedId}
-				AND CASE WHEN operation_id IS NOT NULL
-					THEN operation_id = ${op.operationId}
-					ELSE tx_id = ${op.txId}
-				END
+				AND created_operation_id = ${op.operationId}
 		`;
 		const alreadyMintedThisOp = existingFromOp?.count ?? 0;
 		const baseDistributed = computeInstanceBaseline(distributed, alreadyMintedThisOp);
@@ -137,12 +135,14 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				dataOperationId: mutableData ? op.operationId : null,
 				dataHash,
 				schemaVersion: seed.schema_version,
-				operationId: op.operationId,
-				blockNum: op.blockNum,
-				txId: op.txId,
+				ownerOperationId: op.operationId,
+				createdOperationId: op.operationId,
+				createdBlockNum: op.blockNum,
+				createdTxId: op.txId,
 				createdAt: op.timestamp,
 			}, txn);
 
+			affectedNftIds.push(instanceId);
 			minted++;
 		}
 
@@ -150,4 +150,6 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 			await incrementDistributedBy(seedId, minted, txn);
 		}
 	}
+
+	return affectedNftIds;
 }

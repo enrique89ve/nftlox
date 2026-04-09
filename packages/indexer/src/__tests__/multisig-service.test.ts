@@ -80,6 +80,7 @@ async function cleanDb() {
 	await sql`DELETE FROM nfts`;
 	await sql`DELETE FROM owner_nft_counts`;
 	await sql`DELETE FROM collection_stats`;
+	await sql`DELETE FROM archived_collections`;
 	await sql`DELETE FROM collections`;
 }
 
@@ -131,7 +132,7 @@ async function makeListData(nftId: string, priceAmount = "10.000") {
 async function listNft(nftId: string, priceAmount = "10.000") {
 	const listData = await makeListData(nftId, priceAmount);
 	await handleList(makeOp(ACTION_LIST, listData), sql);
-	const [nft] = await sql`SELECT listing_id, listing_tx_id, tx_id FROM nfts WHERE id = ${nftId}`;
+	const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${nftId}`;
 	return { listingId: nft!.listing_id as string, listTxId: nft!.listing_tx_id as string, nftTxId: nft!.tx_id as string };
 }
 

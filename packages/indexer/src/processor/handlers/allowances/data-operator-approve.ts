@@ -7,7 +7,7 @@ import {
 import { upsertDataOperator, deleteDataOperator } from "@/db/queries/allowances.ts";
 import { requireString, requireBoolean, requireUsername } from "@/utils/validation.ts";
 
-export async function handleDataOperatorApprove(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleDataOperatorApprove(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const collectionId = requireString(op.data.collectionId, "collectionId");
 	const operator = requireUsername(op.data.operator, "operator");
 	const approved = requireBoolean(op.data.approved, "approved");
@@ -26,4 +26,6 @@ export async function handleDataOperatorApprove(op: ParsedOperation, txn: Querya
 	} else {
 		await deleteDataOperator(collectionId, operator, txn);
 	}
+
+	return [];
 }

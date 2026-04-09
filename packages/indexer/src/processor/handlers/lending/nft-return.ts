@@ -4,7 +4,7 @@ import { getNftForProcessing, updateNftStatus, NFT_STATUS_ACTIVE, NFT_STATUS_LEN
 import { getLoan, deleteLoan } from "@/db/queries/loans.ts";
 import { requireString } from "@/utils/validation.ts";
 
-export async function handleNftReturn(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleNftReturn(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 
 	const nft = await getNftForProcessing(instanceId, txn);
@@ -23,4 +23,6 @@ export async function handleNftReturn(op: ParsedOperation, txn: Queryable): Prom
 
 	await updateNftStatus(instanceId, NFT_STATUS_ACTIVE, txn);
 	await deleteLoan(instanceId, txn);
+
+	return [instanceId];
 }

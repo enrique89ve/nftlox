@@ -464,12 +464,12 @@ Collection (totalPotential: 3)
 
 ## 7. Ownership Provenance
 
-NFTs include an `owner_tx_id` field -- the Hive transaction ID that gave the current owner their ownership. This field is:
+NFTs include an `owner_operation_id` field plus a `previous_owner` field. Together they describe the current ownership edge without storing a full ownership history:
 
-- **Set at mint** to the mint transaction ID.
-- **Updated on transfer, buy, and transfer_from** to the respective transaction ID.
+- **Set at mint / bulk distribute / replicate** with `previous_owner = null`.
+- **Updated on transfer, buy, and transfer_from** with the outgoing owner in `previous_owner` and the canonical HafAH operation ID in `owner_operation_id`.
 
-Anyone can look up the `owner_tx_id` on HafAH to see the full operation details (who sent what, when, and in which block). This provides a transparent, on-chain provenance trail for every ownership change without requiring the indexer to store the full operation history.
+Anyone can look up the `owner_operation_id` on HafAH to see the full operation details (who sent what, when, and in which block). This provides a transparent, on-chain provenance trail for the current owner without requiring the indexer to store a full ownership history.
 
 ```bash
 # Get an NFT and check its ownership provenance
@@ -477,10 +477,11 @@ curl https://api-nftlox.hivecreators.co/api/nfts/nft_a1b2c3d4_1_ef56
 
 # Response includes:
 # "owner": "new-owner",
-# "owner_tx_id": "abc123def456..."
+# "previous_owner": "old-owner",
+# "owner_operation_id": "1234567890"
 #
 # Then verify on HafAH:
-# https://hafah.hivehub.dev/rpc/get_transaction?_trx_hash=abc123def456...
+# https://hafah.hivehub.dev/hafah-api/operations/1234567890
 ```
 
 ---

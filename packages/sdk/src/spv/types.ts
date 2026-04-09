@@ -114,6 +114,25 @@ export interface ResolvedMutableData {
 	readonly hash: string;
 }
 
+export interface ResolveOperationByIdParams {
+	readonly l1Config: HiveL1Config;
+	readonly operationId: string;
+	readonly expectedActions?: readonly ProtocolAction[];
+	readonly protocolId?: string;
+}
+
+export interface ResolvedOperationById {
+	readonly operationId: string;
+	readonly txId: string;
+	readonly blockNum: number;
+	readonly timestamp: string;
+	readonly protocolId: string;
+	readonly version: string;
+	readonly action: ProtocolAction;
+	readonly signer: string;
+	readonly data: Record<string, unknown>;
+}
+
 // ============ OWNERSHIP VERIFICATION ============
 
 export interface OwnershipVerifyParams {
@@ -131,6 +150,9 @@ export interface OwnershipCheckResult {
 	expectedSigner: string;
 	l1Status: VerificationStatus;
 	message: string;
+	operationId?: string;
+	previousOwner?: string | null;
+	derivedOwner?: string | null;
 }
 
 export interface OwnershipVerificationResult {

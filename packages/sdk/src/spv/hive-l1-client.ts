@@ -13,6 +13,8 @@ import type {
 	HiveL1Config,
 	HafahTransaction,
 	L1ParsedOperation,
+	ResolveOperationByIdParams,
+	ResolvedOperationById,
 	ResolveMutableDataParams,
 	ResolvedMutableData,
 } from "./types.ts";
@@ -429,6 +431,39 @@ export async function fetchOperationId(
 export async function resolveMutableDataFromOperation(
 	params: ResolveMutableDataParams,
 ): Promise<ResolvedMutableData> {
+	const resolved = await resolveOperationById({
+		l1Config: params.l1Config,
+		operationId: params.operationId,
+		expectedActions: params.expectedActions,
+		protocolId: params.protocolId,
+	});
+
+	if (!isRecord(resolved.data.mutableData)) {
+		throw new Error(`Operation ${params.operationId} does not contain mutableData`);
+	}
+
+	const mutableData = resolved.data.mutableData;
+	const hash = await computeDataHash(mutableData);
+	if (hash !== params.expectedHash) {
+		throw new Error(`Mutable data hash mismatch for operation ${params.operationId}`);
+	}
+
+	return {
+		operationId: resolved.operationId,
+		txId: resolved.txId,
+		blockNum: resolved.blockNum,
+		timestamp: resolved.timestamp,
+		protocolId: resolved.protocolId,
+		action: resolved.action,
+		signer: resolved.signer,
+		mutableData,
+		hash,
+	};
+}
+
+export async function resolveOperationById(
+	params: ResolveOperationByIdParams,
+): Promise<ResolvedOperationById> {
 	const operation = await fetchOperationById(params.l1Config, params.operationId);
 	if (operation.op.type !== "custom_json_operation") {
 		throw new Error(`Operation ${params.operationId} is not a custom_json_operation`);
@@ -454,16 +489,6 @@ export async function resolveMutableDataFromOperation(
 		);
 	}
 
-	if (!isRecord(payload.data.mutableData)) {
-		throw new Error(`Operation ${params.operationId} does not contain mutableData`);
-	}
-
-	const mutableData = payload.data.mutableData;
-	const hash = await computeDataHash(mutableData);
-	if (hash !== params.expectedHash) {
-		throw new Error(`Mutable data hash mismatch for operation ${params.operationId}`);
-	}
-
 	const signer =
 		operation.op.value.required_auths[0]
 		?? operation.op.value.required_posting_auths[0]
@@ -478,10 +503,10 @@ export async function resolveMutableDataFromOperation(
 		blockNum: operation.block,
 		timestamp: operation.timestamp,
 		protocolId: payload.protocol,
+		version: payload.version,
 		action: payload.action,
 		signer,
-		mutableData,
-		hash,
+		data: payload.data,
 	};
 }
 

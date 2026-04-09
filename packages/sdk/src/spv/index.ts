@@ -16,6 +16,8 @@ export type {
 	ListingPriceVerifyParams,
 	ListingPriceVerificationResult,
 	OnChainPrice,
+	ResolveOperationByIdParams,
+	ResolvedOperationById,
 	ResolveMutableDataParams,
 	ResolvedMutableData,
 	AuditorConfig,
@@ -39,6 +41,7 @@ export {
 	fetchFromHiveRpc,
 	parseNftloxOperation,
 	parseAllNftloxOperations,
+	resolveOperationById,
 	resolveMutableDataFromOperation,
 } from "./hive-l1-client.ts";
 

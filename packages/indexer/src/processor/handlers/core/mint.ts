@@ -26,14 +26,14 @@ import {
 
 const log = createLogger("mint");
 
-export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<void> {
+export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const d = op.data;
 	const id = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
 	const collectionId = requireBoundedString(d.collectionId, "collectionId", MAX_ID_LENGTH);
 
 	if (await nftExists(id, txn)) {
 		log.info("Mint skipped: NFT already exists", { nftId: id, signer: op.signer, txId: op.txId });
-		return;
+		return [];
 	}
 	const collection = await getCollectionRules(collectionId, txn);
 	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
@@ -88,7 +88,12 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<v
 		dataOperationId: mutableData ? op.operationId : null,
 		dataHash,
 		schemaVersion: collection.schema_version,
-		operationId: op.operationId,
-		blockNum: op.blockNum, txId: op.txId, createdAt: op.timestamp,
+		ownerOperationId: op.operationId,
+		createdOperationId: op.operationId,
+		createdBlockNum: op.blockNum,
+		createdTxId: op.txId,
+		createdAt: op.timestamp,
 	}, txn);
+
+	return [id];
 }

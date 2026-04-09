@@ -273,11 +273,12 @@ For minting multiple seeds at once, provide an array:
 
 ## Ownership Provenance
 
-The `owner_tx_id` field on each NFT tracks how the current owner obtained the NFT.
+The `owner_operation_id` field on each NFT tracks how the current owner obtained the NFT, and `previous_owner` records the immediately preceding owner when the NFT changed hands.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `ownerTxId` | string | Transaction ID that gave the current owner their ownership |
+| `owner_operation_id` | string | HafAH operation ID that gave the current owner their ownership |
+| `previous_owner` | string \| null | Previous canonical owner, or `null` if the NFT was created directly for the current owner |
 
 **Behavior:**
 

@@ -283,7 +283,7 @@ Exported from `schemas.ts`. Each schema validates input for its corresponding ac
 | `usernameSchema` | Hive username validation |
 | `priceSchema` | Price object validation |
 
-`IndexerCollection` includes an explicit `status: "active" | "archived"` plus archive metadata fields (`archived_at_block`, `archived_tx_id`, `archived_at`). Public indexer collection queries only return active collections.
+`IndexerCollection` includes `status: "active" | "archived"`. Archived collections are hard-deleted and tracked in `archived_collections` (id, creator, tx_id) — full details are derivable from the transaction on-chain.
 
 ### SPV Verification ("Boleto Suizo")
 

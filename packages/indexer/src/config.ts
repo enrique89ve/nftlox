@@ -1,4 +1,5 @@
 import { DEFAULT_FEE_ACCOUNT, PROTOCOL_ID } from "@/protocol/index.ts";
+import { validateGenesisBlockSelection } from "@/protocol/genesis-guard.ts";
 
 const toInt = (val: string | undefined, fallback: number): number => {
 	const parsed = Number(val);
@@ -33,6 +34,7 @@ export const config = {
 	port: toInt(process.env.INDEXER_PORT, 3050),
 	databaseUrl: process.env.DATABASE_URL ?? (process.env.NODE_ENV === "production" ? "" : "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer"),
 	genesisBlock: toInt(process.env.GENESIS_BLOCK, 0),
+	allowUnsafeGenesisBlock: toBool(process.env.ALLOW_UNSAFE_GENESIS_BLOCK, false),
 	protocolId: PROTOCOL_ID,
 	batchSize: toInt(process.env.BATCH_SIZE, 1000),
 	syncIntervalMs: toInt(process.env.SYNC_INTERVAL_MS, 3000),
@@ -65,6 +67,11 @@ export const config = {
 if (!config.genesisBlock) {
 	throw new Error("GENESIS_BLOCK env var is required");
 }
+
+validateGenesisBlockSelection({
+	genesisBlock: config.genesisBlock,
+	allowUnsafeGenesisBlock: config.allowUnsafeGenesisBlock,
+});
 
 if (config.hiveEndpoints.length === 0) {
 	throw new Error("HIVE_ENDPOINTS must contain at least one valid URL");

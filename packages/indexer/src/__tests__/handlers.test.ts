@@ -83,6 +83,7 @@ async function cleanDb() {
 	await sql`DELETE FROM nfts`;
 	await sql`DELETE FROM owner_nft_counts`;
 	await sql`DELETE FROM collection_stats`;
+	await sql`DELETE FROM archived_collections`;
 	await sql`DELETE FROM collections`;
 }
 
@@ -152,7 +153,7 @@ async function makeBulkItem(seedId: string, quantity: number, seedTxId?: string)
 }
 
 async function getSeedTxId(seedId: string): Promise<string> {
-	const [row] = await sql`SELECT tx_id FROM nfts WHERE id = ${seedId}`;
+	const [row] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${seedId}`;
 	return row!.tx_id as string;
 }
 
@@ -355,9 +356,16 @@ describe("Handlers (integration)", () => {
 				collectionId: COL_ID,
 			}), sql);
 
-			// Collection should be hard-deleted
+			// Collection should be hard-deleted from collections table
 			const [collection] = await sql`SELECT 1 FROM collections WHERE id = ${COL_ID}`;
 			expect(collection).toBeUndefined();
+
+			// Minimal audit record should exist in archived_collections
+			const [archived] = await sql`SELECT id, creator, tx_id FROM archived_collections WHERE id = ${COL_ID}`;
+			expect(archived).toBeDefined();
+			expect(archived!.id).toBe(COL_ID);
+			expect(archived!.creator).toBe("alice");
+			expect(archived!.tx_id).toBeDefined();
 
 			// Cascaded child tables should also be gone
 			const [allowances] = await sql`
@@ -1808,7 +1816,7 @@ describe("Handlers (integration)", () => {
 		async function listNft(nftId: string, priceAmount = "10.000") {
 			const listData = await makeListData({ nftId, priceAmount });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
-			const [nft] = await sql`SELECT listing_id, listing_tx_id, tx_id FROM nfts WHERE id = ${nftId}`;
+			const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${nftId}`;
 			return { listingId: nft!.listing_id as string, listTxId: nft!.listing_tx_id as string, txId: nft!.tx_id as string };
 		}
 
@@ -1973,7 +1981,7 @@ describe("Handlers (integration)", () => {
 			const listData = await makeListData({ nftId: instId });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
-			const [nft] = await sql`SELECT listing_id, listing_tx_id, tx_id FROM nfts WHERE id = ${instId}`;
+			const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
 			const nodeAccount = config.hiveAccount;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
@@ -2219,7 +2227,7 @@ describe("Handlers (integration)", () => {
 			const listData = await makeListData({ nftId: "seed_test1" });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
-			const [nftRow] = await sql`SELECT listing_id, listing_tx_id, tx_id FROM nfts WHERE id = 'seed_test1'`;
+			const [nftRow] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = 'seed_test1'`;
 			const nodeAccount = config.hiveAccount;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
