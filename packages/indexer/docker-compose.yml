@@ -1,11 +1,13 @@
 services:
   postgres:
     image: postgres:16-alpine
-    restart: unless-stopped
+    restart: always
+    stop_grace_period: 15s
+    shm_size: 256m
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-nftlox_indexer}
       POSTGRES_USER: ${POSTGRES_USER:-nftlox}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nftlox_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./src/db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
@@ -20,6 +22,7 @@ services:
       resources:
         limits:
           memory: 512M
+          cpus: "0.5"
     logging:
       driver: json-file
       options:
@@ -30,17 +33,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    restart: unless-stopped
+    restart: always
+    init: true
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+      - /app/storage_root-node:size=8m
     depends_on:
       postgres:
         condition: service_healthy
     expose:
       - "3050"
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-nftlox}:${POSTGRES_PASSWORD:-nftlox_dev}@postgres:5432/${POSTGRES_DB:-nftlox_indexer}
+      DATABASE_URL: postgres://${POSTGRES_USER:-nftlox}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-nftlox_indexer}
       INDEXER_PORT: 3050
       HEALTH_PORT: ${HEALTH_PORT:-3051}
-      GENESIS_BLOCK: ${GENESIS_BLOCK}
+      GENESIS_BLOCK: ${GENESIS_BLOCK:?GENESIS_BLOCK is required}
       HIVE_ENDPOINTS: ${HIVE_ENDPOINTS:-https://api.syncad.com,https://rpc.mahdiyari.info,https://api.hive.blog}
       HIVE_ACCOUNT: ${HIVE_ACCOUNT:-nftlox}
       BATCH_SIZE: ${BATCH_SIZE:-1000}
@@ -59,11 +68,12 @@ services:
       MULTISIG_IP_RATE_LIMIT_WINDOW_MS: ${MULTISIG_IP_RATE_LIMIT_WINDOW_MS:-60000}
       POSTGRES_DB: ${POSTGRES_DB:-nftlox_indexer}
       POSTGRES_USER: ${POSTGRES_USER:-nftlox}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nftlox_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     deploy:
       resources:
         limits:
           memory: 1G
+          cpus: "1.5"
     logging:
       driver: json-file
       options:

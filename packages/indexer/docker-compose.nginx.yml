@@ -2,8 +2,15 @@
 # Uso: docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
 services:
   nginx:
-    image: nginx:1-alpine
-    restart: unless-stopped
+    image: nginx:1.27-alpine
+    restart: always
+    stop_grace_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+      - /var/cache/nginx:size=32m
+      - /var/run:size=1m
+      - /var/log/nginx:size=16m
     depends_on:
       indexer:
         condition: service_healthy
@@ -24,6 +31,7 @@ services:
       resources:
         limits:
           memory: 128M
+          cpus: "0.25"
     logging:
       driver: json-file
       options:

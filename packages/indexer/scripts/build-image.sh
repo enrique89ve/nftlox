@@ -32,11 +32,20 @@ cd "$project_dir"
 
 print_build_hint
 
+build_time="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+git_sha="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
+
 set --
 if [ -n "$build_network" ]; then
   echo "Using docker build network: $build_network" >&2
   set -- --network "$build_network"
 fi
+
+set -- "$@" \
+  --build-arg "BUILD_TIME=$build_time" \
+  --build-arg "GIT_COMMIT_SHA=$git_sha" \
+  --build-arg "GIT_CURRENT_BRANCH=$git_branch"
 
 if has_docker_buildx; then
   echo "Using docker buildx for the indexer image." >&2

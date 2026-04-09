@@ -1,5 +1,14 @@
 .env
+.env.*
 node_modules
 storage_root-node
-api_test.log
 *.log
+.tmp-*
+docker-compose*.yml
+Dockerfile*
+nginx/
+scripts/build-image.sh
+scripts/compose.sh
+scripts/dev-env.sh
+src/__tests__/
+.dockerignore

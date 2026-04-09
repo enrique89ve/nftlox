@@ -23,6 +23,34 @@ process.on("uncaughtException", (err) => {
 });
 
 let syncWorker: Worker | null = null;
+let syncWorkerRestarts = 0;
+let shuttingDown = false;
+
+const MAX_WORKER_RESTARTS = 10;
+const WORKER_RESTART_WINDOW_MS = 60_000;
+let lastRestartWindowStart = 0;
+
+function scheduleSyncWorkerRestart(): void {
+	if (shuttingDown) return;
+
+	const now = Date.now();
+	if (now - lastRestartWindowStart > WORKER_RESTART_WINDOW_MS) {
+		syncWorkerRestarts = 0;
+		lastRestartWindowStart = now;
+	}
+
+	syncWorkerRestarts++;
+	if (syncWorkerRestarts > MAX_WORKER_RESTARTS) {
+		log.error(`Sync worker crashed ${MAX_WORKER_RESTARTS} times in ${WORKER_RESTART_WINDOW_MS / 1000}s — giving up. Manual intervention required.`);
+		return;
+	}
+
+	const delayMs = Math.min(30_000, 1000 * 2 ** (syncWorkerRestarts - 1));
+	log.warn(`Restarting sync worker in ${delayMs}ms (attempt ${syncWorkerRestarts}/${MAX_WORKER_RESTARTS})`);
+	setTimeout(() => {
+		if (!shuttingDown) startSyncWorker();
+	}, delayMs);
+}
 
 function startSyncWorker(): void {
 	const worker = new Worker(new URL("./scanner/sync-worker.ts", import.meta.url).href);
@@ -39,6 +67,7 @@ function startSyncWorker(): void {
 				break;
 			case "ready":
 				log.info("Sync worker ready — processing blocks");
+				syncWorkerRestarts = 0;
 				break;
 			case "log":
 				log[msg.level](msg.message, msg.data);
@@ -54,14 +83,19 @@ function startSyncWorker(): void {
 	};
 
 	worker.addEventListener("close", (event) => {
-		log.warn("Sync worker closed", { exitCode: (event as CloseEvent).code });
+		const exitCode = (event as CloseEvent).code;
+		log.warn("Sync worker closed", { exitCode });
 		syncWorker = null;
+		if (exitCode !== 0) {
+			scheduleSyncWorkerRestart();
+		}
 	});
 
 	syncWorker = worker;
 }
 
 function stopSyncWorker(): void {
+	shuttingDown = true;
 	if (!syncWorker) return;
 	const msg: MainToWorkerMessage = { type: "stop" };
 	syncWorker.postMessage(msg);
