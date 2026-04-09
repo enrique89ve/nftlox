@@ -52,7 +52,7 @@ async function doInit(activeKeyWif: string, walletPassword: string): Promise<str
 		throw new Error("BEEKEEPER_PASSWORD is required — set it in your .env");
 	}
 
-	bkInstance = await createBeekeeper({ enableLogs: false });
+	bkInstance = await createBeekeeper({ enableLogs: false, inMemory: true });
 	bkSession = bkInstance.createSession(SESSION_SALT);
 
 	const { wallet } = await bkSession.createWallet(WALLET_NAME, walletPassword, true);
