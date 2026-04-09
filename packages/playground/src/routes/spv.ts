@@ -22,7 +22,6 @@ export const spvRoutes: Record<string, { POST: RouteHandler }> = {
 				const body = await req.json() as {
 					nftId: string;
 					expectedOwner: string;
-					sampleSize?: number;
 				};
 
 				if (!body.nftId || !body.expectedOwner) {
@@ -34,7 +33,6 @@ export const spvRoutes: Record<string, { POST: RouteHandler }> = {
 					expectedOwner: body.expectedOwner,
 					indexerBaseUrl: INDEXER_URL,
 					l1Config: createDefaultL1Config(),
-					sampleSize: body.sampleSize ?? 5,
 				});
 
 				return json(result);

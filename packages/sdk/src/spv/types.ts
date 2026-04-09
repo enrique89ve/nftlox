@@ -140,7 +140,6 @@ export interface OwnershipVerifyParams {
 	expectedOwner: string;
 	indexerBaseUrl: string;
 	l1Config: HiveL1Config;
-	sampleSize: number;
 }
 
 export interface OwnershipCheckResult {
@@ -160,8 +159,7 @@ export interface OwnershipVerificationResult {
 	nftId: string;
 	reportedOwner: string;
 	expectedOwner: string;
-	totalEvents: number;
-	sampledEvents: number;
+	proofsChecked: number;
 	checks: OwnershipCheckResult[];
 	verifiedAt: number;
 	durationMs: number;

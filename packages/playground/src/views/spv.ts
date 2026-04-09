@@ -45,7 +45,6 @@ function renderResult(containerId: string, result: any) {
 async function verifyOwnership() {
 	const nftId = ($("spv-ownership-nft") as HTMLInputElement)?.value.trim();
 	const expectedOwner = ($("spv-ownership-owner") as HTMLInputElement)?.value.trim().toLowerCase();
-	const sampleSize = parseInt(($("spv-ownership-samples") as HTMLInputElement)?.value || "5", 10);
 
 	if (!nftId || !expectedOwner) {
 		log("Fill NFT ID and expected owner", "error");
@@ -58,7 +57,7 @@ async function verifyOwnership() {
 		const response = await fetch("/api/spv/verify-ownership", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ nftId, expectedOwner, sampleSize }),
+			body: JSON.stringify({ nftId, expectedOwner }),
 		});
 		const result = await response.json();
 

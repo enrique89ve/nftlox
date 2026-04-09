@@ -293,7 +293,7 @@ Trustless verification -- the browser reads Hive L1 directly and replays determi
 |----------|-------------|
 | `runAudit(config)` | Random sample audit of pack_open events |
 | `runSingleVerification(config, txId, blockNum)` | Verify a specific pack_open |
-| `verifyNftOwnership(params)` | Verify NFT ownership chain (samples up to 3 events) |
+| `verifyNftOwnership(params)` | Verify the current ownership proof from the NFT's canonical ownership edge |
 | `verifyOperationOnChain(params)` | Verify any operation exists on L1 |
 | `fetchTransaction(config, txId)` | Fetch tx from HAFAH REST API |
 | `parseNftloxOperation(tx)` | Parse NFTLox custom_json from tx |

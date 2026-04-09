@@ -2266,7 +2266,7 @@
 						<div class="card-header">
 							<span class="card-title">Verify NFT Ownership</span>
 						</div>
-						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Samples the NFT's history events and verifies against Hive L1 to confirm current ownership.</p>
+						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Checks the current ownership proof against Hive L1 using the NFT's canonical ownership operation.</p>
 						<div class="form-row">
 							<div class="form-group">
 								<label class="form-label">NFT ID</label>
@@ -2276,10 +2276,6 @@
 								<label class="form-label">Expected Owner</label>
 								<input class="form-input" id="spv-ownership-owner" placeholder="alice">
 							</div>
-						</div>
-						<div class="form-group">
-							<label class="form-label">Sample Size</label>
-							<input class="form-input" type="number" id="spv-ownership-samples" value="5" min="1" max="20" style="width: 100px;">
 						</div>
 						<button class="btn btn-primary" id="btn-verify-ownership">Verify Ownership</button>
 						<div id="spv-ownership-result" style="display: none; margin-top: 16px;"></div>

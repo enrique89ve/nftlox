@@ -81,13 +81,11 @@ describe("verifyNftOwnership", () => {
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
-			sampleSize: 3,
 		});
 
 		expect(result.status).toBe("verified");
 		expect(result.reportedOwner).toBe("bob");
-		expect(result.totalEvents).toBe(1);
-		expect(result.sampledEvents).toBe(1);
+		expect(result.proofsChecked).toBe(1);
 		expect(result.checks).toHaveLength(1);
 		expect(result.checks[0]?.eventType).toBe(ACTION_TRANSFER);
 		expect(result.checks[0]?.operationId).toBe("451882812111324178");
@@ -195,7 +193,6 @@ describe("verifyNftOwnership", () => {
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
-			sampleSize: 3,
 		});
 
 		expect(result.status).toBe("verified");
@@ -265,7 +262,6 @@ describe("verifyNftOwnership", () => {
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
-			sampleSize: 3,
 		});
 
 		expect(result.status).toBe("mismatch");

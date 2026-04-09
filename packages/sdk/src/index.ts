@@ -410,6 +410,7 @@ export {
 	type IndexerCollection,
 	type CollectionStats,
 	type IndexerNft,
+	type IndexerNftProof,
 	type IndexerNftSummary,
 	type UserNftCounts,
 	type UserNftsPage,
