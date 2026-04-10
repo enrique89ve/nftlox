@@ -11,6 +11,7 @@ import {
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertOwnershipChangeable, assertNotSeed } from "@/utils/status-checks.ts";
 import { createLogger } from "@/utils/logger.ts";
+import { ACTION_NFT_TRANSFER_FROM } from "@/protocol/index.ts";
 
 const log = createLogger("handler:nft-transfer-from");
 
@@ -52,6 +53,8 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 		oldOwner: nft.owner,
 		nftType: nft.nft_type,
 		collectionId: nft.collection_id,
+		ownerAction: ACTION_NFT_TRANSFER_FROM,
+		ownerBlockNum: op.blockNum,
 		wasListed: hadExpiredListing,
 	};
 	await updateNftOwner(instanceId, to, op.operationId, ctx, txn);

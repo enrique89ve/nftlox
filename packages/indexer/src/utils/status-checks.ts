@@ -2,7 +2,7 @@
 // Inspired by ICRC-7 (consistent validation) and AtomicAssets (re-validate at execution time)
 
 import type { NftStatus, NftKind } from "@/db/queries/nfts.ts";
-import { NFT_STATUS_LENT, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { NFT_KIND_INSTANCE, NFT_STATUS_LENT, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 
 /** Minimal shape needed for status assertions — any row with status qualifies. */
 type HasStatus = { readonly status: NftStatus };
@@ -16,7 +16,7 @@ type HasKindAndDistributed = HasKind & { readonly distributed: number };
 
 export function isListingExpired(expiresAt: string | null, blockTimestamp: string): boolean {
 	if (!expiresAt) return false;
-	return new Date(blockTimestamp).getTime() > new Date(expiresAt).getTime();
+	return new Date(blockTimestamp).getTime() >= new Date(expiresAt).getTime();
 }
 
 export function assertNotLent(nft: HasStatus, nftId: string): void {
@@ -39,6 +39,12 @@ export function assertNotListed(nft: HasStatus, nftId: string): void {
 export function assertNotSeed(nft: HasKind, nftId: string): void {
 	if (nft.nft_type === "seed") {
 		throw new Error(`Seeds cannot be delegated: ${nftId}`);
+	}
+}
+
+export function assertMarketplaceInstance(nft: HasKind, nftId: string): void {
+	if (nft.nft_type !== NFT_KIND_INSTANCE) {
+		throw new Error(`Only instances can be listed or bought: ${nftId}`);
 	}
 }
 

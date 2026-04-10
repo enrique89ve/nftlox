@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS nfts (
 	schema_version INTEGER,
 	previous_owner TEXT,
 	owner_operation_id TEXT NOT NULL,
+	owner_action TEXT NOT NULL CONSTRAINT chk_nfts_owner_action CHECK (owner_action IN ('mint', 'bulk_distribute', 'replicate', 'transfer', 'nft_transfer_from', 'buy')),
+	owner_block_num BIGINT NOT NULL,
 	listing_id TEXT,
 	listing_tx_id TEXT,
 	listing_price NUMERIC(18,3),
@@ -117,9 +119,9 @@ CREATE TABLE IF NOT EXISTS invalid_operations (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invalid_ops_unique ON invalid_operations(tx_id, COALESCE(operation_id, '')) WHERE tx_id IS NOT NULL;
 
--- Confirmed operations (append-only tracking of successful handler executions)
--- Enables per-operation status lookups and stores the immutable NFT IDs affected
--- by that specific protocol operation.
+-- Confirmed operations (append-only tracking of successful handler executions).
+-- Stores immutable NFT IDs for lightweight per-NFT operations. Bulk creation ops
+-- can intentionally store an empty array because each NFT stores its own origin.
 CREATE TABLE IF NOT EXISTS confirmed_operations (
 	operation_id TEXT PRIMARY KEY,
 	tx_id TEXT NOT NULL,

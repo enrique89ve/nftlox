@@ -8,6 +8,7 @@ import { assertTransferable } from "@/utils/status-checks.ts";
 // NOTE: replicate uses assertTransferable (not assertOwnershipChangeable) because
 // replication doesn't change ownership of the original — it creates a copy.
 import {
+	ACTION_REPLICATE,
 	generateReplicaInstanceDna,
 	MAX_ID_LENGTH,
 } from "@/protocol/index.ts";
@@ -54,6 +55,8 @@ export async function handleReplicate(op: ParsedOperation, txn: Queryable): Prom
 		immutableData: null, dataOperationId: null, dataHash: null,
 		schemaVersion: rules.schema_version,
 		ownerOperationId: op.operationId,
+		ownerAction: ACTION_REPLICATE,
+		ownerBlockNum: op.blockNum,
 		createdOperationId: op.operationId,
 		createdBlockNum: op.blockNum,
 		createdTxId: op.txId,

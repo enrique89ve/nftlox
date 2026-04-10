@@ -1,4 +1,5 @@
 import { sql } from "@/db/client.ts";
+import { NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "./nft-types.ts";
 
 export async function getProtocolStats() {
 	const [nftStats] = await sql`
@@ -8,7 +9,12 @@ export async function getProtocolStats() {
 			COALESCE((SELECT SUM(seeds) FROM collection_stats), 0)::int AS total_seeds,
 			COALESCE((SELECT SUM(instances) FROM collection_stats), 0)::int AS total_instances,
 			COALESCE((SELECT SUM(replicas) FROM collection_stats), 0)::int AS total_replicas,
-			COALESCE((SELECT SUM(listed) FROM collection_stats), 0)::int AS total_listed,
+			COALESCE((
+				SELECT COUNT(*) FROM nfts
+				WHERE nft_type = ${NFT_KIND_INSTANCE}
+					AND status = ${NFT_STATUS_LISTED}
+					AND (listing_expires_at IS NULL OR listing_expires_at > NOW())
+			), 0)::int AS total_listed,
 			COALESCE((SELECT SUM(burned) FROM collection_stats), 0)::int AS total_burned,
 			(SELECT COUNT(DISTINCT owner)::int FROM nfts) AS unique_owners,
 			(SELECT COUNT(*)::int FROM invalid_operations) AS invalid_ops,

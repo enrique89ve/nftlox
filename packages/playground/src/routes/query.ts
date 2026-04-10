@@ -254,7 +254,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 	"/api/seed/:seedId/instances": (req: Request) =>
 		safeHandler(async () => {
 			const seedId = new URL(req.url).pathname.split("/api/seed/")[1]!.split("/")[0]!;
-			const instances = await indexer.getNftInstances(seedId);
+			const instances = await indexer.getNftInstances(seedId, { compact: true });
 			return json({ seedId, count: instances.length, instances });
 		}),
 

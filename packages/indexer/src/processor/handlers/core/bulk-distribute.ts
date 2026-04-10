@@ -22,6 +22,7 @@ import {
 	generateDeterministicInstanceId,
 	generateOriginDna,
 	generateDeterministicInstanceDna,
+	ACTION_BULK_DISTRIBUTE,
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	validateHiveUsername,
 	computeDataHash,
@@ -46,7 +47,6 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	}
 
 	const parsedItems: Array<{ seedId: string; quantity: number; seedTxId: string }> = [];
-	const affectedNftIds: string[] = [];
 	const seenSeeds = new Set<string>();
 
 	for (const item of items) {
@@ -136,13 +136,14 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				dataHash,
 				schemaVersion: seed.schema_version,
 				ownerOperationId: op.operationId,
+				ownerAction: ACTION_BULK_DISTRIBUTE,
+				ownerBlockNum: op.blockNum,
 				createdOperationId: op.operationId,
 				createdBlockNum: op.blockNum,
 				createdTxId: op.txId,
 				createdAt: op.timestamp,
 			}, txn);
 
-			affectedNftIds.push(instanceId);
 			minted++;
 		}
 
@@ -151,5 +152,5 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		}
 	}
 
-	return affectedNftIds;
+	return [];
 }

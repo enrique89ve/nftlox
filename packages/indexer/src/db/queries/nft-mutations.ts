@@ -1,7 +1,12 @@
 import { sql, type Queryable } from "@/db/client.ts";
 import type { InsertNftParams, OwnerChangeCtx, BurnCtx, ListingCtx, NftStatus } from "./nft-types.ts";
-import { NFT_STATUS_ACTIVE, NFT_STATUS_LISTED } from "./nft-types.ts";
+import { NFT_KIND_INSTANCE, NFT_STATUS_ACTIVE, NFT_STATUS_LISTED } from "./nft-types.ts";
 import { adjustOwnerNftCount, recordCollectionMint, adjustCollectionListed, recordCollectionBurn } from "./nft-counters.ts";
+
+export type MarketplaceListingCleanupResult = Readonly<{
+	readonly clearedListings: number;
+	readonly reconciledCollections: number;
+}>;
 
 export async function insertNft(params: InsertNftParams, txn: Queryable = sql): Promise<boolean> {
 	const result = await txn`
@@ -13,7 +18,7 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			seed_id, instance_number, original_id,
 			immutable_data,
 			data_operation_id, data_hash,
-			schema_version, previous_owner, owner_operation_id,
+			schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
 			created_operation_id, created_block_num, created_tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.collectionId}, ${params.nftType},
@@ -27,6 +32,8 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			${params.schemaVersion ?? null},
 			${null},
 			${params.ownerOperationId},
+			${params.ownerAction},
+			${params.ownerBlockNum},
 			${params.createdOperationId},
 			${params.createdBlockNum}, ${params.createdTxId}, ${params.createdAt}
 		)
@@ -51,6 +58,8 @@ export async function updateNftOwner(
 		SET owner = ${newOwner}, status = ${NFT_STATUS_ACTIVE},
 		    previous_owner = ${ctx.oldOwner},
 		    owner_operation_id = ${ownerOperationId},
+		    owner_action = ${ctx.ownerAction},
+		    owner_block_num = ${ctx.ownerBlockNum},
 		    listing_id = NULL, listing_tx_id = NULL,
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
@@ -138,4 +147,45 @@ export async function updateNftDataRef(
 			data_operation_id = ${dataOperationId}
 		WHERE id = ${nftId}
 	`;
+}
+
+export async function cleanupInvalidMarketplaceListings(
+	txn: Queryable = sql,
+): Promise<MarketplaceListingCleanupResult> {
+	const cleared = await txn`
+		UPDATE nfts
+		SET status = ${NFT_STATUS_ACTIVE},
+		    listing_id = NULL, listing_tx_id = NULL,
+		    listing_price = NULL, listing_currency = NULL,
+		    listing_expires_at = NULL, listing_marketplace = NULL
+		WHERE status = ${NFT_STATUS_LISTED}
+			AND (
+				nft_type <> ${NFT_KIND_INSTANCE}
+				OR (listing_expires_at IS NOT NULL AND listing_expires_at <= NOW())
+			)
+	`;
+
+	const reconciled = await txn`
+		WITH active_listed AS (
+			SELECT
+				cs.collection_id,
+				COUNT(n.id)::int AS listed
+			FROM collection_stats cs
+			LEFT JOIN nfts n ON n.collection_id = cs.collection_id
+				AND n.nft_type = ${NFT_KIND_INSTANCE}
+				AND n.status = ${NFT_STATUS_LISTED}
+				AND (n.listing_expires_at IS NULL OR n.listing_expires_at > NOW())
+			GROUP BY cs.collection_id
+		)
+		UPDATE collection_stats cs
+		SET listed = active_listed.listed
+		FROM active_listed
+		WHERE cs.collection_id = active_listed.collection_id
+			AND cs.listed <> active_listed.listed
+	`;
+
+	return {
+		clearedListings: cleared.count,
+		reconciledCollections: reconciled.count,
+	};
 }

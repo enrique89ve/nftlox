@@ -138,7 +138,8 @@ export interface OperationStatusResult {
  * mixed results (e.g., 1 confirmed + 1 invalid within the same tx).
  *
  * Optionally filters by operationId and/or action.
- * For confirmed operations, includes the IDs of NFTs created/affected.
+ * For confirmed operations, includes the IDs of NFTs affected when storing the
+ * list is bounded. Bulk creation operations may intentionally return [].
  */
 export async function getOperationStatus(
 	txId: string,
@@ -184,7 +185,8 @@ export async function getOperationStatus(
 	}
 
 	// 3. Check confirmed_operations using the immutable nft_ids snapshot captured
-	// at confirmation time. Never derive this from mutable current state.
+	// at confirmation time. Bulk creation ops may intentionally store [] because
+	// each NFT row stores its own immutable origin.
 	const confirmed = await sql`
 		SELECT c.operation_id, c.signer, c.action, c.block_num, c.created_at, c.nft_ids
 		FROM confirmed_operations c

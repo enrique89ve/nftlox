@@ -174,6 +174,6 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 		}),
 		detail: {
 			summary: "Operation status by transaction ID",
-			description: "Returns per-operation status for all protocol operations in a Hive transaction. Includes NFT IDs created/affected by confirmed operations. A single tx can contain multiple custom_json ops, each tracked independently.",
+			description: "Returns per-operation status for all protocol operations in a Hive transaction. Includes NFT IDs for bounded per-NFT operations; bulk creation operations may return an empty ID list. A single tx can contain multiple custom_json ops, each tracked independently.",
 		},
 	})

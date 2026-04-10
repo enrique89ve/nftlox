@@ -230,15 +230,20 @@ describe("Multi-operation per transaction", () => {
 
 			await handleMint(mintOp, sql);
 
-			// Op 2: list the same seed (different operation_id, same tx_id)
-			const listData = await makeListData("seed_mintlist");
+			// Op 2: distribute an instance, then list the instance (different operation_id, same tx_id)
+			await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+				items: [{ seedId: "seed_mintlist", quantity: 1, seedTxId: sharedTxId }],
+			}, { txId: sharedTxId, operationId: "op_ml_distribute" }), sql);
+			const [instance] = await sql`SELECT id FROM nfts WHERE seed_id = 'seed_mintlist' LIMIT 1`;
+			const instanceId = instance!.id as string;
+			const listData = await makeListData(instanceId);
 			const listOp = makeOp(ACTION_LIST, listData, {
 				txId: sharedTxId,
 				operationId: "op_ml_list",
 			});
 			await handleList(listOp, sql);
 
-			const [nft] = await sql`SELECT status, listing_price, created_tx_id AS tx_id, listing_tx_id FROM nfts WHERE id = 'seed_mintlist'`;
+			const [nft] = await sql`SELECT status, listing_price, created_tx_id AS tx_id, listing_tx_id FROM nfts WHERE id = ${instanceId}`;
 			expect(nft!.status).toBe("listed");
 			expect(Number(nft!.listing_price)).toBe(10);
 			// tx_id is the CREATION tx
@@ -454,12 +459,12 @@ describe("Multi-operation per transaction", () => {
 			await handleMint(bobMint, sql);
 
 			// Verify all created correctly
-			const [aliceNft] = await sql`SELECT owner, block_num FROM nfts WHERE id = 'seed_alice_block'`;
-			const [bobNft] = await sql`SELECT owner, block_num FROM nfts WHERE id = 'seed_bob_block'`;
+			const [aliceNft] = await sql`SELECT owner, created_block_num FROM nfts WHERE id = 'seed_alice_block'`;
+			const [bobNft] = await sql`SELECT owner, created_block_num FROM nfts WHERE id = 'seed_bob_block'`;
 			expect(aliceNft!.owner).toBe("alice");
 			expect(bobNft!.owner).toBe("bob");
-			expect(Number(aliceNft!.block_num)).toBe(SHARED_BLOCK);
-			expect(Number(bobNft!.block_num)).toBe(SHARED_BLOCK);
+			expect(Number(aliceNft!.created_block_num)).toBe(SHARED_BLOCK);
+			expect(Number(bobNft!.created_block_num)).toBe(SHARED_BLOCK);
 		});
 
 		test("transfer chain within the same block (A→B then B→C)", async () => {
@@ -548,18 +553,25 @@ describe("Multi-operation per transaction", () => {
 
 			const sharedTxId = "tx_list_unlist_same";
 
+			const [seed] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'seed_list_unlist'`;
+			await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+				items: [{ seedId: "seed_list_unlist", quantity: 1, seedTxId: seed!.tx_id }],
+			}), sql);
+			const [instance] = await sql`SELECT id FROM nfts WHERE seed_id = 'seed_list_unlist' LIMIT 1`;
+			const instanceId = instance!.id as string;
+
 			// Op 1: list
-			const listData = await makeListData("seed_list_unlist");
+			const listData = await makeListData(instanceId);
 			await handleList(makeOp(ACTION_LIST, listData, {
 				txId: sharedTxId, operationId: "op_list",
 			}), sql);
 
 			// Op 2: unlist (same tx_id, different operation_id)
-			await handleUnlist(makeOp(ACTION_UNLIST, { nftId: "seed_list_unlist" }, {
+			await handleUnlist(makeOp(ACTION_UNLIST, { nftId: instanceId }, {
 				txId: sharedTxId, operationId: "op_unlist",
 			}), sql);
 
-			const [nft] = await sql`SELECT status, listing_price FROM nfts WHERE id = 'seed_list_unlist'`;
+			const [nft] = await sql`SELECT status, listing_price FROM nfts WHERE id = ${instanceId}`;
 			expect(nft!.status).toBe("active");
 			expect(nft!.listing_price).toBeNull();
 		});

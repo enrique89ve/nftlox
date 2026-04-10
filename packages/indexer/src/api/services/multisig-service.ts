@@ -10,7 +10,7 @@ import { Transaction, type CustomJsonOperation, type TransactionType, type Trans
 import { signWithBeekeeper } from "@/api/services/beekeeper-signer.ts";
 import { createLogger } from "@/utils/logger.ts";
 import type { Queryable } from "@/db/client.ts";
-import { getNftWithCollectionRules, type NftProcessingRow } from "@/db/queries/nfts.ts";
+import { getNftWithCollectionRules, NFT_KIND_INSTANCE, type NftProcessingRow } from "@/db/queries/nfts.ts";
 import type { CollectionRulesRow } from "@/db/queries/collections.ts";
 import { verifyTransfers, type TransferRecord } from "@/utils/validation.ts";
 import {
@@ -534,9 +534,13 @@ async function validateNftState(
 
 	if (nftWithRules.listing_expires_at) {
 		const expiresAt = new Date(nftWithRules.listing_expires_at).getTime();
-		if (Date.now() > expiresAt) {
+		if (Date.now() >= expiresAt) {
 			throw createMultisigError("NFT_EXPIRED_LISTING", "Listing has expired");
 		}
+	}
+
+	if (nftWithRules.nft_type !== NFT_KIND_INSTANCE) {
+		throw createMultisigError("NFT_NOT_INSTANCE", "Only instances can be bought through marketplace");
 	}
 
 	if (buyer === nftWithRules.owner) {
@@ -545,10 +549,6 @@ async function validateNftState(
 
 	if (!nftWithRules.transferable) {
 		throw createMultisigError("NFT_NOT_TRANSFERABLE", "NFT cannot be transferred");
-	}
-
-	if (nftWithRules.nft_type === "seed" && nftWithRules.distributed > 0) {
-		throw createMultisigError("SEED_HAS_INSTANCES", "Seed with distributed instances cannot be sold");
 	}
 
 	const nft: NftProcessingRow = nftWithRules;

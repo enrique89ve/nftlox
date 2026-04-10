@@ -7,7 +7,7 @@ import { createMultisigRateLimiter } from "@/api/services/multisig-rate-limiter.
 import { createMultisigNftLock } from "@/api/services/multisig-nft-lock.ts";
 import { getMultisigHealth } from "@/api/services/multisig-health.ts";
 import { resolveClientIp } from "@/api/middleware/client-ip.ts";
-import { getNftWithCollectionRules, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import { calculatePaymentSplit, MULTISIG_EXPIRATION_MS } from "@/protocol/index.ts";
 
 const log = createLogger("multisig-route");
@@ -68,9 +68,13 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			set.status = 400;
 			return { error: "NFT not listed" };
 		}
+		if (nft.nft_type !== NFT_KIND_INSTANCE) {
+			set.status = 400;
+			return { error: "Only instances can be bought" };
+		}
 		if (nft.listing_expires_at) {
 			const expiresMs = new Date(nft.listing_expires_at).getTime();
-			if (Date.now() > expiresMs) {
+			if (Date.now() >= expiresMs) {
 				set.status = 410;
 				return { error: "Listing has expired" };
 			}

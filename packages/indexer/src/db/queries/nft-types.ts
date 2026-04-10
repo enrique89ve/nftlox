@@ -7,6 +7,8 @@ export type OwnerChangeCtx = {
 	readonly oldOwner: string;
 	readonly nftType: NftKind;
 	readonly collectionId: string;
+	readonly ownerAction: OwnershipAction;
+	readonly ownerBlockNum: number;
 	/** True when the NFT was in 'listed' status before this operation. */
 	readonly wasListed: boolean;
 };
@@ -27,9 +29,18 @@ export type ListingCtx = {
 
 export type NftKind = "seed" | "instance" | "replica";
 export type NftStatus = "active" | "listed" | "lent";
+export type OwnershipAction = "mint" | "bulk_distribute" | "replicate" | "transfer" | "nft_transfer_from" | "buy";
 
 export const VALID_NFT_KINDS = new Set<NftKind>(["seed", "instance", "replica"]);
 export const VALID_NFT_STATUSES = new Set<NftStatus>(["active", "listed", "lent"]);
+export const VALID_OWNERSHIP_ACTIONS = new Set<OwnershipAction>([
+	"mint",
+	"bulk_distribute",
+	"replicate",
+	"transfer",
+	"nft_transfer_from",
+	"buy",
+]);
 
 export const parseNftKind = (value: string | undefined): NftKind | undefined =>
 	value !== undefined && VALID_NFT_KINDS.has(value as NftKind) ? value as NftKind : undefined;
@@ -37,9 +48,16 @@ export const parseNftKind = (value: string | undefined): NftKind | undefined =>
 export const parseNftStatus = (value: string | undefined): NftStatus | undefined =>
 	value !== undefined && VALID_NFT_STATUSES.has(value as NftStatus) ? value as NftStatus : undefined;
 
+export const parseOwnershipAction = (value: string | undefined): OwnershipAction | undefined =>
+	value !== undefined && VALID_OWNERSHIP_ACTIONS.has(value as OwnershipAction) ? value as OwnershipAction : undefined;
+
 export const NFT_STATUS_ACTIVE: NftStatus = "active";
 export const NFT_STATUS_LISTED: NftStatus = "listed";
 export const NFT_STATUS_LENT: NftStatus = "lent";
+
+export const NFT_KIND_SEED: NftKind = "seed";
+export const NFT_KIND_INSTANCE: NftKind = "instance";
+export const NFT_KIND_REPLICA: NftKind = "replica";
 
 // ============ ROW / PARAM INTERFACES ============
 
@@ -64,6 +82,8 @@ export type InsertNftParams = {
 	readonly dataHash: string | null;
 	readonly schemaVersion?: number | null;
 	readonly ownerOperationId: string;
+	readonly ownerAction: OwnershipAction;
+	readonly ownerBlockNum: number;
 	readonly createdOperationId: string;
 	readonly createdBlockNum: number;
 	readonly createdTxId: string;
@@ -163,6 +183,8 @@ export type NftListRow = {
 	readonly schema_version: number | null;
 	readonly previous_owner: string | null;
 	readonly owner_operation_id: string;
+	readonly owner_action: OwnershipAction;
+	readonly owner_block_num: number;
 	readonly listing_id: string | null;
 	readonly listing_tx_id: string | null;
 	readonly listing_price: string | null;
@@ -176,3 +198,23 @@ export type NftPageResult = {
 	readonly nfts: ReadonlyArray<NftListRow>;
 	readonly counts: UserNftCounts;
 };
+
+export type NftOwnerClaim = Readonly<{
+	readonly id: string;
+	readonly owner: string;
+	readonly previous_owner: string | null;
+	readonly owner_action: OwnershipAction;
+	readonly owner_operation_id: string;
+	readonly owner_block_num: number;
+	readonly claim_hash: string;
+}>;
+
+export type NftOwnershipProof = NftOwnerClaim & Readonly<{
+	readonly created_operation_id: string;
+	readonly created_block_num: number;
+	readonly created_tx_id: string;
+	readonly nft_type: NftKind;
+	readonly seed_id: string | null;
+	readonly instance_number: number | null;
+	readonly instance_dna: string | null;
+}>;

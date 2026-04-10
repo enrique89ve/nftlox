@@ -7,7 +7,7 @@ import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/que
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertOwnershipChangeable, assertActionable, assertNotListed, assertSeedNotDistributed } from "@/utils/status-checks.ts";
 import { createLogger } from "@/utils/logger.ts";
-import { MAX_TRANSFER_BATCH_SIZE } from "@/protocol/index.ts";
+import { ACTION_TRANSFER, MAX_TRANSFER_BATCH_SIZE } from "@/protocol/index.ts";
 
 const HIVE_NULL_ACCOUNT = "null";
 const log = createLogger("handler:transfer");
@@ -66,6 +66,8 @@ async function processSingleTransfer(op: ParsedOperation, nftId: string, to: str
 		oldOwner: nft.owner,
 		nftType: nft.nft_type,
 		collectionId: nft.collection_id,
+		ownerAction: ACTION_TRANSFER,
+		ownerBlockNum: op.blockNum,
 		wasListed: hadExpiredListing,
 	};
 	await updateNftOwner(nftId, to, op.operationId, ctx, txn);

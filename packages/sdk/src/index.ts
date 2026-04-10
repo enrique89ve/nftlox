@@ -399,6 +399,9 @@ export {
 	runSingleVerification,
 } from "./spv";
 
+// ============ INHERITANCE (Zero-Duplication) ============
+export { resolveInstance } from "./inheritance";
+
 // ============ INDEXER CLIENT ============
 export {
 	createIndexerClient,
@@ -410,8 +413,10 @@ export {
 	type IndexerCollection,
 	type CollectionStats,
 	type IndexerNft,
+	type IndexerNftOwner,
 	type IndexerNftProof,
 	type IndexerNftSummary,
+	type IndexerOwnershipAction,
 	type ListingSort,
 	type UserNftCounts,
 	type UserNftsPage,

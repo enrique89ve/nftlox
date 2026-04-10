@@ -4,7 +4,7 @@ import { getNftForProcessing, updateNftListing, NFT_STATUS_LISTED } from "@/db/q
 import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireHiveAmount, optionalNumber, optionalString } from "@/utils/validation.ts";
-import { assertActionable, assertSeedNotDistributed, assertSeedNotReserved, isListingExpired } from "@/utils/status-checks.ts";
+import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
 import { generateListingId, LISTING_ID_PREFIX, MIN_PRICE_AMOUNT } from "@/protocol/index.ts";
 
 export async function handleList(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
@@ -23,8 +23,11 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
 	assertActionable(nft, nftId);
-	assertSeedNotDistributed(nft, nftId);
-	assertSeedNotReserved(nft, nftId);
+	assertMarketplaceInstance(nft, nftId);
+
+	if (expiresAt !== null && expiresAt !== 0 && expiresAt <= new Date(op.timestamp).getTime()) {
+		throw new Error(`Listing expiresAt must be in the future for NFT: ${nftId}`);
+	}
 
 	const rules = await getCollectionRules(nft.collection_id, txn);
 	if (rules && !rules.transferable) {

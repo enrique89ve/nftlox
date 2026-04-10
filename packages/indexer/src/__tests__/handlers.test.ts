@@ -18,7 +18,10 @@ import { handleNftLend } from "@/processor/handlers/lending/nft-lend.ts";
 import { handleNftReturn } from "@/processor/handlers/lending/nft-return.ts";
 import { handleDataOperatorApprove } from "@/processor/handlers/allowances/data-operator-approve.ts";
 import { handleSetDataFrom } from "@/processor/handlers/allowances/set-data-from.ts";
-import { listCollections } from "@/db/queries/collections.ts";
+import { getCollectionStats, listCollections } from "@/db/queries/collections.ts";
+import { cleanupInvalidMarketplaceListings, queryNfts } from "@/db/queries/nfts.ts";
+import { getProtocolStats } from "@/db/queries/stats.ts";
+import { multisigRoutes } from "@/api/routes/multisig.ts";
 import {
 	ACTION_CREATE_COLLECTION,
 	ACTION_ARCHIVE_COLLECTION,
@@ -138,12 +141,16 @@ async function seedMint(txn: Queryable = sql) {
  * Requires seedCollection() + seedMint() to have been called first.
  */
 async function seedInstance(txn: Queryable = sql): Promise<string> {
-	const seedTxId = await getSeedTxId("seed_test1");
+	return seedInstanceFrom("seed_test1", txn);
+}
+
+async function seedInstanceFrom(seedId: string, txn: Queryable = sql): Promise<string> {
+	const seedTxId = await getSeedTxId(seedId);
 	const op = makeOp(ACTION_BULK_DISTRIBUTE, {
-		items: [{ seedId: "seed_test1", quantity: 1, seedTxId }],
+		items: [{ seedId, quantity: 1, seedTxId }],
 	});
 	await handleBulkDistribute(op, txn);
-	const [inst] = await txn`SELECT id FROM nfts WHERE seed_id = 'seed_test1' LIMIT 1`;
+	const [inst] = await txn`SELECT id FROM nfts WHERE seed_id = ${seedId} LIMIT 1`;
 	return inst!.id as string;
 }
 
@@ -243,7 +250,7 @@ describe("Handlers (integration)", () => {
 			await expect(handleCreateCollection(op, sql)).rejects.toThrow("Non-canonical collectionId");
 		});
 
-		test("computes originDna canonically, ignoring payload value", async () => {
+		test("ignores payload-only originDna on collection creation", async () => {
 			const op = makeOp(ACTION_CREATE_COLLECTION, {
 				id: COL_ID,
 				name: "Test Collection",
@@ -254,9 +261,8 @@ describe("Handlers (integration)", () => {
 				rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 0 },
 			});
 			await handleCreateCollection(op, sql);
-			const [row] = await sql`SELECT origin_dna FROM collections WHERE id = ${COL_ID}`;
-			expect(row!.origin_dna).not.toBe("FAKE_ORIGIN_DNA");
-			expect(row!.origin_dna).toBeTruthy();
+			const [row] = await sql`SELECT id, name FROM collections WHERE id = ${COL_ID}`;
+			expect(row).toMatchObject({ id: COL_ID, name: "Test Collection" });
 		});
 
 		test("rejects missing metadata", async () => {
@@ -351,6 +357,8 @@ describe("Handlers (integration)", () => {
 
 			// Delete the NFT directly so collection appears empty for archive
 			await sql`DELETE FROM nfts WHERE collection_id = ${COL_ID}`;
+			await sql`DELETE FROM owner_nft_counts`;
+			await sql`DELETE FROM collection_stats WHERE collection_id = ${COL_ID}`;
 
 			await handleArchiveCollection(makeOp(ACTION_ARCHIVE_COLLECTION, {
 				collectionId: COL_ID,
@@ -974,26 +982,30 @@ describe("Handlers (integration)", () => {
 		test("rejects transfer of listed NFT", async () => {
 			await seedCollection();
 			await seedMint();
-			const listData = await makeListData({ nftId: "seed_test1" });
+			const instId = await seedInstance();
+			const listData = await makeListData({ nftId: instId });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
-			const op = makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "bob" });
+			const op = makeOp(ACTION_TRANSFER, { nftId: instId, to: "bob" });
 			await expect(handleTransfer(op, sql)).rejects.toThrow("listed for sale");
 		});
 
 		test("allows transfer of NFT with expired listing", async () => {
 			await seedCollection();
 			await seedMint();
-			// Set listing that expires before the block timestamp used in makeOp
-			const blockTime = new Date("2024-01-01T00:00:00").getTime();
-			const pastExpiry = blockTime - 60_000;
-			const listData = await makeListData({ nftId: "seed_test1", expiresAt: pastExpiry });
+			const instId = await seedInstance();
+			const listData = await makeListData({ nftId: instId });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
+			await sql`
+				UPDATE nfts
+				SET listing_expires_at = ${new Date("2023-01-01").toISOString()}
+				WHERE id = ${instId}
+			`;
 
-			const op = makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "bob" });
+			const op = makeOp(ACTION_TRANSFER, { nftId: instId, to: "bob" });
 			await handleTransfer(op, sql);
 
-			const [nft] = await sql`SELECT owner FROM nfts WHERE id = 'seed_test1'`;
+			const [nft] = await sql`SELECT owner FROM nfts WHERE id = ${instId}`;
 			expect(nft!.owner).toBe("bob");
 		});
 
@@ -1092,11 +1104,12 @@ describe("Handlers (integration)", () => {
 		test("rejects burn of listed NFT", async () => {
 			await seedCollection();
 			await seedMint();
-			const listData = await makeListData({ nftId: "seed_test1" });
+			const instId = await seedInstance();
+			const listData = await makeListData({ nftId: instId });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			await expect(
-				handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql),
+				handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "null" }), sql),
 			).rejects.toThrow("listed");
 		});
 	});
@@ -1107,20 +1120,138 @@ describe("Handlers (integration)", () => {
 		test("list → unlist cycle", async () => {
 			await seedCollection();
 			await seedMint();
+			const instId = await seedInstance();
 
-			const listData = await makeListData({ nftId: "seed_test1" });
+			const listData = await makeListData({ nftId: instId });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
-			const [listed] = await sql`SELECT status, listing_price, listing_currency FROM nfts WHERE id = 'seed_test1'`;
+			const [listed] = await sql`SELECT status, listing_price, listing_currency FROM nfts WHERE id = ${instId}`;
 			expect(listed!.status).toBe("listed");
 			expect(Number(listed!.listing_price)).toBe(10);
 			expect(listed!.listing_currency).toBe("HIVE");
 
-			await handleUnlist(makeOp(ACTION_UNLIST, { nftId: "seed_test1" }), sql);
+			await handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), sql);
 
-			const [unlisted] = await sql`SELECT status, listing_price FROM nfts WHERE id = 'seed_test1'`;
+			const [unlisted] = await sql`SELECT status, listing_price FROM nfts WHERE id = ${instId}`;
 			expect(unlisted!.status).toBe("active");
 			expect(unlisted!.listing_price).toBeNull();
+		});
+
+		test("rejects list of seed and replica NFTs", async () => {
+			await seedCollection();
+			await seedMint();
+			const seedListData = await makeListData({ nftId: "seed_test1" });
+			await expect(
+				handleList(makeOp(ACTION_LIST, seedListData), sql),
+			).rejects.toThrow("Only instances");
+
+			const instId = await seedInstance();
+			await handleReplicate(makeOp(ACTION_REPLICATE, {
+				id: "replica_market1",
+				originalId: instId,
+				newOwner: "alice",
+			}), sql);
+			const replicaListData = await makeListData({ nftId: "replica_market1" });
+			await expect(
+				handleList(makeOp(ACTION_LIST, replicaListData), sql),
+			).rejects.toThrow("Only instances");
+		});
+
+		test("rejects list when expiresAt equals block timestamp", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+			const expiresAt = new Date("2024-01-01T00:00:00").getTime();
+			const listData = await makeListData({ nftId: instId, expiresAt });
+
+			await expect(
+				handleList(makeOp(ACTION_LIST, listData), sql),
+			).rejects.toThrow("must be in the future");
+		});
+
+		test("queries, stats, cleanup, and payment-info only expose active instance listings", async () => {
+			await seedCollection();
+			await seedMint();
+			const activeInstId = await seedInstance();
+			const seedTxId = await getSeedTxId("seed_test1");
+			await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+				items: [{ seedId: "seed_test1", quantity: 1, seedTxId }],
+			}), sql);
+			const [expiredInst] = await sql`
+				SELECT id FROM nfts
+				WHERE seed_id = 'seed_test1' AND id <> ${activeInstId}
+				ORDER BY instance_number DESC
+				LIMIT 1
+			`;
+			const expiredInstId = expiredInst!.id as string;
+			await handleReplicate(makeOp(ACTION_REPLICATE, {
+				id: "replica_market_legacy",
+				originalId: expiredInstId,
+				newOwner: "alice",
+			}), sql);
+
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: activeInstId, priceAmount: "10.000" })), sql);
+			await sql`
+				UPDATE nfts
+				SET status = 'listed',
+					listing_id = 'legacy_seed_listing',
+					listing_tx_id = 'tx_legacy_seed_listing',
+					listing_price = 5,
+					listing_currency = 'HIVE'
+				WHERE id = 'seed_test1'
+			`;
+			await sql`
+				UPDATE nfts
+				SET status = 'listed',
+					listing_id = 'legacy_replica_listing',
+					listing_tx_id = 'tx_legacy_replica_listing',
+					listing_price = 6,
+					listing_currency = 'HIVE'
+				WHERE id = 'replica_market_legacy'
+			`;
+			await sql`
+				UPDATE nfts
+				SET status = 'listed',
+					listing_id = 'expired_instance_listing',
+					listing_tx_id = 'tx_expired_instance_listing',
+					listing_price = 1,
+					listing_currency = 'HIVE',
+					listing_expires_at = ${new Date("2023-01-01").toISOString()}
+				WHERE id = ${expiredInstId}
+			`;
+			await sql`UPDATE collection_stats SET listed = 99 WHERE collection_id = ${COL_ID}`;
+
+			const listed = await queryNfts({ by: "listed" }, { limit: 20, offset: 0 });
+			expect(listed.map((nft) => nft.id)).toEqual([activeInstId]);
+
+			const ownerListed = await queryNfts(
+				{ by: "owner", owner: "alice", status: "listed" },
+				{ limit: 20, offset: 0 },
+			);
+			expect(ownerListed.map((nft) => nft.id)).toEqual([activeInstId]);
+
+			const protocolStats = await getProtocolStats() as unknown as { readonly total_listed: number | string };
+			expect(Number(protocolStats.total_listed)).toBe(1);
+			const collectionStats = await getCollectionStats(COL_ID);
+			expect(Number(collectionStats.total_listed)).toBe(1);
+			expect(Number(collectionStats.floor_price)).toBe(10);
+
+			const paymentResponse = await multisigRoutes.handle(
+				new Request("http://localhost/api/payment-info/seed_test1"),
+			);
+			expect(paymentResponse.status).toBe(400);
+			expect(await paymentResponse.json()).toEqual({ error: "Only instances can be bought" });
+
+			const cleanup = await cleanupInvalidMarketplaceListings(sql);
+			expect(cleanup.clearedListings).toBe(3);
+
+			const [legacyState] = await sql`
+				SELECT COUNT(*)::int AS count FROM nfts
+				WHERE id IN ('seed_test1', 'replica_market_legacy', ${expiredInstId})
+					AND status = 'listed'
+			`;
+			expect(legacyState!.count).toBe(0);
+			expect(await getCollectionStats(COL_ID)).toMatchObject({ total_listed: 1 });
 		});
 
 		test("rejects list for non-transferable collection", async () => {
@@ -1137,7 +1268,8 @@ describe("Handlers (integration)", () => {
 			});
 			await handleMint(mintOp, sql);
 
-			const listData = await makeListData({ nftId: "seed_notransfer1" });
+			const instId = await seedInstanceFrom("seed_notransfer1");
+			const listData = await makeListData({ nftId: instId });
 			await expect(
 				handleList(makeOp(ACTION_LIST, listData), sql),
 			).rejects.toThrow("not transferable");
@@ -1151,16 +1283,16 @@ describe("Handlers (integration)", () => {
 			);
 			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
 
-			const mintOp = makeOp(ACTION_MINT, {
+			await handleMint(makeOp(ACTION_MINT, {
 				id: "seed_nobuy1",
 				collectionId: colId,
 				metadata: { name: "No Buy Seed" },
-			});
-			await handleMint(mintOp, sql);
+			}), sql);
+			const instId = await seedInstanceFrom("seed_nobuy1");
 
 			// Force-list via SQL (bypassing the list handler's transferable check)
 			// to test the buy handler's own guard
-			const listData = await makeListData({ nftId: "seed_nobuy1" });
+			const listData = await makeListData({ nftId: instId });
 			await sql`
 				UPDATE nfts
 				SET status = 'listed',
@@ -1168,21 +1300,22 @@ describe("Handlers (integration)", () => {
 					listing_tx_id = 'tx_fake_list',
 					listing_price = 10,
 					listing_currency = 'HIVE'
-				WHERE id = 'seed_nobuy1'
+				WHERE id = ${instId}
 			`;
 
 			const nodeAccount = config.hiveAccount;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
-				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}seed_nobuy1` },
-				{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}seed_nobuy1` },
+				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
+				{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${instId}` },
 			];
+			const [nftTx] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
 
 			const buyOp = makeOp(ACTION_BUY, {
-				nftId: "seed_nobuy1",
+				nftId: instId,
 				listingId: listData.listingId,
 				listTxId: "tx_fake_list",
-				txId: mintOp.txId,
+				txId: nftTx!.tx_id,
 			}, nodeAccount, transfers);
 
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("not transferable");
@@ -1209,11 +1342,12 @@ describe("Handlers (integration)", () => {
 		test("rejects double list with active listing", async () => {
 			await seedCollection();
 			await seedMint();
+			const instId = await seedInstance();
 
-			const listData1 = await makeListData({ nftId: "seed_test1" });
+			const listData1 = await makeListData({ nftId: instId });
 			await handleList(makeOp(ACTION_LIST, listData1), sql);
 
-			const listData2 = await makeListData({ nftId: "seed_test1", priceAmount: "20.000" });
+			const listData2 = await makeListData({ nftId: instId, priceAmount: "20.000" });
 			await expect(
 				handleList(makeOp(ACTION_LIST, listData2), sql),
 			).rejects.toThrow("already listed");
@@ -1222,20 +1356,22 @@ describe("Handlers (integration)", () => {
 		test("rejects unlist of unlisted NFT", async () => {
 			await seedCollection();
 			await seedMint();
+			const instId = await seedInstance();
 
 			await expect(
-				handleUnlist(makeOp(ACTION_UNLIST, { nftId: "seed_test1" }), sql),
+				handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), sql),
 			).rejects.toThrow("not listed");
 		});
 
 		test("rejects unlist by non-owner", async () => {
 			await seedCollection();
 			await seedMint();
-			const listData = await makeListData({ nftId: "seed_test1" });
+			const instId = await seedInstance();
+			const listData = await makeListData({ nftId: instId });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			await expect(
-				handleUnlist(makeOp(ACTION_UNLIST, { nftId: "seed_test1" }, "eve"), sql),
+				handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }, "eve"), sql),
 			).rejects.toThrow("not owner");
 		});
 
@@ -1543,6 +1679,7 @@ describe("Handlers (integration)", () => {
 		test("transferFrom via approve_all blocked while listed", async () => {
 			await seedCollection();
 			await seedMint();
+			const instId = await seedInstance();
 
 			// Approve "marketbot" for the entire collection
 			await handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
@@ -1551,14 +1688,14 @@ describe("Handlers (integration)", () => {
 				approved: true,
 			}), sql);
 
-			const listData3 = await makeListData({ nftId: "seed_test1", priceAmount: "100.000" });
+			const listData3 = await makeListData({ nftId: instId, priceAmount: "100.000" });
 			await handleList(makeOp(ACTION_LIST, listData3), sql);
 
 			await expect(
 				handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
 					from: "alice",
 					to: "buyer2",
-					instanceId: "seed_test1",
+					instanceId: instId,
 				}, "marketbot"), sql),
 			).rejects.toThrow("listed for sale");
 		});
@@ -1678,11 +1815,12 @@ describe("Handlers (integration)", () => {
 		test("list with marketplace stores it in DB", async () => {
 			await seedCollection();
 			await seedMint();
+			const instId = await seedInstance();
 
-			const listData = await makeListData({ nftId: "seed_test1", marketplace: "norse" });
+			const listData = await makeListData({ nftId: instId, marketplace: "norse" });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
-			const [nft] = await sql`SELECT listing_marketplace, listing_price, status FROM nfts WHERE id = 'seed_test1'`;
+			const [nft] = await sql`SELECT listing_marketplace, listing_price, status FROM nfts WHERE id = ${instId}`;
 			expect(nft!.listing_marketplace).toBe("norse");
 			expect(nft!.status).toBe("listed");
 		});
@@ -1690,11 +1828,12 @@ describe("Handlers (integration)", () => {
 		test("list without marketplace stores null", async () => {
 			await seedCollection();
 			await seedMint();
+			const instId = await seedInstance();
 
-			const listData = await makeListData({ nftId: "seed_test1" });
+			const listData = await makeListData({ nftId: instId });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
-			const [nft] = await sql`SELECT listing_marketplace FROM nfts WHERE id = 'seed_test1'`;
+			const [nft] = await sql`SELECT listing_marketplace FROM nfts WHERE id = ${instId}`;
 			expect(nft!.listing_marketplace).toBeNull();
 		});
 	});
@@ -1764,12 +1903,13 @@ describe("Handlers (integration)", () => {
 		test("replicate rejects listed original", async () => {
 			await seedCollection();
 			await seedMint();
-			const listData = await makeListData({ nftId: "seed_test1", priceAmount: "5.000" });
+			const instId = await seedInstance();
+			const listData = await makeListData({ nftId: instId, priceAmount: "5.000" });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
 			const op = makeOp(ACTION_REPLICATE, {
 				id: "replica_listed",
-				originalId: "seed_test1",
+				originalId: instId,
 				newOwner: "bob",
 			});
 			await expect(handleReplicate(op, sql)).rejects.toThrow("listed");
@@ -1832,16 +1972,17 @@ describe("Handlers (integration)", () => {
 		test("rejects buy own NFT", async () => {
 			await seedCollection();
 			await seedMint();
-			const { listingId, listTxId, txId } = await listNft("seed_test1");
+			const instId = await seedInstance();
+			const { listingId, listTxId, txId } = await listNft(instId);
 
 			// alice owns the NFT, alice tries to buy — paired transfer from alice
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
-				{ from: "alice", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}seed_test1` },
-				{ from: "alice", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}seed_test1` },
+				{ from: "alice", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
+				{ from: "alice", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${instId}` },
 			];
 			const buyOp = makeOp(ACTION_BUY, {
-				nftId: "seed_test1", listingId, listTxId, txId,
+				nftId: instId, listingId, listTxId, txId,
 			}, nodeAccount, transfers);
 
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("Cannot buy own");
@@ -1850,8 +1991,9 @@ describe("Handlers (integration)", () => {
 		test("rejects buy unlisted NFT", async () => {
 			await seedCollection();
 			await seedMint();
+			const instId = await seedInstance();
 
-			const buyOp = makeBuyOp("seed_test1", "list_fake", "tx_fake", "bob", "alice");
+			const buyOp = makeBuyOp(instId, "list_fake", "tx_fake", "bob", "alice");
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("not listed");
 		});
 
@@ -1863,9 +2005,10 @@ describe("Handlers (integration)", () => {
 		test("rejects buy burned (deleted) NFT", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "null" }), sql);
+			const instId = await seedInstance();
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "null" }), sql);
 
-			const buyOp = makeBuyOp("seed_test1", "list_fake", "tx_fake", "bob", "alice");
+			const buyOp = makeBuyOp(instId, "list_fake", "tx_fake", "bob", "alice");
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("not found");
 		});
 
@@ -1882,6 +2025,7 @@ describe("Handlers (integration)", () => {
 		test("rejects buy with expired listing", async () => {
 			await seedCollection();
 			await seedMint();
+			const instId = await seedInstance();
 
 			// Force-list with past expiry via SQL
 			await sql`
@@ -1889,43 +2033,86 @@ describe("Handlers (integration)", () => {
 				SET status = 'listed', listing_id = 'list_expired', listing_tx_id = 'tx_exp',
 					listing_price = 10, listing_currency = 'HIVE',
 					listing_expires_at = ${new Date("2023-01-01").toISOString()}
-				WHERE id = 'seed_test1'
+				WHERE id = ${instId}
 			`;
 
-			const buyOp = makeBuyOp("seed_test1", "list_expired", "tx_exp", "bob", "alice");
+			const buyOp = makeBuyOp(instId, "list_expired", "tx_exp", "bob", "alice");
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("expired");
+		});
+
+		test("rejects buy of legacy listed seed and replica NFTs", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+			await handleReplicate(makeOp(ACTION_REPLICATE, {
+				id: "replica_buy_legacy",
+				originalId: instId,
+				newOwner: "alice",
+			}), sql);
+
+			await sql`
+				UPDATE nfts
+				SET status = 'listed',
+					listing_id = 'legacy_seed_buy',
+					listing_tx_id = 'tx_legacy_seed_buy',
+					listing_price = 10,
+					listing_currency = 'HIVE'
+				WHERE id = 'seed_test1'
+			`;
+			await sql`
+				UPDATE nfts
+				SET status = 'listed',
+					listing_id = 'legacy_replica_buy',
+					listing_tx_id = 'tx_legacy_replica_buy',
+					listing_price = 10,
+					listing_currency = 'HIVE'
+				WHERE id = 'replica_buy_legacy'
+			`;
+
+			const [seed] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'seed_test1'`;
+			const [replica] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'replica_buy_legacy'`;
+
+			await expect(
+				handleBuy(makeBuyOp("seed_test1", "legacy_seed_buy", "tx_legacy_seed_buy", "bob", "alice", 10, seed!.tx_id as string), sql),
+			).rejects.toThrow("Only instances");
+			await expect(
+				handleBuy(makeBuyOp("replica_buy_legacy", "legacy_replica_buy", "tx_legacy_replica_buy", "bob", "alice", 10, replica!.tx_id as string), sql),
+			).rejects.toThrow("Only instances");
 		});
 
 		test("rejects buy with listingId mismatch", async () => {
 			await seedCollection();
 			await seedMint();
-			const { listTxId } = await listNft("seed_test1");
+			const instId = await seedInstance();
+			const { listTxId } = await listNft(instId);
 
-			const buyOp = makeBuyOp("seed_test1", "list_wrong_id", listTxId, "bob", "alice");
+			const buyOp = makeBuyOp(instId, "list_wrong_id", listTxId, "bob", "alice");
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("listingId mismatch");
 		});
 
 		test("rejects buy with listTxId mismatch", async () => {
 			await seedCollection();
 			await seedMint();
-			const { listingId } = await listNft("seed_test1");
+			const instId = await seedInstance();
+			const { listingId } = await listNft(instId);
 
-			const buyOp = makeBuyOp("seed_test1", listingId, "tx_wrong", "bob", "alice");
+			const buyOp = makeBuyOp(instId, listingId, "tx_wrong", "bob", "alice");
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("listTxId mismatch");
 		});
 
 		test("rejects buy with wrong payment amount", async () => {
 			await seedCollection();
 			await seedMint();
-			const { listingId, listTxId, txId } = await listNft("seed_test1");
+			const instId = await seedInstance();
+			const { listingId, listTxId, txId } = await listNft(instId);
 
 			// Send wrong amount (50 instead of 9.9 to seller)
 			const transfers = [
-				{ from: "bob", to: "alice", amount: 50, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}seed_test1` },
-				{ from: "bob", to: nodeAccount, amount: 0.1, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}seed_test1` },
+				{ from: "bob", to: "alice", amount: 50, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
+				{ from: "bob", to: nodeAccount, amount: 0.1, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${instId}` },
 			];
 			const buyOp = makeOp(ACTION_BUY, {
-				nftId: "seed_test1", listingId, listTxId, txId,
+				nftId: instId, listingId, listTxId, txId,
 			}, nodeAccount, transfers);
 
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("Missing");
@@ -2169,15 +2356,19 @@ describe("Handlers (integration)", () => {
 		test("transfer of expired-listed NFT decrements listed and shifts owner", async () => {
 			await seedCollection();
 			await seedMint();
-			const blockTime = new Date("2024-01-01T00:00:00").getTime();
-			const pastExpiry = blockTime - 60_000;
-			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: "seed_test1", expiresAt: pastExpiry })), sql);
+			const instId = await seedInstance();
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: instId })), sql);
+			await sql`
+				UPDATE nfts
+				SET listing_expires_at = ${new Date("2023-01-01").toISOString()}
+				WHERE id = ${instId}
+			`;
 			expect(await collStats(COL_ID)).toMatchObject({ listed: 1 });
 
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_test1", to: "bob" }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "bob" }), sql);
 
 			expect(await collStats(COL_ID)).toMatchObject({ listed: 0 });
-			expect(await ownerCounts("alice")).toMatchObject({ total: 0 });
+			expect(await ownerCounts("alice")).toMatchObject({ total: 1, seeds: 1, instances: 0 });
 			expect(await ownerCounts("bob")).toMatchObject({ total: 1 });
 		});
 
@@ -2193,17 +2384,19 @@ describe("Handlers (integration)", () => {
 		test("list increments listed counter without changing owner count", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: "seed_test1" })), sql);
+			const instId = await seedInstance();
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: instId })), sql);
 
 			expect(await collStats(COL_ID)).toMatchObject({ listed: 1 });
-			expect(await ownerCounts("alice")).toMatchObject({ total: 1, seeds: 1 });
+			expect(await ownerCounts("alice")).toMatchObject({ total: 2, seeds: 1, instances: 1 });
 		});
 
 		test("unlist decrements listed counter", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: "seed_test1" })), sql);
-			await handleUnlist(makeOp(ACTION_UNLIST, { nftId: "seed_test1" }), sql);
+			const instId = await seedInstance();
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: instId })), sql);
+			await handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), sql);
 
 			expect(await collStats(COL_ID)).toMatchObject({ listed: 0 });
 		});
@@ -2211,38 +2404,43 @@ describe("Handlers (integration)", () => {
 		test("re-listing an expired listing keeps listed counter at 1", async () => {
 			await seedCollection();
 			await seedMint();
-			const blockTime = new Date("2024-01-01T00:00:00").getTime();
-			const pastExpiry = blockTime - 60_000;
-			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: "seed_test1", expiresAt: pastExpiry })), sql);
+			const instId = await seedInstance();
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: instId })), sql);
+			await sql`
+				UPDATE nfts
+				SET listing_expires_at = ${new Date("2023-01-01").toISOString()}
+				WHERE id = ${instId}
+			`;
 			expect(await collStats(COL_ID)).toMatchObject({ listed: 1 });
 
 			// Re-list (overwriting expired) — must stay at 1, not go to 2
-			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: "seed_test1" })), sql);
+			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: instId })), sql);
 			expect(await collStats(COL_ID)).toMatchObject({ listed: 1 });
 		});
 
 		test("buy shifts owner counters and decrements listed", async () => {
 			await seedCollection();
 			await seedMint();
-			const listData = await makeListData({ nftId: "seed_test1" });
+			const instId = await seedInstance();
+			const listData = await makeListData({ nftId: instId });
 			await handleList(makeOp(ACTION_LIST, listData), sql);
 
-			const [nftRow] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = 'seed_test1'`;
+			const [nftRow] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
 			const nodeAccount = config.hiveAccount;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
-				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}seed_test1` },
-				...(split.feeAmount > 0 ? [{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}seed_test1` }] : []),
+				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
+				...(split.feeAmount > 0 ? [{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${instId}` }] : []),
 			];
 			await handleBuy(makeOp(ACTION_BUY, {
-				nftId: "seed_test1",
+				nftId: instId,
 				listingId: nftRow!.listing_id,
 				listTxId: nftRow!.listing_tx_id,
 				txId: nftRow!.tx_id,
 			}, nodeAccount, transfers), sql);
 
-			expect(await ownerCounts("alice")).toMatchObject({ total: 0, seeds: 0 });
-			expect(await ownerCounts("bob")).toMatchObject({ total: 1, seeds: 1 });
+			expect(await ownerCounts("alice")).toMatchObject({ total: 1, seeds: 1, instances: 0 });
+			expect(await ownerCounts("bob")).toMatchObject({ total: 1, instances: 1 });
 			expect(await collStats(COL_ID)).toMatchObject({ listed: 0 });
 		});
 	});

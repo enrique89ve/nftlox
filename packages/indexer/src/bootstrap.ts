@@ -1,4 +1,5 @@
 import { testConnection, sql, withTransaction } from "./db/client.ts";
+import { cleanupInvalidMarketplaceListings } from "./db/queries/nfts.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 
@@ -95,6 +96,13 @@ async function checkGenesisReset(): Promise<void> {
 	log.info("Database reset completed — syncing from new genesis block");
 }
 
+async function cleanupMarketplaceListings(): Promise<void> {
+	const result = await withTransaction((txn) => cleanupInvalidMarketplaceListings(txn));
+	if (result.clearedListings === 0 && result.reconciledCollections === 0) return;
+
+	log.info("Marketplace listings reconciled", result);
+}
+
 export async function connectWithRetry(): Promise<void> {
 	let attempt = 0;
 	while (true) {
@@ -106,6 +114,7 @@ export async function connectWithRetry(): Promise<void> {
 			await testConnection();
 			await runMigrations();
 			await checkGenesisReset();
+			await cleanupMarketplaceListings();
 			return;
 		} catch (err) {
 			if (attempt === 1) log.info("Waiting for database...");

@@ -2,6 +2,7 @@
 // Portable client using only fetch() — works in browser, Bun, and Node.
 
 import type { PaymentInfo, MultisigRequest, MultisigResponse } from "./types";
+import { resolveInstance } from "./inheritance.ts";
 
 // ============ ERROR ============
 
@@ -44,6 +45,7 @@ export interface SyncStatus {
 
 export type IndexerNftType = "seed" | "instance" | "replica";
 export type IndexerNftStatus = "active" | "listed" | "burned" | "lent";
+export type IndexerOwnershipAction = "mint" | "bulk_distribute" | "replicate" | "transfer" | "nft_transfer_from" | "buy";
 export type UserNftFilterStatus = "active" | "listed" | "lent";
 export type ListingSort = "price_asc" | "price_desc" | "recent";
 
@@ -177,6 +179,8 @@ export interface IndexerNftSummary {
 	schema_version: number | null;
 	previous_owner: string | null;
 	owner_operation_id: string;
+	owner_action: IndexerOwnershipAction;
+	owner_block_num: number;
 	listing_id: string | null;
 	listing_tx_id: string | null;
 	listing_price: string | null;
@@ -193,11 +197,19 @@ export interface IndexerNft extends IndexerNftSummary {
 	listing_expired: boolean;
 }
 
-export interface IndexerNftProof {
+export interface IndexerNftOwner {
 	id: string;
 	owner: string;
 	previous_owner: string | null;
+	owner_action: IndexerOwnershipAction;
 	owner_operation_id: string;
+	owner_block_num: number;
+	claim_hash: string;
+}
+
+export interface IndexerNftProof extends IndexerNftOwner {
+	created_operation_id: string;
+	created_block_num: number;
 	created_tx_id: string;
 	nft_type: IndexerNftType;
 	seed_id: string | null;
@@ -301,6 +313,12 @@ export type OperationStatusQueryParams = QueryParams & Readonly<{
 	action?: string;
 }>;
 
+/** Internal: compact response from the instances endpoint (?compact=true). */
+interface CompactInstancesResponse {
+	seed: IndexerNftSummary;
+	instances: IndexerNftSummary[];
+}
+
 // ============ INTERNAL HELPERS ============
 
 type QueryParams = { [key: string]: string | number | boolean | undefined | null };
@@ -359,8 +377,10 @@ export interface IndexerClient {
 
 	// NFTs
 	getNft(id: string): Promise<IndexerNft>;
+	getNftOwner(id: string): Promise<IndexerNftOwner>;
+	getNftOwnership(id: string): Promise<IndexerNftProof>;
 	getNftProof(id: string): Promise<IndexerNftProof>;
-	getNftInstances(id: string, params?: { limit?: number; offset?: number }): Promise<IndexerNftSummary[]>;
+	getNftInstances(id: string, params?: { limit?: number; offset?: number; compact?: boolean }): Promise<IndexerNftSummary[]>;
 
 	// Users
 	getUserNfts(username: string, params?: UserNftsQueryParams): Promise<UserNftsPage>;
@@ -413,10 +433,20 @@ export function createIndexerClient(baseUrl: string): IndexerClient {
 		// ---- NFTs ----
 		getNft: (id) =>
 			get<IndexerNft>(baseUrl, `/api/nfts/${encodeURIComponent(id)}`),
+		getNftOwner: (id) =>
+			get<IndexerNftOwner>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/owner`),
+		getNftOwnership: (id) =>
+			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/ownership`),
 		getNftProof: (id) =>
 			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/proof`),
-		getNftInstances: (id, params) =>
-			get<IndexerNftSummary[]>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/instances`, params),
+		getNftInstances: async (id, params) => {
+			const path = `/api/nfts/${encodeURIComponent(id)}/instances`;
+			if (params?.compact) {
+				const { seed, instances } = await get<CompactInstancesResponse>(baseUrl, path, { ...params, compact: true });
+				return instances.map((inst) => resolveInstance(inst, seed));
+			}
+			return get<IndexerNftSummary[]>(baseUrl, path, params);
+		},
 
 		// ---- Users ----
 		getUserNfts: (username, params) =>

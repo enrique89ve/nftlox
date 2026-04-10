@@ -16,6 +16,22 @@ export async function adjustOwnerNftCount(
 	const seedDelta     = nftType === "seed"     ? delta : 0;
 	const instanceDelta = nftType === "instance" ? delta : 0;
 	const replicaDelta  = nftType === "replica"  ? delta : 0;
+
+	if (delta === -1) {
+		const result = await txn`
+			UPDATE owner_nft_counts SET
+				total     = total     + ${delta},
+				seeds     = seeds     + ${seedDelta},
+				instances = instances + ${instanceDelta},
+				replicas  = replicas  + ${replicaDelta}
+			WHERE owner = ${owner}
+		`;
+		if (result.count === 0) {
+			throw new Error(`Owner NFT count missing for ${owner}`);
+		}
+		return;
+	}
+
 	await txn`
 		INSERT INTO owner_nft_counts (owner, total, seeds, instances, replicas)
 		VALUES (${owner}, ${delta}, ${seedDelta}, ${instanceDelta}, ${replicaDelta})

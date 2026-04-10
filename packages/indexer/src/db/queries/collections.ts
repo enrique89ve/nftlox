@@ -1,4 +1,5 @@
 import { sql, type Queryable, clampLimit } from "@/db/client.ts";
+import { NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "./nft-types.ts";
 
 export const COLLECTION_STATUS_ACTIVE = "active";
 export const COLLECTION_STATUS_ARCHIVED = "archived";
@@ -200,10 +201,22 @@ export async function getCollectionStats(collectionId: string) {
 			COALESCE(cs.seeds, 0) AS total_seeds,
 			COALESCE(cs.instances, 0) AS total_instances,
 			COALESCE(cs.replicas, 0) AS total_replicas,
-			COALESCE(cs.listed, 0) AS total_listed,
+			COALESCE((
+				SELECT COUNT(*) FROM nfts
+				WHERE collection_id = ${collectionId}
+					AND nft_type = ${NFT_KIND_INSTANCE}
+					AND status = ${NFT_STATUS_LISTED}
+					AND (listing_expires_at IS NULL OR listing_expires_at > NOW())
+			), 0)::int AS total_listed,
 			COALESCE(cs.burned, 0) AS total_burned,
 			COALESCE((SELECT COUNT(DISTINCT owner) FROM nfts WHERE collection_id = ${collectionId}), 0)::int AS unique_owners,
-			(SELECT MIN(listing_price) FROM nfts WHERE collection_id = ${collectionId} AND status = 'listed' AND (listing_expires_at IS NULL OR listing_expires_at > NOW())) AS floor_price
+			(
+				SELECT MIN(listing_price) FROM nfts
+				WHERE collection_id = ${collectionId}
+					AND nft_type = ${NFT_KIND_INSTANCE}
+					AND status = ${NFT_STATUS_LISTED}
+					AND (listing_expires_at IS NULL OR listing_expires_at > NOW())
+			) AS floor_price
 		FROM collection_stats cs
 		WHERE cs.collection_id = ${collectionId}
 	`;

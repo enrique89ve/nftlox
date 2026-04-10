@@ -61,6 +61,11 @@ const ACTIVE_AUTH_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 
 type Handler = (op: ParsedOperation, txn: Queryable) => Promise<ReadonlyArray<string>>;
 
+function confirmedOperationNftIds(action: ProtocolAction, nftIds: ReadonlyArray<string>): ReadonlyArray<string> {
+	if (action === ACTION_BULK_DISTRIBUTE) return [];
+	return nftIds;
+}
+
 // Typed as Record<ProtocolAction, Handler> (finite union key, not index signature):
 // - TypeScript enforces at compile time that every ProtocolAction has a handler.
 // - Adding a new action to ALL_ACTIONS without registering a handler here is a compile error.
@@ -134,7 +139,7 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 				blockNum: op.blockNum,
 				signer: op.signer,
 				action: op.action,
-				nftIds,
+				nftIds: confirmedOperationNftIds(op.action, nftIds),
 				createdAt: op.timestamp,
 			}, txn);
 			return true;
