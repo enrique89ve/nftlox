@@ -412,6 +412,7 @@ export {
 	type IndexerNft,
 	type IndexerNftProof,
 	type IndexerNftSummary,
+	type ListingSort,
 	type UserNftCounts,
 	type UserNftsPage,
 } from "./client";

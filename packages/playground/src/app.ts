@@ -26,6 +26,7 @@ let currentSession: MintingSession | null = null;
 let broadcastedCount = 0;
 let totalBroadcastOps = 0;
 let debugRoutesEnabled = false;
+const PACKS_EXTENSION_ENABLED = false;
 
 // ============ FETCH-BACKED HELPERS ============
 
@@ -102,6 +103,10 @@ let currentCollectionId: string | null = null;
 let currentNftId: string | null = null;
 
 function navigateTo(pageId: string) {
+	if (!PACKS_EXTENSION_ENABLED && pageId === "packs") {
+		pageId = "collections";
+	}
+
 	document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
 	document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
 
@@ -155,6 +160,18 @@ function checkKeychain() {
 	}
 }
 
+function hidePackExtensionUi(): void {
+	if (PACKS_EXTENSION_ENABLED) return;
+
+	document.querySelector('.nav-item[data-page="packs"]')?.remove();
+	$("page-packs")?.remove();
+	document.querySelector('button[onclick="loadUserPacks()"]')?.remove();
+	$("user-packs-container")?.closest(".card")?.remove();
+	$("btn-verify-pack-open")?.closest(".card")?.remove();
+	$("btn-pack-approve")?.closest(".card")?.remove();
+	$("btn-pack-transfer-from")?.closest(".card")?.remove();
+}
+
 $("btn-connect")?.addEventListener("click", () => {
 	if (!(window as any).hive_keychain) {
 		log("Keychain not available", "error");
@@ -169,7 +186,6 @@ $("btn-connect")?.addEventListener("click", () => {
 			showConnectedUI(connectedUser);
 			log(`Connected as @${connectedUser}`, "success");
 			loadInventory();
-			void refreshPackViews();
 		}
 	});
 });
@@ -207,7 +223,6 @@ $("btn-disconnect")?.addEventListener("click", () => {
 	clearUser();
 	resetDisconnectedUI();
 	log("Disconnected", "info");
-	void refreshPackViews();
 });
 
 // Restore session from localStorage on load
@@ -2431,7 +2446,6 @@ document.querySelectorAll(".advanced-tab").forEach(tab => {
 // ============ NEW VIEW MODULES ============
 
 import { initMarketplace } from "./views/marketplace";
-import { initPacks, refreshPackViews } from "./views/packs";
 import { initPermissions } from "./views/permissions";
 import { initDebug } from "./views/debug";
 import { initSpv } from "./views/spv";
@@ -2532,13 +2546,13 @@ validateField("col-image", (v) => {
 
 // ============ INIT ============
 
+hidePackExtensionUi();
 setTimeout(checkKeychain, 500);
 syncDebugUi();
 loadProtocolVersion();
 loadCollections();
 loadDashboardStats();
 initMarketplace();
-initPacks();
 initPermissions();
 initDebug();
 initSpv();

@@ -13,6 +13,15 @@ const packExtensionUnavailable = (): Response =>
 		error: "Pack queries were removed from the core indexer. Use the external packs module/service instead.",
 	}, 410);
 
+type ListingSort = "price_asc" | "price_desc" | "recent";
+
+const LISTING_SORTS = new Set<ListingSort>(["price_asc", "price_desc", "recent"]);
+
+function parseListingSort(value: string | null): ListingSort | undefined {
+	if (!value) return undefined;
+	return LISTING_SORTS.has(value as ListingSort) ? value as ListingSort : undefined;
+}
+
 async function safeHandler(fn: () => Promise<Response>): Promise<Response> {
 	try {
 		return await fn();
@@ -40,7 +49,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 				hasMore,
 				offset,
 				counts: result.counts,
-				nfts: nfts.map((nft: any) => ({
+				nfts: nfts.map((nft) => ({
 					id: nft.id,
 					collectionId: nft.collection_id,
 					nftType: nft.nft_type,
@@ -75,7 +84,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					name: c.name,
 					symbol: c.symbol,
 					creator: c.creator,
-					originDna: c.origin_dna,
 					totalPotential: c.total_potential,
 					status: c.status,
 				})),
@@ -113,6 +121,10 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			}
 
 			return json({
+				id: nft.id,
+				origin_dna: nft.origin_dna,
+				instance_dna: nft.instance_dna,
+				tx_id: nft.tx_id,
 				nft: {
 					id: nft.id,
 					name: nft.name,
@@ -134,11 +146,8 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					seedId: nft.seed_id,
 					seedTxId: nft.seed_tx_id ?? null,
 					instanceNumber: nft.instance_number,
-					dataOperationId: nft.data_operation_id,
 					dataHash: nft.data_hash,
-					dna: nft.instance_dna,
 					txId: nft.tx_id,
-					blockNum: nft.block_num,
 				},
 				original: original ? {
 					id: original.id,
@@ -168,7 +177,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					name: c.name,
 					symbol: c.symbol,
 					creator: c.creator,
-					originDna: c.origin_dna,
 					totalPotential: c.total_potential,
 					seedCount: c.seed_count,
 					instanceCount: c.instance_count,
@@ -268,7 +276,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 	"/api/marketplace/listings": (req: Request) =>
 		safeHandler(async () => {
 			const url = new URL(req.url);
-			const sort = url.searchParams.get("sort") || undefined;
+			const sort = parseListingSort(url.searchParams.get("sort"));
 			const currency = url.searchParams.get("currency") || undefined;
 			const limit = Number(url.searchParams.get("limit")) || 50;
 			const listings = await indexer.getListings({ sort, currency, limit });

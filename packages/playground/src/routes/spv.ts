@@ -15,22 +15,41 @@ const json = (data: unknown, status = 200) =>
 
 type RouteHandler = (req: Request) => Promise<Response>;
 
+type JsonRecord = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is JsonRecord =>
+	typeof value === "object" && value !== null && !Array.isArray(value);
+
+const asNonEmptyString = (value: unknown): string | null => {
+	if (typeof value !== "string") return null;
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : null;
+};
+
+const asPositiveInteger = (value: unknown): number | null => {
+	if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) return null;
+	return value;
+};
+
 export const spvRoutes: Record<string, { POST: RouteHandler }> = {
 	"/api/spv/verify-ownership": {
 		POST: async (req: Request) => {
 			try {
-				const body = await req.json() as {
-					nftId: string;
-					expectedOwner: string;
-				};
+				const body = await req.json() as unknown;
+				if (!isRecord(body)) {
+					return json({ error: "Invalid JSON body" }, 400);
+				}
 
-				if (!body.nftId || !body.expectedOwner) {
+				const nftId = asNonEmptyString(body.nftId);
+				const expectedOwner = asNonEmptyString(body.expectedOwner)?.toLowerCase();
+
+				if (!nftId || !expectedOwner) {
 					return json({ error: "Missing required fields: nftId, expectedOwner" }, 400);
 				}
 
 				const result = await verifyNftOwnership({
-					nftId: body.nftId,
-					expectedOwner: body.expectedOwner,
+					nftId,
+					expectedOwner,
 					indexerBaseUrl: INDEXER_URL,
 					l1Config: createDefaultL1Config(),
 				});
@@ -45,22 +64,21 @@ export const spvRoutes: Record<string, { POST: RouteHandler }> = {
 	"/api/spv/verify-on-chain": {
 		POST: async (req: Request) => {
 			try {
-				const body = await req.json() as {
-					txId: string;
-					blockNum?: number;
-					expectedAction?: string;
-					expectedSigner?: string;
-				};
+				const body = await req.json() as unknown;
+				if (!isRecord(body)) {
+					return json({ error: "Invalid JSON body" }, 400);
+				}
 
-				if (!body.txId) {
+				const txId = asNonEmptyString(body.txId);
+				if (!txId) {
 					return json({ error: "Missing required field: txId" }, 400);
 				}
 
 				const result = await verifyOperationOnChain({
-					txId: body.txId,
-					blockNum: body.blockNum ?? 0,
-					expectedAction: body.expectedAction ?? "",
-					expectedSigner: body.expectedSigner ?? "",
+					txId,
+					blockNum: typeof body.blockNum === "number" ? body.blockNum : 0,
+					expectedAction: asNonEmptyString(body.expectedAction) ?? "",
+					expectedSigner: asNonEmptyString(body.expectedSigner)?.toLowerCase() ?? "",
 					l1Config: createDefaultL1Config(),
 				});
 
@@ -74,18 +92,21 @@ export const spvRoutes: Record<string, { POST: RouteHandler }> = {
 	"/api/spv/verify-pack-open": {
 		POST: async (req: Request) => {
 			try {
-				const body = await req.json() as {
-					txId: string;
-					blockNum: number;
-				};
+				const body = await req.json() as unknown;
+				if (!isRecord(body)) {
+					return json({ error: "Invalid JSON body" }, 400);
+				}
 
-				if (!body.txId || !body.blockNum) {
+				const txId = asNonEmptyString(body.txId);
+				const blockNum = asPositiveInteger(body.blockNum);
+
+				if (!txId || !blockNum) {
 					return json({ error: "Missing required fields: txId, blockNum" }, 400);
 				}
 
 				const result = await verifyPackOpen({
-					txId: body.txId,
-					blockNum: body.blockNum,
+					txId,
+					blockNum,
 					indexerBaseUrl: INDEXER_URL,
 					l1Config: createDefaultL1Config(),
 				});

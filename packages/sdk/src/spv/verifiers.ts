@@ -741,8 +741,8 @@ async function deriveOwnershipProof(
 }
 
 /**
- * Verifies the current ownership edge using owner_operation_id instead of a
- * local history endpoint. This checks the exact operation that made the
+ * Verifies the current ownership edge using owner_operation_id and the
+ * dedicated proof endpoint. This checks the exact operation that made the
  * reported owner become the current owner.
  */
 export async function verifyNftOwnership(

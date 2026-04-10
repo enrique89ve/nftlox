@@ -225,6 +225,7 @@ console.log(health.liveness.status, health.readiness.status);
 const schemaHistory = await indexer.getCollectionSchemaHistory("col_abc123");
 const opStatus = await indexer.getOperationStatus("506be0e61ae4dbb504397d7fb6ba59dbbab7e02e");
 const nft = await indexer.getNft("nft_abc123");
+const nftProof = await indexer.getNftProof("nft_abc123");
 ```
 
 | Method | Description |
@@ -238,6 +239,7 @@ const nft = await indexer.getNft("nft_abc123");
 | `getCollectionNfts(id, params?)` | NFTs in collection |
 | `getCollectionStats(id)` | Collection statistics |
 | `getNft(id)` | NFT by ID |
+| `getNftProof(id)` | Minimal ownership proof for SPV verification |
 | `getNftInstances(id, params?)` | Instances from seed |
 | `getUserNfts(username, params?)` | User's NFTs with counts |
 | `getUserNftCounts(username)` | NFT counts by type |
@@ -316,7 +318,7 @@ Trustless verification -- the browser reads Hive L1 directly and replays determi
 
 ### Types
 
-All TypeScript interfaces are exported: `CollectionData`, `NFTData`, `ProtocolPayload`, `Price`, `HiveOperation`, `PackDropEntry`, `NftLendData`, `BuyData`, `PaymentInfo`, `MultisigRequest`, `MultisigResponse`, `PackOpenVerificationResult`, `AuditReport`, `BuildResult`, `ValidationError`, and more.
+All TypeScript interfaces are exported: `CollectionData`, `NFTData`, `ProtocolPayload`, `Price`, `HiveOperation`, `PackDropEntry`, `NftLendData`, `BuyData`, `PaymentInfo`, `MultisigRequest`, `MultisigResponse`, `PackOpenVerificationResult`, `AuditReport`, `BuildResult`, `ValidationError`, `IndexerNftProof`, and more.
 
 ## Entity Hierarchy
 
