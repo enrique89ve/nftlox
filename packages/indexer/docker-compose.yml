@@ -39,35 +39,19 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64m
-      - /app/storage_root-node:size=8m
     depends_on:
       postgres:
         condition: service_healthy
     expose:
       - "3050"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-nftlox}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-nftlox_indexer}
-      INDEXER_PORT: 3050
-      HEALTH_PORT: ${HEALTH_PORT:-3051}
-      GENESIS_BLOCK: ${GENESIS_BLOCK:?GENESIS_BLOCK is required}
-      HIVE_ENDPOINTS: ${HIVE_ENDPOINTS:-https://api.syncad.com,https://rpc.mahdiyari.info,https://api.hive.blog}
-      HIVE_ACCOUNT: ${HIVE_ACCOUNT:-nftlox}
-      BATCH_SIZE: ${BATCH_SIZE:-1000}
-      SYNC_INTERVAL_MS: ${SYNC_INTERVAL_MS:-3000}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      INDEXER_ROLE: ${INDEXER_ROLE:-both}
-      NODE_URL: ${NODE_URL:-}
+      # If DATABASE_URL is in .env, use it (external Postgres).
+      # Otherwise, build one pointing to the postgres service in this compose.
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-nftlox}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-nftlox_indexer}}
       NODE_ENV: production
-      ENABLE_SWAGGER: "false"
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
-      ACTIVE_KEY: ${ACTIVE_KEY:-}
-      BEEKEEPER_PASSWORD: ${BEEKEEPER_PASSWORD:-}
-      MULTISIG_RATE_LIMIT_MAX: ${MULTISIG_RATE_LIMIT_MAX:-10}
-      MULTISIG_RATE_LIMIT_WINDOW_MS: ${MULTISIG_RATE_LIMIT_WINDOW_MS:-60000}
-      MULTISIG_IP_RATE_LIMIT_MAX: ${MULTISIG_IP_RATE_LIMIT_MAX:-30}
-      MULTISIG_IP_RATE_LIMIT_WINDOW_MS: ${MULTISIG_IP_RATE_LIMIT_WINDOW_MS:-60000}
-      POSTGRES_DB: ${POSTGRES_DB:-nftlox_indexer}
-      POSTGRES_USER: ${POSTGRES_USER:-nftlox}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     deploy:
       resources:

@@ -1,13 +1,14 @@
-import { DEFAULT_FEE_ACCOUNT, PROTOCOL_ID } from "@/protocol/index.ts";
+import { DEFAULT_FEE_ACCOUNT, PROTOCOL_GENESIS_BLOCK, PROTOCOL_ID } from "@/protocol/index.ts";
 import { validateGenesisBlockSelection } from "@/protocol/genesis-guard.ts";
 
 const toInt = (val: string | undefined, fallback: number): number => {
+	if (val === undefined || val === "") return fallback;
 	const parsed = Number(val);
 	return Number.isNaN(parsed) ? fallback : parsed;
 };
 
 const toBool = (val: string | undefined, fallback: boolean): boolean => {
-	if (val === undefined) return fallback;
+	if (val === undefined || val === "") return fallback;
 	return val === "true" || val === "1";
 };
 
@@ -15,7 +16,7 @@ const VALID_ROLES = new Set(["sync", "api", "both"] as const);
 type IndexerRole = "sync" | "api" | "both";
 
 const toIndexerRole = (val: string | undefined): IndexerRole => {
-	const role = val ?? "both";
+	const role = val || "both";
 	if (!VALID_ROLES.has(role as IndexerRole)) {
 		throw new Error(`Invalid INDEXER_ROLE: "${role}". Must be sync | api | both`);
 	}
@@ -26,14 +27,14 @@ const LOG_LEVELS = new Set(["debug", "info", "warn", "error"]);
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 const toLogLevel = (val: string | undefined, fallback: LogLevel): LogLevel => {
-	if (val !== undefined && LOG_LEVELS.has(val)) return val as LogLevel;
+	if (val && LOG_LEVELS.has(val)) return val as LogLevel;
 	return fallback;
 };
 
 export const config = {
 	port: toInt(process.env.INDEXER_PORT, 3050),
 	databaseUrl: process.env.DATABASE_URL ?? (process.env.NODE_ENV === "production" ? "" : "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer"),
-	genesisBlock: toInt(process.env.GENESIS_BLOCK, 0),
+	genesisBlock: toInt(process.env.GENESIS_BLOCK, PROTOCOL_GENESIS_BLOCK),
 	allowUnsafeGenesisBlock: toBool(process.env.ALLOW_UNSAFE_GENESIS_BLOCK, false),
 	protocolId: PROTOCOL_ID,
 	batchSize: toInt(process.env.BATCH_SIZE, 1000),
@@ -63,10 +64,6 @@ export const config = {
 	multisigIpRateLimitMax: toInt(process.env.MULTISIG_IP_RATE_LIMIT_MAX, 30),
 	multisigIpRateLimitWindowMs: toInt(process.env.MULTISIG_IP_RATE_LIMIT_WINDOW_MS, 60_000),
 } as const;
-
-if (!config.genesisBlock) {
-	throw new Error("GENESIS_BLOCK env var is required");
-}
 
 validateGenesisBlockSelection({
 	genesisBlock: config.genesisBlock,

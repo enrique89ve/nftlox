@@ -170,146 +170,225 @@ All list endpoints support `?limit=N&offset=N`.
 - `multisigClockDriftMs` and rate-limit windows are expressed in milliseconds.
 - `lastBlock`, `headBlock`, `irreversibleBlock`, and `genesisBlock` are Hive block numbers.
 
-## Configuration
+## Self-Hosting
 
-Copy `.env.example` to `.env` and set the chain-specific required values before starting:
+### 1. Choose your database
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `INDEXER_PORT` | 3050 | REST API port |
-| `GENESIS_BLOCK` | required | First block to scan. Must be less than or equal to the canonical protocol genesis block (`105327280`) unless you intentionally allow a partial index |
-| `ALLOW_UNSAFE_GENESIS_BLOCK` | false | Escape hatch to allow starting after the canonical genesis block. This can produce orphaned historical operations and incomplete state |
-| `BATCH_SIZE` | 1000 | Blocks per API request |
-| `SYNC_INTERVAL_MS` | 3000 | Polling interval when caught up |
-| `LOG_LEVEL` | info | debug, info, warn, error |
-| `NODE_ENV` | development | Set to `production` for hardened mode |
-| `ENABLE_SWAGGER` | true | Disabled automatically in production |
-| `ALLOWED_ORIGINS` | (empty) | Comma-separated CORS allowlist. Set this in production |
-| `POSTGRES_DB` | nftlox_indexer | PostgreSQL database name |
-| `POSTGRES_USER` | nftlox | PostgreSQL user |
-| `POSTGRES_PASSWORD` | nftlox_dev | PostgreSQL password (required in production) |
-| `HIVE_ENDPOINTS` | (multiple) | Comma-separated Hive API endpoints |
-| `HIVE_ACCOUNT` | nftlox | Node account (signs buy ops, receives protocol fee) |
-| `ACTIVE_KEY` | (empty) | Node's active key for multisig signing (enables multisig) |
-| `NODE_URL` | (empty) | Public URL of this node |
-| `INDEXER_ROLE` | both | `sync`, `api`, or `both` |
-| `MULTISIG_RATE_LIMIT_MAX` | 10 | Max multisig requests per window |
-| `MULTISIG_RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window in milliseconds |
-| `MULTISIG_IP_RATE_LIMIT_MAX` | 30 | Max multisig requests per IP and window |
-| `MULTISIG_IP_RATE_LIMIT_WINDOW_MS` | 60000 | Per-IP multisig rate limit window in milliseconds |
-| `HEALTH_PORT` | 0 | Separate internal health port with `/live` and `/ready` probes (0 = disabled) |
+The indexer needs PostgreSQL 14+. You can let Docker manage it or bring your own.
 
-`PROTOCOL_ID` is compiled from the protocol constants and is not configured via environment variables.
+```
++---------------------------+       +---------------------------+
+|  Option A (default)       |       |  Option B                 |
+|  Docker manages Postgres  |       |  Bring your own Postgres  |
+|                           |       |                           |
+|  .env:                    |       |  .env:                    |
+|  POSTGRES_PASSWORD=secret |       |  DATABASE_URL=postgres:// |
+|                           |       |    user:pass@host/db      |
+|  That's it.               |       |  POSTGRES_PASSWORD=pass   |
++---------------------------+       +---------------------------+
+```
 
-## Operational Scripts
-
-The indexer ships small deployment scripts inspired by `docs/reference_repos/nft-tracker-temp`, but adapted to the current Bun/Compose layout:
-
-- `scripts/docker-entrypoint.sh`
-  Dispatches container startup in `start`, `monolith`, `sync`, or `api` mode.
-- `scripts/docker-healthcheck.sh`
-  Uses `/live` on `HEALTH_PORT` when enabled, otherwise falls back to `/api/health`.
-- `scripts/dev-env.sh`
-  Detects WSL, slow `/mnt/*` paths, and whether Docker is still using the legacy builder.
-- `scripts/build-image.sh`
-  Builds the standalone indexer image and prefers `docker buildx` when available.
-- `scripts/compose.sh`
-  Resolves the right compose files for `dokploy`, `server`, or `dev`.
-
-Compose files inject only explicit environment variables per service. This keeps secrets like `ACTIVE_KEY` out of unrelated containers such as PostgreSQL.
-
-The container image is also built from `packages/indexer` itself. It no longer copies SDK runtime sources into the image, and it uses the package-local `bun.lock` for reproducible installs.
-
-`Dockerfile.dokploy` is the hosted-deploy variant for the same `packages/indexer` build context. It pins the Bun patch version used during image builds so `bun install --frozen-lockfile --production` stays consistent with the checked-in lockfile.
-
-Examples:
+### 2. Configure
 
 ```bash
 cd packages/indexer
-./scripts/compose.sh dev up -d
-./scripts/compose.sh dokploy up -d
-./scripts/compose.sh server up -d
-./scripts/build-image.sh nftlox-indexer
-DOCKER_SUBNET=172.28.10.0/24 ./scripts/compose.sh dokploy up -d
-DOCKER_BUILD_NETWORK=host ./scripts/build-image.sh nftlox-indexer
+cp .env.example .env
 ```
 
-`dev` mode means:
-- PostgreSQL in Docker
-- indexer on the host with `bun run dev:indexer`
-
-On WSL, the scripts will warn if:
-- the repo is under `/mnt/*`
-- Docker is still using the legacy builder instead of `buildx`
-
-For the fastest local workflow on WSL, prefer:
-- `./scripts/compose.sh dev up -d`
-- run the indexer on the Linux host with `bun run dev:indexer`
-
-If image builds stall on HTTPS downloads in WSL or another host with problematic Docker bridge networking, retry the image build with:
+Open `.env` and set **one required variable**:
 
 ```bash
-DOCKER_BUILD_NETWORK=host ./scripts/build-image.sh nftlox-indexer
+# Required — no default in production
+POSTGRES_PASSWORD=your_secure_password
 ```
 
-That override is a troubleshooting fallback, not the default production configuration.
+Everything else has sensible defaults. The genesis block, Hive endpoints, batch size, and all other settings are pre-configured. See `.env.example` for the full list of optional overrides.
 
-## Production Deployment
-
-Two deployment modes are available. Both use the same base `docker-compose.yml`.
-In production, the base compose keeps PostgreSQL and the indexer on the internal Docker network. Traffic should enter through your platform proxy or the optional Nginx overlay.
-
-For native Ubuntu/Linux servers, use one of these two modes:
-- `dokploy` if TLS and routing are handled by your platform
-- `server` if you want the bundled Nginx overlay in the same stack
-
-### Option A: PaaS (Dokploy / Coolify / Traefik)
-
-For platforms that provide their own reverse proxy with automatic TLS:
+**Want marketplace buy/sell?** Add these three:
 
 ```bash
-cd packages/indexer
+HIVE_ACCOUNT=your-node-account
+ACTIVE_KEY=5J...your-active-key
+BEEKEEPER_PASSWORD=your-wallet-password
+```
+
+Without them the indexer still syncs and serves the full read API. Only the multisig co-signing endpoint is disabled.
+
+### 3. Deploy
+
+Pick the deployment mode that fits your infrastructure:
+
+#### PaaS (Dokploy / Coolify / Traefik)
+
+Your platform handles TLS and routing. One command:
+
+```bash
 ./scripts/compose.sh dokploy up -d
 ```
 
-The platform proxy handles SSL certificates, routing, and HTTPS redirection. Route traffic to the indexer service on internal port `3050`. The container healthcheck uses the internal `/live` probe on `HEALTH_PORT` when available.
+Route traffic to the indexer on internal port `3050`.
 
-### Option B: Standalone with Nginx
+#### VPS with bundled Nginx
 
-For bare-metal or VPS deployments without a PaaS proxy:
+Includes a reverse proxy with rate limiting, gzip, and security headers:
 
 ```bash
-cd packages/indexer
 ./scripts/compose.sh server up -d
 ```
 
-This adds an Nginx reverse proxy container that provides:
-- **Gzip compression** for JSON responses
-- **Rate limiting** at infrastructure level (30 req/s API, 2 req/s multisig)
-- **Request buffering** to protect the indexer from slow clients
-- **Security headers** (X-Frame-Options, X-Content-Type-Options, Referrer-Policy)
-- **Health endpoint** on port `8081` (separate from public traffic)
+Only Nginx is published to the host (port 80). PostgreSQL and the indexer stay private inside the Docker network.
 
-With this mode, only Nginx is published to the host. PostgreSQL and the indexer stay private inside the Docker network.
+<details>
+<summary>Enable TLS</summary>
 
-#### Enabling TLS
-
-1. Place your certificates in `nginx/ssl/` (or set `SSL_CERT_PATH` in `.env`):
+1. Place your certificates:
    ```
    nginx/ssl/fullchain.pem
    nginx/ssl/privkey.pem
    ```
 2. Uncomment the HTTPS server block in `nginx/nginx.conf`
 3. Uncomment the SSL port in `docker-compose.nginx.yml`
-4. Restart: `./scripts/compose.sh server up -d`
+4. `./scripts/compose.sh server up -d`
+</details>
 
-#### Nginx environment variables
+#### External PostgreSQL (RDS, Supabase, managed DB)
+
+Set `DATABASE_URL` in your `.env` and start only the indexer:
+
+```bash
+# .env
+DATABASE_URL=postgres://user:password@your-host:5432/nftlox_indexer
+POSTGRES_PASSWORD=your_password
+```
+
+```bash
+docker compose -f docker-compose.yml up -d indexer
+```
+
+The indexer runs schema migrations automatically on startup (`CREATE TABLE IF NOT EXISTS`). It never drops or alters existing columns.
+
+### 4. Verify
+
+```bash
+# Check sync status
+curl http://localhost:3050/api/status
+
+# Check health
+curl http://localhost:3050/api/health
+
+# View logs
+docker compose logs -f indexer
+```
+
+The indexer is ready when `blocksBehind` reaches `0` in `/api/status`.
+
+### Updating
+
+```bash
+git pull
+./scripts/compose.sh dokploy up -d --build
+```
+
+The indexer picks up schema changes on restart. No manual migrations needed.
+
+## Docker Hardening
+
+The production compose includes these protections out of the box:
+
+| Feature | Purpose |
+|---------|---------|
+| `restart: always` | Auto-restart after crashes or host reboots |
+| `init: true` | Prevents zombie process accumulation (tini as PID 1) |
+| `stop_grace_period: 30s` | Graceful shutdown for in-flight transactions |
+| `read_only: true` | Immutable container filesystem |
+| `tmpfs /tmp` | Writable scratch space in RAM only |
+| `shm_size: 256m` | Prevents Postgres shared memory errors under load |
+| Memory and CPU limits | Prevents container starvation |
+| `json-file` logging with rotation | Prevents disk exhaustion from logs |
+| Non-root user (`bun`) | Reduced attack surface inside containers |
+| OCI labels | Image traceability (commit SHA, build time, branch) |
+
+The sync worker auto-restarts on crash with exponential backoff (1s, 2s, 4s... up to 30s, max 10 retries per minute). If it exhausts retries, the API continues serving cached state and logs an error requiring manual intervention.
+
+Beekeeper (multisig key storage) runs entirely in WASM memory (`inMemory: true`). Keys are never written to disk, not even inside the container.
+
+## Configuration Reference
+
+All variables are optional except `POSTGRES_PASSWORD`. The indexer uses protocol constants and sensible defaults when a variable is not set.
+
+### Database
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PROXY_PORT` | 80 | HTTP port |
-| `PROXY_SSL_PORT` | 443 | HTTPS port (when TLS enabled) |
-| `SSL_CERT_PATH` | ./nginx/ssl | Path to SSL certificates |
+| `POSTGRES_PASSWORD` | **required** | PostgreSQL password |
+| `DATABASE_URL` | auto-built by compose | Full connection string. Set this to use an external database |
+| `POSTGRES_DB` | `nftlox_indexer` | Database name |
+| `POSTGRES_USER` | `nftlox` | Database user |
+
+### Multisig
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ACTIVE_KEY` | (disabled) | Node's Hive active key (WIF) |
+| `BEEKEEPER_PASSWORD` | (disabled) | In-memory beekeeper wallet password |
+| `HIVE_ACCOUNT` | `nftlox` | Account that signs buy ops and receives protocol fee |
+
+### Sync Engine
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GENESIS_BLOCK` | `105327280` | Protocol genesis block. Override only for partial re-indexes |
+| `ALLOW_UNSAFE_GENESIS_BLOCK` | `false` | Allow starting after the canonical genesis block |
+| `BATCH_SIZE` | `1000` | Blocks per sync request |
+| `SYNC_INTERVAL_MS` | `3000` | Polling interval when caught up (ms) |
+| `HIVE_ENDPOINTS` | syncad, mahdiyari, hive.blog | Comma-separated Hive API endpoints (must support HafAH) |
+| `INDEXER_ROLE` | `both` | `sync` (write only), `api` (read only), or `both` |
+
+### API & Security
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `INDEXER_PORT` | `3050` | REST API port |
+| `ALLOWED_ORIGINS` | (all origins) | Comma-separated CORS allowlist. Set this in production |
+| `ENABLE_SWAGGER` | auto | `true` in dev, `false` in production |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `NODE_URL` | (empty) | Public URL of this node (informational) |
+| `HEALTH_PORT` | `0` (disabled) | Separate internal port for `/live` and `/ready` probes |
+
+### Rate Limiting
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MULTISIG_RATE_LIMIT_MAX` | `10` | Max multisig requests per buyer per window |
+| `MULTISIG_RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window (ms) |
+| `MULTISIG_IP_RATE_LIMIT_MAX` | `30` | Max multisig requests per IP per window |
+| `MULTISIG_IP_RATE_LIMIT_WINDOW_MS` | `60000` | Per-IP rate limit window (ms) |
+
+### Nginx (only with `./scripts/compose.sh server`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROXY_PORT` | `80` | HTTP port |
+| `PROXY_SSL_PORT` | `443` | HTTPS port (when TLS enabled) |
+| `SSL_CERT_PATH` | `./nginx/ssl` | Path to SSL certificates |
+
+### Bun Runtime
+
+| Variable | Recommended | Description |
+|----------|-------------|-------------|
+| `BUN_CONFIG_MAX_HTTP_REQUESTS` | `512` | Increase concurrent fetch limit for massive sync |
+| `BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS` | `5` | Faster DNS failover for Hive endpoints |
+| `DO_NOT_TRACK` | `1` | Disable Bun telemetry |
+
+## Operational Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/compose.sh <mode>` | Resolves compose files for `dokploy`, `server`, or `dev` |
+| `scripts/build-image.sh [tag]` | Builds the indexer image with OCI labels (commit, branch, timestamp) |
+| `scripts/docker-entrypoint.sh` | Container entrypoint: dispatches `start`, `sync`, `api`, or `monolith` |
+| `scripts/docker-healthcheck.sh` | Health probe: `/live` on `HEALTH_PORT` or fallback to `/api/health` |
+| `scripts/dev-env.sh` | Detects WSL, slow `/mnt/*` paths, missing `buildx` |
 
 ### Development
 
@@ -540,14 +619,6 @@ PostgreSQL connection pool (postgres.js) with production hardening:
 - **Orphaned buy detection**: Failed buy ops with HIVE transfers flagged for manual review
 - **Block continuity checks**: In-memory cursor verified against DB each batch (max 3 failures)
 - **Global error handlers**: `unhandledRejection` and `uncaughtException` prevent silent death
-
-### Production Environment Variables
-
-| Variable | Recommended | Purpose |
-|----------|-------------|---------|
-| `BUN_CONFIG_MAX_HTTP_REQUESTS` | 512 | Increase concurrent fetch limit for massive sync |
-| `BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS` | 5 | Faster DNS failover for Hive endpoints |
-| `DO_NOT_TRACK` | 1 | Disable Bun telemetry |
 
 ## Testing
 
