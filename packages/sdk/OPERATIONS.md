@@ -550,7 +550,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 ## Architecture Notes
 
 ### Key Authority
-The indexer extracts the signer from `required_auths[0] ?? required_posting_auths[0]`. It does not validate the key type directly -- key validation is performed by the Hive blockchain when accepting the transaction. The SDK sets the correct authority when building the `custom_json`.
+The SDK derives `custom_json` authority from `ACTION_AUTH_LEVEL`: `buy` uses `required_auths`, and every other protocol action uses `required_posting_auths`. The indexer accepts exactly one signer in exactly one authority array, then rejects any action whose submitted authority does not match the canonical map.
 
 ### Idempotency
 The `bulk_distribute` operation is idempotent: if the same transaction is re-sent (same `txId`), it detects already-created instances and adjusts counters to avoid duplicating NFTs. The baseline is computed by subtracting instances born from the same `txId` from the current `distributed` count.

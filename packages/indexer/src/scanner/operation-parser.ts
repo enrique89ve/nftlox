@@ -3,6 +3,7 @@ import {
 	MIN_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	ALL_ACTIONS,
+	type AuthLevel,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
 import { createLogger } from "@/utils/logger.ts";
@@ -10,7 +11,7 @@ import type { HafAHOperation } from "./hive-client.ts";
 
 const log = createLogger("parser");
 
-export type AuthLevel = "active" | "posting";
+export type { AuthLevel } from "@/protocol/index.ts";
 
 export interface TransferDetail {
 	from: string;
@@ -52,6 +53,10 @@ function isNonNullObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isStringArray(value: unknown): value is readonly string[] {
+	return Array.isArray(value) && value.every(item => typeof item === "string");
+}
+
 function isProtocolAction(value: string): value is ProtocolAction {
 	return (ALL_ACTIONS as readonly string[]).includes(value);
 }
@@ -68,9 +73,65 @@ function isCustomJsonValue(value: unknown): value is CustomJsonOperationValue {
 	return (
 		typeof value.id === "string" &&
 		typeof value.json === "string" &&
-		Array.isArray(value.required_auths) &&
-		Array.isArray(value.required_posting_auths)
+		isStringArray(value.required_auths) &&
+		isStringArray(value.required_posting_auths)
 	);
+}
+
+type CustomJsonAuthParseResult =
+	| Readonly<{ ok: true; signer: string; authLevel: AuthLevel }>
+	| Readonly<{ ok: false; signer: string | null; reason: string }>;
+
+function parseCustomJsonAuth(value: CustomJsonOperationValue): CustomJsonAuthParseResult {
+	const activeAuths = value.required_auths;
+	const postingAuths = value.required_posting_auths;
+	const signer = activeAuths[0] ?? postingAuths[0] ?? null;
+
+	if (activeAuths.length === 0 && postingAuths.length === 0) {
+		return {
+			ok: false,
+			signer: null,
+			reason: "No valid signer (empty required_auths and required_posting_auths)",
+		};
+	}
+
+	if (activeAuths.length > 0 && postingAuths.length > 0) {
+		return {
+			ok: false,
+			signer,
+			reason: "Ambiguous authority: required_auths and required_posting_auths cannot both be non-empty",
+		};
+	}
+
+	if (activeAuths.length > 1) {
+		return {
+			ok: false,
+			signer,
+			reason: `Ambiguous active authority: expected exactly one signer, got ${activeAuths.length}`,
+		};
+	}
+
+	if (postingAuths.length > 1) {
+		return {
+			ok: false,
+			signer,
+			reason: `Ambiguous posting authority: expected exactly one signer, got ${postingAuths.length}`,
+		};
+	}
+
+	if (activeAuths.length === 1) {
+		const activeSigner = activeAuths[0];
+		if (!activeSigner) {
+			return { ok: false, signer: null, reason: "Invalid active signer: empty account name" };
+		}
+		return { ok: true, signer: activeSigner, authLevel: "active" };
+	}
+
+	const postingSigner = postingAuths[0];
+	if (!postingSigner) {
+		return { ok: false, signer: null, reason: "Invalid posting signer: empty account name" };
+	}
+	return { ok: true, signer: postingSigner, authLevel: "posting" };
 }
 
 // ─── Format Validators ──────────────────────────────
@@ -91,9 +152,34 @@ function isValidOperationId(opId: unknown): boolean {
 
 // ─── Payload Validation ─────────────────────────────
 
+type ProtocolVersionParts = readonly [number, number, number];
+
+const PROTOCOL_VERSION_REGEX = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+
+function parseProtocolVersion(version: string): ProtocolVersionParts | null {
+	const match = PROTOCOL_VERSION_REGEX.exec(version);
+	if (!match) return null;
+
+	const major = Number(match[1]);
+	const minor = Number(match[2]);
+	const patch = Number(match[3]);
+	if (
+		!Number.isSafeInteger(major) ||
+		!Number.isSafeInteger(minor) ||
+		!Number.isSafeInteger(patch)
+	) {
+		return null;
+	}
+
+	return [major, minor, patch];
+}
+
 function compareVersions(a: string, b: string): number {
-	const partsA = a.split(".").map(Number);
-	const partsB = b.split(".").map(Number);
+	const partsA = parseProtocolVersion(a);
+	const partsB = parseProtocolVersion(b);
+	if (!partsA || !partsB) {
+		throw new Error(`Invalid protocol version comparison: '${a}' vs '${b}'`);
+	}
 	for (let i = 0; i < 3; i++) {
 		const numA = partsA[i] ?? 0;
 		const numB = partsB[i] ?? 0;
@@ -113,6 +199,7 @@ function isValidPayload(payload: unknown): payload is {
 
 	if (payload.protocol !== protocolId) return false;
 	if (typeof payload.version !== "string") return false;
+	if (!parseProtocolVersion(payload.version)) return false;
 	if (compareVersions(payload.version, MIN_PROTOCOL_VERSION) < 0) return false;
 	if (typeof payload.action !== "string") return false;
 	if (!isProtocolAction(payload.action)) return false;
@@ -155,10 +242,26 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 	const rejected: RejectedOperation[] = [];
 
 	for (const hafOp of hafOps) {
-		const value = hafOp.op.value;
+		const rawValue: unknown = hafOp.op.value;
+		if (!isCustomJsonValue(rawValue)) {
+			const rawId = isNonNullObject(rawValue) ? rawValue.id : null;
+			if (rawId !== protocolId) continue;
+			rejected.push({
+				blockNum: hafOp.block,
+				txId: hafOp.trx_id,
+				operationId: String(hafOp.operation_id),
+				signer: null,
+				reason: "Malformed custom_json operation value",
+				rawPayload: rawValue,
+			});
+			continue;
+		}
+
+		const value = rawValue;
 		if (value.id !== protocolId) continue;
 
-		const signer = value.required_auths[0] ?? value.required_posting_auths[0] ?? null;
+		const auth = parseCustomJsonAuth(value);
+		const signer = auth.signer;
 
 		// Validate txId format (40 hex chars = first 20 bytes of SHA256)
 		if (!isValidTxId(hafOp.trx_id)) {
@@ -222,17 +325,14 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 			});
 		}
 
-		const hasActiveAuth = value.required_auths.length > 0;
-		const authLevel: AuthLevel = hasActiveAuth ? "active" : "posting";
-
-		// Reject operations without a valid signer — cannot authorize anything
-		if (!signer) {
+		// Reject malformed or ambiguous protocol authority before routing.
+		if (!auth.ok) {
 			rejected.push({
 				blockNum: hafOp.block,
 				txId: hafOp.trx_id,
 				operationId: hafOp.operation_id,
-				signer: null,
-				reason: "No valid signer (empty required_auths and required_posting_auths)",
+				signer: auth.signer,
+				reason: auth.reason,
 				rawPayload: payload,
 			});
 			continue;
@@ -243,8 +343,8 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 			timestamp: hafOp.timestamp,
 			txId: hafOp.trx_id,
 			operationId: hafOp.operation_id,
-			signer,
-			authLevel,
+			signer: auth.signer,
+			authLevel: auth.authLevel,
 			action: payload.action,
 			version: payload.version,
 			data: payload.data,
@@ -258,6 +358,7 @@ function describePayloadRejection(payload: unknown): string {
 	if (!isNonNullObject(payload)) return "Payload is not a valid object";
 	if (payload.protocol !== protocolId) return `Wrong protocol: ${String(payload.protocol)}`;
 	if (typeof payload.version !== "string") return "Missing or invalid version";
+	if (!parseProtocolVersion(payload.version)) return `Invalid version format: ${payload.version}`;
 	if (compareVersions(payload.version, MIN_PROTOCOL_VERSION) < 0) {
 		return `Version ${payload.version} below minimum ${MIN_PROTOCOL_VERSION}`;
 	}

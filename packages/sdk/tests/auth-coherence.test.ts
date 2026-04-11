@@ -21,7 +21,14 @@ import {
 	buildNftApproveAll,
 	buildNftTransferFrom,
 	buildDataOperatorApprove,
+	buildNodeRegister,
 } from "../src/index";
+import {
+	ACTION_AUTH_LEVEL as INDEXER_ACTION_AUTH_LEVEL,
+} from "../../indexer/src/protocol/auth.ts";
+import {
+	ALL_ACTIONS as INDEXER_ALL_ACTIONS,
+} from "../../indexer/src/protocol/constants.ts";
 
 // ============ STATIC: no builder may hardcode auth literals ============
 //
@@ -89,6 +96,13 @@ describe("Operations catalog documents the canonical action set", () => {
 	test("summary table exactly matches ALL_ACTIONS", () => {
 		const catalog = readFileSync(join(import.meta.dir, "..", "OPERATIONS.md"), "utf8");
 		expect(extractCatalogActions(catalog)).toEqual([...ALL_ACTIONS]);
+	});
+});
+
+describe("SDK follows the indexer action/auth catalog", () => {
+	test("action set and auth levels match the indexer", () => {
+		expect([...ALL_ACTIONS]).toEqual([...INDEXER_ALL_ACTIONS]);
+		expect(ACTION_AUTH_LEVEL).toEqual(INDEXER_ACTION_AUTH_LEVEL);
 	});
 });
 
@@ -240,5 +254,15 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 		});
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildNodeRegister", () => {
+		const r = buildNodeRegister({
+			endpoint: "https://node.example.com",
+			publicKey: "STM6MRyAjQq8ud7hVNYcfnVPJqcVpscN5SoFMugdoJ2M6YB8Wf7b2",
+			nodeAccount: "indexer-node",
+		});
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "indexer-node");
 	});
 });

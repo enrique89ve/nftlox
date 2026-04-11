@@ -20,6 +20,8 @@ export interface InsertCollectionParams {
 	burnable: boolean;
 	royaltyPct: number;
 	royaltyRecipient: string | null;
+	feePaidHbd: number;
+	feePaidHive: number;
 	schema: unknown | null;
 	schemaVersion: number;
 	blockNum: number;
@@ -33,6 +35,7 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 			id, name, symbol, creator, total_potential,
 			description, image_url, external_url,
 			transferable, burnable, royalty_pct, royalty_recipient,
+			fee_paid_hbd, fee_paid_hive,
 			schema, schema_version,
 			block_num, tx_id, created_at
 		) VALUES (
@@ -41,6 +44,7 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 			${params.description}, ${params.imageUrl}, ${params.externalUrl},
 			${params.transferable}, ${params.burnable}, ${params.royaltyPct},
 			${params.royaltyRecipient},
+			${params.feePaidHbd}, ${params.feePaidHive},
 			${params.schema ? JSON.stringify(params.schema) : null}, ${params.schemaVersion},
 			${params.blockNum}, ${params.txId},
 			${params.createdAt}

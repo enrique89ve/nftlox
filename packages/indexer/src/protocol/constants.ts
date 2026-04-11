@@ -1,5 +1,6 @@
-// NFTLox Indexer protocol subset.
-// The SDK may expose extension actions that this indexer does not support.
+// NFTLox Indexer protocol catalog.
+// Keep this explicit so the indexer only accepts actions it can process.
+// protocol-auth.test guards drift against the SDK action/auth catalog.
 
 export const PROTOCOL_ID = "nftlox_testnet";
 export const PROTOCOL_VERSION = "0.5.0";
@@ -27,8 +28,8 @@ export const BASIS_POINTS_DENOMINATOR = 10_000;
 export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 
-// L2 Node Constants
-export const PROTOCOL_NODE_FEE_HBD = "100.000";
+// L2 Constants
+export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
 
 // Memo Prefixes (Marketplace)
 export const MEMO_PREFIX_BUY = "NFTLox BUY:";

@@ -21,7 +21,7 @@ import {
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
-	ACTIVE_AUTH_ACTIONS,
+	getAuthMismatchReason,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
 
@@ -55,9 +55,6 @@ import { handleNftLend } from "./handlers/lending/nft-lend.ts";
 import { handleNftReturn } from "./handlers/lending/nft-return.ts";
 
 const log = createLogger("router");
-
-// Single source of truth: SDK defines which actions require active key.
-const ACTIVE_AUTH_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 
 type Handler = (op: ParsedOperation, txn: Queryable) => Promise<ReadonlyArray<string>>;
 
@@ -117,15 +114,15 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 		// Lookup is non-optional: if this compiles, the handler exists.
 		const handler = handlers[op.action];
 
-		// Enforce canonical auth level before dispatching
-		if (ACTIVE_AUTH_SET.has(op.action) && op.authLevel !== "active") {
+		const authMismatchReason = getAuthMismatchReason(op.action, op.authLevel);
+		if (authMismatchReason) {
 			await insertInvalidOperation({
 				blockNum: op.blockNum,
 				txId: op.txId,
 				operationId: op.operationId,
 				signer: op.signer,
 				action: op.action,
-				reason: `Action '${op.action}' requires active key authority, got posting`,
+				reason: authMismatchReason,
 				rawPayload: op.data,
 			}, txn);
 			return false;

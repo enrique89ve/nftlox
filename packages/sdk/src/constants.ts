@@ -211,8 +211,8 @@ export const ALL_ACTIONS = [...CORE_ACTIONS, ...MARKETPLACE_ACTIONS, ...APPROVE_
 
 export type AuthLevel = "active" | "posting";
 
-export const ACTION_AUTH_LEVEL: Record<ProtocolAction, AuthLevel> = {
-	[ACTION_CREATE_COLLECTION]: "posting",
+const ACTION_AUTH_LEVEL_MAP = {
+	[ACTION_CREATE_COLLECTION]: "active",
 	[ACTION_MINT]: "posting",
 	[ACTION_TRANSFER]: "posting",
 	[ACTION_BULK_DISTRIBUTE]: "posting",
@@ -230,7 +230,9 @@ export const ACTION_AUTH_LEVEL: Record<ProtocolAction, AuthLevel> = {
 	[ACTION_SET_DATA_FROM]: "posting",
 	[ACTION_NFT_LEND]: "posting",
 	[ACTION_NFT_RETURN]: "posting",
-} as const;
+} as const satisfies Record<ProtocolAction, AuthLevel>;
+
+export const ACTION_AUTH_LEVEL = Object.freeze(ACTION_AUTH_LEVEL_MAP);
 
 /** Get the auth level for any protocol action */
 export function getAuthLevel(action: ProtocolAction): AuthLevel {
@@ -253,12 +255,27 @@ export function isProtocolAction(value: unknown): value is ProtocolAction {
 	return typeof value === "string" && (ALL_ACTIONS as readonly string[]).includes(value);
 }
 
-// Derived arrays (computed from the map, not manually maintained)
-export const ACTIVE_AUTH_ACTIONS = ALL_ACTIONS.filter(a => ACTION_AUTH_LEVEL[a] === "active");
-export const POSTING_AUTH_ACTIONS = ALL_ACTIONS.filter(a => ACTION_AUTH_LEVEL[a] === "posting");
+type ActionForAuthLevel<Level extends AuthLevel> = {
+	[Action in ProtocolAction]: (typeof ACTION_AUTH_LEVEL)[Action] extends Level ? Action : never;
+}[ProtocolAction];
 
-export type ActiveAuthAction = (typeof ALL_ACTIONS)[number] & string;
-export type PostingAuthAction = (typeof ALL_ACTIONS)[number] & string;
+export type ActiveAuthAction = ActionForAuthLevel<"active">;
+export type PostingAuthAction = ActionForAuthLevel<"posting">;
+
+function isAuthLevelAction<Level extends AuthLevel>(
+	action: ProtocolAction,
+	level: Level,
+): action is ActionForAuthLevel<Level> {
+	return ACTION_AUTH_LEVEL[action] === level;
+}
+
+// Derived arrays (computed from the map, not manually maintained)
+export const ACTIVE_AUTH_ACTIONS: readonly ActiveAuthAction[] = Object.freeze(ALL_ACTIONS.filter(
+	(action): action is ActiveAuthAction => isAuthLevelAction(action, "active"),
+));
+export const POSTING_AUTH_ACTIONS: readonly PostingAuthAction[] = Object.freeze(ALL_ACTIONS.filter(
+	(action): action is PostingAuthAction => isAuthLevelAction(action, "posting"),
+));
 
 // Type exports
 export type CoreAction = (typeof CORE_ACTIONS)[number];

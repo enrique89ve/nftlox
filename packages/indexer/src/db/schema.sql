@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS collections (
 	burnable BOOLEAN NOT NULL DEFAULT TRUE,
 	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
 	royalty_recipient TEXT,
+	fee_paid_hbd NUMERIC(18,3) NOT NULL DEFAULT 0,
+	fee_paid_hive NUMERIC(18,3) NOT NULL DEFAULT 0,
 	schema JSONB,
 	schema_version INTEGER NOT NULL DEFAULT 0,
 	status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),

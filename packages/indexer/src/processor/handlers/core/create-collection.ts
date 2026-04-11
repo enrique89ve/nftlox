@@ -2,6 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { insertCollection, collectionExists, symbolTakenByCreator, countCollectionsByCreator } from "@/db/queries/collections.ts";
 import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
+import { feeOracle } from "@/utils/fee-oracle.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	requireBoundedString,
@@ -24,6 +25,7 @@ import {
 	MAX_IMAGE_URL_LENGTH,
 	MAX_URL_LENGTH,
 	MAX_ID_LENGTH,
+	PROTOCOL_COLLECTION_FEE_HBD,
 } from "@/protocol/index.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
@@ -41,6 +43,10 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	}
 
 	if (await collectionExists(canonicalId, txn)) return [];
+
+	const transfer = await feeOracle.requireDynamicFee(op, PROTOCOL_COLLECTION_FEE_HBD);
+	const feePaidHbd = transfer.currency === "HBD" ? transfer.amount : 0;
+	const feePaidHive = transfer.currency === "HIVE" ? transfer.amount : 0;
 
 	const creatorCollectionCount = await countCollectionsByCreator(op.signer, txn);
 	await assertWithinLimit("collectionsPerCreator", op.signer, creatorCollectionCount);
@@ -92,6 +98,8 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		burnable,
 		royaltyPct,
 		royaltyRecipient: optionalString(rules.royaltyRecipient),
+		feePaidHbd,
+		feePaidHive,
 		schema: rawSchema,
 		schemaVersion,
 		blockNum: op.blockNum,

@@ -1,4 +1,4 @@
-// NFTLox indexer auth map for the supported protocol subset.
+// NFTLox indexer auth map for the supported protocol catalog.
 
 import {
 	ALL_ACTIONS,
@@ -25,8 +25,8 @@ import {
 
 export type AuthLevel = "active" | "posting";
 
-export const ACTION_AUTH_LEVEL: Record<ProtocolAction, AuthLevel> = {
-	[ACTION_CREATE_COLLECTION]: "posting",
+const ACTION_AUTH_LEVEL_MAP = {
+	[ACTION_CREATE_COLLECTION]: "active",
 	[ACTION_MINT]: "posting",
 	[ACTION_TRANSFER]: "posting",
 	[ACTION_BULK_DISTRIBUTE]: "posting",
@@ -44,8 +44,38 @@ export const ACTION_AUTH_LEVEL: Record<ProtocolAction, AuthLevel> = {
 	[ACTION_SET_DATA_FROM]: "posting",
 	[ACTION_NFT_LEND]: "posting",
 	[ACTION_NFT_RETURN]: "posting",
-} as const;
+} as const satisfies Record<ProtocolAction, AuthLevel>;
 
-// Derived arrays (computed from the map)
-export const ACTIVE_AUTH_ACTIONS = ALL_ACTIONS.filter(a => ACTION_AUTH_LEVEL[a] === "active");
-export const POSTING_AUTH_ACTIONS = ALL_ACTIONS.filter(a => ACTION_AUTH_LEVEL[a] === "posting");
+export const ACTION_AUTH_LEVEL = Object.freeze(ACTION_AUTH_LEVEL_MAP);
+
+export function getAuthLevel(action: ProtocolAction): AuthLevel {
+	return ACTION_AUTH_LEVEL[action];
+}
+
+export function getAuthMismatchReason(action: ProtocolAction, actualAuthLevel: AuthLevel): string | null {
+	const expectedAuthLevel = getAuthLevel(action);
+	if (actualAuthLevel === expectedAuthLevel) return null;
+	return `Action '${action}' requires ${expectedAuthLevel} key authority, got ${actualAuthLevel}`;
+}
+
+type ActionForAuthLevel<Level extends AuthLevel> = {
+	[Action in ProtocolAction]: (typeof ACTION_AUTH_LEVEL)[Action] extends Level ? Action : never;
+}[ProtocolAction];
+
+export type ActiveAuthAction = ActionForAuthLevel<"active">;
+export type PostingAuthAction = ActionForAuthLevel<"posting">;
+
+function isAuthLevelAction<Level extends AuthLevel>(
+	action: ProtocolAction,
+	level: Level,
+): action is ActionForAuthLevel<Level> {
+	return ACTION_AUTH_LEVEL[action] === level;
+}
+
+// Derived arrays (computed from the map, not manually maintained)
+export const ACTIVE_AUTH_ACTIONS: readonly ActiveAuthAction[] = Object.freeze(ALL_ACTIONS.filter(
+	(action): action is ActiveAuthAction => isAuthLevelAction(action, "active"),
+));
+export const POSTING_AUTH_ACTIONS: readonly PostingAuthAction[] = Object.freeze(ALL_ACTIONS.filter(
+	(action): action is PostingAuthAction => isAuthLevelAction(action, "posting"),
+));

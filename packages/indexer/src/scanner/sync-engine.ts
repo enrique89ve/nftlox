@@ -18,7 +18,7 @@ import {
   getTransfersInTransaction,
   checkClockDrift,
 } from "./hive-client.ts";
-import { ACTION_BUY } from "@/protocol/index.ts";
+import { ACTION_BUY, ACTION_NODE_REGISTER } from "@/protocol/index.ts";
 import {
   parseHafAHOperations,
   type RejectedOperation,
@@ -62,9 +62,9 @@ async function fetchBatch(
   const hafOps = await getCustomJsonInRange(from, to, protocolId, behind);
   const { ops, rejected } = parseHafAHOperations(hafOps);
 
-  // Enrich buy ops with paired transfers
-  const buyOps = ops.filter(
-    (op) => op.action === ACTION_BUY,
+  // Enrich operations whose validation depends on transfers from the same Hive tx.
+  const transferBackedOps = ops.filter(
+    (op) => op.action === ACTION_BUY || op.action === ACTION_NODE_REGISTER,
   );
   const transferPools = new Map<
     string,
@@ -80,12 +80,12 @@ async function fetchBatch(
     }
   >();
   await Promise.all(
-    [...new Set(buyOps.map((op) => op.txId))].map(async (txId) => {
+    [...new Set(transferBackedOps.map((op) => op.txId))].map(async (txId) => {
       const transfers = await getTransfersInTransaction(txId);
       transferPools.set(txId, { transfers, consumed: new Set() });
     }),
   );
-  for (const op of buyOps) {
+  for (const op of transferBackedOps) {
     const pool = transferPools.get(op.txId);
     if (!pool) throw new Error(`Transfer pool missing for txId ${op.txId}`);
     op.pairedTransfers = pool.transfers;

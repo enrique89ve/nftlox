@@ -1,47 +1,39 @@
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { Queryable } from "@/db/client.ts";
-import { feeOracle } from "@/utils/fee-oracle.ts";
-import { DEFAULT_FEE_ACCOUNT, PROTOCOL_NODE_FEE_HBD } from "@/protocol/constants.ts";
+import { MAX_URL_LENGTH } from "@/protocol/constants.ts";
+import { requireBoundedString } from "@/utils/validation.ts";
 
-export async function handleNodeRegister(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
-	const data = op.data as { endpoint?: string; publicKey?: string };
+const MAX_NODE_PUBLIC_KEY_LENGTH = 256;
 
-	if (typeof data.endpoint !== "string" || data.endpoint.trim() === "") {
+function requireNodeEndpoint(value: unknown): string {
+	const endpoint = requireBoundedString(value, "endpoint", MAX_URL_LENGTH).trim();
+	if (endpoint === "") {
 		throw new Error("Missing or invalid 'endpoint' parameter");
 	}
-	if (typeof data.publicKey !== "string" || data.publicKey.trim() === "") {
+
+	try {
+		const url = new URL(endpoint);
+		if (url.protocol !== "https:" && url.protocol !== "http:") {
+			throw new Error("unsupported protocol");
+		}
+	} catch {
+		throw new Error("Invalid 'endpoint' parameter: expected http(s) URL");
+	}
+
+	return endpoint;
+}
+
+function requireNodePublicKey(value: unknown): string {
+	const publicKey = requireBoundedString(value, "publicKey", MAX_NODE_PUBLIC_KEY_LENGTH).trim();
+	if (publicKey.length < 10) {
 		throw new Error("Missing or invalid 'publicKey' parameter");
 	}
+	return publicKey;
+}
 
-	// Validate paired transfers for the fee
-	const transfers = op.pairedTransfers || [];
-	if (transfers.length === 0) {
-		throw new Error(`Node registration requires a connection fee of ${PROTOCOL_NODE_FEE_HBD} HBD`);
-	}
-
-	// Only evaluate the FIRST transfer from the signer to the exact fee account
-	const transfer = transfers[0];
-	if (!transfer) throw new Error("No transfer found in payload");
-	
-	if (transfer.from !== op.signer) {
-		throw new Error(`Fee must be paid by the registering node (${op.signer})`);
-	}
-	if (transfer.to !== DEFAULT_FEE_ACCOUNT) {
-		throw new Error(`Fee must be paid to the protocol treasury (${DEFAULT_FEE_ACCOUNT})`);
-	}
-
-	const isValid = await feeOracle.validateFee(
-		PROTOCOL_NODE_FEE_HBD, 
-		transfer.amount, 
-		transfer.currency
-	);
-
-	if (!isValid) {
-		throw new Error(`Insufficient fee paid: ${transfer.amount} ${transfer.currency} does not meet the requirement of ${PROTOCOL_NODE_FEE_HBD} HBD`);
-	}
-
-	const feePaidHbd = transfer.currency === "HBD" ? transfer.amount : 0;
-	const feePaidHive = transfer.currency === "HIVE" ? transfer.amount : 0;
+export async function handleNodeRegister(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
+	const endpoint = requireNodeEndpoint(op.data.endpoint);
+	const publicKey = requireNodePublicKey(op.data.publicKey);
 
 	// Insert into l2_nodes DB table
 	await txn`
@@ -56,19 +48,17 @@ export async function handleNodeRegister(op: ParsedOperation, txn: Queryable): P
 			tx_id
 		) VALUES (
 			${op.signer},
-			${data.endpoint},
-			${data.publicKey},
+			${endpoint},
+			${publicKey},
 			'active',
-			${feePaidHbd},
-			${feePaidHive},
+			0,
+			0,
 			${op.blockNum},
 			${op.txId}
 		)
 		ON CONFLICT (account) DO UPDATE SET
 			endpoint = EXCLUDED.endpoint,
 			public_key = EXCLUDED.public_key,
-			fee_paid_hbd = l2_nodes.fee_paid_hbd + EXCLUDED.fee_paid_hbd,
-			fee_paid_hive = l2_nodes.fee_paid_hive + EXCLUDED.fee_paid_hive,
 			status = 'active',
 			block_num = EXCLUDED.block_num,
 			tx_id = EXCLUDED.tx_id,

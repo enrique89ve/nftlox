@@ -1,5 +1,7 @@
 import { createLogger } from "./logger.ts";
 import { config } from "@/config.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import { DEFAULT_FEE_ACCOUNT } from "@/protocol/constants.ts";
 
 const log = createLogger("fee-oracle");
 
@@ -97,5 +99,43 @@ export const feeOracle = {
 		}
 
 		return false;
+	},
+
+	/**
+	 * Requires the operation to have a valid paired transfer fulfilling the required fee.
+	 */
+	async requireDynamicFee(
+		op: ParsedOperation,
+		requiredHbd: string,
+		targetAccount: string = DEFAULT_FEE_ACCOUNT
+	): Promise<{ amount: number; currency: string }> {
+		const transfers = op.pairedTransfers ?? [];
+		if (transfers.length === 0) {
+			throw new Error(`Operation requires a fee of ${requiredHbd} HBD`);
+		}
+
+		const consumed = op.transferPool?.consumed;
+		let sawCandidate = false;
+		for (let index = 0; index < transfers.length; index++) {
+			if (consumed?.has(index)) continue;
+			const transfer = transfers[index];
+			if (!transfer || transfer.from !== op.signer || transfer.to !== targetAccount) continue;
+
+			sawCandidate = true;
+			const isValid = await this.validateFee(
+				requiredHbd,
+				transfer.amount,
+				transfer.currency,
+			);
+			if (!isValid) continue;
+
+			consumed?.add(index);
+			return { amount: transfer.amount, currency: transfer.currency };
+		}
+
+		if (!sawCandidate) {
+			throw new Error(`Fee must be paid by ${op.signer} to the treasury (${targetAccount})`);
+		}
+		throw new Error(`Insufficient fee paid: no transfer meets the requirement of ${requiredHbd} HBD`);
 	}
 };

@@ -1,7 +1,7 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
 import type { ParsedOperation, ParseResult } from "@/scanner/operation-parser.ts";
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
-import { ACTION_TRANSFER, ACTION_BUY } from "@/protocol/index.ts";
+import { ACTION_TRANSFER, ACTION_BUY, ACTION_NODE_REGISTER } from "@/protocol/index.ts";
 
 // ─── Mocks ──────────────────────────────────────────
 
@@ -533,6 +533,34 @@ describe("syncCycle", () => {
 		expect(mockRouteOperation).toHaveBeenCalled();
 		// Cursor advanced past both batches
 		expect(trackedLastBlock).toBe(6000);
+	});
+
+	test("enriches node_register operations with same-tx transfers", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(1001);
+		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
+		const nodeRegisterOp = fakeParsedOp(1001, ACTION_NODE_REGISTER);
+		const transfers = [{
+			from: "alice",
+			to: "nftlox",
+			amount: 100,
+			currency: "HBD",
+			memo: "node fee",
+		}];
+		mockParseHafAHOperations.mockReturnValue(wrapOps([nodeRegisterOp]));
+		mockGetTransfersInTransaction.mockResolvedValue(transfers);
+
+		await syncCycle();
+
+		expect(mockGetTransfersInTransaction).toHaveBeenCalledWith("tx_1001");
+		expect(mockRouteOperation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: ACTION_NODE_REGISTER,
+				pairedTransfers: transfers,
+				transferPool: expect.objectContaining({ transfers }),
+			}),
+			expect.anything(),
+		);
 	});
 
 	test("1000 empty blocks advance cursor without processing", async () => {
