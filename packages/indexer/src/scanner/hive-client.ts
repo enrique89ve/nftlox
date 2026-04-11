@@ -123,12 +123,12 @@ interface HafAHResponse {
 
 // HafAH page-size limits: server allows up to 150,000 ops per page.
 // Three tiers based on how far behind we are:
-//   MASSIVE: deep catch-up — max throughput, 2000-block ranges
+//   MASSIVE: deep catch-up — bounded response size, 2000-block ranges
 //   NORMAL:  moderate catch-up — balanced latency/throughput
 //   LIVE:    near head — tiny pages, fast round-trips (few ops expected)
 const HAFAH_PAGE_SIZE_LIVE = 100;
 const HAFAH_PAGE_SIZE_NORMAL = 1000;
-const HAFAH_PAGE_SIZE_MASSIVE = 5000;
+const HAFAH_PAGE_SIZE_MASSIVE = 1000;
 const MASSIVE_SYNC_THRESHOLD = 100;
 // <= this many blocks behind = live mode (small pages, no extra sleep)
 const LIVE_SYNC_THRESHOLD = 20;
