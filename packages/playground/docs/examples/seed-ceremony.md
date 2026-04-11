@@ -1,6 +1,6 @@
 # Seed Ceremony: Minting All Game Seeds
 
-This example shows the complete TypeScript script for minting all game card seeds to the Hive blockchain. Seeds are non-transferable template NFTs -- when a player opens a pack, the protocol creates instances of these seeds.
+This example shows the complete TypeScript script for minting all game card seeds to the Hive blockchain. Seeds are non-transferable template NFTs; game flows create playable instances from these seeds with `bulk_distribute`.
 
 **Prerequisites:**
 - A Hive account with posting key

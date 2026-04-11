@@ -5,8 +5,8 @@ This guide walks you through making your first API calls to the NFTLox protocol 
 ## Prerequisites
 
 - **Hive account** -- You need a Hive blockchain account. Create one at [signup.hive.io](https://signup.hive.io).
-- **Active key** -- Required for operations that move value (11 ops): `transfer`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `pack_transfer_from`, `pack_approve`, and `data_operator_approve`.
-- **Posting key** -- Required for the remaining operations (13 ops): `create_collection`, `mint`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `archive_collection`, `unlist`, `pack_create`, `pack_open`, `set_data_from`, `nft_lend`, and `nft_return`.
+- **Active key** -- Required for `buy`.
+- **Posting key** -- Required for protocol operations such as `create_collection`, `mint`, `bulk_distribute`, `transfer`, `list`, `unlist`, approvals, lending, data updates, and `node_register`.
 - Your private keys never leave your client; the API only builds unsigned payloads.
 
 ## Your First API Call
@@ -152,26 +152,20 @@ All build endpoints accept `POST` with a JSON body:
 | `/api/build/collection` | Create a new collection | Posting |
 | `/api/build/seeds` | Batch-mint seed NFTs | Posting |
 | `/api/build/bulk-distribute` | Distribute instances to users | Posting |
-| `/api/build/transfer` | Transfer an NFT | Active |
-| `/api/build/list` | List NFT for sale | Active |
+| `/api/build/transfer` | Transfer an NFT | Posting |
+| `/api/build/list` | List NFT for sale | Posting |
 | `/api/build/unlist` | Remove listing | Posting |
-| `/api/build/burn` | Burn an NFT | Active |
+| `/api/build/burn` | Burn an NFT | Posting |
 | `/api/build/buy` | Buy a listed NFT | Active |
 | `/api/build/set-data` | Update mutable data (creator) | Posting |
 | `/api/build/set-owner-data` | Update owner-specific data | Posting |
 | `/api/build/extend-schema` | Add fields to collection schema | Posting |
-| `/api/build/pack-create` | Create a pack | Posting |
-| `/api/build/pack-buy` | Buy packs | Active |
-| `/api/build/pack-open` | Open packs | Posting |
-| `/api/build/pack-transfer` | Transfer packs | Active |
-| `/api/build/nft-approve` | Approve NFT operator | Active |
-| `/api/build/nft-approve-all` | Approve operator for collection | Active |
-| `/api/build/nft-transfer-from` | Operator transfers NFT | Active |
-| `/api/build/pack-approve` | Approve pack operator | Active |
-| `/api/build/pack-transfer-from` | Operator transfers packs | Active |
+| `/api/build/nft-approve` | Approve NFT operator | Posting |
+| `/api/build/nft-approve-all` | Approve operator for collection | Posting |
+| `/api/build/nft-transfer-from` | Operator transfers NFT | Posting |
 | `/api/build/nft-lend` | Lend an NFT | Posting |
 | `/api/build/nft-return` | Return a lent NFT | Posting |
-| `/api/build/data-operator-approve` | Approve data operator | Active |
+| `/api/build/data-operator-approve` | Approve data operator | Posting |
 | `/api/build/set-data-from` | Operator updates data | Posting |
 | `/api/build/preview-ids` | Preview deterministic IDs | -- |
 

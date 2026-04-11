@@ -20,6 +20,7 @@ import {
 	ACTION_NFT_RETURN,
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
+	ACTION_NODE_REGISTER,
 	ACTIVE_AUTH_ACTIONS,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
@@ -32,6 +33,7 @@ import { handleTransfer } from "./handlers/core/transfer.ts";
 import { handleSetData } from "./handlers/core/set-data.ts";
 import { handleExtendSchema } from "./handlers/core/extend-schema.ts";
 import { handleArchiveCollection } from "./handlers/core/archive-collection.ts";
+import { handleNodeRegister } from "./handlers/core/node_register.ts";
 
 // Marketplace
 import { handleList } from "./handlers/marketplace/list.ts";
@@ -78,6 +80,7 @@ const handlers: Record<ProtocolAction, Handler> = {
 	[ACTION_SET_DATA]: handleSetData,
 	[ACTION_EXTEND_SCHEMA]: handleExtendSchema,
 	[ACTION_ARCHIVE_COLLECTION]: handleArchiveCollection,
+	[ACTION_NODE_REGISTER]: handleNodeRegister,
 
 	// Marketplace
 	[ACTION_LIST]: handleList,

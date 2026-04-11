@@ -1,7 +1,7 @@
 // SPV "Boleto Suizo" - Lightweight Hive L1 Client
 // Uses HAFAH REST API with fetch (zero dependencies, browser-compatible)
 
-import { ALL_ACTIONS, MIN_PROTOCOL_VERSION, type ProtocolAction } from "../constants.ts";
+import { MIN_PROTOCOL_VERSION, isProtocolAction, type ProtocolAction } from "../constants.ts";
 import { getProtocolId } from "../protocol-state.ts";
 import { computeDataHash } from "../schema-validation.ts";
 import {
@@ -53,10 +53,6 @@ function parseStringArray(value: unknown, fieldName: string): string[] {
 		throw new Error(`HAFAH response has invalid ${fieldName}`);
 	}
 	return [...value] as string[];
-}
-
-function isProtocolAction(value: string): value is ProtocolAction {
-	return (ALL_ACTIONS as readonly string[]).includes(value);
 }
 
 const VERSION_REGEX = /^\d+\.\d+\.\d+$/;

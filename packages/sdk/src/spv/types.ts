@@ -1,5 +1,5 @@
 // SPV "Boleto Suizo" - Types
-// Trustless verification system for NFTLox pack operations
+// Trustless verification system for NFTLox operations
 
 import type { ProtocolAction, SupportedCurrency } from "../constants.ts";
 
@@ -53,35 +53,6 @@ export interface L1ParsedOperation {
 // ============ VERIFICATION RESULTS ============
 
 export type VerificationStatus = "verified" | "mismatch" | "error" | "not_found";
-
-export interface SpvMismatch {
-	packIndex: number;
-	itemIndex: number;
-	field: string;
-	expected: string;
-	actual: string;
-	severity: "critical" | "warning";
-}
-
-export interface ReportedMintedNft {
-	instanceId: string;
-	seedId: string;
-	packIndex: number;
-}
-
-export interface PackOpenVerificationResult {
-	status: VerificationStatus;
-	txId: string;
-	blockNum: number;
-	signer: string;
-	packId: string;
-	expectedSeedIds: string[];
-	reportedMintedNfts: ReportedMintedNft[];
-	mismatches: SpvMismatch[];
-	verifiedAt: number;
-	durationMs: number;
-	message: string;
-}
 
 export interface OnChainVerificationResult {
 	status: VerificationStatus;
@@ -187,23 +158,3 @@ export type ListingPriceVerificationResult = {
 	readonly onChainNftId: string | null;
 	readonly message: string;
 };
-
-// ============ AUDITOR ============
-
-export interface AuditorConfig {
-	indexerBaseUrl: string;
-	hiveEndpoints: string[];
-	hiveTimeoutMs: number;
-	sampleSize: number;
-}
-
-export interface AuditReport {
-	startedAt: number;
-	completedAt: number;
-	durationMs: number;
-	samplesChecked: number;
-	verified: number;
-	mismatches: number;
-	errors: number;
-	results: PackOpenVerificationResult[];
-}

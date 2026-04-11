@@ -1,8 +1,6 @@
 // NFTLox DNA Generation Module
 // Implements dual DNA system: originDna (collection) + instanceDna (individual NFT)
 
-import { createHash } from "crypto";
-
 import {
 	ORIGIN_DNA_LENGTH,
 	INSTANCE_DNA_LENGTH,
@@ -19,9 +17,6 @@ import {
  * SHA-256 hash using Web Crypto (crypto.subtle). Async.
  * Used for all identity generation (DNA, IDs, access keys, listing IDs).
  * Uses crypto.subtle for universal runtime support (browsers, Node 18+, Bun, Deno).
- *
- * Note: deterministicRng() uses sync crypto.createHash("sha256") instead,
- * because resolveDropTable() calls it in a tight loop and must stay synchronous.
  */
 export async function generateHash(input: string): Promise<string> {
 	const encoder = new TextEncoder();
@@ -325,28 +320,6 @@ export async function generateDeterministicInstanceId(
 	return `nft_${seedSuffix}_${instanceNumber}_${hash.slice(0, INSTANCE_ID_HASH_LENGTH)}`;
 }
 
-// ============ PACK ID GENERATION ============
-
-/**
- * Generates a deterministic pack ID from collectionId + packName.
- * Uses SHA-256 for cryptographic collision resistance.
- * Same inputs always produce the same packId.
- *
- * NOTE: The separator ":" in the input is not escaped, creating a theoretical
- * collision risk if inputs contain ":". This is mitigated by:
- * 1. collectionId is itself a hash (no colons)
- * 2. packName is user-provided but lowercased; colons in names are uncommon
- * 3. Birthday bound at 56 bits (14 hex chars) is acceptable for pack-level IDs
- */
-export async function generateDeterministicPackId(
-	collectionId: string,
-	packName: string,
-): Promise<string> {
-	const input = `nftlox:pack:${collectionId}:${packName.toLowerCase()}`;
-	const hash = await generateHash(input);
-	return `pack_${hash.slice(0, 14)}`;
-}
-
 // ============ LISTING ID GENERATION ============
 
 /**
@@ -378,17 +351,10 @@ export async function generateListingId(params: {
 	return LISTING_ID_PREFIX + hash.slice(0, LISTING_HASH_LENGTH);
 }
 
-/**
- * Checks if an ID is a pack ID.
- */
-export function isPackId(id: string): boolean {
-	return id.startsWith("pack_");
-}
-
-// ============ DETERMINISTIC INSTANCE DNA (for Pack Minting) ============
+// ============ DETERMINISTIC INSTANCE DNA (for bulk_distribute minting) ============
 
 /**
- * Generates a deterministic instanceDna for NFTs minted from packs.
+ * Generates a deterministic instanceDna for NFTs minted via bulk_distribute.
  * Uses SHA-256 over immutable block data to ensure all indexers produce identical results.
  * The txId acts as a cryptographic nonce (SHA-256 of the full serialized tx,
  * unique and unpredictable before mining).
@@ -406,7 +372,7 @@ export async function generateDeterministicInstanceDna(
 }
 
 /**
- * Generates a deterministic access key for NFTs minted from packs.
+ * Generates a deterministic access key for NFTs minted via bulk_distribute.
  * Uses SHA-256 for cryptographic strength. Same inputs always produce
  * the same key across all indexers. The txId provides uniqueness per transaction.
  */
@@ -418,65 +384,4 @@ export async function generateDeterministicAccessKey(
 	const input = `nftlox:key:${instanceDna}:${owner}:${txId}`;
 	const fullHash = await generateHash(input);
 	return fullHash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
-}
-
-// ============ DETERMINISTIC RNG ============
-
-/**
- * Deterministic RNG using SHA-256.
- * Returns a number in [0, 1) with 53-bit precision (JS safe integer range).
- * Same seed + index always produces the same result.
- *
- * Uses the first 7 bytes of SHA-256 to construct a 53-bit integer,
- * then divides by 2^53 for uniform distribution in [0, 1).
- * SHA-256 provides 256-bit avalanche — no practical collision ceiling.
- */
-export function deterministicRng(seed: string, index: number): number {
-	const input = `nftlox:rng:${seed}:${index}`;
-	const hash = createHash("sha256").update(input).digest();
-	const hi = hash.readUInt32BE(0) >>> 11; // top 21 bits
-	const lo = hash.readUInt32BE(4);        // next 32 bits = 53 total
-	return (hi * 0x100000000 + lo) / 0x20000000000000; // / 2^53
-}
-
-/**
- * Resolves a drop table using deterministic RNG.
- * Returns an array of seedIds selected based on weighted random.
- */
-export function resolveDropTable(
-	dropTable: Array<{ seedId: string; weight: number }>,
-	itemCount: number,
-	rngSeed: string,
-): string[] {
-	if (dropTable.length === 0) {
-		throw new Error("resolveDropTable: dropTable cannot be empty");
-	}
-
-	const totalWeight = dropTable.reduce((sum, entry) => sum + entry.weight, 0);
-	if (totalWeight <= 0) {
-		throw new Error("resolveDropTable: totalWeight must be greater than 0");
-	}
-
-	const results: string[] = [];
-
-	for (let i = 0; i < itemCount; i++) {
-		const roll = deterministicRng(rngSeed, i) * totalWeight;
-		let cumulative = 0;
-		let selected = false;
-
-		for (const entry of dropTable) {
-			cumulative += entry.weight;
-			if (roll < cumulative) {
-				results.push(entry.seedId);
-				selected = true;
-				break;
-			}
-		}
-
-		if (!selected) {
-			results.push(dropTable[dropTable.length - 1]!.seedId);
-		}
-	}
-
-	return results;
 }

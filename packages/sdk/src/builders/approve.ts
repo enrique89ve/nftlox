@@ -1,7 +1,5 @@
 import { z } from "zod";
 import {
-	packApproveInputSchema,
-	packTransferFromInputSchema,
 	nftApproveInputSchema,
 	nftApproveAllInputSchema,
 	nftTransferFromInputSchema,
@@ -10,51 +8,13 @@ import {
 import { formatZodError } from "./helpers";
 import { usernameSchema } from "../schemas";
 import {
-	createPackApprovePayload,
-	createPackTransferFromPayload,
 	createNftApprovePayload,
 	createNftApproveAllPayload,
 	createNftTransferFromPayload,
 	createDataOperatorApprovePayload,
 	toHiveOperation,
 } from "../payloads";
-import type { BuildResult, PackApproveData, PackTransferFromData, NftApproveData, NftApproveAllData, NftTransferFromData, DataOperatorApproveData } from "../types";
-
-export const packApproveBuilderSchema = packApproveInputSchema.extend({
-	owner: usernameSchema,
-});
-export type PackApproveBuilderInput = z.infer<typeof packApproveBuilderSchema>;
-
-export function buildPackApprove(input: PackApproveBuilderInput): BuildResult<PackApproveData> {
-	const parsed = packApproveBuilderSchema.safeParse(input);
-	if (!parsed.success) {
-		return { success: false, errors: formatZodError(parsed.error) };
-	}
-	const data = parsed.data;
-
-	const payload = createPackApprovePayload(data);
-	const operation = toHiveOperation(payload, data.owner);
-
-	return { success: true, payload, operation };
-}
-
-export const packTransferFromBuilderSchema = packTransferFromInputSchema.extend({
-	operator: usernameSchema,
-});
-export type PackTransferFromBuilderInput = z.infer<typeof packTransferFromBuilderSchema>;
-
-export function buildPackTransferFrom(input: PackTransferFromBuilderInput): BuildResult<PackTransferFromData> {
-	const parsed = packTransferFromBuilderSchema.safeParse(input);
-	if (!parsed.success) {
-		return { success: false, errors: formatZodError(parsed.error) };
-	}
-	const data = parsed.data;
-
-	const payload = createPackTransferFromPayload(data);
-	const operation = toHiveOperation(payload, data.operator);
-
-	return { success: true, payload, operation };
-}
+import type { BuildResult, NftApproveData, NftApproveAllData, NftTransferFromData, DataOperatorApproveData } from "../types";
 
 export const nftApproveBuilderSchema = nftApproveInputSchema.extend({
 	owner: usernameSchema,

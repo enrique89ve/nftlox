@@ -1,4 +1,9 @@
-import type { BulkDistributeItem, PackDropEntry, Price } from "nftlox-sdk";
+import type { BulkDistributeItem, Price } from "nftlox-sdk";
+
+export interface PackDropEntry {
+	readonly seedId: string;
+	readonly weight: number;
+}
 
 export interface PackDefinitionInput {
 	readonly collectionId: string;

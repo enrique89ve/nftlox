@@ -8,10 +8,11 @@ import {
 	createSetDataFromPayload,
 	createNftLendPayload,
 	createNftReturnPayload,
+	createNodeRegisterPayload,
 	toHiveOperation,
 } from "../payloads";
-import type { BuildResult, TransferData, SetDataData, SetDataFromData, NftLendData, NftReturnData } from "../types";
-import { usernameSchema } from "../schemas";
+import type { BuildResult, TransferData, SetDataData, SetDataFromData, NftLendData, NftReturnData, NodeRegisterData } from "../types";
+import { usernameSchema, nodeRegisterInputSchema } from "../schemas";
 
 export const burnBuilderSchema = burnInputSchema;
 export type BurnBuilderInput = z.infer<typeof burnBuilderSchema>;
@@ -105,6 +106,24 @@ export function buildNftReturn(input: NftReturnBuilderInput): BuildResult<NftRet
 
 	const payload = createNftReturnPayload(data);
 	const operation = toHiveOperation(payload, data.owner);
+
+	return { success: true, payload, operation };
+}
+
+export const nodeRegisterBuilderSchema = nodeRegisterInputSchema.extend({
+	nodeAccount: usernameSchema,
+});
+export type NodeRegisterBuilderInput = z.infer<typeof nodeRegisterBuilderSchema>;
+
+export function buildNodeRegister(input: NodeRegisterBuilderInput): BuildResult<NodeRegisterData> {
+	const parsed = nodeRegisterBuilderSchema.safeParse(input);
+	if (!parsed.success) {
+		return { success: false, errors: formatZodError(parsed.error) };
+	}
+	const data = parsed.data;
+
+	const payload = createNodeRegisterPayload(data);
+	const operation = toHiveOperation(payload, data.nodeAccount);
 
 	return { success: true, payload, operation };
 }

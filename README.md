@@ -7,6 +7,7 @@ Monorepo for the **NFTLox Protocol** -- Polymorphic Ownership infrastructure on 
 | Package | Description | Port |
 |---------|-------------|------|
 | [`packages/sdk`](./packages/sdk) | Core protocol library (types, payloads, DNA, builders, multisig, SPV) | -- |
+| [`packages/packs-engine`](./packages/packs-engine) | Pure optional extension for pack definition and distribution planning | -- |
 | [`packages/indexer`](./packages/indexer) | Blockchain scanner + PostgreSQL + REST API + Swagger | 3050 |
 | [`packages/playground`](./packages/playground) | Web UI for testing with Hive Keychain | 3040 |
 
@@ -131,9 +132,8 @@ SPV "Boleto Suizo" ──── Trustless verification via HAFAH REST API
 
 ## Protocol Features
 
-- **25 protocol actions**: Core, Marketplace, Packs, Allowances, Lending, Data Operators
+- **17 SDK protocol actions**: Core, Marketplace, Allowances, Lending, Data Operators
 - **Multisig buy**: Node co-signs buy transactions to protect buyer funds (HIVE transfers + NFT transfer are atomic)
-- **Deterministic RNG**: All indexers produce identical results from the same blockchain data
 - **SPV Verification**: Browser-side trustless verification against Hive L1
 - **Ownership Proofs**: Fast owner reads from PostgreSQL, verified by resolving `owner_operation_id` through HAFAH/Hive L1
 - **NFT Lending**: Protocol-level lend/return without ownership transfer

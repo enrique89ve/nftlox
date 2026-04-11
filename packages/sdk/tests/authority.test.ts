@@ -2,17 +2,19 @@ import { test, expect, describe } from "bun:test";
 
 import {
 	ALL_ACTIONS,
+	ACTION_AUTH_LEVEL,
 	ACTIVE_AUTH_ACTIONS,
 	POSTING_AUTH_ACTIONS,
+	isProtocolAction,
+	getAuthLevel,
+	getKeyType,
 	// Operation factories
 	createTransferOperation,
 	createBurnOperation,
 	createBulkDistributeOperation,
 	createListOperation,
 	createBuyOperation,
-	createPackBuyOperation,
-	createPackTransferOperation,
-	createPackApproveOperation,
+	createNodeRegisterOperation,
 	createNftApproveOperation,
 	createNftApproveAllOperation,
 	createDataOperatorApproveOperation,
@@ -21,12 +23,11 @@ import {
 	createArchiveCollectionOperation,
 	createSetDataFromOperation,
 	createUnlistOperation,
-	createPackOpenOperation,
-	createPackTransferFromOperation,
 	createNftTransferFromOperation,
 	createNftLendOperation,
 	createNftReturnOperation,
 	toHiveOperation,
+	ACTION_TRANSFER,
 } from "../src/index";
 
 // ============ EXHAUSTIVENESS ============
@@ -49,6 +50,23 @@ describe("Authority exhaustiveness", () => {
 		}
 	});
 
+	test("ACTION_AUTH_LEVEL keys exactly match ALL_ACTIONS", () => {
+		expect(Object.keys(ACTION_AUTH_LEVEL).sort()).toEqual([...ALL_ACTIONS].sort());
+	});
+
+	test("runtime guard accepts only canonical protocol actions", () => {
+		for (const action of ALL_ACTIONS) {
+			expect(isProtocolAction(action)).toBe(true);
+		}
+
+		expect(isProtocolAction("pack_buy")).toBe(false);
+		expect(isProtocolAction("burn")).toBe(false);
+		expect(isProtocolAction("set_owner_data")).toBe(false);
+		expect(isProtocolAction(null)).toBe(false);
+		expect(() => getAuthLevel("pack_buy" as (typeof ALL_ACTIONS)[number])).toThrow("Unsupported protocol action: pack_buy");
+		expect(() => getKeyType("pack_buy" as (typeof ALL_ACTIONS)[number])).toThrow("Unsupported protocol action: pack_buy");
+	});
+
 	test("no action appears in both ACTIVE and POSTING", () => {
 		const active = new Set<string>(ACTIVE_AUTH_ACTIONS);
 		for (const action of POSTING_AUTH_ACTIONS) {
@@ -56,16 +74,16 @@ describe("Authority exhaustiveness", () => {
 		}
 	});
 
-	test("counts match: 2 active + 22 posting = 24 total", () => {
-		expect(ACTIVE_AUTH_ACTIONS.length).toBe(2);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(22);
-		expect(ALL_ACTIONS.length).toBe(24);
+	test("counts match: 1 active + 17 posting = 18 total", () => {
+		expect(ACTIVE_AUTH_ACTIONS.length).toBe(1);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(17);
+		expect(ALL_ACTIONS.length).toBe(18);
 	});
 });
 
 // ============ ACTIVE KEY OPERATIONS ============
 
-describe("Active key operations use required_auths (only buy/pack_buy)", () => {
+describe("Active key operations use required_auths", () => {
 	test("buy (node account)", () => {
 		const op = createBuyOperation(
 			{ nftId: "nft_1", listingId: "list_1", listTxId: "a".repeat(40), txId: "b".repeat(40) },
@@ -75,11 +93,6 @@ describe("Active key operations use required_auths (only buy/pack_buy)", () => {
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
-	test("pack_buy", () => {
-		const op = createPackBuyOperation({ packId: "pack_1", quantity: 1 }, "alice");
-		expect(op[1].required_auths).toEqual(["alice"]);
-		expect(op[1].required_posting_auths).toEqual([]);
-	});
 });
 
 // ============ POSTING KEY OPERATIONS ============
@@ -89,6 +102,15 @@ describe("Posting key operations use required_posting_auths", () => {
 		const op = createTransferOperation("nft_1", "alice", "bob");
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
+	});
+
+	test("node_register", () => {
+		const op = createNodeRegisterOperation(
+			{ endpoint: "https://node.example.com", publicKey: "public-key-material" },
+			"indexer-node",
+		);
+		expect(op[1].required_auths).toEqual([]);
+		expect(op[1].required_posting_auths).toEqual(["indexer-node"]);
 	});
 
 	test("burn", () => {
@@ -103,21 +125,6 @@ describe("Posting key operations use required_posting_auths", () => {
 			"alice",
 			"list_1",
 			"nonce_1",
-		);
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
-	});
-
-	test("pack_transfer", () => {
-		const op = createPackTransferOperation({ packId: "pack_1", to: "bob", quantity: 1 }, "alice");
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
-	});
-
-	test("pack_approve", () => {
-		const op = createPackApproveOperation(
-			{ spender: "bob", packId: "pack_1", quantity: 5, approved: true },
-			"alice",
 		);
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
@@ -192,21 +199,6 @@ describe("Posting key operations use required_posting_auths", () => {
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
-	test("pack_open", () => {
-		const op = createPackOpenOperation({ packId: "pack_1", quantity: 1 }, "alice");
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
-	});
-
-	test("pack_transfer_from", () => {
-		const op = createPackTransferFromOperation(
-			{ from: "alice", to: "bob", packId: "pack_1", quantity: 1 },
-			"charlie",
-		);
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["charlie"]);
-	});
-
 	test("nft_transfer_from", () => {
 		const op = createNftTransferFromOperation(
 			{ from: "alice", to: "bob", instanceId: "nft_1" },
@@ -235,8 +227,8 @@ describe("Posting key operations use required_posting_auths", () => {
 	});
 
 	test("toHiveOperation (generic posting wrapper)", () => {
-		const payload = { protocol: "test", version: "0.1", action: "test", data: {} };
-		const op = toHiveOperation(payload as any, "alice");
+		const payload = { protocol: "test", version: "0.1", action: ACTION_TRANSFER, data: {} } as const;
+		const op = toHiveOperation(payload, "alice");
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});

@@ -311,7 +311,7 @@ Each `buy` operation creates an append-only record in the `sales` table.
 
 ## Price Format
 
-Used for marketplace listings and pack pricing.
+Used for marketplace listings.
 
 ```json
 {
@@ -348,9 +348,5 @@ Used for marketplace listings and pack pricing.
 | Symbol length | 3-8 chars |
 | Max royalty | 50% |
 | Protocol fee | 1.0% (paid to co-signing node on every sale) |
-| Max drop table entries | 50 (pack_create only) |
-| Drop table weight range | 1 to 10,000 per entry |
-| Max items per pack | 20 |
-| Max pack open batch | 50 |
 | Max bulk distribute items | 50 |
 | Min price | 0.001 HIVE/HBD |

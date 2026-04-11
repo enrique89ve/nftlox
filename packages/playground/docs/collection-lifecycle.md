@@ -363,7 +363,7 @@ NFTs store the collection's `schema_version` at the time they are minted. This v
 
 ## 5. Archiving a Collection
 
-`archive_collection` permanently closes a collection. Archived collections cannot mint new NFTs, create packs, or extend their schema.
+`archive_collection` permanently closes a collection. Archived collections cannot mint new NFTs or extend their schema.
 
 ### Preconditions
 
@@ -372,7 +372,6 @@ All of the following must be true:
 - The signer must be the collection **creator**.
 - The collection must not already be archived.
 - The collection must have **0 NFTs** remaining (all burned or otherwise removed).
-- The collection must have **0 packs** remaining.
 
 ### What Happens on Archive
 

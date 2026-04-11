@@ -1,4 +1,6 @@
-import { MAX_PACK_OPEN_BATCH, resolveDropTable, type BulkDistributeItem } from "nftlox-sdk";
+import type { BulkDistributeItem } from "nftlox-sdk";
+import { MAX_PACK_OPEN_BATCH } from "./constants.ts";
+import { resolveDropTable } from "./rng.ts";
 import type {
 	PackDefinition,
 	PackOpenContext,

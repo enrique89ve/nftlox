@@ -8,11 +8,6 @@ import {
 	MAX_ROYALTY_PCT,
 	SUPPORTED_CURRENCIES,
 	MIN_PRICE_AMOUNT,
-	MAX_DROP_TABLE_ENTRIES,
-	MAX_ITEMS_PER_PACK,
-	MAX_PACK_OPEN_BATCH,
-	MIN_DROP_WEIGHT,
-	MAX_DROP_WEIGHT,
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	SYMBOL_REGEX,
 	TX_ID_REGEX,
@@ -202,48 +197,6 @@ export const importedNftSchema = z.object({
 });
 export type ImportedNFT = z.infer<typeof importedNftSchema>;
 
-export const packDropEntrySchema = z.object({
-	seedId: z.string().min(1, "seedId is required"),
-	weight: z.number().min(MIN_DROP_WEIGHT).max(MAX_DROP_WEIGHT),
-});
-export type PackDropEntry = z.infer<typeof packDropEntrySchema>;
-
-export const packCreateInputSchema = z.object({
-	collectionId: z.string().min(1, "Collection ID is required"),
-	name: z.string().min(1, "Pack name is required").max(MAX_NAME_LENGTH),
-	description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
-	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH).optional(),
-	dropTable: z.array(packDropEntrySchema).min(1).max(MAX_DROP_TABLE_ENTRIES),
-	itemsPerPack: z.number().int().min(1).max(MAX_ITEMS_PER_PACK),
-	price: priceSchema.optional(),
-	maxSupply: z.number().int().nonnegative(),
-});
-export type PackCreateInput = z.infer<typeof packCreateInputSchema>;
-
-export const packBuyInputSchema = z.object({
-	packId: z.string().min(1, "Pack ID is required"),
-	quantity: z.number().int().min(1, "Quantity must be a positive integer").max(MAX_PACK_OPEN_BATCH, `Cannot buy more than ${MAX_PACK_OPEN_BATCH} packs at once`),
-});
-export type PackBuyInput = z.infer<typeof packBuyInputSchema>;
-
-export const packTransferInputSchema = z.object({
-	packId: z.string().min(1, "Pack ID is required"),
-	to: usernameSchema,
-	quantity: z.number().int().min(1, "Quantity must be a positive integer"),
-});
-export type PackTransferInput = z.infer<typeof packTransferInputSchema>;
-
-export const packOpenInputSchema = z.object({
-	packId: z.string().min(1, "Pack ID is required"),
-	quantity: z.number().int().min(1).max(MAX_PACK_OPEN_BATCH, `Cannot open more than ${MAX_PACK_OPEN_BATCH} packs at once`),
-});
-export type PackOpenInput = z.infer<typeof packOpenInputSchema>;
-
-export const packDestroyInputSchema = z.object({
-	packId: z.string().min(1, "Pack ID is required"),
-});
-export type PackDestroyInput = z.infer<typeof packDestroyInputSchema>;
-
 export const bulkDistributeItemSchema = z.object({
 	seedId: z.string().min(1, "seedId is required"),
 	quantity: z.number().int().min(1, "Quantity must be positive"),
@@ -295,22 +248,6 @@ export const unlistInputSchema = z.object({
 	seedTxId: z.string().optional(),
 });
 export type UnlistInput = z.infer<typeof unlistInputSchema>;
-
-export const packApproveInputSchema = z.object({
-	spender: usernameSchema,
-	packId: z.string().min(1),
-	quantity: z.number().int().min(1),
-	approved: z.boolean(),
-});
-export type PackApproveInput = z.infer<typeof packApproveInputSchema>;
-
-export const packTransferFromInputSchema = z.object({
-	from: usernameSchema,
-	to: usernameSchema,
-	packId: z.string().min(1),
-	quantity: z.number().int().min(1),
-});
-export type PackTransferFromInput = z.infer<typeof packTransferFromInputSchema>;
 
 export const nftApproveInputSchema = z.object({
 	spender: usernameSchema,
@@ -380,3 +317,9 @@ export const nftReturnInputSchema = seedProvenanceSchema.extend({
 	instanceId: z.string().min(1),
 });
 export type NftReturnInput = z.infer<typeof nftReturnInputSchema>;
+
+export const nodeRegisterInputSchema = z.object({
+	endpoint: httpUrlSchema,
+	publicKey: z.string().min(10, "Public key must be at least 10 characters"),
+});
+export type NodeRegisterInput = z.infer<typeof nodeRegisterInputSchema>;

@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test";
 
-import { deterministicRng, resolveDropTable } from "../src/index";
+import { deterministicRng, resolveDropTable } from "../src/index.ts";
 
 // ============ deterministicRng VECTORS ============
 

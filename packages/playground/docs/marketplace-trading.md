@@ -7,7 +7,7 @@ The NFTLox marketplace enables peer-to-peer NFT trading on Hive. It follows a **
 ## Lifecycle Overview
 
 ```
-Owner lists NFT (active key)
+Owner lists NFT (posting key)
   └── NFT status changes to "listed" with price, currency, and listingId
 
 Buyer purchases NFT (multisig flow)
@@ -23,7 +23,8 @@ Owner unlists NFT (posting key)
 
 **Key facts:**
 
-- `list` and `buy` require **active key** (custody transfer / financial operation)
+- `list` requires **posting key**.
+- `buy` requires **active key** because it includes HIVE/HBD transfers and node co-signing.
 - `unlist` requires **posting key** (safe, protective action)
 - Supported currencies: `HIVE`, `HBD`
 - Protocol fee: **1.0%** (goes to the co-signing node)
@@ -67,8 +68,8 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/list \
 	"success": true,
 	"protocolVersion": "0.4.1",
 	"operation": ["custom_json", {
-		"required_auths": ["alice"],
-		"required_posting_auths": [],
+		"required_auths": [],
+		"required_posting_auths": ["alice"],
 		"id": "nftlox_testnet",
 		"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.4.1\",\"action\":\"list\",\"data\":{\"nftId\":\"nft_a1b2c3d4e5f6\",\"listingId\":\"list_abc123def456...\",\"listingNonce\":\"r4nd0mn0nc3\",\"price\":{\"amount\":\"25.000\",\"currency\":\"HIVE\"}}}"
 	}],
@@ -102,7 +103,7 @@ if (!result.success) {
 	return;
 }
 
-// result.operation -- sign with active key and broadcast
+// result.operation -- sign with posting key and broadcast
 // result.payload.data.listingId -- deterministic listing ID
 ```
 

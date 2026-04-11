@@ -11,7 +11,7 @@ The playground API (`/api/build/*`) is a thin wrapper over the NFTLox SDK. If yo
 | Quick testing, prototyping | API (`curl`, `fetch`) |
 | Browser app with Hive Keychain | API (build payload, pass to Keychain) |
 | Backend script (seed ceremony, airdrops) | **SDK** (direct, no HTTP overhead) |
-| Game server (pack opening, bulk distribute) | **SDK** (full control over RNG + broadcast) |
+| Game server (bulk distribute, mutable data updates) | **SDK** (full control over operation building + broadcast) |
 | Custom tooling, CI/CD | **SDK** |
 
 ---
@@ -214,48 +214,6 @@ const result = buildBulkDistribute({
 
 ---
 
-## Pack Opening with RNG (Server-Side Resolution)
-
-Use the SDK's deterministic RNG locally, then bulk_distribute the resolved cards:
-
-```typescript
-import {
-	resolveDropTable,
-	createBulkDistributePayload,
-	generateDeterministicSeedId,
-} from "nftlox-sdk";
-
-// 1. Build drop table from your full card catalog (no 50-entry limit)
-const dropTable = cards.map((card) => ({
-	seedId: generateDeterministicSeedId(COLLECTION_ID, card.artId),
-	weight: RARITY_WEIGHTS[card.rarity],
-}));
-
-// 2. Resolve using immutable blockchain data as RNG seed
-const rngSeed = `${playerPaymentTxId}:${blockNum}:${playerAccount}`;
-const selectedSeeds = resolveDropTable(dropTable, 5, rngSeed);
-
-// 3. Aggregate (same seed can appear multiple times)
-const seedCounts = new Map<string, number>();
-for (const seedId of selectedSeeds) {
-	seedCounts.set(seedId, (seedCounts.get(seedId) ?? 0) + 1);
-}
-
-// 4. Build bulk_distribute payload
-const payload = createBulkDistributePayload({
-	to: playerAccount,
-	items: Array.from(seedCounts.entries()).map(([seedId, quantity]) => ({
-		seedId,
-		quantity,
-		seedTxId: seedTxIds.get(seedId)!,
-	})),
-});
-
-// 5. Sign and broadcast
-```
-
----
-
 ## Update Mutable Data
 
 ### As collection creator
@@ -401,11 +359,8 @@ const transferFrom = buildNftTransferFrom({
 import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
-	generateDeterministicPackId,
 	generateDeterministicInstanceId,
 	generateOriginDna,
-	resolveDropTable,
-	deterministicRng,
 	validateArtId,
 	isSeedId,
 	isInstanceId,
@@ -414,14 +369,9 @@ import {
 // Deterministic IDs (same input = same output, always)
 const collectionId = generateDeterministicCollectionId("ragnarok-admin", "Ragnarok Cards", "RGNRK");
 const seedId = generateDeterministicSeedId(collectionId, "odin-001");
-const packId = generateDeterministicPackId(collectionId, "Standard Pack");
 
 // DNA
 const originDna = await generateOriginDna(collectionId);
-
-// RNG
-const rng = deterministicRng("some-seed-string", 0); // returns float [0, 1)
-const selected = resolveDropTable(dropTable, 5, "rng-seed");
 
 // Validation
 const artIdCheck = validateArtId("odin-001"); // { valid: true }

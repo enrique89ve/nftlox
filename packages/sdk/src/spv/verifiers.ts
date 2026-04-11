@@ -2,14 +2,11 @@
 // Reuses SDK deterministic functions — zero duplication
 
 import {
-	resolveDropTable,
 	generateDeterministicInstanceId,
 	generateDeterministicInstanceDna,
 	generateDeterministicAccessKey,
-	extractInstanceNumber,
 } from "../dna.ts";
 import {
-	ACTION_PACK_OPEN,
 	ACTION_MINT,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_TRANSFER,
@@ -22,59 +19,24 @@ import {
 	SUPPORTED_CURRENCIES,
 	type SupportedCurrency,
 } from "../constants.ts";
-import { buildRngSeed } from "./constants.ts";
 import {
 	fetchTransaction,
-	fetchOperationIds,
-	parseAllNftloxOperations,
 	parseNftloxOperation,
 	resolveOperationById,
 } from "./hive-l1-client.ts";
 import type {
 	HiveL1Config,
-	PackOpenVerificationResult,
 	OnChainVerificationResult,
 	OwnershipVerifyParams,
 	OwnershipVerificationResult,
 	OwnershipCheckResult,
-	ReportedMintedNft,
 	ResolvedOperationById,
-	SpvMismatch,
 	ListingPriceVerifyParams,
 	ListingPriceVerificationResult,
 	OnChainPrice,
 } from "./types.ts";
 
 // ============ PURE VERIFIERS (no network) ============
-
-export interface DropTableReplayParams {
-	txId: string;
-	operationId: string;
-	blockNum: number;
-	signer: string;
-	packId: string;
-	packIndex: number;
-	dropTable: Array<{ seedId: string; weight: number }>;
-	itemsPerPack: number;
-}
-
-/**
- * Replays the drop table resolution using the same deterministic RNG.
- * Pure function — no network calls.
- */
-export function replayDropTableResolution(
-	params: DropTableReplayParams,
-): string[] {
-	const rngSeed = buildRngSeed(
-		params.txId,
-		params.operationId,
-		params.blockNum,
-		params.signer,
-		params.packId,
-		params.packIndex,
-	);
-	return resolveDropTable(params.dropTable, params.itemsPerPack, rngSeed);
-}
 
 export interface DeterministicDerivationParams {
 	seedId: string;
@@ -113,233 +75,6 @@ export async function verifyDeterministicDerivation(
 		params.txId,
 	);
 	return { instanceId, instanceDna, accessKey };
-}
-
-// ============ NETWORK VERIFIERS ============
-
-export interface PackOpenVerifyParams {
-	txId: string;
-	blockNum: number;
-	indexerBaseUrl: string;
-	l1Config: HiveL1Config;
-	/** Required for multi-op transactions to identify the correct pack_open. */
-	packId?: string;
-}
-
-/**
- * Full pack_open verification:
- * 1. Fetches tx from Hive L1
- * 2. Parses NFTLox operation
- * 3. Fetches pack info + history from indexer
- * 4. Replays RNG and compares results
- */
-export async function verifyPackOpen(
-	params: PackOpenVerifyParams,
-): Promise<PackOpenVerificationResult> {
-	const startTime = Date.now();
-	const mismatches: SpvMismatch[] = [];
-	const allExpectedSeedIds: string[] = [];
-	const allReportedNfts: ReportedMintedNft[] = [];
-
-	try {
-		// Step 1: Fetch tx + all operation IDs from Hive L1
-		const tx = await fetchTransaction(params.l1Config, params.txId);
-		const operationIds = await fetchOperationIds(params.l1Config, params.txId, params.blockNum);
-
-		// Step 2: Parse ALL NFTLox operations (multi-op safe)
-		const allOps = parseAllNftloxOperations(tx, operationIds);
-		const packOpenOps = allOps.filter(op => op.action === ACTION_PACK_OPEN);
-
-		if (packOpenOps.length === 0) {
-			return buildResult("not_found", startTime, {
-				txId: params.txId,
-				blockNum: params.blockNum,
-				message: "No pack_open operation found in transaction",
-			});
-		}
-
-		// Match by packId if specified, otherwise take the first pack_open
-		const l1Op = params.packId
-			? packOpenOps.find(op => op.data.packId === params.packId) ?? packOpenOps[0]!
-			: packOpenOps[0]!;
-
-		const packId = l1Op.data.packId;
-		const quantity = l1Op.data.quantity;
-
-		if (typeof packId !== "string" || typeof quantity !== "number") {
-			return buildResult("error", startTime, {
-				txId: params.txId,
-				blockNum: params.blockNum,
-				signer: l1Op.signer,
-				message: "pack_open payload missing packId or quantity",
-			});
-		}
-
-		// Step 3: Fetch pack info from indexer
-		const packResponse = await fetch(
-			`${params.indexerBaseUrl}/api/packs/${packId}`,
-		);
-		if (!packResponse.ok) {
-			return buildResult("error", startTime, {
-				txId: params.txId,
-				blockNum: params.blockNum,
-				signer: l1Op.signer,
-				packId,
-				message: `Indexer returned ${packResponse.status} for pack ${packId}`,
-			});
-		}
-
-		const packData = await packResponse.json() as Record<string, unknown>;
-		const dropTable = packData.drop_table;
-		const itemsPerPack = packData.items_per_pack;
-
-		if (!Array.isArray(dropTable) || typeof itemsPerPack !== "number") {
-			return buildResult("error", startTime, {
-				txId: params.txId,
-				blockNum: params.blockNum,
-				signer: l1Op.signer,
-				packId,
-				message: "Indexer pack data missing drop_table or items_per_pack",
-			});
-		}
-
-		// Step 4: Fetch pack history to find minted NFTs
-		const historyResponse = await fetch(
-			`${params.indexerBaseUrl}/api/packs/${packId}/history`,
-		);
-		if (!historyResponse.ok) {
-			return buildResult("error", startTime, {
-				txId: params.txId,
-				blockNum: params.blockNum,
-				signer: l1Op.signer,
-				packId,
-				message: `Indexer returned ${historyResponse.status} for pack history`,
-			});
-		}
-
-		const historyRaw = await historyResponse.json() as unknown;
-
-		if (!Array.isArray(historyRaw)) {
-			return buildResult("error", startTime, {
-				txId: params.txId,
-				blockNum: params.blockNum,
-				signer: l1Op.signer,
-				packId,
-				message: "Indexer pack history is not an array",
-			});
-		}
-
-		const historyData = historyRaw as Array<{
-			event_type: string;
-			tx_id: string;
-			payload?: { mintedNfts?: ReportedMintedNft[] };
-		}>;
-
-		const packOpenEvent = historyData.find(
-			(e) => e.event_type === ACTION_PACK_OPEN && e.tx_id === params.txId,
-		);
-
-		const reportedNfts = packOpenEvent?.payload?.mintedNfts ?? [];
-		allReportedNfts.push(...reportedNfts);
-
-		// Step 5: Replay RNG for each pack index
-		for (let packIndex = 0; packIndex < quantity; packIndex++) {
-			const expectedSeeds = replayDropTableResolution({
-				txId: params.txId,
-				operationId: l1Op.operationId,
-				blockNum: params.blockNum,
-				signer: l1Op.signer,
-				packId,
-				packIndex,
-				dropTable: dropTable as Array<{ seedId: string; weight: number }>,
-				itemsPerPack: itemsPerPack,
-			});
-			allExpectedSeedIds.push(...expectedSeeds);
-
-			// Compare expected seeds with reported NFTs for this packIndex
-			const reportedForIndex = reportedNfts.filter(
-				(n) => n.packIndex === packIndex,
-			);
-
-			for (let itemIndex = 0; itemIndex < expectedSeeds.length; itemIndex++) {
-				const expectedSeedId = expectedSeeds[itemIndex]!;
-				const reported = reportedForIndex[itemIndex];
-
-				if (!reported) {
-					mismatches.push({
-						packIndex,
-						itemIndex,
-						field: "seedId",
-						expected: expectedSeedId,
-						actual: "(missing)",
-						severity: "critical",
-					});
-					continue;
-				}
-
-				if (reported.seedId !== expectedSeedId) {
-					mismatches.push({
-						packIndex,
-						itemIndex,
-						field: "seedId",
-						expected: expectedSeedId,
-						actual: reported.seedId,
-						severity: "critical",
-					});
-				}
-			}
-		}
-
-		// Step 6: Verify deterministic derivations for each reported NFT
-		for (const nft of reportedNfts) {
-			const instanceNumber = extractInstanceNumber(nft.instanceId);
-			if (instanceNumber === null) continue;
-
-			const derived = await verifyDeterministicDerivation({
-				seedId: nft.seedId,
-				instanceNumber,
-				txId: params.txId,
-				blockNum: params.blockNum,
-				signer: l1Op.signer,
-			});
-
-			if (derived.instanceId !== nft.instanceId) {
-				mismatches.push({
-					packIndex: nft.packIndex,
-					itemIndex: 0,
-					field: "instanceId",
-					expected: derived.instanceId,
-					actual: nft.instanceId,
-					severity: "critical",
-				});
-			}
-		}
-
-		const status = mismatches.length === 0 ? "verified" : "mismatch";
-		const message = mismatches.length === 0
-			? `Verified: ${reportedNfts.length} NFTs from ${quantity} pack(s)`
-			: `Found ${mismatches.length} mismatch(es)`;
-
-		return {
-			status,
-			txId: params.txId,
-			blockNum: params.blockNum,
-			signer: l1Op.signer,
-			packId,
-			expectedSeedIds: allExpectedSeedIds,
-			reportedMintedNfts: allReportedNfts,
-			mismatches,
-			verifiedAt: Date.now(),
-			durationMs: Date.now() - startTime,
-			message,
-		};
-	} catch (err) {
-		return buildResult("error", startTime, {
-			txId: params.txId,
-			blockNum: params.blockNum,
-			message: err instanceof Error ? err.message : String(err),
-		});
-	}
 }
 
 // ============ GENERIC ON-CHAIN VERIFICATION ============
@@ -992,34 +727,4 @@ export async function verifyListingPrice(
 			message: err instanceof Error ? err.message : String(err),
 		});
 	}
-}
-
-// ============ HELPERS ============
-
-interface BuildResultPartial {
-	txId: string;
-	blockNum: number;
-	signer?: string;
-	packId?: string;
-	message: string;
-}
-
-function buildResult(
-	status: PackOpenVerificationResult["status"],
-	startTime: number,
-	partial: BuildResultPartial,
-): PackOpenVerificationResult {
-	return {
-		status,
-		txId: partial.txId,
-		blockNum: partial.blockNum,
-		signer: partial.signer ?? "",
-		packId: partial.packId ?? "",
-		expectedSeedIds: [],
-		reportedMintedNfts: [],
-		mismatches: [],
-		verifiedAt: Date.now(),
-		durationMs: Date.now() - startTime,
-		message: partial.message,
-	};
 }

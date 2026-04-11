@@ -10,10 +10,9 @@ NFTLox implements an ERC-721-style approval system that lets NFT owners delegate
 |------------|-------|---------|----------|
 | NFT Approve | Single NFT instance | Owner | Marketplace escrow, P2P trades |
 | NFT Approve All | All NFTs in a collection | Owner | Marketplace blanket approval |
-| Pack Approve | Specific pack + quantity | Owner | Pack marketplace, guild vaults |
 | Data Operator | Collection-wide data writes | Creator | Game servers, oracle feeds |
 
-**Key principle:** Approve operations use `required_auths` (active key). Transfer-from and set-data-from operations use `required_posting_auths` (posting key) -- the security gate was at the approve step.
+**Key principle:** Approve, transfer-from, and set-data-from operations use `required_posting_auths` (posting key). Do not keep active keys on a server for delegation flows.
 
 ---
 
@@ -155,96 +154,9 @@ const result = buildNftTransferFrom({
 
 ---
 
-## Pack Approve
-
-Grant or revoke a spender's permission to transfer a specific quantity of packs on your behalf. Pack allowances are ERC-20-style: quantity-based, not boolean.
-
-### Validation rules
-
-- Spender cannot be the signer.
-- Pack must exist.
-- `quantity` must be >= 1 when approving.
-- Signer must have at least 1 pack balance when approving.
-- Setting `approved: false` sets quantity to 0, which deletes the allowance.
-
-### API
-
-`POST /api/build/pack-approve`
-
-```json
-{
-	"owner": "alice",
-	"spender": "guild-vault",
-	"packId": "pack_a1b2c3d4",
-	"quantity": 10,
-	"approved": true
-}
-```
-
-### SDK
-
-```typescript
-import { buildPackApprove } from "nftlox-sdk";
-
-const result = buildPackApprove({
-	owner: "alice",
-	spender: "guild-vault",
-	packId: "pack_a1b2c3d4",
-	quantity: 10,
-	approved: true,
-});
-```
-
----
-
-## Pack Transfer From
-
-Transfer packs on behalf of their owner, consuming from the approved allowance.
-
-### Validation rules
-
-- `from` and `to` cannot be the same account.
-- `quantity` must be >= 1.
-- Pack must exist.
-- Signer must have sufficient allowance (>= quantity).
-- Owner must have sufficient pack balance (>= quantity).
-- Allowance is **deducted** by the transfer quantity (not cleared entirely).
-
-### API
-
-`POST /api/build/pack-transfer-from`
-
-```json
-{
-	"spender": "guild-vault",
-	"from": "alice",
-	"to": "bob",
-	"packId": "pack_a1b2c3d4",
-	"quantity": 3
-}
-```
-
-> **Note:** The `spender` field in the request body maps to `operator` internally in the builder.
-
-### SDK
-
-```typescript
-import { buildPackTransferFrom } from "nftlox-sdk";
-
-const result = buildPackTransferFrom({
-	operator: "guild-vault",
-	from: "alice",
-	to: "bob",
-	packId: "pack_a1b2c3d4",
-	quantity: 3,
-});
-```
-
----
-
 ## Data Operator Approve
 
-Authorize a Hive account to update mutable data on NFTs within your collection. This is completely separate from NFT/pack transfer allowances -- data operators cannot transfer NFTs.
+Authorize a Hive account to update mutable data on NFTs within your collection. This is completely separate from NFT transfer allowances -- data operators cannot transfer NFTs.
 
 ### Validation rules
 
@@ -358,18 +270,6 @@ buildNftApproveAll({
 });
 ```
 
-### Revoke pack approval
-
-```typescript
-buildPackApprove({
-	owner: "alice",
-	spender: "guild-vault",
-	packId: "pack_a1b2c3d4",
-	quantity: 0,   // ignored when approved is false
-	approved: false,
-});
-```
-
 ### Revoke data operator
 
 ```typescript
@@ -389,7 +289,6 @@ Some operations clear allowances automatically:
 |-------|--------|
 | NFT Transfer From | Individual NFT allowance is cleared (collection allowance stays) |
 | NFT Transfer (direct) | Individual NFT allowance is cleared |
-| Pack Transfer From | Pack allowance is deducted by the transferred quantity |
 | Collection archived | All collection allowances and data operators are removed |
 
 ---
@@ -402,5 +301,4 @@ For reference, the indexer maintains these tables:
 |-------|-----|-------------|
 | `nft_allowances` | `nft_id` (unique) | Single NFT approvals. One spender per NFT. |
 | `collection_allowances` | `(owner, spender, collection_id)` | Collection-wide approvals. |
-| `pack_allowances` | `(owner, spender, pack_id)` | Pack approvals with quantity. |
 | `data_operators` | `(collection_id, operator)` | Authorized data operators. |

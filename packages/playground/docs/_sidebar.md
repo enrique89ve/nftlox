@@ -13,8 +13,6 @@
 
 - **Game Integration**
 	- [Architecture & Flow](game-integration.md)
-	- [Pack Distribution](pack-distribution-guide.md)
-	- [RNG Algorithm](rng-reference.md)
 
 - **Security**
 	- [Key Security & Permissions](key-security.md)
@@ -29,5 +27,4 @@
 
 - **Examples**
 	- [Seed Ceremony](examples/seed-ceremony.md)
-	- [Pack Opening](examples/pack-opening.md)
 	- [Mutable Data](examples/mutable-data.md)

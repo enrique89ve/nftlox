@@ -16,5 +16,6 @@ This package does **not** own:
 - inventory
 - idempotency persistence
 - database state
+- SPV/auditor verification of pack-opening claims against Hive L1
 
 Those concerns belong in an external backend or service. The core protocol remains focused on property and NFT supply.

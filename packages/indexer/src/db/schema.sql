@@ -244,6 +244,21 @@ CREATE TABLE IF NOT EXISTS collection_stats (
 	burned INT NOT NULL DEFAULT 0
 );
 
+-- ============ L2 NODES ============
+
+CREATE TABLE IF NOT EXISTS l2_nodes (
+	account TEXT PRIMARY KEY,
+	endpoint TEXT NOT NULL,
+	public_key TEXT NOT NULL,
+	status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'banned')),
+	fee_paid_hbd NUMERIC(18,3) NOT NULL DEFAULT 0,
+	fee_paid_hive NUMERIC(18,3) NOT NULL DEFAULT 0,
+	block_num BIGINT NOT NULL,
+	tx_id TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ============ MULTISIG LOCKS ============
 
 CREATE TABLE IF NOT EXISTS multisig_locks (

@@ -236,60 +236,7 @@ export interface BuyData {
 	readonly seedTxId?: string;
 }
 
-// ============ PACK TYPES (Semi-Fungible) ============
-
-export interface PackDropEntry {
-	seedId: string;
-	weight: number;
-}
-
-export interface PackCreateData {
-	id: string;
-	collectionId: string;
-	name: string;
-	description?: string;
-	imageUrl?: string;
-	dropTable: PackDropEntry[];
-	itemsPerPack: number;
-	price?: Price;
-	maxSupply: number;
-}
-
-export interface PackBuyData {
-	packId: string;
-	quantity: number;
-}
-
-export interface PackTransferData {
-	packId: string;
-	to: string;
-	quantity: number;
-}
-
-export interface PackOpenData {
-	packId: string;
-	quantity: number;
-}
-
-export interface PackDestroyData {
-	packId: string;
-}
-
 // ============ APPROVE & TRANSFER_FROM TYPES ============
-
-export interface PackApproveData {
-	spender: string;
-	packId: string;
-	quantity: number;
-	approved: boolean;
-}
-
-export interface PackTransferFromData {
-	from: string;
-	to: string;
-	packId: string;
-	quantity: number;
-}
 
 export interface NftApproveData {
 	spender: string;
@@ -434,3 +381,8 @@ export type PaymentInfo = Readonly<{
 	txId: string;
 	seedTxId: string | null;
 }>;
+
+export interface NodeRegisterData {
+	endpoint: string;
+	publicKey: string;
+}

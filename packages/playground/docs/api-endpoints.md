@@ -93,7 +93,6 @@ Aggregate protocol statistics.
 	"total_burned": 80,
 	"unique_owners": 350,
 	"invalid_ops": 12,
-	"total_packs": 25,
 	"total_schema_versions": 78,
 	"sales": [
 		{
@@ -597,33 +596,6 @@ curl "https://api-nftlox.hivecreators.co/api/users/alice/collections?limit=10"
 
 ---
 
-### GET /api/users/:username/packs
-
-Get pack balances for a user. Only packs with balance > 0 are returned.
-
-**Path parameters:**
-
-| Parameter | Description |
-|---|---|
-| `username` | Hive username |
-
-**Query parameters:**
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `limit` | number | 50 | Results per page (1-200) |
-| `offset` | number | 0 | Pagination offset |
-
-**Response:** Array of pack balance objects.
-
-**Example:**
-
-```bash
-curl https://api-nftlox.hivecreators.co/api/users/alice/packs
-```
-
----
-
 ## Marketplace
 
 ### GET /api/marketplace/listings
@@ -728,53 +700,6 @@ Aggregated trading volume by currency with royalties and fees breakdown. Optiona
 
 ```bash
 curl "https://api-nftlox.hivecreators.co/api/marketplace/volume?collectionId=col_xyz"
-```
-
----
-
-## Packs
-
-### GET /api/packs
-
-List available packs.
-
-**Query parameters:**
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `collectionId` | string | -- | Filter by collection ID |
-| `creator` | string | -- | Filter by creator Hive username |
-| `limit` | number | 50 | Results per page (1-200) |
-| `offset` | number | 0 | Pagination offset |
-
-**Response:** Array of pack objects including name, description, drop table, items per pack, price, max supply, and current supply.
-
-**Example:**
-
-```bash
-curl "https://api-nftlox.hivecreators.co/api/packs?collectionId=abc123&limit=10"
-```
-
----
-
-### GET /api/packs/:id
-
-Get a single pack by ID.
-
-**Path parameters:**
-
-| Parameter | Description |
-|---|---|
-| `id` | Pack ID |
-
-**Response:** Full pack object.
-
-**Error:** `404` if the pack does not exist.
-
-**Example:**
-
-```bash
-curl https://api-nftlox.hivecreators.co/api/packs/pack-id-here
 ```
 
 ---
@@ -927,7 +852,7 @@ All Build API endpoints return JSON with the following standard shape:
 | `operation`       | `array`    | Hive operation tuple `["custom_json", {...}]`, ready to sign.               |
 | `payload`         | `object`   | The decoded protocol payload embedded inside the operation's `json` field.  |
 | `keyType`         | `string`   | Which Hive key to sign with: `"Posting"` or `"Active"`.                     |
-| `generatedId`     | `string`   | Deterministic ID generated for the resource (collections, seeds, packs).    |
+| `generatedId`     | `string`   | Deterministic ID generated for the resource (collections, seeds).           |
 | `generatedIds`    | `object`   | Map of all generated IDs (e.g. `{ collectionId, originDna }`).              |
 | `warnings`        | `string[]` | Optional advisory messages (high royalty, large supply, etc.).               |
 | `errors`          | `array`    | Present when `success: false`. Array of `{ field, message, code }` objects. |
@@ -956,11 +881,8 @@ Error response (400):
 | `SYMBOL_REGEX`               | `^[A-Z0-9]{3,8}$` | Valid symbol pattern.               |
 | `MAX_OPERATIONS_PER_TX`      | 5        | Max operations per Hive transaction.       |
 | `MAX_BULK_DISTRIBUTE_ITEMS`  | 50       | Max items in a bulk distribute.            |
-| `MAX_DROP_TABLE_ENTRIES`     | 50       | Max entries in a pack drop table.          |
-| `MAX_ITEMS_PER_PACK`         | 20       | Max items revealed per pack open.          |
-| `MAX_PACK_OPEN_BATCH`        | 50       | Max packs opened/bought in one call.       |
 | `MAX_ROYALTY_PCT`            | 50       | Maximum royalty percentage.                |
-| `PROTOCOL_FEE_PCT`           | 1.0      | Protocol fee (1%) on sales, paid to the co-signing node. |
+| `PROTOCOL_FEE_BPS`           | 100      | Protocol fee in basis points (1%) on sales, paid to the co-signing node. |
 | `SUPPORTED_CURRENCIES`       | `HIVE`, `HBD` | Accepted payment currencies.          |
 | `MIN_PRICE_AMOUNT`           | `0.001`  | Minimum listing price.                     |
 | `SAFE_PAYLOAD_MAX_BYTES`     | 7372     | Max payload size (8KB with 10% margin).    |
@@ -1171,7 +1093,7 @@ Transfer an NFT instance to another Hive account.
 | `seedId`   | `string` | No       | Seed provenance ID.                                  |
 | `seedTxId`  | `string` | No       | Seed parent's tx_id (for L1 traceability).                                |
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -1285,7 +1207,7 @@ Approve or revoke a data operator for a collection. Only the collection creator 
 
 Note: The `creator` field in the request body maps to `owner` internally.
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -1342,7 +1264,7 @@ List an NFT for sale on the marketplace.
 | `seedId`     | `string` | No       | Seed provenance ID.                                             |
 | `seedTxId`    | `string` | No       | Seed parent's tx_id (for L1 traceability).                                           |
 
-**Key type:** Active
+**Key type:** Posting
 
 **curl example:**
 
@@ -1417,108 +1339,6 @@ Buy a listed NFT. Returns multiple Hive operations: a `custom_json` payload plus
 
 ---
 
-## Packs
-
-### POST /api/build/pack-create
-
-Create a new pack definition for a collection.
-
-**Request Body:**
-
-| Field                       | Type     | Required | Description                                       |
-|-----------------------------|----------|----------|---------------------------------------------------|
-| `collectionId`              | `string` | Yes      | Collection ID the pack belongs to.                |
-| `creator`                   | `string` | Yes      | Hive username of the collection creator.          |
-| `name`                      | `string` | Yes      | Pack name (1-100 chars).                          |
-| `description`               | `string` | No       | Pack description (max 250 chars).                 |
-| `imageUrl`                  | `string` | No       | Pack image URL (max 500 chars).                   |
-| `dropTable`                 | `array`  | Yes      | Drop table entries (1-50 entries).                |
-| `dropTable[].seedId`        | `string` | Yes      | Seed ID that can drop from this pack.             |
-| `dropTable[].weight`        | `number` | Yes      | Drop weight (1-10000). Higher = more likely.      |
-| `itemsPerPack`              | `number` | Yes      | Items revealed per pack (1-20).                   |
-| `price`                     | `object` | No       | Pack price `{ amount, currency }`.                |
-| `price.amount`              | `string` | No       | Price in Hive decimal format (e.g. `"5.000"`).    |
-| `price.currency`            | `string` | No       | `"HIVE"` or `"HBD"`.                             |
-| `maxSupply`                 | `number` | Yes      | Maximum packs available (>= 0, 0 = unlimited).    |
-
-**Response** (additional fields):
-
-| Field    | Type     | Description                     |
-|----------|----------|---------------------------------|
-| `packId` | `string` | Deterministic pack ID.          |
-
-**Key type:** Posting
-
-**curl example:**
-
-```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/pack-create \
-	-H "Content-Type: application/json" \
-	-d '{
-		"collectionId": "col_abc123",
-		"creator": "alice",
-		"name": "Dragon Booster Pack",
-		"itemsPerPack": 5,
-		"maxSupply": 1000,
-		"dropTable": [
-			{ "seedId": "seed_fire", "weight": 7000 },
-			{ "seedId": "seed_ice", "weight": 3000 }
-		],
-		"price": { "amount": "5.000", "currency": "HIVE" }
-	}'
-```
-
----
-
-### POST /api/build/pack-buy
-
-Buy packs from a collection.
-
-**Request Body:**
-
-| Field      | Type     | Required | Description                            |
-|------------|----------|----------|----------------------------------------|
-| `packId`   | `string` | Yes      | Pack definition ID.                    |
-| `buyer`    | `string` | Yes      | Hive username of the buyer.            |
-| `quantity` | `number` | Yes      | Number of packs to buy (1-50).         |
-
-**Key type:** Active
-
----
-
-### POST /api/build/pack-open
-
-Open owned packs to reveal NFT instances.
-
-**Request Body:**
-
-| Field      | Type     | Required | Description                            |
-|------------|----------|----------|----------------------------------------|
-| `packId`   | `string` | Yes      | Pack definition ID.                    |
-| `owner`    | `string` | Yes      | Hive username of the pack owner.       |
-| `quantity` | `number` | Yes      | Number of packs to open (1-50).        |
-
-**Key type:** Posting
-
----
-
-### POST /api/build/pack-transfer
-
-Transfer packs to another account.
-
-**Request Body:**
-
-| Field      | Type     | Required | Description                                        |
-|------------|----------|----------|----------------------------------------------------|
-| `packId`   | `string` | Yes      | Pack definition ID.                                |
-| `from`     | `string` | Yes      | Current pack owner (Hive username).                |
-| `to`       | `string` | Yes      | Recipient (Hive username). Must differ from `from`.|
-| `quantity` | `number` | Yes      | Number of packs to transfer (>= 1).               |
-
-**Key type:** Active
-
----
-
 ## Allowances
 
 ### POST /api/build/nft-approve
@@ -1534,7 +1354,7 @@ Approve or revoke a spender for a specific NFT instance.
 | `instanceId` | `string`  | Yes      | NFT instance ID.                               |
 | `approved`   | `boolean` | Yes      | `true` to approve, `false` to revoke.          |
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -1551,7 +1371,7 @@ Approve or revoke a spender for all NFTs in a collection owned by the signer.
 | `collectionId` | `string`  | Yes      | Collection ID scope.                           |
 | `approved`     | `boolean` | Yes      | `true` to approve, `false` to revoke.          |
 
-**Key type:** Active
+**Key type:** Posting
 
 ---
 
@@ -1572,45 +1392,7 @@ Transfer an NFT as an approved spender (operator).
 
 Note: The `spender` field in the request body maps to `operator` internally.
 
-**Key type:** Active
-
----
-
-### POST /api/build/pack-approve
-
-Approve or revoke a spender for packs.
-
-**Request Body:**
-
-| Field      | Type      | Required | Description                                    |
-|------------|-----------|----------|------------------------------------------------|
-| `owner`    | `string`  | Yes      | Hive username of the pack owner.               |
-| `spender`  | `string`  | Yes      | Hive username to approve/revoke.               |
-| `packId`   | `string`  | Yes      | Pack definition ID.                            |
-| `quantity` | `number`  | Yes      | Number of packs approved (>= 1).               |
-| `approved` | `boolean` | Yes      | `true` to approve, `false` to revoke.          |
-
-**Key type:** Active
-
----
-
-### POST /api/build/pack-transfer-from
-
-Transfer packs as an approved spender (operator).
-
-**Request Body:**
-
-| Field      | Type     | Required | Description                                    |
-|------------|----------|----------|------------------------------------------------|
-| `spender`  | `string` | Yes      | Hive username of the approved operator.        |
-| `from`     | `string` | Yes      | Current pack owner (Hive username).            |
-| `to`       | `string` | Yes      | Recipient (Hive username).                     |
-| `packId`   | `string` | Yes      | Pack definition ID.                            |
-| `quantity` | `number` | Yes      | Number of packs to transfer (>= 1).            |
-
-Note: The `spender` field in the request body maps to `operator` internally.
-
-**Key type:** Active
+**Key type:** Posting
 
 ---
 

@@ -8,14 +8,13 @@
 
 Traditional NFT protocols force you into rigid smart contract environments. NFTLox takes a different approach: encode operations as deterministic `custom_json` on Hive L1, then reconstruct state through indexing. The result is a protocol that is fast, free to transact, and fully verifiable.
 
-**If you are building a game** with collectible cards, items, or characters, NFTLox gives you typed schemas, deterministic RNG for trustless pack openings, and mutable data fields your game server can update in real time -- all anchored to an L1 blockchain with 3-second finality.
+**If you are building a game** with collectible cards, items, or characters, NFTLox gives you typed schemas, seed/instance distribution, and mutable data fields your game server can update in real time -- all anchored to an L1 blockchain with 3-second finality.
 
 ## Features at a Glance
 
 - **No smart contracts** -- Operations are `custom_json` payloads on Hive L1; the protocol is enforced by deterministic indexing
 - **Typed schemas** -- Define immutable, mutable, and owner-editable fields per collection with strict validation
 - **Deterministic DNA** -- Every NFT has a reproducible cryptographic identity derived from blockchain data
-- **Verifiable RNG** -- Pack openings use SHA-256 deterministic RNG seeded from block data; anyone can independently verify the results
 - **Seed/Instance model** -- Mint a seed template, distribute instances from it; each instance gets unique DNA
 - **Zero transaction fees** -- Hive L1 uses resource credits, not gas; end users pay nothing
 - **3-second finality** -- Operations are confirmed in the next Hive block
@@ -46,7 +45,7 @@ Your App                              Hive L1
 
 **Write path:** Build an unsigned payload via the SDK or Build API. Sign it client-side with a Hive key. Broadcast to any Hive RPC node. The indexer detects the operation and updates state.
 
-**Read path:** Query the indexer API for collections, NFTs, users, marketplace listings, packs, and operators. No authentication required.
+**Read path:** Query the indexer API for collections, NFTs, users, marketplace listings, and operators. No authentication required.
 
 ## Quick Start
 
@@ -74,8 +73,6 @@ Then follow the [Getting Started guide](getting-started.md) to make your first A
 | [SPV Verification](spv-verification.md) | Trustless client-side verification against Hive L1 |
 | **Game Integration** | |
 | [Architecture & Flow](game-integration.md) | Complete game developer integration walkthrough |
-| [Pack Distribution](pack-distribution-guide.md) | Native packs vs custom distribution comparison |
-| [RNG Algorithm](rng-reference.md) | Deterministic RNG specification with test vectors |
 | **Security** | |
 | [Key Security](key-security.md) | Permission model, key types, and account architecture |
 | **Reference** | |
@@ -89,7 +86,6 @@ Then follow the [Getting Started guide](getting-started.md) to make your first A
 Working code for common workflows:
 
 - [Seed Ceremony](examples/seed-ceremony.md) -- Create a collection and mint seeds with typed schemas
-- [Pack Opening](examples/pack-opening.md) -- Verifiable RNG pack resolution and instance distribution
 - [Mutable Data](examples/mutable-data.md) -- Update game-state fields on NFTs
 
 ## Protocol Info
@@ -101,7 +97,7 @@ Working code for common workflows:
 | Min Version | `0.4.1` |
 | Blockchain | Hive L1 |
 | Finality | ~3 seconds |
-| Auth | Posting key (15 ops) / Active key (10 ops) |
+| Auth | Posting key (17 SDK protocol actions) / Active key (`buy`) |
 
 | Environment | URL |
 |---|---|

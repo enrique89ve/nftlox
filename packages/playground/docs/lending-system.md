@@ -119,12 +119,10 @@ While an NFT has status `lent`, the following operations are blocked by the inde
 | `transfer`         | Yes      | `assertTransferable()` |
 | `list`             | Yes      | `assertNotLent()`      |
 | `buy`              | Yes      | `assertNotLent()`      |
-| `burn`             | Yes      | `assertNotLent()`      |
+| Burn helper (`transfer` to `null`) | Yes | `assertNotLent()` |
 | `nft_approve`      | Yes      | `assertNotLent()`      |
 | `bulk_distribute`  | Yes      | `assertNotLent()`      |
-| `pack_open` (seed) | Yes      | `assertNotLent()`      |
 | `set_data`         | No       | Creator can still update mutable data |
-| `set_owner_data`   | No       | Owner can still update owner data     |
 | `nft_return`       | No       | This is how you unlock it             |
 
 Additionally, when an NFT is lent, all existing approvals (allowances) are deleted. This prevents a pre-approved spender from transferring a lent NFT.

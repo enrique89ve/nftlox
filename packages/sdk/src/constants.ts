@@ -126,13 +126,6 @@ export function calculatePaymentSplit(
 export const HIVE_CUSTOM_JSON_MAX_BYTES = 8192;
 export const SAFE_PAYLOAD_MAX_BYTES = Math.floor(HIVE_CUSTOM_JSON_MAX_BYTES * 0.90);
 
-// Pack Constants
-export const MAX_DROP_TABLE_ENTRIES = 50;
-export const MAX_ITEMS_PER_PACK = 20;
-export const MAX_PACK_OPEN_BATCH = 50;
-export const MIN_DROP_WEIGHT = 1;
-export const MAX_DROP_WEIGHT = 10000;
-
 // Schema Constants
 export const MAX_SCHEMA_FIELDS = 64;
 export const MAX_FIELD_NAME_LENGTH = 64;
@@ -151,6 +144,7 @@ export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
 export const ACTION_EXTEND_SCHEMA = "extend_schema";
 export const ACTION_ARCHIVE_COLLECTION = "archive_collection";
+export const ACTION_NODE_REGISTER = "node_register";
 
 // Protocol Actions (Marketplace)
 export const ACTION_LIST = "list";
@@ -161,16 +155,7 @@ export const ACTION_BUY = "buy" as const;
 export const MULTISIG_EXPIRATION_MS = 125_000;
 export const MAX_MULTISIG_OPERATIONS = 4; // seller + royalty + fee + custom_json
 
-// Protocol Actions (Packs)
-export const ACTION_PACK_CREATE = "pack_create";
-export const ACTION_PACK_BUY = "pack_buy";
-export const ACTION_PACK_TRANSFER = "pack_transfer";
-export const ACTION_PACK_OPEN = "pack_open";
-export const ACTION_PACK_DESTROY = "pack_destroy";
-
 // Protocol Actions (Approve & TransferFrom)
-export const ACTION_PACK_APPROVE = "pack_approve";
-export const ACTION_PACK_TRANSFER_FROM = "pack_transfer_from";
 export const ACTION_NFT_APPROVE = "nft_approve";
 export const ACTION_NFT_APPROVE_ALL = "nft_approve_all";
 export const ACTION_NFT_TRANSFER_FROM = "nft_transfer_from";
@@ -192,6 +177,7 @@ export const CORE_ACTIONS = [
 	ACTION_SET_DATA,
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
+	ACTION_NODE_REGISTER,
 ] as const;
 
 export const MARKETPLACE_ACTIONS = [
@@ -200,17 +186,7 @@ export const MARKETPLACE_ACTIONS = [
 	ACTION_BUY,
 ] as const;
 
-export const PACK_ACTIONS = [
-	ACTION_PACK_CREATE,
-	ACTION_PACK_BUY,
-	ACTION_PACK_TRANSFER,
-	ACTION_PACK_OPEN,
-	ACTION_PACK_DESTROY,
-] as const;
-
 export const APPROVE_ACTIONS = [
-	ACTION_PACK_APPROVE,
-	ACTION_PACK_TRANSFER_FROM,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
 	ACTION_NFT_TRANSFER_FROM,
@@ -226,11 +202,11 @@ export const DATA_OPERATOR_ACTIONS = [
 	ACTION_SET_DATA_FROM,
 ] as const;
 
-export const ALL_ACTIONS = [...CORE_ACTIONS, ...MARKETPLACE_ACTIONS, ...PACK_ACTIONS, ...APPROVE_ACTIONS, ...LENDING_ACTIONS, ...DATA_OPERATOR_ACTIONS] as const;
+export const ALL_ACTIONS = [...CORE_ACTIONS, ...MARKETPLACE_ACTIONS, ...APPROVE_ACTIONS, ...LENDING_ACTIONS, ...DATA_OPERATOR_ACTIONS] as const;
 
 // ============ AUTHORITY MAP — SINGLE SOURCE OF TRUTH ============
-// Active key: only operations that move native HIVE/HBD tokens
-// Posting key: all protocol operations (in-game assets, no real tokens)
+// Active custom_json: buy multisig authorization
+// Posting custom_json: all other protocol actions
 // To change an action's auth level, update ONLY this map.
 
 export type AuthLevel = "active" | "posting";
@@ -243,16 +219,10 @@ export const ACTION_AUTH_LEVEL: Record<ProtocolAction, AuthLevel> = {
 	[ACTION_SET_DATA]: "posting",
 	[ACTION_EXTEND_SCHEMA]: "posting",
 	[ACTION_ARCHIVE_COLLECTION]: "posting",
+	[ACTION_NODE_REGISTER]: "posting",
 	[ACTION_LIST]: "posting",
 	[ACTION_UNLIST]: "posting",
 	[ACTION_BUY]: "active",
-	[ACTION_PACK_CREATE]: "posting",
-	[ACTION_PACK_BUY]: "active",
-	[ACTION_PACK_TRANSFER]: "posting",
-	[ACTION_PACK_OPEN]: "posting",
-	[ACTION_PACK_DESTROY]: "posting",
-	[ACTION_PACK_APPROVE]: "posting",
-	[ACTION_PACK_TRANSFER_FROM]: "posting",
 	[ACTION_NFT_APPROVE]: "posting",
 	[ACTION_NFT_APPROVE_ALL]: "posting",
 	[ACTION_NFT_TRANSFER_FROM]: "posting",
@@ -264,12 +234,23 @@ export const ACTION_AUTH_LEVEL: Record<ProtocolAction, AuthLevel> = {
 
 /** Get the auth level for any protocol action */
 export function getAuthLevel(action: ProtocolAction): AuthLevel {
+	if (!isProtocolAction(action)) {
+		throw new Error(`Unsupported protocol action: ${String(action)}`);
+	}
 	return ACTION_AUTH_LEVEL[action];
 }
 
 /** Get the Keychain-compatible key type string */
 export function getKeyType(action: ProtocolAction): "Active" | "Posting" {
+	if (!isProtocolAction(action)) {
+		throw new Error(`Unsupported protocol action: ${String(action)}`);
+	}
 	return ACTION_AUTH_LEVEL[action] === "active" ? "Active" : "Posting";
+}
+
+/** Runtime guard for payloads parsed from JS, JSON, or other untyped boundaries. */
+export function isProtocolAction(value: unknown): value is ProtocolAction {
+	return typeof value === "string" && (ALL_ACTIONS as readonly string[]).includes(value);
 }
 
 // Derived arrays (computed from the map, not manually maintained)
@@ -282,7 +263,6 @@ export type PostingAuthAction = (typeof ALL_ACTIONS)[number] & string;
 // Type exports
 export type CoreAction = (typeof CORE_ACTIONS)[number];
 export type MarketplaceAction = (typeof MARKETPLACE_ACTIONS)[number];
-export type PackAction = (typeof PACK_ACTIONS)[number];
 export type ApproveAction = (typeof APPROVE_ACTIONS)[number];
 export type LendingAction = (typeof LENDING_ACTIONS)[number];
 export type DataOperatorAction = (typeof DATA_OPERATOR_ACTIONS)[number];

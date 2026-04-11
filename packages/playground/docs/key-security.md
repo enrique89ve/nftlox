@@ -10,22 +10,22 @@ This guide covers the NFTLox permission model, recommended account architecture 
 
 | Role | Actions | Key Required |
 |------|---------|-------------|
-| **Collection creator** | `create_collection`, `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting (except `data_operator_approve` = Active) |
-| **Seed owner** | `bulk_distribute`, `transfer` (only if `distributed === 0`), `burn`, `list` (only if `distributed === 0`), `unlist` | Posting for `bulk_distribute`; Active for the rest |
-| **NFT/Instance owner** | `transfer`, `burn`, `list`, `unlist`, `nft_approve`, `nft_lend`, `set_owner_data` | Active (except `set_owner_data`, `unlist` = Posting) |
+| **Collection creator** | `create_collection`, `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting |
+| **Seed owner** | `bulk_distribute`, `transfer` (only if `distributed === 0`), `burn`, `list` (only if `distributed === 0`), `unlist` | Posting |
+| **NFT/Instance owner** | `transfer`, burn helper (`transfer` to `null`), `list`, `unlist`, `nft_approve`, `nft_lend` | Posting |
 | **Approved operator** | `set_data_from` | Posting |
-| **Approved spender** | `nft_transfer_from`, `pack_transfer_from` | Posting |
+| **Approved spender** | `nft_transfer_from` | Posting |
 
 **Key distinction**: The collection creator controls the **schema and metadata**. The seed owner controls **custody and distribution exclusively** — the collection creator has NO distribution rights over seeds they don't own. Seeds with distributed instances (`distributed > 0`) cannot be transferred, listed, sold, delegated, or lent.
 
 ### Key Types
 
-The protocol has **10 actions requiring active key** and **14 using posting key**.
+The SDK emits active-key `custom_json` for `buy`. Other SDK protocol `custom_json` operations use posting keys.
 
 | Key required | Actions |
 |---|---|
-| **Active key** (10) | `transfer`, `burn`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `pack_approve`, `data_operator_approve` |
-| **Posting key** (14) | `create_collection`, `mint`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `unlist`, `pack_create`, `pack_open`, `nft_transfer_from`, `pack_transfer_from`, `set_data_from`, `nft_lend`, `nft_return` |
+| **Active key** | `buy` |
+| **Posting key** | `create_collection`, `mint`, `bulk_distribute`, `transfer`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `list`, `unlist`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `data_operator_approve`, `set_data_from`, `nft_lend`, `nft_return` |
 
 Active-key actions use `required_auths` while posting-key actions use `required_posting_auths` in the `custom_json` operation.
 
@@ -42,7 +42,7 @@ ragnarok-game (creator + seed owner + game server)
   - Creates collection, mints seeds, distributes instances, updates stats
   - Seeds are non-transferable once instances are distributed
   - Posting key on the server for bulk_distribute and set_data
-  - Active key in secure vault for one-time setup (data_operator_approve)
+  - Active key kept out of the server runtime
 ```
 
 ### Two Accounts (security isolation)
@@ -67,22 +67,23 @@ The creator retains seed ownership and handles distribution. Only the seed owner
 
 | Key | Where | Used For |
 |-----|-------|----------|
-| **Active key** | Secure vault, offline | One-time setup: `data_operator_approve`. Never on a server. |
-| **Posting key** | Game server (env var) | Recurring ops: `bulk_distribute`, `set_data`, `set_data_from`, `mint` |
+| **Active key** | Secure vault, offline | Marketplace buys and Hive/HBD account operations. Never on a server. |
+| **Posting key** | Game server (env var) | Recurring protocol ops: `bulk_distribute`, `set_data`, `set_data_from`, `mint` |
 | **Owner/Master key** | Cold storage only | Account recovery. Never used in game operations. |
 
 ### Risk Matrix
 
 | If compromised... | Active key | Posting key |
 |-------------------|-----------|-------------|
-| Can transfer NFTs? | Yes | No |
-| Can list/sell NFTs? | Yes | No |
+| Can transfer NFTs owned by that account? | Yes, if custom payloads are built | Yes |
+| Can list NFTs owned by that account? | Yes, if custom payloads are built | Yes |
 | Can modify game data? | Yes | Yes |
-| Can distribute packs? | Yes | Yes |
-| Can approve operators? | Yes | No |
-| **Blast radius** | **Total loss of assets** | **Game data corruption only** |
+| Can distribute instances? | Yes | Yes |
+| Can approve data operators? | Yes, if custom payloads are built | Yes |
+| Can move HIVE/HBD? | Yes | No |
+| **Blast radius** | **Native-token loss plus protocol actions** | **Protocol actions for assets owned by that account** |
 
-**Best practice**: Only the posting key should exist on a running server. The active key should be used once for setup (`data_operator_approve`) and stored offline.
+**Best practice**: Only the posting key should exist on a running server. Keep the active key offline unless you are signing a buy flow or native Hive/HBD account operation.
 
 ### Security Recommendations
 

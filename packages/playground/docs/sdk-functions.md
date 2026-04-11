@@ -9,16 +9,16 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 | Export | Description |
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
-| `PROTOCOL_VERSION` | `"0.4.1"` |
-| `ALL_ACTIONS` | All 26 protocol actions |
-| `CORE_ACTIONS` | 10 core actions |
+| `PROTOCOL_VERSION` | `"0.5.0"` |
+| `ALL_ACTIONS` | All 18 SDK protocol actions |
+| `CORE_ACTIONS` | 8 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |
-| `PACK_ACTIONS` | 4 pack actions |
-| `APPROVE_ACTIONS` | 5 approve/transferFrom actions |
+| `APPROVE_ACTIONS` | 3 approve/transferFrom actions |
 | `LENDING_ACTIONS` | 2 lending actions (nft_lend, nft_return) |
 | `DATA_OPERATOR_ACTIONS` | 2 data operator actions |
+| `isProtocolAction(value)` | Runtime guard for SDK-owned protocol actions |
 | `SUPPORTED_CURRENCIES` | `["HIVE", "HBD"]` |
-| `PROTOCOL_FEE_PCT` | `1.0` (protocol fee percentage, 1% on sales) |
+| `PROTOCOL_FEE_BPS` | `100` (protocol fee in basis points, 1% on sales) |
 | `MEMO_PREFIX_BUY` | `"NFTLox BUY:"` — strict memo prefix for seller transfer |
 | `MEMO_PREFIX_ROYALTY` | `"NFTLox ROY:"` — strict memo prefix for royalty transfer |
 | `MEMO_PREFIX_FEE` | `"NFTLox FEE:"` — strict memo prefix for fee transfer |
@@ -47,25 +47,19 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 | `createDeterministicMintPayload()` | Mint seed/NFT (deterministic ID) |
 | `createBulkDistributePayload()` | Bulk distribute instances from seed |
 | `createTransferPayload()` | Transfer NFT |
-| `createBurnPayload()` | Burn NFT |
+| `createBurnPayload()` | Burn helper (emits `transfer` to `null`) |
 | `createSetDataPayload()` | Update custom data/tags |
+| `createArchiveCollectionPayload()` | Archive collection |
+| `createNodeRegisterPayload()` | Register an L2 node |
 | `createListPayload()` | List on marketplace |
 | `createUnlistPayload()` | Remove listing |
 | `createBuyPayload()` | Buy listed NFT (multisig) |
-| `createPackCreatePayload()` | Create pack |
-| `createPackBuyPayload()` | Buy pack |
-| `createPackTransferPayload()` | Transfer pack |
-| `createPackOpenPayload()` | Open pack |
 | `createNftApprovePayload()` | Approve spender for NFT |
 | `createNftApproveAllPayload()` | Approve spender for collection |
 | `createNftTransferFromPayload()` | Transfer as approved spender |
-| `createPackApprovePayload()` | Approve pack spending |
-| `createPackTransferFromPayload()` | Transfer pack as spender |
 | `createNftLendPayload()` | Lend NFT to borrower |
 | `createNftReturnPayload()` | Return lent NFT |
-| `createSetOwnerDataPayload()` | Update owner-controlled data |
 | `createExtendSchemaPayload()` | Extend collection schema |
-| `createArchiveCollectionPayload()` | Archive collection |
 | `createDataOperatorApprovePayload()` | Approve data operator |
 | `createSetDataFromPayload()` | Write data as operator |
 
@@ -87,22 +81,17 @@ Higher-level functions that validate input via Zod schemas, generate determinist
 | `buildList()` | Validate + build marketplace listing |
 | `buildUnlist()` | Validate + build unlist |
 | `buildBuy()` | Validate + build buy (with payment split) |
-| `buildBurn()` | Validate + build burn |
+| `buildBurn()` | Validate + build burn helper (`transfer` to `null`) |
 | `buildSetData()` | Validate + build set-data |
+| `buildArchiveCollection()` | Validate + build archive collection |
+| `buildNodeRegister()` | Validate + build node registration |
 | `buildSetDataFrom()` | Validate + build set-data-from |
-| `buildPackCreate()` | Validate + build pack create |
-| `buildPackBuy()` | Validate + build pack buy |
-| `buildPackTransfer()` | Validate + build pack transfer |
-| `buildPackOpen()` | Validate + build pack open |
 | `buildNftApprove()` | Validate + build NFT approve |
 | `buildNftApproveAll()` | Validate + build collection-wide approve |
 | `buildNftTransferFrom()` | Validate + build NFT transfer-from |
-| `buildPackApprove()` | Validate + build pack approve |
-| `buildPackTransferFrom()` | Validate + build pack transfer-from |
 | `buildNftLend()` | Validate + build lend |
 | `buildNftReturn()` | Validate + build return |
 | `buildDataOperatorApprove()` | Validate + build data operator approve |
-| `buildArchiveCollection()` | Validate + build archive collection |
 | `computeSeedAvailability()` | Compute remaining supply from seed fields |
 
 ---
@@ -171,12 +160,9 @@ const nft = await indexer.getNft("nft_abc123");
 | `getUserNfts(username, params?)` | User's NFTs with counts |
 | `getUserNftCounts(username)` | NFT counts by type |
 | `getUserCollections(username, params?)` | User's collections |
-| `getUserPacks(username, params?)` | User's pack balances |
 | `getListings(params?)` | Marketplace listings |
 | `getPaymentInfo(nftId)` | Payment split for buy |
 | `multisig(request)` | Request multisig signing |
-| `getPacks(params?)` | List packs |
-| `getPack(id)` | Pack by ID |
 
 ---
 
@@ -195,12 +181,6 @@ Exported from `schemas.ts`. Each schema validates input for its corresponding ac
 | `setDataInputSchema` | Set data input |
 | `dataOperatorApproveInputSchema` | Data operator approve |
 | `setDataFromInputSchema` | Set data from input |
-| `packCreateInputSchema` | Pack create input |
-| `packBuyInputSchema` | Pack buy input |
-| `packTransferInputSchema` | Pack transfer input |
-| `packOpenInputSchema` | Pack open input |
-| `packApproveInputSchema` | Pack approve input |
-| `packTransferFromInputSchema` | Pack transfer-from input |
 | `nftApproveInputSchema` | NFT approve input |
 | `nftApproveAllInputSchema` | NFT approve-all input |
 | `nftTransferFromInputSchema` | NFT transfer-from input |
@@ -218,13 +198,10 @@ Trustless verification -- the browser reads Hive L1 directly and replays determi
 
 | Function | Description |
 |----------|-------------|
-| `runAudit(config)` | Random sample audit of pack_open events |
-| `runSingleVerification(config, txId, blockNum)` | Verify a specific pack_open |
 | `verifyNftOwnership(params)` | Verify NFT ownership chain (samples up to 3 events) |
 | `verifyOperationOnChain(params)` | Verify any operation exists on L1 |
 | `fetchTransaction(config, txId)` | Fetch tx from HAFAH REST API |
 | `parseNftloxOperation(tx)` | Parse NFTLox custom_json from tx |
-| `replayDropTableResolution(params)` | Replay RNG locally (pure function) |
 | `verifyDeterministicDerivation(params)` | Verify instanceId/DNA/accessKey derivation |
 
 ---
@@ -250,12 +227,10 @@ Trustless verification -- the browser reads Hive L1 directly and replays determi
 | `generateDeterministicCollectionId()` | Deterministic collection ID |
 | `generateDeterministicSeedId()` | Deterministic seed ID |
 | `generateDeterministicInstanceId()` | Deterministic instance ID |
-| `generateDeterministicPackId()` | Deterministic pack ID |
-| `resolveDropTable()` | Deterministic RNG drop table resolution |
-| `isSeedId()` / `isInstanceId()` / `isPackId()` | ID type checks |
+| `isSeedId()` / `isInstanceId()` | ID type checks |
 
 ---
 
 ## Types
 
-All TypeScript interfaces are exported: `CollectionData`, `NFTData`, `ProtocolPayload`, `Price`, `HiveOperation`, `PackDropEntry`, `NftLendData`, `BuyData`, `PaymentInfo`, `MultisigRequest`, `MultisigResponse`, `PackOpenVerificationResult`, `AuditReport`, `BuildResult`, `ValidationError`, and more.
+All TypeScript interfaces are exported: `CollectionData`, `NFTData`, `ProtocolPayload`, `Price`, `HiveOperation`, `NftLendData`, `BuyData`, `PaymentInfo`, `MultisigRequest`, `MultisigResponse`, `BuildResult`, `ValidationError`, and more.

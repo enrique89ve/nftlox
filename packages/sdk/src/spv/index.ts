@@ -6,9 +6,6 @@ export type {
 	HafahOperationRecord,
 	L1ParsedOperation,
 	VerificationStatus,
-	SpvMismatch,
-	ReportedMintedNft,
-	PackOpenVerificationResult,
 	OnChainVerificationResult,
 	OwnershipVerifyParams,
 	OwnershipVerificationResult,
@@ -20,15 +17,11 @@ export type {
 	ResolvedOperationById,
 	ResolveMutableDataParams,
 	ResolvedMutableData,
-	AuditorConfig,
-	AuditReport,
 } from "./types.ts";
 
 export {
 	DEFAULT_HIVE_ENDPOINTS,
 	DEFAULT_HIVE_TIMEOUT_MS,
-	DEFAULT_AUDIT_SAMPLE_SIZE,
-	buildRngSeed,
 } from "./constants.ts";
 
 export {
@@ -46,22 +39,11 @@ export {
 } from "./hive-l1-client.ts";
 
 export {
-	replayDropTableResolution,
 	verifyDeterministicDerivation,
-	verifyPackOpen,
 	verifyOperationOnChain,
 	verifyNftOwnership,
 	verifyListingPrice,
-	type DropTableReplayParams,
 	type DeterministicDerivationParams,
 	type DeterministicDerivationResult,
-	type PackOpenVerifyParams,
 	type OnChainVerifyParams,
 } from "./verifiers.ts";
-
-export {
-	createAuditorConfig,
-	fetchRecentPackOpenEvents,
-	runAudit,
-	runSingleVerification,
-} from "./auditor.ts";

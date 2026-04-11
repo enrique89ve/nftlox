@@ -25,12 +25,12 @@ You are responsible for wrapping them in a transaction, signing, and broadcastin
 
 ### Which key to use
 
-The protocol has **11 actions requiring active key** and **13 using posting key**.
+The protocol uses active-key `custom_json` for `buy`. Other SDK protocol `custom_json` operations use posting keys.
 
 | Key required | Actions |
 |---|---|
-| **Active key** (11) | `transfer`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `pack_transfer_from`, `pack_approve`, `data_operator_approve` |
-| **Posting key** (13) | `create_collection`, `mint`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `archive_collection`, `unlist`, `pack_create`, `pack_open`, `set_data_from`, `nft_lend`, `nft_return` |
+| **Active key** | `buy` |
+| **Posting key** | `create_collection`, `mint`, `bulk_distribute`, `transfer`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `list`, `unlist`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `set_data_from`, `nft_lend`, `nft_return`, `data_operator_approve` |
 
 Active-key actions use `required_auths` while posting-key actions use `required_posting_auths` in the `custom_json` operation.
 
@@ -611,7 +611,7 @@ async function broadcastAndConfirm(broadcastFn: () => Promise<string>) {
 
 All three libraries throw errors on broadcast failure. Common failure reasons:
 
-- **Missing required authority** -- wrong key type (posting vs active). Remember: 11 actions need active key, 14 need posting key
+- **Missing required authority** -- wrong key type (posting vs active). Remember: `buy` needs active key; other SDK protocol `custom_json` operations use posting key.
 - **Duplicate transaction** -- same operation already in a pending block
 - **Expired transaction** -- transaction was created too long ago (> 60 seconds)
 - **RC (Resource Credits) insufficient** -- account does not have enough RC to broadcast
@@ -634,7 +634,7 @@ try {
 
 ### Using active key for active-key operations
 
-Actions like `transfer`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `pack_transfer_from`, `pack_approve`, and `data_operator_approve` require an active key. These operations use `required_auths` instead of `required_posting_auths`:
+The `buy` operation requires active key. Active-key operations use `required_auths` instead of `required_posting_auths`:
 
 ```typescript
 // The operation format for active-key actions

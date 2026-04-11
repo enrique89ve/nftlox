@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test";
-import { buildTransfer, buildList, buildPackTransfer } from "../src/builders";
+import { buildTransfer, buildList } from "../src/builders";
 
 describe("Builder username validation", () => {
 	describe("buildTransfer rejects invalid Hive usernames", () => {
@@ -91,38 +91,6 @@ describe("Builder price validation", () => {
 					(e) => e.field.startsWith("price"),
 				);
 				expect(priceErrors.length).toBe(0);
-			}
-		});
-	});
-});
-
-describe("Builder pack transfer username validation", () => {
-	describe("buildPackTransfer rejects invalid usernames", () => {
-		test("rejects username too short (ab)", () => {
-			const result = buildPackTransfer({
-				packId: "pack_test123",
-				to: "ab",
-				quantity: 1,
-				from: "alice",
-			});
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				const errorFields = result.errors.map((e) => e.field);
-				expect(errorFields).toContain("to");
-			}
-		});
-
-		test("valid username does not produce username error on 'to'", () => {
-			const result = buildPackTransfer({
-				packId: "pack_test123",
-				to: "alice",
-				quantity: 1,
-				from: "bob123",
-			});
-
-			if (!result.success) {
-				const toErrors = result.errors.filter((e) => e.field === "to");
-				expect(toErrors.length).toBe(0);
 			}
 		});
 	});

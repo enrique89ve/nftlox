@@ -10,13 +10,6 @@ import {
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
-	ACTION_PACK_CREATE,
-	ACTION_PACK_BUY,
-	ACTION_PACK_TRANSFER,
-	ACTION_PACK_OPEN,
-	ACTION_PACK_DESTROY,
-	ACTION_PACK_APPROVE,
-	ACTION_PACK_TRANSFER_FROM,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
 	ACTION_NFT_TRANSFER_FROM,
@@ -27,6 +20,8 @@ import {
 	ACTION_NFT_LEND,
 	ACTION_NFT_RETURN,
 	ACTION_BUY,
+	ACTION_NODE_REGISTER,
+	isProtocolAction,
 	type ProtocolAction,
 } from "./constants";
 
@@ -50,20 +45,6 @@ import type {
 	ListingData,
 	UnlistData,
 	BuyData,
-	PackCreateData,
-	PackBuyData,
-	PackTransferData,
-	PackOpenData,
-	PackDestroyData,
-	PackCreateInput,
-	PackBuyInput,
-	PackTransferInput,
-	PackOpenInput,
-	PackDestroyInput,
-	PackApproveData,
-	PackApproveInput,
-	PackTransferFromData,
-	PackTransferFromInput,
 	NftApproveData,
 	NftApproveInput,
 	NftApproveAllData,
@@ -78,6 +59,8 @@ import type {
 	ListInput,
 	BurnInput,
 	UnlistInput,
+	NodeRegisterData,
+	NodeRegisterInput,
 	HiveOperation,
 	SchemaFieldType,
 } from "./types";
@@ -88,17 +71,19 @@ import {
 	generateImageHash,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
-	generateDeterministicPackId,
 } from "./dna";
 
 import { getProtocolVersion, getProtocolId } from "./protocol-state";
-import { ACTION_AUTH_LEVEL, type AuthLevel } from "./constants";
+import { ACTION_AUTH_LEVEL } from "./constants";
 
 /**
  * Creates a protocol payload envelope with protocol ID and version injected automatically.
  * Uses runtime state from initProtocol() if initialized, otherwise falls back to constants.
  */
 export function makePayload<T>(action: ProtocolAction, data: T): ProtocolPayload<T> {
+	if (!isProtocolAction(action)) {
+		throw new Error(`Unsupported protocol action: ${String(action)}`);
+	}
 	return { protocol: getProtocolId(), version: getProtocolVersion(), action, data };
 }
 
@@ -145,9 +130,13 @@ export function toHiveOperation(
 function buildHiveOperation(
 	payload: ProtocolPayload<unknown>,
 	signer: string,
-	authOverride?: AuthLevel,
 ): HiveOperation {
-	const level = authOverride ?? ACTION_AUTH_LEVEL[payload.action as ProtocolAction] ?? "posting";
+	const action = payload.action;
+	if (!isProtocolAction(action)) {
+		throw new Error(`Unsupported protocol action: ${String(action)}`);
+	}
+
+	const level = ACTION_AUTH_LEVEL[action];
 	const json = safeStringify(payload);
 	return [
 		"custom_json",
@@ -558,127 +547,7 @@ export async function createDeterministicMintOperation(
 	return toHiveOperation(payload, signer);
 }
 
-// ============ PACK PAYLOADS ============
-
-export async function createPackCreatePayload(
-	input: PackCreateInput,
-	creator: string,
-): Promise<ProtocolPayload<PackCreateData>> {
-	const id = await generateDeterministicPackId(input.collectionId, input.name);
-	return makePayload(ACTION_PACK_CREATE, {
-		id,
-		collectionId: input.collectionId,
-		name: input.name,
-		...(input.description && { description: input.description }),
-		...(input.imageUrl && { imageUrl: input.imageUrl }),
-		dropTable: input.dropTable,
-		itemsPerPack: input.itemsPerPack,
-		...(input.price && { price: input.price }),
-		maxSupply: input.maxSupply,
-	});
-}
-
-export function createPackBuyPayload(
-	input: PackBuyInput,
-): ProtocolPayload<PackBuyData> {
-	return makePayload(ACTION_PACK_BUY, {
-		packId: input.packId,
-		quantity: input.quantity,
-	});
-}
-
-export function createPackTransferPayload(
-	input: PackTransferInput,
-): ProtocolPayload<PackTransferData> {
-	return makePayload(ACTION_PACK_TRANSFER, {
-		packId: input.packId,
-		to: input.to,
-		quantity: input.quantity,
-	});
-}
-
-export function createPackOpenPayload(
-	input: PackOpenInput,
-): ProtocolPayload<PackOpenData> {
-	return makePayload(ACTION_PACK_OPEN, {
-		packId: input.packId,
-		quantity: input.quantity,
-	});
-}
-
-// ============ PACK HIVE OPERATIONS ============
-
-export async function createPackCreateOperation(
-	input: PackCreateInput,
-	creator: string,
-): Promise<HiveOperation> {
-	const payload = await createPackCreatePayload(input, creator);
-	return buildHiveOperation(payload, creator);
-}
-
-export function createPackBuyOperation(
-	input: PackBuyInput,
-	buyer: string,
-): HiveOperation {
-	const payload = createPackBuyPayload(input);
-	return buildHiveOperation(payload, buyer);
-}
-
-export function createPackTransferOperation(
-	input: PackTransferInput,
-	from: string,
-): HiveOperation {
-	const payload = createPackTransferPayload(input);
-	return buildHiveOperation(payload, from);
-}
-
-export function createPackOpenOperation(
-	input: PackOpenInput,
-	opener: string,
-): HiveOperation {
-	const payload = createPackOpenPayload(input);
-	return buildHiveOperation(payload, opener);
-}
-
-export function createPackDestroyPayload(
-	input: PackDestroyInput,
-): ProtocolPayload<PackDestroyData> {
-	return makePayload(ACTION_PACK_DESTROY, {
-		packId: input.packId,
-	});
-}
-
-export function createPackDestroyOperation(
-	input: PackDestroyInput,
-	creator: string,
-): HiveOperation {
-	const payload = createPackDestroyPayload(input);
-	return buildHiveOperation(payload, creator);
-}
-
 // ============ APPROVE & TRANSFER_FROM PAYLOADS ============
-
-export function createPackApprovePayload(
-	input: PackApproveInput,
-): ProtocolPayload<PackApproveData> {
-	return makePayload(ACTION_PACK_APPROVE, {
-		spender: input.spender,
-		packId: input.packId,
-		quantity: input.quantity,
-		approved: input.approved,
-	});
-}
-
-export function createPackTransferFromPayload(
-	input: PackTransferFromInput,
-): ProtocolPayload<PackTransferFromData> {
-	return makePayload(ACTION_PACK_TRANSFER_FROM, {
-		from: input.from,
-		to: input.to,
-		packId: input.packId,
-		quantity: input.quantity,
-	});
-}
 
 export function createNftApprovePayload(
 	input: NftApproveInput,
@@ -713,22 +582,6 @@ export function createNftTransferFromPayload(
 
 // ============ APPROVE & TRANSFER_FROM OPERATIONS ============
 // Approve operations require active key; transfer_from uses posting (gate was at approve)
-
-export function createPackApproveOperation(
-	input: PackApproveInput,
-	owner: string,
-): HiveOperation {
-	const payload = createPackApprovePayload(input);
-	return buildHiveOperation(payload, owner);
-}
-
-export function createPackTransferFromOperation(
-	input: PackTransferFromInput,
-	spender: string,
-): HiveOperation {
-	const payload = createPackTransferFromPayload(input);
-	return buildHiveOperation(payload, spender);
-}
 
 export function createNftApproveOperation(
 	input: NftApproveInput,
@@ -789,4 +642,23 @@ export function createNftReturnOperation(
 ): HiveOperation {
 	const payload = createNftReturnPayload(input);
 	return buildHiveOperation(payload, signer);
+}
+
+// ============ NODE REGISTRATION PAYLOADS ============
+
+export function createNodeRegisterPayload(
+	input: NodeRegisterInput,
+): ProtocolPayload<NodeRegisterData> {
+	return makePayload(ACTION_NODE_REGISTER, {
+		endpoint: input.endpoint,
+		publicKey: input.publicKey,
+	});
+}
+
+export function createNodeRegisterOperation(
+	input: NodeRegisterInput,
+	nodeAccount: string,
+): HiveOperation {
+	const payload = createNodeRegisterPayload(input);
+	return buildHiveOperation(payload, nodeAccount);
 }

@@ -27,6 +27,9 @@ export const BASIS_POINTS_DENOMINATOR = 10_000;
 export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 
+// L2 Node Constants
+export const PROTOCOL_NODE_FEE_HBD = "100.000";
+
 // Memo Prefixes (Marketplace)
 export const MEMO_PREFIX_BUY = "NFTLox BUY:";
 export const MEMO_PREFIX_ROYALTY = "NFTLox ROY:";
@@ -59,6 +62,7 @@ export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
 export const ACTION_EXTEND_SCHEMA = "extend_schema";
 export const ACTION_ARCHIVE_COLLECTION = "archive_collection";
+export const ACTION_NODE_REGISTER = "node_register";
 
 // Protocol Actions (Marketplace)
 export const ACTION_LIST = "list";
@@ -87,6 +91,7 @@ export const CORE_ACTIONS = [
 	ACTION_SET_DATA,
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
+	ACTION_NODE_REGISTER,
 ] as const;
 
 export const MARKETPLACE_ACTIONS = [

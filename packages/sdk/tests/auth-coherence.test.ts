@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
 	ALL_ACTIONS,
 	ACTION_AUTH_LEVEL,
+	makePayload,
 	toHiveOperation,
 	type ProtocolAction,
 	buildBurn,
@@ -20,8 +21,6 @@ import {
 	buildNftApproveAll,
 	buildNftTransferFrom,
 	buildDataOperatorApprove,
-	buildPackApprove,
-	buildPackTransferFrom,
 } from "../src/index";
 
 // ============ STATIC: no builder may hardcode auth literals ============
@@ -52,9 +51,8 @@ describe("toHiveOperation emits auth fields from ACTION_AUTH_LEVEL", () => {
 	for (const action of ALL_ACTIONS) {
 		const level = ACTION_AUTH_LEVEL[action as ProtocolAction];
 		test(`${action} → ${level}`, () => {
-			const payload = { protocol: "nftlox", version: "0.1", action, data: {} };
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const op = toHiveOperation(payload as any, "alice");
+			const payload = { protocol: "nftlox", version: "0.1", action, data: {} } as const;
+			const op = toHiveOperation(payload, "alice");
 			if (level === "active") {
 				expect(op[1].required_auths).toEqual(["alice"]);
 				expect(op[1].required_posting_auths).toEqual([]);
@@ -64,6 +62,34 @@ describe("toHiveOperation emits auth fields from ACTION_AUTH_LEVEL", () => {
 			}
 		});
 	}
+
+	test("rejects removed pack actions instead of falling back to posting auth", () => {
+		const payload = {
+			protocol: "nftlox",
+			version: "0.1",
+			action: "pack_buy" as ProtocolAction,
+			data: { packId: "pack_1", quantity: 1 },
+		} as const;
+
+		expect(() => toHiveOperation(payload, "alice")).toThrow("Unsupported protocol action: pack_buy");
+	});
+
+	test("makePayload rejects removed pack actions", () => {
+		expect(() => makePayload("pack_buy" as ProtocolAction, {})).toThrow("Unsupported protocol action: pack_buy");
+	});
+});
+
+describe("Operations catalog documents the canonical action set", () => {
+	function extractCatalogActions(markdown: string): string[] {
+		return [...markdown.matchAll(/^\| \d+ \| `([^`]+)` \|/gm)]
+			.map(match => match[1]!)
+			.filter(action => action !== "Action");
+	}
+
+	test("summary table exactly matches ALL_ACTIONS", () => {
+		const catalog = readFileSync(join(import.meta.dir, "..", "OPERATIONS.md"), "utf8");
+		expect(extractCatalogActions(catalog)).toEqual([...ALL_ACTIONS]);
+	});
 });
 
 // ============ END-TO-END: every builder emits auth fields consistent with the map ============
@@ -81,6 +107,7 @@ function assertAuthCoherent(
 	expect(kind).toBe("custom_json");
 	const parsed = JSON.parse(body.json) as { action: string };
 	const level = ACTION_AUTH_LEVEL[parsed.action as ProtocolAction];
+	expect(level).toBeDefined();
 	if (level === "active") {
 		expect(body.required_auths).toEqual([expectedSigner]);
 		expect(body.required_posting_auths).toEqual([]);
@@ -213,29 +240,5 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 		});
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operation, "alice");
-	});
-
-	test("buildPackApprove", () => {
-		const r = buildPackApprove({
-			spender: "bob",
-			packId: "pack_1",
-			quantity: 5,
-			approved: true,
-			owner: "alice",
-		});
-		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
-	});
-
-	test("buildPackTransferFrom", () => {
-		const r = buildPackTransferFrom({
-			from: "alice",
-			to: "bob",
-			packId: "pack_1",
-			quantity: 1,
-			operator: "charlie",
-		});
-		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "charlie");
 	});
 });
