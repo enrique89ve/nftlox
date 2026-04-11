@@ -34,6 +34,7 @@ const ALLOWED_SAMPLE_FILES = new Set([
 	"sample-nfts.json",
 	"sample-game-cards.json",
 	"template-seeds.json",
+	"sample-satoshi.json",
 ]);
 
 const server = Bun.serve({
