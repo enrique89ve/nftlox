@@ -26,7 +26,6 @@ let currentSession: MintingSession | null = null;
 let broadcastedCount = 0;
 let totalBroadcastOps = 0;
 let debugRoutesEnabled = false;
-const PACKS_EXTENSION_ENABLED = false;
 
 // ============ FETCH-BACKED HELPERS ============
 
@@ -103,10 +102,6 @@ let currentCollectionId: string | null = null;
 let currentNftId: string | null = null;
 
 function navigateTo(pageId: string) {
-	if (!PACKS_EXTENSION_ENABLED && pageId === "packs") {
-		pageId = "collections";
-	}
-
 	document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
 	document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
 
@@ -158,18 +153,6 @@ function checkKeychain() {
 		dot.classList.add("error");
 		log("Keychain not found - install Hive Keychain extension", "error");
 	}
-}
-
-function hidePackExtensionUi(): void {
-	if (PACKS_EXTENSION_ENABLED) return;
-
-	document.querySelector('.nav-item[data-page="packs"]')?.remove();
-	$("page-packs")?.remove();
-	document.querySelector('button[onclick="loadUserPacks()"]')?.remove();
-	$("user-packs-container")?.closest(".card")?.remove();
-	$("btn-verify-pack-open")?.closest(".card")?.remove();
-	$("btn-pack-approve")?.closest(".card")?.remove();
-	$("btn-pack-transfer-from")?.closest(".card")?.remove();
 }
 
 $("btn-connect")?.addEventListener("click", () => {
@@ -453,7 +436,7 @@ async function archiveCurrentCollection() {
 	}
 
 	const confirmed = window.confirm(
-		"Archive this collection? This only succeeds if it has no seeds, instances, or packs.",
+		"Archive this collection? This only succeeds if it has no seeds or instances.",
 	);
 	if (!confirmed) return;
 
@@ -1843,271 +1826,6 @@ function resetMinting() {
 (window as any).broadcastBatch = broadcastBatch;
 (window as any).resetMinting = resetMinting;
 
-// ============ HIVE NFT TRACKER (BlockTrades Standard) ============
-
-function nftTrackerLog(msg: string, type = "info") {
-	log(msg, type, "nft-tracker-log");
-}
-
-function getNftTrackerFormData(action: string): Record<string, unknown> | null {
-	if (action === "register") {
-		const creator = ($("nft-reg-creator") as HTMLInputElement)?.value.trim().toLowerCase();
-		const symbol = ($("nft-reg-symbol") as HTMLInputElement)?.value.trim().toUpperCase();
-		const name = ($("nft-reg-name") as HTMLInputElement)?.value.trim();
-		const maxCount = parseInt(($("nft-reg-max") as HTMLInputElement)?.value || "0", 10);
-		const issuersRaw = ($("nft-reg-issuers") as HTMLInputElement)?.value.trim();
-
-		if (!creator || !symbol || !name) {
-			nftTrackerLog("Fill creator, symbol, and name", "error");
-			return null;
-		}
-
-		const issuers = [creator];
-		if (issuersRaw) {
-			issuersRaw.split(",").map(s => s.trim().toLowerCase()).filter(Boolean).forEach(s => {
-				if (!issuers.includes(s)) issuers.push(s);
-			});
-		}
-
-		return {
-			creator,
-			symbol: `${creator}/${symbol}`,
-			name,
-			maxCount: maxCount || null,
-			issuers,
-		};
-	}
-
-	if (action === "issue") {
-		const issuer = ($("nft-issue-issuer") as HTMLInputElement)?.value.trim().toLowerCase();
-		const symbol = ($("nft-issue-symbol") as HTMLInputElement)?.value.trim();
-		const holder = ($("nft-issue-holder") as HTMLInputElement)?.value.trim().toLowerCase();
-		const dataRaw = ($("nft-issue-data") as HTMLTextAreaElement)?.value.trim();
-		const soulbound = ($("nft-issue-soulbound") as HTMLInputElement)?.checked || false;
-
-		if (!issuer || !symbol || !holder) {
-			nftTrackerLog("Fill issuer, symbol, and holder", "error");
-			return null;
-		}
-
-		let data: Record<string, unknown> = {};
-		if (dataRaw) {
-			try { data = JSON.parse(dataRaw); }
-			catch { nftTrackerLog("Invalid JSON in data field", "error"); return null; }
-		}
-
-		return { issuer, symbol, holder, data, soulbound };
-	}
-
-	if (action === "transfer") {
-		const from = ($("nft-xfer-from") as HTMLInputElement)?.value.trim().toLowerCase();
-		const to = ($("nft-xfer-to") as HTMLInputElement)?.value.trim().toLowerCase();
-		const symbol = ($("nft-xfer-symbol") as HTMLInputElement)?.value.trim();
-		const idsRaw = ($("nft-xfer-ids") as HTMLInputElement)?.value.trim();
-
-		if (!from || !to || !symbol || !idsRaw) {
-			nftTrackerLog("Fill all transfer fields", "error");
-			return null;
-		}
-
-		const ids = idsRaw.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
-		if (ids.length === 0) {
-			nftTrackerLog("At least one valid ID is required", "error");
-			return null;
-		}
-
-		return { from, to, symbol, ids };
-	}
-
-	return null;
-}
-
-async function nftTrackerPreview(action: string) {
-	const formData = getNftTrackerFormData(action);
-	if (!formData) return;
-
-	try {
-		const response = await fetch(`/api/nft-tracker/${action}`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(formData),
-		});
-		const result = await response.json();
-
-		if (result.error) {
-			nftTrackerLog(`Error: ${result.error}`, "error");
-			return;
-		}
-
-		// Show the preview card
-		const card = $("nft-tracker-preview-card");
-		const jsonEl = $("nft-tracker-json");
-		if (card) card.style.display = "block";
-		if (jsonEl) jsonEl.textContent = JSON.stringify(result, null, 2);
-
-		nftTrackerLog(`Preview generated for "${action}" action`, "success");
-	} catch (e) {
-		nftTrackerLog(`Request failed: ${(e as Error).message}`, "error");
-	}
-}
-
-async function nftTrackerBroadcast(action: string) {
-	const formData = getNftTrackerFormData(action);
-	if (!formData) return;
-
-	if (!(window as any).hive_keychain) {
-		nftTrackerLog("Hive Keychain not detected. Install the extension.", "error");
-		return;
-	}
-
-	try {
-		const response = await fetch(`/api/nft-tracker/${action}`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(formData),
-		});
-		const result = await response.json();
-
-		if (result.error) {
-			nftTrackerLog(`Error: ${result.error}`, "error");
-			return;
-		}
-
-		// Show preview
-		const card = $("nft-tracker-preview-card");
-		const jsonEl = $("nft-tracker-json");
-		if (card) card.style.display = "block";
-		if (jsonEl) jsonEl.textContent = JSON.stringify(result, null, 2);
-
-		// Get the broadcaster account
-		const broadcaster =
-			(formData.creator as string) ||
-			(formData.issuer as string) ||
-			(formData.from as string) ||
-			connectedUser;
-
-		if (!broadcaster) {
-			nftTrackerLog("No account specified for broadcasting", "error");
-			return;
-		}
-
-		nftTrackerLog(`Broadcasting "${action}" as @${broadcaster}...`);
-
-		const ops = [result.operation];
-		(window as any).hive_keychain.requestBroadcast(
-			broadcaster,
-			ops,
-			"Active",
-			(res: any) => {
-				if (res.success) {
-					nftTrackerLog(`✅ "${action}" broadcast successful! TxID: ${res.result?.id || "confirmed"}`, "success");
-				} else {
-					const err = typeof res.error === "object" ? JSON.stringify(res.error) : res.error;
-					nftTrackerLog(`❌ Broadcast failed: ${err}`, "error");
-				}
-			}
-		);
-	} catch (e) {
-		nftTrackerLog(`Request failed: ${(e as Error).message}`, "error");
-	}
-}
-
-// Auto-fill creator fields when connected
-function autoFillNftTracker() {
-	if (!connectedUser) return;
-	const fields = ["nft-reg-creator", "nft-issue-issuer", "nft-xfer-from"];
-	for (const id of fields) {
-		const el = $(id) as HTMLInputElement;
-		if (el && !el.value) el.value = connectedUser;
-	}
-}
-
-// ---- Sample Bulls Loader ----
-
-let sampleBulls: any[] = [];
-
-async function loadSampleBulls() {
-	try {
-		const response = await fetch("/playground/sample-bulls.json");
-		const raw = await response.json();
-		sampleBulls = raw.seeds || raw;
-
-		// Pre-fill Register form
-		const creator = connectedUser || "enrique89";
-		const setVal = (id: string, val: string) => {
-			const el = $(id) as HTMLInputElement;
-			if (el) el.value = val;
-		};
-		setVal("nft-reg-creator", creator);
-		setVal("nft-reg-symbol", "BULLS");
-		setVal("nft-reg-name", "HiveBull Warriors");
-		const totalSupply = sampleBulls.reduce((sum: number, b: any) => sum + (b.maxSupply || 0), 0);
-		setVal("nft-reg-max", String(totalSupply));
-
-		// Pre-fill Issue form defaults
-		setVal("nft-issue-issuer", creator);
-		setVal("nft-issue-symbol", `${creator}/BULLS`);
-		setVal("nft-issue-holder", creator);
-
-		// Render bull cards
-		const container = $("nft-tracker-bulls");
-		const grid = $("nft-tracker-bulls-grid");
-		if (container) container.style.display = "block";
-		if (grid) {
-			grid.innerHTML = sampleBulls.map((bull: any, i: number) => `
-				<div class="nft-card" data-bull-idx="${i}" onclick="selectBullForIssue(${i})" style="cursor: pointer;">
-					<img class="nft-image" src="${escapeHtml(bull.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
-					<div class="nft-name">${escapeHtml(bull.name)}</div>
-					<div class="nft-owner" style="color: var(--text-muted); font-size: 11px;">${escapeHtml(bull.brief)}</div>
-					<div class="nft-id" style="display: flex; justify-content: space-between; margin-top: 6px;">
-						<span style="color: var(--accent);">${escapeHtml(bull.artId)}</span>
-						<span>Supply: ${bull.maxSupply}</span>
-					</div>
-				</div>
-			`).join("");
-		}
-
-		nftTrackerLog(`Loaded ${sampleBulls.length} bulls. Register form pre-filled. Click a bull to fill Issue form.`, "success");
-	} catch (e) {
-		nftTrackerLog(`Failed to load sample bulls: ${(e as Error).message}`, "error");
-	}
-}
-
-function selectBullForIssue(index: number) {
-	const bull = sampleBulls[index];
-	if (!bull) return;
-
-	const creator = ($("nft-reg-creator") as HTMLInputElement)?.value.trim() || connectedUser || "enrique89";
-	const setVal = (id: string, val: string) => {
-		const el = $(id) as HTMLInputElement | HTMLTextAreaElement;
-		if (el) el.value = val;
-	};
-
-	setVal("nft-issue-issuer", creator);
-	setVal("nft-issue-symbol", `${creator}/BULLS`);
-	setVal("nft-issue-holder", creator);
-	setVal("nft-issue-data", JSON.stringify({
-		artId: bull.artId,
-		name: bull.name,
-		brief: bull.brief,
-		image: bull.imageUrl,
-		maxSupply: bull.maxSupply,
-	}, null, 2));
-
-	// Highlight selected card
-	document.querySelectorAll("#nft-tracker-bulls-grid .nft-card").forEach(c => c.classList.remove("selected"));
-	const card = document.querySelector(`#nft-tracker-bulls-grid .nft-card[data-bull-idx="${index}"]`);
-	if (card) card.classList.add("selected");
-
-	nftTrackerLog(`Selected: ${bull.name} (${bull.artId}) — Issue form pre-filled`, "success");
-}
-
-// Export for HTML onclick handlers
-(window as any).nftTrackerPreview = nftTrackerPreview;
-(window as any).nftTrackerBroadcast = nftTrackerBroadcast;
-(window as any).loadSampleBulls = loadSampleBulls;
-(window as any).selectBullForIssue = selectBullForIssue;
-
 // ============ NFT DETAIL ACTIONS ============
 
 async function nftDetailTransfer() {
@@ -2543,7 +2261,6 @@ validateField("col-image", (v) => {
 
 // ============ INIT ============
 
-hidePackExtensionUi();
 setTimeout(checkKeychain, 500);
 syncDebugUi();
 loadProtocolVersion();

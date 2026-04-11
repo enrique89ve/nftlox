@@ -139,6 +139,34 @@
 			opacity: 1;
 		}
 
+		.sidebar-footer {
+			margin-top: auto;
+			padding-top: 16px;
+			border-top: 1px solid var(--border);
+		}
+
+		.utility-links {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+
+		.utility-links summary {
+			cursor: pointer;
+			color: var(--text-dim);
+			font-size: 12px;
+			font-weight: 500;
+			list-style: none;
+		}
+
+		.utility-links summary::-webkit-details-marker {
+			display: none;
+		}
+
+		.utility-links[open] summary {
+			color: var(--text-muted);
+		}
+
 		/* Connection status — fixed top-right */
 		.connection {
 			position: fixed;
@@ -235,6 +263,54 @@
 		.page-desc {
 			color: var(--text-muted);
 			font-size: 14px;
+		}
+
+		.workflow-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+			gap: 16px;
+			margin-bottom: 24px;
+		}
+
+		.workflow-card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 18px;
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+			min-height: 180px;
+		}
+
+		.workflow-card > div {
+			flex: 1;
+		}
+
+		.workflow-step {
+			width: 28px;
+			height: 28px;
+			border-radius: 8px;
+			background: var(--accent-dim);
+			color: var(--accent);
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			font-family: var(--mono);
+			font-size: 12px;
+			font-weight: 700;
+		}
+
+		.workflow-title {
+			font-size: 16px;
+			font-weight: 600;
+			color: var(--text);
+		}
+
+		.workflow-copy {
+			color: var(--text-muted);
+			font-size: 13px;
+			flex: 1;
 		}
 
 		/* Cards */
@@ -1047,6 +1123,26 @@
 		.log-msg.error { color: var(--error); }
 		.log-msg.warning { color: var(--warning); }
 
+		.app-log {
+			margin-top: 20px;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 14px 16px;
+		}
+
+		.app-log summary {
+			cursor: pointer;
+			color: var(--text-muted);
+			font-size: 13px;
+			font-weight: 500;
+		}
+
+		.app-log .log-container {
+			margin-top: 12px;
+			max-height: 160px;
+		}
+
 		/* Empty state */
 		.empty-state {
 			text-align: center;
@@ -1335,11 +1431,50 @@
 			}
 
 			.sidebar {
+				position: sticky;
+				top: 0;
+				z-index: 900;
+				padding: 12px;
+				gap: 12px;
+				border-right: 0;
+				border-bottom: 1px solid var(--border);
+			}
+
+			.logo {
 				display: none;
+			}
+
+			.sidebar-footer {
+				display: none;
+			}
+
+			nav {
+				flex-direction: row;
+				overflow-x: auto;
+				padding-bottom: 2px;
+			}
+
+			.nav-section {
+				display: none;
+			}
+
+			.nav-item {
+				white-space: nowrap;
+				flex: 0 0 auto;
 			}
 
 			main {
 				padding: 20px;
+			}
+
+			.connection {
+				top: auto;
+				right: 12px;
+				bottom: 12px;
+			}
+
+			.workflow-card {
+				min-height: 0;
 			}
 		}
 	</style>
@@ -1362,7 +1497,7 @@
 						<rect x="3" y="14" width="7" height="7" rx="1"/>
 						<rect x="14" y="14" width="7" height="7" rx="1"/>
 					</svg>
-					Explorer
+					Explore
 				</div>
 				<div class="nav-item" data-page="create">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1370,43 +1505,35 @@
 						<line x1="12" y1="8" x2="12" y2="16"/>
 						<line x1="8" y1="12" x2="16" y2="12"/>
 					</svg>
-					Create Collection
+					Create
 				</div>
-
-				<div class="nav-section">Inventory</div>
 				<div class="nav-item" data-page="inventory">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
 					</svg>
 					Inventory
 				</div>
-
-				<div class="nav-section">Marketplace</div>
 				<div class="nav-item" data-page="marketplace">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
 						<line x1="3" y1="6" x2="21" y2="6"/>
 						<path d="M16 10a4 4 0 01-8 0"/>
 					</svg>
-					Marketplace
-				</div>
-				<div class="nav-item" data-page="packs">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-						<polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-						<line x1="12" y1="22.08" x2="12" y2="12"/>
-					</svg>
-					Packs
-				</div>
-
-				<div class="nav-section">Advanced</div>
-				<div class="nav-item" data-page="advanced">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-					</svg>
-					Advanced
+					Market
 				</div>
 			</nav>
+
+			<div class="sidebar-footer">
+				<details class="utility-links">
+					<summary>Developer tools</summary>
+					<div class="nav-item" data-page="advanced">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+						</svg>
+						Advanced
+					</div>
+				</details>
+			</div>
 
 		</aside>
 
@@ -1426,20 +1553,47 @@
 			<!-- Collections Page -->
 			<div class="page active" id="page-collections">
 				<div class="page-header">
-					<h1 class="page-title">Explorer</h1>
-					<p class="page-desc">Browse and explore all NFT collections on the protocol</p>
+					<h1 class="page-title">NFTLox Playground</h1>
+					<p class="page-desc">Create seeds, distribute instances, and manage NFT ownership on Hive.</p>
+				</div>
+
+				<div class="workflow-grid">
+					<article class="workflow-card">
+						<span class="workflow-step">1</span>
+						<div>
+							<h2 class="workflow-title">Create seeds</h2>
+							<p class="workflow-copy">Use sample data or upload a seed JSON file, then broadcast the collection and seed mints.</p>
+						</div>
+						<button class="btn btn-primary" onclick="showPage('create')">Create collection</button>
+					</article>
+					<article class="workflow-card">
+						<span class="workflow-step">2</span>
+						<div>
+							<h2 class="workflow-title">Distribute instances</h2>
+							<p class="workflow-copy">Open a seed you own and send instances to a Hive account with a posting-key operation.</p>
+						</div>
+						<button class="btn btn-secondary" onclick="showPage('inventory')">Open inventory</button>
+					</article>
+					<article class="workflow-card">
+						<span class="workflow-step">3</span>
+						<div>
+							<h2 class="workflow-title">Trade instances</h2>
+							<p class="workflow-copy">List owned instances, browse active listings, and complete marketplace purchases.</p>
+						</div>
+						<button class="btn btn-secondary" onclick="showPage('marketplace')">Open market</button>
+					</article>
 				</div>
 
 				<!-- Search by username -->
 				<div class="card" style="margin-bottom: 24px;">
 					<div class="card-header">
-						<span class="card-title">Search NFTs by User</span>
+						<span class="card-title">Find NFTs by Owner</span>
 					</div>
 					<div style="display: flex; gap: 10px; align-items: flex-end;">
 						<div class="form-group" style="flex: 1; margin-bottom: 0;">
 							<input type="text" class="form-input" id="search-user" placeholder="Enter Hive username">
 						</div>
-						<button class="btn btn-primary" onclick="searchUser()" style="height: 42px;">Search</button>
+						<button class="btn btn-primary" onclick="searchUser()" style="height: 42px;">Find NFTs</button>
 					</div>
 					<div id="search-results" class="nft-grid" style="margin-top: 16px;"></div>
 				</div>
@@ -1715,7 +1869,6 @@
 				<div class="btn-group" style="margin-bottom: 24px;">
 					<button class="btn btn-secondary" onclick="loadInventory()">Refresh NFTs</button>
 					<button class="btn btn-secondary" onclick="loadUserActivity()">Load Activity</button>
-					<button class="btn btn-secondary" onclick="loadUserPacks()">Load Packs</button>
 				</div>
 
 				<div id="inventory-container">
@@ -1737,15 +1890,6 @@
 					</div>
 				</div>
 
-				<!-- User Packs -->
-				<div class="card">
-					<div class="card-header">
-						<span class="card-title">My Packs</span>
-					</div>
-					<div id="user-packs-container">
-						<div class="empty-state"><p class="empty-state-text">Connect wallet to view your pack balances</p></div>
-					</div>
-				</div>
 			</div>
 
 	
@@ -2024,12 +2168,11 @@
 				</div>
 			</div>
 
-			<!-- Global Activity Log -->
-			<div class="card" style="margin-top: 20px;">
-				<div class="card-title">Activity Log</div>
+			<details class="app-log">
+				<summary>Activity log</summary>
 				<div class="log-container" id="log"></div>
-			</div>
-			<!-- ============ ADVANCED PAGE (Tabbed: Permissions | SPV | NFT Tracker) ============ -->
+			</details>
+			<!-- ============ ADVANCED PAGE (Tabbed: Permissions | SPV | Collection Ops | Debug) ============ -->
 			<div class="page" id="page-advanced">
 				<div class="page-header">
 					<h1 class="page-title">Advanced</h1>
@@ -2039,7 +2182,6 @@
 				<div class="advanced-tabs">
 					<button class="advanced-tab active" data-tab="tab-permissions">Permissions</button>
 					<button class="advanced-tab" data-tab="tab-spv">SPV Verify</button>
-					<button class="advanced-tab" data-tab="tab-nft-tracker">NFT Tracker</button>
 					<button class="advanced-tab" data-tab="tab-collection-ops">Collection Ops</button>
 					<button class="advanced-tab" data-tab="tab-debug">Debug</button>
 				</div>
@@ -2116,64 +2258,6 @@
 							<input class="form-input" id="perm-nft-xfer-instance" placeholder="inst_abc123_1">
 						</div>
 						<button class="btn btn-primary" id="btn-nft-transfer-from">Transfer From via Keychain</button>
-					</div>
-
-					<!-- Pack Approve -->
-					<div class="card">
-						<div class="card-header">
-							<span class="card-title">Pack Approve</span>
-							<span class="nft-badge auth">ACTIVE KEY</span>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">Spender</label>
-								<input class="form-input" id="perm-pack-approve-spender" placeholder="bob">
-							</div>
-							<div class="form-group">
-								<label class="form-label">Pack ID</label>
-								<input class="form-input" id="perm-pack-approve-pack" placeholder="pack_abc123">
-							</div>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">Quantity</label>
-								<input class="form-input" type="number" id="perm-pack-approve-quantity" value="1" min="1">
-							</div>
-							<div class="form-group" style="display: flex; align-items: center; gap: 8px; padding-top: 20px;">
-								<input type="checkbox" id="perm-pack-approve-approved" checked>
-								<label for="perm-pack-approve-approved" style="font-size: 13px;">Approved</label>
-							</div>
-						</div>
-						<button class="btn btn-primary" id="btn-pack-approve">Approve via Keychain</button>
-					</div>
-
-					<!-- Pack Transfer From -->
-					<div class="card">
-						<div class="card-header">
-							<span class="card-title">Pack Transfer From</span>
-							<span class="nft-badge auth">ACTIVE KEY</span>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">From (owner)</label>
-								<input class="form-input" id="perm-pack-xfer-from" placeholder="alice">
-							</div>
-							<div class="form-group">
-								<label class="form-label">To</label>
-								<input class="form-input" id="perm-pack-xfer-to" placeholder="charlie">
-							</div>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">Pack ID</label>
-								<input class="form-input" id="perm-pack-xfer-pack" placeholder="pack_abc123">
-							</div>
-							<div class="form-group">
-								<label class="form-label">Quantity</label>
-								<input class="form-input" type="number" id="perm-pack-xfer-quantity" value="1" min="1">
-							</div>
-						</div>
-						<button class="btn btn-primary" id="btn-pack-transfer-from">Transfer From via Keychain</button>
 					</div>
 
 					<!-- Lending -->
@@ -2310,166 +2394,6 @@
 						<div id="spv-onchain-result" style="display: none; margin-top: 16px;"></div>
 					</div>
 
-					<!-- Verify Pack Open -->
-					<div class="card">
-						<div class="card-header">
-							<span class="card-title">Verify Pack Open</span>
-						</div>
-						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Verify that a pack_open transaction produced the correct NFTs using deterministic RNG replay.</p>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">Transaction ID</label>
-								<input class="form-input" id="spv-pack-txid" placeholder="abc123def456...">
-							</div>
-							<div class="form-group">
-								<label class="form-label">Block Number</label>
-								<input class="form-input" type="number" id="spv-pack-block" placeholder="12345678">
-							</div>
-						</div>
-						<button class="btn btn-primary" id="btn-verify-pack-open">Verify Pack Open</button>
-						<div id="spv-pack-result" style="display: none; margin-top: 16px;"></div>
-					</div>
-				</div>
-
-				<!-- ===== Tab: NFT Tracker ===== -->
-				<div class="advanced-tab-content" id="tab-nft-tracker">
-					<!-- Sample Data Loader -->
-					<div class="card">
-						<div class="card-header">
-							<span class="card-title">Sample Data</span>
-							<button class="btn btn-primary btn-sm" onclick="loadSampleBulls()">Load Sample Bulls</button>
-						</div>
-						<div id="nft-tracker-bulls" style="display: none;">
-							<div class="nft-grid" id="nft-tracker-bulls-grid"></div>
-							<p style="font-size: 12px; color: var(--text-dim); margin-top: 12px;">
-								Click any bull card to pre-fill the Issue form below. Register the collection first!
-							</p>
-						</div>
-					</div>
-
-					<!-- Register NFT Type -->
-					<div class="card">
-						<div class="card-header">
-							<span class="card-title">1. Register NFT Type (Collection)</span>
-							<span class="nft-badge seed">ACTIVE KEY</span>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">Creator (Hive Account)</label>
-								<input class="form-input" id="nft-reg-creator" placeholder="alice">
-							</div>
-							<div class="form-group">
-								<label class="form-label">Symbol</label>
-								<input class="form-input" id="nft-reg-symbol" placeholder="BADGE">
-							</div>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">Name</label>
-								<input class="form-input" id="nft-reg-name" placeholder="Achievement Badges">
-							</div>
-							<div class="form-group">
-								<label class="form-label">Max Count (0 = unlimited)</label>
-								<input class="form-input" id="nft-reg-max" type="number" value="1000">
-							</div>
-						</div>
-						<div class="form-group">
-							<label class="form-label">Additional Issuers (comma-separated, optional)</label>
-							<input class="form-input" id="nft-reg-issuers" placeholder="bob, charlie">
-						</div>
-						<div class="btn-group">
-							<button class="btn btn-secondary" onclick="nftTrackerPreview('register')">Preview JSON</button>
-							<button class="btn btn-primary" onclick="nftTrackerBroadcast('register')">Register via Keychain</button>
-						</div>
-					</div>
-
-					<!-- Issue NFT Instance -->
-					<div class="card">
-						<div class="card-header">
-							<span class="card-title">2. Issue NFT Instance (Mint)</span>
-							<span class="nft-badge instance">ACTIVE KEY</span>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">Issuer (your account)</label>
-								<input class="form-input" id="nft-issue-issuer" placeholder="alice">
-							</div>
-							<div class="form-group">
-								<label class="form-label">Symbol</label>
-								<input class="form-input" id="nft-issue-symbol" placeholder="alice/BADGE">
-							</div>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">Holder (recipient)</label>
-								<input class="form-input" id="nft-issue-holder" placeholder="charlie">
-							</div>
-							<div class="form-group">
-								<label class="form-label">Tags (comma-separated, max 4)</label>
-								<input class="form-input" id="nft-issue-tags" placeholder="rare, bronze">
-							</div>
-						</div>
-						<div class="form-group">
-							<label class="form-label">Custom Data (JSON)</label>
-							<textarea class="form-input" id="nft-issue-data" rows="3" placeholder='{"image": "https://...", "rarity": "rare", "level": 1}'></textarea>
-						</div>
-						<div class="form-group">
-							<label style="color: var(--text-muted); font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-								<input type="checkbox" id="nft-issue-soulbound"> Soulbound (non-transferable)
-							</label>
-						</div>
-						<div class="btn-group">
-							<button class="btn btn-secondary" onclick="nftTrackerPreview('issue')">Preview JSON</button>
-							<button class="btn btn-primary" onclick="nftTrackerBroadcast('issue')">Issue via Keychain</button>
-						</div>
-					</div>
-
-					<!-- Transfer NFT -->
-					<div class="card">
-						<div class="card-header">
-							<span class="card-title">3. Transfer NFT</span>
-							<span class="nft-badge auth">ACTIVE KEY</span>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">From (your account)</label>
-								<input class="form-input" id="nft-xfer-from" placeholder="alice">
-							</div>
-							<div class="form-group">
-								<label class="form-label">To</label>
-								<input class="form-input" id="nft-xfer-to" placeholder="bob">
-							</div>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">Symbol</label>
-								<input class="form-input" id="nft-xfer-symbol" placeholder="alice/BADGE">
-							</div>
-							<div class="form-group">
-								<label class="form-label">Instance IDs (comma-separated)</label>
-								<input class="form-input" id="nft-xfer-ids" placeholder="1, 2, 3">
-							</div>
-						</div>
-						<div class="btn-group">
-							<button class="btn btn-secondary" onclick="nftTrackerPreview('transfer')">Preview JSON</button>
-							<button class="btn btn-primary" onclick="nftTrackerBroadcast('transfer')">Transfer via Keychain</button>
-						</div>
-					</div>
-
-					<!-- JSON Preview -->
-					<div class="card" id="nft-tracker-preview-card" style="display: none;">
-						<div class="card-header">
-							<span class="card-title">Generated Operation</span>
-							<button class="btn btn-sm btn-secondary" onclick="document.getElementById('nft-tracker-preview-card').style.display='none'">Close</button>
-						</div>
-						<pre id="nft-tracker-json" style="background: var(--bg); padding: 16px; border-radius: 6px; font-family: var(--mono); font-size: 12px; overflow-x: auto; color: var(--accent); max-height: 400px; overflow-y: auto;"></pre>
-					</div>
-
-					<!-- Activity Log -->
-					<div class="card">
-						<div class="card-title">Activity Log</div>
-						<div class="log-container" id="nft-tracker-log"></div>
-					</div>
 				</div>
 
 				<!-- ===== Tab: Collection Ops ===== -->
@@ -2619,179 +2543,6 @@
 				<!-- Sales history not yet available -->
 			</div>
 
-			<!-- ============ PACKS PAGE ============ -->
-			<div class="page" id="page-packs">
-				<div class="page-header">
-					<h1 class="page-title">Packs</h1>
-					<p class="page-desc">Create, browse, buy, open, and transfer packs</p>
-				</div>
-
-				<!-- Create Pack -->
-				<div class="card" id="pack-create-card">
-					<div class="card-header">
-						<span class="card-title">Create Pack</span>
-						<button class="btn btn-sm btn-secondary" id="btn-toggle-pack-form" onclick="togglePackCreateForm()">Show Form</button>
-					</div>
-					<div id="pack-create-form" style="display: none;">
-
-						<!-- Step 1: Source Collection -->
-						<div style="margin-bottom: 24px;">
-							<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
-								<span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 11px; font-weight: 600;">1</span>
-								<span style="font-size: 13px; font-weight: 500; color: var(--text); letter-spacing: -0.01em;">Source Collection</span>
-							</div>
-							<div class="form-group" style="margin-bottom: 0;">
-								<div style="display: flex; gap: 8px;">
-									<input type="text" class="form-input" id="pack-collection-id" placeholder="Collection ID — paste or select below">
-									<button class="btn btn-sm btn-secondary" onclick="loadCollectionsForPack()" style="white-space: nowrap;">My Collections</button>
-								</div>
-								<select class="form-input" id="pack-collection-select" style="display: none; margin-top: 8px;" onchange="selectCollectionForPack()">
-									<option value="">Select a collection...</option>
-								</select>
-							</div>
-						</div>
-
-						<!-- Step 2: Pack Info -->
-						<div style="margin-bottom: 24px;">
-							<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
-								<span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 11px; font-weight: 600;">2</span>
-								<span style="font-size: 13px; font-weight: 500; color: var(--text); letter-spacing: -0.01em;">Pack Details</span>
-							</div>
-							<div class="form-row">
-								<div class="form-group">
-									<label class="form-label">Pack Name</label>
-									<input type="text" class="form-input" id="pack-name" placeholder="e.g., Starter Pack">
-								</div>
-								<div class="form-group">
-									<label class="form-label">Image URL <span style="color: var(--text-dim); font-weight: normal;">(optional)</span></label>
-									<input type="url" class="form-input" id="pack-image-url" placeholder="https://...">
-								</div>
-							</div>
-							<div class="form-group">
-								<label class="form-label">Description <span style="color: var(--text-dim); font-weight: normal;">(optional)</span></label>
-								<textarea class="form-input" id="pack-description" placeholder="A brief description of this pack..." rows="2" style="resize: vertical;"></textarea>
-							</div>
-						</div>
-
-						<!-- Step 3: Drop Table -->
-						<div style="margin-bottom: 24px;">
-							<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-								<div style="display: flex; align-items: center; gap: 8px;">
-									<span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 11px; font-weight: 600;">3</span>
-									<span style="font-size: 13px; font-weight: 500; color: var(--text); letter-spacing: -0.01em;">Drop Table</span>
-								</div>
-								<div style="display: flex; gap: 6px;">
-									<button class="btn btn-sm btn-secondary" onclick="loadSeedsForDropTable()" style="font-size: 12px;">
-										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-										Load from Collection
-									</button>
-									<button class="btn btn-sm btn-secondary" onclick="addDropTableEntry()" style="font-size: 12px;">+ Manual</button>
-								</div>
-							</div>
-							<div id="pack-drop-table-entries" style="display: flex; flex-direction: column; gap: 6px;"></div>
-
-							<!-- Supply Analysis Panel -->
-							<div id="pack-supply-analysis" style="display: none; margin-top: 16px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden;">
-								<div style="padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
-									<span style="font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em;">Supply Analysis</span>
-									<span id="pack-supply-status" style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;"></span>
-								</div>
-								<div id="pack-supply-bars" style="padding: 12px 16px;"></div>
-								<div id="pack-supply-summary" style="padding: 8px 16px 12px; font-size: 12px; color: var(--text-muted);"></div>
-							</div>
-						</div>
-
-						<!-- Step 4: Economics -->
-						<div style="margin-bottom: 24px;">
-							<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
-								<span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 11px; font-weight: 600;">4</span>
-								<span style="font-size: 13px; font-weight: 500; color: var(--text); letter-spacing: -0.01em;">Economics</span>
-							</div>
-							<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
-								<div class="form-group" style="margin-bottom: 0;">
-									<label class="form-label">Items / Pack</label>
-									<input type="number" class="form-input" id="pack-items-per-pack" min="1" max="20" value="3" onchange="recalculateSupply()" oninput="recalculateSupply()">
-								</div>
-								<div class="form-group" style="margin-bottom: 0;">
-									<label class="form-label">
-										Max Supply
-										<span id="pack-max-supply-hint" style="color: var(--accent); font-weight: 400;"></span>
-									</label>
-									<input type="number" class="form-input" id="pack-max-supply" min="0" value="100" onchange="recalculateSupply()" oninput="recalculateSupply()">
-								</div>
-								<div class="form-group" style="margin-bottom: 0;">
-									<label class="form-label">Price <span style="color: var(--text-dim); font-weight: normal;">(optional)</span></label>
-									<div style="display: flex; gap: 4px;">
-										<input type="text" class="form-input" id="pack-price-amount" placeholder="0.000" style="flex: 1;">
-										<select class="form-input" id="pack-price-currency" style="width: 72px; padding: 12px 6px;">
-											<option value="HIVE">HIVE</option>
-											<option value="HBD">HBD</option>
-										</select>
-									</div>
-								</div>
-							</div>
-						</div>
-
-						<!-- Divider -->
-						<div style="border-top: 1px solid var(--border); margin: 4px 0 20px;"></div>
-
-						<!-- Submit -->
-						<div style="display: flex; align-items: center; gap: 12px;">
-							<button class="btn btn-primary" id="btn-create-pack" onclick="submitPackCreate()" style="padding: 12px 28px; font-size: 14px;">
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-								Create Pack
-							</button>
-							<span id="pack-create-validation-msg" style="font-size: 12px; color: var(--text-dim);"></span>
-						</div>
-
-						<!-- Result -->
-						<div id="pack-create-result" style="display: none; margin-top: 16px; padding: 14px 18px; border-radius: 8px; background: var(--success-dim); border: 1px solid var(--success); font-size: 13px;"></div>
-					</div>
-				</div>
-
-				<div class="card">
-					<div class="card-header">
-						<span class="card-title">Available Packs</span>
-						<button class="btn btn-sm btn-secondary" id="btn-load-packs">Refresh</button>
-					</div>
-					<div class="nft-grid" id="packs-container">
-						<div class="empty-state"><p class="empty-state-text">Loading...</p></div>
-					</div>
-				</div>
-
-				<!-- Pack Detail (hidden by default) -->
-				<div class="card" id="pack-detail-card" style="display: none;">
-					<div class="card-header">
-						<span class="card-title">Pack Detail</span>
-					</div>
-					<h3 id="pack-detail-name" style="font-size: 18px; margin-bottom: 4px;"></h3>
-					<p id="pack-detail-creator" style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;"></p>
-
-					<div class="stats-grid" id="pack-detail-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px;"></div>
-
-					<div id="pack-detail-actions" style="margin-bottom: 20px;"></div>
-
-					<div>
-						<h4 style="font-size: 14px; color: var(--text-muted); margin-bottom: 8px;">Drop Table</h4>
-						<div id="pack-drop-table"></div>
-					</div>
-				</div>
-
-				<!-- User Packs -->
-				<div class="card">
-					<div class="card-header">
-						<span class="card-title">My Packs</span>
-						<button class="btn btn-sm btn-secondary" onclick="loadUserPacksOnPacksPage()">Refresh</button>
-					</div>
-					<div id="packs-page-user-container">
-						<div class="empty-state"><p class="empty-state-text">Connect wallet to view your pack balances</p></div>
-					</div>
-				</div>
-			</div>
-
-	
-	
-	
 		</main>
 	</div>
 

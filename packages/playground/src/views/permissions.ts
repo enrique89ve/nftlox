@@ -1,4 +1,4 @@
-// Permissions view — NFT approvals, pack approvals, lending, data operators
+// Permissions view — NFT approvals, lending, data operators
 import { $, log } from "../shared/dom";
 import { getConnectedUser } from "../shared/state";
 import { broadcastOperation } from "../shared/keychain";
@@ -8,8 +8,6 @@ export function initPermissions() {
 	$("btn-nft-approve")?.addEventListener("click", () => submitPermission("nft-approve"));
 	$("btn-nft-approve-all")?.addEventListener("click", () => submitPermission("nft-approve-all"));
 	$("btn-nft-transfer-from")?.addEventListener("click", () => submitPermission("nft-transfer-from"));
-	$("btn-pack-approve")?.addEventListener("click", () => submitPermission("pack-approve"));
-	$("btn-pack-transfer-from")?.addEventListener("click", () => submitPermission("pack-transfer-from"));
 	$("btn-nft-lend")?.addEventListener("click", () => submitPermission("nft-lend"));
 	$("btn-nft-return")?.addEventListener("click", () => submitPermission("nft-return"));
 	$("btn-data-operator-approve")?.addEventListener("click", () => submitPermission("data-operator-approve"));
@@ -40,22 +38,6 @@ function getFormData(action: string): Record<string, unknown> | null {
 				from: val("perm-nft-xfer-from"),
 				to: val("perm-nft-xfer-to"),
 				instanceId: val("perm-nft-xfer-instance"),
-				spender: getConnectedUser(),
-			};
-		case "pack-approve":
-			return {
-				spender: val("perm-pack-approve-spender"),
-				packId: val("perm-pack-approve-pack"),
-				quantity: parseInt(val("perm-pack-approve-quantity") || "0", 10),
-				approved: checked("perm-pack-approve-approved"),
-				owner: getConnectedUser(),
-			};
-		case "pack-transfer-from":
-			return {
-				from: val("perm-pack-xfer-from"),
-				to: val("perm-pack-xfer-to"),
-				packId: val("perm-pack-xfer-pack"),
-				quantity: parseInt(val("perm-pack-xfer-quantity") || "0", 10),
 				spender: getConnectedUser(),
 			};
 		case "nft-lend":

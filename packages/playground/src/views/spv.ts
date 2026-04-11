@@ -3,11 +3,10 @@ import { $, escapeHtml, log } from "../shared/dom";
 import type {
 	OnChainVerificationResult,
 	OwnershipVerificationResult,
-	PackOpenVerificationResult,
 	VerificationStatus,
 } from "nftlox-sdk";
 
-type SpvResult = OwnershipVerificationResult | OnChainVerificationResult | PackOpenVerificationResult;
+type SpvResult = OwnershipVerificationResult | OnChainVerificationResult;
 
 interface ErrorResponse {
 	error: string;
@@ -35,7 +34,6 @@ const getDurationMs = (result: SpvResult): number | null => {
 export function initSpv() {
 	$("btn-verify-ownership")?.addEventListener("click", verifyOwnership);
 	$("btn-verify-on-chain")?.addEventListener("click", verifyOnChain);
-	$("btn-verify-pack-open")?.addEventListener("click", verifyPackOpen);
 }
 
 function renderResult(containerId: string, result: SpvResult) {
@@ -145,42 +143,6 @@ async function verifyOnChain() {
 
 		renderResult("spv-onchain-result", result);
 		log(`On-chain verification: ${result.status}`, result.status === "verified" ? "success" : "error");
-	} catch (e) {
-		log(`Error: ${(e as Error).message}`, "error");
-	}
-}
-
-async function verifyPackOpen() {
-	const txId = ($("spv-pack-txid") as HTMLInputElement)?.value.trim();
-	const blockNum = parseInt(($("spv-pack-block") as HTMLInputElement)?.value || "0", 10);
-
-	if (!txId || !blockNum) {
-		log("Enter transaction ID and block number", "error");
-		return;
-	}
-
-	log("Verifying pack open against Hive L1...");
-
-	try {
-		const response = await fetch("/api/spv/verify-pack-open", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ txId, blockNum }),
-		});
-		const result: unknown = await response.json();
-
-		if (isErrorResponse(result)) {
-			log(`Error: ${result.error}`, "error");
-			return;
-		}
-
-		if (!isSpvResult(result)) {
-			log("Unexpected pack verification response shape", "error");
-			return;
-		}
-
-		renderResult("spv-pack-result", result);
-		log(`Pack open verification: ${result.status}`, result.status === "verified" ? "success" : "error");
 	} catch (e) {
 		log(`Error: ${(e as Error).message}`, "error");
 	}

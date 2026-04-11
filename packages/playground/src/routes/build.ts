@@ -18,16 +18,9 @@ import {
 	buildBurn,
 	buildBuy,
 	buildSetData,
-	buildPackCreate,
-	buildPackBuy,
-	buildPackOpen,
-	buildPackTransfer,
-	buildPackDestroy,
 	buildNftApprove,
 	buildNftApproveAll,
 	buildNftTransferFrom,
-	buildPackApprove,
-	buildPackTransferFrom,
 	buildDataOperatorApprove,
 	buildSetDataFrom,
 	buildNftLend,
@@ -228,69 +221,6 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 
 	// ============ NEW BUILD ENDPOINTS ============
 
-	// --- Packs (4) ---
-
-	"/api/build/pack-create": buildRoute(async (body) => {
-		const result = await buildPackCreate(body);
-		if (!result.success) return json({ success: false, errors: result.errors }, 400);
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			packId: result.generatedId,
-			operation: result.operation,
-			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
-		});
-	}),
-
-	"/api/build/pack-buy": buildRoute((body) => {
-		const result = buildPackBuy(body);
-		if (!result.success) return json({ success: false, errors: result.errors }, 400);
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
-		});
-	}),
-
-	"/api/build/pack-open": buildRoute((body) => {
-		const result = buildPackOpen(body);
-		if (!result.success) return json({ success: false, errors: result.errors }, 400);
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
-		});
-	}),
-
-	"/api/build/pack-transfer": buildRoute((body) => {
-		const result = buildPackTransfer(body);
-		if (!result.success) return json({ success: false, errors: result.errors }, 400);
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
-		});
-	}),
-
-	"/api/build/pack-destroy": buildRoute((body) => {
-		const result = buildPackDestroy(body);
-		if (!result.success) return json({ success: false, errors: result.errors }, 400);
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
-		});
-	}),
-
 	"/api/build/set-data": buildRoute((body) => {
 		const result = buildSetData({ ...body, owner: body.issuer });
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
@@ -332,7 +262,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	// --- Allowances (5) ---
+	// --- Allowances (3) ---
 
 	"/api/build/nft-approve": buildRoute((body) => {
 		const result = buildNftApprove(body);
@@ -358,28 +288,6 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 
 	"/api/build/nft-transfer-from": buildRoute((body) => {
 		const result = buildNftTransferFrom({ ...body, operator: body.spender });
-		if (!result.success) return json({ success: false, errors: result.errors }, 400);
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			keyType: keyTypeFromOp(result.operation),
-		});
-	}),
-
-	"/api/build/pack-approve": buildRoute((body) => {
-		const result = buildPackApprove(body);
-		if (!result.success) return json({ success: false, errors: result.errors }, 400);
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			keyType: keyTypeFromOp(result.operation),
-		});
-	}),
-
-	"/api/build/pack-transfer-from": buildRoute((body) => {
-		const result = buildPackTransferFrom({ ...body, operator: body.spender });
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,

@@ -8,11 +8,6 @@ const json = (data: unknown, status = 200) =>
 		headers: { "Content-Type": "application/json" },
 	});
 
-const packExtensionUnavailable = (): Response =>
-	json({
-		error: "Pack queries were removed from the core indexer. Use the external packs module/service instead.",
-	}, 410);
-
 type ListingSort = "price_asc" | "price_desc" | "recent";
 
 const LISTING_SORTS = new Set<ListingSort>(["price_asc", "price_desc", "recent"]);
@@ -89,8 +84,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 				})),
 			});
 		}),
-
-	"/api/user/:username/packs": async () => packExtensionUnavailable(),
 
 	"/api/nft/:nftId": (req: Request) =>
 		safeHandler(async () => {
@@ -280,10 +273,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			const listings = await indexer.getListings({ sort, currency, limit });
 			return json({ count: listings.length, listings });
 		}),
-
-	// Packs moved to an external module
-	"/api/packs": async () => packExtensionUnavailable(),
-	"/api/pack/:id": async () => packExtensionUnavailable(),
 
 	// Status/Stats
 	"/api/stats": () =>

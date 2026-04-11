@@ -2,7 +2,6 @@
 import {
 	verifyNftOwnership,
 	verifyOperationOnChain,
-	verifyPackOpen,
 	createDefaultL1Config,
 } from "nftlox-sdk";
 import { INDEXER_URL } from "../shared/indexer";
@@ -24,11 +23,6 @@ const asNonEmptyString = (value: unknown): string | null => {
 	if (typeof value !== "string") return null;
 	const trimmed = value.trim();
 	return trimmed.length > 0 ? trimmed : null;
-};
-
-const asPositiveInteger = (value: unknown): number | null => {
-	if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) return null;
-	return value;
 };
 
 export const spvRoutes: Record<string, { POST: RouteHandler }> = {
@@ -89,32 +83,4 @@ export const spvRoutes: Record<string, { POST: RouteHandler }> = {
 		},
 	},
 
-	"/api/spv/verify-pack-open": {
-		POST: async (req: Request) => {
-			try {
-				const body = await req.json() as unknown;
-				if (!isRecord(body)) {
-					return json({ error: "Invalid JSON body" }, 400);
-				}
-
-				const txId = asNonEmptyString(body.txId);
-				const blockNum = asPositiveInteger(body.blockNum);
-
-				if (!txId || !blockNum) {
-					return json({ error: "Missing required fields: txId, blockNum" }, 400);
-				}
-
-				const result = await verifyPackOpen({
-					txId,
-					blockNum,
-					indexerBaseUrl: INDEXER_URL,
-					l1Config: createDefaultL1Config(),
-				});
-
-				return json(result);
-			} catch (e) {
-				return json({ error: String(e) }, 500);
-			}
-		},
-	},
 };

@@ -27,11 +27,9 @@ Open `http://localhost:3040` in your browser.
 - **Transfers**: Transfer NFTs with atomic notifications (0.001 HIVE)
 - **Marketplace**: List, unlist, and browse listings
 - **Multisig buy**: Purchase NFTs via node co-signed transactions (cosign with indexer node)
-- **Packs**: Create, buy, open, and transfer packs
 - **Lending**: Lend/return NFTs at protocol level
 - **Permissions**: NFT approvals, collection-wide approvals, data operators
-- **SPV Verification**: Trustless verification of ownership, transactions, and pack opens against Hive L1
-- **NFT Tracker**: BlockTrades standard metadata operations
+- **SPV Verification**: Trustless verification of ownership and transactions against Hive L1
 - **Search**: Look up users and NFTs
 - **Debug**: Test server-side signing and multisig buy flow end-to-end
 
@@ -43,7 +41,6 @@ Open `http://localhost:3040` in your browser.
 |----------|-------------|
 | `GET /api/user/:username` | User's NFTs |
 | `GET /api/user/:username/collections` | User's collections |
-| `GET /api/user/:username/packs` | User's pack balances |
 | `GET /api/nft/:nftId` | NFT details |
 | `GET /api/nft/:nftId/details` | NFT with parent/instances |
 | `GET /api/collections` | Active collections |
@@ -54,13 +51,11 @@ Open `http://localhost:3040` in your browser.
 | `GET /api/seed/:seedId/instances` | Seed instances |
 | `GET /api/seed/:id/exists` | Seed existence check |
 | `GET /api/marketplace/listings` | Active listings |
-| `GET /api/packs` | All packs |
-| `GET /api/pack/:id` | Pack details |
 | `GET /api/stats` | Protocol stats |
 | `GET /api/status` | Sync status |
 | `GET /api/health` | Health check |
 
-### Build API (26 endpoints)
+### Build API (19 endpoints)
 
 All `POST` endpoints that validate input and return Hive operations ready for Keychain signing:
 
@@ -78,15 +73,9 @@ All `POST` endpoints that validate input and return Hive operations ready for Ke
 | `/api/build/archive-collection` | Archive empty collection |
 | `/api/build/extend-schema` | Add fields to collection schema |
 | `/api/build/preview-ids` | Preview deterministic IDs |
-| `/api/build/pack-create` | Create pack |
-| `/api/build/pack-buy` | Buy pack |
-| `/api/build/pack-open` | Open pack |
-| `/api/build/pack-transfer` | Transfer pack |
 | `/api/build/nft-approve` | Approve NFT spender |
 | `/api/build/nft-approve-all` | Approve collection-wide |
 | `/api/build/nft-transfer-from` | Transfer as spender |
-| `/api/build/pack-approve` | Approve pack spending |
-| `/api/build/pack-transfer-from` | Transfer pack as spender |
 | `/api/build/nft-lend` | Lend NFT |
 | `/api/build/nft-return` | Return lent NFT |
 | `/api/build/data-operator-approve` | Approve data operator |
@@ -105,7 +94,6 @@ All `POST` endpoints that validate input and return Hive operations ready for Ke
 |----------|-------------|
 | `POST /api/spv/verify-ownership` | SPV ownership verification |
 | `POST /api/spv/verify-on-chain` | SPV on-chain verification |
-| `POST /api/spv/verify-pack-open` | SPV pack-open verification |
 | `POST /api/validate/pre-mint` | Pre-mint validation |
 | `GET /api/protocol/version` | Protocol version info |
 | `GET /api/protocol/info` | Full protocol info |
@@ -117,7 +105,7 @@ Collections use an explicit lifecycle status in indexer responses:
 - `active`: visible in public collection queries and open for normal mutations
 - `archived`: retained in the indexer database but hidden from the standard collection query endpoints
 
-The playground only shows active collections in browse flows. Archiving is exposed through `/api/build/archive-collection` and will only succeed when the collection has no seeds, instances, or packs.
+The playground only shows active collections in browse flows. Archiving is exposed through `/api/build/archive-collection` and will only succeed when the collection has no seeds or instances.
 
 ## Configuration
 

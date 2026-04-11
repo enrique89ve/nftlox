@@ -8,7 +8,6 @@ import { playgroundConfig } from "./config";
 import { queryRoutes } from "./routes/query";
 import { buildRoutes } from "./routes/build";
 import { batchRoutes } from "./routes/batch";
-import { nftTrackerRoutes } from "./routes/nft-tracker";
 import { validationRoutes } from "./routes/validation";
 import { spvRoutes } from "./routes/spv";
 import { debugRoutes } from "./routes/debug";
@@ -86,9 +85,6 @@ const server = Bun.serve({
 		// ============ VALIDATION ROUTES ============
 		...validationRoutes,
 
-		// ============ NFT TRACKER ROUTES (BlockTrades Standard) ============
-		...nftTrackerRoutes,
-
 		// ============ SPV VERIFICATION ROUTES ============
 		...spvRoutes,
 
@@ -144,17 +140,14 @@ Query API (via Indexer):
   GET  /api/status
   GET  /api/health
 
-Build API (25 endpoints):
+Build API (19 endpoints):
   POST /api/build/collection       POST /api/build/seeds
   POST /api/build/bulk-distribute  POST /api/build/transfer
   POST /api/build/list             POST /api/build/unlist
   POST /api/build/burn             POST /api/build/buy
   POST /api/build/preview-ids
-  POST /api/build/set-data         POST /api/build/pack-create
-  POST /api/build/pack-buy         POST /api/build/pack-open
-  POST /api/build/pack-transfer    POST /api/build/nft-approve
+  POST /api/build/set-data         POST /api/build/nft-approve
   POST /api/build/nft-approve-all  POST /api/build/nft-transfer-from
-  POST /api/build/pack-approve     POST /api/build/pack-transfer-from
   POST /api/build/nft-lend         POST /api/build/nft-return
   POST /api/build/data-operator-approve
   POST /api/build/set-data-from
@@ -164,18 +157,9 @@ Build API (25 endpoints):
 SPV Verification:
   POST /api/spv/verify-ownership
   POST /api/spv/verify-on-chain
-  POST /api/spv/verify-pack-open
 
 Validation:
   POST /api/validate/pre-mint
-
-NFT Tracker (BlockTrades Standard):
-  POST /api/nft-tracker/register
-  POST /api/nft-tracker/issue
-  POST /api/nft-tracker/transfer
-  POST /api/nft-tracker/set-data
-  POST /api/nft-tracker/soulbind
-  POST /api/nft-tracker/modify
 
 Legacy Batch:
   POST /api/batch/preview
