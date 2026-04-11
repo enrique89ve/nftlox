@@ -14,7 +14,7 @@
 	},
 	"seeds": [
 		{
-			"id": "gold",
+			"artId": "gold",
 			"name": "Gold Edition",
 			"description": "Ultra rare 24k Gold digital asset",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23uQvjZTsjNvA9ATYitG7YDU1oQQh8tzh1u746rzcs5j5nh1xiChz8bDp59JafVWR6ALy.png",
@@ -29,7 +29,7 @@
 			}
 		},
 		{
-			"id": "silver",
+			"artId": "silver",
 			"name": "Silver Edition",
 			"description": "Rare .999 Silver digital asset",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23uQpem5oHYnhJqptoySjzLtm4evBkyP6efkhVBb8eU7DteELGjokhpQhb4mTQ8fqBVq2.png",
@@ -44,7 +44,7 @@
 			}
 		},
 		{
-			"id": "satoshi",
+			"artId": "satoshi",
 			"name": "Satoshi Core",
 			"description": "The base foundation of Satoshi digital artifacts",
 			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23tHBwHxKMLQEAQtbwiq7TVt4qTZvcxKbQSQWt8SkMsTiRm9CiLwXcnHqtfRvmJ4kt1Bj.png",
