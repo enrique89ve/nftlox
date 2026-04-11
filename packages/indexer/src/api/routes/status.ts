@@ -1,4 +1,5 @@
 import { Elysia, t } from "elysia";
+import { getMedianPrice } from "@/utils/fee-oracle.ts";
 import { getLastBlock, getSyncStatus, getOperationStatus } from "@/db/queries/sync.ts";
 import { getBlockchainHead } from "@/scanner/hive-client.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
@@ -177,3 +178,27 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			description: "Returns per-operation status for all protocol operations in a Hive transaction. Includes NFT IDs for bounded per-NFT operations; bulk creation operations may return an empty ID list. A single tx can contain multiple custom_json ops, each tracked independently.",
 		},
 	})
+	.get("/api/fee-estimate", async ({ query }) => {
+		const hbdTarget = typeof query.hbd === "string" ? parseFloat(query.hbd) : null;
+		if (!hbdTarget || isNaN(hbdTarget) || hbdTarget <= 0) {
+			return { error: "Missing or invalid 'hbd' query parameter" };
+		}
+		
+		const ratio = await getMedianPrice();
+		const hiveAmount = hbdTarget / ratio;
+		
+		return {
+			hbdTarget,
+			ratio,
+			hiveAmount: parseFloat(hiveAmount.toFixed(3)),
+			hiveAmountString: `${hiveAmount.toFixed(3)} HIVE`
+		};
+	}, {
+		query: t.Object({
+			hbd: t.Optional(t.String()),
+		}),
+		detail: {
+			summary: "Dynamic Fee Oracle Estimation",
+			description: "Calculates the dynamic correct amount of HIVE needed to meet the specified HBD target using the internal L2 Node feed history.",
+		},
+	});

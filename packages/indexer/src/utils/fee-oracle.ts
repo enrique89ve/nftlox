@@ -21,7 +21,7 @@ const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour cache since median price moves sl
  * Uses a built-in fetch with the primary endpoint. For full failover,
  * this would normally tie into `callWithFailover` in `hive-client.ts`.
  */
-async function getMedianPrice(): Promise<number> {
+export async function getMedianPrice(): Promise<number> {
 	if (cachedPrice && Date.now() < cachedPrice.expiresAt) {
 		return cachedPrice.hbdPerHive;
 	}
