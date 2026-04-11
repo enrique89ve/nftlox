@@ -99,7 +99,7 @@ async function seedCollection(txn: Queryable = sql) {
 		symbol: "MULTI",
 		totalPotential: 100,
 		metadata: { description: "Multi-op test", image: "https://example.com/img.png" },
-		rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 0 },
+		rules: { transferable: true, burnable: true, royaltyPct: 0 },
 	}), txn);
 }
 
@@ -153,7 +153,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
-				maxReplicas: 5,
+				maxSupply: 5,
 				metadata: { name: "Seed A", imageUrl: "https://example.com/a.png", imageHash: "hash_a" },
 			}, { txId: sharedTxId, operationId: "op_mint_a" });
 
@@ -162,7 +162,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: COL_ID,
 				edition: 2,
 				owner: "alice",
-				maxReplicas: 5,
+				maxSupply: 5,
 				metadata: { name: "Seed B", imageUrl: "https://example.com/b.png", imageHash: "hash_b" },
 			}, { txId: sharedTxId, operationId: "op_mint_b" });
 
@@ -188,12 +188,12 @@ describe("Multi-operation per transaction", () => {
 			const ops = [
 				makeOp(ACTION_MINT, {
 					id: "seed_replay_a", collectionId: COL_ID, edition: 1,
-					owner: "alice", maxReplicas: 3,
+					owner: "alice", maxSupply: 3,
 					metadata: { name: "Replay A", imageUrl: "https://example.com/a.png", imageHash: "h1" },
 				}, { txId: sharedTxId, operationId: "op_r1" }),
 				makeOp(ACTION_MINT, {
 					id: "seed_replay_b", collectionId: COL_ID, edition: 2,
-					owner: "alice", maxReplicas: 3,
+					owner: "alice", maxSupply: 3,
 					metadata: { name: "Replay B", imageUrl: "https://example.com/b.png", imageHash: "h2" },
 				}, { txId: sharedTxId, operationId: "op_r2" }),
 			];
@@ -224,7 +224,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
-				maxReplicas: 5,
+				maxSupply: 5,
 				metadata: { name: "MintList", imageUrl: "https://example.com/ml.png", imageHash: "ml_h" },
 			}, { txId: sharedTxId, operationId: "op_ml_mint" });
 
@@ -266,7 +266,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
-				maxReplicas: 5,
+				maxSupply: 5,
 				metadata: { name: "Valid", imageUrl: "https://example.com/v.png", imageHash: "vh" },
 			}, { txId: sharedTxId, operationId: "op_valid" });
 
@@ -276,7 +276,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: "col_does_not_exist",
 				edition: 1,
 				owner: "alice",
-				maxReplicas: 5,
+				maxSupply: 5,
 				metadata: { name: "Invalid", imageUrl: "https://example.com/i.png", imageHash: "ih" },
 			}, { txId: sharedTxId, operationId: "op_invalid" });
 
@@ -311,7 +311,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: "col_fake_1",
 				edition: 1,
 				owner: "alice",
-				maxReplicas: 1,
+				maxSupply: 1,
 				metadata: { name: "Bad1", imageUrl: "https://example.com/b1.png", imageHash: "b1" },
 			}, { txId: sharedTxId, operationId: "op_bad_1" });
 
@@ -320,7 +320,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: "col_fake_2",
 				edition: 1,
 				owner: "alice",
-				maxReplicas: 1,
+				maxSupply: 1,
 				metadata: { name: "Bad2", imageUrl: "https://example.com/b2.png", imageHash: "b2" },
 			}, { txId: sharedTxId, operationId: "op_bad_2" });
 
@@ -350,7 +350,7 @@ describe("Multi-operation per transaction", () => {
 			const validOps = validSeeds.map((letter, i) =>
 				makeOp(ACTION_MINT, {
 					id: `seed_5op_${letter}`, collectionId: COL_ID, edition: i + 1,
-					owner: "alice", maxReplicas: 5,
+					owner: "alice", maxSupply: 5,
 					metadata: { name: `5op ${letter.toUpperCase()}`, imageUrl: `https://example.com/5${letter}.png`, imageHash: `5${letter}h` },
 				}, { txId: sharedTxId, operationId: `op_5_${i + 1}` }),
 			);
@@ -358,7 +358,7 @@ describe("Multi-operation per transaction", () => {
 			// Op 3 (index 2): invalid mint — bad collection, sits between valid ops
 			const invalidOp = makeOp(ACTION_MINT, {
 				id: "seed_5op_bad", collectionId: "col_nonexistent",
-				edition: 1, owner: "alice", maxReplicas: 1,
+				edition: 1, owner: "alice", maxSupply: 1,
 				metadata: { name: "Bad", imageUrl: "https://example.com/bad.png", imageHash: "bad" },
 			}, { txId: sharedTxId, operationId: "op_5_3" });
 
@@ -396,7 +396,7 @@ describe("Multi-operation per transaction", () => {
 			// Same mint payload, two different operation_ids (simulating replay / duplicate broadcast)
 			const mintData = {
 				id: "seed_replay_dup", collectionId: COL_ID, edition: 1,
-				owner: "alice", maxReplicas: 5,
+				owner: "alice", maxSupply: 5,
 				metadata: { name: "Dup", imageUrl: "https://example.com/dup.png", imageHash: "duph" },
 			};
 
@@ -430,7 +430,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
-				maxReplicas: 5,
+				maxSupply: 5,
 				metadata: { name: "Alice Block", imageUrl: "https://example.com/ab.png", imageHash: "abh" },
 			}, { txId: "tx_alice_block", operationId: "op_alice_1", blockNum: SHARED_BLOCK });
 
@@ -441,7 +441,7 @@ describe("Multi-operation per transaction", () => {
 				symbol: "BOB",
 				totalPotential: 50,
 				metadata: { description: "Bob's", image: "https://example.com/bob.png" },
-				rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 0 },
+				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			}, { signer: "bob", txId: "tx_bob_block", operationId: "op_bob_1", blockNum: SHARED_BLOCK });
 
 			const bobMint = makeOp(ACTION_MINT, {
@@ -449,7 +449,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: bobColId,
 				edition: 1,
 				owner: "bob",
-				maxReplicas: 5,
+				maxSupply: 5,
 				metadata: { name: "Bob Block", imageUrl: "https://example.com/bb.png", imageHash: "bbh" },
 			}, { signer: "bob", txId: "tx_bob_block", operationId: "op_bob_2", blockNum: SHARED_BLOCK });
 
@@ -476,7 +476,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
-				maxReplicas: 1,
+				maxSupply: 1,
 				metadata: { name: "Chain", imageUrl: "https://example.com/c.png", imageHash: "ch" },
 			}), sql);
 
@@ -508,7 +508,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
-				maxReplicas: 10,
+				maxSupply: 10,
 				metadata: { name: "BulkShared", imageUrl: "https://example.com/bs.png", imageHash: "bsh" },
 			}, { txId: sharedTxId, operationId: "op_bs_mint" }), sql);
 
@@ -547,7 +547,7 @@ describe("Multi-operation per transaction", () => {
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
-				maxReplicas: 1,
+				maxSupply: 1,
 				metadata: { name: "ListUnlist", imageUrl: "https://example.com/lu.png", imageHash: "luh" },
 			}), sql);
 

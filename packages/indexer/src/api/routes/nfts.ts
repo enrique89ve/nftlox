@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
 import { getNftById, getNftOwnerClaim, getNftOwnershipProof, getSeedSummary, queryNfts, queryRawInstances } from "@/db/queries/nfts.ts";
+import { getNftLoan } from "@/db/queries/loans.ts";
 
 export const nftsRoutes = new Elysia({ prefix: "/api/nfts", tags: ["NFTs"] })
 	.get("/:id", async ({ params }) => {
@@ -61,6 +62,23 @@ export const nftsRoutes = new Elysia({ prefix: "/api/nfts", tags: ["NFTs"] })
 		detail: {
 			summary: "Get NFT ownership proof",
 			description: "Returns the minimal ownership-proof contract used by the SDK SPV verifier",
+		},
+	})
+	.get("/:id/loan", async ({ params }) => {
+		const nft = await getNftById(params.id);
+		if (!nft) {
+			return new Response(JSON.stringify({ error: "NFT not found" }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		const loan = await getNftLoan(params.id);
+		return { nft_id: params.id, active: loan !== null, loan };
+	}, {
+		params: t.Object({ id: t.String({ minLength: 1, maxLength: 128 }) }),
+		detail: {
+			summary: "Get NFT loan status",
+			description: "Returns active loan custody for this NFT without changing ownership semantics.",
 		},
 	})
 	.get("/:id/instances", async ({ params, query }) => {

@@ -38,7 +38,6 @@ export {
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
-	ACTION_REPLICATE,
 	ACTION_BULK_DISTRIBUTE,
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	MAX_TRANSFER_BATCH_SIZE,
@@ -119,7 +118,6 @@ export type {
 	NFTMetadata,
 	NFTData,
 	SeedProvenance,
-	ReplicaData,
 	BulkDistributeItem,
 	BulkDistributeData,
 	BulkDistributeInput,
@@ -142,7 +140,6 @@ export type {
 	CreateCollectionInput,
 	ArchiveCollectionInput,
 	MintInput,
-	ReplicateInput,
 	ListInput,
 	BuyInput,
 	UnlistInput,
@@ -186,11 +183,7 @@ export {
 	generateHash,
 	generateOriginDna,
 	generateInstanceDna,
-	generateReplicaInstanceDna,
 	generateImageHash,
-	generateReplicaId,
-	extractOriginalId,
-	isReplicaId,
 	// Seed & Instance helpers
 	generateInstanceId,
 	extractSeedId,
@@ -222,7 +215,6 @@ export {
 // ============ PAYLOAD CREATION ============
 export {
 	// Payload creators
-	createReplicatePayload,
 	createBulkDistributePayload,
 	createBulkDistributeOperation,
 	createTransferPayload,
@@ -242,7 +234,6 @@ export {
 	createBuyPayload,
 	createBuyOperation,
 	// Operation creators
-	createReplicateOperation,
 	createTransferOperation,
 	createBurnOperation,
 	createBulkBurnOperation,
@@ -415,11 +406,19 @@ export {
 	type IndexerNft,
 	type IndexerNftOwner,
 	type IndexerNftProof,
+	type IndexerNftLoan,
+	type IndexerNftLoanStatus,
 	type IndexerNftSummary,
 	type IndexerOwnershipAction,
+	type LoanRole,
 	type ListingSort,
+	type UserAssetsOverview,
+	type UserAssetsQueryParams,
+	type UserLoansPage,
+	type UserLoansQueryParams,
 	type UserNftCounts,
 	type UserNftsPage,
+	type UserNftsQueryParams,
 } from "./client";
 
 // ============ UTILS ============

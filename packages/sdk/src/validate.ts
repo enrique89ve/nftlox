@@ -25,9 +25,9 @@ import {
 export type NftState = Readonly<{
 	status: "active" | "listed" | "burned" | "lent";
 	owner: string;
-	nft_type: "seed" | "instance" | "replica";
+	nft_type: "seed" | "instance";
 	distributed: number;
-	max_replicas: number;
+	max_supply: number;
 	/** From collection rules — optional, fetched separately via GET /api/collections/:id */
 	transferable?: boolean;
 	/** From collection rules — optional, fetched separately via GET /api/collections/:id */
@@ -115,8 +115,8 @@ export function validateNftOperation(
 	if (action === ACTION_BULK_DISTRIBUTE) {
 		if (nft.nft_type !== "seed") {
 			errors.push(`${nftId} is not a seed`);
-		} else if (nft.max_replicas > 0 && nft.distributed >= nft.max_replicas) {
-			errors.push(`Seed ${nftId} supply exhausted: ${nft.distributed}/${nft.max_replicas}`);
+		} else if (nft.max_supply > 0 && nft.distributed >= nft.max_supply) {
+			errors.push(`Seed ${nftId} supply exhausted: ${nft.distributed}/${nft.max_supply}`);
 		}
 	}
 

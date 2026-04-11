@@ -8,9 +8,9 @@ import {
 	createSetDataFromPayload,
 	createNftLendPayload,
 	createNftReturnPayload,
+	toHiveOperation,
 } from "../payloads";
-import { getProtocolId } from "../protocol-state";
-import type { BuildResult, TransferData, SetDataData, SetDataFromData, NftLendData, NftReturnData, HiveOperation } from "../types";
+import type { BuildResult, TransferData, SetDataData, SetDataFromData, NftLendData, NftReturnData } from "../types";
 import { usernameSchema } from "../schemas";
 
 export const burnBuilderSchema = burnInputSchema;
@@ -28,15 +28,7 @@ export function buildBurn(input: BurnBuilderInput): BuildResult<TransferData> {
 		? createBulkBurnPayload(data.nftIds!, data.owner)
 		: createBurnPayload(data.nftId!, data.owner);
 
-	const operation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [data.owner],
-			required_posting_auths: [],
-			id: getProtocolId(),
-			json: JSON.stringify(payload),
-		},
-	];
+	const operation = toHiveOperation(payload, data.owner);
 
 	return { success: true, payload, operation };
 }
@@ -54,15 +46,7 @@ export function buildSetData(input: SetDataBuilderInput): BuildResult<SetDataDat
 	const data = parsed.data;
 	
 	const payload = createSetDataPayload(data);
-	const operation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [data.owner],
-			id: getProtocolId(),
-			json: JSON.stringify(payload),
-		},
-	];
+	const operation = toHiveOperation(payload, data.owner);
 
 	return { success: true, payload, operation };
 }
@@ -80,15 +64,7 @@ export function buildSetDataFrom(input: SetDataFromBuilderInput): BuildResult<Se
 	const data = parsed.data;
 
 	const payload = createSetDataFromPayload(data);
-	const operation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [data.operator],
-			id: getProtocolId(),
-			json: JSON.stringify(payload),
-		},
-	];
+	const operation = toHiveOperation(payload, data.operator);
 
 	return { success: true, payload, operation };
 }
@@ -110,15 +86,7 @@ export function buildNftLend(input: NftLendBuilderInput): BuildResult<NftLendDat
 	}
 
 	const payload = createNftLendPayload(data);
-	const operation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [data.owner],
-			id: getProtocolId(),
-			json: JSON.stringify(payload),
-		},
-	];
+	const operation = toHiveOperation(payload, data.owner);
 
 	return { success: true, payload, operation };
 }
@@ -136,15 +104,7 @@ export function buildNftReturn(input: NftReturnBuilderInput): BuildResult<NftRet
 	const data = parsed.data;
 
 	const payload = createNftReturnPayload(data);
-	const operation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [data.owner],
-			id: getProtocolId(),
-			json: JSON.stringify(payload),
-		},
-	];
+	const operation = toHiveOperation(payload, data.owner);
 
 	return { success: true, payload, operation };
 }

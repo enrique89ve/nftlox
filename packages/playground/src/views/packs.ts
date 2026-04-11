@@ -749,13 +749,13 @@ function recalculateSupply() {
 		const seed = loadedSeedData.find(s => s.id === entry.seedId);
 		if (!seed) return "";
 
-		const maxReplicas = seed.maxSupply;
-		const remaining = maxReplicas > 0 ? maxReplicas - seed.distributed : Infinity;
+		const maxSupply = seed.maxSupply;
+		const remaining = maxSupply > 0 ? maxSupply - seed.distributed : Infinity;
 		const probability = entry.weight / totalWeight;
 		const expectedDemand = maxSupply > 0 ? Math.ceil(maxSupply * itemsPerPack * probability) : 0;
 
 		// How many packs this seed can support
-		const seedMaxPacks = maxReplicas > 0
+		const seedMaxPacks = maxSupply > 0
 			? Math.floor((remaining * totalWeight) / (entry.weight * itemsPerPack))
 			: Infinity;
 
@@ -764,11 +764,11 @@ function recalculateSupply() {
 			bottleneckName = seed.name || seed.id;
 		}
 
-		const isOverflow = maxReplicas > 0 && expectedDemand > remaining;
+		const isOverflow = maxSupply > 0 && expectedDemand > remaining;
 		if (isOverflow) hasError = true;
 
-		const barPct = maxReplicas > 0 ? Math.min(100, (expectedDemand / maxReplicas) * 100) : 0;
-		const usedPct = maxReplicas > 0 ? Math.min(100, (seed.distributed / maxReplicas) * 100) : 0;
+		const barPct = maxSupply > 0 ? Math.min(100, (expectedDemand / maxSupply) * 100) : 0;
+		const usedPct = maxSupply > 0 ? Math.min(100, (seed.distributed / maxSupply) * 100) : 0;
 		const barColor = isOverflow ? "var(--error)" : "var(--accent)";
 
 		return `<div style="margin-bottom: 10px;">
@@ -784,7 +784,7 @@ function recalculateSupply() {
 			</div>
 			<div style="display: flex; justify-content: space-between; margin-top: 2px;">
 				<span style="font-size: 10px; color: var(--text-dim);">${(probability * 100).toFixed(1)}% chance</span>
-				<span style="font-size: 10px; color: var(--text-dim);">cap: ${maxReplicas > 0 ? maxReplicas.toLocaleString() : "unlimited"}</span>
+				<span style="font-size: 10px; color: var(--text-dim);">cap: ${maxSupply > 0 ? maxSupply.toLocaleString() : "unlimited"}</span>
 			</div>
 		</div>`;
 	}).filter(Boolean).join("");

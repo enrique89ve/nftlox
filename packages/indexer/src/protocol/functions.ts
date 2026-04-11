@@ -597,15 +597,6 @@ export async function generateInstanceDna(
   return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
 }
 
-export async function generateReplicaInstanceDna(
-  originDna: string,
-  originalInstanceDna: string,
-): Promise<string> {
-  const input = `nftlox:replica:${originDna}:${originalInstanceDna}`;
-  const fullHash = await generateHash(input);
-  return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
-}
-
 export async function generateDeterministicCollectionId(
   creator: string,
   name: string,

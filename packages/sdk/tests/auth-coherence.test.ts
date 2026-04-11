@@ -1,0 +1,241 @@
+import { test, expect, describe } from "bun:test";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
+import {
+	ALL_ACTIONS,
+	ACTION_AUTH_LEVEL,
+	toHiveOperation,
+	type ProtocolAction,
+	buildBurn,
+	buildTransfer,
+	buildList,
+	buildUnlist,
+	buildBuy,
+	buildBulkDistribute,
+	buildSetData,
+	buildNftLend,
+	buildNftReturn,
+	buildNftApprove,
+	buildNftApproveAll,
+	buildNftTransferFrom,
+	buildDataOperatorApprove,
+	buildPackApprove,
+	buildPackTransferFrom,
+} from "../src/index";
+
+// ============ STATIC: no builder may hardcode auth literals ============
+//
+// Every build* function must route through the canonical helper
+// (toHiveOperation or a create*Operation factory). This guard detects drift
+// if anyone re-introduces a raw custom_json block in a builder file.
+
+describe("Builders never hardcode auth fields", () => {
+	const buildersDir = join(import.meta.dir, "..", "src", "builders");
+	const files = readdirSync(buildersDir)
+		.filter(f => f.endsWith(".ts") && f !== "index.ts" && f !== "helpers.ts" && f !== "seed-availability.ts");
+
+	for (const file of files) {
+		test(`${file} contains no raw custom_json / required_auths / getProtocolId`, () => {
+			const source = readFileSync(join(buildersDir, file), "utf8");
+			expect(source).not.toContain("\"custom_json\"");
+			expect(source).not.toContain("required_auths");
+			expect(source).not.toContain("required_posting_auths");
+			expect(source).not.toContain("getProtocolId");
+		});
+	}
+});
+
+// ============ RUNTIME: toHiveOperation respects ACTION_AUTH_LEVEL ============
+
+describe("toHiveOperation emits auth fields from ACTION_AUTH_LEVEL", () => {
+	for (const action of ALL_ACTIONS) {
+		const level = ACTION_AUTH_LEVEL[action as ProtocolAction];
+		test(`${action} → ${level}`, () => {
+			const payload = { protocol: "nftlox", version: "0.1", action, data: {} };
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const op = toHiveOperation(payload as any, "alice");
+			if (level === "active") {
+				expect(op[1].required_auths).toEqual(["alice"]);
+				expect(op[1].required_posting_auths).toEqual([]);
+			} else {
+				expect(op[1].required_auths).toEqual([]);
+				expect(op[1].required_posting_auths).toEqual(["alice"]);
+			}
+		});
+	}
+});
+
+// ============ END-TO-END: every builder emits auth fields consistent with the map ============
+//
+// For each builder, parse its emitted operation.json.action and verify the
+// custom_json auth fields match ACTION_AUTH_LEVEL[action]. Covers the full
+// request-parse-emit pipeline, not just the helper in isolation.
+
+function assertAuthCoherent(
+	operation: ReadonlyArray<unknown> | undefined,
+	expectedSigner: string,
+) {
+	expect(operation).toBeDefined();
+	const [kind, body] = operation as [string, { required_auths: string[]; required_posting_auths: string[]; json: string }];
+	expect(kind).toBe("custom_json");
+	const parsed = JSON.parse(body.json) as { action: string };
+	const level = ACTION_AUTH_LEVEL[parsed.action as ProtocolAction];
+	if (level === "active") {
+		expect(body.required_auths).toEqual([expectedSigner]);
+		expect(body.required_posting_auths).toEqual([]);
+	} else {
+		expect(body.required_auths).toEqual([]);
+		expect(body.required_posting_auths).toEqual([expectedSigner]);
+	}
+}
+
+describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
+	test("buildBurn (was previously hardcoded active — regression guard)", () => {
+		const r = buildBurn({ nftId: "nft_1", owner: "alice" });
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildTransfer", async () => {
+		const r = await buildTransfer({ nftId: "nft_1", from: "alice", to: "bob" });
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildList", async () => {
+		const r = await buildList({
+			nftId: "nft_1",
+			price: { amount: "10.000", currency: "HIVE" },
+			owner: "alice",
+		});
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildUnlist", async () => {
+		const r = await buildUnlist({ nftId: "nft_1", owner: "alice" });
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildBuy — active key, signer is the node account (multisig envelope)", () => {
+		const r = buildBuy({
+			nftId: "nft_1",
+			listingId: "list_1",
+			listTxId: "a".repeat(40),
+			txId: "b".repeat(40),
+			buyer: "alice",
+			seller: "bob",
+			nodeAccount: "nftlox-node",
+			paymentSplit: {
+				sellerAmount: 9.5,
+				royaltyAmount: 0.5,
+				royaltyRecipient: "creator",
+				feeAmount: 0,
+				feeAccount: "fee-account",
+				totalPrice: 10,
+				currency: "HIVE",
+			},
+		});
+		if (!r.success) throw new Error("build failed");
+		// buildBuy emits hiveOperations (transfers + custom_json), not a single `operation` field.
+		const customJsonOp = r.hiveOperations?.find(op => op[0] === "custom_json");
+		assertAuthCoherent(customJsonOp, "nftlox-node");
+	});
+
+	test("buildBulkDistribute", () => {
+		const r = buildBulkDistribute({
+			items: [{ seedId: "seed_1", quantity: 1, seedTxId: "a".repeat(40) }],
+			signer: "alice",
+		});
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildSetData", () => {
+		const r = buildSetData({ nftId: "nft_1", instanceDna: "dna_1", owner: "alice" });
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildNftLend", () => {
+		const r = buildNftLend({ instanceId: "nft_1", borrower: "bob", owner: "alice" });
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildNftReturn", () => {
+		const r = buildNftReturn({ instanceId: "nft_1", owner: "alice" });
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildNftApprove", () => {
+		const r = buildNftApprove({
+			spender: "bob",
+			instanceId: "nft_1",
+			approved: true,
+			owner: "alice",
+		});
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildNftApproveAll", () => {
+		const r = buildNftApproveAll({
+			spender: "bob",
+			collectionId: "col_1",
+			approved: true,
+			owner: "alice",
+		});
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildNftTransferFrom", () => {
+		const r = buildNftTransferFrom({
+			from: "alice",
+			to: "bob",
+			instanceId: "nft_1",
+			operator: "charlie",
+		});
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "charlie");
+	});
+
+	test("buildDataOperatorApprove", () => {
+		const r = buildDataOperatorApprove({
+			collectionId: "col_1",
+			operator: "bob",
+			approved: true,
+			creator: "alice",
+		});
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildPackApprove", () => {
+		const r = buildPackApprove({
+			spender: "bob",
+			packId: "pack_1",
+			quantity: 5,
+			approved: true,
+			owner: "alice",
+		});
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "alice");
+	});
+
+	test("buildPackTransferFrom", () => {
+		const r = buildPackTransferFrom({
+			from: "alice",
+			to: "bob",
+			packId: "pack_1",
+			quantity: 1,
+			operator: "charlie",
+		});
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operation, "charlie");
+	});
+});

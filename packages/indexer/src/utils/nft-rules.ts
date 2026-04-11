@@ -69,13 +69,13 @@ export const computeInstanceBaseline = (
 
 export const validateSeedSupplyForDistribution = (
 	seedId: string,
-	maxReplicas: number,
+	maxSupply: number,
 	baseDistributed: number,
 	requestedQuantity: number,
 	reservedSupply: number = 0,
 ): void => {
-	if (maxReplicas > 0) {
-		const available = maxReplicas - baseDistributed - reservedSupply;
+	if (maxSupply > 0) {
+		const available = maxSupply - baseDistributed - reservedSupply;
 		if (requestedQuantity > available) {
 			throw new Error(
 				`Seed ${seedId} insufficient supply: needs ${requestedQuantity}, available ${available}`,

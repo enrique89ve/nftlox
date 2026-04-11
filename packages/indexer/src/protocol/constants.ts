@@ -55,7 +55,6 @@ export const MAX_MULTISIG_OPERATIONS = 4;
 export const ACTION_CREATE_COLLECTION = "create_collection";
 export const ACTION_MINT = "mint";
 export const ACTION_TRANSFER = "transfer";
-export const ACTION_REPLICATE = "replicate";
 export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
 export const ACTION_EXTEND_SCHEMA = "extend_schema";
@@ -84,7 +83,6 @@ export const CORE_ACTIONS = [
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
-	ACTION_REPLICATE,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_SET_DATA,
 	ACTION_EXTEND_SCHEMA,

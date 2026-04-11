@@ -3,8 +3,7 @@ import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema } fr
 import { formatZodError } from "./helpers";
 import { generateImageHash, generateListingNonce, generateListingId } from "../dna";
 import { ACTION_LIST, ACTION_BUY, ACTION_UNLIST, MEMO_PREFIX_BUY, MEMO_PREFIX_ROYALTY, MEMO_PREFIX_FEE } from "../constants";
-import { getProtocolId } from "../protocol-state";
-import { makePayload } from "../payloads";
+import { makePayload, toHiveOperation, createBuyOperation } from "../payloads";
 import type { BuildResult, ListingData, UnlistData, ProtocolPayload, HiveOperation, BuyData, HiveTransferOperation } from "../types";
 
 export const listBuilderSchema = listInputSchema.extend({
@@ -52,16 +51,7 @@ export async function buildList(input: ListBuilderInput): Promise<BuildResult<Li
 	};
 
 	const payload: ProtocolPayload<ListingData> = makePayload(ACTION_LIST, payloadData);
-
-	const operation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [data.owner],
-			id: getProtocolId(),
-			json: JSON.stringify(payload),
-		},
-	];
+	const operation = toHiveOperation(payload, data.owner);
 
 	return {
 		success: true,
@@ -100,16 +90,7 @@ export async function buildUnlist(input: UnlistBuilderInput): Promise<BuildResul
 	};
 
 	const payload: ProtocolPayload<UnlistData> = makePayload(ACTION_UNLIST, payloadData);
-
-	const operation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [data.owner],
-			id: getProtocolId(),
-			json: JSON.stringify(payload),
-		},
-	];
+	const operation = toHiveOperation(payload, data.owner);
 
 	return {
 		success: true,
@@ -159,15 +140,7 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 		...(data.seedTxId && { seedTxId: data.seedTxId }),
 	});
 
-	const payloadOperation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [data.nodeAccount],
-			required_posting_auths: [],
-			id: getProtocolId(),
-			json: JSON.stringify(payload),
-		},
-	];
+	const payloadOperation = createBuyOperation(payload.data, data.nodeAccount);
 
 	const paymentSplit = data.paymentSplit;
 	const currencyExt = paymentSplit.currency;

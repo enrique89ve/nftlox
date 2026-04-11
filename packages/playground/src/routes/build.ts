@@ -2,9 +2,6 @@
 import {
 	PROTOCOL_VERSION,
 	HASH_VERSION,
-	// Direct operation creators for replicate (no builder exists)
-	createReplicateOperation,
-	createReplicatePayload,
 	createExtendSchemaOperation,
 	createExtendSchemaPayload,
 	extendSchemaInputSchema,
@@ -291,28 +288,6 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			operation: result.operation,
 			payload: result.payload,
 			keyType: keyTypeFromOp(result.operation),
-		});
-	}),
-
-	// --- Core faltante (2) ---
-
-	"/api/build/replicate": buildRoute(async (body) => {
-		const input = {
-			originalId: body.originalId,
-			originDna: body.originDna,
-			originalInstanceDna: body.originalInstanceDna,
-			newOwner: body.newOwner,
-			currentOwner: body.currentOwner,
-		};
-		const operation = await createReplicateOperation(input);
-		const payload = await createReplicatePayload(input);
-
-		return json({
-			success: true,
-			protocolVersion: PROTOCOL_VERSION,
-			operation,
-			payload,
-			keyType: keyTypeFromOp(operation),
 		});
 	}),
 

@@ -52,7 +52,7 @@ type ValidatedCustomJsonOp = ValidatedTransaction["customJsonOperation"];
 type ValidatedBuyPayload = ValidatedCustomJsonOp["payload"];
 type ParsedAmount = ValidatedTransferOp["parsedAmount"];
 
-type MultisigRules = Pick<CollectionRulesRow, "id" | "creator" | "transferable" | "burnable" | "replicable" | "royalty_pct" | "royalty_recipient">;
+type MultisigRules = Pick<CollectionRulesRow, "id" | "creator" | "transferable" | "burnable" | "royalty_pct" | "royalty_recipient">;
 
 type TransactionOperationInput = Readonly<{
 	readonly name: string;
@@ -557,7 +557,6 @@ async function validateNftState(
 		creator: nftWithRules.creator,
 		transferable: nftWithRules.transferable,
 		burnable: nftWithRules.burnable,
-		replicable: nftWithRules.replicable,
 		royalty_pct: nftWithRules.royalty_pct,
 		royalty_recipient: nftWithRules.royalty_recipient,
 	} satisfies MultisigRules;

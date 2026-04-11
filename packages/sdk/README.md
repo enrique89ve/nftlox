@@ -44,7 +44,7 @@ const seed = createDeterministicMintPayload({
 	owner: "username",
 	name: "NFT Name",
 	imageUrl: "https://...",
-	maxReplicas: 100,
+	maxSupply: 100,
 });
 
 // 3. Lend an NFT (protocol-level, owner keeps ownership)
@@ -145,7 +145,6 @@ const payload = makePayload("transfer", {
 | `createBulkDistributePayload()` | Bulk distribute instances from seed (`seedTxId` per item) |
 | `createTransferPayload()` | Transfer NFT |
 | `createBurnPayload()` | Burn NFT |
-| `createReplicatePayload()` | Create replica |
 | `createSetDataPayload()` | Update custom data/tags |
 | `createArchiveCollectionPayload()` | Archive an empty collection |
 | `createListPayload()` | List on marketplace |
@@ -225,7 +224,13 @@ console.log(health.liveness.status, health.readiness.status);
 const schemaHistory = await indexer.getCollectionSchemaHistory("col_abc123");
 const opStatus = await indexer.getOperationStatus("506be0e61ae4dbb504397d7fb6ba59dbbab7e02e");
 const nft = await indexer.getNft("nft_abc123");
+const ownerClaim = await indexer.getNftOwner("nft_abc123");
+const ownership = await indexer.getNftOwnership("nft_abc123");
 const nftProof = await indexer.getNftProof("nft_abc123");
+const nftLoan = await indexer.getNftLoan("nft_abc123");
+const assets = await indexer.getUserAssets("alice", { previewLimit: 6 });
+console.log(ownerClaim.owner, ownerClaim.owner_operation_id, ownership.claim_hash);
+console.log(nftLoan.active, assets.counts.borrowed);
 ```
 
 | Method | Description |
@@ -239,10 +244,16 @@ const nftProof = await indexer.getNftProof("nft_abc123");
 | `getCollectionNfts(id, params?)` | NFTs in collection |
 | `getCollectionStats(id)` | Collection statistics |
 | `getNft(id)` | NFT by ID |
-| `getNftProof(id)` | Minimal ownership proof for SPV verification |
-| `getNftInstances(id, params?)` | Instances from seed |
+| `getNftOwner(id)` | Fast current-owner claim from `/api/nfts/:id/owner` |
+| `getNftOwnership(id)` | Canonical ownership proof from `/api/nfts/:id/ownership` |
+| `getNftProof(id)` | Compatibility alias for the ownership proof contract used by SPV verification |
+| `getNftLoan(id)` | Active loan custody for an NFT, separate from ownership |
+| `getNftInstances(id, params?)` | Instances from seed; supports `{ compact: true }` for reduced payloads |
+| `getUserAssets(username, params?)` | Dashboard overview of owned NFTs, seeds, loans, and collections |
 | `getUserNfts(username, params?)` | User's NFTs with counts |
 | `getUserNftCounts(username)` | NFT counts by type |
+| `getUserCollections(username, params?)` | Collections created by a user |
+| `getUserLoans(username, params?)` | Active loans by role (`lender`, `borrower`, or `all`) |
 | `getListings(params?)` | Marketplace listings |
 | `getSales(params?)` | Completed sales with financial breakdown |
 | `getSalesVolume(params?)` | Aggregated marketplace volume statistics |
@@ -251,7 +262,6 @@ const nftProof = await indexer.getNftProof("nft_abc123");
 | `multisig(request)` | Request multisig signing |
 
 Compatibility helpers still available:
-- `getUserCollections(username, params?)` forwards to `getCollections({ creator: username, ...params })`
 - `getVolume(params?)` forwards to `getSalesVolume(params?)`
 
 ### Zod Schemas
@@ -265,7 +275,6 @@ Exported from `schemas.ts`. Each schema validates input for its corresponding ac
 | `listInputSchema` | List input |
 | `unlistInputSchema` | Unlist input |
 | `burnInputSchema` | Burn input |
-| `replicateInputSchema` | Replicate input |
 | `bulkDistributeInputSchema` | Bulk distribute input |
 | `setDataInputSchema` | Set data input |
 | `dataOperatorApproveInputSchema` | Data operator approve |
@@ -289,7 +298,7 @@ Exported from `schemas.ts`. Each schema validates input for its corresponding ac
 
 ### SPV Verification ("Boleto Suizo")
 
-Trustless verification -- the browser reads Hive L1 directly and replays deterministic logic to verify the indexer.
+Trustless verification -- the browser reads Hive L1 directly and replays deterministic logic to verify the indexer. NFT ownership verification uses the compact proof contract anchored by `owner_operation_id`: the SDK fetches the indexer snapshot, resolves that operation through HAFAH, derives the real owner from the on-chain `custom_json`, and compares it with the reported owner and previous owner.
 
 | Function | Description |
 |----------|-------------|
@@ -316,15 +325,21 @@ Trustless verification -- the browser reads Hive L1 directly and replays determi
 | `resolveDropTable()` | Deterministic RNG drop table resolution |
 | `isSeedId()` / `isInstanceId()` / `isPackId()` | ID type checks |
 
+Ownership proof fields:
+- `owner_operation_id`: authoritative operation anchor resolved through HAFAH/Hive L1.
+- `owner_action`: one of `mint`, `bulk_distribute`, `transfer`, `nft_transfer_from`, `buy`.
+- `owner_block_num`: Hive block context for ordering and diagnostics; not unique proof by itself.
+- `claim_hash`: deterministic hash over the current owner claim fields.
+
 ### Types
 
-All TypeScript interfaces are exported: `CollectionData`, `NFTData`, `ProtocolPayload`, `Price`, `HiveOperation`, `PackDropEntry`, `NftLendData`, `BuyData`, `PaymentInfo`, `MultisigRequest`, `MultisigResponse`, `PackOpenVerificationResult`, `AuditReport`, `BuildResult`, `ValidationError`, `IndexerNftProof`, and more.
+All TypeScript interfaces are exported: `CollectionData`, `NFTData`, `ProtocolPayload`, `Price`, `HiveOperation`, `PackDropEntry`, `NftLendData`, `BuyData`, `PaymentInfo`, `MultisigRequest`, `MultisigResponse`, `PackOpenVerificationResult`, `AuditReport`, `BuildResult`, `ValidationError`, `IndexerNftOwner`, `IndexerNftProof`, `IndexerNftLoan`, `UserAssetsOverview`, and more.
 
 ## Entity Hierarchy
 
 ```
 Collection
-  +-- Seed (master NFT, maxReplicas = N)
+  +-- Seed (master NFT, maxSupply = N)
   |     +-- Instance #1 (distributed copy)
   |     +-- Instance #2
   |     +-- Instance #N

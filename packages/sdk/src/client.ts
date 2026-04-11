@@ -43,10 +43,11 @@ export interface SyncStatus {
 	inSync: boolean;
 }
 
-export type IndexerNftType = "seed" | "instance" | "replica";
+export type IndexerNftType = "seed" | "instance";
 export type IndexerNftStatus = "active" | "listed" | "burned" | "lent";
-export type IndexerOwnershipAction = "mint" | "bulk_distribute" | "replicate" | "transfer" | "nft_transfer_from" | "buy";
+export type IndexerOwnershipAction = "mint" | "bulk_distribute" | "transfer" | "nft_transfer_from" | "buy";
 export type UserNftFilterStatus = "active" | "listed" | "lent";
+export type LoanRole = "lender" | "borrower" | "all";
 export type ListingSort = "price_asc" | "price_desc" | "recent";
 
 export type HealthMode = "liveness" | "readiness";
@@ -84,7 +85,6 @@ export interface ProtocolStats {
 	total_nfts: number;
 	total_seeds: number;
 	total_instances: number;
-	total_replicas: number;
 	total_listed: number;
 	total_burned: number;
 	unique_owners: number;
@@ -97,7 +97,6 @@ export interface UserNftCounts {
 	total: number;
 	seeds: number;
 	instances: number;
-	replicas: number;
 }
 
 export interface UserNftsPage {
@@ -105,6 +104,34 @@ export interface UserNftsPage {
 	counts: UserNftCounts;
 	offset: number;
 	limit: number;
+}
+
+export interface UserLoansPage {
+	username: string;
+	role: LoanRole;
+	loans: IndexerNftLoan[];
+	total: number;
+	offset: number;
+	limit: number;
+}
+
+export interface UserAssetsOverview {
+	username: string;
+	counts: {
+		owned: number;
+		seeds: number;
+		collections: number;
+		lentOut: number;
+		borrowed: number;
+	};
+	assets: {
+		owned: IndexerNftSummary[];
+		seeds: IndexerNftSummary[];
+		lentOut: IndexerNftLoan[];
+		borrowed: IndexerNftLoan[];
+		collections: IndexerCollectionSummary[];
+	};
+	previewLimit: number;
 }
 
 export interface IndexerCollectionBase {
@@ -118,7 +145,6 @@ export interface IndexerCollectionBase {
 	external_url: string | null;
 	transferable: boolean;
 	burnable: boolean;
-	replicable: boolean;
 	/** Whole percent value in protocol 0.5.0, serialized from PostgreSQL numeric. */
 	royalty_pct: string;
 	royalty_recipient: string | null;
@@ -140,7 +166,6 @@ export interface IndexerCollection extends IndexerCollectionBase {
 export interface CollectionStats {
 	total_seeds: number;
 	total_instances: number;
-	total_replicas: number;
 	total_listed: number;
 	total_burned: number;
 	unique_owners: number;
@@ -173,7 +198,7 @@ export interface IndexerNftSummary {
 	seed_id: string | null;
 	seed_tx_id: string | null;
 	instance_number: number | null;
-	max_replicas: number;
+	max_supply: number;
 	distributed: number;
 	supply_exhausted: boolean;
 	schema_version: number | null;
@@ -190,7 +215,6 @@ export interface IndexerNftSummary {
 }
 
 export interface IndexerNft extends IndexerNftSummary {
-	original_id: string | null;
 	data_hash: string | null;
 	tx_id: string;
 	listing_marketplace: string | null;
@@ -215,6 +239,34 @@ export interface IndexerNftProof extends IndexerNftOwner {
 	seed_id: string | null;
 	instance_number: number | null;
 	instance_dna: string | null;
+}
+
+export interface IndexerNftLoan {
+	nft_id: string;
+	collection_id: string;
+	nft_type: IndexerNftType;
+	status: IndexerNftStatus;
+	owner: string;
+	name: string;
+	image_url: string | null;
+	seed_id: string | null;
+	seed_tx_id: string | null;
+	instance_number: number | null;
+	owner_operation_id: string;
+	owner_action: IndexerOwnershipAction;
+	owner_block_num: number;
+	lender: string;
+	borrower: string;
+	loan_operation_id: string;
+	loan_block_num: number;
+	loan_tx_id: string;
+	loan_created_at: string;
+}
+
+export interface IndexerNftLoanStatus {
+	nft_id: string;
+	active: boolean;
+	loan: IndexerNftLoan | null;
 }
 
 export interface MarketplaceSale {
@@ -286,6 +338,16 @@ export type UserNftsQueryParams = QueryParams & Readonly<{
 	type?: IndexerNftType;
 	limit?: number;
 	offset?: number;
+}>;
+
+export type UserLoansQueryParams = QueryParams & Readonly<{
+	role?: LoanRole;
+	limit?: number;
+	offset?: number;
+}>;
+
+export type UserAssetsQueryParams = QueryParams & Readonly<{
+	previewLimit?: number;
 }>;
 
 export type ListingsQueryParams = QueryParams & Readonly<{
@@ -380,13 +442,15 @@ export interface IndexerClient {
 	getNftOwner(id: string): Promise<IndexerNftOwner>;
 	getNftOwnership(id: string): Promise<IndexerNftProof>;
 	getNftProof(id: string): Promise<IndexerNftProof>;
+	getNftLoan(id: string): Promise<IndexerNftLoanStatus>;
 	getNftInstances(id: string, params?: { limit?: number; offset?: number; compact?: boolean }): Promise<IndexerNftSummary[]>;
 
 	// Users
+	getUserAssets(username: string, params?: UserAssetsQueryParams): Promise<UserAssetsOverview>;
 	getUserNfts(username: string, params?: UserNftsQueryParams): Promise<UserNftsPage>;
 	getUserNftCounts(username: string): Promise<UserNftCounts>;
-	/** @deprecated Use getCollections({ creator: username, ...params }) instead. */
 	getUserCollections(username: string, params?: Omit<CollectionsQueryParams, "creator">): Promise<IndexerCollectionSummary[]>;
+	getUserLoans(username: string, params?: UserLoansQueryParams): Promise<UserLoansPage>;
 
 	// Marketplace
 	getListings(params?: ListingsQueryParams): Promise<IndexerNftSummary[]>;
@@ -439,6 +503,8 @@ export function createIndexerClient(baseUrl: string): IndexerClient {
 			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/ownership`),
 		getNftProof: (id) =>
 			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/proof`),
+		getNftLoan: (id) =>
+			get<IndexerNftLoanStatus>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/loan`),
 		getNftInstances: async (id, params) => {
 			const path = `/api/nfts/${encodeURIComponent(id)}/instances`;
 			if (params?.compact) {
@@ -449,12 +515,16 @@ export function createIndexerClient(baseUrl: string): IndexerClient {
 		},
 
 		// ---- Users ----
+		getUserAssets: (username, params) =>
+			get<UserAssetsOverview>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets`, params),
 		getUserNfts: (username, params) =>
 			get<UserNftsPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts`, params),
 		getUserNftCounts: (username) =>
 			get<UserNftCounts>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts/count`),
 		getUserCollections: (username, params) =>
-			get<IndexerCollectionSummary[]>(baseUrl, "/api/collections", { ...params, creator: username }),
+			get<IndexerCollectionSummary[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/collections`, params),
+		getUserLoans: (username, params) =>
+			get<UserLoansPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/loans`, params),
 
 		// ---- Marketplace ----
 		getListings: (params) =>

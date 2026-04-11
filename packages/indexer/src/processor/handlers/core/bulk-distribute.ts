@@ -88,7 +88,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		}
 
 		const distributed = Number(seed.distributed) || 0;
-		const maxReplicas = Number(seed.max_replicas) || 0;
+		const maxSupply = Number(seed.max_supply) || 0;
 
 		// Idempotency: count instances already created by THIS operation.
 		const [existingFromOp] = await txn`
@@ -100,7 +100,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const baseDistributed = computeInstanceBaseline(distributed, alreadyMintedThisOp);
 
 		const reservedSupply = Number(seed.reserved_supply) || 0;
-		validateSeedSupplyForDistribution(seedId, maxReplicas, baseDistributed, quantity, reservedSupply);
+		validateSeedSupplyForDistribution(seedId, maxSupply, baseDistributed, quantity, reservedSupply);
 
 		const originDna = await generateOriginDna(seed.collection_id);
 
@@ -127,10 +127,9 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				instanceDna,
 				name: "",
 				imageUrl: null,
-				maxReplicas: 0,
+				maxSupply: 0,
 				seedId,
 				instanceNumber,
-				originalId: null,
 				immutableData: null,
 				dataOperationId: mutableData ? op.operationId : null,
 				dataHash,

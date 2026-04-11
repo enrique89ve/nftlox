@@ -74,7 +74,6 @@ All `POST` endpoints that validate input and return Hive operations ready for Ke
 | `/api/build/unlist` | Remove listing |
 | `/api/build/buy` | Buy NFT |
 | `/api/build/burn` | Burn NFT |
-| `/api/build/replicate` | Create replica |
 | `/api/build/set-data` | Update mutable data (creator) |
 | `/api/build/archive-collection` | Archive empty collection |
 | `/api/build/extend-schema` | Add fields to collection schema |

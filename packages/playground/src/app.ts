@@ -47,7 +47,7 @@ async function fetchJsonOrThrow<T>(url: string, init?: RequestInit): Promise<T> 
 async function getNFTsByOwner(owner: string, limit = 200, offset = 0) {
 	const firstRes = await fetch(`/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${offset}`);
 	const firstData = await firstRes.json();
-	const counts = firstData.counts ?? { total: 0, seeds: 0, instances: 0, replicas: 0 };
+	const counts = firstData.counts ?? { total: 0, seeds: 0, instances: 0 };
 	const allNfts: any[] = firstData.nfts || [];
 
 	if (counts.total > limit) {
@@ -517,12 +517,12 @@ async function loadNftDetail(nftId: string) {
 
 	// Reset sections
 	const parentSection = $("parent-section");
-	const replicasSection = $("replicas-section");
+	const instancesSection = $("instances-section");
 	const seedInfoSection = $("seed-info-section");
 	const burnSection = $("nft-burn-section");
 	const setDataSection = $("nft-set-data-section");
 	if (parentSection) parentSection.style.display = "none";
-	if (replicasSection) replicasSection.style.display = "none";
+	if (instancesSection) instancesSection.style.display = "none";
 	if (seedInfoSection) seedInfoSection.style.display = "none";
 	if (burnSection) burnSection.style.display = "none";
 	if (setDataSection) setDataSection.style.display = "none";
@@ -555,7 +555,6 @@ async function loadNftDetail(nftId: string) {
 			const badges: string[] = [];
 			if (nft.isSeed) badges.push('<span class="nft-badge seed">SEED</span>');
 			if (nft.seedId) badges.push('<span class="nft-badge instance">INSTANCE #' + (nft.instanceNumber || 1) + '</span>');
-			if (nft.isReplica) badges.push('<span class="nft-badge replica">REPLICA</span>');
 			if (nft.listed) badges.push('<span class="nft-badge listed">LISTED</span>');
 			badgesEl.innerHTML = badges.join("");
 		}
@@ -579,7 +578,7 @@ async function loadNftDetail(nftId: string) {
 			if (distributedEl) distributedEl.textContent = String(nft.distributed || 0);
 		}
 
-		// Parent NFT (if instance/replica)
+		// Parent seed for an instance.
 		if (data.original && parentSection) {
 			parentSection.style.display = "block";
 			const parentItem = $("nft-parent-item");
@@ -590,22 +589,22 @@ async function loadNftDetail(nftId: string) {
 			}
 		}
 
-		// Replicas/Instances
-		if (data.replicas && data.replicas.count > 0 && replicasSection) {
-			replicasSection.style.display = "block";
-			const countEl = $("replicas-count");
-			const listEl = $("nft-replicas-list");
-			if (countEl) countEl.textContent = String(data.replicas.count);
+		// Instances
+		if (data.instances && data.instances.count > 0 && instancesSection) {
+			instancesSection.style.display = "block";
+			const countEl = $("instances-count");
+			const listEl = $("nft-instances-list");
+			if (countEl) countEl.textContent = String(data.instances.count);
 			if (listEl) {
-				listEl.innerHTML = data.replicas.items.map((r: any) => `
-					<div class="replica-item" data-id="${r.id}">
-						<span class="replica-num">#${r.instanceNumber || "?"}</span>
-						<span class="replica-owner">@${r.owner}</span>
+				listEl.innerHTML = data.instances.items.map((r: any) => `
+					<div class="instance-item" data-id="${r.id}">
+						<span class="instance-num">#${r.instanceNumber || "?"}</span>
+						<span class="instance-owner">@${r.owner}</span>
 					</div>
 				`).join("");
 
 				// Add click handlers
-				listEl.querySelectorAll(".replica-item").forEach(item => {
+				listEl.querySelectorAll(".instance-item").forEach(item => {
 					item.addEventListener("click", () => {
 						const id = (item as HTMLElement).dataset.id;
 						if (id) loadNftDetail(id);
@@ -1392,7 +1391,7 @@ async function previewSeeds() {
 	}
 
 	// Calculate preview from uploaded data
-	const totalSupply = uploadedSeeds.reduce((sum: number, s: any) => sum + (s.maxSupply || s.maxReplicas || 1), 0);
+	const totalSupply = uploadedSeeds.reduce((sum: number, s: any) => sum + (s.maxSupply || 1), 0);
 	previewData = {
 		collection: {
 			name: colName,
@@ -1402,7 +1401,7 @@ async function previewSeeds() {
 		seeds: uploadedSeeds.map((s: any) => ({
 			artId: s.artId,
 			name: s.name,
-			maxSupply: s.maxSupply || s.maxReplicas || 1
+			maxSupply: s.maxSupply || 1
 		})),
 		summary: {
 			totalSeeds: uploadedSeeds.length,
@@ -1500,7 +1499,6 @@ async function createCollection() {
 				rules: {
 					transferable: true,
 					burnable: true,
-					replicable: true,
 					royaltyPct: 5,
 					royaltyRecipient: creator,
 				},
@@ -2449,7 +2447,6 @@ import { initMarketplace } from "./views/marketplace";
 import { initPermissions } from "./views/permissions";
 import { initDebug } from "./views/debug";
 import { initSpv } from "./views/spv";
-import { initAdvancedOps } from "./views/advanced-ops";
 import { initCollectionOps } from "./views/collection-ops";
 
 
@@ -2556,6 +2553,5 @@ initMarketplace();
 initPermissions();
 initDebug();
 initSpv();
-initAdvancedOps();
 initCollectionOps();
 log("Console ready");

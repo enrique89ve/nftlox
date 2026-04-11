@@ -81,7 +81,7 @@ export function assertActionable(nft: HasStatus, nftId: string): void {
 }
 
 /**
- * Asserts the NFT can be transferred/replicated.
+ * Asserts the NFT can be transferred.
  * Rejects: burned, lent, listed (unless listing has expired).
  * Returns true if the listing was expired (caller should clean up listing fields).
  */

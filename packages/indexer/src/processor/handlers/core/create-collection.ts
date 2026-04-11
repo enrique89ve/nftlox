@@ -58,7 +58,6 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const rules = requireObject(d.rules, "rules");
 	const transferable = requireBoolean(rules.transferable, "rules.transferable");
 	const burnable = requireBoolean(rules.burnable, "rules.burnable");
-	const replicable = requireBoolean(rules.replicable, "rules.replicable");
 	const royaltyPct = requireNumber(rules.royaltyPct, "rules.royaltyPct");
 	if (royaltyPct < 0 || royaltyPct > 50) {
 		throw new Error(`royaltyPct must be between 0 and 50, got ${royaltyPct}`);
@@ -91,7 +90,6 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		externalUrl: optionalBoundedString(metadata.externalUrl, "metadata.externalUrl", MAX_URL_LENGTH),
 		transferable,
 		burnable,
-		replicable,
 		royaltyPct,
 		royaltyRecipient: optionalString(rules.royaltyRecipient),
 		schema: rawSchema,

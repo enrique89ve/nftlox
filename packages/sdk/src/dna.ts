@@ -63,20 +63,6 @@ export async function generateInstanceDna(
 	return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
 }
 
-/**
- * Generates instance DNA for a replica.
- * DETERMINISTIC: SHA-256 derived from original's DNA to maintain lineage.
- * Prefixed with "i" to identify as instance DNA.
- */
-export async function generateReplicaInstanceDna(
-	originDna: string,
-	originalInstanceDna: string,
-): Promise<string> {
-	const input = `nftlox:replica:${originDna}:${originalInstanceDna}`;
-	const fullHash = await generateHash(input);
-	return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
-}
-
 // ============ IMAGE HASH ============
 
 /**
@@ -90,31 +76,6 @@ export async function generateImageHash(imageUrl: string): Promise<string> {
 }
 
 // ============ ID GENERATION ============
-
-/**
- * Generates a deterministic replica ID from an original NFT ID.
- * Same originalId always produces the same replicaId.
- */
-export async function generateReplicaId(originalId: string): Promise<string> {
-	const hash = await generateHash(`nftlox:replica:${originalId}`);
-	return `${originalId}_r${hash.slice(0, 8)}`;
-}
-
-/**
- * Extracts the original NFT ID from a replica ID.
- */
-export function extractOriginalId(replicaId: string): string | null {
-	const rIndex = replicaId.lastIndexOf("_r");
-	if (rIndex === -1) return null;
-	return replicaId.slice(0, rIndex);
-}
-
-/**
- * Checks if an ID is a replica ID.
- */
-export function isReplicaId(id: string): boolean {
-	return id.includes("_r");
-}
 
 // ============ SEED & INSTANCE IDS ============
 

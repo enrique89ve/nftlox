@@ -55,7 +55,6 @@ export async function createTestCollection(
 		rules: {
 			transferable: true,
 			burnable: true,
-			replicable: true,
 			royaltyPct: 5,
 			royaltyRecipient: creator,
 		},
@@ -141,7 +140,7 @@ export async function loadSampleNFTs(filePath: string): Promise<SeedNFTWithArtId
 		name: item.name,
 		brief: item.brief,
 		imageUrl: item.imageUrl,
-		maxSupply: item.maxSupply ?? item.maxReplicas ?? 1,
+		maxSupply: item.maxSupply ?? 1,
 	}));
 }
 
@@ -209,7 +208,6 @@ export async function createDeterministicCollection(
 		rules: {
 			transferable: true,
 			burnable: true,
-			replicable: true,
 			royaltyPct: 5,
 			royaltyRecipient: creator,
 		},
@@ -266,7 +264,7 @@ export async function createDeterministicSeedMintOperations(
 			name: nft.name,
 			description: nft.brief,
 			imageUrl: nft.imageUrl,
-			maxReplicas: nft.maxSupply,
+			maxSupply: nft.maxSupply,
 		});
 
 		const operation: HiveOperation = [
@@ -311,7 +309,7 @@ export async function loadSampleNFTsWithArtId(filePath: string): Promise<SeedNFT
 		name: item.name,
 		brief: item.brief,
 		imageUrl: item.imageUrl,
-		maxSupply: item.maxSupply ?? item.maxReplicas ?? 1,
+		maxSupply: item.maxSupply ?? 1,
 	}));
 }
 

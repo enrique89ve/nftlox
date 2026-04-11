@@ -7,7 +7,6 @@
 		"totalPotential": 4300,
 		"transferable": true,
 		"burnable": true,
-		"replicable": false,
 		"royaltyPct": 7
 	},
 	"seeds": [

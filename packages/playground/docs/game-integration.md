@@ -116,7 +116,6 @@ const collectionInput: DeterministicCollectionInput = {
 	rules: {
 		transferable: true,
 		burnable: true,
-		replicable: false,
 		royaltyPct: 5,
 		royaltyRecipient: "ragnarok-game",
 	},
@@ -146,7 +145,6 @@ The SDK also exports pre-built templates for Ragnarok-style card types: `RAGNARO
 	"rules": {
 		"transferable": true,
 		"burnable": true,
-		"replicable": false,
 		"royaltyPct": 5,
 		"royaltyRecipient": "ragnarok-game"
 	},
@@ -274,7 +272,7 @@ function buildSeedMintPayload(card: CardDefinition): DeterministicMintInput {
 		owner: CREATOR, // owner of the seed (can differ from signer/creator)
 		name: card.name,
 		imageUrl: card.imageUrl,
-		maxReplicas: card.maxSupply,
+		maxSupply: card.maxSupply,
 		immutableData: {
 			card_id: CARD_CATALOG.indexOf(card) + 1,
 			card_type: card.cardType,
@@ -878,7 +876,6 @@ All build endpoints accept `POST` with a JSON body:
 | `/api/build/unlist` | Remove listing | Posting |
 | `/api/build/burn` | Burn an NFT | Active |
 | `/api/build/buy` | Buy a listed NFT | Active |
-| `/api/build/replicate` | Replicate a seed | Posting |
 | `/api/build/set-data` | Update mutable data (creator) | Posting |
 | `/api/build/set-owner-data` | Update owner-specific data | Posting |
 | `/api/build/extend-schema` | Add fields to collection schema | Posting |
@@ -963,7 +960,6 @@ const collectionInput: DeterministicCollectionInput = {
 	rules: {
 		transferable: true,
 		burnable: true,
-		replicable: false,
 		royaltyPct: 5,
 		royaltyRecipient: CREATOR,
 	},
@@ -1036,7 +1032,7 @@ const mintPayloads = cards.map((card): DeterministicMintInput => ({
 	owner: CREATOR,
 	name: card.name,
 	imageUrl: card.imageUrl,
-	maxReplicas: card.maxSupply,
+	maxSupply: card.maxSupply,
 	immutableData: card.immutableData,
 }));
 
@@ -1206,7 +1202,7 @@ async function getActiveDropTable(
 
 	return fullTable.filter(entry => {
 		const supply = supplies[entry.seedId];
-		return supply && supply.distributed < supply.maxReplicas;
+		return supply && supply.distributed < supply.maxSupply;
 	});
 }
 ```

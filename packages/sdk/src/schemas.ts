@@ -138,7 +138,6 @@ export const createCollectionInputSchema = z.object({
 	rules: z.object({
 		transferable: z.boolean(),
 		burnable: z.boolean(),
-		replicable: z.boolean(),
 		royaltyPct: z.number().min(0).max(MAX_ROYALTY_PCT, `Royalty percentage must be between 0 and ${MAX_ROYALTY_PCT}`),
 		royaltyRecipient: z.string().optional(),
 	}),
@@ -156,7 +155,7 @@ export const mintInputSchema = z.object({
 	description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
 	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH),
 	imageHash: z.string().optional(),
-	maxReplicas: z.number().int().min(1, "Max replicas must be at least 1").optional(),
+	maxSupply: z.number().int().min(1, "Max supply must be at least 1").optional(),
 	data: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",
@@ -199,7 +198,7 @@ export const importedNftSchema = z.object({
 	brief: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
 	imageUrl: httpUrlSchema,
 	imageHash: z.string().optional(),
-	maxReplicas: z.number().int().min(1).default(1),
+	maxSupply: z.number().int().min(1).default(1),
 });
 export type ImportedNFT = z.infer<typeof importedNftSchema>;
 
@@ -277,17 +276,6 @@ export const bulkDistributeInputSchema = z.object({
 	),
 });
 export type BulkDistributeInput = z.infer<typeof bulkDistributeInputSchema>;
-
-// And other simple types:
-
-export const replicateInputSchema = seedProvenanceSchema.extend({
-	originalId: z.string().min(1),
-	originDna: z.string().min(1),
-	originalInstanceDna: z.string().min(1),
-	newOwner: usernameSchema,
-	currentOwner: usernameSchema,
-});
-export type ReplicateInput = z.infer<typeof replicateInputSchema>;
 
 export const burnInputSchema = z.object({
 	nftId: z.string().min(1).optional(),

@@ -108,7 +108,6 @@ const collectionInput: DeterministicCollectionInput = {
 	rules: {
 		transferable: true,
 		burnable: true,
-		replicable: false,
 		royaltyPct: 5,
 		royaltyRecipient: "ragnarok-game",
 	},
@@ -205,7 +204,7 @@ function buildSeedMintPayload(card: CardDefinition): DeterministicMintInput {
 		owner: CREATOR,
 		name: card.name,
 		imageUrl: card.imageUrl,
-		maxReplicas: card.maxSupply,
+		maxSupply: card.maxSupply,
 		immutableData: {
 			card_id: CARD_CATALOG.indexOf(card) + 1,
 			card_type: card.cardType,
@@ -751,7 +750,6 @@ const collectionInput: DeterministicCollectionInput = {
 	rules: {
 		transferable: true,
 		burnable: true,
-		replicable: false,
 		royaltyPct: 5,
 		royaltyRecipient: CREATOR,
 	},
@@ -824,7 +822,7 @@ const mintPayloads = cards.map((card): DeterministicMintInput => ({
 	owner: CREATOR,
 	name: card.name,
 	imageUrl: card.imageUrl,
-	maxReplicas: card.maxSupply,
+	maxSupply: card.maxSupply,
 	immutableData: card.immutableData,
 }));
 
@@ -977,7 +975,7 @@ async function recordMatchResult(
 | Role | Actions | Key Required |
 |------|---------|-------------|
 | **Collection creator** | `create_collection`, `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting (except `data_operator_approve` = Active) |
-| **Seed owner** | `bulk_distribute`, `transfer`, `burn`, `replicate`, `list`, `unlist` | Posting for `bulk_distribute`; Active for the rest |
+| **Seed owner** | `bulk_distribute`, `transfer`, `burn`, `list`, `unlist` | Posting for `bulk_distribute`; Active for the rest |
 | **NFT owner** | `transfer`, `burn`, `list`, `unlist`, `nft_approve`, `nft_lend` | Posting |
 | **Approved operator** | `set_data_from` | Posting |
 | **Approved spender** | `nft_transfer_from`, `pack_transfer_from` | Posting |
@@ -1073,7 +1071,7 @@ async function getActiveDropTable(
 
 	return fullTable.filter(entry => {
 		const supply = supplies[entry.seedId];
-		return supply && supply.distributed < supply.maxReplicas;
+		return supply && supply.distributed < supply.maxSupply;
 	});
 }
 ```

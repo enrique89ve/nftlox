@@ -20,7 +20,6 @@ describe("buildCollection consistency", () => {
 		rules: {
 			transferable: true,
 			burnable: true,
-			replicable: true,
 			royaltyPct: 5,
 		},
 	};

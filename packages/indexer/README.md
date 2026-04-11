@@ -51,18 +51,18 @@ Buyer                          Indexer Node
 
 **Scalability** -- The indexer reads Hive L1 and projects state into PostgreSQL. This means SQL joins, sorting, filtering, and pagination over millions of NFTs -- things that are impossible querying raw blockchain JSON.
 
-**SPV Verification ("Boleto Suizo")** -- The client doesn't trust the indexer blindly. It picks random events, fetches the original transaction from Hive L1 via HAFAH, replays the deterministic logic locally, and compares the result. If they match, the indexer is honest.
+**SPV Verification ("Boleto Suizo")** -- The client doesn't trust the indexer blindly. For ownership, the indexer returns a compact current-owner claim (`owner`, `previous_owner`, `owner_action`, `owner_operation_id`, `owner_block_num`, `claim_hash`), and the SDK resolves `owner_operation_id` directly through HAFAH/Hive L1 before accepting it. PostgreSQL stays a fast projection; Hive L1 remains the authority.
 
 ```
 Client                         Indexer              Hive L1
-  |--- pick random buy ---------->|                      |
-  |<-- here's what happened -----|                      |
-  |--- fetch same tx directly ---|--------------------->|
+  |--- GET /api/nfts/:id/ownership ->|                   |
+  |<-- owner claim + op id -------|                      |
+  |--- resolve owner_operation_id --------------------->|
   |<-- raw transaction ----------|------- HAFAH --------|
   |                                                     |
-  [replay RNG locally]                                  |
-  [compare result]                                      |
-  -> match? indexer is honest                           |
+  [derive owner from custom_json]                       |
+  [compare L1-derived owner with claim fields]          |
+  -> match? ownership is verified                       |
 ```
 
 ## Prerequisites
@@ -130,13 +130,19 @@ Interactive documentation available at `http://localhost:3050/swagger` (disabled
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/nfts/:id` | NFT details |
+| `GET /api/nfts/:id/owner` | Fast current-owner claim (`owner`, operation anchor, block, claim hash) |
+| `GET /api/nfts/:id/ownership` | Canonical ownership proof for SDK/HafAH verification |
+| `GET /api/nfts/:id/proof` | Compatibility alias for the ownership proof contract |
+| `GET /api/nfts/:id/loan` | Active loan custody for this NFT, separate from ownership |
 | `GET /api/nfts/:id/instances` | Instances distributed from this seed |
 
 ### Users
 | Endpoint | Description |
 |----------|-------------|
+| `GET /api/users/:username/assets` | Dashboard overview of owned NFTs, seeds, loans, and collections |
 | `GET /api/users/:username/nfts` | User's NFTs with counts (?status=active&type=seed) |
-| `GET /api/users/:username/nfts/count` | NFT counts by type (seeds, instances, replicas) |
+| `GET /api/users/:username/nfts/count` | NFT counts by type (seeds, instances) |
+| `GET /api/users/:username/loans` | Active loans by role (?role=lender\|borrower\|all) |
 | `GET /api/users/:username/collections` | User's collections |
 
 ### Marketplace
@@ -169,6 +175,9 @@ All list endpoints support `?limit=N&offset=N`.
 - Monetary fields such as `listing_price`, `gross_amount`, `royalty_amount`, `protocol_fee`, `seller_net`, `totalPrice`, `sellerAmount`, `royaltyAmount`, and `feeAmount` are Hive asset amounts with 3 decimal places.
 - `multisigClockDriftMs` and rate-limit windows are expressed in milliseconds.
 - `lastBlock`, `headBlock`, `irreversibleBlock`, and `genesisBlock` are Hive block numbers.
+- `owner_operation_id` is the authoritative ownership anchor resolved through HAFAH/Hive L1. `owner_block_num` is useful context and ordering metadata, but not unique proof by itself because a block can contain multiple ownership operations.
+- `claim_hash` is a deterministic hash over the compact owner claim fields. L1 verification still depends on resolving `owner_operation_id`.
+- `confirmed_operations.nft_ids` is bounded by design. Bulk creation operations such as `bulk_distribute` may store an empty NFT ID list because each NFT row already stores its own creation and owner anchors.
 
 ## Self-Hosting
 
@@ -508,16 +517,15 @@ Hive Blockchain
 +-------------------+
 ```
 
-## Protocol Actions (18)
+## Protocol Actions (17)
 
-### Core (8)
+### Core (7)
 | Action | Description |
 |--------|-------------|
 | `create_collection` | Create NFT collection |
 | `mint` | Mint seed NFT |
 | `bulk_distribute` | Create instances from seed |
 | `transfer` | Transfer ownership |
-| `replicate` | Create replica |
 | `set_data` | Update mutable data (creator only) |
 | `archive_collection` | Archive an empty collection |
 | `extend_schema` | Add fields to collection schema |

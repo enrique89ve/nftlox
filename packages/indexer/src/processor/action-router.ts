@@ -8,7 +8,6 @@ import {
 	ACTION_MINT,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_TRANSFER,
-	ACTION_REPLICATE,
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
@@ -30,7 +29,6 @@ import { handleCreateCollection } from "./handlers/core/create-collection.ts";
 import { handleMint } from "./handlers/core/mint.ts";
 import { handleBulkDistribute } from "./handlers/core/bulk-distribute.ts";
 import { handleTransfer } from "./handlers/core/transfer.ts";
-import { handleReplicate } from "./handlers/core/replicate.ts";
 import { handleSetData } from "./handlers/core/set-data.ts";
 import { handleExtendSchema } from "./handlers/core/extend-schema.ts";
 import { handleArchiveCollection } from "./handlers/core/archive-collection.ts";
@@ -77,7 +75,6 @@ const handlers: Record<ProtocolAction, Handler> = {
 	[ACTION_MINT]: handleMint,
 	[ACTION_BULK_DISTRIBUTE]: handleBulkDistribute,
 	[ACTION_TRANSFER]: handleTransfer,
-	[ACTION_REPLICATE]: handleReplicate,
 	[ACTION_SET_DATA]: handleSetData,
 	[ACTION_EXTEND_SCHEMA]: handleExtendSchema,
 	[ACTION_ARCHIVE_COLLECTION]: handleArchiveCollection,

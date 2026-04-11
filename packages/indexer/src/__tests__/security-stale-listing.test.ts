@@ -87,7 +87,7 @@ async function seedCollection(txn: Queryable = sql) {
 		symbol: "SEC",
 		totalPotential: 1000,
 		metadata: { description: "Security test", image: "https://example.com/img.png" },
-		rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 5 },
+		rules: { transferable: true, burnable: true, royaltyPct: 5 },
 	}), txn);
 }
 
@@ -97,7 +97,7 @@ async function seedMint(txn: Queryable = sql) {
 		collectionId: COL_ID,
 		edition: 1,
 		owner: "alice",
-		maxReplicas: 10,
+		maxSupply: 10,
 		metadata: { name: "Security Seed", imageUrl: "https://example.com/nft.png", imageHash: "sec_hash" },
 	}), txn);
 }

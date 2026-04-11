@@ -144,13 +144,12 @@ Query API (via Indexer):
   GET  /api/status
   GET  /api/health
 
-Build API (26 endpoints):
+Build API (25 endpoints):
   POST /api/build/collection       POST /api/build/seeds
   POST /api/build/bulk-distribute  POST /api/build/transfer
   POST /api/build/list             POST /api/build/unlist
   POST /api/build/burn             POST /api/build/buy
   POST /api/build/preview-ids
-  POST /api/build/replicate
   POST /api/build/set-data         POST /api/build/pack-create
   POST /api/build/pack-buy         POST /api/build/pack-open
   POST /api/build/pack-transfer    POST /api/build/nft-approve

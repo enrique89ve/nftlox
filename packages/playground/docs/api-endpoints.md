@@ -89,7 +89,6 @@ Aggregate protocol statistics.
 	"total_nfts": 15000,
 	"total_seeds": 500,
 	"total_instances": 14000,
-	"total_replicas": 500,
 	"total_listed": 120,
 	"total_burned": 80,
 	"unique_owners": 350,
@@ -125,7 +124,7 @@ curl https://api-nftlox.hivecreators.co/api/stats
 
 ### GET /api/operation-status/:txId
 
-Check the status of a broadcast transaction. Returns whether it was confirmed, invalid, orphaned, or unknown.
+Check the status of a broadcast transaction. Returns one entry per NFTLox operation inside the Hive transaction, so a single transaction can report mixed confirmed/invalid results.
 
 **Path parameters:**
 
@@ -137,12 +136,23 @@ Check the status of a broadcast transaction. Returns whether it was confirmed, i
 
 ```json
 {
-	"status": "invalid",
-	"signer": "alice",
-	"action": "bulk_distribute",
-	"reason": "Signer alice is not the owner of seed seed_abc123",
-	"blockNum": 90000150,
-	"timestamp": "2026-03-30T15:00:00Z"
+	"txId": "506be0e61ae4dbb504397d7fb6ba59dbbab7e02e",
+	"totalOperations": 1,
+	"confirmed": 0,
+	"invalid": 1,
+	"orphaned": 0,
+	"operations": [
+		{
+			"status": "invalid",
+			"operationId": "90000150:4:0",
+			"signer": "alice",
+			"action": "bulk_distribute",
+			"reason": "Signer alice is not the owner of seed seed_abc123",
+			"blockNum": 90000150,
+			"timestamp": "2026-03-30T15:00:00Z",
+			"nftIds": []
+		}
+	]
 }
 ```
 
@@ -152,6 +162,8 @@ Check the status of a broadcast transaction. Returns whether it was confirmed, i
 | `invalid` | Operation rejected by indexer validation |
 | `orphaned` | Buy operation failed but HIVE transfers were already broadcast |
 | `unknown` | Transaction not found (not yet processed or record expired) |
+
+> `nftIds` is intentionally bounded. Bulk creation operations such as `bulk_distribute` can return an empty array because each created NFT row stores its own creation and owner anchors.
 
 > Invalid and orphaned records are retained for 24 hours, then automatically cleaned up. After cleanup, the endpoint returns `unknown`.
 
@@ -217,7 +229,7 @@ List NFTs belonging to a collection.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `type` | string | -- | Filter by NFT type: `seed`, `instance`, `replica` |
+| `type` | string | -- | Filter by NFT type: `seed`, `instance` |
 | `limit` | number | 50 | Results per page (1-200) |
 | `offset` | number | 0 | Pagination offset |
 
@@ -241,7 +253,7 @@ Aggregated statistics for a single collection.
 |---|---|
 | `id` | Collection ID |
 
-**Response:** Object with counts for seeds, instances, replicas, listed, burned, unique owners, and floor price.
+**Response:** Object with counts for seeds, instances, listed, burned, unique owners, and floor price.
 
 **Example:**
 
@@ -313,17 +325,16 @@ Get full details for a single NFT.
 | `id` | NFT ID |
 
 **Response:** Complete NFT object including:
-- `id`, `name`, `image_url`, `image_hash`
-- `collection_id`, `edition`, `nft_type` (seed/instance/replica)
-- `owner`, `minted_by`, `status` (active/listed/burned)
-- `origin_dna`, `instance_dna`, `unique_access_key`
-- `max_replicas`, `distributed`, `seed_id`, `instance_number`
-- `listing_price`, `listing_currency`, `listing_marketplace`
-- `immutable_data`, `mutable_data`, `owner_data`
-- `schema_version`, `previous_owner`, `owner_operation_id`
-- `block_num`, `tx_id`, `created_at`, `seed_tx_id`
+- `id`, `name`, `image_url`
+- `collection_id`, `edition`, `nft_type` (seed/instance)
+- `owner`, `status` (active/listed/lent)
+- `origin_dna`, `instance_dna`, `immutable_data`, `data_hash`
+- `max_supply`, `distributed`, `supply_exhausted`, `seed_id`, `instance_number`
+- `listing_id`, `listing_tx_id`, `listing_price`, `listing_currency`, `listing_expires_at`, `listing_marketplace`, `listing_expired`
+- `schema_version`, `previous_owner`, `owner_operation_id`, `owner_action`, `owner_block_num`
+- `tx_id`, `created_at`, `seed_tx_id`
 
-> All NFT list endpoints (collection NFTs, user NFTs, marketplace listings) also include `schema_version`, `previous_owner`, and `owner_operation_id` in each NFT object.
+> All NFT list endpoints (collection NFTs, user NFTs, marketplace listings) also include `schema_version`, `previous_owner`, `owner_operation_id`, `owner_action`, and `owner_block_num` in each NFT object.
 
 **Error:** `404` if the NFT does not exist.
 
@@ -331,6 +342,107 @@ Get full details for a single NFT.
 
 ```bash
 curl https://api-nftlox.hivecreators.co/api/nfts/my-nft-id
+```
+
+---
+
+### GET /api/nfts/:id/owner
+
+Fast current-owner claim for a single NFT. This is the lightweight route for UI reads and high-throughput checks.
+
+**Response:**
+
+```json
+{
+	"id": "my-nft-id",
+	"owner": "alice",
+	"previous_owner": "bob",
+	"owner_action": "buy",
+	"owner_operation_id": "90000150:4:0",
+	"owner_block_num": 90000150,
+	"claim_hash": "8a1f..."
+}
+```
+
+`owner_operation_id` is the authoritative anchor. The SDK can resolve it through HAFAH/Hive L1 to prove the claim. `owner_block_num` is useful context but not unique proof by itself because one block can contain multiple ownership operations.
+
+**Example:**
+
+```bash
+curl https://api-nftlox.hivecreators.co/api/nfts/my-nft-id/owner
+```
+
+---
+
+### GET /api/nfts/:id/ownership
+
+Canonical ownership proof. Returns the current owner claim plus creation anchors needed by SPV verification.
+
+**Response:** Same fields as `/owner`, plus:
+
+```json
+{
+	"created_operation_id": "89999999:2:0",
+	"created_block_num": 89999999,
+	"created_tx_id": "1234567890abcdef1234567890abcdef12345678",
+	"nft_type": "instance",
+	"seed_id": "seed-id",
+	"instance_number": 42,
+	"instance_dna": "4fc2..."
+}
+```
+
+**Example:**
+
+```bash
+curl https://api-nftlox.hivecreators.co/api/nfts/my-nft-id/ownership
+```
+
+---
+
+### GET /api/nfts/:id/proof
+
+Compatibility alias for the ownership proof contract. New integrations should prefer `/ownership`; existing SDK SPV clients can keep using `/proof`.
+
+---
+
+### GET /api/nfts/:id/loan
+
+Return active loan custody for an NFT without changing ownership semantics.
+
+**Response when lent:**
+
+```json
+{
+	"nft_id": "my-nft-id",
+	"active": true,
+	"loan": {
+		"nft_id": "my-nft-id",
+		"owner": "alice",
+		"lender": "alice",
+		"borrower": "bob",
+		"status": "lent",
+		"loan_operation_id": "90000150:4:0",
+		"loan_block_num": 90000150,
+		"loan_tx_id": "1234567890abcdef1234567890abcdef12345678"
+	}
+}
+```
+
+**Response when not lent:**
+
+```json
+{
+	"nft_id": "my-nft-id",
+	"active": false,
+	"loan": null
+}
+```
+
+**Example:**
+
+```bash
+curl https://api-nftlox.hivecreators.co/api/nfts/my-nft-id/loan
 ```
 
 ---
@@ -351,6 +463,7 @@ List instances distributed from a seed NFT.
 |---|---|---|---|
 | `limit` | number | 50 | Results per page (1-200) |
 | `offset` | number | 0 | Pagination offset |
+| `compact` | boolean | false | Return the seed once plus instance deltas for lower payload size |
 
 **Response:** Paginated array of instance NFT objects.
 
@@ -364,9 +477,29 @@ curl "https://api-nftlox.hivecreators.co/api/nfts/seed-id/instances?limit=20"
 
 ## Users
 
+### GET /api/users/:username/assets
+
+Dashboard-oriented asset overview. This route is for frontend and SDK overview screens; use paginated domain routes for full lists.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `previewLimit` | number | 6 | Max preview items per section (1-20) |
+
+**Response:** Counts plus preview arrays for owned NFTs, seeds, lent-out NFTs, borrowed NFTs, and created collections.
+
+**Example:**
+
+```bash
+curl "https://api-nftlox.hivecreators.co/api/users/alice/assets?previewLimit=6"
+```
+
+---
+
 ### GET /api/users/:username/nfts
 
-Get a user's NFTs with aggregate counts.
+Get NFTs owned by a user with aggregate counts. This route means real ownership (`nfts.owner = username`), not borrowed custody.
 
 **Path parameters:**
 
@@ -378,8 +511,8 @@ Get a user's NFTs with aggregate counts.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `status` | string | -- | Filter: `active`, `listed`, `burned` |
-| `type` | string | -- | Filter: `seed`, `instance`, `replica` |
+| `status` | string | -- | Filter: `active`, `listed`, `lent` |
+| `type` | string | -- | Filter: `seed`, `instance` |
 | `limit` | number | 50 | Results per page (1-200) |
 | `offset` | number | 0 | Pagination offset |
 
@@ -403,12 +536,36 @@ Get NFT count breakdown for a user.
 |---|---|
 | `username` | Hive username |
 
-**Response:** Counts by type (seeds, instances, replicas), excluding burned NFTs.
+**Response:** Counts by type (seeds, instances), excluding burned NFTs.
 
 **Example:**
 
 ```bash
 curl https://api-nftlox.hivecreators.co/api/users/alice/nfts/count
+```
+
+---
+
+### GET /api/users/:username/loans
+
+Get active NFT loans for a user by role.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `role` | string | `all` | Filter: `lender`, `borrower`, `all` |
+| `limit` | number | 50 | Results per page (1-200) |
+| `offset` | number | 0 | Pagination offset |
+
+**Response:** Object containing `loans`, `total`, `role`, `offset`, and `limit`.
+
+Use `role=lender` for NFTs the user has lent out, and `role=borrower` for NFTs temporarily usable by the user.
+
+**Example:**
+
+```bash
+curl "https://api-nftlox.hivecreators.co/api/users/alice/loans?role=lender&limit=20"
 ```
 
 ---
@@ -830,7 +987,6 @@ Create a new NFT collection with optional typed schema.
 | `metadata.externalUrl`       | `string`  | No       | External website URL.                                 |
 | `rules.transferable`         | `boolean` | Yes      | Whether NFTs can be transferred.                      |
 | `rules.burnable`             | `boolean` | Yes      | Whether NFTs can be burned.                           |
-| `rules.replicable`           | `boolean` | Yes      | Whether NFTs can be replicated.                       |
 | `rules.royaltyPct`           | `number`  | Yes      | Royalty percentage on secondary sales (0-50).         |
 | `rules.royaltyRecipient`     | `string`  | No       | Hive account receiving royalties.                     |
 | `schema`                     | `object`  | No       | Typed schema definition.                              |
@@ -865,7 +1021,6 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 		"rules": {
 			"transferable": true,
 			"burnable": true,
-			"replicable": true,
 			"royaltyPct": 5,
 			"royaltyRecipient": "alice"
 		}
@@ -1036,38 +1191,6 @@ Permanently destroy an NFT instance.
 | `seedTxId`  | `string` | No       | Seed parent's tx_id (for L1 traceability).                                |
 
 **Key type:** Posting
-
----
-
-### POST /api/build/replicate
-
-Create a replica of an existing NFT instance (if the collection allows replication).
-
-**Request Body:**
-
-| Field               | Type     | Required | Description                               |
-|---------------------|----------|----------|-------------------------------------------|
-| `originalId`        | `string` | Yes      | ID of the NFT to replicate.               |
-| `originDna`         | `string` | Yes      | Collection origin DNA.                    |
-| `originalInstanceDna` | `string` | Yes    | Instance DNA of the original NFT.         |
-| `newOwner`          | `string` | Yes      | Hive username of the replica owner.       |
-| `currentOwner`      | `string` | Yes      | Hive username of the original NFT owner.  |
-
-**Key type:** Posting
-
-**curl example:**
-
-```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/replicate \
-	-H "Content-Type: application/json" \
-	-d '{
-		"originalId": "nft_abc123",
-		"originDna": "a1b2c3d4e5f67890",
-		"originalInstanceDna": "12345678901234",
-		"newOwner": "bob",
-		"currentOwner": "alice"
-	}'
-```
 
 ---
 

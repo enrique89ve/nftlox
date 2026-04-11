@@ -50,7 +50,7 @@ export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: 
 	}, {
 		params: t.Object({ id: t.String({ minLength: 1, maxLength: 128 }) }),
 		query: t.Object({
-			type: t.Optional(t.String({ description: "Filter by nft_type: seed, instance, replica" })),
+			type: t.Optional(t.String({ description: "Filter by nft_type: seed, instance" })),
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
@@ -81,5 +81,5 @@ export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: 
 		return stats ?? {};
 	}, {
 		params: t.Object({ id: t.String({ minLength: 1, maxLength: 128 }) }),
-		detail: { summary: "Get collection statistics", description: "Aggregated stats: seeds, instances, replicas, listed, burned, unique owners, floor price" },
+		detail: { summary: "Get collection statistics", description: "Aggregated stats: seeds, instances, listed, burned, unique owners, floor price" },
 	});

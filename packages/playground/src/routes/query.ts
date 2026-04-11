@@ -63,7 +63,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					seedId: nft.seed_id,
 					seedTxId: nft.seed_tx_id ?? null,
 					instanceNumber: nft.instance_number,
-					maxSupply: nft.max_replicas,
+					maxSupply: nft.max_supply,
 					distributed: nft.distributed,
 					listingPrice: nft.listing_price,
 					listingCurrency: nft.listing_currency,
@@ -111,9 +111,9 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					: Promise.resolve([]),
 			]);
 
-			// Fetch parent if instance/replica
+			// Fetch parent if this is an instance.
 			let original = null;
-			const parentId = nft.original_id || nft.seed_id;
+			const parentId = nft.seed_id;
 			if (parentId) {
 				try {
 					original = await indexer.getNft(parentId);
@@ -139,10 +139,8 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					listed: nft.status === "listed",
 					listingPrice: nft.listing_price ? { amount: nft.listing_price, currency: nft.listing_currency } : undefined,
 					isSeed: nft.nft_type === "seed",
-					maxSupply: nft.max_replicas,
+					maxSupply: nft.max_supply,
 					distributed: nft.distributed,
-					isReplica: nft.nft_type === "replica",
-					originalId: nft.original_id,
 					seedId: nft.seed_id,
 					seedTxId: nft.seed_tx_id ?? null,
 					instanceNumber: nft.instance_number,
@@ -155,7 +153,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					imageUrl: original.image_url,
 					owner: original.owner,
 				} : null,
-				replicas: {
+				instances: {
 					count: instances.length,
 					items: instances.slice(0, 50).map(r => ({
 						id: r.id,
@@ -210,7 +208,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 						name: nft.name,
 						imageUrl: nft.image_url,
 						owner: nft.owner,
-						maxSupply: nft.max_replicas,
+						maxSupply: nft.max_supply,
 						distributed: nft.distributed || 0,
 						originDna: nft.origin_dna,
 						instanceDna: nft.instance_dna,

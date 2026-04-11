@@ -167,7 +167,6 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					totalPotential: 100000,
 					transferable: true,
 					burnable: true,
-					replicable: false,
 					royaltyPct: 5,
 					royaltyRecipient: GAME_ACCOUNT,
 					schema: GAME_SCHEMA,

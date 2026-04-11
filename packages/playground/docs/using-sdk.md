@@ -63,7 +63,6 @@ const result = buildCollection({
 	rules: {
 		transferable: true,
 		burnable: true,
-		replicable: false,
 		royaltyPct: 0,
 	},
 	schema: {
@@ -131,7 +130,7 @@ const payload = createDeterministicMintPayload({
 	owner: "ragnarok-admin",
 	name: "Echo of the Allfather",
 	imageUrl: "https://example.com/art/odin-001.webp",
-	maxReplicas: 250,
+	maxSupply: 250,
 	immutableData: {
 		card_id: 20001,
 		name: "Echo of the Allfather",

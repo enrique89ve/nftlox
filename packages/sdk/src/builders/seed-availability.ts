@@ -10,7 +10,7 @@
 //   console.log(`${avail.remaining} left of ${avail.maxSupply}`);
 
 type SeedLike = {
-	max_replicas: number;
+	max_supply: number;
 	distributed: number;
 };
 
@@ -23,7 +23,7 @@ export type SeedAvailability = {
 };
 
 export function computeSeedAvailability(seed: SeedLike): SeedAvailability {
-	const maxSupply = seed.max_replicas;
+	const maxSupply = seed.max_supply;
 	const distributed = seed.distributed;
 	const unlimited = maxSupply === 0;
 	const remaining = unlimited ? Infinity : Math.max(0, maxSupply - distributed);

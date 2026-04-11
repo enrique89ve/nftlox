@@ -66,7 +66,7 @@ export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): 
 		name: data.name,
 		description: data.brief,
 		imageUrl: data.imageUrl,
-		maxReplicas: data.maxSupply,
+		maxSupply: data.maxSupply,
 		...(data.collectionBlock !== undefined && { collectionBlock: data.collectionBlock }),
 	};
 

@@ -25,12 +25,12 @@ You are responsible for wrapping them in a transaction, signing, and broadcastin
 
 ### Which key to use
 
-The protocol has **11 actions requiring active key** and **14 using posting key**.
+The protocol has **11 actions requiring active key** and **13 using posting key**.
 
 | Key required | Actions |
 |---|---|
 | **Active key** (11) | `transfer`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `pack_transfer_from`, `pack_approve`, `data_operator_approve` |
-| **Posting key** (14) | `create_collection`, `mint`, `replicate`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `archive_collection`, `unlist`, `pack_create`, `pack_open`, `set_data_from`, `nft_lend`, `nft_return` |
+| **Posting key** (13) | `create_collection`, `mint`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `archive_collection`, `unlist`, `pack_create`, `pack_open`, `set_data_from`, `nft_lend`, `nft_return` |
 
 Active-key actions use `required_auths` while posting-key actions use `required_posting_auths` in the `custom_json` operation.
 
@@ -696,7 +696,6 @@ async function mintCollectionAndSeeds() {
 		rules: {
 			transferable: true,
 			burnable: true,
-			replicable: false,
 			royaltyPct: 5,
 			royaltyRecipient: "myaccount",
 		},
@@ -726,7 +725,7 @@ async function mintCollectionAndSeeds() {
 			name: `Card #${edition}`,
 			description: `Game card edition ${edition}`,
 			imageUrl: `https://example.com/cards/${edition}.png`,
-			maxReplicas: 100,
+			maxSupply: 100,
 		});
 		mintOps.push(mintOp);
 	}

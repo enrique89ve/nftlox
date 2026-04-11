@@ -1,6 +1,6 @@
 # NFTLox Protocol Operations Catalog v0.4.1
 
-Complete reference for all 25 protocol operations. Each operation is broadcast as a `custom_json` on the Hive blockchain with `id = "nftlox_testnet"`.
+Complete reference for all 24 protocol operations. Each operation is broadcast as a `custom_json` on the Hive blockchain with `id = "nftlox_testnet"`.
 
 ---
 
@@ -12,31 +12,30 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 | 2 | `mint` | Core | posting | Creates a seed NFT within a collection |
 | 3 | `transfer` | Core | active | Transfers ownership of an NFT |
 | 4 | `burn` | Core | active | Permanently destroys an NFT |
-| 5 | `replicate` | Core | posting | Creates a derived replica from an original NFT |
-| 6 | `bulk_distribute` | Core | posting | Mints multiple instances from seeds |
-| 7 | `set_data` | Core | posting | Creator updates mutable data of an NFT (requires schema) |
-| 8 | `set_owner_data` | Core | posting | Owner writes own data to an NFT |
-| 9 | `extend_schema` | Core | posting | Creator adds fields to a collection schema |
-| 10 | `list` | Marketplace | active | Lists an NFT for sale |
-| 11 | `unlist` | Marketplace | posting | Removes an NFT from the marketplace |
-| 12 | `buy` | Marketplace | active | Buys a listed NFT (multisig with node) |
-| 13 | `pack_create` | Pack | posting | Creates a pack with a probabilistic drop table |
-| 14 | `pack_buy` | Pack | active | Buys packs (free or paid) |
-| 15 | `pack_transfer` | Pack | active | Transfers packs between users |
-| 16 | `pack_open` | Pack | posting | Opens packs and generates NFT instances |
-| 17 | `nft_approve` | Approve | active | Approves a spender for ONE specific NFT |
-| 18 | `nft_approve_all` | Approve | active | Approves a spender for ALL NFTs in a collection |
-| 19 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
-| 20 | `pack_approve` | Approve | active | Approves a spender to spend N packs |
-| 21 | `pack_transfer_from` | Approve | posting | Approved spender transfers packs from the owner |
-| 22 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
-| 23 | `nft_return` | Lending | posting | Returns a lent NFT |
-| 24 | `data_operator_approve` | DataOperator | active | Authorizes an external operator for a collection |
-| 25 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
+| 5 | `bulk_distribute` | Core | posting | Mints multiple instances from seeds |
+| 6 | `set_data` | Core | posting | Creator updates mutable data of an NFT (requires schema) |
+| 7 | `set_owner_data` | Core | posting | Owner writes own data to an NFT |
+| 8 | `extend_schema` | Core | posting | Creator adds fields to a collection schema |
+| 9 | `list` | Marketplace | active | Lists an NFT for sale |
+| 10 | `unlist` | Marketplace | posting | Removes an NFT from the marketplace |
+| 11 | `buy` | Marketplace | active | Buys a listed NFT (multisig with node) |
+| 12 | `pack_create` | Pack | posting | Creates a pack with a probabilistic drop table |
+| 13 | `pack_buy` | Pack | active | Buys packs (free or paid) |
+| 14 | `pack_transfer` | Pack | active | Transfers packs between users |
+| 15 | `pack_open` | Pack | posting | Opens packs and generates NFT instances |
+| 16 | `nft_approve` | Approve | active | Approves a spender for ONE specific NFT |
+| 17 | `nft_approve_all` | Approve | active | Approves a spender for ALL NFTs in a collection |
+| 18 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
+| 19 | `pack_approve` | Approve | active | Approves a spender to spend N packs |
+| 20 | `pack_transfer_from` | Approve | posting | Approved spender transfers packs from the owner |
+| 21 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
+| 22 | `nft_return` | Lending | posting | Returns a lent NFT |
+| 23 | `data_operator_approve` | DataOperator | active | Authorizes an external operator for a collection |
+| 24 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
 
 ---
 
-## Core (9 operations)
+## Core (8 operations)
 
 ### 1. `create_collection`
 
@@ -59,7 +58,6 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 | `rules` | object | yes | Collection rules (required, all fields explicit) |
 | `rules.transferable` | boolean | yes | Whether NFTs are transferable |
 | `rules.burnable` | boolean | yes | Whether NFTs can be burned |
-| `rules.replicable` | boolean | yes | Whether NFTs can be replicated |
 | `rules.royaltyPct` | number | yes | Royalty percentage 0-50 |
 | `rules.royaltyRecipient` | string | no | Account that receives royalties |
 | `schema` | object | no | Typed schema with `immutable` and `mutable` fields |
@@ -111,7 +109,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - If the collection has a schema, `immutableData`/`mutableData` are validated against it
 - If the collection has `totalPotential > 0`, seed cap is validated
 
-**State changes**: Inserts row in `nfts` with type `seed` and status `active`. The NFT is stamped with the collection's current `schema_version`.
+**State changes**: Inserts row in `nfts` with type `seed` and status `active`. The NFT is stamped with the collection's current `schema_version`, `owner_operation_id`, `owner_action = "mint"`, `owner_block_num`, and creation anchors.
 **Restrictions**: Instance mint, duplicate ID, nonexistent/archived collection, non-creator signer, seed cap reached, or schema validation failure -> rejected.
 
 ---
@@ -136,7 +134,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - Cannot transfer to yourself (`to !== signer`)
 - Collection must be transferable (`transferable=true` in rules)
 
-**State changes**: Updates `owner` and `owner_tx_id` in `nfts`, clears listing fields, deletes `nft_allowances` for that NFT.
+**State changes**: Updates `owner`, `previous_owner`, `owner_operation_id`, `owner_action = "transfer"`, and `owner_block_num` in `nfts`, clears listing fields, deletes `nft_allowances` for that NFT.
 **Restrictions**: NFT burned, lent, actively listed, collection not transferable, or signer is not owner -> rejected.
 
 ---
@@ -166,36 +164,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 5. `replicate`
-
-**SDK constant**: `ACTION_REPLICATE`
-**Description**: Creates a derived replica from an original NFT. The replica is a new NFT referencing the original.
-**Key authority**: posting -- the owner of the original signs.
-**Signer role**: Must be the owner of the original NFT.
-
-**SDK payload**:
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | yes | ID of the new replica |
-| `originalId` | string | yes | ID of the original NFT |
-| `newOwner` | string | yes | Owner of the replica |
-| `originDna` | string | no | Origin DNA |
-| `instanceDna` | string | no | Instance DNA |
-| `uniqueAccessKey` | string | no | Access key (ignored by indexer, generates its own) |
-| `name` | string | no | Name (default: "Original Name (Replica)") |
-
-**Indexer validations**:
-- Replica with that `id` must not exist
-- Original must exist
-- `original.owner === op.signer`
-- Original cannot be `burned` or `lent`
-
-**State changes**: Inserts row in `nfts` with `nft_type = "replica"` stamped with the collection's current `schema_version`, `originalId` referencing the original.
-**Restrictions**: Duplicate ID, original nonexistent/burned/lent, or signer is not owner -> rejected.
-
----
-
-### 6. `bulk_distribute`
+### 5. `bulk_distribute`
 
 **SDK constant**: `ACTION_BULK_DISTRIBUTE`
 **Description**: Mints multiple instances from one or more seeds in a single operation. Generates deterministic DNA. Instances inherit `immutable_data` from the seed automatically.
@@ -223,13 +192,14 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - If the collection has a schema and `mutableData` is provided, it is validated against the schema
 - `uniqueAccessKey` is computed by the indexer from `(instanceDna, recipient, txId)` — not from signer
 
-**State changes**: Inserts N rows in `nfts` (type `instance`) stamped with the collection's current `schema_version`, increments `distributed` on the seed.
+**State changes**: Inserts N rows in `nfts` (type `instance`) stamped with the collection's current `schema_version`, increments `distributed` on the seed, and stores each instance's creation/current ownership anchors (`owner_operation_id`, `owner_action = "bulk_distribute"`, `owner_block_num`).
+**Operation status**: `bulk_distribute` does not store the full created instance list in `confirmed_operations.nft_ids`; it can return `[]` there to keep the confirmation cache bounded. Per-instance provenance comes from each `nfts` row.
 **Idempotency**: Detects re-sends of the same txId and adjusts counters.
 **Restrictions**: Invalid seedTxId, supply exceeded, nonexistent seeds, or non-owner signer -> rejected.
 
 ---
 
-### 7. `set_data`
+### 6. `set_data`
 
 **SDK constant**: `ACTION_SET_DATA`
 **Description**: The collection creator updates the mutable data of an NFT. Requires the collection to have a defined schema.
@@ -257,7 +227,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 8. `set_owner_data`
+### 7. `set_owner_data`
 
 **SDK constant**: `ACTION_SET_OWNER_DATA`
 **Description**: The NFT owner writes data to the `owner_data` field, separate from the creator's `mutable_data`. Does not require schema validation.
@@ -281,7 +251,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 9. `extend_schema`
+### 8. `extend_schema`
 
 **SDK constant**: `ACTION_EXTEND_SCHEMA`
 **Description**: The creator adds new fields to a collection schema. Existing fields cannot be deleted or modified; only new fields can be added. If the collection has no schema, a new one is created.
@@ -310,7 +280,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ## Marketplace (3 operations)
 
-### 10. `list`
+### 9. `list`
 
 **SDK constant**: `ACTION_LIST`
 **Description**: Lists an NFT for sale on the marketplace with price and currency.
@@ -343,7 +313,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 11. `unlist`
+### 10. `unlist`
 
 **SDK constant**: `ACTION_UNLIST`
 **Description**: Removes an NFT from the marketplace.
@@ -365,7 +335,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 12. `buy`
+### 11. `buy`
 
 **SDK constant**: `ACTION_BUY`
 **Description**: Buys a listed NFT. Special operation: the node co-signs with active key (multisig). The buyer is extracted from paired transfers, not from the signer.
@@ -397,14 +367,14 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - If `royaltyRecipient === seller`, royalty merges into seller payment
 - If `feeAccount === seller`, fee merges into seller payment
 
-**State changes**: `owner` -> buyer, `owner_tx_id` -> current txId, status -> `active`, clears listing and allowances. A sale record is inserted in the `sales` table with `gross_amount`, `royalty_amount`, `protocol_fee`, and `seller_net`.
+**State changes**: `owner` -> buyer, `previous_owner` -> seller, `owner_operation_id` -> current operation id, `owner_action = "buy"`, `owner_block_num` -> current block, status -> `active`, clears listing and allowances. A sale record is inserted in the `sales` table with `gross_amount`, `royalty_amount`, `protocol_fee`, and `seller_net`.
 **Restrictions**: NFT not listed, listing expired, collection not transferable, listingId mismatch, listTxId mismatch, incorrect payments, buyer = seller -> rejected.
 
 ---
 
 ## Packs (4 operations)
 
-### 13. `pack_create`
+### 12. `pack_create`
 
 **SDK constant**: `ACTION_PACK_CREATE`
 **Description**: Creates a pack with a probabilistic drop table. When a pack is opened, instances are generated according to the table weights.
@@ -436,7 +406,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 14. `pack_buy`
+### 13. `pack_buy`
 
 **SDK constant**: `ACTION_PACK_BUY`
 **Description**: Buys packs. If the pack has a price, requires a paired HIVE/HBD transfer from buyer to creator.
@@ -460,7 +430,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 15. `pack_transfer`
+### 14. `pack_transfer`
 
 **SDK constant**: `ACTION_PACK_TRANSFER`
 **Description**: Transfers packs between users.
@@ -486,7 +456,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 16. `pack_open`
+### 15. `pack_open`
 
 **SDK constant**: `ACTION_PACK_OPEN`
 **Description**: Opens packs and generates deterministic NFT instances based on the drop table. RNG is deterministic (txId, blockNum, signer, packId, index).
@@ -518,7 +488,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ## Approve/Delegation (5 operations)
 
-### 17. `nft_approve`
+### 16. `nft_approve`
 
 **SDK constant**: `ACTION_NFT_APPROVE`
 **Description**: Approves a spender to transfer ONE specific NFT from the owner.
@@ -543,7 +513,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 18. `nft_approve_all`
+### 17. `nft_approve_all`
 
 **SDK constant**: `ACTION_NFT_APPROVE_ALL`
 **Description**: Approves a spender to transfer ALL of the signer's NFTs in a collection. Analogous to ERC-721 `setApprovalForAll`.
@@ -566,7 +536,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 19. `nft_transfer_from`
+### 18. `nft_transfer_from`
 
 **SDK constant**: `ACTION_NFT_TRANSFER_FROM`
 **Description**: An approved spender transfers an NFT from the owner to another recipient.
@@ -587,12 +557,12 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 - Collection must be `transferable`
 - Authorization: `getNftAllowance(nftId)` or `hasCollectionAllowance(from, signer, collectionId)`
 
-**State changes**: `owner` -> `to`, `owner_tx_id` -> current txId, clears allowances.
+**State changes**: `owner` -> `to`, `previous_owner` -> `from`, `owner_operation_id` -> current operation id, `owner_action = "nft_transfer_from"`, `owner_block_num` -> current block, clears allowances.
 **Restrictions**: No authorization, NFT not transferable/burned/lent/listed -> rejected.
 
 ---
 
-### 20. `pack_approve`
+### 19. `pack_approve`
 
 **SDK constant**: `ACTION_PACK_APPROVE`
 **Description**: Approves a spender to spend N packs from the owner. Analogous to ERC-20 `approve`.
@@ -617,7 +587,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 21. `pack_transfer_from`
+### 20. `pack_transfer_from`
 
 **SDK constant**: `ACTION_PACK_TRANSFER_FROM`
 **Description**: An approved spender transfers packs from the owner to another recipient.
@@ -645,7 +615,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ## Lending (2 operations)
 
-### 22. `nft_lend`
+### 21. `nft_lend`
 
 **SDK constant**: `ACTION_NFT_LEND`
 **Description**: Lends an NFT to a borrower. The NFT is locked (cannot be transferred, listed, burned, or approved).
@@ -670,7 +640,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 23. `nft_return`
+### 22. `nft_return`
 
 **SDK constant**: `ACTION_NFT_RETURN`
 **Description**: Returns a lent NFT. Both the lender and the borrower can execute this action.
@@ -694,7 +664,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ## Data Operators (2 operations)
 
-### 24. `data_operator_approve`
+### 23. `data_operator_approve`
 
 **SDK constant**: `ACTION_DATA_OPERATOR_APPROVE`
 **Description**: The collection creator authorizes an external operator to modify mutable data of NFTs in that collection.
@@ -718,7 +688,7 @@ Complete reference for all 25 protocol operations. Each operation is broadcast a
 
 ---
 
-### 25. `set_data_from`
+### 24. `set_data_from`
 
 **SDK constant**: `ACTION_SET_DATA_FROM`
 **Description**: An approved operator modifies the mutable data (`mutable_data`) of an NFT. Works identically to `set_data` but signed by an authorized operator instead of the creator. Requires the collection to have a defined schema.

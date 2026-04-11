@@ -18,7 +18,6 @@ export interface InsertCollectionParams {
 	externalUrl: string | null;
 	transferable: boolean;
 	burnable: boolean;
-	replicable: boolean;
 	royaltyPct: number;
 	royaltyRecipient: string | null;
 	schema: unknown | null;
@@ -33,14 +32,14 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 		INSERT INTO collections (
 			id, name, symbol, creator, total_potential,
 			description, image_url, external_url,
-			transferable, burnable, replicable, royalty_pct, royalty_recipient,
+			transferable, burnable, royalty_pct, royalty_recipient,
 			schema, schema_version,
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.name}, ${params.symbol},
 			${params.creator}, ${params.totalPotential},
 			${params.description}, ${params.imageUrl}, ${params.externalUrl},
-			${params.transferable}, ${params.burnable}, ${params.replicable}, ${params.royaltyPct},
+			${params.transferable}, ${params.burnable}, ${params.royaltyPct},
 			${params.royaltyRecipient},
 			${params.schema ? JSON.stringify(params.schema) : null}, ${params.schemaVersion},
 			${params.blockNum}, ${params.txId},
@@ -55,7 +54,7 @@ export async function getCollectionById(id: string): Promise<Record<string, unkn
 	const [row] = await sql`
 		SELECT id, name, symbol, creator, total_potential,
 			description, image_url, external_url,
-			transferable, burnable, replicable, royalty_pct, royalty_recipient,
+			transferable, burnable, royalty_pct, royalty_recipient,
 			schema, schema_version, status, tx_id, created_at
 		FROM collections
 		WHERE id = ${id}
@@ -71,7 +70,6 @@ export interface CollectionRulesRow {
 	status: CollectionStatus;
 	transferable: boolean;
 	burnable: boolean;
-	replicable: boolean;
 	royalty_pct: string;
 	royalty_recipient: string | null;
 	schema: unknown | null;
@@ -91,7 +89,7 @@ export async function getCollectionRules(
 ): Promise<CollectionRulesRow | null> {
 	const [row] = await txn<CollectionRulesRow[]>`
 		SELECT c.id, c.creator, c.total_potential, c.status, c.transferable,
-			c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient,
+			c.burnable, c.royalty_pct, c.royalty_recipient,
 			c.schema, c.schema_version,
 			COALESCE(cs.seeds, 0)::int AS seed_count
 		FROM collections c
@@ -165,7 +163,7 @@ export async function countCollectionsByCreator(creator: string, txn: Queryable 
 const COLLECTION_LIST_COLUMNS = sql`
 	c.id, c.name, c.symbol, c.creator, c.total_potential,
 	c.description, c.image_url, c.external_url,
-	c.transferable, c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient,
+	c.transferable, c.burnable, c.royalty_pct, c.royalty_recipient,
 	c.schema_version, c.status, c.tx_id, c.created_at,
 	COALESCE(cs.seeds, 0)::int AS seed_count,
 	COALESCE(cs.instances, 0)::int AS instance_count
@@ -200,7 +198,6 @@ export async function getCollectionStats(collectionId: string) {
 		SELECT
 			COALESCE(cs.seeds, 0) AS total_seeds,
 			COALESCE(cs.instances, 0) AS total_instances,
-			COALESCE(cs.replicas, 0) AS total_replicas,
 			COALESCE((
 				SELECT COUNT(*) FROM nfts
 				WHERE collection_id = ${collectionId}
@@ -221,7 +218,7 @@ export async function getCollectionStats(collectionId: string) {
 		WHERE cs.collection_id = ${collectionId}
 	`;
 	return stats ?? {
-		total_seeds: 0, total_instances: 0, total_replicas: 0,
+		total_seeds: 0, total_instances: 0,
 		total_listed: 0, total_burned: 0, unique_owners: 0, floor_price: null,
 	};
 }

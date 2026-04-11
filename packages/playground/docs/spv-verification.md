@@ -49,9 +49,11 @@ The SPV module uses the HAFAH REST API to fetch raw transactions directly from H
 
 ### NFT Ownership
 
-1. The indexer-reported owner matches the expected owner
-2. Random history events (transfers, burns, listings) exist on L1
-3. Each sampled event has the correct signer and action type
+1. The indexer returns a compact current-owner claim from `/api/nfts/{nftId}/proof`
+2. The claim is anchored by `owner_operation_id`, not by a mutable local tx field
+3. The SDK resolves `owner_operation_id` through HAFAH/Hive L1 and parses the on-chain `custom_json`
+4. The SDK derives the owner and previous owner from the L1 operation, then compares them with the indexer claim and the expected owner
+5. `owner_block_num` is kept as block context, not as unique proof, because one block can contain multiple ownership operations
 
 ### Deterministic Derivation
 
@@ -183,7 +185,9 @@ interface PackOpenVerificationResult {
 
 ## Verify NFT Ownership
 
-Verifies that an NFT's reported owner and history events match Hive L1 data. Samples up to 3 random events from the NFT's history (Boleto Suizo principle).
+Verifies the current ownership edge for an NFT. The indexer provides the snapshot, but the SDK treats it as untrusted: it resolves `owner_operation_id` directly through HAFAH/Hive L1, derives the owner from the on-chain NFTLox operation, and only verifies if the L1-derived owner matches both the indexer claim and `expectedOwner`.
+
+This is current-edge verification, not a full historical replay. The database can be rebuilt from Hive, and a corrupted local owner value should be rejected because the referenced L1 operation will not derive the same owner.
 
 ```typescript
 import {
@@ -199,25 +203,25 @@ const result: OwnershipVerificationResult = await verifyNftOwnership({
 	expectedOwner: "player-alice",
 	indexerBaseUrl: "https://api-nftlox.hivecreators.co",
 	l1Config,
-	sampleSize: 3,
 });
 
 console.log(`Status: ${result.status}`);
 console.log(`Reported owner: ${result.reportedOwner}`);
-console.log(`Events checked: ${result.sampledEvents}/${result.totalEvents}`);
+console.log(`Proofs checked: ${result.proofsChecked}`);
 
 for (const check of result.checks) {
-	console.log(`  ${check.eventType} tx=${check.txId} -> ${check.l1Status}`);
+	console.log(`  ${check.eventType} op=${check.operationId} -> ${check.l1Status}`);
+	console.log(`  L1 owner: ${check.derivedOwner}`);
 }
 ```
 
 ### Ownership Verification Flow
 
-1. Fetches NFT info from `GET /api/nfts/{nftId}` -- checks reported owner
-2. Fetches NFT history from `GET /api/nfts/{nftId}/history`
-3. Randomly samples up to 3 history events
-4. For each event, verifies the transaction exists on L1 with the correct action and signer
-5. Returns `"verified"` only if owner matches AND all sampled events pass L1 checks
+1. Fetches the ownership proof from `GET /api/nfts/{nftId}/proof` (same proof contract as `/api/nfts/{nftId}/ownership`)
+2. Receives `owner`, `previous_owner`, `owner_action`, `owner_operation_id`, `owner_block_num`, creation anchors, and `claim_hash`
+3. Resolves `owner_operation_id` from Hive L1 through HAFAH
+4. Derives the real owner and previous owner from the on-chain NFTLox action (`mint`, `bulk_distribute`, `transfer`, `nft_transfer_from`, or `buy`)
+5. Returns `"verified"` only if the L1-derived owner matches `expectedOwner`, the indexer-reported owner, and the indexer-reported previous owner
 
 ### OwnershipVerificationResult Shape
 
@@ -227,8 +231,7 @@ interface OwnershipVerificationResult {
 	nftId: string;
 	reportedOwner: string;
 	expectedOwner: string;
-	totalEvents: number;
-	sampledEvents: number;
+	proofsChecked: number;
 	checks: OwnershipCheckResult[];
 	verifiedAt: number;
 	durationMs: number;
@@ -242,6 +245,9 @@ interface OwnershipCheckResult {
 	expectedSigner: string;
 	l1Status: "verified" | "mismatch" | "error" | "not_found";
 	message: string;
+	operationId?: string;
+	previousOwner?: string | null;
+	derivedOwner?: string | null;
 }
 ```
 

@@ -787,10 +787,10 @@
 			border: 1px solid rgba(59, 130, 246, 0.2);
 		}
 
-		.nft-badge.replica {
-			background: rgba(168, 85, 247, 0.1);
-			color: #c084fc;
-			border: 1px solid rgba(168, 85, 247, 0.2);
+		.nft-badge.auth {
+			background: rgba(20, 184, 166, 0.1);
+			color: #5eead4;
+			border: 1px solid rgba(20, 184, 166, 0.2);
 		}
 
 		.nft-badge.listed {
@@ -875,7 +875,7 @@
 			line-height: 1.4;
 		}
 
-		.replicas-list {
+		.instances-list {
 			display: grid;
 			grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 			gap: 12px;
@@ -884,7 +884,7 @@
 			padding-right: 4px;
 		}
 
-		.replica-item {
+		.instance-item {
 			display: flex;
 			align-items: center;
 			gap: 10px;
@@ -896,14 +896,14 @@
 			transition: all 0.2s;
 		}
 
-		.replica-item:hover {
+		.instance-item:hover {
 			background: var(--surface);
 			border-color: var(--accent);
 			transform: translateY(-1px);
 			box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 		}
 
-		.replica-num {
+		.instance-num {
 			font-family: var(--mono);
 			font-size: 11px;
 			color: var(--accent);
@@ -913,7 +913,7 @@
 			font-weight: 600;
 		}
 
-		.replica-owner {
+		.instance-owner {
 			font-size: 13px;
 			color: var(--text);
 			font-weight: 500;
@@ -1881,17 +1881,17 @@
 								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
 								Parent NFT
 							</div>
-							<div class="replica-item" id="nft-parent-item" onclick="">
-								<span class="replica-num">SEED</span>
-								<span class="replica-owner" id="nft-parent-name">-</span>
+							<div class="instance-item" id="nft-parent-item" onclick="">
+								<span class="instance-num">SEED</span>
+								<span class="instance-owner" id="nft-parent-name">-</span>
 							</div>
 						</div>
 
-						<div class="detail-section" id="replicas-section" style="display: none;">
+						<div class="detail-section" id="instances-section" style="display: none;">
 							<div class="detail-section-title">
-								Instances / Replicas (<span id="replicas-count">0</span>)
+								Instances (<span id="instances-count">0</span>)
 							</div>
-							<div class="replicas-list" id="nft-replicas-list"></div>
+							<div class="instances-list" id="nft-instances-list"></div>
 						</div>
 
 						<!-- Actions Section (visible when owner) -->
@@ -2041,7 +2041,6 @@
 					<button class="advanced-tab" data-tab="tab-spv">SPV Verify</button>
 					<button class="advanced-tab" data-tab="tab-nft-tracker">NFT Tracker</button>
 					<button class="advanced-tab" data-tab="tab-collection-ops">Collection Ops</button>
-					<button class="advanced-tab" data-tab="tab-advanced-ops">Advanced Ops</button>
 					<button class="advanced-tab" data-tab="tab-debug">Debug</button>
 				</div>
 
@@ -2051,7 +2050,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">NFT Approve</span>
-							<span class="nft-badge replica">ACTIVE KEY</span>
+							<span class="nft-badge auth">ACTIVE KEY</span>
 						</div>
 						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Approve a spender to transfer a specific NFT instance on your behalf.</p>
 						<div class="form-row">
@@ -2075,7 +2074,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">NFT Approve All (Collection-wide)</span>
-							<span class="nft-badge replica">ACTIVE KEY</span>
+							<span class="nft-badge auth">ACTIVE KEY</span>
 						</div>
 						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Approve a spender for all your NFTs in a collection.</p>
 						<div class="form-row">
@@ -2099,7 +2098,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">NFT Transfer From</span>
-							<span class="nft-badge replica">ACTIVE KEY</span>
+							<span class="nft-badge auth">ACTIVE KEY</span>
 						</div>
 						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Transfer an NFT you have approval for (as spender).</p>
 						<div class="form-row">
@@ -2123,7 +2122,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">Pack Approve</span>
-							<span class="nft-badge replica">ACTIVE KEY</span>
+							<span class="nft-badge auth">ACTIVE KEY</span>
 						</div>
 						<div class="form-row">
 							<div class="form-group">
@@ -2152,7 +2151,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">Pack Transfer From</span>
-							<span class="nft-badge replica">ACTIVE KEY</span>
+							<span class="nft-badge auth">ACTIVE KEY</span>
 						</div>
 						<div class="form-row">
 							<div class="form-group">
@@ -2181,7 +2180,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">NFT Lending</span>
-							<span class="nft-badge replica">ACTIVE KEY</span>
+							<span class="nft-badge auth">ACTIVE KEY</span>
 						</div>
 						<div class="form-row">
 							<div class="form-group">
@@ -2207,7 +2206,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">Data Operator Approve</span>
-							<span class="nft-badge replica">ACTIVE KEY</span>
+							<span class="nft-badge auth">ACTIVE KEY</span>
 						</div>
 						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Allow an operator to set data on NFTs in your collection.</p>
 						<div class="form-row">
@@ -2231,7 +2230,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">Set Data From (as Operator)</span>
-							<span class="nft-badge replica">ACTIVE KEY</span>
+							<span class="nft-badge auth">ACTIVE KEY</span>
 						</div>
 						<div class="form-row">
 							<div class="form-group">
@@ -2429,7 +2428,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">3. Transfer NFT</span>
-							<span class="nft-badge replica">ACTIVE KEY</span>
+							<span class="nft-badge auth">ACTIVE KEY</span>
 						</div>
 						<div class="form-row">
 							<div class="form-group">
@@ -2479,7 +2478,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">Bulk Distribute</span>
-							<span class="nft-badge replica">POSTING KEY</span>
+							<span class="nft-badge auth">POSTING KEY</span>
 						</div>
 						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Distribute NFT instances from seeds to multiple recipients at once.</p>
 
@@ -2520,7 +2519,7 @@
 					<div class="card">
 						<div class="card-header">
 							<span class="card-title">Extend Schema</span>
-							<span class="nft-badge replica">POSTING KEY</span>
+							<span class="nft-badge auth">POSTING KEY</span>
 						</div>
 						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Add new fields to an existing collection's schema. Only the collection creator can do this.</p>
 
@@ -2552,50 +2551,6 @@
 							</div>
 							<pre id="extend-schema-json" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: var(--mono); font-size: 12px; overflow-x: auto; max-height: 300px; overflow-y: auto;"></pre>
 						</div>
-					</div>
-				</div>
-
-				<!-- ===== Tab: Advanced Ops ===== -->
-				<div class="advanced-tab-content" id="tab-advanced-ops">
-					<!-- Replicate NFT -->
-					<div class="card">
-						<div class="card-header">
-							<span class="card-title">Replicate NFT</span>
-							<span class="nft-badge replica">POSTING KEY</span>
-						</div>
-						<p style="color: var(--text-dim); font-size: 13px; margin-bottom: 12px;">Create a replica (copy) of an existing NFT for a new owner.</p>
-						<div class="form-row">
-							<div class="form-group" style="flex: 1;">
-								<label class="form-label">Original NFT ID</label>
-								<input class="form-input" id="adv-replicate-nft-id" placeholder="seed_abc123">
-							</div>
-							<div class="form-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;">
-								<button class="btn btn-secondary btn-sm" id="btn-replicate-load-nft">Load NFT</button>
-							</div>
-						</div>
-						<div class="form-row">
-							<div class="form-group">
-								<label class="form-label">Origin DNA</label>
-								<input class="form-input" id="adv-replicate-origin-dna" placeholder="Auto-filled on Load NFT">
-							</div>
-							<div class="form-group">
-								<label class="form-label">Original Instance DNA</label>
-								<input class="form-input" id="adv-replicate-instance-dna" placeholder="Auto-filled on Load NFT">
-							</div>
-						</div>
-						<div class="form-group">
-							<label class="form-label">New Owner</label>
-							<input class="form-input" id="adv-replicate-new-owner" placeholder="bob">
-						</div>
-						<button class="btn btn-primary" id="btn-replicate-submit">Replicate via Keychain</button>
-					</div>
-
-					<!-- Preview -->
-					<div class="card" id="advanced-ops-preview" style="display: none;">
-						<div class="card-header">
-							<span class="card-title">Generated Operation</span>
-						</div>
-						<pre id="advanced-ops-json" style="background: var(--bg); padding: 16px; border-radius: 6px; font-family: var(--mono); font-size: 12px; overflow-x: auto; color: var(--accent); max-height: 300px; overflow-y: auto;"></pre>
 					</div>
 				</div>
 

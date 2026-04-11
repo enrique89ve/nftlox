@@ -107,8 +107,8 @@ export function validateReservationDemand(
 
 	return Object.entries(reservedSupply).map(([seedId, reserved]) => {
 		const snapshot = getSnapshotBySeedId(seedSnapshots, seedId);
-		const unlimited = snapshot.maxReplicas === 0;
-		const finiteRemainingBefore = Math.max(0, snapshot.maxReplicas - snapshot.distributed - snapshot.reserved);
+		const unlimited = snapshot.maxSupply === 0;
+		const finiteRemainingBefore = Math.max(0, snapshot.maxSupply - snapshot.distributed - snapshot.reserved);
 		const remainingBefore = unlimited ? null : finiteRemainingBefore;
 		const remainingAfter = unlimited ? null : finiteRemainingBefore - reserved;
 

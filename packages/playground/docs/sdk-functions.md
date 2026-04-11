@@ -48,7 +48,6 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 | `createBulkDistributePayload()` | Bulk distribute instances from seed |
 | `createTransferPayload()` | Transfer NFT |
 | `createBurnPayload()` | Burn NFT |
-| `createReplicatePayload()` | Create replica |
 | `createSetDataPayload()` | Update custom data/tags |
 | `createListPayload()` | List on marketplace |
 | `createUnlistPayload()` | Remove listing |
@@ -192,7 +191,6 @@ Exported from `schemas.ts`. Each schema validates input for its corresponding ac
 | `listInputSchema` | List input |
 | `unlistInputSchema` | Unlist input |
 | `burnInputSchema` | Burn input |
-| `replicateInputSchema` | Replicate input |
 | `bulkDistributeInputSchema` | Bulk distribute input |
 | `setDataInputSchema` | Set data input |
 | `dataOperatorApproveInputSchema` | Data operator approve |

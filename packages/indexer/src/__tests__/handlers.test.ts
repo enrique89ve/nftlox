@@ -13,7 +13,6 @@ import { config } from "@/config.ts";
 import { handleNftApprove } from "@/processor/handlers/allowances/nft-approve.ts";
 import { handleNftApproveAll } from "@/processor/handlers/allowances/nft-approve-all.ts";
 import { handleNftTransferFrom } from "@/processor/handlers/allowances/nft-transfer-from.ts";
-import { handleReplicate } from "@/processor/handlers/core/replicate.ts";
 import { handleNftLend } from "@/processor/handlers/lending/nft-lend.ts";
 import { handleNftReturn } from "@/processor/handlers/lending/nft-return.ts";
 import { handleDataOperatorApprove } from "@/processor/handlers/allowances/data-operator-approve.ts";
@@ -30,7 +29,6 @@ import {
 	ACTION_TRANSFER,
 	ACTION_LIST,
 	ACTION_UNLIST,
-	ACTION_REPLICATE,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
 	ACTION_NFT_TRANSFER_FROM,
@@ -97,7 +95,7 @@ async function seedCollection(txn: Queryable = sql) {
 		symbol: "TEST",
 		totalPotential: 1000,
 		metadata: { description: "A test collection", image: "https://example.com/img.png" },
-		rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 5 },
+		rules: { transferable: true, burnable: true, royaltyPct: 5 },
 	});
 	await handleCreateCollection(op, txn);
 }
@@ -117,7 +115,7 @@ async function makeCanonicalCollection(
 			symbol,
 			totalPotential: 100,
 			metadata: { description: "Test", image: "https://example.com/img.png" },
-			rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 0 },
+			rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			...overrides,
 		},
 	};
@@ -129,7 +127,7 @@ async function seedMint(txn: Queryable = sql) {
 		collectionId: COL_ID,
 		edition: 1,
 		owner: "alice",
-		maxReplicas: 10,
+		maxSupply: 10,
 		metadata: { name: "Test Seed", imageUrl: "https://example.com/nft.png", imageHash: "img_abc" },
 	});
 	await handleMint(op, txn);
@@ -245,7 +243,7 @@ describe("Handlers (integration)", () => {
 				symbol: "TEST",
 				totalPotential: 100,
 				metadata: { description: "Test", image: "https://example.com/img.png" },
-				rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 0 },
+				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
 			await expect(handleCreateCollection(op, sql)).rejects.toThrow("Non-canonical collectionId");
 		});
@@ -258,7 +256,7 @@ describe("Handlers (integration)", () => {
 				totalPotential: 100,
 				originDna: "FAKE_ORIGIN_DNA",
 				metadata: { description: "Test", image: "https://example.com/img.png" },
-				rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 0 },
+				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
 			await handleCreateCollection(op, sql);
 			const [row] = await sql`SELECT id, name FROM collections WHERE id = ${COL_ID}`;
@@ -271,7 +269,7 @@ describe("Handlers (integration)", () => {
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: 100,
-				rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 0 },
+				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
 			await expect(handleCreateCollection(op, sql)).rejects.toThrow("metadata");
 		});
@@ -283,7 +281,7 @@ describe("Handlers (integration)", () => {
 				symbol: "TEST",
 				totalPotential: 100,
 				metadata: { image: "https://example.com/img.png" },
-				rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 0 },
+				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
 			await expect(handleCreateCollection(op, sql)).rejects.toThrow("metadata.description");
 		});
@@ -306,7 +304,7 @@ describe("Handlers (integration)", () => {
 				symbol: "TEST",
 				totalPotential: 100,
 				metadata: { description: "Test", image: "https://example.com/img.png" },
-				rules: { burnable: true, replicable: true, royaltyPct: 0 },
+				rules: { burnable: true, royaltyPct: 0 },
 			});
 			await expect(handleCreateCollection(op, sql)).rejects.toThrow("rules.transferable");
 		});
@@ -318,7 +316,7 @@ describe("Handlers (integration)", () => {
 				symbol: "TEST",
 				totalPotential: 100,
 				metadata: { description: "Test", image: "https://example.com/img.png" },
-				rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 60 },
+				rules: { transferable: true, burnable: true, royaltyPct: 60 },
 			});
 			await expect(handleCreateCollection(op, sql)).rejects.toThrow("royaltyPct");
 		});
@@ -330,7 +328,7 @@ describe("Handlers (integration)", () => {
 				symbol: "TEST",
 				totalPotential: -5,
 				metadata: { description: "Test", image: "https://example.com/img.png" },
-				rules: { transferable: true, burnable: true, replicable: true, royaltyPct: 0 },
+				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
 			await expect(handleCreateCollection(op, sql)).rejects.toThrow("totalPotential");
 		});
@@ -441,7 +439,7 @@ describe("Handlers (integration)", () => {
 			expect(nft).toBeDefined();
 			expect(nft!.nft_type).toBe("seed");
 			expect(nft!.owner).toBe("alice");
-			expect(nft!.max_replicas).toBe(10);
+			expect(nft!.max_supply).toBe(10);
 		});
 
 		test("rejects mint without collection", async () => {
@@ -601,7 +599,7 @@ describe("Handlers (integration)", () => {
 			const mintOp = makeOp(ACTION_MINT, {
 				id: "seed_limited",
 				collectionId: COL_ID,
-				maxReplicas: 2,
+				maxSupply: 2,
 				metadata: { name: "Limited" },
 			});
 			await handleMint(mintOp, sql);
@@ -687,7 +685,7 @@ describe("Handlers (integration)", () => {
 				id: "seed_bob",
 				collectionId: COL_ID,
 				owner: "bob",
-				maxReplicas: 10,
+				maxSupply: 10,
 				metadata: { name: "Bob Seed" },
 			}, "alice");
 			await handleMint(mintOp, sql);
@@ -779,11 +777,11 @@ describe("Handlers (integration)", () => {
 		test("supply check uses pre-tx distributed count", async () => {
 			await seedCollection();
 
-			// Seed with max 3 replicas
+			// Seed with max 3 distributable instances
 			const mintOp = makeOp(ACTION_MINT, {
 				id: "seed_capped",
 				collectionId: COL_ID,
-				maxReplicas: 3,
+				maxSupply: 3,
 				metadata: { name: "Capped" },
 			});
 			await handleMint(mintOp, sql);
@@ -809,7 +807,7 @@ describe("Handlers (integration)", () => {
 			const mintOp2 = makeOp(ACTION_MINT, {
 				id: "seed_test2",
 				collectionId: COL_ID,
-				maxReplicas: 10,
+				maxSupply: 10,
 				metadata: { name: "Seed 2" },
 			});
 			await handleMint(mintOp2, sql);
@@ -843,7 +841,7 @@ describe("Handlers (integration)", () => {
 			const mintOp = makeOp(ACTION_MINT, {
 				id: "seed_concurrent",
 				collectionId: COL_ID,
-				maxReplicas: 20,
+				maxSupply: 20,
 				metadata: { name: "Concurrent Seed" },
 			});
 			await handleMint(mintOp, sql);
@@ -885,7 +883,7 @@ describe("Handlers (integration)", () => {
 			const mintOp = makeOp(ACTION_MINT, {
 				id: "seed_race",
 				collectionId: COL_ID,
-				maxReplicas: 5,
+				maxSupply: 5,
 				metadata: { name: "Race Seed" },
 			});
 			await handleMint(mintOp, sql);
@@ -917,7 +915,7 @@ describe("Handlers (integration)", () => {
 			const mintOp = makeOp(ACTION_MINT, {
 				id: "seed_replay_multi",
 				collectionId: COL_ID,
-				maxReplicas: 10,
+				maxSupply: 10,
 				metadata: { name: "Replay Multi" },
 			});
 			await handleMint(mintOp, sql);
@@ -1012,7 +1010,7 @@ describe("Handlers (integration)", () => {
 		test("rejects transfer from non-transferable collection", async () => {
 			const { id: colId, data: colData } = await makeCanonicalCollection(
 				"alice", "Locked Collection", "LOCK",
-				{ rules: { transferable: false, burnable: true, replicable: true, royaltyPct: 0 } },
+				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
 			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
 
@@ -1078,7 +1076,7 @@ describe("Handlers (integration)", () => {
 		test("rejects burn from non-burnable collection", async () => {
 			const { id: colId, data: colData } = await makeCanonicalCollection(
 				"alice", "No Burn", "NOBRN",
-				{ rules: { transferable: true, burnable: false, replicable: true, royaltyPct: 0 } },
+				{ rules: { transferable: true, burnable: false, royaltyPct: 0 } },
 			);
 			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
 			await handleMint(makeOp(ACTION_MINT, {
@@ -1137,23 +1135,12 @@ describe("Handlers (integration)", () => {
 			expect(unlisted!.listing_price).toBeNull();
 		});
 
-		test("rejects list of seed and replica NFTs", async () => {
+		test("rejects list of seed NFTs", async () => {
 			await seedCollection();
 			await seedMint();
 			const seedListData = await makeListData({ nftId: "seed_test1" });
 			await expect(
 				handleList(makeOp(ACTION_LIST, seedListData), sql),
-			).rejects.toThrow("Only instances");
-
-			const instId = await seedInstance();
-			await handleReplicate(makeOp(ACTION_REPLICATE, {
-				id: "replica_market1",
-				originalId: instId,
-				newOwner: "alice",
-			}), sql);
-			const replicaListData = await makeListData({ nftId: "replica_market1" });
-			await expect(
-				handleList(makeOp(ACTION_LIST, replicaListData), sql),
 			).rejects.toThrow("Only instances");
 		});
 
@@ -1184,12 +1171,6 @@ describe("Handlers (integration)", () => {
 				LIMIT 1
 			`;
 			const expiredInstId = expiredInst!.id as string;
-			await handleReplicate(makeOp(ACTION_REPLICATE, {
-				id: "replica_market_legacy",
-				originalId: expiredInstId,
-				newOwner: "alice",
-			}), sql);
-
 			await handleList(makeOp(ACTION_LIST, await makeListData({ nftId: activeInstId, priceAmount: "10.000" })), sql);
 			await sql`
 				UPDATE nfts
@@ -1199,15 +1180,6 @@ describe("Handlers (integration)", () => {
 					listing_price = 5,
 					listing_currency = 'HIVE'
 				WHERE id = 'seed_test1'
-			`;
-			await sql`
-				UPDATE nfts
-				SET status = 'listed',
-					listing_id = 'legacy_replica_listing',
-					listing_tx_id = 'tx_legacy_replica_listing',
-					listing_price = 6,
-					listing_currency = 'HIVE'
-				WHERE id = 'replica_market_legacy'
 			`;
 			await sql`
 				UPDATE nfts
@@ -1243,11 +1215,11 @@ describe("Handlers (integration)", () => {
 			expect(await paymentResponse.json()).toEqual({ error: "Only instances can be bought" });
 
 			const cleanup = await cleanupInvalidMarketplaceListings(sql);
-			expect(cleanup.clearedListings).toBe(3);
+			expect(cleanup.clearedListings).toBe(2);
 
 			const [legacyState] = await sql`
 				SELECT COUNT(*)::int AS count FROM nfts
-				WHERE id IN ('seed_test1', 'replica_market_legacy', ${expiredInstId})
+				WHERE id IN ('seed_test1', ${expiredInstId})
 					AND status = 'listed'
 			`;
 			expect(legacyState!.count).toBe(0);
@@ -1257,7 +1229,7 @@ describe("Handlers (integration)", () => {
 		test("rejects list for non-transferable collection", async () => {
 			const { id: colId, data: colData } = await makeCanonicalCollection(
 				"alice", "No Transfer Collection", "NOTX",
-				{ rules: { transferable: false, burnable: true, replicable: true, royaltyPct: 0 } },
+				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
 			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
 
@@ -1279,7 +1251,7 @@ describe("Handlers (integration)", () => {
 			// Create non-transferable collection and mint a seed
 			const { id: colId, data: colData } = await makeCanonicalCollection(
 				"alice", "No Buy Collection", "NOBUY",
-				{ rules: { transferable: false, burnable: true, replicable: true, royaltyPct: 0 } },
+				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
 			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
 
@@ -1399,16 +1371,18 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
-
-			await handleNftLend(makeOp(ACTION_NFT_LEND, {
+			const lendOp = makeOp(ACTION_NFT_LEND, {
 				instanceId: instId,
 				borrower: "bob",
-			}), sql);
+			});
+
+			await handleNftLend(lendOp, sql);
 
 			const [loan] = await sql`SELECT * FROM nft_loans WHERE nft_id = ${instId}`;
 			expect(loan).toBeDefined();
 			expect(loan!.lender).toBe("alice");
 			expect(loan!.borrower).toBe("bob");
+			expect(loan!.operation_id).toBe(lendOp.operationId);
 		});
 
 		test("return restores active status", async () => {
@@ -1581,11 +1555,11 @@ describe("Handlers (integration)", () => {
 		test("rejects lend from non-transferable collection", async () => {
 			const { id: colId, data: colData } = await makeCanonicalCollection(
 				"alice", "No Lend", "NOLND",
-				{ rules: { transferable: false, burnable: true, replicable: true, royaltyPct: 0 } },
+				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
 			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
 			const mintOp = makeOp(ACTION_MINT, {
-				id: "seed_nolend1", collectionId: colId, maxReplicas: 10,
+				id: "seed_nolend1", collectionId: colId, maxSupply: 10,
 				metadata: { name: "No Lend Seed" },
 			});
 			await handleMint(mintOp, sql);
@@ -1866,55 +1840,6 @@ describe("Handlers (integration)", () => {
 			await expect(handleMint(op, sql)).rejects.toThrow("Only the collection creator can mint");
 		});
 
-		test("replicate computes DNA from original, ignoring user-supplied values", async () => {
-			await seedCollection();
-			await seedMint();
-
-			const op = makeOp(ACTION_REPLICATE, {
-				id: "replica_dna_test",
-				originalId: "seed_test1",
-				newOwner: "bob",
-				originDna: "FAKE_ORIGIN",
-				instanceDna: "FAKE_INSTANCE",
-				uniqueAccessKey: "FAKEKEY9",
-			});
-			await handleReplicate(op, sql);
-
-			const [replica] = await sql`SELECT origin_dna, instance_dna FROM nfts WHERE id = 'replica_dna_test'`;
-			expect(replica).toBeDefined();
-			expect(replica!.origin_dna).not.toBe("FAKE_ORIGIN");
-			expect(replica!.instance_dna).not.toBe("FAKE_INSTANCE");
-			// DNA should be derived from original
-			expect(replica!.instance_dna).toBeTruthy();
-		});
-
-		test("replicate rejects non-owner signer", async () => {
-			await seedCollection();
-			await seedMint();
-
-			const op = makeOp(ACTION_REPLICATE, {
-				id: "replica_evil",
-				originalId: "seed_test1",
-				newOwner: "eve",
-			}, "eve");
-			await expect(handleReplicate(op, sql)).rejects.toThrow("not owner");
-		});
-
-		test("replicate rejects listed original", async () => {
-			await seedCollection();
-			await seedMint();
-			const instId = await seedInstance();
-			const listData = await makeListData({ nftId: instId, priceAmount: "5.000" });
-			await handleList(makeOp(ACTION_LIST, listData), sql);
-
-			const op = makeOp(ACTION_REPLICATE, {
-				id: "replica_listed",
-				originalId: instId,
-				newOwner: "bob",
-			});
-			await expect(handleReplicate(op, sql)).rejects.toThrow("listed");
-		});
-
 		test("self-transfer rejected", async () => {
 			await seedCollection();
 			await seedMint();
@@ -2040,15 +1965,9 @@ describe("Handlers (integration)", () => {
 			await expect(handleBuy(buyOp, sql)).rejects.toThrow("expired");
 		});
 
-		test("rejects buy of legacy listed seed and replica NFTs", async () => {
+		test("rejects buy of listed seed NFTs", async () => {
 			await seedCollection();
 			await seedMint();
-			const instId = await seedInstance();
-			await handleReplicate(makeOp(ACTION_REPLICATE, {
-				id: "replica_buy_legacy",
-				originalId: instId,
-				newOwner: "alice",
-			}), sql);
 
 			await sql`
 				UPDATE nfts
@@ -2059,24 +1978,10 @@ describe("Handlers (integration)", () => {
 					listing_currency = 'HIVE'
 				WHERE id = 'seed_test1'
 			`;
-			await sql`
-				UPDATE nfts
-				SET status = 'listed',
-					listing_id = 'legacy_replica_buy',
-					listing_tx_id = 'tx_legacy_replica_buy',
-					listing_price = 10,
-					listing_currency = 'HIVE'
-				WHERE id = 'replica_buy_legacy'
-			`;
-
 			const [seed] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'seed_test1'`;
-			const [replica] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'replica_buy_legacy'`;
 
 			await expect(
 				handleBuy(makeBuyOp("seed_test1", "legacy_seed_buy", "tx_legacy_seed_buy", "bob", "alice", 10, seed!.tx_id as string), sql),
-			).rejects.toThrow("Only instances");
-			await expect(
-				handleBuy(makeBuyOp("replica_buy_legacy", "legacy_replica_buy", "tx_legacy_replica_buy", "bob", "alice", 10, replica!.tx_id as string), sql),
 			).rejects.toThrow("Only instances");
 		});
 
@@ -2256,7 +2161,7 @@ describe("Handlers (integration)", () => {
 			const op = makeOp(ACTION_MINT, {
 				id: seedId,
 				collectionId: COL_ID,
-				maxReplicas: 10000,
+				maxSupply: 10000,
 				metadata: { name: `Seed ${seedId}` },
 			});
 			await handleMint(op, sql);
@@ -2286,27 +2191,25 @@ describe("Handlers (integration)", () => {
 	describe("Counter management", () => {
 		async function ownerCounts(owner: string) {
 			const [r] = await sql`
-				SELECT total, seeds, instances, replicas
+				SELECT total, seeds, instances
 				FROM owner_nft_counts WHERE owner = ${owner}
 			`;
 			return {
 				total:     Number(r?.total ?? 0),
 				seeds:     Number(r?.seeds ?? 0),
 				instances: Number(r?.instances ?? 0),
-				replicas:  Number(r?.replicas ?? 0),
 			};
 		}
 
 		async function collStats(collectionId: string) {
 			const [r] = await sql`
-				SELECT total, seeds, instances, replicas, listed, burned
+				SELECT total, seeds, instances, listed, burned
 				FROM collection_stats WHERE collection_id = ${collectionId}
 			`;
 			return {
 				total:     Number(r?.total ?? 0),
 				seeds:     Number(r?.seeds ?? 0),
 				instances: Number(r?.instances ?? 0),
-				replicas:  Number(r?.replicas ?? 0),
 				listed:    Number(r?.listed ?? 0),
 				burned:    Number(r?.burned ?? 0),
 			};
@@ -2316,7 +2219,7 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 
-			expect(await ownerCounts("alice")).toMatchObject({ total: 1, seeds: 1, instances: 0, replicas: 0 });
+			expect(await ownerCounts("alice")).toMatchObject({ total: 1, seeds: 1, instances: 0 });
 			expect(await collStats(COL_ID)).toMatchObject({ total: 1, seeds: 1, instances: 0, listed: 0, burned: 0 });
 		});
 

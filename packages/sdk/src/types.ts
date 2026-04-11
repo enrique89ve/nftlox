@@ -66,7 +66,6 @@ export interface CollectionMetadata {
 export interface CollectionRules {
 	transferable: boolean;
 	burnable: boolean;
-	replicable: boolean;
 	/** Royalty percentage as a whole percent value in protocol 0.5.0. Example: 5 = 5%. */
 	royaltyPct: number;
 	royaltyRecipient?: string;
@@ -122,7 +121,7 @@ export interface NFTData {
 	collectionBlock?: number;
 
 	metadata: NFTMetadata;
-	maxReplicas: number;
+	maxSupply: number;
 
 	// Structured data (schema-based collections)
 	immutableData?: Record<string, unknown>;
@@ -130,17 +129,6 @@ export interface NFTData {
 
 	// Legacy (optional)
 	data?: Record<string, unknown>;
-}
-
-// ============ REPLICA TYPES ============
-
-export interface ReplicaData extends SeedProvenance {
-	id: string;
-	originalId: string;
-	newOwner: string;
-	originDna: string;
-	instanceDna: string;
-	uniqueAccessKey?: string;
 }
 
 // ============ BULK DISTRIBUTE TYPES ============

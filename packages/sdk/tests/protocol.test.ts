@@ -16,11 +16,7 @@ import {
 	MAX_MULTISIG_OPERATIONS,
 	generateOriginDna,
 	generateInstanceDna,
-	generateReplicaInstanceDna,
 	generateDeterministicAccessKey,
-	generateReplicaId,
-	extractOriginalId,
-	isReplicaId,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateDeterministicInstanceDna,
@@ -105,16 +101,6 @@ describe("Instance DNA Generation", () => {
 		expect(dna.length).toBe(INSTANCE_DNA_LENGTH);
 	});
 
-	test("replica instance DNA should be deterministic", async () => {
-		const originDna = "ORIGIN123456";
-		const originalInstanceDna = "INSTANCE123456";
-
-		const replica1 = await generateReplicaInstanceDna(originDna, originalInstanceDna);
-		const replica2 = await generateReplicaInstanceDna(originDna, originalInstanceDna);
-
-		expect(replica1).toBe(replica2);
-		expect(replica1.length).toBe(INSTANCE_DNA_LENGTH);
-	});
 });
 
 describe("Deterministic Access Key Generation", () => {
@@ -254,29 +240,6 @@ describe("ID Generation", () => {
 		expect(seed1).not.toBe(seed2);
 	});
 
-	test("replica ID should contain original ID", async () => {
-		const originalId = "nft_abc123";
-		const replicaId = await generateReplicaId(originalId);
-
-		expect(replicaId.startsWith(originalId)).toBe(true);
-		expect(replicaId).toContain("_r");
-	});
-
-	test("extractOriginalId should work correctly", async () => {
-		const originalId = "nft_abc123";
-		const replicaId = await generateReplicaId(originalId);
-		const extracted = extractOriginalId(replicaId);
-
-		expect(extracted).toBe(originalId);
-	});
-
-	test("isReplicaId should identify replicas", async () => {
-		const originalId = "nft_abc123";
-		const replicaId = await generateReplicaId(originalId);
-
-		expect(isReplicaId(originalId)).toBe(false);
-		expect(isReplicaId(replicaId)).toBe(true);
-	});
 });
 
 describe("Collection Payload", () => {
@@ -292,7 +255,6 @@ describe("Collection Payload", () => {
 		rules: {
 			transferable: true,
 			burnable: true,
-			replicable: true,
 			royaltyPct: 5,
 		},
 	};
@@ -442,7 +404,6 @@ describe("Validation", () => {
 			rules: {
 				transferable: true,
 				burnable: true,
-				replicable: true,
 				royaltyPct: 5,
 			},
 		};
@@ -903,7 +864,6 @@ describe("Deterministic Collection Payloads", () => {
 		rules: {
 			transferable: true,
 			burnable: true,
-			replicable: false,
 			royaltyPct: 10,
 		},
 	};

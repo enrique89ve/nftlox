@@ -75,9 +75,9 @@ export function buildPackOpenPlan(params: {
 			}
 
 			const alreadyPlanned = plannedDistribution.get(seedId) ?? 0;
-			const availableSupply = snapshot.maxReplicas === 0
+			const availableSupply = snapshot.maxSupply === 0
 				? Number.POSITIVE_INFINITY
-				: snapshot.maxReplicas - snapshot.distributed - alreadyPlanned;
+				: snapshot.maxSupply - snapshot.distributed - alreadyPlanned;
 
 			if (availableSupply < 1) {
 				delivered = false;

@@ -10,14 +10,14 @@ const LIST_COLUMNS = sql`
 	COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
 	n.instance_dna,
 	n.seed_id, n.instance_number, s.created_tx_id AS seed_tx_id,
-	n.max_replicas, n.distributed, n.supply_exhausted,
+	n.max_supply, n.distributed, n.supply_exhausted,
 	n.schema_version, n.previous_owner, n.owner_operation_id, n.owner_action, n.owner_block_num::int AS owner_block_num,
 	n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency, n.listing_expires_at, n.listing_marketplace, n.created_at
 `;
 
 export async function getUserNftCounts(owner: string, txn: Queryable = sql): Promise<UserNftCounts> {
 	const [row] = await txn`
-		SELECT total, seeds, instances, replicas
+		SELECT total, seeds, instances
 		FROM owner_nft_counts
 		WHERE owner = ${owner}
 	`;
@@ -25,7 +25,6 @@ export async function getUserNftCounts(owner: string, txn: Queryable = sql): Pro
 		total: row?.total ?? 0,
 		seeds: row?.seeds ?? 0,
 		instances: row?.instances ?? 0,
-		replicas: row?.replicas ?? 0,
 	};
 }
 
@@ -61,7 +60,7 @@ const RAW_INSTANCE_COLUMNS = sql`
 	n.name, n.image_url, n.origin_dna, n.immutable_data,
 	n.instance_dna,
 	n.seed_id, n.instance_number, NULL::text AS seed_tx_id,
-	n.max_replicas, n.distributed, n.supply_exhausted,
+	n.max_supply, n.distributed, n.supply_exhausted,
 	n.schema_version, n.previous_owner, n.owner_operation_id, n.owner_action, n.owner_block_num::int AS owner_block_num,
 	n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency, n.listing_expires_at, n.listing_marketplace, n.created_at
 `;

@@ -32,6 +32,7 @@ export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promis
 		nftId: instanceId,
 		lender: op.signer,
 		borrower,
+		operationId: op.operationId,
 		blockNum: op.blockNum,
 		txId: op.txId,
 	}, txn);

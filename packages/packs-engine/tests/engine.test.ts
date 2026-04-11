@@ -35,8 +35,8 @@ describe("packs-engine", () => {
 		const plan = buildPackOpenPlan({
 			definition,
 			seedSnapshots: [
-				{ seedId: "seed_a", seedTxId: "a".repeat(40), maxReplicas: 100, distributed: 10, reserved: 20 },
-				{ seedId: "seed_b", seedTxId: "b".repeat(40), maxReplicas: 100, distributed: 5, reserved: 10 },
+				{ seedId: "seed_a", seedTxId: "a".repeat(40), maxSupply: 100, distributed: 10, reserved: 20 },
+				{ seedId: "seed_b", seedTxId: "b".repeat(40), maxSupply: 100, distributed: 5, reserved: 10 },
 			],
 			context: {
 				txId: "c".repeat(40),
@@ -69,7 +69,7 @@ describe("packs-engine", () => {
 		});
 
 		expect(() => validateReservationDemand(definition, [
-			{ seedId: "seed_a", seedTxId: "a".repeat(40), maxReplicas: 4, distributed: 0, reserved: 0 },
+			{ seedId: "seed_a", seedTxId: "a".repeat(40), maxSupply: 4, distributed: 0, reserved: 0 },
 		])).toThrow("Seed seed_a needs 5 reserved supply but only 4 is available");
 	});
 });

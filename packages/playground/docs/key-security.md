@@ -11,7 +11,7 @@ This guide covers the NFTLox permission model, recommended account architecture 
 | Role | Actions | Key Required |
 |------|---------|-------------|
 | **Collection creator** | `create_collection`, `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting (except `data_operator_approve` = Active) |
-| **Seed owner** | `bulk_distribute`, `transfer` (only if `distributed === 0`), `burn`, `replicate`, `list` (only if `distributed === 0`), `unlist` | Posting for `bulk_distribute`; Active for the rest |
+| **Seed owner** | `bulk_distribute`, `transfer` (only if `distributed === 0`), `burn`, `list` (only if `distributed === 0`), `unlist` | Posting for `bulk_distribute`; Active for the rest |
 | **NFT/Instance owner** | `transfer`, `burn`, `list`, `unlist`, `nft_approve`, `nft_lend`, `set_owner_data` | Active (except `set_owner_data`, `unlist` = Posting) |
 | **Approved operator** | `set_data_from` | Posting |
 | **Approved spender** | `nft_transfer_from`, `pack_transfer_from` | Posting |
@@ -20,12 +20,12 @@ This guide covers the NFTLox permission model, recommended account architecture 
 
 ### Key Types
 
-The protocol has **10 actions requiring active key** and **15 using posting key**.
+The protocol has **10 actions requiring active key** and **14 using posting key**.
 
 | Key required | Actions |
 |---|---|
 | **Active key** (10) | `transfer`, `burn`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `pack_approve`, `data_operator_approve` |
-| **Posting key** (15) | `create_collection`, `mint`, `replicate`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `unlist`, `pack_create`, `pack_open`, `nft_transfer_from`, `pack_transfer_from`, `set_data_from`, `nft_lend`, `nft_return` |
+| **Posting key** (14) | `create_collection`, `mint`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `unlist`, `pack_create`, `pack_open`, `nft_transfer_from`, `pack_transfer_from`, `set_data_from`, `nft_lend`, `nft_return` |
 
 Active-key actions use `required_auths` while posting-key actions use `required_posting_auths` in the `custom_json` operation.
 
@@ -57,7 +57,7 @@ ragnarok-game (creator + seed owner)   ragnarok-server (operator)
   - Calls bulk_distribute (as owner)
 ```
 
-The creator retains seed ownership and handles distribution. Only the seed owner can call `bulk_distribute` — the collection creator role alone is insufficient. The server only updates mutable data via operator delegation. Seeds cannot be approved or lent.
+The creator retains seed ownership and handles distribution. Only the seed owner can call `bulk_distribute` — the collection creator role alone is insufficient. The server only updates mutable data via operator delegation. Seeds cannot be approved or lent, and **cannot be transferred or sold once they have emitted any instances (`distributed > 0`)**.
 
 ---
 

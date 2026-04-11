@@ -6,7 +6,6 @@ import {
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
-	ACTION_REPLICATE,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_SET_DATA,
 	ACTION_LIST,
@@ -34,7 +33,6 @@ import {
 import type {
 	CollectionData,
 	NFTData,
-	ReplicaData,
 	SeedProvenance,
 	TransferData,
 	SetDataData,
@@ -77,7 +75,6 @@ import type {
 	NftReturnData,
 	NftReturnInput,
 	ProtocolPayload,
-	ReplicateInput,
 	ListInput,
 	BurnInput,
 	UnlistInput,
@@ -88,9 +85,7 @@ import type {
 import {
 	generateOriginDna,
 	generateInstanceDna,
-	generateReplicaInstanceDna,
 	generateImageHash,
-	generateReplicaId,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateDeterministicPackId,
@@ -191,26 +186,6 @@ export function createArchiveCollectionOperation(
 }
 
 // ============ MINT PAYLOADS ============
-
-// ============ REPLICATE PAYLOADS ============
-
-export async function createReplicatePayload(
-	input: ReplicateInput,
-): Promise<ProtocolPayload<ReplicaData>> {
-	const instanceDna = await generateReplicaInstanceDna(
-		input.originDna,
-		input.originalInstanceDna,
-	);
-
-	return makePayload(ACTION_REPLICATE, {
-		id: await generateReplicaId(input.originalId),
-		originalId: input.originalId,
-		newOwner: input.newOwner,
-		originDna: input.originDna,
-		instanceDna,
-		...spreadProvenance(input),
-	});
-}
 
 // ============ BULK DISTRIBUTE PAYLOADS ============
 
@@ -414,11 +389,6 @@ export function createBuyOperation(data: BuyData, nodeAccount: string): HiveOper
 
 // ============ HIVE OPERATION CREATION ============
 
-export async function createReplicateOperation(input: ReplicateInput): Promise<HiveOperation> {
-	const payload = await createReplicatePayload(input);
-	return buildHiveOperation(payload, input.currentOwner);
-}
-
 export function createTransferOperation(
 	nftId: string,
 	from: string,
@@ -483,7 +453,6 @@ export interface DeterministicCollectionInput {
 	rules: {
 		transferable: boolean;
 		burnable: boolean;
-		replicable: boolean;
 		royaltyPct: number;
 		royaltyRecipient?: string;
 	};
@@ -538,7 +507,7 @@ export interface DeterministicMintInput {
 	description?: string;
 	imageUrl: string;
 	imageHash?: string;
-	maxReplicas?: number;
+	maxSupply?: number;
 	collectionBlock?: number;
 	immutableData?: Record<string, unknown>;
 	mutableData?: Record<string, unknown>;
@@ -574,7 +543,7 @@ export async function createDeterministicMintPayload(
 			imageUrl: input.imageUrl,
 			imageHash,
 		},
-		maxReplicas: input.maxReplicas ?? 1,
+		maxSupply: input.maxSupply ?? 1,
 		...(input.nftType && { nftType: input.nftType }),
 		...(input.immutableData && { immutableData: input.immutableData }),
 		...(input.mutableData && { mutableData: input.mutableData }),

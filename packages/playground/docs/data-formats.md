@@ -94,7 +94,6 @@ If you provide `imageHash`, it is stored as-is for integrity verification. If om
 | `metadata.externalUrl` | string | No | Valid URL |
 | `rules.transferable` | boolean | Yes | Whether NFTs can be transferred |
 | `rules.burnable` | boolean | Yes | Whether NFTs can be burned |
-| `rules.replicable` | boolean | Yes | Whether NFTs can be replicated |
 | `rules.royaltyPct` | number | Yes | 0-50 |
 | `rules.royaltyRecipient` | string | No | Valid Hive username |
 | `schemaVersion` | number | Read-only | Current schema version (0 = no schema, incremented by `extend_schema`) |
@@ -273,18 +272,21 @@ For minting multiple seeds at once, provide an array:
 
 ## Ownership Provenance
 
-The `owner_operation_id` field on each NFT tracks how the current owner obtained the NFT, and `previous_owner` records the immediately preceding owner when the NFT changed hands.
+The ownership projection tracks the current ownership edge. PostgreSQL stores the fast owner fields, while `owner_operation_id` is the anchor that clients can resolve through HAFAH/Hive L1. The owner endpoints also derive a `claim_hash` for the compact claim response.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `owner_operation_id` | string | HafAH operation ID that gave the current owner their ownership |
+| `owner_action` | string | Ownership-producing action: `mint`, `bulk_distribute`, `transfer`, `nft_transfer_from`, or `buy` |
+| `owner_block_num` | number | Hive block context for the current ownership edge; not unique proof by itself |
 | `previous_owner` | string \| null | Previous canonical owner, or `null` if the NFT was created directly for the current owner |
+| `claim_hash` | string | Deterministic hash returned by `/api/nfts/:id/owner` and `/api/nfts/:id/ownership` over the compact owner claim fields |
 
 **Behavior:**
 
-- Set to the creation transaction ID on `mint` and `bulk_distribute`.
+- Set to the current operation ID on creation actions such as `mint` and `bulk_distribute`.
 - Updated on every `transfer`, `buy`, and `nft_transfer_from`.
-- With `ownerTxId`, anyone can query HafAH (Hive Account History API) to see the exact transaction, including any associated HIVE/HBD transfers.
+- Anyone can resolve `owner_operation_id` through HAFAH to inspect the exact on-chain `custom_json` operation. For buys, the same Hive transaction also contains the associated HIVE/HBD transfers.
 
 ---
 

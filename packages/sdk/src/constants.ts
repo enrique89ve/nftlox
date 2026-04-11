@@ -147,7 +147,6 @@ export const MAX_TRANSFER_BATCH_SIZE = 50;
 export const ACTION_CREATE_COLLECTION = "create_collection";
 export const ACTION_MINT = "mint";
 export const ACTION_TRANSFER = "transfer";
-export const ACTION_REPLICATE = "replicate";
 export const ACTION_BULK_DISTRIBUTE = "bulk_distribute";
 export const ACTION_SET_DATA = "set_data";
 export const ACTION_EXTEND_SCHEMA = "extend_schema";
@@ -189,7 +188,6 @@ export const CORE_ACTIONS = [
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
-	ACTION_REPLICATE,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_SET_DATA,
 	ACTION_EXTEND_SCHEMA,
@@ -241,7 +239,6 @@ export const ACTION_AUTH_LEVEL: Record<ProtocolAction, AuthLevel> = {
 	[ACTION_CREATE_COLLECTION]: "posting",
 	[ACTION_MINT]: "posting",
 	[ACTION_TRANSFER]: "posting",
-	[ACTION_REPLICATE]: "posting",
 	[ACTION_BULK_DISTRIBUTE]: "posting",
 	[ACTION_SET_DATA]: "posting",
 	[ACTION_EXTEND_SCHEMA]: "posting",

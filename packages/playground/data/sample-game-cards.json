@@ -7,7 +7,6 @@
 		"totalPotential": 52750,
 		"transferable": true,
 		"burnable": true,
-		"replicable": false,
 		"royaltyPct": 5,
 		"schema": {
 			"immutable": [

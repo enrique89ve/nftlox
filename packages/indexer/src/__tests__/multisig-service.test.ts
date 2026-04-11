@@ -99,7 +99,7 @@ async function seedCollection(
 		symbol,
 		totalPotential: 1000,
 		metadata: { description: `Test collection ${name}`, image: "https://example.com/img.png" },
-		rules: { transferable, burnable: true, replicable: true, royaltyPct },
+		rules: { transferable, burnable: true, royaltyPct },
 	});
 	await handleCreateCollection(op, sql);
 	return id;
@@ -111,7 +111,7 @@ async function seedMint(nftId = "seed_test1", collectionId: string) {
 		collectionId,
 		edition: 1,
 		owner: "alice",
-		maxReplicas: 10,
+		maxSupply: 10,
 		metadata: { name: `NFT ${nftId}`, imageUrl: "https://example.com/nft.png", imageHash: "img_abc" },
 	});
 	await handleMint(op, sql);

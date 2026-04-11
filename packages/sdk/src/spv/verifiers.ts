@@ -15,7 +15,6 @@ import {
 	ACTION_TRANSFER,
 	ACTION_LIST,
 	ACTION_BUY,
-	ACTION_REPLICATE,
 	ACTION_NFT_TRANSFER_FROM,
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
@@ -564,28 +563,6 @@ async function deriveOwnershipProof(
 				derivedOwner: owner,
 				previousOwner: null,
 				message: "Verified current owner from mint operation",
-			};
-		}
-		case ACTION_REPLICATE: {
-			const replicatedId = parseRequiredString(resolved.data.id, "replicate.data.id");
-			if (replicatedId !== nftId) {
-				throw new OwnershipMismatchError(`Replicate operation targets NFT ${replicatedId}, expected ${nftId}`);
-			}
-			const newOwner = parseRequiredString(resolved.data.newOwner, "replicate.data.newOwner");
-			if (snapshot.createdTxId !== resolved.txId) {
-				throw new OwnershipMismatchError(
-					`Indexer creation tx ${snapshot.createdTxId} does not match replicate tx ${resolved.txId}`,
-				);
-			}
-			return {
-				txId: resolved.txId,
-				blockNum: resolved.blockNum,
-				operationId: resolved.operationId,
-				eventType: resolved.action,
-				expectedSigner: resolved.signer,
-				derivedOwner: newOwner,
-				previousOwner: null,
-				message: "Verified current owner from replicate operation",
 			};
 		}
 		case ACTION_TRANSFER: {

@@ -3,7 +3,7 @@
 -- ============ ENUMS ============
 
 DO $$ BEGIN
-	CREATE TYPE nft_kind AS ENUM ('seed', 'instance', 'replica');
+	CREATE TYPE nft_kind AS ENUM ('seed', 'instance');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -35,7 +35,6 @@ CREATE TABLE IF NOT EXISTS collections (
 	external_url TEXT,
 	transferable BOOLEAN NOT NULL DEFAULT TRUE,
 	burnable BOOLEAN NOT NULL DEFAULT TRUE,
-	replicable BOOLEAN NOT NULL DEFAULT TRUE,
 	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
 	royalty_recipient TEXT,
 	schema JSONB,
@@ -47,7 +46,7 @@ CREATE TABLE IF NOT EXISTS collections (
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- NFTs (unified: seeds, instances, replicas)
+-- NFTs (unified: seeds and instances)
 CREATE TABLE IF NOT EXISTS nfts (
 	id TEXT PRIMARY KEY,
 	collection_id TEXT NOT NULL REFERENCES collections(id),
@@ -59,20 +58,19 @@ CREATE TABLE IF NOT EXISTS nfts (
 	instance_dna TEXT,
 	name TEXT NOT NULL,
 	image_url TEXT,
-	max_replicas INTEGER NOT NULL DEFAULT 1 CHECK (max_replicas >= 0),
+	max_supply INTEGER NOT NULL DEFAULT 1 CHECK (max_supply >= 0),
 	distributed INTEGER NOT NULL DEFAULT 0 CHECK (distributed >= 0),
 	reserved_supply INTEGER NOT NULL DEFAULT 0,
-	supply_exhausted BOOLEAN GENERATED ALWAYS AS (max_replicas > 0 AND (distributed + reserved_supply) >= max_replicas) STORED,
+	supply_exhausted BOOLEAN GENERATED ALWAYS AS (max_supply > 0 AND (distributed + reserved_supply) >= max_supply) STORED,
 	seed_id TEXT REFERENCES nfts(id) ON DELETE SET NULL,
 	instance_number INTEGER,
-	original_id TEXT REFERENCES nfts(id) ON DELETE SET NULL,
 	immutable_data JSONB,
 	data_operation_id TEXT,
 	data_hash TEXT,
 	schema_version INTEGER,
 	previous_owner TEXT,
 	owner_operation_id TEXT NOT NULL,
-	owner_action TEXT NOT NULL CONSTRAINT chk_nfts_owner_action CHECK (owner_action IN ('mint', 'bulk_distribute', 'replicate', 'transfer', 'nft_transfer_from', 'buy')),
+	owner_action TEXT NOT NULL CONSTRAINT chk_nfts_owner_action CHECK (owner_action IN ('mint', 'bulk_distribute', 'transfer', 'nft_transfer_from', 'buy')),
 	owner_block_num BIGINT NOT NULL,
 	listing_id TEXT,
 	listing_tx_id TEXT,
@@ -186,6 +184,7 @@ CREATE TABLE IF NOT EXISTS nft_loans (
 	nft_id TEXT PRIMARY KEY REFERENCES nfts(id) ON DELETE CASCADE,
 	lender TEXT NOT NULL,
 	borrower TEXT NOT NULL,
+	operation_id TEXT NOT NULL,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -231,8 +230,7 @@ CREATE TABLE IF NOT EXISTS owner_nft_counts (
 	owner TEXT PRIMARY KEY,
 	total INT NOT NULL DEFAULT 0 CHECK (total >= 0),
 	seeds INT NOT NULL DEFAULT 0 CHECK (seeds >= 0),
-	instances INT NOT NULL DEFAULT 0 CHECK (instances >= 0),
-	replicas INT NOT NULL DEFAULT 0 CHECK (replicas >= 0)
+	instances INT NOT NULL DEFAULT 0 CHECK (instances >= 0)
 );
 
 -- ============ COLLECTION STATS (denormalized) ============
@@ -242,7 +240,6 @@ CREATE TABLE IF NOT EXISTS collection_stats (
 	total INT NOT NULL DEFAULT 0,
 	seeds INT NOT NULL DEFAULT 0,
 	instances INT NOT NULL DEFAULT 0,
-	replicas INT NOT NULL DEFAULT 0,
 	listed INT NOT NULL DEFAULT 0,
 	burned INT NOT NULL DEFAULT 0
 );

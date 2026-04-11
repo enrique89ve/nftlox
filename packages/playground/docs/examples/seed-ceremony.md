@@ -175,7 +175,6 @@ const collectionInput: DeterministicCollectionInput = {
 	rules: {
 		transferable: true,
 		burnable: true,
-		replicable: false,
 		royaltyPct: 5,
 		royaltyRecipient: CREATOR,
 	},
@@ -239,7 +238,7 @@ function buildMintPayload(
 		owner: CREATOR,
 		name: card.name,
 		imageUrl: card.imageUrl,
-		maxReplicas: card.maxSupply,
+		maxSupply: card.maxSupply,
 		immutableData: {
 			card_id: cardIndex + 1,
 			card_type: card.cardType,

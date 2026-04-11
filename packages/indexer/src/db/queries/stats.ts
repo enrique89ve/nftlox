@@ -8,7 +8,6 @@ export async function getProtocolStats() {
 			COALESCE((SELECT SUM(total) FROM collection_stats), 0)::int AS total_nfts,
 			COALESCE((SELECT SUM(seeds) FROM collection_stats), 0)::int AS total_seeds,
 			COALESCE((SELECT SUM(instances) FROM collection_stats), 0)::int AS total_instances,
-			COALESCE((SELECT SUM(replicas) FROM collection_stats), 0)::int AS total_replicas,
 			COALESCE((
 				SELECT COUNT(*) FROM nfts
 				WHERE nft_type = ${NFT_KIND_INSTANCE}

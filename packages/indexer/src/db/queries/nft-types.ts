@@ -27,16 +27,15 @@ export type ListingCtx = {
 
 // ============ ENUMS & PARSERS ============
 
-export type NftKind = "seed" | "instance" | "replica";
+export type NftKind = "seed" | "instance";
 export type NftStatus = "active" | "listed" | "lent";
-export type OwnershipAction = "mint" | "bulk_distribute" | "replicate" | "transfer" | "nft_transfer_from" | "buy";
+export type OwnershipAction = "mint" | "bulk_distribute" | "transfer" | "nft_transfer_from" | "buy";
 
-export const VALID_NFT_KINDS = new Set<NftKind>(["seed", "instance", "replica"]);
+export const VALID_NFT_KINDS = new Set<NftKind>(["seed", "instance"]);
 export const VALID_NFT_STATUSES = new Set<NftStatus>(["active", "listed", "lent"]);
 export const VALID_OWNERSHIP_ACTIONS = new Set<OwnershipAction>([
 	"mint",
 	"bulk_distribute",
-	"replicate",
 	"transfer",
 	"nft_transfer_from",
 	"buy",
@@ -57,7 +56,6 @@ export const NFT_STATUS_LENT: NftStatus = "lent";
 
 export const NFT_KIND_SEED: NftKind = "seed";
 export const NFT_KIND_INSTANCE: NftKind = "instance";
-export const NFT_KIND_REPLICA: NftKind = "replica";
 
 // ============ ROW / PARAM INTERFACES ============
 
@@ -72,11 +70,10 @@ export type InsertNftParams = {
 	readonly instanceDna: string | null;
 	readonly name: string;
 	readonly imageUrl: string | null;
-	readonly maxReplicas: number;
+	readonly maxSupply: number;
 	readonly distributed?: number;
 	readonly seedId: string | null;
 	readonly instanceNumber: number | null;
-	readonly originalId: string | null;
 	readonly immutableData: Record<string, unknown> | null;
 	readonly dataOperationId: string | null;
 	readonly dataHash: string | null;
@@ -97,7 +94,7 @@ export type NftProcessingRow = {
 	readonly nft_type: NftKind;
 	readonly name: string;
 	readonly seed_id: string | null;
-	readonly max_replicas: number;
+	readonly max_supply: number;
 	readonly distributed: number;
 	readonly reserved_supply: number;
 	readonly collection_id: string;
@@ -115,7 +112,6 @@ export type NftWithRulesRow = NftProcessingRow & {
 	readonly creator: string;
 	readonly transferable: boolean;
 	readonly burnable: boolean;
-	readonly replicable: boolean;
 	readonly royalty_pct: string;
 	readonly royalty_recipient: string | null;
 	readonly created_tx_id: string;
@@ -129,7 +125,7 @@ export type SeedWithDnaRow = {
 	readonly nft_type: NftKind;
 	readonly name: string;
 	readonly seed_id: string | null;
-	readonly max_replicas: number;
+	readonly max_supply: number;
 	readonly distributed: number;
 	readonly reserved_supply: number;
 	readonly collection_id: string;
@@ -149,7 +145,6 @@ export type UserNftCounts = {
 	readonly total: number;
 	readonly seeds: number;
 	readonly instances: number;
-	readonly replicas: number;
 };
 
 export type ListSort = "price_asc" | "price_desc" | "recent";
@@ -177,7 +172,7 @@ export type NftListRow = {
 	readonly seed_id: string | null;
 	readonly instance_number: number | null;
 	readonly seed_tx_id: string | null;
-	readonly max_replicas: number;
+	readonly max_supply: number;
 	readonly distributed: number;
 	readonly supply_exhausted: boolean;
 	readonly schema_version: number | null;

@@ -6,7 +6,7 @@ This guide walks you through making your first API calls to the NFTLox protocol 
 
 - **Hive account** -- You need a Hive blockchain account. Create one at [signup.hive.io](https://signup.hive.io).
 - **Active key** -- Required for operations that move value (11 ops): `transfer`, `list`, `buy`, `pack_buy`, `pack_transfer`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `pack_transfer_from`, `pack_approve`, and `data_operator_approve`.
-- **Posting key** -- Required for the remaining operations (14 ops): `create_collection`, `mint`, `replicate`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `archive_collection`, `unlist`, `pack_create`, `pack_open`, `set_data_from`, `nft_lend`, and `nft_return`.
+- **Posting key** -- Required for the remaining operations (13 ops): `create_collection`, `mint`, `bulk_distribute`, `set_data`, `set_owner_data`, `extend_schema`, `archive_collection`, `unlist`, `pack_create`, `pack_open`, `set_data_from`, `nft_lend`, and `nft_return`.
 - Your private keys never leave your client; the API only builds unsigned payloads.
 
 ## Your First API Call
@@ -49,7 +49,7 @@ All read endpoints are `GET` requests. No authentication is required.
 curl https://api-nftlox.hivecreators.co/api/stats
 ```
 
-Returns aggregate counts: total collections, NFTs, seeds, instances, replicas, listed, burned, and unique owners.
+Returns aggregate counts: total collections, NFTs, seeds, instances, listed, burned, and unique owners.
 
 ### List all collections
 
@@ -78,7 +78,7 @@ curl "https://api-nftlox.hivecreators.co/api/users/YOUR_USERNAME/nfts?limit=50&o
 
 Supports optional filters:
 - `status` -- `active`, `listed`, or `burned`
-- `type` -- `seed`, `instance`, or `replica`
+- `type` -- `seed` or `instance`
 - `limit` -- results per page (1-200, default 50)
 - `offset` -- pagination offset (default 0)
 
@@ -117,7 +117,6 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 		"rules": {
 			"transferable": true,
 			"burnable": true,
-			"replicable": false,
 			"royaltyPct": 5
 		}
 	}'
@@ -158,7 +157,6 @@ All build endpoints accept `POST` with a JSON body:
 | `/api/build/unlist` | Remove listing | Posting |
 | `/api/build/burn` | Burn an NFT | Active |
 | `/api/build/buy` | Buy a listed NFT | Active |
-| `/api/build/replicate` | Replicate a seed | Posting |
 | `/api/build/set-data` | Update mutable data (creator) | Posting |
 | `/api/build/set-owner-data` | Update owner-specific data | Posting |
 | `/api/build/extend-schema` | Add fields to collection schema | Posting |
@@ -231,9 +229,8 @@ The transaction is broadcast to `https://api.hive.blog` (or any Hive RPC node). 
 
 NFTLox uses a two-tier model:
 
-- **Seed** -- The original NFT. Think of it as a master template. A seed has a `maxSupply` that limits how many instances can be distributed from it.
-- **Instance** -- A copy distributed from a seed via `bulk_distribute`. Each instance gets a unique `instanceDna` and `instanceNumber`. Instances are full NFTs that can be transferred, listed, and burned independently.
-- **Replica** -- Created via `replicate`. Similar to instances but created on-demand from a seed.
+- **Seed** -- The original NFT. Think of it as a master template. A seed has a `maxSupply` that limits how many instances can be distributed from it. **Important:** Once instances are distributed (`distributed > 0`), the seed becomes permanently locked and cannot be transferred or sold to ensure ownership integrity.
+- **Instance** -- A copy distributed from a seed via `bulk_distribute`. Each instance gets a unique `instanceDna` and `instanceNumber`. Instances are full NFTs that can be freely transferred, listed, and burned independently.
 
 ### Deterministic IDs
 

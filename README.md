@@ -135,6 +135,7 @@ SPV "Boleto Suizo" ──── Trustless verification via HAFAH REST API
 - **Multisig buy**: Node co-signs buy transactions to protect buyer funds (HIVE transfers + NFT transfer are atomic)
 - **Deterministic RNG**: All indexers produce identical results from the same blockchain data
 - **SPV Verification**: Browser-side trustless verification against Hive L1
+- **Ownership Proofs**: Fast owner reads from PostgreSQL, verified by resolving `owner_operation_id` through HAFAH/Hive L1
 - **NFT Lending**: Protocol-level lend/return without ownership transfer
 - **Cross-Game Composability**: Data operators can write to NFTs across games
 

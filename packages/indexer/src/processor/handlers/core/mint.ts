@@ -70,9 +70,9 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	const ownerRaw = optionalString(d.owner);
 	const owner = ownerRaw ? requireUsername(ownerRaw, "owner") : op.signer;
 
-	const maxReplicas = optionalNumber(d.maxReplicas) ?? 1;
-	if (maxReplicas < 1) {
-		throw new Error(`maxReplicas must be >= 1 for seeds, got ${maxReplicas}`);
+	const maxSupply = optionalNumber(d.maxSupply) ?? 1;
+	if (maxSupply < 1) {
+		throw new Error(`maxSupply must be >= 1 for seeds, got ${maxSupply}`);
 	}
 
 	await insertNft({
@@ -83,8 +83,8 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 		instanceDna,
 		name: optionalBoundedString(metadata.name, "metadata.name", MAX_NAME_LENGTH) ?? optionalBoundedString(d.name, "name", MAX_NAME_LENGTH) ?? "",
 		imageUrl: optionalBoundedString(metadata.imageUrl, "metadata.imageUrl", MAX_IMAGE_URL_LENGTH),
-		maxReplicas,
-		seedId: null, instanceNumber: null, originalId: null,
+		maxSupply,
+		seedId: null, instanceNumber: null,
 		immutableData: immutableData && Object.keys(immutableData).length > 0 ? immutableData : null,
 		dataOperationId: mutableData ? op.operationId : null,
 		dataHash,

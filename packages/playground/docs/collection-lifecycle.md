@@ -1,6 +1,6 @@
 # Collection Lifecycle
 
-A collection is the top-level container in NFTLox. Every NFT (seed, instance, replica) belongs to exactly one collection. This page covers the full lifecycle: creation, schema definition, schema extension, and archival.
+A collection is the top-level container in NFTLox. Every NFT (seed or instance) belongs to exactly one collection. This page covers the full lifecycle: creation, schema definition, schema extension, and archival.
 
 ```
 create_collection ──► ACTIVE ──► extend_schema (repeatable)
@@ -58,7 +58,6 @@ const result = await buildCollection({
 	rules: {
 		transferable: true,
 		burnable: true,
-		replicable: false,
 		royaltyPct: 5,
 		royaltyRecipient: "ragnarok-treasury",
 	},
@@ -104,7 +103,6 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 		"rules": {
 			"transferable": true,
 			"burnable": true,
-			"replicable": false,
 			"royaltyPct": 5
 		}
 	}'
@@ -152,7 +150,6 @@ Rules are set at creation time and cannot be changed afterward.
 |---|---|---|---|
 | `transferable` | bool | `true` | Whether NFTs in this collection can be transferred between owners |
 | `burnable` | bool | `true` | Whether NFTs can be permanently destroyed |
-| `replicable` | bool | `true` | Whether NFTs can be replicated (copies with new instanceDna) |
 | `royaltyPct` | number | `0` | Royalty percentage on marketplace sales (0--50) |
 | `royaltyRecipient` | string | -- | Hive account that receives royalty payments |
 
@@ -160,7 +157,6 @@ Rules are set at creation time and cannot be changed afterward.
 
 - Setting `transferable: false` creates soulbound tokens -- they stay with the minting owner forever.
 - Setting `burnable: false` makes NFTs permanent -- useful for certifications or credentials.
-- Setting `replicable: false` prevents copies -- each seed can only produce instances, no replicas.
 - `royaltyPct` is enforced by the protocol on marketplace sales. Maximum is 50%. Values above 25% trigger a builder warning.
 
 ---
@@ -246,7 +242,6 @@ const result = await buildCollection({
 	rules: {
 		transferable: true,
 		burnable: true,
-		replicable: false,
 		royaltyPct: 0,
 	},
 	schema: GAMING_SCHEMA,
@@ -466,7 +461,7 @@ Collection (totalPotential: 3)
 
 NFTs include an `owner_operation_id` field plus a `previous_owner` field. Together they describe the current ownership edge without storing a full ownership history:
 
-- **Set at mint / bulk distribute / replicate** with `previous_owner = null`.
+- **Set at mint / bulk distribute** with `previous_owner = null`.
 - **Updated on transfer, buy, and transfer_from** with the outgoing owner in `previous_owner` and the canonical HafAH operation ID in `owner_operation_id`.
 
 Anyone can look up the `owner_operation_id` on HafAH to see the full operation details (who sent what, when, and in which block). This provides a transparent, on-chain provenance trail for the current owner without requiring the indexer to store a full ownership history.
@@ -512,7 +507,7 @@ curl https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4...
 
 ### GET /api/collections/:id/nfts
 
-List NFTs belonging to a collection. Supports `type` filter (`seed`, `instance`, `replica`).
+List NFTs belonging to a collection. Supports `type` filter (`seed`, `instance`).
 
 ```bash
 curl "https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4.../nfts?type=seed&limit=20"
@@ -550,7 +545,7 @@ curl https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4.../schema-histo
 
 ### GET /api/collections/:id/stats
 
-Aggregated statistics: seed count, instance count, replica count, listed, burned, unique owners, floor price.
+Aggregated statistics: seed count, instance count, listed, burned, unique owners, floor price.
 
 ```bash
 curl https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4.../stats

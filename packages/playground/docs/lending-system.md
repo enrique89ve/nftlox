@@ -30,7 +30,7 @@ The lending system introduces two operations:
 When an NFT is lent:
 
 - Its status changes from `active` to `lent`.
-- A loan record is created in the `nft_loans` table (lender, borrower, block, tx).
+- A loan record is created in the `nft_loans` table (lender, borrower, operation, block, tx).
 - All existing NFT approvals are cleared.
 - The borrower **cannot** transfer, list, burn, or approve the NFT.
 - Ownership does **not** change -- the lender remains the on-chain owner.
@@ -73,7 +73,7 @@ When an NFT is returned:
 2. Checks the collection allows transfers.
 3. Checks no existing loan exists.
 4. Sets NFT status to `lent`.
-5. Inserts a row into `nft_loans` with `lender`, `borrower`, `block_num`, and `tx_id`.
+5. Inserts a row into `nft_loans` with `lender`, `borrower`, `operation_id`, `block_num`, and `tx_id`.
 6. Deletes any existing NFT allowances (approvals are cleared).
 
 ---
@@ -132,6 +132,27 @@ Additionally, when an NFT is lent, all existing approvals (allowances) are delet
 ---
 
 ## 5. API Endpoints
+
+### GET /api/users/:username/loans
+
+List active loans for a user.
+
+```bash
+curl "https://api-nftlox.hivecreators.co/api/users/alice/loans?role=lender"
+curl "https://api-nftlox.hivecreators.co/api/users/bob/loans?role=borrower"
+```
+
+`role=lender` returns NFTs the user has lent out. `role=borrower` returns NFTs temporarily usable by the user. `role=all` returns both.
+
+### GET /api/nfts/:id/loan
+
+Return active loan custody for one NFT.
+
+```bash
+curl https://api-nftlox.hivecreators.co/api/nfts/inst_abc123/loan
+```
+
+The response includes `loan_operation_id`, which can be resolved through HAFAH. This route does not change or redefine the NFT owner.
 
 ### POST /api/build/nft-lend
 
@@ -373,11 +394,14 @@ CREATE TABLE IF NOT EXISTS nft_loans (
 	nft_id TEXT PRIMARY KEY REFERENCES nfts(id),
 	lender TEXT NOT NULL,
 	borrower TEXT NOT NULL,
+	operation_id TEXT NOT NULL,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
+
+`operation_id` is the HafAH operation anchor for the active lend operation. `block_num` and `tx_id` remain useful context, but `operation_id` is the precise identifier when one Hive transaction contains multiple NFTLox `custom_json` operations.
 
 Indexes:
 

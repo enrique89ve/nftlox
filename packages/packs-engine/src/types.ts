@@ -18,7 +18,7 @@ export interface PackDefinition extends PackDefinitionInput {
 export interface SeedSupplySnapshot {
 	readonly seedId: string;
 	readonly seedTxId: string;
-	readonly maxReplicas: number;
+	readonly maxSupply: number;
 	readonly distributed: number;
 	readonly reserved: number;
 }

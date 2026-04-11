@@ -141,7 +141,7 @@ export function startApiServer(): void {
 				tags: [
 					{ name: "Status", description: "Indexer sync status and protocol stats" },
 					{ name: "Collections", description: "NFT collections" },
-					{ name: "NFTs", description: "Individual NFTs (seeds, instances, replicas)" },
+					{ name: "NFTs", description: "Individual NFTs (seeds and instances)" },
 					{ name: "Users", description: "User portfolios and activity" },
 					{ name: "Marketplace", description: "Listings and sales" },
 				],

@@ -80,8 +80,8 @@ export async function getNftById(id: string) {
 			n.instance_dna,
 			COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
 			n.data_hash, n.schema_version,
-			n.max_replicas, n.distributed, n.supply_exhausted,
-			n.seed_id, n.instance_number, n.original_id,
+			n.max_supply, n.distributed, n.supply_exhausted,
+			n.seed_id, n.instance_number,
 			n.previous_owner, n.owner_operation_id, n.owner_action, n.owner_block_num::int AS owner_block_num,
 			n.created_tx_id AS tx_id, n.created_at,
 			n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
@@ -154,7 +154,7 @@ export async function nftExists(id: string, txn: Queryable = sql): Promise<boole
 
 export async function getNftForProcessing(id: string, txn: Queryable = sql): Promise<NftProcessingRow | null> {
 	const [row] = await txn<NftProcessingRow[]>`
-		SELECT id, owner, status, nft_type, name, seed_id, max_replicas, distributed, reserved_supply,
+		SELECT id, owner, status, nft_type, name, seed_id, max_supply, distributed, reserved_supply,
 		       collection_id, instance_dna,
 		       listing_id, listing_tx_id, listing_price, listing_currency, listing_expires_at, listing_marketplace, data_operation_id
 		FROM nfts WHERE id = ${id}
@@ -168,11 +168,11 @@ export async function getNftWithCollectionRules(
 ): Promise<NftWithRulesRow | null> {
 	const [row] = await txn<NftWithRulesRow[]>`
 		SELECT
-			n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+			n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_supply, n.distributed,
 			n.reserved_supply,
 			n.collection_id, n.instance_dna, n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
 			n.listing_expires_at, n.listing_marketplace, n.data_operation_id, n.created_tx_id,
-			c.creator, c.transferable, c.burnable, c.replicable, c.royalty_pct, c.royalty_recipient,
+			c.creator, c.transferable, c.burnable, c.royalty_pct, c.royalty_recipient,
 			s.created_tx_id AS seed_created_tx_id
 		FROM nfts n
 		JOIN collections c ON c.id = n.collection_id
@@ -190,7 +190,7 @@ export async function getSeedSummary(id: string): Promise<NftListRow | null> {
 			name, image_url, origin_dna, immutable_data,
 			instance_dna,
 			seed_id, instance_number, NULL::text AS seed_tx_id,
-			max_replicas, distributed, supply_exhausted,
+			max_supply, distributed, supply_exhausted,
 			schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num::int AS owner_block_num,
 			listing_id, listing_tx_id, listing_price, listing_currency, listing_expires_at, listing_marketplace, created_at
 		FROM nfts WHERE id = ${id} AND nft_type = 'seed'
@@ -200,7 +200,7 @@ export async function getSeedSummary(id: string): Promise<NftListRow | null> {
 
 export async function getSeedWithSchemaForUpdate(id: string, txn: Queryable): Promise<SeedWithSchemaRow | null> {
 	const [row] = await txn<SeedWithSchemaRow[]>`
-		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_replicas, n.distributed,
+		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_supply, n.distributed,
 			n.reserved_supply,
 			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.created_tx_id,
 			c.schema, c.schema_version

@@ -56,10 +56,10 @@ describe("Authority exhaustiveness", () => {
 		}
 	});
 
-	test("counts match: 2 active + 23 posting = 25 total", () => {
+	test("counts match: 2 active + 22 posting = 24 total", () => {
 		expect(ACTIVE_AUTH_ACTIONS.length).toBe(2);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(23);
-		expect(ALL_ACTIONS.length).toBe(25);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(22);
+		expect(ALL_ACTIONS.length).toBe(24);
 	});
 });
 

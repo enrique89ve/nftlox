@@ -3,9 +3,8 @@ import { usernameSchema, seedProvenanceSchema } from "../schemas";
 import { formatZodError } from "./helpers";
 import { generateImageHash } from "../dna";
 import { ACTION_TRANSFER } from "../constants";
-import { getProtocolId } from "../protocol-state";
-import { makePayload } from "../payloads";
-import type { BuildResult, TransferData, ProtocolPayload, HiveOperation } from "../types";
+import { makePayload, toHiveOperation } from "../payloads";
+import type { BuildResult, TransferData, ProtocolPayload } from "../types";
 
 export const transferBuilderSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1, "Invalid NFT ID format"),
@@ -45,15 +44,7 @@ export async function buildTransfer(input: TransferBuilderInput): Promise<BuildR
 		...(data.seedTxId && { seedTxId: data.seedTxId }),
 	});
 
-	const operation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [data.from],
-			id: getProtocolId(),
-			json: JSON.stringify(payload),
-		},
-	];
+	const operation = toHiveOperation(payload, data.from);
 
 	return {
 		success: true,

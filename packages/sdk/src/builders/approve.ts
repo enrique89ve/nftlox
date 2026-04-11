@@ -9,7 +9,6 @@ import {
 } from "../schemas";
 import { formatZodError } from "./helpers";
 import { usernameSchema } from "../schemas";
-import { getProtocolId } from "../protocol-state";
 import {
 	createPackApprovePayload,
 	createPackTransferFromPayload,
@@ -17,8 +16,9 @@ import {
 	createNftApproveAllPayload,
 	createNftTransferFromPayload,
 	createDataOperatorApprovePayload,
+	toHiveOperation,
 } from "../payloads";
-import type { BuildResult, PackApproveData, PackTransferFromData, NftApproveData, NftApproveAllData, NftTransferFromData, DataOperatorApproveData, HiveOperation } from "../types";
+import type { BuildResult, PackApproveData, PackTransferFromData, NftApproveData, NftApproveAllData, NftTransferFromData, DataOperatorApproveData } from "../types";
 
 export const packApproveBuilderSchema = packApproveInputSchema.extend({
 	owner: usernameSchema,
@@ -33,7 +33,7 @@ export function buildPackApprove(input: PackApproveBuilderInput): BuildResult<Pa
 	const data = parsed.data;
 
 	const payload = createPackApprovePayload(data);
-	const operation: HiveOperation = ["custom_json", { required_auths: [], required_posting_auths: [data.owner], id: getProtocolId(), json: JSON.stringify(payload) }];
+	const operation = toHiveOperation(payload, data.owner);
 
 	return { success: true, payload, operation };
 }
@@ -51,7 +51,7 @@ export function buildPackTransferFrom(input: PackTransferFromBuilderInput): Buil
 	const data = parsed.data;
 
 	const payload = createPackTransferFromPayload(data);
-	const operation: HiveOperation = ["custom_json", { required_auths: [], required_posting_auths: [data.operator], id: getProtocolId(), json: JSON.stringify(payload) }];
+	const operation = toHiveOperation(payload, data.operator);
 
 	return { success: true, payload, operation };
 }
@@ -69,7 +69,7 @@ export function buildNftApprove(input: NftApproveBuilderInput): BuildResult<NftA
 	const data = parsed.data;
 
 	const payload = createNftApprovePayload(data);
-	const operation: HiveOperation = ["custom_json", { required_auths: [], required_posting_auths: [data.owner], id: getProtocolId(), json: JSON.stringify(payload) }];
+	const operation = toHiveOperation(payload, data.owner);
 
 	return { success: true, payload, operation };
 }
@@ -87,7 +87,7 @@ export function buildNftApproveAll(input: NftApproveAllBuilderInput): BuildResul
 	const data = parsed.data;
 
 	const payload = createNftApproveAllPayload(data);
-	const operation: HiveOperation = ["custom_json", { required_auths: [], required_posting_auths: [data.owner], id: getProtocolId(), json: JSON.stringify(payload) }];
+	const operation = toHiveOperation(payload, data.owner);
 
 	return { success: true, payload, operation };
 }
@@ -105,7 +105,7 @@ export function buildNftTransferFrom(input: NftTransferFromBuilderInput): BuildR
 	const data = parsed.data;
 
 	const payload = createNftTransferFromPayload(data);
-	const operation: HiveOperation = ["custom_json", { required_auths: [], required_posting_auths: [data.operator], id: getProtocolId(), json: JSON.stringify(payload) }];
+	const operation = toHiveOperation(payload, data.operator);
 
 	return { success: true, payload, operation };
 }
@@ -123,7 +123,7 @@ export function buildDataOperatorApprove(input: DataOperatorApproveBuilderInput)
 	const data = parsed.data;
 
 	const payload = createDataOperatorApprovePayload(data);
-	const operation: HiveOperation = ["custom_json", { required_auths: [], required_posting_auths: [data.creator], id: getProtocolId(), json: JSON.stringify(payload) }];
+	const operation = toHiveOperation(payload, data.creator);
 
 	return { success: true, payload, operation };
 }
