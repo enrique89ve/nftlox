@@ -91,7 +91,7 @@ export async function insertConfirmedOperation(
 
 // ============ EXPIRED OPERATIONS CLEANUP ============
 
-const RETENTION_MS = 24 * 60 * 60 * 1000; // 1 day
+const RETENTION_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
 
 export async function cleanupExpiredOperations(): Promise<number> {
 	const cutoff = new Date(Date.now() - RETENTION_MS).toISOString();
