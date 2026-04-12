@@ -1648,44 +1648,6 @@ function setOpStatus(opId: string, status: "pending" | "active" | "complete" | "
 	}
 }
 
-let currentFeeAsset = "HBD";
-let currentFeeAmount = "0.100";
-
-async function updateFeeCurrencyDisplay() {
-	const select = $("fee-currency-select") as HTMLSelectElement;
-	const display = $("fee-display-amount");
-	const btn = $("btn-op-collection") as HTMLButtonElement;
-	
-	if (select.value === "HBD") {
-		currentFeeAsset = "HBD";
-		currentFeeAmount = "0.100";
-		if (display) display.innerHTML = `0.100 HBD`;
-		mintLog("Switched fee currency to HBD", "info");
-		if (btn) btn.disabled = false;
-	} else if (select.value === "HIVE") {
-		currentFeeAsset = "HIVE";
-		if (display) display.innerHTML = `<span style="color:var(--text-muted)">Estimating oracle price...</span>`;
-		if (btn) btn.disabled = true; // Lock broadcast while estimating
-		
-		try {
-			// Get exact oracle price (0.100 HBD target)
-			const res = await fetch("http://localhost:3050/api/fee-estimate?hbd=0.100");
-			const json = await res.json();
-			if (json.error) throw new Error(json.error);
-			
-			currentFeeAmount = json.hiveAmount.toFixed(3);
-			if (display) display.innerHTML = `${currentFeeAmount} HIVE <span style="font-size:11px; font-weight:normal; color:var(--text-dim)">(Ratio: ${json.ratio.toFixed(3)})</span>`;
-			mintLog(`Oracle calculated ${currentFeeAmount} HIVE equivalent to 0.100 HBD`, "success");
-			if (btn) btn.disabled = false;
-		} catch (e) {
-			console.error("Failed to estimate fee:", e);
-			if (display) display.innerHTML = `<span style="color:var(--error)">Error fetching oracle price</span>`;
-			mintLog("Failed to fetch dynamic HIVE fee from oracle", "error");
-		}
-	}
-}
-(window as any).updateFeeCurrencyDisplay = updateFeeCurrencyDisplay;
-
 function broadcastCollection() {
 	const creator = (window as any).__batchCreator;
 	const collectionOp = (window as any).__collectionOp;
@@ -1704,23 +1666,10 @@ function broadcastCollection() {
 	setOpStatus("op-collection", "active");
 	mintLog("Opening Keychain...");
 
-	const formattedAmount = `${currentFeeAmount} ${currentFeeAsset}`;
-	const feeTransfer = [
-		"transfer",
-		{
-			from: creator,
-			to: "nftlox",
-			amount: formattedAmount,
-			memo: "Create collection fee"
-		}
-	];
-
-	mintLog(`Injecting dynamic Protocol fee of ${formattedAmount} via Active Key...`, "info");
-
 	(window as any).hive_keychain.requestBroadcast(
 		creator,
-		[feeTransfer, collectionOp],
-		"Active",
+		[collectionOp],
+		"Posting",
 		(res: any) => {
 			console.log("Keychain response:", res);
 			if (res.success) {

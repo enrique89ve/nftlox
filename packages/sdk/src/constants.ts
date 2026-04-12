@@ -153,7 +153,7 @@ export const ACTION_BUY = "buy" as const;
 
 // Multisig Constants
 export const MULTISIG_EXPIRATION_MS = 125_000;
-export const MAX_MULTISIG_OPERATIONS = 4; // seller + royalty + fee + custom_json
+export const MAX_MULTISIG_OPERATIONS = 5;
 
 // Protocol Actions (Approve & TransferFrom)
 export const ACTION_NFT_APPROVE = "nft_approve";

@@ -338,6 +338,7 @@ export type MultisigErrorCode =
 	| "INVALID_TX_STRUCTURE"
 	| "NFT_NOT_FOUND"
 	| "NFT_NOT_LISTED"
+	| "NFT_NOT_INSTANCE"
 	| "NFT_NOT_TRANSFERABLE"
 	| "NFT_EXPIRED_LISTING"
 	| "CANNOT_BUY_OWN"
@@ -347,19 +348,28 @@ export type MultisigErrorCode =
 	| "NODE_ACCOUNT_MISMATCH"
 	| "MISSING_BUYER_AUTH"
 	| "MULTISIG_DISABLED"
+	| "SIGNING_QUEUE_FULL"
+	| "SIGNING_TIMEOUT"
 	| "INTERNAL_ERROR";
 
 export type MultisigResponse =
 	| Readonly<{ ok: true; signature: string; digest: string; expiration: string }>
 	| Readonly<{ ok: false; code: MultisigErrorCode; message: string }>;
 
-export type MultisigRequest = Readonly<{
+export type BuyMultisigRequest = Readonly<{
 	buyer: string;
 	nftId: string;
 	listingId: string;
 	listTxId: string;
 	transaction: HiveTransactionObject;
 }>;
+
+export type CreateCollectionMultisigRequest = Readonly<{
+	creator: string;
+	transaction: HiveTransactionObject;
+}>;
+
+export type MultisigRequest = BuyMultisigRequest | CreateCollectionMultisigRequest;
 
 export type PaymentInfo = Readonly<{
 	nftId: string;

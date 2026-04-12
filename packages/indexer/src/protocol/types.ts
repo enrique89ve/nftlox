@@ -111,6 +111,8 @@ export type MultisigErrorCode =
 	| "NODE_ACCOUNT_MISMATCH"
 	| "MISSING_BUYER_AUTH"
 	| "MULTISIG_DISABLED"
+	| "SIGNING_QUEUE_FULL"
+	| "SIGNING_TIMEOUT"
 	| "INTERNAL_ERROR";
 
 export type MultisigResponse =

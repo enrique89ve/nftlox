@@ -4,6 +4,7 @@ import { insertCollection, collectionExists, symbolTakenByCreator, countCollecti
 import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
 import { feeOracle } from "@/utils/fee-oracle.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
+import { config } from "@/config.ts";
 import {
 	requireBoundedString,
 	requireSymbol,
@@ -14,6 +15,7 @@ import {
 	optionalBoundedString,
 	optionalCollectionSchema,
 	collectionSchemaToRecord,
+	requireUsername,
 } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import {
@@ -29,13 +31,23 @@ import {
 } from "@/protocol/index.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
+	if (op.signer !== config.hiveAccount) {
+		throw new Error(
+			`create_collection must be signed by node account '${config.hiveAccount}', got '${op.signer}'`,
+		);
+	}
+
+	const rawCreator = op.pairedTransfers?.[0]?.from;
+	if (!rawCreator) throw new Error("No fee transfer found for create_collection action");
+	const creator = requireUsername(rawCreator, "creator");
+
 	const d = op.data;
 	const payloadId = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
 	const name = requireBoundedString(d.name, "name", MAX_NAME_LENGTH);
 	const symbol = requireSymbol(d.symbol, "symbol");
 
 	// C4: Recalculate canonical collectionId and reject mismatch
-	const canonicalId = await generateDeterministicCollectionId(op.signer, name, symbol);
+	const canonicalId = await generateDeterministicCollectionId(creator, name, symbol);
 	if (payloadId !== canonicalId) {
 		throw new Error(
 			`Non-canonical collectionId: expected ${canonicalId}, got ${payloadId}`,
@@ -44,15 +56,15 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 
 	if (await collectionExists(canonicalId, txn)) return [];
 
-	const transfer = await feeOracle.requireDynamicFee(op, PROTOCOL_COLLECTION_FEE_HBD);
+	const transfer = await feeOracle.requireDynamicFee(op, PROTOCOL_COLLECTION_FEE_HBD, config.hiveAccount, creator);
 	const feePaidHbd = transfer.currency === "HBD" ? transfer.amount : 0;
 	const feePaidHive = transfer.currency === "HIVE" ? transfer.amount : 0;
 
-	const creatorCollectionCount = await countCollectionsByCreator(op.signer, txn);
-	await assertWithinLimit("collectionsPerCreator", op.signer, creatorCollectionCount);
+	const creatorCollectionCount = await countCollectionsByCreator(creator, txn);
+	await assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount);
 
-	if (await symbolTakenByCreator(op.signer, symbol, txn)) {
-		throw new Error(`Symbol ${symbol} already used by @${op.signer}`);
+	if (await symbolTakenByCreator(creator, symbol, txn)) {
+		throw new Error(`Symbol ${symbol} already used by @${creator}`);
 	}
 
 	// H3: Require metadata with mandatory fields
@@ -89,7 +101,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		id: canonicalId,
 		name,
 		symbol,
-		creator: op.signer,
+		creator,
 		totalPotential,
 		description,
 		imageUrl,

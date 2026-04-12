@@ -122,6 +122,8 @@ export type {
 	HiveTransactionObject,
 	MultisigErrorCode,
 	MultisigResponse,
+	BuyMultisigRequest,
+	CreateCollectionMultisigRequest,
 	MultisigRequest,
 	PaymentInfo,
 	ProtocolPayload,

@@ -107,7 +107,8 @@ export const feeOracle = {
 	async requireDynamicFee(
 		op: ParsedOperation,
 		requiredHbd: string,
-		targetAccount: string = DEFAULT_FEE_ACCOUNT
+		targetAccount: string = DEFAULT_FEE_ACCOUNT,
+		payerAccount: string = op.signer,
 	): Promise<{ amount: number; currency: string }> {
 		const transfers = op.pairedTransfers ?? [];
 		if (transfers.length === 0) {
@@ -119,7 +120,7 @@ export const feeOracle = {
 		for (let index = 0; index < transfers.length; index++) {
 			if (consumed?.has(index)) continue;
 			const transfer = transfers[index];
-			if (!transfer || transfer.from !== op.signer || transfer.to !== targetAccount) continue;
+			if (!transfer || transfer.from !== payerAccount || transfer.to !== targetAccount) continue;
 
 			sawCandidate = true;
 			const isValid = await this.validateFee(
@@ -134,7 +135,7 @@ export const feeOracle = {
 		}
 
 		if (!sawCandidate) {
-			throw new Error(`Fee must be paid by ${op.signer} to the treasury (${targetAccount})`);
+			throw new Error(`Fee must be paid by ${payerAccount} to the treasury (${targetAccount})`);
 		}
 		throw new Error(`Insufficient fee paid: no transfer meets the requirement of ${requiredHbd} HBD`);
 	}

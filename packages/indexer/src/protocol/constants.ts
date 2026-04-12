@@ -30,6 +30,7 @@ export const DEFAULT_FEE_ACCOUNT = "nftlox";
 
 // L2 Constants
 export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
+export const HIVE_CUSTOM_JSON_MAX_BYTES = 8192;
 
 // Memo Prefixes (Marketplace)
 export const MEMO_PREFIX_BUY = "NFTLox BUY:";
@@ -53,7 +54,7 @@ export const MAX_TRANSFER_BATCH_SIZE = 50;
 
 // Multisig Constants
 export const MULTISIG_EXPIRATION_MS = 125_000;
-export const MAX_MULTISIG_OPERATIONS = 4;
+export const MAX_MULTISIG_OPERATIONS = 5;
 
 // Protocol Actions (Core)
 export const ACTION_CREATE_COLLECTION = "create_collection";

@@ -18,7 +18,7 @@ import {
   getTransfersInTransaction,
   checkClockDrift,
 } from "./hive-client.ts";
-import { ACTION_BUY, ACTION_NODE_REGISTER } from "@/protocol/index.ts";
+import { ACTION_BUY, ACTION_CREATE_COLLECTION, ACTION_NODE_REGISTER } from "@/protocol/index.ts";
 import {
   parseHafAHOperations,
   type RejectedOperation,
@@ -64,7 +64,7 @@ async function fetchBatch(
 
   // Enrich operations whose validation depends on transfers from the same Hive tx.
   const transferBackedOps = ops.filter(
-    (op) => op.action === ACTION_BUY || op.action === ACTION_NODE_REGISTER,
+    (op) => op.action === ACTION_BUY || op.action === ACTION_CREATE_COLLECTION || op.action === ACTION_NODE_REGISTER,
   );
   const transferPools = new Map<
     string,

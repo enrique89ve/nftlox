@@ -1797,21 +1797,6 @@
 					<p style="font-size: 11px; color: var(--text-dim); margin-top: 6px; text-align: center;">
 						This will prepare blockchain operations for broadcast
 					</p>
-					
-					<div class="form-group" style="margin-top: 16px;">
-						<label class="form-label" style="text-align: center; display: block;">Protocol Fee Payment</label>
-						<select class="form-input" id="fee-currency-select" onchange="updateFeeCurrencyDisplay()">
-							<option value="HBD">Pay in HBD (0.100 HBD)</option>
-							<option value="HIVE" style="color: var(--accent);">Pay in HIVE (Dynamic Oracle Price)</option>
-						</select>
-					</div>
-
-					<div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; padding: 12px; margin-top: 16px; text-align: center;">
-						<span style="font-size: 13px; font-weight: 500; color: var(--warning);">
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-							Collection Creation requires a protocol fee of <strong id="fee-display-amount">0.100 HBD</strong>
-						</span>
-					</div>
 				</div>
 
 				<!-- Minting Progress - Step 4 -->
@@ -1846,7 +1831,7 @@
 							</div>
 							<div class="op-info">
 								<div class="op-title">Create Collection</div>
-								<div class="op-desc"><span style="color: var(--accent);">Active Key</span> · 0.100 HBD Fee · Registers collection on blockchain</div>
+								<div class="op-desc">1 operation · Registers collection on blockchain</div>
 							</div>
 							<button class="btn btn-primary btn-sm" id="btn-op-collection" onclick="broadcastCollection()">
 								Broadcast
