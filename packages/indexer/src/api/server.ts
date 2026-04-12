@@ -69,7 +69,7 @@ export function startApiServer(): void {
 		.use(cors({
 			origin: allowedOrigins?.length ? allowedOrigins : true,
 			methods: ["GET", "POST", "OPTIONS"],
-			allowedHeaders: ["content-type"],
+			allowedHeaders: ["content-type", "x-nftlox-pow"],
 		}))
 		.onBeforeHandle(({ request, set }) => {
 			// Rate limiting — pass socket IP as safe fallback against header spoofing

@@ -2,7 +2,9 @@
 // Portable client using only fetch() — works in browser, Bun, and Node.
 
 import type { PaymentInfo, MultisigRequest, MultisigResponse } from "./types";
+import type { RequestMultisigOptions } from "./multisig.ts";
 import { resolveInstance } from "./inheritance.ts";
+import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow.ts";
 
 // ============ ERROR ============
 
@@ -406,11 +408,16 @@ async function get<T>(baseUrl: string, path: string, params?: QueryParams): Prom
 	return data as T;
 }
 
-async function post<T>(baseUrl: string, path: string, body: unknown): Promise<T> {
+async function post<T>(
+	baseUrl: string,
+	path: string,
+	body: unknown,
+	headers: Readonly<Record<string, string>> = {},
+): Promise<T> {
 	const url = new URL(path, baseUrl);
 	const response = await fetch(url.toString(), {
 		method: "POST",
-		headers: { "Content-Type": "application/json" },
+		headers: { "Content-Type": "application/json", ...headers },
 		body: JSON.stringify(body),
 	});
 	if (!response.ok) {
@@ -467,7 +474,7 @@ export interface IndexerClient {
 	/** Fetch payment split info for buying an NFT */
 	getPaymentInfo(nftId: string): Promise<PaymentInfo>;
 	/** Request multisig signing of a buy transaction */
-	multisig(request: MultisigRequest): Promise<MultisigResponse>;
+	multisig(request: MultisigRequest, options?: RequestMultisigOptions): Promise<MultisigResponse>;
 }
 
 /**
@@ -544,7 +551,11 @@ export function createIndexerClient(baseUrl: string): IndexerClient {
 		// ---- Multisig ----
 		getPaymentInfo: (nftId) =>
 			get<PaymentInfo>(baseUrl, `/api/payment-info/${encodeURIComponent(nftId)}`),
-		multisig: (request) =>
-			post<MultisigResponse>(baseUrl, "/api/multisig", request),
+		multisig: async (request, options) => {
+			const powToken = await solveMultisigPow(request, options?.powBits);
+			return post<MultisigResponse>(baseUrl, "/api/multisig", request, {
+				[NFTLOX_POW_HEADER]: powToken,
+			});
+		},
 	};
 }

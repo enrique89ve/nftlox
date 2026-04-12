@@ -7,6 +7,16 @@ const toInt = (val: string | undefined, fallback: number): number => {
 	return Number.isNaN(parsed) ? fallback : parsed;
 };
 
+const toBoundedInt = (
+	val: string | undefined,
+	fallback: number,
+	min: number,
+	max: number,
+): number => {
+	const parsed = toInt(val, fallback);
+	return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+};
+
 const toBool = (val: string | undefined, fallback: boolean): boolean => {
 	if (val === undefined || val === "") return fallback;
 	return val === "true" || val === "1";
@@ -63,6 +73,10 @@ export const config = {
 	multisigRateLimitWindowMs: toInt(process.env.MULTISIG_RATE_LIMIT_WINDOW_MS, 60_000),
 	multisigIpRateLimitMax: toInt(process.env.MULTISIG_IP_RATE_LIMIT_MAX, 30),
 	multisigIpRateLimitWindowMs: toInt(process.env.MULTISIG_IP_RATE_LIMIT_WINDOW_MS, 60_000),
+	multisigPowBits: toBoundedInt(process.env.MULTISIG_POW_BITS, 10, 0, 24),
+	multisigPowTtlMs: toBoundedInt(process.env.MULTISIG_POW_TTL_MS, 300_000, 1_000, 3_600_000),
+	multisigPowMaxFutureSkewMs: toBoundedInt(process.env.MULTISIG_POW_MAX_FUTURE_SKEW_MS, 30_000, 0, 300_000),
+	multisigPowReplayCacheMax: toBoundedInt(process.env.MULTISIG_POW_REPLAY_CACHE_MAX, 10_000, 1, 1_000_000),
 } as const;
 
 validateGenesisBlockSelection({

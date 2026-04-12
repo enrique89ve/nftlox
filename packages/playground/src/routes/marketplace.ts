@@ -7,6 +7,8 @@ import {
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
+	NFTLOX_POW_HEADER,
+	solveMultisigPow,
 	type PaymentInfo,
 	type MultisigResponse,
 } from "nftlox-sdk";
@@ -85,16 +87,20 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 					}),
 				});
 
+				const multisigRequest = {
+					buyer: body.buyer,
+					nftId: body.nftId,
+					listingId: info.listingId,
+					listTxId: info.listTxId,
+					transaction: tx.transaction,
+				};
 				const multisigRes = await fetch(`${INDEXER_URL}/api/multisig`, {
 					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						buyer: body.buyer,
-						nftId: body.nftId,
-						listingId: info.listingId,
-						listTxId: info.listTxId,
-						transaction: tx.transaction,
-					}),
+					headers: {
+						"Content-Type": "application/json",
+						[NFTLOX_POW_HEADER]: await solveMultisigPow(multisigRequest),
+					},
+					body: JSON.stringify(multisigRequest),
 				});
 				const multisigResult = await multisigRes.json() as MultisigResponse;
 

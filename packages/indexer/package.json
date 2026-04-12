@@ -9,8 +9,8 @@
 		"start:sync": "INDEXER_ROLE=sync bun run src/index.ts",
 		"start:api": "INDEXER_ROLE=api bun run src/index.ts",
 		"start:monolith": "INDEXER_ROLE=both bun run src/index.ts",
-		"test": "bun test src/__tests__/sync-state.test.ts src/__tests__/concurrency.test.ts src/__tests__/stress.test.ts src/__tests__/sync-engine.test.ts && bun test src/__tests__/handlers.test.ts && bun test src/__tests__/multisig-service.test.ts",
-		"test:unit": "bun test src/__tests__/sync-engine.test.ts src/__tests__/sync-state.test.ts src/__tests__/concurrency.test.ts src/__tests__/stress.test.ts",
+		"test": "bun test src/__tests__/pow-validator.test.ts src/__tests__/sync-state.test.ts src/__tests__/concurrency.test.ts src/__tests__/stress.test.ts src/__tests__/sync-engine.test.ts && bun test src/__tests__/handlers.test.ts && bun test src/__tests__/multisig-service.test.ts",
+		"test:unit": "bun test src/__tests__/pow-validator.test.ts src/__tests__/sync-engine.test.ts src/__tests__/sync-state.test.ts src/__tests__/concurrency.test.ts src/__tests__/stress.test.ts",
 		"test:integration": "bun test --serial src/__tests__/handlers.test.ts src/__tests__/multisig-service.test.ts",
 		"typecheck": "bunx tsc --noEmit"
 	},

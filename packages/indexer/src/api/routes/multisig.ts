@@ -7,6 +7,7 @@ import { createMultisigRateLimiter } from "@/api/services/multisig-rate-limiter.
 import { createMultisigNftLock } from "@/api/services/multisig-nft-lock.ts";
 import { getMultisigHealth } from "@/api/services/multisig-health.ts";
 import { resolveClientIp } from "@/api/middleware/client-ip.ts";
+import { NFTLOX_POW_HEADER, validateMultisigPow } from "@/api/middleware/pow-validator.ts";
 import { getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import { calculatePaymentSplit, MULTISIG_EXPIRATION_MS } from "@/protocol/index.ts";
 
@@ -132,6 +133,25 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 				code: "MULTISIG_DISABLED",
 			});
 			return { ok: false, code: "MULTISIG_DISABLED", message };
+		}
+
+		const powResult = await validateMultisigPow({
+			body,
+			header: request.headers.get(NFTLOX_POW_HEADER),
+			requiredBits: config.multisigPowBits,
+			ttlMs: config.multisigPowTtlMs,
+			maxFutureSkewMs: config.multisigPowMaxFutureSkewMs,
+			replayCacheMax: config.multisigPowReplayCacheMax,
+		});
+		if (!powResult.ok) {
+			logRejection({
+				buyer: body.buyer,
+				nftId: body.nftId,
+				clientIp,
+				code: powResult.code,
+			});
+			set.status = 429;
+			return { ok: false, code: powResult.code, message: powResult.message };
 		}
 
 		// Elysia validates body schema, so buyer and nftId are typed strings.

@@ -286,7 +286,20 @@ export * from "./builders";
 export {
 	fetchPaymentInfo,
 	requestMultisig,
+	type RequestMultisigOptions,
 } from "./multisig";
+
+export {
+	DEFAULT_MULTISIG_POW_BITS,
+	MAX_MULTISIG_POW_BITS,
+	MULTISIG_POW_VERSION,
+	NFTLOX_POW_HEADER,
+	canonicalPowJson,
+	hashJsonPayload,
+	hashMultisigPowToken,
+	hasLeadingZeroBits,
+	solveMultisigPow,
+} from "./pow";
 
 
 // ============ SPV VERIFICATION ============
