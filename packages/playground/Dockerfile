@@ -4,8 +4,10 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/playground/package.json ./packages/playground/
+COPY packages/indexer/package.json ./packages/indexer/
+COPY packages/packs-engine/package.json ./packages/packs-engine/
 
-RUN bun install --frozen-lockfile --production
+RUN bun install --frozen-lockfile --production --filter nftlox-playground
 
 COPY packages/sdk/ ./packages/sdk/
 COPY packages/playground/ ./packages/playground/
