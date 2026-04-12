@@ -217,6 +217,7 @@ export interface IndexerNftSummary {
 export interface IndexerNft extends IndexerNftSummary {
 	data_hash: string | null;
 	tx_id: string;
+	minted_by: string | null;
 	listing_marketplace: string | null;
 	listing_expired: boolean;
 }

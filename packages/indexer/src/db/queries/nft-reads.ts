@@ -84,6 +84,7 @@ export async function getNftById(id: string) {
 			n.seed_id, n.instance_number,
 			n.previous_owner, n.owner_operation_id, n.owner_action, n.owner_block_num::int AS owner_block_num,
 			n.created_tx_id AS tx_id, n.created_at,
+			co.signer AS minted_by,
 			n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
 			n.listing_expires_at, n.listing_marketplace,
 			s.created_tx_id AS seed_tx_id,
@@ -92,6 +93,7 @@ export async function getNftById(id: string) {
 			END AS listing_expired
 		FROM nfts n
 		LEFT JOIN nfts s ON s.id = n.seed_id
+		LEFT JOIN confirmed_operations co ON co.operation_id = n.created_operation_id
 		WHERE n.id = ${id}
 	`;
 	return row ?? null;

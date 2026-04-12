@@ -27,6 +27,110 @@ let broadcastedCount = 0;
 let totalBroadcastOps = 0;
 let debugRoutesEnabled = false;
 
+type CollectionSort = "recent" | "name" | "supply" | "seeds";
+
+interface CollectionSummary {
+	id: string;
+	name: string;
+	symbol: string;
+	creator: string;
+	totalPotential?: number | null;
+	seedCount?: number | null;
+	instanceCount?: number | null;
+	status?: string | null;
+}
+
+interface CollectionsResponse {
+	count?: number;
+	collections: CollectionSummary[];
+}
+
+interface UserNftCounts {
+	total: number;
+	seeds: number;
+	instances: number;
+}
+
+interface NftCardData {
+	id: string;
+	collectionId?: string | null;
+	edition?: string | number | null;
+	owner?: string | null;
+	name?: string | null;
+	imageUrl?: string | null;
+	instanceDna?: string | null;
+	distributed?: number | null;
+	maxSupply?: number | null;
+	instanceNumber?: number | null;
+	listingPrice?: string | null;
+	listingCurrency?: string | null;
+	status?: string | null;
+	isSeed?: boolean;
+}
+
+interface UserNftsResponse {
+	counts?: Partial<UserNftCounts>;
+	nfts?: NftCardData[];
+}
+
+interface UserNftsResult {
+	counts: UserNftCounts;
+	nfts: NftCardData[];
+}
+
+interface NftDetailListingPrice {
+	amount: string;
+	currency: string | null;
+}
+
+interface NftDetailNft {
+	id: string;
+	name: string;
+	imageUrl: string | null;
+	owner: string;
+	collectionId: string;
+	edition: number;
+	originDna: string | null;
+	instanceDna: string | null;
+	mintedBy: string | null;
+	mintedAt: string | null;
+	burned: boolean;
+	listed: boolean;
+	listingPrice?: NftDetailListingPrice;
+	isSeed: boolean;
+	maxSupply: number;
+	distributed: number;
+	seedId: string | null;
+	seedTxId: string | null;
+	instanceNumber: number | null;
+	dataHash: string | null;
+	txId: string;
+}
+
+interface NftDetailOriginal {
+	id: string;
+	name: string;
+	imageUrl: string | null;
+	owner: string;
+}
+
+interface NftDetailInstance {
+	id: string;
+	name: string;
+	owner: string;
+	instanceNumber: number | null;
+}
+
+interface NftDetailResponse {
+	error?: string;
+	nft?: NftDetailNft;
+	original?: NftDetailOriginal | null;
+	instances?: {
+		count: number;
+		items: NftDetailInstance[];
+	};
+}
+
 // ============ FETCH-BACKED HELPERS ============
 
 async function fetchJsonOrThrow<T>(url: string, init?: RequestInit): Promise<T> {
@@ -43,23 +147,44 @@ async function fetchJsonOrThrow<T>(url: string, init?: RequestInit): Promise<T> 
 	return data as T;
 }
 
-async function getNFTsByOwner(owner: string, limit = 200, offset = 0) {
+function normalizeNftCounts(data: UserNftsResponse): UserNftCounts {
+	const nfts = data.nfts ?? [];
+	return {
+		total: data.counts?.total ?? nfts.length,
+		seeds: data.counts?.seeds ?? nfts.filter((nft) => nft.isSeed === true).length,
+		instances: data.counts?.instances ?? nfts.filter((nft) => nft.isSeed !== true).length,
+	};
+}
+
+function formatDisplayDate(value: string | null | undefined): string {
+	if (!value) return "-";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return "-";
+	return date.toLocaleString(undefined, {
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+}
+
+async function getNFTsByOwner(owner: string, limit = 200, offset = 0): Promise<UserNftsResult> {
 	const firstRes = await fetch(`/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${offset}`);
-	const firstData = await firstRes.json();
-	const counts = firstData.counts ?? { total: 0, seeds: 0, instances: 0 };
-	const allNfts: any[] = firstData.nfts || [];
+	const firstData = await firstRes.json() as UserNftsResponse;
+	const counts = normalizeNftCounts(firstData);
+	const allNfts: NftCardData[] = firstData.nfts ?? [];
 
 	if (counts.total > limit) {
 		const totalPages = Math.ceil(counts.total / limit);
-		const fetches = [];
-		for (let page = 1; page < totalPages; page++) {
-			fetches.push(
-				fetch(`/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${page * limit}`)
-					.then(r => r.json())
-					.then(d => d.nfts || [])
-			);
-		}
-		const pages = await Promise.all(fetches);
+		const pages = await Promise.all(
+			Array.from({ length: totalPages - 1 }, async (_, index) => {
+				const page = index + 1;
+				const response = await fetch(`/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${page * limit}`);
+				const data = await response.json() as UserNftsResponse;
+				return data.nfts ?? [];
+			}),
+		);
 		for (const nfts of pages) allNfts.push(...nfts);
 	}
 
@@ -222,6 +347,117 @@ $("btn-disconnect")?.addEventListener("click", () => {
 
 // ============ COLLECTIONS ============
 
+let loadedCollections: CollectionSummary[] = [];
+
+function getCollectionSort(): CollectionSort {
+	const value = ($("collection-sort") as HTMLSelectElement | null)?.value;
+	if (value === "name" || value === "supply" || value === "seeds") return value;
+	return "recent";
+}
+
+function getCollectionSearchTerm(): string {
+	return (($("collection-search") as HTMLInputElement | null)?.value ?? "").trim().toLowerCase();
+}
+
+function getCollectionItemCount(collection: CollectionSummary): number {
+	return (collection.seedCount ?? 0) + (collection.instanceCount ?? 0);
+}
+
+function getCollectionInitial(collection: CollectionSummary): string {
+	const value = collection.symbol || collection.name || collection.id;
+	return value.slice(0, 2).toUpperCase();
+}
+
+function sortCollections(collections: CollectionSummary[], sort: CollectionSort): CollectionSummary[] {
+	const sorted = [...collections];
+	if (sort === "name") {
+		return sorted.sort((a, b) => a.name.localeCompare(b.name));
+	}
+	if (sort === "supply") {
+		return sorted.sort((a, b) => getCollectionItemCount(b) - getCollectionItemCount(a));
+	}
+	if (sort === "seeds") {
+		return sorted.sort((a, b) => (b.seedCount ?? 0) - (a.seedCount ?? 0));
+	}
+	return sorted;
+}
+
+function renderCollections() {
+	const container = $("collections-container");
+	const countLabel = $("collection-count-label");
+	if (!container) return;
+
+	const query = getCollectionSearchTerm();
+	const filtered = loadedCollections.filter((collection) => {
+		if (!query) return true;
+		const searchable = [
+			collection.name,
+			collection.symbol,
+			collection.creator,
+			collection.id,
+		].join(" ").toLowerCase();
+		return searchable.includes(query);
+	});
+	const collections = sortCollections(filtered, getCollectionSort());
+
+	if (countLabel) {
+		countLabel.textContent = query
+			? `${collections.length} of ${loadedCollections.length} collections match "${query}".`
+			: `${collections.length} active collections available.`;
+	}
+
+	if (collections.length === 0) {
+		container.innerHTML = `
+			<div class="empty-state">
+				<p class="empty-state-text">No collections match this search.</p>
+			</div>
+		`;
+		return;
+	}
+
+	container.innerHTML = collections.map((col) => {
+		const status = String(col.status || "active");
+		const statusClass = status === "archived" ? "status-archived" : "status-active";
+		const itemCount = getCollectionItemCount(col);
+
+		return `
+			<article class="collection-card" data-id="${escapeHtml(col.id)}">
+				<div class="collection-card-cover" aria-hidden="true">${escapeHtml(getCollectionInitial(col))}</div>
+				<div class="collection-card-header">
+					<span class="collection-symbol">${escapeHtml(col.symbol)}</span>
+					<span class="status-badge ${statusClass}">${escapeHtml(status.toUpperCase())}</span>
+				</div>
+				<div class="collection-name">${escapeHtml(col.name)}</div>
+				<div class="collection-meta">
+					<span class="collection-creator">@${escapeHtml(col.creator)}</span>
+				</div>
+				<div class="collection-meta" style="margin-top: 8px;">${escapeHtml(col.id)}</div>
+				<div class="collection-stats-row">
+					<div class="collection-stat">
+						<span class="collection-stat-value">${itemCount.toLocaleString()}</span>
+						<span class="collection-stat-label">items</span>
+					</div>
+					<div class="collection-stat">
+						<span class="collection-stat-value">${(col.seedCount ?? 0).toLocaleString()}</span>
+						<span class="collection-stat-label">seeds</span>
+					</div>
+					<div class="collection-stat">
+						<span class="collection-stat-value">${(col.instanceCount ?? 0).toLocaleString()}</span>
+						<span class="collection-stat-label">instances</span>
+					</div>
+				</div>
+			</article>
+		`;
+	}).join("");
+
+	container.querySelectorAll(".collection-card").forEach(card => {
+		card.addEventListener("click", () => {
+			const id = (card as HTMLElement).dataset.id;
+			if (id) loadCollectionDetail(id);
+		});
+	});
+}
+
 async function loadCollections() {
 	const container = $("collections-container");
 	if (!container) return;
@@ -229,10 +465,10 @@ async function loadCollections() {
 	container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Loading...</p></div>';
 
 	try {
-		const response = await fetch("/api/collections");
-		const data = await response.json();
+		const data = await fetchJsonOrThrow<CollectionsResponse>("/api/collections");
+		loadedCollections = data.collections ?? [];
 
-		if (data.collections.length === 0) {
+		if (loadedCollections.length === 0) {
 			container.innerHTML = `
 				<div class="empty-state">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -245,35 +481,8 @@ async function loadCollections() {
 			return;
 		}
 
-		container.innerHTML = data.collections.map((col: any) => {
-			const status = String(col.status || "active");
-			const statusClass = status === "archived" ? "status-archived" : "status-active";
-
-			return `
-				<div class="collection-card" data-id="${col.id}">
-					<div class="collection-card-header">
-						<span class="collection-symbol">${col.symbol}</span>
-						<span class="status-badge ${statusClass}">${status.toUpperCase()}</span>
-					</div>
-					<div class="collection-name">${col.name}</div>
-					<div class="collection-meta">
-						<span class="collection-creator">@${col.creator}</span>
-					</div>
-					<div class="collection-meta" style="margin-top: 4px;">${col.seedCount || 0} seeds • ${col.instanceCount || 0} instances</div>
-					<div class="collection-meta" style="margin-top: 4px;">${col.id}</div>
-				</div>
-			`;
-		}).join("");
-
-		log(`Loaded ${data.collections.length} collections`, "success");
-
-		// Add click handlers to collection cards
-		container.querySelectorAll(".collection-card").forEach(card => {
-			card.addEventListener("click", () => {
-				const id = (card as HTMLElement).dataset.id;
-				if (id) loadCollectionDetail(id);
-			});
-		});
+		renderCollections();
+		log(`Loaded ${loadedCollections.length} collections`, "success");
 	} catch (e) {
 		container.innerHTML = `
 			<div class="empty-state">
@@ -286,6 +495,8 @@ async function loadCollections() {
 
 // Make it globally available
 (window as any).loadCollections = loadCollections;
+$("collection-search")?.addEventListener("input", renderCollections);
+$("collection-sort")?.addEventListener("change", renderCollections);
 
 // ============ COLLECTION DETAIL ============
 
@@ -511,10 +722,9 @@ async function loadNftDetail(nftId: string) {
 	if (setDataSection) setDataSection.style.display = "none";
 
 	try {
-		const response = await fetch(`/api/nft/${nftId}/details`);
-		const data = await response.json();
+		const data = await fetchJsonOrThrow<NftDetailResponse>(`/api/nft/${encodeURIComponent(nftId)}/details`);
 
-		if (data.error) {
+		if (data.error || !data.nft) {
 			log(`NFT not found: ${data.error}`, "error");
 			return;
 		}
@@ -563,12 +773,13 @@ async function loadNftDetail(nftId: string) {
 
 		// Parent seed for an instance.
 		if (data.original && parentSection) {
+			const original = data.original;
 			parentSection.style.display = "block";
 			const parentItem = $("nft-parent-item");
 			const parentName = $("nft-parent-name");
-			if (parentName) parentName.textContent = data.original.name;
+			if (parentName) parentName.textContent = original.name;
 			if (parentItem) {
-				parentItem.onclick = () => loadNftDetail(data.original.id);
+				parentItem.onclick = () => loadNftDetail(original.id);
 			}
 		}
 
@@ -579,7 +790,7 @@ async function loadNftDetail(nftId: string) {
 			const listEl = $("nft-instances-list");
 			if (countEl) countEl.textContent = String(data.instances.count);
 			if (listEl) {
-				listEl.innerHTML = data.instances.items.map((r: any) => `
+				listEl.innerHTML = data.instances.items.map((r) => `
 					<div class="instance-item" data-id="${r.id}">
 						<span class="instance-num">#${r.instanceNumber || "?"}</span>
 						<span class="instance-owner">@${r.owner}</span>
@@ -653,7 +864,7 @@ async function loadNftDetail(nftId: string) {
 		const mintedByEl = $("nft-detail-minted-by");
 		const mintedAtEl = $("nft-detail-minted-at");
 		if (mintedByEl) mintedByEl.textContent = nft.mintedBy ? `@${nft.mintedBy}` : "-";
-		if (mintedAtEl) mintedAtEl.textContent = nft.mintedAt ? new Date(nft.mintedAt).toLocaleDateString() : "-";
+		if (mintedAtEl) mintedAtEl.textContent = formatDisplayDate(nft.mintedAt);
 
 		log(`Loaded NFT: ${nft.name}`, "success");
 	} catch (e) {
@@ -692,9 +903,11 @@ function goBackToCollections() {
 
 async function loadInventory() {
 	const container = $("inventory-container");
+	const summary = $("inventory-summary");
 	if (!container) return;
 
 	if (!connectedUser) {
+		if (summary) summary.style.display = "none";
 		container.innerHTML = `
 			<div class="empty-state">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -711,9 +924,10 @@ async function loadInventory() {
 	try {
 		const result = await getNFTsByOwner(connectedUser, 200);
 		const counts = result.counts;
-		const seeds = result.nfts.filter((n: any) => n.isSeed);
-		const instances = result.nfts.filter((n: any) => !n.isSeed);
+		const seeds = result.nfts.filter((n) => n.isSeed === true);
+		const instances = result.nfts.filter((n) => n.isSeed !== true);
 		const totalCount = counts.total;
+		renderInventorySummary(counts, result.nfts);
 
 		if (totalCount === 0) {
 			container.innerHTML = '<div class="empty-state"><p class="empty-state-text">No NFTs found</p></div>';
@@ -758,6 +972,32 @@ async function loadInventory() {
 
 (window as any).loadInventory = loadInventory;
 
+function renderInventorySummary(counts: UserNftCounts, nfts: NftCardData[]) {
+	const summary = $("inventory-summary");
+	if (!summary) return;
+
+	const listedCount = nfts.filter((nft) => Boolean(nft.listingPrice)).length;
+	summary.style.display = "grid";
+	summary.innerHTML = `
+		<div class="inventory-summary-card">
+			<div class="stat-label">Owned</div>
+			<div class="stat-value">${counts.total.toLocaleString()}</div>
+		</div>
+		<div class="inventory-summary-card">
+			<div class="stat-label">Seeds</div>
+			<div class="stat-value">${counts.seeds.toLocaleString()}</div>
+		</div>
+		<div class="inventory-summary-card">
+			<div class="stat-label">Instances</div>
+			<div class="stat-value">${counts.instances.toLocaleString()}</div>
+		</div>
+		<div class="inventory-summary-card">
+			<div class="stat-label">Listed</div>
+			<div class="stat-value">${listedCount.toLocaleString()}</div>
+		</div>
+	`;
+}
+
 // ============ SEARCH ============
 
 async function searchUser() {
@@ -786,7 +1026,7 @@ async function searchUser() {
 
 // ============ RENDER NFTS ============
 
-function renderNfts(nfts: any[], containerId: string, selectable = false) {
+function renderNfts(nfts: NftCardData[], containerId: string, selectable = false) {
 	const container = $(containerId);
 	if (!container) return;
 
@@ -800,7 +1040,7 @@ function renderNfts(nfts: any[], containerId: string, selectable = false) {
 	}
 
 	container.innerHTML = nfts.map(nft => {
-		const isSeed = nft.isSeed;
+		const isSeed = nft.isSeed === true;
 		const typeLabel = isSeed ? "SEED" : "INSTANCE";
 		const typeCls = isSeed ? "seed" : "instance";
 		const supplyText = isSeed
@@ -809,11 +1049,11 @@ function renderNfts(nfts: any[], containerId: string, selectable = false) {
 
 		return `
 			<div class="nft-card" data-id="${escapeHtml(nft.id)}" data-collection="${escapeHtml(nft.collectionId)}"
-				 data-edition="${escapeHtml(String(nft.edition))}" data-dna="${escapeHtml(nft.instanceDna)}">
+				 data-edition="${escapeHtml(String(nft.edition ?? ""))}" data-dna="${escapeHtml(nft.instanceDna)}">
 				<img class="nft-image" src="${escapeHtml(nft.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
 				<div class="nft-card-body">
-					<div class="nft-name">${escapeHtml(nft.name)}</div>
-					<div class="nft-owner">@${escapeHtml(nft.owner)}</div>
+					<div class="nft-name">${escapeHtml(nft.name ?? "Untitled NFT")}</div>
+					<div class="nft-owner">@${escapeHtml(nft.owner ?? "unknown")}</div>
 					<div class="nft-meta">
 						<span class="nft-meta-supply">${supplyText}</span>
 						<span class="nft-type-badge ${typeCls}">${typeLabel}</span>
@@ -2191,43 +2431,6 @@ async function loadDashboardStats() {
 }
 
 (window as any).loadDashboardStats = loadDashboardStats;
-
-// ============ USER ACTIVITY ============
-
-async function loadUserActivity() {
-	const container = $("user-activity-container");
-	if (!container || !connectedUser) return;
-
-	container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Loading...</p></div>';
-
-	try {
-		const response = await fetch(`/api/user/${connectedUser}/activity?limit=20`);
-		const data = await response.json();
-		const events = data.events || [];
-
-		if (events.length === 0) {
-			container.innerHTML = '<div class="empty-state"><p class="empty-state-text">No activity yet</p></div>';
-			return;
-		}
-
-		container.innerHTML = `<table class="data-table">
-			<thead><tr><th>Event</th><th>NFT</th><th>From</th><th>To</th><th>Date</th></tr></thead>
-			<tbody>${events.map((e: any) => `
-				<tr>
-					<td>${e.event_type}</td>
-					<td style="font-family: var(--mono); font-size: 11px;">${e.nft_id}</td>
-					<td>${e.from_account ? `@${e.from_account}` : "-"}</td>
-					<td>${e.to_account ? `@${e.to_account}` : "-"}</td>
-					<td style="color: var(--text-dim);">${new Date(e.timestamp).toLocaleDateString()}</td>
-				</tr>
-			`).join("")}</tbody>
-		</table>`;
-	} catch (e) {
-		container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Error loading activity</p></div>';
-	}
-}
-
-(window as any).loadUserActivity = loadUserActivity;
 
 // ============ STEP 1 INLINE VALIDATION ============
 

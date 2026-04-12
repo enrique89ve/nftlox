@@ -28,6 +28,15 @@ async function safeHandler(fn: () => Promise<Response>): Promise<Response> {
 	}
 }
 
+async function getCollectionCreator(collectionId: string): Promise<string | null> {
+	try {
+		const collection = await indexer.getCollection(collectionId);
+		return collection.creator;
+	} catch {
+		return null;
+	}
+}
+
 export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) | { [method: string]: (req: Request) => Promise<Response> }> = {
 	"/api/user/:username": (req: Request) =>
 		safeHandler(async () => {
@@ -97,12 +106,13 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			const nftId = new URL(req.url).pathname.split("/api/nft/")[1]!.split("/")[0]!;
 			const nft = await indexer.getNft(nftId);
 
-			// Fetch related data in parallel
-			const [instances] = await Promise.all([
+			const [collectionCreator, instances] = await Promise.all([
+				getCollectionCreator(nft.collection_id),
 				nft.nft_type === "seed"
 					? indexer.getNftInstances(nftId, { limit: 50 })
 					: Promise.resolve([]),
 			]);
+			const mintedBy = nft.minted_by ?? collectionCreator;
 
 			// Fetch parent if this is an instance.
 			let original = null;
@@ -127,6 +137,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					edition: nft.edition,
 					originDna: nft.origin_dna,
 					instanceDna: nft.instance_dna,
+					mintedBy,
 					mintedAt: nft.created_at,
 					burned: nft.status === "burned",
 					listed: nft.status === "listed",

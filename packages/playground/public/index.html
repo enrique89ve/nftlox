@@ -9,20 +9,25 @@
 	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
 	<style>
 		:root {
-			--bg: #0c0c0c;
-			--surface: #141414;
-			--surface-2: #1a1a1a;
-			--border: #262626;
-			--border-hover: #404040;
-			--text: #e5e5e5;
-			--text-muted: #737373;
-			--text-dim: #525252;
-			--accent: #22c55e;
-			--accent-dim: rgba(34, 197, 94, 0.15);
+			--bg: #f6f8fb;
+			--surface: #ffffff;
+			--surface-2: #eef2f7;
+			--border: #dfe5ee;
+			--border-hover: #b7c3d4;
+			--text: #121826;
+			--text-muted: #526071;
+			--text-dim: #7a8798;
+			--accent: #2081e2;
+			--accent-strong: #1266c3;
+			--accent-dim: rgba(32, 129, 226, 0.12);
+			--accent-soft: rgba(20, 184, 166, 0.14);
+			--accent-secondary: #0f9f8f;
 			--error: #ef4444;
 			--warning: #f59e0b;
-			--success: #10b981;
-			--success-dim: rgba(16, 185, 129, 0.15);
+			--success: #16a34a;
+			--success-dim: rgba(22, 163, 74, 0.14);
+			--shadow-sm: 0 1px 2px rgba(18, 24, 38, 0.08);
+			--shadow-md: 0 12px 32px rgba(18, 24, 38, 0.12);
 			--mono: 'JetBrains Mono', monospace;
 			--sans: 'Space Grotesk', system-ui, sans-serif;
 		}
@@ -52,6 +57,7 @@
 			display: flex;
 			flex-direction: column;
 			gap: 32px;
+			min-width: 0;
 		}
 
 		.logo {
@@ -71,13 +77,13 @@
 			font-family: var(--mono);
 			font-weight: 600;
 			font-size: 14px;
-			color: var(--bg);
+			color: #ffffff;
 		}
 
 		.logo-text {
 			font-weight: 600;
 			font-size: 18px;
-			letter-spacing: -0.02em;
+			letter-spacing: 0;
 		}
 
 		.version {
@@ -102,7 +108,7 @@
 			font-weight: 500;
 			color: var(--text-dim);
 			text-transform: uppercase;
-			letter-spacing: 0.05em;
+			letter-spacing: 0;
 			padding: 8px 0;
 			margin-top: 8px;
 		}
@@ -167,19 +173,25 @@
 			color: var(--text-muted);
 		}
 
-		/* Connection status — fixed top-right */
+		.main-topbar {
+			display: flex;
+			align-items: center;
+			justify-content: flex-end;
+			min-height: 42px;
+			margin-bottom: 24px;
+		}
+
+		/* Connection status */
 		.connection {
-			position: fixed;
-			top: 12px;
-			right: 16px;
-			z-index: 1000;
 			display: flex;
 			align-items: center;
 			gap: 10px;
 			padding: 8px 14px;
-			background: var(--surface-2);
-			border-radius: 20px;
+			background: rgba(255, 255, 255, 0.92);
+			border-radius: 8px;
 			border: 1px solid var(--border);
+			box-shadow: var(--shadow-sm);
+			backdrop-filter: blur(12px);
 		}
 
 		.connection-header {
@@ -192,7 +204,7 @@
 			font-size: 11px;
 			color: var(--text-dim);
 			text-transform: uppercase;
-			letter-spacing: 0.05em;
+			letter-spacing: 0;
 		}
 
 		.status-dot {
@@ -209,6 +221,10 @@
 			font-family: var(--mono);
 			font-size: 13px;
 			color: var(--text);
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 
 		.btn-connect {
@@ -216,7 +232,7 @@
 			padding: 6px 12px;
 			background: transparent;
 			border: 1px solid var(--border);
-			border-radius: 14px;
+			border-radius: 8px;
 			color: var(--text);
 			font-family: var(--sans);
 			font-size: 12px;
@@ -233,6 +249,7 @@
 		main {
 			padding: 32px 40px;
 			overflow-y: auto;
+			min-width: 0;
 		}
 
 		.page {
@@ -256,7 +273,7 @@
 		.page-title {
 			font-size: 24px;
 			font-weight: 600;
-			letter-spacing: -0.02em;
+			letter-spacing: 0;
 			margin-bottom: 8px;
 		}
 
@@ -317,9 +334,10 @@
 		.card {
 			background: var(--surface);
 			border: 1px solid var(--border);
-			border-radius: 10px;
+			border-radius: 8px;
 			padding: 24px;
 			margin-bottom: 20px;
+			box-shadow: var(--shadow-sm);
 		}
 
 		.card-header {
@@ -334,7 +352,7 @@
 			font-weight: 500;
 			color: var(--text-muted);
 			text-transform: uppercase;
-			letter-spacing: 0.03em;
+			letter-spacing: 0;
 		}
 
 		/* Forms */
@@ -396,11 +414,12 @@
 
 		.btn-primary {
 			background: var(--accent);
-			color: var(--bg);
+			color: #ffffff;
 		}
 
 		.btn-primary:hover {
-			filter: brightness(1.1);
+			background: var(--accent-strong);
+			filter: none;
 		}
 
 		.btn-secondary {
@@ -550,15 +569,59 @@
 		.collection-card {
 			background: var(--surface);
 			border: 1px solid var(--border);
-			border-radius: 10px;
+			border-radius: 8px;
 			padding: 20px;
 			cursor: pointer;
 			transition: all 0.15s;
+			box-shadow: var(--shadow-sm);
 		}
 
 		.collection-card:hover {
 			border-color: var(--border-hover);
 			transform: translateY(-2px);
+			box-shadow: var(--shadow-md);
+		}
+
+		.collection-card-cover {
+			height: 96px;
+			border-radius: 8px;
+			background:
+				linear-gradient(135deg, rgba(32, 129, 226, 0.2), rgba(15, 159, 143, 0.18)),
+				var(--surface-2);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			margin-bottom: 16px;
+			color: var(--accent);
+			font-family: var(--mono);
+			font-size: 24px;
+			font-weight: 700;
+		}
+
+		.collection-stats-row {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 8px;
+			margin-top: 16px;
+		}
+
+		.collection-stat {
+			background: var(--surface-2);
+			border-radius: 8px;
+			padding: 10px;
+		}
+
+		.collection-stat-value {
+			display: block;
+			color: var(--text);
+			font-family: var(--mono);
+			font-size: 13px;
+			font-weight: 700;
+		}
+
+		.collection-stat-label {
+			color: var(--text-dim);
+			font-size: 11px;
 		}
 
 		.collection-card-header {
@@ -602,11 +665,11 @@
 			align-items: center;
 			justify-content: center;
 			padding: 4px 8px;
-			border-radius: 999px;
+			border-radius: 8px;
 			font-family: var(--mono);
 			font-size: 11px;
 			font-weight: 600;
-			letter-spacing: 0.04em;
+			letter-spacing: 0;
 			text-transform: uppercase;
 		}
 
@@ -630,18 +693,19 @@
 		.nft-card {
 			background: var(--surface);
 			border: 1px solid var(--border);
-			border-radius: 10px;
+			border-radius: 8px;
 			padding: 0;
 			cursor: pointer;
 			transition: all 0.2s ease;
 			overflow: hidden;
 			position: relative;
+			box-shadow: var(--shadow-sm);
 		}
 
 		.nft-card:hover {
 			border-color: var(--border-hover);
 			transform: translateY(-3px);
-			box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+			box-shadow: var(--shadow-md);
 		}
 
 		.nft-card.selected {
@@ -695,7 +759,7 @@
 		.nft-type-badge {
 			font-size: 10px;
 			font-weight: 700;
-			letter-spacing: 0.05em;
+			letter-spacing: 0;
 			padding: 2px 6px;
 			border-radius: 3px;
 		}
@@ -728,7 +792,7 @@
 			font-size: 13px;
 			font-weight: 600;
 			text-transform: uppercase;
-			letter-spacing: 0.06em;
+			letter-spacing: 0;
 		}
 
 		.inventory-section-count {
@@ -786,12 +850,12 @@
 			width: 100%;
 			aspect-ratio: 1;
 			object-fit: cover;
-			border-radius: 16px;
+			border-radius: 8px;
 			background: var(--surface);
 			border: 1px solid var(--border);
 			position: sticky;
 			top: 24px;
-			box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+			box-shadow: var(--shadow-md);
 		}
 
 		.nft-detail-info {
@@ -803,10 +867,8 @@
 		.nft-detail-title {
 			font-size: 32px;
 			font-weight: 600;
-			letter-spacing: -0.02em;
-			background: linear-gradient(to right, #ffffff, #a3a3a3);
-			-webkit-background-clip: text;
-			-webkit-text-fill-color: transparent;
+			letter-spacing: 0;
+			color: var(--text);
 			margin-bottom: -10px;
 		}
 
@@ -848,7 +910,7 @@
 			font-size: 11px;
 			font-weight: 600;
 			text-transform: uppercase;
-			letter-spacing: 0.05em;
+			letter-spacing: 0;
 		}
 
 		.nft-badge.seed {
@@ -878,14 +940,14 @@
 		.detail-section {
 			background: var(--surface);
 			border: 1px solid var(--border);
-			border-radius: 12px;
+			border-radius: 8px;
 			padding: 24px;
-			box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+			box-shadow: var(--shadow-sm);
 			transition: border-color 0.2s;
 		}
 		
 		.detail-section:hover {
-			border-color: #333333;
+			border-color: var(--border-hover);
 		}
 
 		.detail-section-title {
@@ -896,7 +958,7 @@
 			font-weight: 600;
 			color: var(--text-dim);
 			text-transform: uppercase;
-			letter-spacing: 0.05em;
+			letter-spacing: 0;
 			margin-bottom: 20px;
 			padding-bottom: 12px;
 			border-bottom: 1px solid var(--border);
@@ -934,7 +996,7 @@
 			color: var(--text-dim);
 			margin-bottom: 8px;
 			text-transform: uppercase;
-			letter-spacing: 0.05em;
+			letter-spacing: 0;
 			font-weight: 500;
 		}
 		
@@ -1045,7 +1107,7 @@
 			font-weight: 500;
 			color: var(--text-dim);
 			text-transform: uppercase;
-			letter-spacing: 0.03em;
+			letter-spacing: 0;
 		}
 
 		.seeds-table td {
@@ -1064,7 +1126,7 @@
 		/* Upload area */
 		.upload-area {
 			border: 2px dashed var(--border);
-			border-radius: 10px;
+			border-radius: 8px;
 			padding: 40px;
 			text-align: center;
 			cursor: pointer;
@@ -1230,7 +1292,7 @@
 			font-size: 11px;
 			color: var(--text-dim);
 			text-transform: uppercase;
-			letter-spacing: 0.03em;
+			letter-spacing: 0;
 			margin-bottom: 4px;
 		}
 
@@ -1321,7 +1383,7 @@
 			color: var(--text-dim);
 			font-size: 11px;
 			text-transform: uppercase;
-			letter-spacing: 0.05em;
+			letter-spacing: 0;
 			border-bottom: 1px solid var(--border);
 		}
 
@@ -1348,7 +1410,7 @@
 			font-size: 11px;
 			color: var(--text-dim);
 			text-transform: uppercase;
-			letter-spacing: 0.05em;
+			letter-spacing: 0;
 			margin-bottom: 4px;
 		}
 
@@ -1400,23 +1462,102 @@
 		}
 
 		/* Marketplace */
-	.marketplace-filters {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 12px 16px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		margin-bottom: 20px;
-	}
+		.explore-toolbar {
+			display: grid;
+			grid-template-columns: minmax(220px, 1fr) auto;
+			gap: 12px;
+			align-items: end;
+			padding: 12px;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			margin-bottom: 20px;
+			box-shadow: var(--shadow-sm);
+		}
 
-	.marketplace-filter-group {
-		display: flex;
-		gap: 8px;
-	}
+		.marketplace-filters {
+			display: grid;
+			grid-template-columns:
+				minmax(260px, 1.5fr)
+				minmax(160px, 0.7fr)
+				minmax(140px, 0.6fr)
+				minmax(88px, 0.4fr)
+				minmax(88px, 0.4fr)
+				auto;
+			gap: 12px;
+			align-items: end;
+			padding: 12px;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			margin-bottom: 20px;
+			box-shadow: var(--shadow-sm);
+		}
 
-	/* Field errors */
+		.filter-field {
+			min-width: 0;
+		}
+
+		.explore-toolbar-actions,
+		.filter-actions {
+			display: flex;
+			gap: 8px;
+			align-items: center;
+			justify-content: flex-end;
+			flex-wrap: wrap;
+		}
+
+		.marketplace-filters .form-input,
+		.marketplace-filters .btn {
+			min-height: 43px;
+		}
+
+		.marketplace-summary,
+		.inventory-summary {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+			gap: 12px;
+			margin-bottom: 20px;
+		}
+
+		.marketplace-summary-card,
+		.inventory-summary-card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 14px 16px;
+			box-shadow: var(--shadow-sm);
+		}
+
+		.marketplace-price {
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+		}
+
+		.marketplace-price-label {
+			color: var(--text-dim);
+			font-size: 11px;
+		}
+
+		.marketplace-price-value {
+			color: var(--text);
+			font-family: var(--mono);
+			font-size: 14px;
+			font-weight: 700;
+		}
+
+		.nft-card-footer {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			margin-top: 12px;
+			padding-top: 12px;
+			border-top: 1px solid var(--border);
+		}
+
+		/* Field errors */
 		.field-error {
 			display: none;
 			font-size: 12px;
@@ -1452,6 +1593,7 @@
 				flex-direction: row;
 				overflow-x: auto;
 				padding-bottom: 2px;
+				max-width: 100%;
 			}
 
 			.nav-section {
@@ -1467,14 +1609,50 @@
 				padding: 20px;
 			}
 
+			.main-topbar {
+				justify-content: stretch;
+				margin-bottom: 16px;
+			}
+
 			.connection {
-				top: auto;
-				right: 12px;
-				bottom: 12px;
+				display: grid;
+				grid-template-columns: auto minmax(0, 1fr);
+				width: 100%;
+				align-items: center;
+			}
+
+			.connection .btn-connect {
+				grid-column: 1 / -1;
+				width: 100%;
 			}
 
 			.workflow-card {
 				min-height: 0;
+			}
+
+			.explore-toolbar,
+			.marketplace-filters {
+				grid-template-columns: 1fr;
+			}
+
+			.explore-toolbar-actions,
+			.filter-actions {
+				align-items: stretch;
+			}
+
+			.explore-toolbar-actions > *,
+			.filter-actions > * {
+				width: 100% !important;
+			}
+		}
+
+		@media (min-width: 769px) and (max-width: 1180px) {
+			.marketplace-filters {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+
+			.filter-actions {
+				grid-column: 1 / -1;
 			}
 		}
 	</style>
@@ -1537,19 +1715,20 @@
 
 		</aside>
 
-		<!-- Keychain — fixed top-right -->
-		<div class="connection">
-			<div class="connection-header">
-				<div class="status-dot" id="keychain-dot"></div>
-				<span class="connection-label">Keychain</span>
-			</div>
-			<div class="connection-user" id="user-display">Not connected</div>
-			<button class="btn-connect" id="btn-connect">Connect Wallet</button>
-			<button class="btn-connect" id="btn-disconnect" style="display:none; color: var(--error); border-color: var(--error);">Disconnect</button>
-		</div>
-
 		<!-- Main Content -->
 		<main>
+			<header class="main-topbar" aria-label="Wallet status">
+				<div class="connection">
+					<div class="connection-header">
+						<div class="status-dot" id="keychain-dot"></div>
+						<span class="connection-label">Keychain</span>
+					</div>
+					<div class="connection-user" id="user-display">Not connected</div>
+					<button class="btn-connect" id="btn-connect">Connect Wallet</button>
+					<button class="btn-connect" id="btn-disconnect" style="display:none; color: var(--error); border-color: var(--error);">Disconnect</button>
+				</div>
+			</header>
+
 			<!-- Collections Page -->
 			<div class="page active" id="page-collections">
 				<div class="page-header">
@@ -1587,10 +1766,11 @@
 				<!-- Search by username -->
 				<div class="card" style="margin-bottom: 24px;">
 					<div class="card-header">
-						<span class="card-title">Find NFTs by Owner</span>
+						<span class="card-title">Find collector inventory</span>
 					</div>
 					<div style="display: flex; gap: 10px; align-items: flex-end;">
 						<div class="form-group" style="flex: 1; margin-bottom: 0;">
+							<label class="form-label" for="search-user">Hive username</label>
 							<input type="text" class="form-input" id="search-user" placeholder="Enter Hive username">
 						</div>
 						<button class="btn btn-primary" onclick="searchUser()" style="height: 42px;">Find NFTs</button>
@@ -1601,14 +1781,23 @@
 				<!-- Dashboard Stats -->
 				<div id="dashboard-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; margin-bottom: 24px;"></div>
 
-				<div class="btn-group" style="margin-bottom: 24px;">
-					<button class="btn btn-primary" onclick="loadCollections()">
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path d="M23 4v6h-6M1 20v-6h6"/>
-							<path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-						</svg>
-						Refresh
-					</button>
+				<div class="explore-toolbar">
+					<div>
+						<label class="form-label" for="collection-search">Search collections</label>
+						<input type="search" class="form-input" id="collection-search" placeholder="Search by name, symbol, creator, or ID">
+					</div>
+					<div class="explore-toolbar-actions">
+						<select class="form-input" id="collection-sort" aria-label="Sort collections" style="width: auto; min-width: 170px;">
+							<option value="recent">Newest first</option>
+							<option value="name">Name A-Z</option>
+							<option value="supply">Most items</option>
+							<option value="seeds">Most seeds</option>
+						</select>
+						<button class="btn btn-secondary" onclick="loadCollections()">
+							Refresh
+						</button>
+					</div>
+					<p class="page-desc" id="collection-count-label" style="grid-column: 1 / -1;">Loading collections...</p>
 				</div>
 
 				<div id="collections-container" class="collections-grid">
@@ -1864,13 +2053,14 @@
 			<div class="page" id="page-inventory">
 				<div class="page-header">
 					<h1 class="page-title">Inventory</h1>
-					<p class="page-desc">Your seeds and instances</p>
+					<p class="page-desc">Your owned seeds, instances, and listed items.</p>
 				</div>
 
 				<div class="btn-group" style="margin-bottom: 24px;">
 					<button class="btn btn-secondary" onclick="loadInventory()">Refresh NFTs</button>
-					<button class="btn btn-secondary" onclick="loadUserActivity()">Load Activity</button>
 				</div>
+
+				<div class="inventory-summary" id="inventory-summary" style="display: none;"></div>
 
 				<div id="inventory-container">
 					<div class="empty-state">
@@ -1878,16 +2068,6 @@
 							<path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
 						</svg>
 						<p class="empty-state-text">Connect wallet to view inventory</p>
-					</div>
-				</div>
-
-				<!-- User Activity -->
-				<div class="card" style="margin-top: 20px;">
-					<div class="card-header">
-						<span class="card-title">Recent Activity</span>
-					</div>
-					<div id="user-activity-container">
-						<div class="empty-state"><p class="empty-state-text">Click "Load Activity" to view</p></div>
 					</div>
 				</div>
 
@@ -2049,8 +2229,8 @@
 							<!-- Seed actions -->
 							<div id="nft-action-seed-buttons" style="display: none;">
 								<div style="display: flex; flex-direction: column; gap: 14px;">
-									<div style="background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 12px; padding: 18px; transition: all 0.2s ease;">
-										<div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 12px; letter-spacing: 0.05em;">
+									<div style="background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 8px; padding: 18px; transition: all 0.2s ease;">
+										<div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 12px; letter-spacing: 0;">
 											<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 											DISTRIBUTE
 										</div>
@@ -2066,8 +2246,8 @@
 										<button class="btn btn-primary" onclick="nftDetailDistribute()" style="width: 100%; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);">Distribute Instances</button>
 										<small style="display: block; margin-top: 10px; color: var(--text-dim); font-size: 11px; text-align: center; font-weight: 500;">Posting key, no HIVE cost</small>
 									</div>
-									<div style="background: var(--surface-2); border-radius: 12px; padding: 18px; border: 1px solid var(--border);">
-										<div style="font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; letter-spacing: 0.05em;">TRANSFER OWNERSHIP</div>
+									<div style="background: var(--surface-2); border-radius: 8px; padding: 18px; border: 1px solid var(--border);">
+										<div style="font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; letter-spacing: 0;">TRANSFER OWNERSHIP</div>
 										<div class="form-group" style="margin-bottom: 12px;">
 											<input type="text" class="form-input" id="nft-action-seed-transfer-to" placeholder="Recipient username" style="background: var(--surface);">
 										</div>
@@ -2081,8 +2261,8 @@
 							<div id="nft-action-instance-buttons" style="display: none;">
 								<div style="display: flex; flex-direction: column; gap: 14px;">
 									<!-- Sell -->
-									<div id="nft-action-list-form" style="background: linear-gradient(to bottom, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.02)); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);">
-										<div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--warning); margin-bottom: 12px; letter-spacing: 0.05em;">
+									<div id="nft-action-list-form" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);">
+										<div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--warning); margin-bottom: 12px; letter-spacing: 0;">
 											<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>	
 											SELL ON MARKET
 										</div>
@@ -2093,18 +2273,18 @@
 												<option value="HBD">HBD</option>
 											</select>
 										</div>
-										<button class="btn btn-primary" onclick="nftDetailList()" style="width: 100%; background: linear-gradient(135deg, var(--warning), #d97706); color: var(--bg); border: none; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3); font-weight: 600;">List for Sale</button>
+										<button class="btn btn-primary" onclick="nftDetailList()" style="width: 100%; background: var(--warning); color: #121826; border: none; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3); font-weight: 600;">List for Sale</button>
 										<small style="display: block; margin-top: 10px; color: var(--text-dim); font-size: 11px; text-align: center; font-weight: 500;">Posting key</small>
 									</div>
 									<!-- Unlist (shown when listed) -->
-									<div id="nft-action-unlist-form" style="display: none; background: rgba(245, 158, 11, 0.05); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: 12px; padding: 18px;">
-										<div style="font-size: 13px; font-weight: 600; color: var(--warning); margin-bottom: 12px; letter-spacing: 0.05em;">CURRENTLY LISTED</div>
+									<div id="nft-action-unlist-form" style="display: none; background: rgba(245, 158, 11, 0.05); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 18px;">
+										<div style="font-size: 13px; font-weight: 600; color: var(--warning); margin-bottom: 12px; letter-spacing: 0;">CURRENTLY LISTED</div>
 										<p style="font-size: 14px; color: var(--text); margin-bottom: 12px; font-weight: 500;" id="nft-action-listing-info"></p>
 										<button class="btn btn-secondary" onclick="nftDetailUnlist()" style="width: 100%; border-color: var(--warning); color: var(--warning); font-weight: 500; background: transparent;">Unlist from Marketplace</button>
 									</div>
 									<!-- Transfer -->
-									<div style="background: var(--surface-2); border-radius: 12px; padding: 18px; border: 1px solid var(--border);">
-										<div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; letter-spacing: 0.05em;">
+									<div style="background: var(--surface-2); border-radius: 8px; padding: 18px; border: 1px solid var(--border);">
+										<div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; letter-spacing: 0;">
 											<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
 											TRANSFER
 										</div>
@@ -2124,7 +2304,7 @@
 								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
 								Set Mutable Data
 							</div>
-							<div style="background: var(--surface-2); border-radius: 12px; padding: 18px; border: 1px solid var(--border);">
+							<div style="background: var(--surface-2); border-radius: 8px; padding: 18px; border: 1px solid var(--border);">
 								<div class="form-group" style="margin-bottom: 10px;">
 									<label class="form-label" style="color: var(--text-dim); font-size: 12px;">NFT ID</label>
 									<input type="text" class="form-input" id="nft-set-data-id" readonly style="background: var(--surface); opacity: 0.7;">
@@ -2141,13 +2321,13 @@
 
 						<!-- Burn NFT (visible when owner) -->
 						<div class="detail-section" id="nft-burn-section" style="display: none;">
-							<div class="detail-section-title" style="color: var(--danger, #ef4444);">
+							<div class="detail-section-title" style="color: var(--error);">
 								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
 								Destructive Actions
 							</div>
-							<div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 12px; padding: 18px;">
+							<div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 18px;">
 								<p style="font-size: 13px; color: var(--text-dim); margin-bottom: 12px;">Burning permanently destroys this NFT. This action is irreversible.</p>
-								<button class="btn btn-secondary" onclick="nftDetailBurn()" style="width: 100%; border-color: rgba(239, 68, 68, 0.5); color: var(--danger, #ef4444); font-weight: 600;">Burn NFT</button>
+								<button class="btn btn-secondary" onclick="nftDetailBurn()" style="width: 100%; border-color: rgba(239, 68, 68, 0.5); color: var(--error); font-weight: 600;">Burn NFT</button>
 								<small style="display: block; margin-top: 10px; color: var(--text-dim); font-size: 11px; text-align: center; font-weight: 500;">Posting key &middot; Irreversible</small>
 							</div>
 						</div>
@@ -2169,10 +2349,6 @@
 				</div>
 			</div>
 
-			<details class="app-log">
-				<summary>Activity log</summary>
-				<div class="log-container" id="log"></div>
-			</details>
 			<!-- ============ ADVANCED PAGE (Tabbed: Permissions | SPV | Collection Ops | Debug) ============ -->
 			<div class="page" id="page-advanced">
 				<div class="page-header">
@@ -2503,7 +2679,8 @@
 							indexer validates and signs (node key), Keychain adds buyer signature, then broadcast.
 						</p>
 						<div style="margin-bottom: 12px;">
-							<input type="text" id="multisig-nft-id" placeholder="NFT ID (e.g. abc123-...)" class="input" style="width: 100%; max-width: 400px;">
+							<label class="form-label" for="multisig-nft-id">NFT ID</label>
+							<input type="text" id="multisig-nft-id" placeholder="NFT ID (e.g. abc123-...)" class="form-input" style="width: 100%; max-width: 400px;">
 						</div>
 						<div class="btn-group">
 							<button class="btn btn-primary" id="btn-debug-multisig">Buy with Multisig</button>
@@ -2516,33 +2693,57 @@
 			<div class="page" id="page-marketplace">
 				<div class="page-header">
 					<h1 class="page-title">Marketplace</h1>
-					<p class="page-desc">Buy and sell NFTs</p>
+					<p class="page-desc">Browse active listings, compare prices, and buy with Hive Keychain.</p>
 				</div>
 
 				<!-- Filters bar -->
 				<div class="marketplace-filters">
-					<div class="marketplace-filter-group">
-						<select class="form-input" id="listing-sort" style="width: auto; padding: 8px 12px;">
+					<div class="filter-field">
+						<label class="form-label" for="listing-search">Search listings</label>
+						<input class="form-input" type="search" id="listing-search" placeholder="Search by item, owner, collection, or ID">
+					</div>
+					<div class="filter-field">
+						<label class="form-label" for="listing-sort">Sort</label>
+						<select class="form-input" id="listing-sort">
 							<option value="recent">Recently Listed</option>
 							<option value="price_asc">Price: Low to High</option>
 							<option value="price_desc">Price: High to Low</option>
 						</select>
-						<select class="form-input" id="listing-currency" style="width: auto; padding: 8px 12px;">
+					</div>
+					<div class="filter-field">
+						<label class="form-label" for="listing-currency">Currency</label>
+						<select class="form-input" id="listing-currency">
 							<option value="">All Currencies</option>
 							<option value="HIVE">HIVE</option>
 							<option value="HBD">HBD</option>
 						</select>
 					</div>
-					<button class="btn btn-primary btn-sm" id="btn-load-listings">Refresh</button>
+					<div class="filter-field">
+						<label class="form-label" for="listing-min-price">Min</label>
+						<input class="form-input" type="number" id="listing-min-price" min="0" step="0.001" placeholder="0">
+					</div>
+					<div class="filter-field">
+						<label class="form-label" for="listing-max-price">Max</label>
+						<input class="form-input" type="number" id="listing-max-price" min="0" step="0.001" placeholder="Any">
+					</div>
+					<div class="filter-actions" aria-label="Listing filter actions">
+						<button class="btn btn-secondary btn-sm" id="btn-clear-listing-filters">Clear</button>
+						<button class="btn btn-primary btn-sm" id="btn-load-listings">Refresh</button>
+					</div>
 				</div>
+
+				<div class="marketplace-summary" id="marketplace-summary" style="display: none;"></div>
 
 				<!-- Listings grid -->
 				<div class="nft-grid" id="listings-container">
-					<div class="empty-state"><p class="empty-state-text">Click Refresh to load listings</p></div>
+					<div class="empty-state"><p class="empty-state-text">Refresh listings to start browsing.</p></div>
 				</div>
-
-				<!-- Sales history not yet available -->
 			</div>
+
+			<details class="app-log">
+				<summary>Activity log</summary>
+				<div class="log-container" id="log"></div>
+			</details>
 
 		</main>
 	</div>
