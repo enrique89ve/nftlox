@@ -44,8 +44,8 @@ import {
 } from "../src/index";
 
 describe("Protocol Version", () => {
-	test("version should be 0.5.0", () => {
-		expect(PROTOCOL_VERSION).toBe("0.5.0");
+	test("version should be 0.5.1", () => {
+		expect(PROTOCOL_VERSION).toBe("0.5.1");
 	});
 });
 
@@ -263,7 +263,7 @@ describe("Collection Payload", () => {
 		const payload = await createDeterministicCollectionPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.5.0");
+		expect(payload.version).toBe("0.5.1");
 		expect(payload.action).toBe(ACTION_CREATE_COLLECTION);
 		expect(payload.data.id.startsWith("col_")).toBe(true);
 		expect(payload.data.originDna.length).toBe(ORIGIN_DNA_LENGTH);
@@ -286,7 +286,7 @@ describe("Archive Collection Payload", () => {
 		const payload = createArchiveCollectionPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.5.0");
+		expect(payload.version).toBe("0.5.1");
 		expect(payload.action).toBe(ACTION_ARCHIVE_COLLECTION);
 		expect(payload.data.collectionId).toBe(validInput.collectionId);
 	});
@@ -316,7 +316,7 @@ describe("Mint Payload", () => {
 		const payload = await createDeterministicMintPayload(validInput);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.5.0");
+		expect(payload.version).toBe("0.5.1");
 		expect(payload.action).toBe(ACTION_MINT);
 		expect(payload.data.id.startsWith("seed_")).toBe(true);
 		expect(payload.data.originDna).toBe("ABCD1234EFGH5678");
@@ -527,8 +527,8 @@ describe("Buy Action (Multisig)", () => {
 		expect(MULTISIG_EXPIRATION_MS).toBe(125_000);
 	});
 
-	test("MAX_MULTISIG_OPERATIONS should be 4", () => {
-		expect(MAX_MULTISIG_OPERATIONS).toBe(4);
+	test("MAX_MULTISIG_OPERATIONS should be 5", () => {
+		expect(MAX_MULTISIG_OPERATIONS).toBe(5);
 	});
 
 	test("createBuyPayload should produce valid payload with listingId and listTxId", () => {
@@ -536,7 +536,7 @@ describe("Buy Action (Multisig)", () => {
 		const payload = createBuyPayload(data);
 
 		expect(payload.protocol).toBe("nftlox_testnet");
-		expect(payload.version).toBe("0.5.0");
+		expect(payload.version).toBe("0.5.1");
 		expect(payload.action).toBe(ACTION_BUY);
 		expect(payload.data.nftId).toBe("nft_test123");
 		expect(payload.data.listingId).toBe("list_abc123");

@@ -28,6 +28,7 @@ export {
 	MIN_PRICE_AMOUNT,
 	PROTOCOL_FEE_BPS,
 	DEFAULT_FEE_ACCOUNT,
+	PROTOCOL_COLLECTION_FEE_HBD,
 	calculatePaymentSplit,
 	calculateBasisPointsAmount,
 	percentageToBasisPoints,

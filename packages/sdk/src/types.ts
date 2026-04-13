@@ -66,7 +66,7 @@ export interface CollectionMetadata {
 export interface CollectionRules {
 	transferable: boolean;
 	burnable: boolean;
-	/** Royalty percentage as a whole percent value in protocol 0.5.0. Example: 5 = 5%. */
+	/** Royalty percentage as a whole percent value in protocol 0.5.x. Example: 5 = 5%. */
 	royaltyPct: number;
 	royaltyRecipient?: string;
 }

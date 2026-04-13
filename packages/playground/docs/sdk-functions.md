@@ -9,7 +9,7 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 | Export | Description |
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
-| `PROTOCOL_VERSION` | `"0.5.0"` |
+| `PROTOCOL_VERSION` | `"0.5.1"` |
 | `ALL_ACTIONS` | All 18 SDK protocol actions |
 | `CORE_ACTIONS` | 8 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |

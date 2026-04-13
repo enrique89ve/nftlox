@@ -69,6 +69,7 @@ mock.module("@/protocol/index.ts", () => ({
 	percentageToBasisPoints: (percentage: number) => Math.round(percentage * 100),
 	SUPPORTED_CURRENCIES: ["HIVE", "HBD"],
 	ALL_ACTIONS: ["buy", "list"],
+	PROTOCOL_GENESIS_BLOCK: 105327280,
 }));
 
 const { Elysia } = await import("elysia");
@@ -87,6 +88,9 @@ describe("status route", () => {
 		expect(json.multisigClockDriftMs).toBe(20000);
 		expect(json.protocolFeeBps).toBe(250);
 		expect(json.maxRoyaltyBps).toBe(5000);
+		expect(json.canonicalGenesisBlock).toBe(105327280);
+		expect(json.partialIndex).toBe(false);
+		expect(json.genesisOffsetBlocks).toBe(0);
 	});
 
 	test("returns combined healthy status when synced", async () => {

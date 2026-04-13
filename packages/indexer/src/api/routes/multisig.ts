@@ -32,6 +32,15 @@ type RejectionCode =
 	| "INTERNAL_ERROR"
 	| string;
 
+const multisigTransactionSchema = t.Object({
+	ref_block_num: t.Number(),
+	ref_block_prefix: t.Number(),
+	expiration: t.String(),
+	operations: t.Array(t.Tuple([t.String(), t.Record(t.String(), t.Unknown())])),
+	extensions: t.Optional(t.Array(t.Unknown())),
+	signatures: t.Array(t.String()),
+}, { description: "Unsigned Hive transaction object" });
+
 function logRejection(params: {
 	buyer: string;
 	nftId: string;
@@ -43,6 +52,21 @@ function logRejection(params: {
 	log.warn("Multisig request rejected", {
 		buyer,
 		nftId,
+		clientIp,
+		code,
+		retryAfterMs,
+	});
+}
+
+function logCollectionRejection(params: {
+	creator: string;
+	clientIp: string;
+	code: RejectionCode;
+	retryAfterMs?: number;
+}): void {
+	const { creator, clientIp, code, retryAfterMs } = params;
+	log.warn("Collection multisig request rejected", {
+		creator,
 		clientIp,
 		code,
 		retryAfterMs,
@@ -114,6 +138,96 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		detail: {
 			summary: "Get payment info for buying an NFT",
 			description: "Returns the payment split needed to build a buy transaction. totalPrice, sellerAmount, royaltyAmount, and feeAmount are decimal Hive asset values rounded to 3 decimals. currency is HIVE or HBD. Royalties are derived from the collection royalty_pct field, which remains a whole percent value.",
+		},
+	})
+
+	// POST /api/multisig/collection — validate and multisig-sign a collection creation transaction
+	.post("/api/multisig/collection", async ({ body, request, server, set }) => {
+		const socketIp = server?.requestIP(request)?.address;
+		const clientIp = resolveClientIp(request, socketIp);
+		const health = getMultisigHealth();
+
+		if (!health.multisigEnabled) {
+			set.status = 503;
+			const message = getDisabledMessage();
+			logCollectionRejection({
+				creator: body.creator,
+				clientIp,
+				code: "MULTISIG_DISABLED",
+			});
+			return { ok: false, code: "MULTISIG_DISABLED", message };
+		}
+
+		const powResult = await validateMultisigPow({
+			body,
+			header: request.headers.get(NFTLOX_POW_HEADER),
+			requiredBits: config.multisigPowBits,
+			ttlMs: config.multisigPowTtlMs,
+			maxFutureSkewMs: config.multisigPowMaxFutureSkewMs,
+			replayCacheMax: config.multisigPowReplayCacheMax,
+		});
+		if (!powResult.ok) {
+			logCollectionRejection({
+				creator: body.creator,
+				clientIp,
+				code: powResult.code,
+			});
+			set.status = 429;
+			return { ok: false, code: powResult.code, message: powResult.message };
+		}
+
+		const creatorRateResult = buyerRateLimiter.check(body.creator);
+		if (!creatorRateResult.allowed) {
+			logCollectionRejection({
+				creator: body.creator,
+				clientIp,
+				code: "RATE_LIMITED",
+				retryAfterMs: creatorRateResult.retryAfterMs,
+			});
+			set.status = 429;
+			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${creatorRateResult.retryAfterMs}ms` };
+		}
+
+		const ipRateResult = ipRateLimiter.check(clientIp);
+		if (!ipRateResult.allowed) {
+			logCollectionRejection({
+				creator: body.creator,
+				clientIp,
+				code: "RATE_LIMITED",
+				retryAfterMs: ipRateResult.retryAfterMs,
+			});
+			set.status = 429;
+			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${ipRateResult.retryAfterMs}ms` };
+		}
+
+		try {
+			const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId);
+			if (!result.ok) {
+				logCollectionRejection({
+					creator: body.creator,
+					clientIp,
+					code: result.code,
+				});
+				set.status = 400;
+			}
+			return result;
+		} catch (err) {
+			log.error("Unexpected collection multisig route error", {
+				creator: body.creator,
+				clientIp,
+				error: err instanceof Error ? err.message : String(err),
+			});
+			set.status = 500;
+			return { ok: false, code: "INTERNAL_ERROR" as const, message: "Unexpected signing error" };
+		}
+	}, {
+		body: t.Object({
+			creator: t.String({ minLength: 3, maxLength: 16, description: "Hive username of the collection creator" }),
+			transaction: multisigTransactionSchema,
+		}),
+		detail: {
+			summary: "Multisig-sign a collection creation transaction",
+			description: "Validates the collection fee transfer and payload, then signs the create_collection custom_json with the node active key.",
 		},
 	})
 
@@ -232,14 +346,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			nftId: t.String({ minLength: 1, maxLength: 128, description: "ID of the NFT being purchased" }),
 			listingId: t.String({ minLength: 1, maxLength: 128, description: "Deterministic listing ID from the list operation" }),
 			listTxId: t.String({ minLength: 1, maxLength: 40, description: "Transaction ID of the list operation on Hive" }),
-			transaction: t.Object({
-				ref_block_num: t.Number(),
-				ref_block_prefix: t.Number(),
-				expiration: t.String(),
-				operations: t.Array(t.Tuple([t.String(), t.Record(t.String(), t.Unknown())])),
-				extensions: t.Optional(t.Array(t.Unknown())),
-				signatures: t.Array(t.String()),
-			}, { description: "Unsigned Hive transaction object" }),
+			transaction: multisigTransactionSchema,
 		}),
 		detail: {
 			summary: "Multisig-sign a buy transaction",

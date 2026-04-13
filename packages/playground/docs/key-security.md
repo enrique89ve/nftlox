@@ -10,7 +10,8 @@ This guide covers the NFTLox permission model, recommended account architecture 
 
 | Role | Actions | Key Required |
 |------|---------|-------------|
-| **Collection creator** | `create_collection`, `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting |
+| **Collection creator** | `create_collection` | Active (node co-sign + fee transfer) |
+| **Collection creator** | `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting |
 | **Seed owner** | `bulk_distribute`, `transfer` (only if `distributed === 0`), `burn`, `list` (only if `distributed === 0`), `unlist` | Posting |
 | **NFT/Instance owner** | `transfer`, burn helper (`transfer` to `null`), `list`, `unlist`, `nft_approve`, `nft_lend` | Posting |
 | **Approved operator** | `set_data_from` | Posting |
@@ -20,12 +21,12 @@ This guide covers the NFTLox permission model, recommended account architecture 
 
 ### Key Types
 
-The SDK emits active-key `custom_json` for `buy`. Other SDK protocol `custom_json` operations use posting keys.
+The SDK emits active-key `custom_json` for node-cosigned `create_collection` and `buy`. Other SDK protocol `custom_json` operations use posting keys.
 
 | Key required | Actions |
 |---|---|
-| **Active key** | `buy` |
-| **Posting key** | `create_collection`, `mint`, `bulk_distribute`, `transfer`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `list`, `unlist`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `data_operator_approve`, `set_data_from`, `nft_lend`, `nft_return` |
+| **Active key** | `create_collection`, `buy` |
+| **Posting key** | `mint`, `bulk_distribute`, `transfer`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `list`, `unlist`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `data_operator_approve`, `set_data_from`, `nft_lend`, `nft_return` |
 
 Active-key actions use `required_auths` while posting-key actions use `required_posting_auths` in the `custom_json` operation.
 

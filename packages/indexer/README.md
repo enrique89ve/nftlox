@@ -171,7 +171,7 @@ All list endpoints support `?limit=N&offset=N`.
 
 - `protocolFeeBps` in `GET /api/status` uses basis points: `100 = 1%`.
 - `maxRoyaltyBps` in `GET /api/status` also uses basis points: `5000 = 50%`.
-- `royalty_pct` in collection responses remains a whole percent for protocol `0.5.0`.
+- `royalty_pct` in collection responses remains a whole percent for protocol `0.5.x`.
 - Monetary fields such as `listing_price`, `gross_amount`, `royalty_amount`, `protocol_fee`, `seller_net`, `totalPrice`, `sellerAmount`, `royaltyAmount`, and `feeAmount` are Hive asset amounts with 3 decimal places.
 - `multisigClockDriftMs` and rate-limit windows are expressed in milliseconds.
 - `lastBlock`, `headBlock`, `irreversibleBlock`, and `genesisBlock` are Hive block numbers.

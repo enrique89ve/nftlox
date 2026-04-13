@@ -147,7 +147,7 @@ export interface IndexerCollectionBase {
 	external_url: string | null;
 	transferable: boolean;
 	burnable: boolean;
-	/** Whole percent value in protocol 0.5.0, serialized from PostgreSQL numeric. */
+	/** Whole percent value in protocol 0.5.x, serialized from PostgreSQL numeric. */
 	royalty_pct: string;
 	royalty_recipient: string | null;
 	status: "active" | "archived";

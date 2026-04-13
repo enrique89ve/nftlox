@@ -1,7 +1,7 @@
-// NFTLox Protocol Constants - v0.5.0
+// NFTLox Protocol Constants - v0.5.1
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.5.0";
+export const PROTOCOL_VERSION = "0.5.1";
 export const MIN_PROTOCOL_VERSION = "0.5.0";
 export const HASH_VERSION = "v1";
 // Transaction Limits
@@ -33,6 +33,7 @@ export const MIN_PRICE_AMOUNT = "0.001";
 export const BASIS_POINTS_DENOMINATOR = 10_000;
 export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
+export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
 
 // Memo Prefixes (Marketplace) — strict format: `${PREFIX}${nftId}`
 export const MEMO_PREFIX_BUY = "NFTLox BUY:";
@@ -205,8 +206,8 @@ export const DATA_OPERATOR_ACTIONS = [
 export const ALL_ACTIONS = [...CORE_ACTIONS, ...MARKETPLACE_ACTIONS, ...APPROVE_ACTIONS, ...LENDING_ACTIONS, ...DATA_OPERATOR_ACTIONS] as const;
 
 // ============ AUTHORITY MAP — SINGLE SOURCE OF TRUTH ============
-// Active custom_json: buy multisig authorization
-// Posting custom_json: all other protocol actions
+// Active custom_json: node-cosigned collection creation and buy authorization.
+// Posting custom_json: all other protocol actions.
 // To change an action's auth level, update ONLY this map.
 
 export type AuthLevel = "active" | "posting";

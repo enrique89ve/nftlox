@@ -131,7 +131,42 @@ interface NftDetailResponse {
 	};
 }
 
+type KeyType = "Active" | "Posting";
+
+interface HiveRpcResponse {
+	error?: { message?: string } | string;
+	result?: { id?: string; tx_id?: string; block_num?: number };
+}
+
 // ============ FETCH-BACKED HELPERS ============
+
+function keyTypeFromOperation(operation: HiveOperation): KeyType {
+	const [, body] = operation;
+	return body.required_auths.length > 0 ? "Active" : "Posting";
+}
+
+async function broadcastSignedTransaction(signedTx: unknown): Promise<string> {
+	const response = await fetch("https://api.hive.blog", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			jsonrpc: "2.0",
+			method: "condenser_api.broadcast_transaction_synchronous",
+			params: [signedTx],
+			id: 1,
+		}),
+	});
+	const data = await response.json() as HiveRpcResponse;
+
+	if (data.error) {
+		const message = typeof data.error === "string"
+			? data.error
+			: data.error.message ?? JSON.stringify(data.error);
+		throw new Error(message);
+	}
+
+	return data.result?.id ?? data.result?.tx_id ?? "unknown";
+}
 
 async function fetchJsonOrThrow<T>(url: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(url, init);
@@ -1707,7 +1742,7 @@ async function createCollection() {
 
 	try {
 		// Step 1: Build collection operation
-		const colResponse = await fetch("/api/build/collection", {
+		const colResponse = await fetch("/api/build/collection-multisig", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1770,7 +1805,10 @@ async function createCollection() {
 		(window as any).__pendingBatches = mintData.batches;
 		(window as any).__currentBatchIndex = 0;
 		(window as any).__batchCreator = creator;
-		(window as any).__collectionOp = colData.operation;
+		(window as any).__collectionOp = colData.operation ?? null;
+		(window as any).__collectionTx = colData.transaction;
+		(window as any).__collectionNodeSignature = colData.nodeSignature;
+		(window as any).__collectionKeyType = colData.keyType;
 		(window as any).__collectionName = colName;
 		(window as any).__totalSeeds = mintData.seeds.length;
 		(window as any).__totalSupply = previewData?.summary?.totalPotentialInstances || 0;
@@ -1891,9 +1929,12 @@ function setOpStatus(opId: string, status: "pending" | "active" | "complete" | "
 function broadcastCollection() {
 	const creator = (window as any).__batchCreator;
 	const collectionOp = (window as any).__collectionOp;
+	const collectionTx = (window as any).__collectionTx;
+	const collectionNodeSignature = (window as any).__collectionNodeSignature;
+	const collectionKeyType = (window as any).__collectionKeyType as KeyType | undefined;
 	const sessionId = (window as any).__sessionId;
 
-	if (!collectionOp) {
+	if (!collectionOp && !collectionTx) {
 		mintLog("No collection operation ready", "error");
 		return;
 	}
@@ -1906,41 +1947,76 @@ function broadcastCollection() {
 	setOpStatus("op-collection", "active");
 	mintLog("Opening Keychain...");
 
+	const handleSuccess = (txId: string | undefined) => {
+		setOpStatus("op-collection", "complete");
+		broadcastPhase = 1;
+		broadcastedCount++;
+		updateBroadcastProgress();
+		mintLog("Collection created!", "success");
+
+		if (sessionId) {
+			updateCollectionBroadcast(sessionId, "confirmed", txId);
+		}
+
+		const firstBatch = $("op-batch-0");
+		if (firstBatch) {
+			firstBatch.dataset.status = "pending";
+			const btn = firstBatch.querySelector(".btn") as HTMLButtonElement;
+			if (btn) btn.style.display = "";
+		}
+	};
+
+	const handleFailure = (message: unknown) => {
+		setOpStatus("op-collection", "error");
+		mintLog(`Failed: ${typeof message === "object" ? JSON.stringify(message) : String(message)}`, "error");
+		const retryBtn = $("btn-op-collection") as HTMLButtonElement;
+		if (retryBtn) {
+			retryBtn.textContent = "Retry";
+			retryBtn.style.display = "";
+			retryBtn.disabled = false;
+		}
+	};
+
+	if (collectionTx && collectionNodeSignature) {
+		const keychain = (window as any).hive_keychain;
+		if (!keychain.requestSignTx) {
+			handleFailure("Hive Keychain 3.x+ required for collection creation");
+			return;
+		}
+
+		collectionTx.signatures = [collectionNodeSignature];
+		keychain.requestSignTx(
+			creator,
+			collectionTx,
+			"Active",
+			async (res: any) => {
+				if (!res.success) {
+					handleFailure(res.error || res.message);
+					return;
+				}
+
+				try {
+					mintLog("Broadcasting signed collection transaction...");
+					const txId = await broadcastSignedTransaction(res.result);
+					handleSuccess(txId);
+				} catch (err) {
+					handleFailure(err instanceof Error ? err.message : String(err));
+				}
+			},
+		);
+		return;
+	}
+
 	(window as any).hive_keychain.requestBroadcast(
 		creator,
 		[collectionOp],
-		"Posting",
+		collectionKeyType ?? keyTypeFromOperation(collectionOp as HiveOperation),
 		(res: any) => {
 			console.log("Keychain response:", res);
 			if (res.success) {
-				setOpStatus("op-collection", "complete");
-				broadcastPhase = 1;
-				broadcastedCount++;
-				updateBroadcastProgress();
-				mintLog("Collection created!", "success");
-
-				// Update session persistence
-				if (sessionId) {
-					updateCollectionBroadcast(sessionId, "confirmed", res.result?.id);
-				}
-
-				// Enable first batch
-				const firstBatch = $("op-batch-0");
-				if (firstBatch) {
-					firstBatch.dataset.status = "pending";
-					const btn = firstBatch.querySelector(".btn") as HTMLButtonElement;
-					if (btn) btn.style.display = "";
-				}
+				handleSuccess(res.result?.id);
 			} else {
-				setOpStatus("op-collection", "error");
-				mintLog(`Failed: ${res.message || res.error}`, "error");
-				// Show retry button
-				const retryBtn = $("btn-op-collection") as HTMLButtonElement;
-				if (retryBtn) {
-					retryBtn.textContent = "Retry";
-					retryBtn.style.display = "";
-					retryBtn.disabled = false;
-				}
+				handleFailure(res.message || res.error);
 			}
 		}
 	);
@@ -2032,6 +2108,9 @@ function resetMinting() {
 	(window as any).__pendingBatches = null;
 	(window as any).__currentBatchIndex = 0;
 	(window as any).__collectionOp = null;
+	(window as any).__collectionTx = null;
+	(window as any).__collectionNodeSignature = null;
+	(window as any).__collectionKeyType = null;
 	broadcastPhase = 0;
 	broadcastedCount = 0;
 	totalBroadcastOps = 0;

@@ -25,12 +25,12 @@ You are responsible for wrapping them in a transaction, signing, and broadcastin
 
 ### Which key to use
 
-The protocol uses active-key `custom_json` for `buy`. Other SDK protocol `custom_json` operations use posting keys.
+The protocol uses active-key `custom_json` for node-cosigned `create_collection` and `buy`. Other SDK protocol `custom_json` operations use posting keys.
 
 | Key required | Actions |
 |---|---|
-| **Active key** | `buy` |
-| **Posting key** | `create_collection`, `mint`, `bulk_distribute`, `transfer`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `list`, `unlist`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `set_data_from`, `nft_lend`, `nft_return`, `data_operator_approve` |
+| **Active key** | `create_collection`, `buy` |
+| **Posting key** | `mint`, `bulk_distribute`, `transfer`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `list`, `unlist`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `set_data_from`, `nft_lend`, `nft_return`, `data_operator_approve` |
 
 Active-key actions use `required_auths` while posting-key actions use `required_posting_auths` in the `custom_json` operation.
 

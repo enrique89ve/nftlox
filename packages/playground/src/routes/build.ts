@@ -1,7 +1,13 @@
 // Build routes — construct Hive operations via SDK builders
+import { Transaction } from "hive-tx";
 import {
+	ACTION_CREATE_COLLECTION,
+	NFTLOX_POW_HEADER,
 	PROTOCOL_VERSION,
+	PROTOCOL_ID,
 	HASH_VERSION,
+	PROTOCOL_COLLECTION_FEE_HBD,
+	solveMultisigPow,
 	createExtendSchemaOperation,
 	createExtendSchemaPayload,
 	extendSchemaInputSchema,
@@ -31,6 +37,7 @@ import {
 	generateDeterministicSeedId,
 } from "nftlox-sdk";
 import { splitOperationsIntoBatches } from "../protocol";
+import { INDEXER_URL } from "../shared/indexer";
 
 const json = (data: unknown, status = 200) =>
 	new Response(JSON.stringify(data, null, 2), {
@@ -39,6 +46,19 @@ const json = (data: unknown, status = 200) =>
 	});
 
 type RouteHandler = (req: Request) => Promise<Response>;
+const TX_EXPIRATION_MS = 60_000;
+
+interface IndexerStatusResponse {
+	nodeAccount?: string | null;
+}
+
+interface CollectionMultisigResponse {
+	ok: boolean;
+	signature?: string;
+	digest?: string;
+	code?: string;
+	message?: string;
+}
 
 /** Derive keyType from the SDK operation — single source of truth */
 function keyTypeFromOp(operation: unknown): "Active" | "Posting" {
@@ -73,6 +93,80 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			generatedIds: result.generatedIds,
 			operation: result.operation,
 			payload: result.payload,
+			keyType: keyTypeFromOp(result.operation),
+			warnings: result.warnings,
+		});
+	}),
+
+	"/api/build/collection-multisig": buildRoute(async (body) => {
+		const result = await buildCollection(body);
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
+
+		const statusRes = await fetch(`${INDEXER_URL}/api/status`);
+		if (!statusRes.ok) {
+			return json({ success: false, error: "Indexer status unavailable" }, 502);
+		}
+		const status = await statusRes.json() as IndexerStatusResponse;
+		if (!status.nodeAccount) {
+			return json({ success: false, error: "Indexer node account unavailable" }, 502);
+		}
+
+		const tx = new Transaction({ expiration: TX_EXPIRATION_MS });
+		await tx.addOperation("transfer", {
+			from: body.creator,
+			to: status.nodeAccount,
+			amount: `${PROTOCOL_COLLECTION_FEE_HBD} HBD`,
+			memo: `NFTLox collection fee:${result.generatedId}`,
+		});
+		await tx.addOperation("custom_json", {
+			required_auths: [status.nodeAccount],
+			required_posting_auths: [],
+			id: PROTOCOL_ID,
+			json: JSON.stringify({
+				protocol: PROTOCOL_ID,
+				version: PROTOCOL_VERSION,
+				action: ACTION_CREATE_COLLECTION,
+				data: result.payload.data,
+			}),
+		});
+
+		const multisigRequest = {
+			creator: body.creator,
+			transaction: tx.transaction,
+		};
+		const multisigRes = await fetch(`${INDEXER_URL}/api/multisig/collection`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				[NFTLOX_POW_HEADER]: await solveMultisigPow(multisigRequest),
+			},
+			body: JSON.stringify(multisigRequest),
+		});
+		const multisigResult = await multisigRes.json() as CollectionMultisigResponse;
+		if (!multisigResult.ok || !multisigResult.signature) {
+			return json({
+				success: false,
+				error: multisigResult.message ?? "Collection multisig signing failed",
+				code: multisigResult.code,
+			}, 400);
+		}
+
+		return json({
+			success: true,
+			protocolVersion: PROTOCOL_VERSION,
+			hashVersion: HASH_VERSION,
+			collectionId: result.generatedId,
+			generatedIds: result.generatedIds,
+			transaction: tx.transaction,
+			nodeSignature: multisigResult.signature,
+			digest: multisigResult.digest,
+			payload: result.payload,
+			keyType: "Active",
+			fee: {
+				amount: PROTOCOL_COLLECTION_FEE_HBD,
+				currency: "HBD",
+				account: status.nodeAccount,
+			},
 			warnings: result.warnings,
 		});
 	}),

@@ -55,13 +55,14 @@ Open `http://localhost:3040` in your browser.
 | `GET /api/status` | Sync status |
 | `GET /api/health` | Health check |
 
-### Build API (19 endpoints)
+### Build API (20 endpoints)
 
 All `POST` endpoints that validate input and return Hive operations ready for Keychain signing:
 
 | Endpoint | Action |
 |----------|--------|
 | `/api/build/collection` | Create collection |
+| `/api/build/collection-multisig` | Create collection with node co-signature |
 | `/api/build/seeds` | Mint seed batch |
 | `/api/build/bulk-distribute` | Bulk distribute |
 | `/api/build/transfer` | Transfer NFT |

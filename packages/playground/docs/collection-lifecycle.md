@@ -554,11 +554,12 @@ curl https://api-nftlox.hivecreators.co/api/collections/a1b2c3d4.../stats
 
 ## 9. Build API Summary
 
-All build endpoints return an unsigned Hive `custom_json` operation. The client signs and broadcasts it.
+Most build endpoints return an unsigned Hive `custom_json` operation. Collection creation uses `/api/build/collection-multisig` so the node can co-sign the fee transaction.
 
 | Endpoint | Action | Key Type |
 |---|---|---|
-| `POST /api/build/collection` | `create_collection` | Posting |
+| `POST /api/build/collection-multisig` | `create_collection` | Active |
+| `POST /api/build/collection` | `create_collection` raw custom_json | Active |
 | `POST /api/build/extend-schema` | `extend_schema` | Posting |
 | `POST /api/build/archive-collection` | `archive_collection` | Posting |
 | `POST /api/build/preview-ids` | (utility) Preview deterministic IDs | -- |

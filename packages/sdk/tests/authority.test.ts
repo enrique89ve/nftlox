@@ -15,6 +15,7 @@ import {
 	createListOperation,
 	createBuyOperation,
 	createNodeRegisterOperation,
+	createDeterministicCollectionOperation,
 	createNftApproveOperation,
 	createNftApproveAllOperation,
 	createDataOperatorApproveOperation,
@@ -74,9 +75,9 @@ describe("Authority exhaustiveness", () => {
 		}
 	});
 
-	test("counts match: 1 active + 17 posting = 18 total", () => {
-		expect(ACTIVE_AUTH_ACTIONS.length).toBe(1);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(17);
+	test("counts match: 2 active + 16 posting = 18 total", () => {
+		expect(ACTIVE_AUTH_ACTIONS.length).toBe(2);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(16);
 		expect(ALL_ACTIONS.length).toBe(18);
 	});
 });
@@ -84,6 +85,19 @@ describe("Authority exhaustiveness", () => {
 // ============ ACTIVE KEY OPERATIONS ============
 
 describe("Active key operations use required_auths", () => {
+	test("create_collection", async () => {
+		const op = await createDeterministicCollectionOperation({
+			creator: "indexer-node",
+			name: "Test Collection",
+			symbol: "TEST",
+			totalPotential: 100,
+			metadata: { description: "Test", image: "https://example.com/image.png" },
+			rules: { transferable: true, burnable: true, royaltyPct: 5 },
+		});
+		expect(op[1].required_auths).toEqual(["indexer-node"]);
+		expect(op[1].required_posting_auths).toEqual([]);
+	});
+
 	test("buy (node account)", () => {
 		const op = createBuyOperation(
 			{ nftId: "nft_1", listingId: "list_1", listTxId: "a".repeat(40), txId: "b".repeat(40) },

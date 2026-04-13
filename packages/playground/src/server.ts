@@ -1,4 +1,3 @@
-import index from "../public/index.html";
 import {
 	PROTOCOL_VERSION,
 	MIN_PROTOCOL_VERSION,
@@ -20,6 +19,41 @@ const json = (data: unknown, status = 200) =>
 		headers: { "Content-Type": "application/json" },
 	});
 
+const INDEX_HTML_PATH = new URL("../public/index.html", import.meta.url).pathname;
+const APP_ENTRYPOINT_PATH = new URL("../public/app.ts", import.meta.url).pathname;
+
+async function buildBrowserBundle(): Promise<string> {
+	const result = await Bun.build({
+		entrypoints: [APP_ENTRYPOINT_PATH],
+		target: "browser",
+		format: "esm",
+		minify: playgroundConfig.isProduction,
+	});
+
+	if (!result.success) {
+		const details = result.logs.map((log) => log.message).join("\n");
+		throw new Error(`Failed to build playground browser bundle${details ? `:\n${details}` : ""}`);
+	}
+
+	const [bundle] = result.outputs;
+	if (!bundle) {
+		throw new Error("Failed to build playground browser bundle: no output generated");
+	}
+
+	return bundle.text();
+}
+
+const browserBundle = await buildBrowserBundle();
+
+function browserBundleResponse(): Response {
+	return new Response(browserBundle, {
+		headers: {
+			"Content-Type": "application/javascript; charset=utf-8",
+			"Cache-Control": "no-store",
+		},
+	});
+}
+
 const MIME_TYPES: Record<string, string> = {
 	".html": "text/html; charset=utf-8",
 	".md": "text/plain; charset=utf-8",
@@ -40,7 +74,15 @@ const ALLOWED_SAMPLE_FILES = new Set([
 const server = Bun.serve({
 	port: 3040,
 	routes: {
-		"/": index,
+		"/": () => new Response(Bun.file(INDEX_HTML_PATH), {
+			headers: {
+				"Content-Type": "text/html; charset=utf-8",
+				"Cache-Control": "no-store",
+			},
+		}),
+
+		"/app.js": browserBundleResponse,
+		"/app.ts": browserBundleResponse,
 
 		// Serve sample JSON files
 		"/playground/:filename": async (req) => {
@@ -141,8 +183,9 @@ Query API (via Indexer):
   GET  /api/status
   GET  /api/health
 
-Build API (19 endpoints):
-  POST /api/build/collection       POST /api/build/seeds
+Build API (20 endpoints):
+  POST /api/build/collection       POST /api/build/collection-multisig
+  POST /api/build/seeds
   POST /api/build/bulk-distribute  POST /api/build/transfer
   POST /api/build/list             POST /api/build/unlist
   POST /api/build/burn             POST /api/build/buy

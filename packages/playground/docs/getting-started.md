@@ -5,8 +5,8 @@ This guide walks you through making your first API calls to the NFTLox protocol 
 ## Prerequisites
 
 - **Hive account** -- You need a Hive blockchain account. Create one at [signup.hive.io](https://signup.hive.io).
-- **Active key** -- Required for `buy`.
-- **Posting key** -- Required for protocol operations such as `create_collection`, `mint`, `bulk_distribute`, `transfer`, `list`, `unlist`, approvals, lending, data updates, and `node_register`.
+- **Active key** -- Required for node-cosigned `create_collection` and `buy`.
+- **Posting key** -- Required for protocol operations such as `mint`, `bulk_distribute`, `transfer`, `list`, `unlist`, approvals, lending, data updates, and `node_register`.
 - Your private keys never leave your client; the API only builds unsigned payloads.
 
 ## Your First API Call
@@ -149,7 +149,8 @@ All build endpoints accept `POST` with a JSON body:
 
 | Endpoint | Description | Key Type |
 |---|---|---|
-| `/api/build/collection` | Create a new collection | Posting |
+| `/api/build/collection-multisig` | Create a new collection with node co-signature | Active |
+| `/api/build/collection` | Build raw collection custom_json | Active |
 | `/api/build/seeds` | Batch-mint seed NFTs | Posting |
 | `/api/build/bulk-distribute` | Distribute instances to users | Posting |
 | `/api/build/transfer` | Transfer an NFT | Posting |

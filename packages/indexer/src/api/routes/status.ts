@@ -18,6 +18,7 @@ import {
 	MAX_ROYALTY_PCT,
 	SUPPORTED_CURRENCIES,
 	ALL_ACTIONS,
+	PROTOCOL_GENESIS_BLOCK,
 	percentageToBasisPoints,
 } from "@/protocol/index.ts";
 
@@ -111,10 +112,14 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 		const multisig = getMultisigHealth();
 		const blocksBehind = Math.max(0, chain.irreversibleBlock - lastBlock);
 		const inSync = chain.irreversibleBlock > 0 && blocksBehind <= SYNC_TOLERANCE_BLOCKS;
+		const genesisOffsetBlocks = Math.max(0, config.genesisBlock - PROTOCOL_GENESIS_BLOCK);
 		return {
 			protocolVersion: PROTOCOL_VERSION,
 			protocolId: config.protocolId,
 			genesisBlock: config.genesisBlock,
+			canonicalGenesisBlock: PROTOCOL_GENESIS_BLOCK,
+			partialIndex: genesisOffsetBlocks > 0,
+			genesisOffsetBlocks,
 			nodeAccount: config.hiveAccount,
 			nodeUrl: config.nodeUrl || null,
 			multisigEnabled: multisig.multisigEnabled,

@@ -1,4 +1,5 @@
 // NFTLox indexer auth map for the supported protocol catalog.
+// Active custom_json actions are node-cosigned flows.
 
 import {
 	ALL_ACTIONS,

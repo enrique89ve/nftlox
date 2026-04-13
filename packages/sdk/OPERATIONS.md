@@ -1,4 +1,4 @@
-# NFTLox Protocol Operations Catalog v0.5.0
+# NFTLox Protocol Operations Catalog v0.5.1
 
 Complete reference for SDK-owned protocol operations. Each operation is broadcast as a `custom_json` on the Hive blockchain with `id = "nftlox_testnet"`.
 
@@ -8,7 +8,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 | # | Action | Category | Key | Description |
 |---|--------|----------|-----|-------------|
-| 1 | `create_collection` | Core | posting | Creates a collection (archetype) |
+| 1 | `create_collection` | Core | active | Creates a collection (node-cosigned with fee transfer) |
 | 2 | `mint` | Core | posting | Creates a seed NFT within a collection |
 | 3 | `transfer` | Core | posting | Transfers ownership of an NFT |
 | 4 | `bulk_distribute` | Core | posting | Mints multiple instances from seeds |
@@ -35,8 +35,8 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 **SDK constant**: `ACTION_CREATE_COLLECTION`
 **Description**: Creates a collection that groups NFTs under shared rules (transfer, burn, royalties).
-**Key authority**: posting -- creator configuration action.
-**Signer role**: The signer becomes the collection creator (`creator` field in the payload is ignored).
+**Key authority**: active -- node-cosigned collection creation.
+**Signer role**: The co-signing node signs the `custom_json`; the collection creator is identified from the paired fee transfer.
 
 **SDK payload**:
 | Field | Type | Required | Description |
@@ -57,7 +57,8 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | `schema` | object | no | Typed schema with `immutable` and `mutable` fields |
 
 **Indexer validations**:
-- `id` must be canonical: recalculated from `signer + name + symbol` and rejected if mismatch
+- `id` must be canonical: recalculated from `creator + name + symbol` and rejected if mismatch
+- Transaction must include a valid collection fee transfer from creator to node account.
 - `id` must not already exist (duplicate is idempotent no-op)
 - `creator` is forced to `op.signer`
 - `originDna` is always recalculated by the indexer (payload value ignored)
@@ -566,8 +567,8 @@ The SDK's `calculatePaymentSplit()` function is reused in the indexer to verify 
 
 If royaltyRecipient or feeAccount equals the seller, those amounts merge into the seller payment. Marketplace fees are handled off-chain by the marketplace frontend.
 
-### Multisig (Buy)
-The `buy` operation is the only one where the node co-signs. The buyer submits transfers (HIVE/HBD) and the node validates and co-signs the `custom_json`. If the node rejects, the funds never leave the buyer's account. The multisig lock is DB-backed (table `multisig_locks`) with a configurable expiration, preventing concurrent purchases of the same NFT even across multiple API instances. The transaction bundle includes up to 4 operations (`MAX_MULTISIG_OPERATIONS`): seller payment + royalty payment + fee payment + custom_json.
+### Multisig
+The `create_collection` and `buy` operations are node-cosigned. The client submits the required transfer operations, and the node validates and co-signs the `custom_json`. If the node rejects, the funds never leave the client account. Buy requests use a DB-backed multisig lock (table `multisig_locks`) with a configurable expiration, preventing concurrent purchases of the same NFT even across multiple API instances. A transaction bundle includes up to 5 operations (`MAX_MULTISIG_OPERATIONS`).
 
 ### Data System
 The current SDK-owned operation set manages two data layers per NFT:
