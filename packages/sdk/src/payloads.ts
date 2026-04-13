@@ -164,7 +164,7 @@ function buildHiveOperation(
           required_posting_auths: [signer],
           id: getProtocolId(),
           json,
-          level,
+          "Posting",
         },
   ];
 }
