@@ -13,6 +13,7 @@ import { checkRateLimit } from "./middleware/rate-limiter.ts";
 import { getSyncStatus } from "@/db/queries/sync.ts";
 import { isSynced as _isSynced, getSyncProgress } from "@/scanner/sync-state.ts";
 import { getBlockchainHead } from "@/scanner/hive-client.ts";
+import { SYNC_TOLERANCE_BLOCKS } from "@/scanner/sync-engine.ts";
 
 const log = createLogger("api");
 
@@ -33,7 +34,8 @@ async function pollApiSyncState(): Promise<void> {
 		apiLastBlock = st.lastBlock;
 		apiHeadBlock = chain.headBlock;
 		apiIrreversibleBlock = chain.irreversibleBlock;
-		apiSynced = st.lastBlock >= chain.irreversibleBlock;
+		apiSynced = chain.irreversibleBlock > 0 &&
+			Math.max(0, chain.irreversibleBlock - st.lastBlock) <= SYNC_TOLERANCE_BLOCKS;
 	} catch (err) {
 		apiSynced = false;
 		log.warn("Sync polling failed", { error: err instanceof Error ? err.message : String(err) });
