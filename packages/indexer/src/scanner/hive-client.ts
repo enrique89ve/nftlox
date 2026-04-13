@@ -5,18 +5,18 @@ import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { selectConsensusSample } from "./head-consensus.ts";
 import {
-	initEndpointHealth,
-	selectEndpoint,
-	recordSuccess,
-	recordFailure,
 	classifyError,
+	createEndpointHealthPool,
 	getBackoffMs,
+	type ErrorCategory,
 } from "./endpoint-health.ts";
 
 const log = createLogger("hive-client");
 
-// Initialize health tracking for all configured endpoints
-initEndpointHealth(config.hiveEndpoints);
+// Keep transport health independent by capability. A healthy JSON-RPC probe
+// should not reset HafAH failures for the same host.
+const rpcHealth = createEndpointHealthPool(config.hiveEndpoints);
+const hafahHealth = createEndpointHealthPool(config.hiveEndpoints);
 
 // ============ FETCH ERROR ============
 
@@ -38,6 +38,32 @@ function parseRetryAfterHeader(response: Response): number | undefined {
 	const seconds = Number(header);
 	if (!Number.isNaN(seconds) && seconds > 0) return seconds * 1000;
 	return undefined;
+}
+
+function logRetryFailure(
+	message: string,
+	endpoint: string,
+	attempt: number,
+	maxAttempts: number,
+	err: unknown,
+	category: ErrorCategory,
+	context: Record<string, unknown> = {},
+): void {
+	const data = {
+		...context,
+		endpoint,
+		attempt: attempt + 1,
+		maxAttempts,
+		error: err instanceof Error ? err.message : String(err),
+		category,
+	};
+
+	if (attempt === maxAttempts - 1 || category !== "transient") {
+		log.warn(message, data);
+		return;
+	}
+
+	log.debug(message, data);
 }
 
 // ============ JSON-RPC (for head block only) ============
@@ -74,20 +100,17 @@ async function callWithFailover<T>(method: string, params: Record<string, unknow
 	const maxAttempts = config.hiveEndpoints.length * 2;
 
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		const endpoint = selectEndpoint();
+		const endpoint = rpcHealth.selectEndpoint();
 		const start = performance.now();
 		try {
 			const result = await rpcCall<T>(endpoint, method, params);
-			recordSuccess(endpoint, performance.now() - start);
+			rpcHealth.recordSuccess(endpoint, performance.now() - start);
 			return result;
 		} catch (err) {
 			const category = classifyError(err);
 			const retryAfterMs = err instanceof FetchError ? err.retryAfterMs : undefined;
-			recordFailure(endpoint, category, retryAfterMs);
-			log.warn(`RPC failed: ${endpoint} (${attempt + 1}/${maxAttempts})`, {
-				error: err instanceof Error ? err.message : String(err),
-				category,
-			});
+			rpcHealth.recordFailure(endpoint, category, retryAfterMs);
+			logRetryFailure("RPC failed", endpoint, attempt, maxAttempts, err, category, { method });
 			if (attempt === maxAttempts - 1) throw err;
 			await new Promise(r => setTimeout(r, getBackoffMs(attempt, category)));
 		}
@@ -171,19 +194,21 @@ async function hafahWithFailover(fromBlock: number, toBlock: number, operationBe
 	const maxAttempts = config.hiveEndpoints.length * 2;
 
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		const endpoint = selectEndpoint();
+		const endpoint = hafahHealth.selectEndpoint();
 		const start = performance.now();
 		try {
 			const result = await hafahFetch(endpoint, fromBlock, toBlock, operationBegin, pageSize);
-			recordSuccess(endpoint, performance.now() - start);
+			hafahHealth.recordSuccess(endpoint, performance.now() - start);
 			return result;
 		} catch (err) {
 			const category = classifyError(err);
 			const retryAfterMs = err instanceof FetchError ? err.retryAfterMs : undefined;
-			recordFailure(endpoint, category, retryAfterMs);
-			log.warn(`HafAH failed: ${endpoint} (${attempt + 1}/${maxAttempts})`, {
-				error: err instanceof Error ? err.message : String(err),
-				category,
+			hafahHealth.recordFailure(endpoint, category, retryAfterMs);
+			logRetryFailure("HafAH failed", endpoint, attempt, maxAttempts, err, category, {
+				fromBlock,
+				toBlock,
+				operationBegin,
+				pageSize,
 			});
 			if (attempt === maxAttempts - 1) throw err;
 			await new Promise(r => setTimeout(r, getBackoffMs(attempt, category)));
@@ -274,7 +299,7 @@ export async function getBlockchainHead(consistency: "fast" | "strict" = "strict
 				"condenser_api.get_dynamic_global_properties",
 				[],
 			);
-			recordSuccess(endpoint, performance.now() - start);
+			rpcHealth.recordSuccess(endpoint, performance.now() - start);
 			return { endpoint, head: parseBlockchainHead(result) };
 		}),
 	);
@@ -286,7 +311,7 @@ export async function getBlockchainHead(consistency: "fast" | "strict" = "strict
 		const endpoint = config.hiveEndpoints[idx] ?? "";
 		const category = classifyError(result.reason);
 		const retryAfterMs = result.reason instanceof FetchError ? result.reason.retryAfterMs : undefined;
-		recordFailure(endpoint, category, retryAfterMs);
+		rpcHealth.recordFailure(endpoint, category, retryAfterMs);
 		log.warn("RPC head probe failed", {
 			endpoint,
 			error: result.reason instanceof Error ? result.reason.message : String(result.reason),
@@ -340,7 +365,7 @@ export async function checkClockDrift(): Promise<{ ok: boolean; driftMs: number 
 export async function getHeadBlockNum(): Promise<number> {
 	const maxAttempts = config.hiveEndpoints.length * 2;
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		const endpoint = selectEndpoint();
+		const endpoint = hafahHealth.selectEndpoint();
 		const start = performance.now();
 		try {
 			const response = await fetch(`${endpoint}/hafah-api/headblock`, { signal: AbortSignal.timeout(10_000) });
@@ -352,16 +377,13 @@ export async function getHeadBlockNum(): Promise<number> {
 			const text = await response.text();
 			const blockNum = parseInt(text, 10);
 			if (Number.isNaN(blockNum)) throw new Error(`Invalid headblock: ${text}`);
-			recordSuccess(endpoint, performance.now() - start);
+			hafahHealth.recordSuccess(endpoint, performance.now() - start);
 			return blockNum;
 		} catch (err) {
 			const category = classifyError(err);
 			const retryAfterMs = err instanceof FetchError ? err.retryAfterMs : undefined;
-			recordFailure(endpoint, category, retryAfterMs);
-			log.warn(`HafAH headblock failed: ${endpoint} (${attempt + 1}/${maxAttempts})`, {
-				error: err instanceof Error ? err.message : String(err),
-				category,
-			});
+			hafahHealth.recordFailure(endpoint, category, retryAfterMs);
+			logRetryFailure("HafAH headblock failed", endpoint, attempt, maxAttempts, err, category);
 			if (attempt === maxAttempts - 1) throw err;
 			await new Promise(r => setTimeout(r, getBackoffMs(attempt, category)));
 		}

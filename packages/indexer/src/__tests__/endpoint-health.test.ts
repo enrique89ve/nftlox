@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import {
+	createEndpointHealthPool,
 	initEndpointHealth,
 	selectEndpoint,
 	recordSuccess,
@@ -303,6 +304,10 @@ describe("classifyError", () => {
 		expect(classifyError(new TypeError("fetch failed"))).toBe("transient");
 	});
 
+	test("Bun socket close error → transient", () => {
+		expect(classifyError(new Error("The socket connection was closed unexpectedly"))).toBe("transient");
+	});
+
 	test("generic Error → unknown", () => {
 		expect(classifyError(new Error("something broke"))).toBe("unknown");
 	});
@@ -382,5 +387,28 @@ describe("latency tracking", () => {
 	test("reports 0 when no latency data", () => {
 		initEndpointHealth([EP_A]);
 		expect(getHealthSnapshot()[0]!.avgLatencyMs).toBe(0);
+	});
+});
+
+// ─── Independent Pools ───────────────────────────────
+
+describe("createEndpointHealthPool", () => {
+	test("keeps independent state per caller", () => {
+		const rpcPool = createEndpointHealthPool([EP_A]);
+		const hafahPool = createEndpointHealthPool([EP_A]);
+
+		for (let i = 0; i < OPEN_AFTER_FAILURES - 1; i++) {
+			hafahPool.recordFailure(EP_A, "transient");
+		}
+		rpcPool.recordSuccess(EP_A, 50);
+
+		const rpcSnap = rpcPool.getHealthSnapshot()[0]!;
+		const hafahSnap = hafahPool.getHealthSnapshot()[0]!;
+
+		expect(rpcSnap.consecutiveFailures).toBe(0);
+		expect(hafahSnap.consecutiveFailures).toBe(OPEN_AFTER_FAILURES - 1);
+
+		hafahPool.recordFailure(EP_A, "transient");
+		expect(hafahPool.getHealthSnapshot()[0]!.state).toBe("open");
 	});
 });

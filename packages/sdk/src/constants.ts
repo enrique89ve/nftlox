@@ -48,26 +48,29 @@ export const LISTING_HASH_LENGTH = 32;
 // ============ PAYMENT SPLIT ============
 
 export interface PaymentSplit {
-	sellerAmount: number;
-	royaltyAmount: number;
-	royaltyRecipient: string | null;
-	feeAmount: number;
-	feeAccount: string;
-	totalPrice: number;
-	currency: string;
+  sellerAmount: number;
+  royaltyAmount: number;
+  royaltyRecipient: string | null;
+  feeAmount: number;
+  feeAccount: string;
+  totalPrice: number;
+  currency: string;
 }
 
 /** Round to 3 decimal places (Hive precision) */
 export function roundHive(n: number): number {
-	return Math.round(n * 1000) / 1000;
+  return Math.round(n * 1000) / 1000;
 }
 
 export function percentageToBasisPoints(percentage: number): number {
-	return Math.round(percentage * 100);
+  return Math.round(percentage * 100);
 }
 
-export function calculateBasisPointsAmount(totalAmount: number, basisPoints: number): number {
-	return roundHive(totalAmount * basisPoints / BASIS_POINTS_DENOMINATOR);
+export function calculateBasisPointsAmount(
+  totalAmount: number,
+  basisPoints: number,
+): number {
+  return roundHive((totalAmount * basisPoints) / BASIS_POINTS_DENOMINATOR);
 }
 
 /**
@@ -80,52 +83,61 @@ export function calculateBasisPointsAmount(totalAmount: number, basisPoints: num
  * If feeAccount === seller → fee merges into seller amount.
  */
 export function calculatePaymentSplit(
-	totalPrice: number,
-	currency: string,
-	royaltyPct: number,
-	royaltyRecipient: string | null,
-	seller: string,
-	feeAccount: string,
+  totalPrice: number,
+  currency: string,
+  royaltyPct: number,
+  royaltyRecipient: string | null,
+  seller: string,
+  feeAccount: string,
 ): PaymentSplit {
-	if (royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
-		throw new Error(`royaltyPct out of range: ${royaltyPct} (max ${MAX_ROYALTY_PCT})`);
-	}
+  if (royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
+    throw new Error(
+      `royaltyPct out of range: ${royaltyPct} (max ${MAX_ROYALTY_PCT})`,
+    );
+  }
 
-	const feeAmount = calculateBasisPointsAmount(totalPrice, PROTOCOL_FEE_BPS);
+  const feeAmount = calculateBasisPointsAmount(totalPrice, PROTOCOL_FEE_BPS);
 
-	let royaltyAmount = 0;
-	let effectiveRoyaltyRecipient: string | null = null;
-	if (royaltyRecipient && royaltyPct > 0) {
-		if (royaltyRecipient === seller) {
-			royaltyAmount = 0;
-			effectiveRoyaltyRecipient = null;
-		} else {
-			royaltyAmount = calculateBasisPointsAmount(totalPrice, percentageToBasisPoints(royaltyPct));
-			effectiveRoyaltyRecipient = royaltyRecipient;
-		}
-	}
+  let royaltyAmount = 0;
+  let effectiveRoyaltyRecipient: string | null = null;
+  if (royaltyRecipient && royaltyPct > 0) {
+    if (royaltyRecipient === seller) {
+      royaltyAmount = 0;
+      effectiveRoyaltyRecipient = null;
+    } else {
+      royaltyAmount = calculateBasisPointsAmount(
+        totalPrice,
+        percentageToBasisPoints(royaltyPct),
+      );
+      effectiveRoyaltyRecipient = royaltyRecipient;
+    }
+  }
 
-	let effectiveFee = feeAmount;
-	if (feeAccount === seller) {
-		effectiveFee = 0;
-	}
+  let effectiveFee = feeAmount;
+  if (feeAccount === seller) {
+    effectiveFee = 0;
+  }
 
-	const sellerAmount = roundHive(Math.max(0, totalPrice - royaltyAmount - effectiveFee));
+  const sellerAmount = roundHive(
+    Math.max(0, totalPrice - royaltyAmount - effectiveFee),
+  );
 
-	return {
-		sellerAmount,
-		royaltyAmount,
-		royaltyRecipient: effectiveRoyaltyRecipient,
-		feeAmount: effectiveFee,
-		feeAccount,
-		totalPrice,
-		currency,
-	};
+  return {
+    sellerAmount,
+    royaltyAmount,
+    royaltyRecipient: effectiveRoyaltyRecipient,
+    feeAmount: effectiveFee,
+    feeAccount,
+    totalPrice,
+    currency,
+  };
 }
 
 // Hive custom_json payload limit (8KB) with 10% safety margin
 export const HIVE_CUSTOM_JSON_MAX_BYTES = 8192;
-export const SAFE_PAYLOAD_MAX_BYTES = Math.floor(HIVE_CUSTOM_JSON_MAX_BYTES * 0.90);
+export const SAFE_PAYLOAD_MAX_BYTES = Math.floor(
+  HIVE_CUSTOM_JSON_MAX_BYTES * 0.9,
+);
 
 // Schema Constants
 export const MAX_SCHEMA_FIELDS = 64;
@@ -171,39 +183,42 @@ export const ACTION_SET_DATA_FROM = "set_data_from";
 
 // All Protocol Actions
 export const CORE_ACTIONS = [
-	ACTION_CREATE_COLLECTION,
-	ACTION_MINT,
-	ACTION_TRANSFER,
-	ACTION_BULK_DISTRIBUTE,
-	ACTION_SET_DATA,
-	ACTION_EXTEND_SCHEMA,
-	ACTION_ARCHIVE_COLLECTION,
-	ACTION_NODE_REGISTER,
+  ACTION_CREATE_COLLECTION,
+  ACTION_MINT,
+  ACTION_TRANSFER,
+  ACTION_BULK_DISTRIBUTE,
+  ACTION_SET_DATA,
+  ACTION_EXTEND_SCHEMA,
+  ACTION_ARCHIVE_COLLECTION,
+  ACTION_NODE_REGISTER,
 ] as const;
 
 export const MARKETPLACE_ACTIONS = [
-	ACTION_LIST,
-	ACTION_UNLIST,
-	ACTION_BUY,
+  ACTION_LIST,
+  ACTION_UNLIST,
+  ACTION_BUY,
 ] as const;
 
 export const APPROVE_ACTIONS = [
-	ACTION_NFT_APPROVE,
-	ACTION_NFT_APPROVE_ALL,
-	ACTION_NFT_TRANSFER_FROM,
+  ACTION_NFT_APPROVE,
+  ACTION_NFT_APPROVE_ALL,
+  ACTION_NFT_TRANSFER_FROM,
 ] as const;
 
-export const LENDING_ACTIONS = [
-	ACTION_NFT_LEND,
-	ACTION_NFT_RETURN,
-] as const;
+export const LENDING_ACTIONS = [ACTION_NFT_LEND, ACTION_NFT_RETURN] as const;
 
 export const DATA_OPERATOR_ACTIONS = [
-	ACTION_DATA_OPERATOR_APPROVE,
-	ACTION_SET_DATA_FROM,
+  ACTION_DATA_OPERATOR_APPROVE,
+  ACTION_SET_DATA_FROM,
 ] as const;
 
-export const ALL_ACTIONS = [...CORE_ACTIONS, ...MARKETPLACE_ACTIONS, ...APPROVE_ACTIONS, ...LENDING_ACTIONS, ...DATA_OPERATOR_ACTIONS] as const;
+export const ALL_ACTIONS = [
+  ...CORE_ACTIONS,
+  ...MARKETPLACE_ACTIONS,
+  ...APPROVE_ACTIONS,
+  ...LENDING_ACTIONS,
+  ...DATA_OPERATOR_ACTIONS,
+] as const;
 
 // ============ AUTHORITY MAP — SINGLE SOURCE OF TRUTH ============
 // Active custom_json: node-cosigned collection creation and buy authorization.
@@ -213,70 +228,79 @@ export const ALL_ACTIONS = [...CORE_ACTIONS, ...MARKETPLACE_ACTIONS, ...APPROVE_
 export type AuthLevel = "active" | "posting";
 
 const ACTION_AUTH_LEVEL_MAP = {
-	[ACTION_CREATE_COLLECTION]: "active",
-	[ACTION_MINT]: "posting",
-	[ACTION_TRANSFER]: "posting",
-	[ACTION_BULK_DISTRIBUTE]: "posting",
-	[ACTION_SET_DATA]: "posting",
-	[ACTION_EXTEND_SCHEMA]: "posting",
-	[ACTION_ARCHIVE_COLLECTION]: "posting",
-	[ACTION_NODE_REGISTER]: "posting",
-	[ACTION_LIST]: "posting",
-	[ACTION_UNLIST]: "posting",
-	[ACTION_BUY]: "active",
-	[ACTION_NFT_APPROVE]: "posting",
-	[ACTION_NFT_APPROVE_ALL]: "posting",
-	[ACTION_NFT_TRANSFER_FROM]: "posting",
-	[ACTION_DATA_OPERATOR_APPROVE]: "posting",
-	[ACTION_SET_DATA_FROM]: "posting",
-	[ACTION_NFT_LEND]: "posting",
-	[ACTION_NFT_RETURN]: "posting",
+  [ACTION_CREATE_COLLECTION]: "active",
+  [ACTION_MINT]: "posting",
+  [ACTION_TRANSFER]: "posting",
+  [ACTION_BULK_DISTRIBUTE]: "posting",
+  [ACTION_SET_DATA]: "posting",
+  [ACTION_EXTEND_SCHEMA]: "posting",
+  [ACTION_ARCHIVE_COLLECTION]: "posting",
+  [ACTION_NODE_REGISTER]: "posting",
+  [ACTION_LIST]: "posting",
+  [ACTION_UNLIST]: "posting",
+  [ACTION_BUY]: "active",
+  [ACTION_NFT_APPROVE]: "posting",
+  [ACTION_NFT_APPROVE_ALL]: "posting",
+  [ACTION_NFT_TRANSFER_FROM]: "posting",
+  [ACTION_DATA_OPERATOR_APPROVE]: "posting",
+  [ACTION_SET_DATA_FROM]: "posting",
+  [ACTION_NFT_LEND]: "posting",
+  [ACTION_NFT_RETURN]: "posting",
 } as const satisfies Record<ProtocolAction, AuthLevel>;
 
 export const ACTION_AUTH_LEVEL = Object.freeze(ACTION_AUTH_LEVEL_MAP);
 
 /** Get the auth level for any protocol action */
 export function getAuthLevel(action: ProtocolAction): AuthLevel {
-	if (!isProtocolAction(action)) {
-		throw new Error(`Unsupported protocol action: ${String(action)}`);
-	}
-	return ACTION_AUTH_LEVEL[action];
+  if (!isProtocolAction(action)) {
+    throw new Error(`Unsupported protocol action: ${String(action)}`);
+  }
+  return ACTION_AUTH_LEVEL[action];
 }
 
 /** Get the Keychain-compatible key type string */
 export function getKeyType(action: ProtocolAction): "Active" | "Posting" {
-	if (!isProtocolAction(action)) {
-		throw new Error(`Unsupported protocol action: ${String(action)}`);
-	}
-	return ACTION_AUTH_LEVEL[action] === "active" ? "Active" : "Posting";
+  if (!isProtocolAction(action)) {
+    throw new Error(`Unsupported protocol action: ${String(action)}`);
+  }
+  return ACTION_AUTH_LEVEL[action] === "active" ? "Active" : "Posting";
 }
 
 /** Runtime guard for payloads parsed from JS, JSON, or other untyped boundaries. */
 export function isProtocolAction(value: unknown): value is ProtocolAction {
-	return typeof value === "string" && (ALL_ACTIONS as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (ALL_ACTIONS as readonly string[]).includes(value)
+  );
 }
 
 type ActionForAuthLevel<Level extends AuthLevel> = {
-	[Action in ProtocolAction]: (typeof ACTION_AUTH_LEVEL)[Action] extends Level ? Action : never;
+  [Action in ProtocolAction]: (typeof ACTION_AUTH_LEVEL)[Action] extends Level
+    ? Action
+    : never;
 }[ProtocolAction];
 
 export type ActiveAuthAction = ActionForAuthLevel<"active">;
 export type PostingAuthAction = ActionForAuthLevel<"posting">;
 
 function isAuthLevelAction<Level extends AuthLevel>(
-	action: ProtocolAction,
-	level: Level,
+  action: ProtocolAction,
+  level: Level,
 ): action is ActionForAuthLevel<Level> {
-	return ACTION_AUTH_LEVEL[action] === level;
+  return ACTION_AUTH_LEVEL[action] === level;
 }
 
 // Derived arrays (computed from the map, not manually maintained)
-export const ACTIVE_AUTH_ACTIONS: readonly ActiveAuthAction[] = Object.freeze(ALL_ACTIONS.filter(
-	(action): action is ActiveAuthAction => isAuthLevelAction(action, "active"),
-));
-export const POSTING_AUTH_ACTIONS: readonly PostingAuthAction[] = Object.freeze(ALL_ACTIONS.filter(
-	(action): action is PostingAuthAction => isAuthLevelAction(action, "posting"),
-));
+export const ACTIVE_AUTH_ACTIONS: readonly ActiveAuthAction[] = Object.freeze(
+  ALL_ACTIONS.filter((action): action is ActiveAuthAction =>
+    isAuthLevelAction(action, "active"),
+  ),
+);
+export const POSTING_AUTH_ACTIONS: readonly PostingAuthAction[] = Object.freeze(
+  ALL_ACTIONS.filter((action): action is PostingAuthAction =>
+    isAuthLevelAction(action, "posting"),
+  ),
+);
 
 // Type exports
 export type CoreAction = (typeof CORE_ACTIONS)[number];
