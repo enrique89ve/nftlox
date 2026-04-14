@@ -19,7 +19,8 @@ import {
 	createNftLendOperation,
 	createNftReturnOperation,
 	fetchPaymentInfo,
-	requestMultisig,
+	requestBuyMultisig,
+	requestCreateCollectionMultisig,
 	createIndexerClient,
 	createDefaultL1Config,
 	verifyNftOwnership,
@@ -53,11 +54,13 @@ const lendOp = createNftLendOperation(
 	"alice", // owner signs with posting key
 );
 
-// 4. Buy an NFT via multisig
+// 4. Buy an NFT via multisig (digital ownership transfer)
 const info = await fetchPaymentInfo("https://indexer.nftlox.com", "nft_xyz");
-const result = await requestMultisig("https://indexer.nftlox.com", {
+const result = await requestBuyMultisig("https://indexer.nftlox.com", {
 	buyer: "alice",
 	nftId: "nft_xyz",
+	listingId: info.listingId,
+	listTxId: info.listTxId,
 	transaction: unsignedTx,
 });
 
@@ -193,14 +196,15 @@ Higher-level functions that validate input via Zod schemas, generate determinist
 
 ### Multisig Client
 
-Functions for interacting with an indexer node's multisig endpoints (buy flow).
+Functions for interacting with an indexer node's multisig endpoints. Both endpoints share the same `MultisigResponse` shape; choose the wrapper matching the transaction type.
 
-| Function | Description |
-|----------|-------------|
-| `fetchPaymentInfo(indexerUrl, nftId)` | Fetch payment split for building a buy tx |
-| `requestMultisig(indexerUrl, request)` | Send unsigned tx for node co-signature |
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `fetchPaymentInfo(indexerUrl, nftId)` | `GET /api/payment-info/:nftId` | Fetch payment split for building a buy tx |
+| `requestBuyMultisig(indexerUrl, request)` | `POST /api/multisig` | Co-sign a buy tx (digital ownership transfer, critical path) |
+| `requestCreateCollectionMultisig(indexerUrl, request)` | `POST /api/multisig/collection` | Co-sign a create_collection tx |
 
-Related types: `MultisigRequest`, `MultisigResponse`, `MultisigErrorCode`, `PaymentInfo`.
+Related types: `BuyMultisigRequest`, `CreateCollectionMultisigRequest`, `MultisigResponse`, `MultisigErrorCode`, `PaymentInfo`.
 
 ### Indexer Client
 

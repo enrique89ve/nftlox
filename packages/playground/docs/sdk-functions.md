@@ -130,9 +130,10 @@ Functions for interacting with an indexer node's multisig endpoints (buy flow).
 | Function | Description |
 |----------|-------------|
 | `fetchPaymentInfo(indexerUrl, nftId)` | Fetch payment split for building a buy tx |
-| `requestMultisig(indexerUrl, request)` | Send unsigned tx for node co-signature |
+| `requestBuyMultisig(indexerUrl, request)` | Send unsigned buy tx for node co-signature |
+| `requestCreateCollectionMultisig(indexerUrl, request)` | Send unsigned collection tx for node co-signature |
 
-Related types: `MultisigRequest`, `MultisigResponse`, `MultisigErrorCode`, `PaymentInfo`.
+Related types: `BuyMultisigRequest`, `CreateCollectionMultisigRequest`, `MultisigResponse`, `MultisigErrorCode`, `PaymentInfo`.
 
 ---
 

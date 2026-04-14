@@ -286,7 +286,8 @@ export * from "./builders";
 // ============ MULTISIG CLIENT ============
 export {
 	fetchPaymentInfo,
-	requestMultisig,
+	requestBuyMultisig,
+	requestCreateCollectionMultisig,
 	type RequestMultisigOptions,
 } from "./multisig";
 

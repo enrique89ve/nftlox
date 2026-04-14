@@ -323,14 +323,14 @@ export interface MintingSession {
 
 // ============ MULTISIG TYPES ============
 
-export type HiveTransactionObject = Readonly<{
+export type HiveTransactionObject = {
 	ref_block_num: number;
 	ref_block_prefix: number;
 	expiration: string;
-	operations: ReadonlyArray<readonly [string, Record<string, unknown>]>;
-	extensions: ReadonlyArray<unknown>;
-	signatures: ReadonlyArray<string>;
-}>;
+	operations: Array<[string, any]>;
+	extensions: any[];
+	signatures: string[];
+};
 
 export type MultisigErrorCode =
 	| "NFT_LOCKED"

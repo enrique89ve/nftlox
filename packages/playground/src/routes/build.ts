@@ -2,12 +2,11 @@
 import { Transaction } from "hive-tx";
 import {
 	ACTION_CREATE_COLLECTION,
-	NFTLOX_POW_HEADER,
 	PROTOCOL_VERSION,
 	PROTOCOL_ID,
 	HASH_VERSION,
 	PROTOCOL_COLLECTION_FEE_HBD,
-	solveMultisigPow,
+	requestCreateCollectionMultisig,
 	createExtendSchemaOperation,
 	createExtendSchemaPayload,
 	extendSchemaInputSchema,
@@ -48,16 +47,24 @@ const json = (data: unknown, status = 200) =>
 type RouteHandler = (req: Request) => Promise<Response>;
 const TX_EXPIRATION_MS = 60_000;
 
-interface IndexerStatusResponse {
+type IndexerStatusResponse = {
 	nodeAccount?: string | null;
 }
 
-interface CollectionMultisigResponse {
+type CollectionMultisigResponse = {
 	ok: boolean;
 	signature?: string;
 	digest?: string;
 	code?: string;
 	message?: string;
+}
+
+function isIndexerStatusResponse(v: unknown): v is IndexerStatusResponse {
+	return typeof v === "object" && v !== null;
+}
+
+function isCollectionMultisigResponse(v: unknown): v is CollectionMultisigResponse {
+	return typeof v === "object" && v !== null && typeof (v as Record<string, unknown>).ok === "boolean";
 }
 
 /** Derive keyType from the SDK operation — single source of truth */
@@ -106,7 +113,11 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		if (!statusRes.ok) {
 			return json({ success: false, error: "Indexer status unavailable" }, 502);
 		}
-		const status = await statusRes.json() as IndexerStatusResponse;
+		const statusRaw: unknown = await statusRes.json();
+		if (!isIndexerStatusResponse(statusRaw)) {
+			return json({ success: false, error: "Indexer status malformed" }, 502);
+		}
+		const status = statusRaw;
 		if (!status.nodeAccount) {
 			return json({ success: false, error: "Indexer node account unavailable" }, 502);
 		}
@@ -130,23 +141,20 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			}),
 		});
 
+		if (!tx.transaction) {
+			return json({ success: false, error: "Transaction building failed" }, 500);
+		}
+
 		const multisigRequest = {
 			creator: body.creator,
 			transaction: tx.transaction,
 		};
-		const multisigRes = await fetch(`${INDEXER_URL}/api/multisig/collection`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				[NFTLOX_POW_HEADER]: await solveMultisigPow(multisigRequest),
-			},
-			body: JSON.stringify(multisigRequest),
-		});
-		const multisigResult = await multisigRes.json() as CollectionMultisigResponse;
-		if (!multisigResult.ok || !multisigResult.signature) {
+		const multisigResult = await requestCreateCollectionMultisig(INDEXER_URL, multisigRequest);
+
+		if (!multisigResult.ok) {
 			return json({
 				success: false,
-				error: multisigResult.message ?? "Collection multisig signing failed",
+				error: multisigResult.message,
 				code: multisigResult.code,
 			}, 400);
 		}

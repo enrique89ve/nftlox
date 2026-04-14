@@ -37,7 +37,7 @@ let debugRoutesEnabled = false;
 
 type CollectionSort = "recent" | "name" | "supply" | "seeds";
 
-interface CollectionSummary {
+type CollectionSummary = {
   id: string;
   name: string;
   symbol: string;
@@ -48,18 +48,18 @@ interface CollectionSummary {
   status?: string | null;
 }
 
-interface CollectionsResponse {
+type CollectionsResponse = {
   count?: number;
   collections: CollectionSummary[];
 }
 
-interface UserNftCounts {
+type UserNftCounts = {
   total: number;
   seeds: number;
   instances: number;
 }
 
-interface NftCardData {
+type NftCardData = {
   id: string;
   collectionId?: string | null;
   edition?: string | number | null;
@@ -76,22 +76,22 @@ interface NftCardData {
   isSeed?: boolean;
 }
 
-interface UserNftsResponse {
+type UserNftsResponse = {
   counts?: Partial<UserNftCounts>;
   nfts?: NftCardData[];
 }
 
-interface UserNftsResult {
+type UserNftsResult = {
   counts: UserNftCounts;
   nfts: NftCardData[];
 }
 
-interface NftDetailListingPrice {
+type NftDetailListingPrice = {
   amount: string;
   currency: string | null;
 }
 
-interface NftDetailNft {
+type NftDetailNft = {
   id: string;
   name: string;
   imageUrl: string | null;
@@ -116,21 +116,21 @@ interface NftDetailNft {
   txId: string;
 }
 
-interface NftDetailOriginal {
+type NftDetailOriginal = {
   id: string;
   name: string;
   imageUrl: string | null;
   owner: string;
 }
 
-interface NftDetailInstance {
+type NftDetailInstance = {
   id: string;
   name: string;
   owner: string;
   instanceNumber: number | null;
 }
 
-interface NftDetailResponse {
+type NftDetailResponse = {
   error?: string;
   nft?: NftDetailNft;
   original?: NftDetailOriginal | null;
@@ -142,7 +142,7 @@ interface NftDetailResponse {
 
 type KeyType = "Active" | "Posting";
 
-interface HiveRpcResponse {
+type HiveRpcResponse = {
   error?: { message?: string } | string;
   result?: { id?: string; tx_id?: string; block_num?: number };
 }
@@ -165,7 +165,8 @@ async function broadcastSignedTransaction(signedTx: unknown): Promise<string> {
       id: 1,
     }),
   });
-  const data = (await response.json()) as HiveRpcResponse;
+  const raw: unknown = await response.json();
+  const data = raw as HiveRpcResponse;
 
   if (data.error) {
     const message =
@@ -231,10 +232,9 @@ async function getNFTsByOwner(
   limit = 200,
   offset = 0,
 ): Promise<UserNftsResult> {
-  const firstRes = await fetch(
+  const firstData = await fetchJsonOrThrow<UserNftsResponse>(
     `/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${offset}`,
   );
-  const firstData = (await firstRes.json()) as UserNftsResponse;
   const counts = normalizeNftCounts(firstData);
   const allNfts: NftCardData[] = firstData.nfts ?? [];
 
@@ -243,10 +243,9 @@ async function getNFTsByOwner(
     const pages = await Promise.all(
       Array.from({ length: totalPages - 1 }, async (_, index) => {
         const page = index + 1;
-        const response = await fetch(
+        const data = await fetchJsonOrThrow<UserNftsResponse>(
           `/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${page * limit}`,
         );
-        const data = (await response.json()) as UserNftsResponse;
         return data.nfts ?? [];
       }),
     );

@@ -1,4 +1,4 @@
-// Marketplace routes — multisig buy flow (public, not debug-gated)
+import { z } from "zod";
 import { Transaction } from "hive-tx";
 import {
 	PROTOCOL_ID,
@@ -7,12 +7,18 @@ import {
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
-	NFTLOX_POW_HEADER,
-	solveMultisigPow,
+	fetchPaymentInfo,
+	requestBuyMultisig,
+	usernameSchema,
 	type PaymentInfo,
 	type MultisigResponse,
 } from "nftlox-sdk";
 import { INDEXER_URL } from "../shared/indexer";
+
+const buyRequestSchema = z.object({
+	buyer: usernameSchema,
+	nftId: z.string().min(1),
+});
 
 const json = (data: unknown, status = 200) =>
 	new Response(JSON.stringify(data, null, 2), {
@@ -28,17 +34,13 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 	"/api/marketplace/buy": {
 		POST: async (req: Request) => {
 			try {
-				const body = await req.json() as { buyer: string; nftId: string };
-				if (!body.buyer || !body.nftId) {
-					return json({ success: false, error: "buyer and nftId are required" }, 400);
+				const parse = buyRequestSchema.safeParse(await req.json());
+				if (!parse.success) {
+					return json({ success: false, error: parse.error.issues }, 400);
 				}
+				const body = parse.data;
 
-				const infoRes = await fetch(`${INDEXER_URL}/api/payment-info/${encodeURIComponent(body.nftId)}`);
-				if (!infoRes.ok) {
-					const err = await infoRes.json().catch(() => ({ error: "Payment info unavailable" }));
-					return json({ success: false, error: `Payment info failed: ${err.error}` }, 400);
-				}
-				const info = await infoRes.json() as PaymentInfo;
+				const info = await fetchPaymentInfo(INDEXER_URL, body.nftId);
 
 				const tx = new Transaction({ expiration: TX_EXPIRATION_MS });
 
@@ -87,6 +89,10 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 					}),
 				});
 
+				if (!tx.transaction) {
+					return json({ success: false, error: "Transaction building failed" }, 500);
+				}
+
 				const multisigRequest = {
 					buyer: body.buyer,
 					nftId: body.nftId,
@@ -94,15 +100,7 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 					listTxId: info.listTxId,
 					transaction: tx.transaction,
 				};
-				const multisigRes = await fetch(`${INDEXER_URL}/api/multisig`, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						[NFTLOX_POW_HEADER]: await solveMultisigPow(multisigRequest),
-					},
-					body: JSON.stringify(multisigRequest),
-				});
-				const multisigResult = await multisigRes.json() as MultisigResponse;
+				const multisigResult = await requestBuyMultisig(INDEXER_URL, multisigRequest);
 
 				if (!multisigResult.ok) {
 					return json({ success: false, error: multisigResult.message, code: multisigResult.code }, 400);

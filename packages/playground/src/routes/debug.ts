@@ -7,8 +7,8 @@ import {
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
-	NFTLOX_POW_HEADER,
-	solveMultisigPow,
+	fetchPaymentInfo,
+	requestBuyMultisig,
 	type PaymentInfo,
 	type MultisigResponse,
 } from "nftlox-sdk";
@@ -85,12 +85,7 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 				}
 
 				// 1. Fetch payment info from indexer
-				const infoRes = await fetch(`${INDEXER_URL}/api/payment-info/${encodeURIComponent(body.nftId)}`);
-				if (!infoRes.ok) {
-					const err = await infoRes.json();
-					return json({ success: false, error: `Payment info failed: ${err.error}` }, 400);
-				}
-				const info = await infoRes.json() as PaymentInfo;
+				const info = await fetchPaymentInfo(INDEXER_URL, body.nftId);
 
 				// 2. Build unsigned transaction
 				const tx = new Transaction({ expiration: TX_EXPIRATION_MS });
@@ -145,6 +140,10 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 				});
 
 				// 3. Send to indexer for multisig signing
+				if (!tx.transaction) {
+					return json({ success: false, error: "Transaction building failed" }, 500);
+				}
+
 				const multisigRequest = {
 					buyer: body.buyer,
 					nftId: body.nftId,
@@ -152,15 +151,7 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 					listTxId: info.listTxId,
 					transaction: tx.transaction,
 				};
-				const multisigRes = await fetch(`${INDEXER_URL}/api/multisig`, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						[NFTLOX_POW_HEADER]: await solveMultisigPow(multisigRequest),
-					},
-					body: JSON.stringify(multisigRequest),
-				});
-				const multisigResult = await multisigRes.json() as MultisigResponse;
+				const multisigResult = await requestBuyMultisig(INDEXER_URL, multisigRequest);
 
 				if (!multisigResult.ok) {
 					return json({ success: false, error: multisigResult.message, code: multisigResult.code }, 400);

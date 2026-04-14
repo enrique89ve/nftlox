@@ -3,7 +3,7 @@
 
 import { PROTOCOL_VERSION, PROTOCOL_ID } from "./constants";
 
-interface ProtocolState {
+type ProtocolState = {
 	version: string;
 	protocolId: string;
 	initialized: boolean;
@@ -17,7 +17,7 @@ const state: ProtocolState = {
 
 const DEFAULT_STATUS_URL = "https://api-nftlox.hivecreators.co/api/status";
 
-interface StatusResponse {
+type StatusResponse = {
 	protocolVersion: string;
 	protocolId: string;
 }
@@ -37,7 +37,15 @@ export async function initProtocol(baseUrl?: string): Promise<ProtocolState> {
 		throw new Error(`Failed to fetch protocol status: ${res.status}`);
 	}
 
-	const data = (await res.json()) as StatusResponse;
+	const raw: unknown = await res.json();
+	if (
+		typeof raw !== "object" || raw === null ||
+		typeof (raw as Record<string, unknown>).protocolVersion !== "string" ||
+		typeof (raw as Record<string, unknown>).protocolId !== "string"
+	) {
+		throw new Error("Protocol status response malformed");
+	}
+	const data = raw as StatusResponse;
 	state.version = data.protocolVersion;
 	state.protocolId = data.protocolId;
 	state.initialized = true;

@@ -10,7 +10,8 @@
 	},
 	"dependencies": {
 		"hive-tx": "^7.0.1",
-		"nftlox-sdk": "workspace:*"
+		"nftlox-sdk": "workspace:*",
+		"zod": "^4.3.6"
 	},
 	"devDependencies": {
 		"@types/bun": "latest"
