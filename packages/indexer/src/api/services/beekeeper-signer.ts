@@ -52,14 +52,43 @@ async function doInit(activeKeyWif: string, walletPassword: string): Promise<str
 		throw new Error("BEEKEEPER_PASSWORD is required — set it in your .env");
 	}
 
-	bkInstance = await createBeekeeper({ enableLogs: false, inMemory: true });
+	// We use inMemory: true to keep keys off disk, but we also specify a storageRoot
+	// in a writable location just in case the WASM module needs a scratch space.
+	// We also set a very large unlockTimeout (1 year) to prevent the wallet from auto-locking.
+	const storageRoot = process.env.BEEKEEPER_STORAGE_ROOT || "/tmp/nftlox-beekeeper";
+
+	bkInstance = await createBeekeeper({
+		enableLogs: false,
+		inMemory: true,
+		storageRoot,
+		unlockTimeout: 31_536_000,
+	});
 	bkSession = bkInstance.createSession(SESSION_SALT);
 
-	const { wallet } = await bkSession.createWallet(WALLET_NAME, walletPassword, true);
+	let wallet: IBeekeeperUnlockedWallet;
+
+	if (bkSession.hasWallet(WALLET_NAME)) {
+		log.info("Wallet already exists, opening and unlocking", { walletName: WALLET_NAME });
+		const openResult = bkSession.openWallet(WALLET_NAME);
+		if (openResult.unlocked) {
+			wallet = openResult.unlocked;
+		} else {
+			wallet = openResult.unlock(walletPassword);
+		}
+	} else {
+		// createWallet returns IWalletCreated which has an 'unlocked' wallet
+		const created = await bkSession.createWallet(WALLET_NAME, walletPassword, true);
+		wallet = created.wallet;
+	}
+
 	bkWallet = wallet;
 
 	cachedPublicKey = await wallet.importKey(activeKeyWif);
-	log.info("Beekeeper signer initialized", { publicKey: cachedPublicKey });
+	log.info("Beekeeper signer initialized", {
+		publicKey: cachedPublicKey,
+		storageRoot,
+		isTemporary: wallet.isTemporary,
+	});
 
 	return cachedPublicKey;
 }
@@ -73,7 +102,30 @@ export function signWithBeekeeper(sigDigestHex: string): string {
 		throw new Error("Beekeeper signer not initialized — call initBeekeeperSigner() first");
 	}
 
-	return bkWallet.signDigest(cachedPublicKey, sigDigestHex);
+	try {
+		return bkWallet.signDigest(cachedPublicKey, sigDigestHex);
+	} catch (err: any) {
+		// Log detailed state if signing fails — helps diagnose "not found in unlocked wallets"
+		const wallets = bkSession ? bkSession.listWallets().map((w) => ({ name: w.name, unlocked: !!w.unlocked })) : [];
+		const keys = bkWallet ? (tryGetPublicKeys(bkWallet) ?? []) : [];
+
+		log.error("Beekeeper signing failed", {
+			error: err?.message || String(err),
+			requestedKey: cachedPublicKey,
+			activeWallets: wallets,
+			keysInCurrentWallet: keys,
+		});
+
+		throw err;
+	}
+}
+
+function tryGetPublicKeys(wallet: IBeekeeperUnlockedWallet): string[] | null {
+	try {
+		return wallet.getPublicKeys();
+	} catch {
+		return null;
+	}
 }
 
 /** True when the signer has been initialized and is ready to sign. */
