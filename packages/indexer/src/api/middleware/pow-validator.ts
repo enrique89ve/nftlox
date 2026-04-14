@@ -2,6 +2,7 @@
 // The cache is process-local by design, matching the existing in-memory rate limiters.
 
 import type { MultisigErrorCode } from "@/protocol/index.ts";
+import { canonicalJson } from "@/utils/canonical-json.ts";
 
 export const NFTLOX_POW_HEADER = "X-NFTLox-PoW";
 export const MULTISIG_POW_VERSION = "v1";
@@ -14,8 +15,6 @@ const HEX_REGEX = /^[a-f0-9]+$/;
 const DECIMAL_REGEX = /^\d+$/;
 
 const replayCache = new Map<string, number>();
-
-type JsonObjectLike = Readonly<Record<string, unknown>>;
 
 export type PowValidationResult =
 	| Readonly<{ ok: true }>
@@ -38,24 +37,6 @@ type ParsedPowToken = Readonly<{
 	payloadHash: string;
 }>;
 
-function isJsonObjectLike(value: unknown): value is JsonObjectLike {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function sortKeysDeep(value: unknown): unknown {
-	if (value === null || value === undefined) return value;
-	if (Array.isArray(value)) return value.map(sortKeysDeep);
-	if (isJsonObjectLike(value)) {
-		const sorted: Record<string, unknown> = {};
-		for (const key of Object.keys(value).sort()) {
-			if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
-			sorted[key] = sortKeysDeep(value[key]);
-		}
-		return sorted;
-	}
-	return value;
-}
-
 function bytesToHex(bytes: Uint8Array): string {
 	let hex = "";
 	for (const byte of bytes) {
@@ -71,7 +52,7 @@ async function sha256Hex(input: string): Promise<string> {
 }
 
 function canonicalPowJson(payload: unknown): string {
-	const json = JSON.stringify(sortKeysDeep(payload));
+	const json = canonicalJson(payload as Record<string, unknown>);
 	if (json === undefined) {
 		throw new TypeError("PoW payload must be JSON serializable");
 	}

@@ -4,6 +4,7 @@ import { setStartupTime, setSynced, updateSyncProgress } from "./scanner/sync-st
 import { connectWithRetry } from "./bootstrap.ts";
 import { initBeekeeperSigner, closeBeekeeperSigner } from "./api/services/beekeeper-signer.ts";
 import { startMultisigHealthMonitor, stopMultisigHealthMonitor } from "./api/services/multisig-health.ts";
+import { startPricePoller, stopPricePoller } from "./utils/fee-oracle.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 import { dns } from "bun";
@@ -118,6 +119,7 @@ async function main(): Promise<void> {
 	}
 
 	await startMultisigHealthMonitor();
+	startPricePoller();
 	// API server runs on main thread — event loop stays free
 	startApiServer();
 
@@ -147,6 +149,7 @@ async function shutdown(): Promise<void> {
 	log.info("Shutting down...");
 	stopSyncWorker();
 	stopMultisigHealthMonitor();
+	stopPricePoller();
 	await closeBeekeeperSigner();
 	await closePool();
 	process.exit(0);

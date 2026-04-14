@@ -5,29 +5,22 @@ import { DEFAULT_FEE_ACCOUNT } from "@/protocol/constants.ts";
 
 const log = createLogger("fee-oracle");
 
-// Lightweight ad-hoc interface for the RPC call
 interface FeedHistory {
 	current_median_history: {
-		base: string; // e.g. "0.280 HBD"
-		quote: string; // e.g. "1.000 HIVE"
+		base: string;
+		quote: string;
 	};
 }
 
-let cachedPrice: { hbdPerHive: number; expiresAt: number } | null = null;
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour cache since median price moves slowly (every 3.5 days)
+const PRICE_POLL_INTERVAL_MS = 3_600_000;
+const PRICE_STALE_THRESHOLD_MS = 14_400_000;
 
-/**
- * Fetches the current median HBD per HIVE price from the blockchain.
- * Uses a built-in fetch with the primary endpoint. For full failover,
- * this would normally tie into `callWithFailover` in `hive-client.ts`.
- */
-export async function getMedianPrice(): Promise<number> {
-	if (cachedPrice && Date.now() < cachedPrice.expiresAt) {
-		return cachedPrice.hbdPerHive;
-	}
+let cachedPrice: { hbdPerHive: number; fetchedAt: number } | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+async function fetchMedianPrice(): Promise<number | null> {
 	const endpoint = config.hiveEndpoints[0] || "https://api.hive.blog";
-	
+
 	try {
 		const response = await fetch(endpoint, {
 			method: "POST",
@@ -42,7 +35,7 @@ export async function getMedianPrice(): Promise<number> {
 		});
 
 		if (!response.ok) throw new Error(`HTTP ${response.status}`);
-		
+
 		const json = await response.json() as { result?: FeedHistory };
 		if (!json.result?.current_median_history) {
 			throw new Error("Invalid get_feed_history response");
@@ -52,7 +45,7 @@ export async function getMedianPrice(): Promise<number> {
 		if (!median.base || !median.quote) {
 			throw new Error("Missing base/quote in price feed");
 		}
-		
+
 		const baseAmount = parseFloat(median.base.split(" ")[0]!);
 		const quoteAmount = parseFloat(median.quote.split(" ")[0]!);
 
@@ -60,28 +53,70 @@ export async function getMedianPrice(): Promise<number> {
 			throw new Error("Invalid price feed format");
 		}
 
-		const hbdPerHive = baseAmount / quoteAmount;
-
-		cachedPrice = {
-			hbdPerHive,
-			expiresAt: Date.now() + CACHE_TTL_MS,
-		};
-
-		return hbdPerHive;
+		return baseAmount / quoteAmount;
 	} catch (err) {
 		log.warn("Failed to fetch feed history", { error: err instanceof Error ? err.message : String(err) });
-		// Fallback to a safe estimate if the node is down
-		return 0.3; 
+		return null;
 	}
 }
 
+export async function refreshPrice(): Promise<void> {
+	const price = await fetchMedianPrice();
+	if (price !== null) {
+		cachedPrice = { hbdPerHive: price, fetchedAt: Date.now() };
+		log.info("HIVE/HBD price updated", { hbdPerHive: price });
+	} else if (cachedPrice) {
+		log.warn("Price fetch failed — using cached price", {
+			hbdPerHive: cachedPrice.hbdPerHive,
+			ageMs: Date.now() - cachedPrice.fetchedAt,
+			stale: !isPriceFresh(),
+		});
+	} else {
+		log.warn("Price fetch failed — no cached price available, HIVE payments will be rejected");
+	}
+}
+
+export function startPricePoller(): void {
+	refreshPrice().catch(() => {});
+	if (pollTimer !== null) return;
+	pollTimer = setInterval(() => {
+		refreshPrice().catch(() => {});
+	}, PRICE_POLL_INTERVAL_MS);
+	pollTimer.unref();
+}
+
+export function stopPricePoller(): void {
+	if (pollTimer !== null) {
+		clearInterval(pollTimer);
+		pollTimer = null;
+	}
+}
+
+function isPriceFresh(): boolean {
+	if (!cachedPrice) return false;
+	return (Date.now() - cachedPrice.fetchedAt) < PRICE_STALE_THRESHOLD_MS;
+}
+
+export function getMedianPrice(): number | null {
+	if (!isPriceFresh()) return null;
+	return cachedPrice!.hbdPerHive;
+}
+
+export function getPriceStatus(): Readonly<{
+	available: boolean;
+	hbdPerHive: number | null;
+	fetchedAt: number | null;
+	stale: boolean;
+}> {
+	return {
+		available: cachedPrice !== null,
+		hbdPerHive: cachedPrice?.hbdPerHive ?? null,
+		fetchedAt: cachedPrice?.fetchedAt ?? null,
+		stale: !isPriceFresh(),
+	};
+}
+
 export const feeOracle = {
-	/**
-	 * Validates if the paid amount (HBD or HIVE) meets the required HBD constant fee.
-	 * @param requiredHbd - The constant string value, e.g. "100.000"
-	 * @param paidAmount - The amount of tokens paid as a number
-	 * @param paidCurrency - "HBD" or "HIVE"
-	 */
 	async validateFee(requiredHbd: string, paidAmount: number, paidCurrency: string): Promise<boolean> {
 		const target = parseFloat(requiredHbd);
 		if (Number.isNaN(target)) throw new Error("Invalid required HBD format");
@@ -91,19 +126,15 @@ export const feeOracle = {
 		}
 
 		if (paidCurrency === "HIVE") {
-			const hbdPerHive = await getMedianPrice();
+			const hbdPerHive = getMedianPrice();
+			if (hbdPerHive === null) return false;
 			const hiveRequired = target / hbdPerHive;
-			
-			// We allow a small 0.5% margin of error due to price fluctuations
 			return paidAmount >= (hiveRequired * 0.995);
 		}
 
 		return false;
 	},
 
-	/**
-	 * Requires the operation to have a valid paired transfer fulfilling the required fee.
-	 */
 	async requireDynamicFee(
 		op: ParsedOperation,
 		requiredHbd: string,
@@ -137,6 +168,11 @@ export const feeOracle = {
 		if (!sawCandidate) {
 			throw new Error(`Fee must be paid by ${payerAccount} to the treasury (${targetAccount})`);
 		}
+
+		if (!isPriceFresh()) {
+			throw new Error(`Cannot validate HIVE fee: price feed unavailable or stale. Required: ${requiredHbd} HBD`);
+		}
+
 		throw new Error(`Insufficient fee paid: no transfer meets the requirement of ${requiredHbd} HBD`);
 	}
 };

@@ -42,7 +42,10 @@ let initPromise: Promise<string> | null = null;
  */
 export function initBeekeeperSigner(activeKeyWif: string, walletPassword: string): Promise<string> {
 	if (!initPromise) {
-		initPromise = doInit(activeKeyWif, walletPassword);
+		initPromise = doInit(activeKeyWif, walletPassword).catch((err) => {
+			initPromise = null;
+			throw err;
+		});
 	}
 	return initPromise;
 }
@@ -52,45 +55,53 @@ async function doInit(activeKeyWif: string, walletPassword: string): Promise<str
 		throw new Error("BEEKEEPER_PASSWORD is required — set it in your .env");
 	}
 
-	// We use inMemory: true to keep keys off disk, but we also specify a storageRoot
-	// in a writable location just in case the WASM module needs a scratch space.
-	// We also set a very large unlockTimeout (1 year) to prevent the wallet from auto-locking.
 	const storageRoot = process.env.BEEKEEPER_STORAGE_ROOT || "/tmp/nftlox-beekeeper";
 
-	bkInstance = await createBeekeeper({
-		enableLogs: false,
-		inMemory: true,
-		storageRoot,
-		unlockTimeout: 31_536_000,
-	});
-	bkSession = bkInstance.createSession(SESSION_SALT);
+	try {
+		bkInstance = await createBeekeeper({
+			enableLogs: false,
+			inMemory: true,
+			storageRoot,
+			unlockTimeout: 31_536_000,
+		});
+		bkSession = bkInstance.createSession(SESSION_SALT);
 
-	let wallet: IBeekeeperUnlockedWallet;
+		let wallet: IBeekeeperUnlockedWallet;
 
-	if (bkSession.hasWallet(WALLET_NAME)) {
-		log.info("Wallet already exists, opening and unlocking", { walletName: WALLET_NAME });
-		const openResult = bkSession.openWallet(WALLET_NAME);
-		if (openResult.unlocked) {
-			wallet = openResult.unlocked;
+		if (bkSession.hasWallet(WALLET_NAME)) {
+			log.info("Wallet already exists, opening and unlocking", { walletName: WALLET_NAME });
+			const openResult = bkSession.openWallet(WALLET_NAME);
+			if (openResult.unlocked) {
+				wallet = openResult.unlocked;
+			} else {
+				wallet = openResult.unlock(walletPassword);
+			}
 		} else {
-			wallet = openResult.unlock(walletPassword);
+			const created = await bkSession.createWallet(WALLET_NAME, walletPassword, true);
+			wallet = created.wallet;
 		}
-	} else {
-		// createWallet returns IWalletCreated which has an 'unlocked' wallet
-		const created = await bkSession.createWallet(WALLET_NAME, walletPassword, true);
-		wallet = created.wallet;
+
+		bkWallet = wallet;
+
+		cachedPublicKey = await wallet.importKey(activeKeyWif);
+		log.info("Beekeeper signer initialized", {
+			publicKey: cachedPublicKey,
+			storageRoot,
+			isTemporary: wallet.isTemporary,
+		});
+
+		return cachedPublicKey;
+	} catch (err) {
+		cleanupState();
+		throw err;
 	}
+}
 
-	bkWallet = wallet;
-
-	cachedPublicKey = await wallet.importKey(activeKeyWif);
-	log.info("Beekeeper signer initialized", {
-		publicKey: cachedPublicKey,
-		storageRoot,
-		isTemporary: wallet.isTemporary,
-	});
-
-	return cachedPublicKey;
+function cleanupState(): void {
+	bkWallet = null;
+	bkSession = null;
+	bkInstance = null;
+	cachedPublicKey = null;
 }
 
 /**
@@ -149,10 +160,7 @@ export async function closeBeekeeperSigner(): Promise<void> {
 		try { await bkInstance.delete(); } catch { /* best-effort */ }
 	}
 
-	bkWallet = null;
-	bkSession = null;
-	bkInstance = null;
-	cachedPublicKey = null;
+	cleanupState();
 
 	log.info("Beekeeper signer closed");
 }

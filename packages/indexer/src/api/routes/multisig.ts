@@ -314,9 +314,12 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			};
 		}
 
+		let signingSucceeded = false;
 		try {
 			const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId);
-			if (!result.ok) {
+			if (result.ok) {
+				signingSucceeded = true;
+			} else {
 				logRejection({
 					buyer: body.buyer,
 					nftId: body.nftId,
@@ -336,9 +339,9 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			set.status = 500;
 			return { ok: false, code: "INTERNAL_ERROR" as const, message: "Unexpected signing error" };
 		} finally {
-			// Always release lock — on success it expires naturally via MULTISIG_EXPIRATION_MS,
-			// but on any failure (validation or unexpected) we free the NFT immediately.
-			await nftLock.release(body.nftId);
+			if (!signingSucceeded) {
+				await nftLock.release(body.nftId);
+			}
 		}
 	}, {
 		body: t.Object({
