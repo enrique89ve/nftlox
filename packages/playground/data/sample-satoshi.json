@@ -2,15 +2,13 @@
 	"collection": {
 		"name": "Foundation Collection",
 		"symbol": "GSB",
-		"creator": "enrique89",
 		"totalPotential": 10040,
 		"description": "Exclusive Satoshi, Gold and Silver digital artifacts.",
 		"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23u64jtH44hTDBxvZoA9GcmfHUnqciWU2ZjB2NJQg4JvVzDg1E7v5rRUcXoRGLDNDXrLY.png",
 		"externalUrl": "https://nftlox.tech",
 		"transferable": true,
 		"burnable": true,
-		"royaltyPct": 5.0,
-		"royaltyRecipient": "enrique89"
+		"royaltyPct": 5.0
 	},
 	"seeds": [
 		{
