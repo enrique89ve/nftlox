@@ -19,8 +19,28 @@ const json = (data: unknown, status = 200) =>
 		headers: { "Content-Type": "application/json" },
 	});
 
-const INDEX_HTML_PATH = new URL("../public/index.html", import.meta.url).pathname;
 const APP_ENTRYPOINT_PATH = new URL("../public/app.ts", import.meta.url).pathname;
+const PUBLIC_DIR = new URL("../public", import.meta.url).pathname;
+
+const PAGE_IDS = [
+	"collections",
+	"create",
+	"inventory",
+	"collection-detail",
+	"nft-detail",
+	"advanced",
+	"marketplace",
+] as const;
+
+async function buildIndexHtml(): Promise<string> {
+	const [shell, ...pageFragments] = await Promise.all([
+		Bun.file(`${PUBLIC_DIR}/shell.html`).text(),
+		...PAGE_IDS.map((id) => Bun.file(`${PUBLIC_DIR}/pages/${id}.html`).text()),
+	]);
+	return shell.replace("<!-- PAGES -->", pageFragments.join("\n"));
+}
+
+const indexHtml = await buildIndexHtml();
 
 async function buildBrowserBundle(): Promise<string> {
 	const result = await Bun.build({
@@ -74,11 +94,19 @@ const ALLOWED_SAMPLE_FILES = new Set([
 const server = Bun.serve({
 	port: 3040,
 	routes: {
-		"/": () => new Response(Bun.file(INDEX_HTML_PATH), {
+		"/": () => new Response(indexHtml, {
 			headers: {
 				"Content-Type": "text/html; charset=utf-8",
 				"Cache-Control": "no-store",
 			},
+		}),
+
+		"/theme.css": () => new Response(Bun.file(`${PUBLIC_DIR}/theme.css`), {
+			headers: { "Content-Type": "text/css", "Cache-Control": "no-store" },
+		}),
+
+		"/styles.css": () => new Response(Bun.file(`${PUBLIC_DIR}/styles.css`), {
+			headers: { "Content-Type": "text/css", "Cache-Control": "no-store" },
 		}),
 
 		"/app.js": browserBundleResponse,

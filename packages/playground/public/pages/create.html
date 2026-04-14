@@ -1,0 +1,487 @@
+        <div class="page" id="page-create">
+          <div class="page-header">
+            <h1 class="page-title">Create Collection</h1>
+            <p class="page-desc">Create a new collection and mint seed NFTs</p>
+          </div>
+
+          <!-- Stepper -->
+          <div class="stepper">
+            <div class="step active" data-step="1">
+              <span class="step-num">1</span>
+              Collection Info
+            </div>
+            <div class="step" data-step="2">
+              <span class="step-num">2</span>
+              Upload Seeds
+            </div>
+            <div class="step" data-step="3">
+              <span class="step-num">3</span>
+              Review
+            </div>
+            <div class="step" data-step="4">
+              <span class="step-num">4</span>
+              Broadcast
+            </div>
+          </div>
+
+          <!-- Step 1: Collection Info -->
+          <div class="card" id="step-1-content">
+            <div class="card-title">Collection Details</div>
+
+            <!-- Quick Start: load a sample collection -->
+            <div class="form-group" style="margin-top: 16px">
+              <label class="form-label">Quick Start — Load Example</label>
+              <select
+                class="form-input"
+                id="sample-select"
+                onchange="loadSampleCollection()"
+              >
+                <option value="">Start from scratch...</option>
+                <option value="playground/sample-bulls.json">
+                  HiveBull Warriors (5 seeds, simple)
+                </option>
+                <option value="playground/sample-seeds.json">
+                  Genesis Seeds (5 seeds, tiered rarity)
+                </option>
+                <option value="playground/sample-nfts.json">
+                  Cosmic Collection (10 seeds, art)
+                </option>
+                <option value="playground/sample-game-cards.json">
+                  Dragon Masters TCG (5 seeds, typed schema)
+                </option>
+                <option value="playground/sample-satoshi.json">
+                  Foundation Collection (GSB)
+                </option>
+              </select>
+              <small
+                style="
+                  color: var(--text-dim);
+                  font-size: 12px;
+                  margin-top: 4px;
+                  display: block;
+                "
+              >
+                Select an example to auto-fill all fields, or fill manually
+                below
+              </small>
+            </div>
+
+            <div
+              style="border-top: 1px solid var(--border); margin: 20px 0"
+            ></div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Collection Name</label>
+                <input
+                  type="text"
+                  class="form-input"
+                  id="col-name"
+                  placeholder="e.g., HiveBull Warriors"
+                />
+                <span class="field-error" id="col-name-error"></span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Symbol (3-8 chars)</label>
+                <input
+                  type="text"
+                  class="form-input"
+                  id="col-symbol"
+                  placeholder="e.g., BULL"
+                  maxlength="8"
+                  style="text-transform: uppercase"
+                />
+                <span class="field-error" id="col-symbol-error"></span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Creator Username</label>
+              <input
+                type="text"
+                class="form-input"
+                id="col-creator"
+                placeholder="e.g., satoshi"
+              />
+              <span class="field-error" id="col-creator-error"></span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Collection Image URL</label>
+              <input
+                type="url"
+                class="form-input"
+                id="col-image"
+                placeholder="https://example.com/collection-cover.png"
+              />
+              <span class="field-error" id="col-image-error"></span>
+              <small
+                style="
+                  color: var(--text-dim);
+                  font-size: 12px;
+                  margin-top: 4px;
+                  display: block;
+                "
+                >IPFS, Imgur, or direct image URL</small
+              >
+            </div>
+            <div class="form-group">
+              <label class="form-label"
+                >Description
+                <span style="color: var(--text-dim); font-weight: normal"
+                  >(optional)</span
+                ></label
+              >
+              <textarea
+                class="form-input"
+                id="col-description"
+                placeholder="A brief description of your collection..."
+                rows="2"
+                style="resize: vertical"
+              ></textarea>
+              <small
+                style="
+                  color: var(--text-dim);
+                  font-size: 12px;
+                  margin-top: 4px;
+                  display: block;
+                "
+                >If empty, defaults to "[Collection Name] collection"</small
+              >
+            </div>
+            <div class="btn-group" style="margin-top: 20px">
+              <button class="btn btn-primary" onclick="goToStep(2)">
+                Next: Upload Seeds
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2: Upload Seeds -->
+          <div class="card" id="step-2-content" style="display: none">
+            <div class="card-title">Upload Seed NFTs</div>
+
+            <div class="upload-area" id="upload-area" style="margin-top: 16px">
+              <svg
+                class="upload-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <p class="upload-text">Drop JSON file or click to browse</p>
+              <p class="upload-hint">
+                Required fields: artId, name, imageUrl, maxSupply
+              </p>
+              <a
+                href="/playground/template-seeds.json"
+                download="template-seeds.json"
+                style="
+                  font-size: 12px;
+                  color: var(--accent);
+                  text-decoration: none;
+                  margin-top: 8px;
+                  display: inline-block;
+                "
+                onclick="event.stopPropagation()"
+              >
+                Download template.json
+              </a>
+            </div>
+            <input
+              type="file"
+              id="file-input"
+              accept=".json"
+              style="display: none"
+            />
+
+            <!-- Info banner when sample is pre-loaded -->
+            <div
+              id="sample-loaded-banner"
+              style="
+                display: none;
+                margin-top: 16px;
+                padding: 12px 16px;
+                border-radius: 8px;
+                background: var(--accent-dim);
+                border: 1px solid var(--accent);
+                color: var(--accent);
+                font-size: 13px;
+              "
+            >
+              Seeds loaded from example collection. You can still upload a
+              different JSON to override.
+            </div>
+
+            <!-- ArtId Suffix (collapsible) -->
+            <details style="margin-top: 16px">
+              <summary
+                style="
+                  cursor: pointer;
+                  font-size: 13px;
+                  font-weight: 500;
+                  color: var(--text-muted);
+                "
+              >
+                Advanced Options
+              </summary>
+              <div class="form-group" style="margin-top: 12px">
+                <label class="form-label">ArtId Suffix</label>
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <input
+                    class="form-input"
+                    id="artid-suffix"
+                    placeholder="e.g. v2, test, mar26"
+                    style="flex: 1"
+                  />
+                  <button
+                    class="btn btn-sm btn-secondary"
+                    onclick="randomizeSuffix()"
+                  >
+                    Random
+                  </button>
+                </div>
+                <p
+                  style="
+                    font-size: 11px;
+                    color: var(--text-dim);
+                    margin-top: 4px;
+                  "
+                >
+                  Appended to each artId to avoid blockchain duplicates (e.g.,
+                  BULL001 → BULL001-v2)
+                </p>
+              </div>
+            </details>
+
+            <!-- Validation Results -->
+            <div
+              id="validation-results"
+              style="display: none; margin-top: 20px"
+            >
+              <div class="card-title" style="margin-bottom: 12px">
+                Validation Results
+              </div>
+              <div
+                id="validation-summary"
+                style="
+                  padding: 12px 16px;
+                  border-radius: 8px;
+                  margin-bottom: 12px;
+                "
+              ></div>
+              <div id="validation-errors" style="display: none"></div>
+              <div
+                id="validation-seeds"
+                style="max-height: 200px; overflow-y: auto"
+              ></div>
+            </div>
+
+            <!-- Validation Status -->
+            <div
+              id="validation-status"
+              style="
+                display: none;
+                margin-top: 16px;
+                padding: 12px 16px;
+                border-radius: 8px;
+              "
+            ></div>
+
+            <div class="btn-group" style="margin-top: 20px">
+              <button class="btn btn-secondary" onclick="goToStep(1)">
+                Back
+              </button>
+              <button
+                class="btn btn-primary"
+                id="btn-validate"
+                onclick="validateSeeds()"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M9 12l2 2 4-4" />
+                  <circle cx="12" cy="12" r="10" />
+                </svg>
+                Validate Seeds
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 3: Review -->
+          <div class="card" id="step-3-content" style="display: none">
+            <div class="card-title">Review</div>
+
+            <div
+              class="preview-stats"
+              id="preview-stats"
+              style="margin-top: 16px"
+            ></div>
+
+            <div style="max-height: 300px; overflow-y: auto; margin-top: 16px">
+              <table class="seeds-table" id="seeds-preview-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Name</th>
+                    <th>Max Supply</th>
+                  </tr>
+                </thead>
+                <tbody id="seeds-preview-body"></tbody>
+              </table>
+            </div>
+
+            <div class="btn-group" style="margin-top: 20px">
+              <button class="btn btn-secondary" onclick="goToStep(2)">
+                Back
+              </button>
+              <button
+                class="btn btn-primary"
+                id="btn-create-collection"
+                onclick="createCollection()"
+              >
+                Create Collection
+              </button>
+            </div>
+            <p
+              style="
+                font-size: 11px;
+                color: var(--text-dim);
+                margin-top: 6px;
+                text-align: center;
+              "
+            >
+              This will prepare blockchain operations for broadcast
+            </p>
+          </div>
+
+          <!-- Minting Progress - Step 4 -->
+          <div class="card" id="minting-progress" style="display: none">
+            <div class="card-title">Broadcast Operations</div>
+
+            <!-- Summary of what we're minting -->
+            <div
+              id="mint-summary"
+              style="
+                background: var(--surface);
+                padding: 12px 16px;
+                border-radius: 8px;
+                margin-bottom: 16px;
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                "
+              >
+                <div>
+                  <div
+                    style="font-weight: 600; color: var(--text)"
+                    id="summary-collection-name"
+                  >
+                    Collection Name
+                  </div>
+                  <div
+                    style="font-size: 13px; color: var(--text-dim)"
+                    id="summary-details"
+                  >
+                    0 seeds · 0 total supply
+                  </div>
+                </div>
+                <div style="text-align: right">
+                  <div style="font-size: 13px; color: var(--text-dim)">
+                    Creator
+                  </div>
+                  <div
+                    style="font-weight: 500; color: var(--accent)"
+                    id="summary-creator"
+                  >
+                    @username
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Progress Counter -->
+            <div
+              id="broadcast-progress"
+              style="
+                font-size: 13px;
+                color: var(--text-muted);
+                margin-bottom: 12px;
+                display: none;
+              "
+            >
+              0 of 0 operations broadcast
+            </div>
+
+            <!-- Operation Checklist -->
+            <div
+              id="operation-checklist"
+              style="display: flex; flex-direction: column; gap: 8px"
+            >
+              <!-- Collection Operation -->
+              <div class="op-item" id="op-collection" data-status="pending">
+                <div class="op-status">
+                  <div class="op-icon pending">○</div>
+                </div>
+                <div class="op-info">
+                  <div class="op-title">Create Collection</div>
+                  <div class="op-desc">
+                    1 operation · Registers collection on blockchain
+                  </div>
+                </div>
+                <button
+                  class="btn btn-primary btn-sm"
+                  id="btn-op-collection"
+                  onclick="broadcastCollection()"
+                >
+                  Broadcast
+                </button>
+              </div>
+
+              <!-- Seed Batches Container -->
+              <div id="seed-batches-list"></div>
+            </div>
+
+            <!-- Compact Log -->
+            <details open style="margin-top: 16px">
+              <summary
+                style="cursor: pointer; color: var(--text-dim); font-size: 13px"
+              >
+                View detailed log
+              </summary>
+              <div
+                class="log-container"
+                id="mint-log"
+                style="margin-top: 8px; max-height: 150px"
+              ></div>
+            </details>
+
+            <!-- Reset Form -->
+            <div style="margin-top: 24px; text-align: center">
+              <button
+                class="btn btn-secondary"
+                onclick="resetMinting()"
+                style="padding: 8px 20px; font-size: 13px"
+              >
+                Reset Form
+              </button>
+              <p
+                style="font-size: 11px; color: var(--text-dim); margin-top: 6px"
+              >
+                Already-broadcast operations are permanent on the blockchain
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inventory Page -->

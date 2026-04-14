@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NFTLox Protocol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/theme.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="logo">
+          <div class="logo-mark">N</div>
+          <span class="logo-text">NFTLox</span>
+          <span class="version" id="protocol-version">v0.2.0</span>
+        </div>
+
+        <nav>
+          <div class="nav-item active" data-page="collections">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            Explore
+          </div>
+          <div class="nav-item" data-page="create">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="16" />
+              <line x1="8" y1="12" x2="16" y2="12" />
+            </svg>
+            Create
+          </div>
+          <div class="nav-item" data-page="inventory">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+              />
+            </svg>
+            Inventory
+          </div>
+          <div class="nav-item" data-page="marketplace">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M16 10a4 4 0 01-8 0" />
+            </svg>
+            Market
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <details class="utility-links">
+            <summary>Developer tools</summary>
+            <div class="nav-item" data-page="advanced">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              Advanced
+            </div>
+          </details>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main>
+        <header class="main-topbar" aria-label="Wallet status">
+          <div class="connection">
+            <div class="connection-header">
+              <div class="status-dot" id="keychain-dot"></div>
+              <span class="connection-label">Keychain</span>
+            </div>
+            <div class="connection-user" id="user-display">Not connected</div>
+            <button class="btn-connect" id="btn-connect">Connect Wallet</button>
+            <button
+              class="btn-connect"
+              id="btn-disconnect"
+              style="
+                display: none;
+                color: var(--error);
+                border-color: var(--error);
+              "
+            >
+              Disconnect
+            </button>
+          </div>
+        </header>
+
+        <!-- Collections Page -->
+        <!-- PAGES -->
+        <details class="app-log">
+          <summary>Activity log</summary>
+          <div class="log-container" id="log"></div>
+        </details>
+      </main>
+    </div>
+
+    <script type="module" src="/app.js?v=0.5.1"></script>
+  </body>
+</html>

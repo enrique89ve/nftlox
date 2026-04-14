@@ -45,6 +45,7 @@ import {
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
 	generateDeterministicCollectionId,
+	PROTOCOL_COLLECTION_FEE_HBD,
 } from "@/protocol/index.ts";
 
 const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
@@ -88,8 +89,24 @@ async function cleanDb() {
 	await sql`DELETE FROM collections`;
 }
 
+/**
+ * Builds a create_collection op with the node-account signer and a paired fee transfer
+ * from the given creator. All tests must use this helper — `handleCreateCollection`
+ * now enforces signer == config.hiveAccount and derives the creator from the fee transfer.
+ */
+function makeCreateCollectionOp(
+	data: Record<string, unknown>,
+	creator = "alice",
+): ParsedOperation {
+	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
+	const pairedTransfers = [
+		{ from: creator, to: config.hiveAccount, amount: feeAmount, currency: "HBD", memo: "" },
+	];
+	return makeOp(ACTION_CREATE_COLLECTION, data, config.hiveAccount, pairedTransfers);
+}
+
 async function seedCollection(txn: Queryable = sql) {
-	const op = makeOp(ACTION_CREATE_COLLECTION, {
+	const op = makeCreateCollectionOp({
 		id: COL_ID,
 		name: "Test Collection",
 		symbol: "TEST",
@@ -237,7 +254,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects non-canonical collectionId", async () => {
-			const op = makeOp(ACTION_CREATE_COLLECTION, {
+			const op = makeCreateCollectionOp({
 				id: "col_fake_id_12345",
 				name: "Test Collection",
 				symbol: "TEST",
@@ -249,7 +266,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("ignores payload-only originDna on collection creation", async () => {
-			const op = makeOp(ACTION_CREATE_COLLECTION, {
+			const op = makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -264,7 +281,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects missing metadata", async () => {
-			const op = makeOp(ACTION_CREATE_COLLECTION, {
+			const op = makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -275,7 +292,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects missing metadata.description", async () => {
-			const op = makeOp(ACTION_CREATE_COLLECTION, {
+			const op = makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -287,7 +304,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects missing rules", async () => {
-			const op = makeOp(ACTION_CREATE_COLLECTION, {
+			const op = makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -298,7 +315,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects missing rules.transferable", async () => {
-			const op = makeOp(ACTION_CREATE_COLLECTION, {
+			const op = makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -310,7 +327,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects royaltyPct out of range", async () => {
-			const op = makeOp(ACTION_CREATE_COLLECTION, {
+			const op = makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -322,7 +339,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects negative totalPotential", async () => {
-			const op = makeOp(ACTION_CREATE_COLLECTION, {
+			const op = makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -1012,7 +1029,7 @@ describe("Handlers (integration)", () => {
 				"alice", "Locked Collection", "LOCK",
 				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
-			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
+			await handleCreateCollection(makeCreateCollectionOp(colData, "alice"), sql);
 
 			const mintOp = makeOp(ACTION_MINT, {
 				id: "seed_locked1",
@@ -1078,7 +1095,7 @@ describe("Handlers (integration)", () => {
 				"alice", "No Burn", "NOBRN",
 				{ rules: { transferable: true, burnable: false, royaltyPct: 0 } },
 			);
-			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
+			await handleCreateCollection(makeCreateCollectionOp(colData, "alice"), sql);
 			await handleMint(makeOp(ACTION_MINT, {
 				id: "seed_noburn1", collectionId: colId, metadata: { name: "No Burn Seed" },
 			}), sql);
@@ -1231,7 +1248,7 @@ describe("Handlers (integration)", () => {
 				"alice", "No Transfer Collection", "NOTX",
 				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
-			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
+			await handleCreateCollection(makeCreateCollectionOp(colData, "alice"), sql);
 
 			const mintOp = makeOp(ACTION_MINT, {
 				id: "seed_notransfer1",
@@ -1253,7 +1270,7 @@ describe("Handlers (integration)", () => {
 				"alice", "No Buy Collection", "NOBUY",
 				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
-			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
+			await handleCreateCollection(makeCreateCollectionOp(colData, "alice"), sql);
 
 			await handleMint(makeOp(ACTION_MINT, {
 				id: "seed_nobuy1",
@@ -1557,7 +1574,7 @@ describe("Handlers (integration)", () => {
 				"alice", "No Lend", "NOLND",
 				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
-			await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, colData), sql);
+			await handleCreateCollection(makeCreateCollectionOp(colData, "alice"), sql);
 			const mintOp = makeOp(ACTION_MINT, {
 				id: "seed_nolend1", collectionId: colId, maxSupply: 10,
 				metadata: { name: "No Lend Seed" },
@@ -1815,14 +1832,13 @@ describe("Handlers (integration)", () => {
 	// ─── signer validation (congruence fixes) ──────────────────
 
 	describe("signer validation", () => {
-		test("create_collection ignores creator field and uses signer", async () => {
+		test("create_collection ignores creator field and uses fee payer", async () => {
 			const { id: colId, data: colData } = await makeCanonicalCollection(
 				"alice", "Spoofed", "SPOOF",
 			);
-			const op = makeOp(ACTION_CREATE_COLLECTION, {
-				...colData,
-				creator: "bob",
-			}, "alice");
+			// Payload tries to spoof creator as "bob", but fee transfer is from "alice".
+			// Handler must derive creator from fee transfer, not from payload.
+			const op = makeCreateCollectionOp({ ...colData, creator: "bob" }, "alice");
 			await handleCreateCollection(op, sql);
 
 			const [row] = await sql`SELECT creator FROM collections WHERE id = ${colId}`;

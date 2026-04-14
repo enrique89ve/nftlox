@@ -1,0 +1,84 @@
+        <div class="page" id="page-collection-detail">
+          <button class="btn-back" onclick="goBackToCollections()">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Back to Collections
+          </button>
+
+          <div class="page-header">
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 12px;
+              "
+            >
+              <div class="collection-symbol" id="detail-symbol">SYMBOL</div>
+              <span class="status-badge status-active" id="detail-status"
+                >ACTIVE</span
+              >
+            </div>
+            <h1 class="page-title" id="detail-collection-name">
+              Collection Name
+            </h1>
+            <p class="page-desc">
+              Created by
+              <span id="detail-creator" style="color: var(--accent)"
+                >@creator</span
+              >
+            </p>
+            <div
+              class="btn-group"
+              id="detail-archive-actions"
+              style="display: none; margin-top: 16px"
+            >
+              <button
+                class="btn btn-danger btn-sm"
+                id="btn-archive-collection"
+                onclick="archiveCurrentCollection()"
+              >
+                Archive Empty Collection
+              </button>
+            </div>
+          </div>
+
+          <div class="preview-stats" style="margin-bottom: 24px">
+            <div class="stat-box">
+              <div class="stat-label">Seeds</div>
+              <div class="stat-value" id="detail-seeds-count">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Instances</div>
+              <div class="stat-value" id="detail-instances-count">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Total NFTs</div>
+              <div class="stat-value" id="detail-total-count">0</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Seeds</span>
+            </div>
+            <div id="collection-seeds" class="nft-grid"></div>
+          </div>
+
+          <div class="card" style="margin-top: 20px">
+            <div class="card-header">
+              <span class="card-title">Instances</span>
+            </div>
+            <div id="collection-instances" class="nft-grid"></div>
+          </div>
+        </div>
+
+        <!-- NFT Detail Page -->

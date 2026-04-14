@@ -1,0 +1,38 @@
+        <div class="page" id="page-inventory">
+          <div class="page-header">
+            <h1 class="page-title">Inventory</h1>
+            <p class="page-desc">
+              Your owned seeds, instances, and listed items.
+            </p>
+          </div>
+
+          <div class="btn-group" style="margin-bottom: 24px">
+            <button class="btn btn-secondary" onclick="loadInventory()">
+              Refresh NFTs
+            </button>
+          </div>
+
+          <div
+            class="inventory-summary"
+            id="inventory-summary"
+            style="display: none"
+          ></div>
+
+          <div id="inventory-container">
+            <div class="empty-state">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                />
+              </svg>
+              <p class="empty-state-text">Connect wallet to view inventory</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collection Detail Page -->

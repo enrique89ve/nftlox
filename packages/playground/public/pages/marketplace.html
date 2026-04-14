@@ -1,0 +1,89 @@
+        <div class="page" id="page-marketplace">
+          <div class="page-header">
+            <h1 class="page-title">Marketplace</h1>
+            <p class="page-desc">
+              Browse active listings, compare prices, and buy with Hive
+              Keychain.
+            </p>
+          </div>
+
+          <!-- Filters bar -->
+          <div class="marketplace-filters">
+            <div class="filter-field">
+              <label class="form-label" for="listing-search"
+                >Search listings</label
+              >
+              <input
+                class="form-input"
+                type="search"
+                id="listing-search"
+                placeholder="Search by item, owner, collection, or ID"
+              />
+            </div>
+            <div class="filter-field">
+              <label class="form-label" for="listing-sort">Sort</label>
+              <select class="form-input" id="listing-sort">
+                <option value="recent">Recently Listed</option>
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label class="form-label" for="listing-currency">Currency</label>
+              <select class="form-input" id="listing-currency">
+                <option value="">All Currencies</option>
+                <option value="HIVE">HIVE</option>
+                <option value="HBD">HBD</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label class="form-label" for="listing-min-price">Min</label>
+              <input
+                class="form-input"
+                type="number"
+                id="listing-min-price"
+                min="0"
+                step="0.001"
+                placeholder="0"
+              />
+            </div>
+            <div class="filter-field">
+              <label class="form-label" for="listing-max-price">Max</label>
+              <input
+                class="form-input"
+                type="number"
+                id="listing-max-price"
+                min="0"
+                step="0.001"
+                placeholder="Any"
+              />
+            </div>
+            <div class="filter-actions" aria-label="Listing filter actions">
+              <button
+                class="btn btn-secondary btn-sm"
+                id="btn-clear-listing-filters"
+              >
+                Clear
+              </button>
+              <button class="btn btn-primary btn-sm" id="btn-load-listings">
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="marketplace-summary"
+            id="marketplace-summary"
+            style="display: none"
+          ></div>
+
+          <!-- Listings grid -->
+          <div class="nft-grid" id="listings-container">
+            <div class="empty-state">
+              <p class="empty-state-text">
+                Refresh listings to start browsing.
+              </p>
+            </div>
+          </div>
+        </div>
+

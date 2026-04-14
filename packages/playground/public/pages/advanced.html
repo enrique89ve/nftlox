@@ -1,0 +1,689 @@
+        <div class="page" id="page-advanced">
+          <div class="page-header">
+            <h1 class="page-title">Advanced</h1>
+            <p class="page-desc">
+              Permissions, verification, and Hive L1 tools
+            </p>
+          </div>
+
+          <div class="advanced-tabs">
+            <button class="advanced-tab active" data-tab="tab-permissions">
+              Permissions
+            </button>
+            <button class="advanced-tab" data-tab="tab-spv">SPV Verify</button>
+            <button class="advanced-tab" data-tab="tab-collection-ops">
+              Collection Ops
+            </button>
+            <button class="advanced-tab" data-tab="tab-debug">Debug</button>
+          </div>
+
+          <!-- ===== Tab: Permissions ===== -->
+          <div class="advanced-tab-content active" id="tab-permissions">
+            <!-- NFT Approve -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">NFT Approve</span>
+                <span class="nft-badge auth">ACTIVE KEY</span>
+              </div>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin-bottom: 12px;
+                "
+              >
+                Approve a spender to transfer a specific NFT instance on your
+                behalf.
+              </p>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Instance ID</label>
+                  <input
+                    class="form-input"
+                    id="perm-nft-approve-instance"
+                    placeholder="inst_abc123_1"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Spender</label>
+                  <input
+                    class="form-input"
+                    id="perm-nft-approve-spender"
+                    placeholder="bob"
+                  />
+                </div>
+              </div>
+              <div
+                class="form-group"
+                style="display: flex; align-items: center; gap: 8px"
+              >
+                <input type="checkbox" id="perm-nft-approve-approved" checked />
+                <label for="perm-nft-approve-approved" style="font-size: 13px"
+                  >Approved</label
+                >
+              </div>
+              <button class="btn btn-primary" id="btn-nft-approve">
+                Approve via Keychain
+              </button>
+            </div>
+
+            <!-- NFT Approve All -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title"
+                  >NFT Approve All (Collection-wide)</span
+                >
+                <span class="nft-badge auth">ACTIVE KEY</span>
+              </div>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin-bottom: 12px;
+                "
+              >
+                Approve a spender for all your NFTs in a collection.
+              </p>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Collection ID</label>
+                  <input
+                    class="form-input"
+                    id="perm-nft-approve-all-collection"
+                    placeholder="col_abc123"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Spender</label>
+                  <input
+                    class="form-input"
+                    id="perm-nft-approve-all-spender"
+                    placeholder="bob"
+                  />
+                </div>
+              </div>
+              <div
+                class="form-group"
+                style="display: flex; align-items: center; gap: 8px"
+              >
+                <input
+                  type="checkbox"
+                  id="perm-nft-approve-all-approved"
+                  checked
+                />
+                <label
+                  for="perm-nft-approve-all-approved"
+                  style="font-size: 13px"
+                  >Approved</label
+                >
+              </div>
+              <button class="btn btn-primary" id="btn-nft-approve-all">
+                Approve All via Keychain
+              </button>
+            </div>
+
+            <!-- NFT Transfer From -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">NFT Transfer From</span>
+                <span class="nft-badge auth">ACTIVE KEY</span>
+              </div>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin-bottom: 12px;
+                "
+              >
+                Transfer an NFT you have approval for (as spender).
+              </p>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">From (owner)</label>
+                  <input
+                    class="form-input"
+                    id="perm-nft-xfer-from"
+                    placeholder="alice"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">To</label>
+                  <input
+                    class="form-input"
+                    id="perm-nft-xfer-to"
+                    placeholder="charlie"
+                  />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Instance ID</label>
+                <input
+                  class="form-input"
+                  id="perm-nft-xfer-instance"
+                  placeholder="inst_abc123_1"
+                />
+              </div>
+              <button class="btn btn-primary" id="btn-nft-transfer-from">
+                Transfer From via Keychain
+              </button>
+            </div>
+
+            <!-- Lending -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">NFT Lending</span>
+                <span class="nft-badge auth">ACTIVE KEY</span>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Instance ID</label>
+                  <input
+                    class="form-input"
+                    id="perm-lend-instance"
+                    placeholder="inst_abc123_1"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Borrower</label>
+                  <input
+                    class="form-input"
+                    id="perm-lend-borrower"
+                    placeholder="bob"
+                  />
+                </div>
+              </div>
+              <div class="btn-group">
+                <button class="btn btn-primary" id="btn-nft-lend">
+                  Lend via Keychain
+                </button>
+                <button class="btn btn-secondary" id="btn-nft-return">
+                  Return via Keychain
+                </button>
+              </div>
+              <div class="form-group" style="margin-top: 12px">
+                <label class="form-label">Instance ID (for Return)</label>
+                <input
+                  class="form-input"
+                  id="perm-return-instance"
+                  placeholder="inst_abc123_1"
+                />
+              </div>
+            </div>
+
+            <!-- Data Operator -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Data Operator Approve</span>
+                <span class="nft-badge auth">ACTIVE KEY</span>
+              </div>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin-bottom: 12px;
+                "
+              >
+                Allow an operator to set data on NFTs in your collection.
+              </p>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Collection ID</label>
+                  <input
+                    class="form-input"
+                    id="perm-data-op-collection"
+                    placeholder="col_abc123"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Operator</label>
+                  <input
+                    class="form-input"
+                    id="perm-data-op-operator"
+                    placeholder="operator-account"
+                  />
+                </div>
+              </div>
+              <div
+                class="form-group"
+                style="display: flex; align-items: center; gap: 8px"
+              >
+                <input type="checkbox" id="perm-data-op-approved" checked />
+                <label for="perm-data-op-approved" style="font-size: 13px"
+                  >Approved</label
+                >
+              </div>
+              <button class="btn btn-primary" id="btn-data-operator-approve">
+                Approve via Keychain
+              </button>
+            </div>
+
+            <!-- Set Data From (as operator) -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Set Data From (as Operator)</span>
+                <span class="nft-badge auth">ACTIVE KEY</span>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">NFT ID</label>
+                  <input
+                    class="form-input"
+                    id="perm-set-data-from-nft"
+                    placeholder="seed_abc123"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Instance DNA</label>
+                  <input
+                    class="form-input"
+                    id="perm-set-data-from-dna"
+                    placeholder="dna_hash"
+                  />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Data (JSON)</label>
+                <textarea
+                  class="form-input"
+                  id="perm-set-data-from-data"
+                  rows="3"
+                  placeholder='{"level": 5}'
+                ></textarea>
+              </div>
+              <button class="btn btn-primary" id="btn-set-data-from">
+                Set Data via Keychain
+              </button>
+            </div>
+
+            <!-- Preview -->
+            <div class="card" id="permissions-preview" style="display: none">
+              <div class="card-header">
+                <span class="card-title">Generated Operation</span>
+              </div>
+              <pre
+                id="permissions-json"
+                style="
+                  background: var(--bg);
+                  padding: 16px;
+                  border-radius: 6px;
+                  font-family: var(--mono);
+                  font-size: 12px;
+                  overflow-x: auto;
+                  color: var(--accent);
+                  max-height: 300px;
+                  overflow-y: auto;
+                "
+              ></pre>
+            </div>
+          </div>
+
+          <!-- ===== Tab: SPV Verify ===== -->
+          <div class="advanced-tab-content" id="tab-spv">
+            <!-- Verify Ownership -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Verify NFT Ownership</span>
+              </div>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin-bottom: 12px;
+                "
+              >
+                Checks the current ownership proof against Hive L1 using the
+                NFT's canonical ownership operation.
+              </p>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">NFT ID</label>
+                  <input
+                    class="form-input"
+                    id="spv-ownership-nft"
+                    placeholder="seed_abc123"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Expected Owner</label>
+                  <input
+                    class="form-input"
+                    id="spv-ownership-owner"
+                    placeholder="alice"
+                  />
+                </div>
+              </div>
+              <button class="btn btn-primary" id="btn-verify-ownership">
+                Verify Ownership
+              </button>
+              <div
+                id="spv-ownership-result"
+                style="display: none; margin-top: 16px"
+              ></div>
+            </div>
+
+            <!-- Verify On-Chain -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Verify Operation On-Chain</span>
+              </div>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin-bottom: 12px;
+                "
+              >
+                Verify that a specific NFTLox operation exists on Hive L1.
+              </p>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Transaction ID</label>
+                  <input
+                    class="form-input"
+                    id="spv-onchain-txid"
+                    placeholder="abc123def456..."
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Block Number</label>
+                  <input
+                    class="form-input"
+                    type="number"
+                    id="spv-onchain-block"
+                    placeholder="12345678"
+                  />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Expected Action (optional)</label>
+                  <input
+                    class="form-input"
+                    id="spv-onchain-action"
+                    placeholder="mint, transfer, etc."
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Expected Signer (optional)</label>
+                  <input
+                    class="form-input"
+                    id="spv-onchain-signer"
+                    placeholder="alice"
+                  />
+                </div>
+              </div>
+              <button class="btn btn-primary" id="btn-verify-on-chain">
+                Verify On-Chain
+              </button>
+              <div
+                id="spv-onchain-result"
+                style="display: none; margin-top: 16px"
+              ></div>
+            </div>
+          </div>
+
+          <!-- ===== Tab: Collection Ops ===== -->
+          <div class="advanced-tab-content" id="tab-collection-ops">
+            <!-- Bulk Distribute -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Bulk Distribute</span>
+                <span class="nft-badge auth">POSTING KEY</span>
+              </div>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin-bottom: 12px;
+                "
+              >
+                Distribute NFT instances from seeds to multiple recipients at
+                once.
+              </p>
+
+              <div class="form-row">
+                <div class="form-group" style="flex: 3">
+                  <label class="form-label">Collection ID</label>
+                  <input
+                    class="form-input"
+                    id="bulk-dist-collection"
+                    placeholder="col_abc123"
+                  />
+                </div>
+                <div
+                  class="form-group"
+                  style="flex: 0 0 auto; display: flex; align-items: flex-end"
+                >
+                  <button class="btn btn-secondary btn-sm" id="btn-load-seeds">
+                    Load Seeds
+                  </button>
+                </div>
+              </div>
+
+              <div style="margin-bottom: 12px">
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                  "
+                >
+                  <label class="form-label" style="margin: 0">Seed Items</label>
+                  <button
+                    class="btn btn-secondary btn-sm"
+                    id="btn-add-dist-item"
+                  >
+                    + Add Item
+                  </button>
+                </div>
+                <div id="bulk-dist-items"></div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label"
+                  >Recipients (one username per line)</label
+                >
+                <textarea
+                  class="form-input"
+                  id="bulk-dist-recipients"
+                  rows="4"
+                  placeholder="alice&#10;bob&#10;charlie"
+                  style="
+                    resize: vertical;
+                    font-family: var(--mono);
+                    font-size: 13px;
+                  "
+                ></textarea>
+              </div>
+
+              <button class="btn btn-primary" id="btn-bulk-distribute">
+                Distribute via Keychain
+              </button>
+
+              <div
+                id="bulk-dist-preview"
+                style="display: none; margin-top: 16px"
+              >
+                <div class="card-header" style="margin-bottom: 8px">
+                  <span class="card-title" style="font-size: 13px"
+                    >Operation Preview</span
+                  >
+                </div>
+                <pre
+                  id="bulk-dist-json"
+                  style="
+                    background: var(--surface-2);
+                    border: 1px solid var(--border);
+                    border-radius: 6px;
+                    padding: 12px;
+                    font-family: var(--mono);
+                    font-size: 12px;
+                    overflow-x: auto;
+                    max-height: 300px;
+                    overflow-y: auto;
+                  "
+                ></pre>
+              </div>
+            </div>
+
+            <!-- Extend Schema -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Extend Schema</span>
+                <span class="nft-badge auth">POSTING KEY</span>
+              </div>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin-bottom: 12px;
+                "
+              >
+                Add new fields to an existing collection's schema. Only the
+                collection creator can do this.
+              </p>
+
+              <div class="form-row">
+                <div class="form-group" style="flex: 3">
+                  <label class="form-label">Collection ID</label>
+                  <input
+                    class="form-input"
+                    id="extend-schema-collection"
+                    placeholder="col_abc123"
+                  />
+                </div>
+                <div
+                  class="form-group"
+                  style="flex: 0 0 auto; display: flex; align-items: flex-end"
+                >
+                  <button class="btn btn-secondary btn-sm" id="btn-load-schema">
+                    Load Current Schema
+                  </button>
+                </div>
+              </div>
+
+              <div
+                id="extend-schema-current"
+                style="
+                  display: none;
+                  background: var(--surface-2);
+                  border: 1px solid var(--border);
+                  border-radius: 6px;
+                  padding: 12px;
+                  margin-bottom: 12px;
+                "
+              ></div>
+
+              <div style="margin-bottom: 12px">
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                  "
+                >
+                  <label class="form-label" style="margin: 0">New Fields</label>
+                  <button
+                    class="btn btn-secondary btn-sm"
+                    id="btn-add-schema-field"
+                  >
+                    + Add Field
+                  </button>
+                </div>
+                <div id="extend-schema-fields"></div>
+              </div>
+
+              <button class="btn btn-primary" id="btn-extend-schema">
+                Extend Schema via Keychain
+              </button>
+
+              <div
+                id="extend-schema-preview"
+                style="display: none; margin-top: 16px"
+              >
+                <div class="card-header" style="margin-bottom: 8px">
+                  <span class="card-title" style="font-size: 13px"
+                    >Operation Preview</span
+                  >
+                </div>
+                <pre
+                  id="extend-schema-json"
+                  style="
+                    background: var(--surface-2);
+                    border: 1px solid var(--border);
+                    border-radius: 6px;
+                    padding: 12px;
+                    font-family: var(--mono);
+                    font-size: 12px;
+                    overflow-x: auto;
+                    max-height: 300px;
+                    overflow-y: auto;
+                  "
+                ></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Tab: Debug ===== -->
+          <div class="advanced-tab-content" id="tab-debug">
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Direct Server Transfer</span>
+              </div>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin-bottom: 16px;
+                  line-height: 1.6;
+                "
+              >
+                Server signs and broadcasts <strong>0.001 HIVE</strong> from
+                <code>gametest.ing</code> to <code>enrique89.test</code>. Solo
+                firma del servidor.
+              </p>
+              <div class="btn-group">
+                <button class="btn btn-primary" id="btn-debug-direct">
+                  Send Transfer
+                </button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Buy NFT (Multisig)</span>
+              </div>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin-bottom: 16px;
+                  line-height: 1.6;
+                "
+              >
+                Full multisig buy flow: playground builds the unsigned tx with
+                payment splits, indexer validates and signs (node key), Keychain
+                adds buyer signature, then broadcast.
+              </p>
+              <div style="margin-bottom: 12px">
+                <label class="form-label" for="multisig-nft-id">NFT ID</label>
+                <input
+                  type="text"
+                  id="multisig-nft-id"
+                  placeholder="NFT ID (e.g. abc123-...)"
+                  class="form-input"
+                  style="width: 100%; max-width: 400px"
+                />
+              </div>
+              <div class="btn-group">
+                <button class="btn btn-primary" id="btn-debug-multisig">
+                  Buy with Multisig
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ MARKETPLACE PAGE ============ -->
