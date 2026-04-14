@@ -27,7 +27,7 @@ Response:
 
 ```json
 {
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -127,14 +127,14 @@ Response:
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"hashVersion": "v1",
 	"collectionId": "deterministic-id-here",
 	"generatedIds": { "collectionId": "..." },
 	"operation": ["custom_json", { ... }],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.4.1",
+		"version": "0.5.1",
 		"action": "create_collection",
 		"data": { ... }
 	}
@@ -159,7 +159,6 @@ All build endpoints accept `POST` with a JSON body:
 | `/api/build/burn` | Burn an NFT | Posting |
 | `/api/build/buy` | Buy a listed NFT | Active |
 | `/api/build/set-data` | Update mutable data (creator) | Posting |
-| `/api/build/set-owner-data` | Update owner-specific data | Posting |
 | `/api/build/extend-schema` | Add fields to collection schema | Posting |
 | `/api/build/nft-approve` | Approve NFT operator | Posting |
 | `/api/build/nft-approve-all` | Approve operator for collection | Posting |
@@ -240,7 +239,6 @@ All IDs in NFTLox are deterministic -- they are derived from the creator, collec
 Collections with a typed schema support structured data on each NFT:
 
 - **immutableData** -- Set at mint time, can never be changed. Use for permanent attributes like rarity, generation, or base stats.
-- **mutableData** -- Can be updated by the collection creator (or an approved data operator) via `set_data`. Use for dynamic attributes like level, XP, or equipment.
-- **ownerData** -- Can be updated by the current NFT owner. Use for personalization like nicknames or display preferences.
+- **mutableData** -- Can be updated by the collection creator (or an approved data operator) via `set_data` / `set_data_from`. Use for dynamic attributes like level, XP, or equipment.
 
 The schema is defined at collection creation and enforces field names and types. The indexer validates all data mutations against the schema.

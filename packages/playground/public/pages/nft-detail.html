@@ -577,7 +577,128 @@
                           text-align: center;
                           font-weight: 500;
                         "
-                        >Transfer (Posting key)</small
+                        >Posting key</small
+                      >
+                    </div>
+
+                    <!-- Lend (shown when active) -->
+                    <div
+                      id="nft-action-lend-form"
+                      style="
+                        display: none;
+                        background: rgba(139, 92, 246, 0.05);
+                        border: 1px solid rgba(139, 92, 246, 0.2);
+                        border-radius: 8px;
+                        padding: 18px;
+                      "
+                    >
+                      <div
+                        style="
+                          display: flex;
+                          align-items: center;
+                          gap: 6px;
+                          font-size: 13px;
+                          font-weight: 600;
+                          color: #a78bfa;
+                          margin-bottom: 12px;
+                          letter-spacing: 0;
+                        "
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                          <circle cx="9" cy="7" r="4"/>
+                          <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        LEND
+                      </div>
+                      <div class="form-group" style="margin-bottom: 12px">
+                        <input
+                          type="text"
+                          class="form-input"
+                          id="nft-action-lend-borrower"
+                          placeholder="Borrower username"
+                          style="background: var(--surface)"
+                        />
+                      </div>
+                      <button
+                        class="btn btn-primary"
+                        onclick="nftDetailLend()"
+                        style="
+                          width: 100%;
+                          background: rgba(139, 92, 246, 0.8);
+                          border-color: rgba(139, 92, 246, 0.8);
+                          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+                        "
+                      >
+                        Lend via Keychain
+                      </button>
+                      <small
+                        style="
+                          display: block;
+                          margin-top: 10px;
+                          color: var(--text-dim);
+                          font-size: 11px;
+                          text-align: center;
+                          font-weight: 500;
+                        "
+                        >Posting key &middot; You keep ownership</small
+                      >
+                    </div>
+
+                    <!-- Return (shown when lent) -->
+                    <div
+                      id="nft-action-return-form"
+                      style="
+                        display: none;
+                        background: rgba(139, 92, 246, 0.05);
+                        border: 1px dashed rgba(139, 92, 246, 0.4);
+                        border-radius: 8px;
+                        padding: 18px;
+                      "
+                    >
+                      <div
+                        style="
+                          font-size: 13px;
+                          font-weight: 600;
+                          color: #a78bfa;
+                          margin-bottom: 12px;
+                          letter-spacing: 0;
+                        "
+                      >
+                        CURRENTLY LENT
+                      </div>
+                      <button
+                        class="btn btn-secondary"
+                        onclick="nftDetailReturn()"
+                        style="
+                          width: 100%;
+                          border-color: rgba(139, 92, 246, 0.5);
+                          color: #a78bfa;
+                          font-weight: 500;
+                        "
+                      >
+                        Return NFT
+                      </button>
+                      <small
+                        style="
+                          display: block;
+                          margin-top: 10px;
+                          color: var(--text-dim);
+                          font-size: 11px;
+                          text-align: center;
+                          font-weight: 500;
+                        "
+                        >Posting key &middot; Lender or borrower can return</small
                       >
                     </div>
                   </div>

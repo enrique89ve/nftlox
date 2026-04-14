@@ -27,7 +27,7 @@ Sync status and node information.
 
 ```json
 {
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -826,7 +826,7 @@ The API sets `Cache-Control` headers on all `GET` responses:
 
 The Build API constructs unsigned Hive `custom_json` operations for the NFTLox protocol. It does **not** broadcast transactions -- the client is responsible for signing the returned operations with the appropriate Hive key and broadcasting them to the blockchain.
 
-**Protocol version:** `0.4.1`
+**Protocol version:** `0.5.1`
 
 ---
 
@@ -837,9 +837,9 @@ All Build API endpoints return JSON with the following standard shape:
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"operation": ["custom_json", { ... }],
-	"payload": { "protocol": "nftlox_testnet", "version": "0.4.1", "action": "...", "data": { ... } },
+	"payload": { "protocol": "nftlox_testnet", "version": "0.5.1", "action": "...", "data": { ... } },
 	"keyType": "Posting"
 }
 ```
@@ -847,7 +847,7 @@ All Build API endpoints return JSON with the following standard shape:
 | Field             | Type       | Description                                                                 |
 |-------------------|------------|-----------------------------------------------------------------------------|
 | `success`         | `boolean`  | Whether the build succeeded.                                                |
-| `protocolVersion` | `string`   | Protocol version used (`0.4.1`).                                            |
+| `protocolVersion` | `string`   | Protocol version used (`0.5.1`).                                            |
 | `hashVersion`     | `string`   | Hash version (present on collection/seed endpoints): `v1`.                  |
 | `operation`       | `array`    | Hive operation tuple `["custom_json", {...}]`, ready to sign.               |
 | `payload`         | `object`   | The decoded protocol payload embedded inside the operation's `json` field.  |
@@ -1156,23 +1156,6 @@ Update mutable data as an approved data operator.
 
 ---
 
-### POST /api/build/set-owner-data
-
-Update owner-specific data on an NFT instance. Only the current owner can call this. Owner data is separate from mutable data (which is controlled by the collection creator).
-
-**Request Body:**
-
-| Field         | Type     | Required | Description                                   |
-|---------------|----------|----------|-----------------------------------------------|
-| `nftId`       | `string` | Yes      | NFT instance ID.                              |
-| `instanceDna` | `string` | Yes      | Instance DNA of the NFT.                      |
-| `owner`       | `string` | Yes      | Hive username of the current NFT owner.       |
-| `ownerData`   | `object` | Yes      | Key-value pairs to update (owner-specific).   |
-
-**Key type:** Posting
-
----
-
 ### POST /api/build/extend-schema
 
 Add new fields to an existing collection schema. Only the collection creator can extend the schema. Existing fields cannot be modified or removed.
@@ -1229,7 +1212,7 @@ Preview deterministic IDs without creating any operation. Useful for pre-computi
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"hashVersion": "v1",
 	"collectionId": "col_...",
 	"originDna": "...",
@@ -1325,7 +1308,7 @@ Buy a listed NFT. Returns multiple Hive operations: a `custom_json` payload plus
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"hiveOperations": [
 		["transfer", { "from": "buyer", "to": "seller", "amount": "9.900 HIVE", "memo": "NFTLox BUY:nft_abc" }],
 		["transfer", { "from": "buyer", "to": "nftlox", "amount": "0.100 HIVE", "memo": "NFTLox FEE:nft_abc" }],

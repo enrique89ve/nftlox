@@ -113,7 +113,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"collectionId": "a1b2c3d4...",
 	"generatedIds": {
 		"collectionId": "a1b2c3d4...",
@@ -122,7 +122,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 	"operation": ["custom_json", { ... }],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.4.1",
+		"version": "0.5.1",
 		"action": "create_collection",
 		"data": { ... }
 	}
@@ -326,11 +326,11 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/extend-schema \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"operation": ["custom_json", { ... }],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.4.1",
+		"version": "0.5.1",
 		"action": "extend_schema",
 		"data": {
 			"collectionId": "a1b2c3d4...",
@@ -417,11 +417,11 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/archive-collection \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"operation": ["custom_json", { ... }],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.4.1",
+		"version": "0.5.1",
 		"action": "archive_collection",
 		"data": {
 			"collectionId": "a1b2c3d4..."
@@ -584,7 +584,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/preview-ids \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"collectionId": "a1b2c3d4...",
 	"originDna": "e5f6a7b8...",
 	"seedIds": {

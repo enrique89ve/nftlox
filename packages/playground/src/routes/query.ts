@@ -141,6 +141,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					mintedAt: nft.created_at,
 					burned: nft.status === "burned",
 					listed: nft.status === "listed",
+					lent: nft.status === "lent",
 					listingPrice: nft.listing_price ? { amount: nft.listing_price, currency: nft.listing_currency } : undefined,
 					isSeed: nft.nft_type === "seed",
 					maxSupply: nft.max_supply,

@@ -44,7 +44,7 @@ The collection creator can update mutable data on any NFT in their collection.
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"operation": ["custom_json", { "..." }],
 	"payload": { "..." },
 	"keyType": "Posting"

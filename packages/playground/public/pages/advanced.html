@@ -171,8 +171,8 @@
             <!-- Lending -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">NFT Lending</span>
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="card-title">Lend NFT</span>
+                <span class="nft-badge posting">POSTING KEY</span>
               </div>
               <div class="form-row">
                 <div class="form-group">
@@ -192,22 +192,28 @@
                   />
                 </div>
               </div>
-              <div class="btn-group">
-                <button class="btn btn-primary" id="btn-nft-lend">
-                  Lend via Keychain
-                </button>
-                <button class="btn btn-secondary" id="btn-nft-return">
-                  Return via Keychain
-                </button>
+              <button class="btn btn-primary" id="btn-nft-lend">
+                Lend via Keychain
+              </button>
+            </div>
+
+            <!-- Return -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Return NFT</span>
+                <span class="nft-badge posting">POSTING KEY</span>
               </div>
-              <div class="form-group" style="margin-top: 12px">
-                <label class="form-label">Instance ID (for Return)</label>
+              <div class="form-group">
+                <label class="form-label">Instance ID</label>
                 <input
                   class="form-input"
                   id="perm-return-instance"
                   placeholder="inst_abc123_1"
                 />
               </div>
+              <button class="btn btn-secondary" id="btn-nft-return">
+                Return via Keychain
+              </button>
             </div>
 
             <!-- Data Operator -->

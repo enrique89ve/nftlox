@@ -93,11 +93,11 @@ Working code for common workflows:
 | Property | Value |
 |----------|-------|
 | Protocol ID | `nftlox_testnet` |
-| Version | `0.4.1` |
-| Min Version | `0.4.1` |
+| Version | `0.5.1` |
+| Min Version | `0.5.0` |
 | Blockchain | Hive L1 |
 | Finality | ~3 seconds |
-| Auth | Posting key (17 SDK protocol actions) / Active key (`buy`) |
+| Auth | Posting key (16 actions) / Active key (`create_collection`, `buy`) |
 
 | Environment | URL |
 |---|---|
@@ -107,7 +107,7 @@ Working code for common workflows:
 ---
 
 <div class="nftlox-footer">
-	<span class="version-badge">v0.4.1</span>
+	<span class="version-badge">v0.5.1</span>
 	<br>
 	NFTLox Protocol -- Built on Hive L1
 </div>

@@ -3,6 +3,7 @@
 // Shared by SDK builders (client-side) and indexer handlers (server-side).
 
 import type { CollectionSchema, SchemaField, SchemaFieldType, ValidationError } from "./types";
+import { MAX_SCHEMA_FIELDS, MAX_FIELD_NAME_LENGTH } from "./constants";
 
 // ============ SUPPORTED TYPES ============
 
@@ -38,8 +39,6 @@ const INT_RANGES: Record<string, { min: number; max: number }> = {
 // ============ FIELD NAME VALIDATION ============
 
 const FIELD_NAME_REGEX = /^[a-z][a-z0-9_]*$/;
-const MAX_FIELD_NAME_LENGTH = 64;
-const MAX_SCHEMA_FIELDS = 64;
 
 // ============ CANONICAL JSON & HASHING ============
 

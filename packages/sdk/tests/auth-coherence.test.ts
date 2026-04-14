@@ -28,7 +28,13 @@ import {
 } from "../../indexer/src/protocol/auth.ts";
 import {
 	ALL_ACTIONS as INDEXER_ALL_ACTIONS,
+	MAX_SCHEMA_FIELDS as INDEXER_MAX_SCHEMA_FIELDS,
+	MAX_FIELD_NAME_LENGTH as INDEXER_MAX_FIELD_NAME_LENGTH,
 } from "../../indexer/src/protocol/constants.ts";
+import {
+	MAX_SCHEMA_FIELDS,
+	MAX_FIELD_NAME_LENGTH,
+} from "../src/constants";
 
 // ============ STATIC: no builder may hardcode auth literals ============
 //
@@ -103,6 +109,11 @@ describe("SDK follows the indexer action/auth catalog", () => {
 	test("action set and auth levels match the indexer", () => {
 		expect([...ALL_ACTIONS]).toEqual([...INDEXER_ALL_ACTIONS]);
 		expect(ACTION_AUTH_LEVEL).toEqual(INDEXER_ACTION_AUTH_LEVEL);
+	});
+
+	test("schema limits match the indexer", () => {
+		expect(MAX_SCHEMA_FIELDS).toBe(INDEXER_MAX_SCHEMA_FIELDS);
+		expect(MAX_FIELD_NAME_LENGTH).toBe(INDEXER_MAX_FIELD_NAME_LENGTH);
 	});
 });
 

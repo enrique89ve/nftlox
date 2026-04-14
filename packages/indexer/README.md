@@ -517,9 +517,9 @@ Hive Blockchain
 +-------------------+
 ```
 
-## Protocol Actions (17)
+## Protocol Actions (18)
 
-### Core (7)
+### Core (8)
 | Action | Description |
 |--------|-------------|
 | `create_collection` | Create NFT collection |
@@ -529,6 +529,7 @@ Hive Blockchain
 | `set_data` | Update mutable data (creator only) |
 | `archive_collection` | Archive an empty collection |
 | `extend_schema` | Add fields to collection schema |
+| `node_register` | Register/update an indexer node record |
 
 ### Marketplace (3)
 | Action | Description |

@@ -58,7 +58,7 @@ When an NFT is returned:
 ```json
 {
 	"protocol": "nftlox_testnet",
-	"version": "0.4.1",
+	"version": "0.5.1",
 	"action": "nft_lend",
 	"data": {
 		"instanceId": "inst_abc123",
@@ -91,7 +91,7 @@ When an NFT is returned:
 ```json
 {
 	"protocol": "nftlox_testnet",
-	"version": "0.4.1",
+	"version": "0.5.1",
 	"action": "nft_return",
 	"data": {
 		"instanceId": "inst_abc123"
@@ -185,7 +185,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/nft-lend \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"operation": [
 		"custom_json",
 		{
@@ -245,7 +245,7 @@ Note: The `signer` field in the request body maps to `owner` internally.
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.4.1",
+	"protocolVersion": "0.5.1",
 	"operation": [
 		"custom_json",
 		{
@@ -310,13 +310,13 @@ const lendPayload = createNftLendPayload({
 	instanceId: "inst_abc123",
 	borrower: "bob",
 });
-// → { protocol: "nftlox_testnet", version: "0.4.1", action: "nft_lend", data: { instanceId: "inst_abc123", borrower: "bob" } }
+// → { protocol: "nftlox_testnet", version: "0.5.1", action: "nft_lend", data: { instanceId: "inst_abc123", borrower: "bob" } }
 
 // Return
 const returnPayload = createNftReturnPayload({
 	instanceId: "inst_abc123",
 });
-// → { protocol: "nftlox_testnet", version: "0.4.1", action: "nft_return", data: { instanceId: "inst_abc123" } }
+// → { protocol: "nftlox_testnet", version: "0.5.1", action: "nft_return", data: { instanceId: "inst_abc123" } }
 ```
 
 ### Using Operation Creators

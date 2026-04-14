@@ -104,6 +104,7 @@ interface NftDetailNft {
   mintedAt: string | null;
   burned: boolean;
   listed: boolean;
+  lent: boolean;
   listingPrice?: NftDetailListingPrice;
   isSeed: boolean;
   maxSupply: number;
@@ -834,6 +835,10 @@ async function loadNftDetail(nftId: string) {
   if (seedInfoSection) seedInfoSection.style.display = "none";
   if (burnSection) burnSection.style.display = "none";
   if (setDataSection) setDataSection.style.display = "none";
+  const lendForm = $("nft-action-lend-form");
+  const returnForm = $("nft-action-return-form");
+  if (lendForm) lendForm.style.display = "none";
+  if (returnForm) returnForm.style.display = "none";
 
   try {
     const data = await fetchJsonOrThrow<NftDetailResponse>(
@@ -873,6 +878,8 @@ async function loadNftDetail(nftId: string) {
         );
       if (nft.listed)
         badges.push('<span class="nft-badge listed">LISTED</span>');
+      if (nft.lent)
+        badges.push('<span class="nft-badge posting">LENT</span>');
       badgesEl.innerHTML = badges.join("");
     }
 
@@ -975,6 +982,14 @@ async function loadNftDetail(nftId: string) {
           } else {
             if (listForm) listForm.style.display = "block";
             if (unlistForm) unlistForm.style.display = "none";
+          }
+
+          if (nft.lent) {
+            if (lendForm) lendForm.style.display = "none";
+            if (returnForm) returnForm.style.display = "block";
+          } else {
+            if (lendForm) lendForm.style.display = "block";
+            if (returnForm) returnForm.style.display = "none";
           }
         }
       } else {
@@ -2773,6 +2788,82 @@ function hideSetDataError(el: HTMLElement | null) {
 
 (window as any).nftDetailBurn = nftDetailBurn;
 (window as any).nftDetailSetData = nftDetailSetData;
+
+// ============ NFT DETAIL — LENDING ============
+
+async function nftDetailLend() {
+  const borrower = ($("nft-action-lend-borrower") as HTMLInputElement)?.value
+    .trim()
+    .toLowerCase();
+  if (!borrower || !connectedUser || !currentNftId) {
+    log("Fill borrower and ensure you're connected", "error");
+    return;
+  }
+
+  const res = await fetch(`/api/build/nft-lend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instanceId: currentNftId, borrower, owner: connectedUser }),
+  });
+  const result = await res.json();
+  if (!result.success) {
+    log(`Build failed: ${result.error ?? result.errors?.[0]?.message}`, "error");
+    return;
+  }
+
+  log(`Lending ${currentNftId} to @${borrower}...`);
+  (window as any).hive_keychain.requestBroadcast(
+    connectedUser,
+    [result.operation],
+    "Posting",
+    (r: any) => {
+      if (r.success) {
+        log(`Lend successful! @${borrower} can now use the NFT.`, "success");
+        setTimeout(() => { loadNftDetail(currentNftId!); loadInventory(); }, 4000);
+      } else {
+        const err = typeof r.error === "object" ? JSON.stringify(r.error) : r.error;
+        log(`Lend failed: ${err}`, "error");
+      }
+    },
+  );
+}
+
+async function nftDetailReturn() {
+  if (!connectedUser || !currentNftId) {
+    log("Connect wallet first", "error");
+    return;
+  }
+
+  const res = await fetch(`/api/build/nft-return`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instanceId: currentNftId, signer: connectedUser }),
+  });
+  const result = await res.json();
+  if (!result.success) {
+    log(`Build failed: ${result.error ?? result.errors?.[0]?.message}`, "error");
+    return;
+  }
+
+  log(`Returning ${currentNftId}...`);
+  (window as any).hive_keychain.requestBroadcast(
+    connectedUser,
+    [result.operation],
+    "Posting",
+    (r: any) => {
+      if (r.success) {
+        log(`Return successful! NFT is active again.`, "success");
+        setTimeout(() => { loadNftDetail(currentNftId!); loadInventory(); }, 4000);
+      } else {
+        const err = typeof r.error === "object" ? JSON.stringify(r.error) : r.error;
+        log(`Return failed: ${err}`, "error");
+      }
+    },
+  );
+}
+
+(window as any).nftDetailLend = nftDetailLend;
+(window as any).nftDetailReturn = nftDetailReturn;
 
 // ============ ADVANCED TABS ============
 
