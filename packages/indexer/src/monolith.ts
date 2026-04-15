@@ -10,6 +10,7 @@ import { config } from "./config.ts";
 import { dns } from "bun";
 import type { WorkerMessage, MainToWorkerMessage } from "./scanner/sync-messages.ts";
 import { buildInternalHealthResponse } from "./health/internal-health.ts";
+import { PROTOCOL_VERSION, PROTOCOL_GENESIS_BLOCK } from "./protocol/index.ts";
 
 const log = createLogger("monolith");
 
@@ -104,7 +105,7 @@ function stopSyncWorker(): void {
 
 async function main(): Promise<void> {
 	setStartupTime();
-	log.info("NFTLox Indexer starting (monolith + worker)...");
+	log.info(`NFTLox Indexer starting (monolith + worker) — protocol v${PROTOCOL_VERSION}, genesis #${PROTOCOL_GENESIS_BLOCK}`);
 
 	// Main thread connects to DB for API queries
 	await connectWithRetry();

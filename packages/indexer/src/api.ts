@@ -5,11 +5,12 @@ import { initBeekeeperSigner, closeBeekeeperSigner } from "./api/services/beekee
 import { startMultisigHealthMonitor, stopMultisigHealthMonitor } from "./api/services/multisig-health.ts";
 import { startPricePoller, stopPricePoller } from "./utils/fee-oracle.ts";
 import { createLogger } from "./utils/logger.ts";
+import { PROTOCOL_VERSION, PROTOCOL_GENESIS_BLOCK } from "./protocol/index.ts";
 
 const log = createLogger("api");
 
 async function main(): Promise<void> {
-	log.info("NFTLox API Server starting...");
+	log.info(`NFTLox API Server starting — protocol v${PROTOCOL_VERSION}, genesis #${PROTOCOL_GENESIS_BLOCK}`);
 
 	await connectWithRetry();
 

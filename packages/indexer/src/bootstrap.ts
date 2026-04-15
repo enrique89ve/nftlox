@@ -68,7 +68,8 @@ const DATA_TABLES = [
 
 async function checkGenesisReset(): Promise<void> {
 	const [row] = await sql`SELECT genesis_block FROM sync_state WHERE id = 1`;
-	const storedGenesis = Number(row?.genesis_block ?? 0);
+	const raw = row?.genesis_block ?? 0;
+	const storedGenesis = Number.isFinite(Number(raw)) ? Number(raw) : 0;
 
 	if (storedGenesis === config.genesisBlock) return;
 

@@ -1,9 +1,9 @@
 import { PROTOCOL_GENESIS_BLOCK, PROTOCOL_ID } from "./constants.ts";
 
-export interface GenesisBlockValidationInput {
+export type GenesisBlockValidationInput = {
 	readonly genesisBlock: number;
 	readonly allowUnsafeGenesisBlock: boolean;
-}
+};
 
 export function validateGenesisBlockSelection(input: GenesisBlockValidationInput): void {
 	const { genesisBlock, allowUnsafeGenesisBlock } = input;
