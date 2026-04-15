@@ -1,4 +1,4 @@
-# NFTLox Protocol Operations Catalog v0.5.1
+# NFTLox Protocol Operations Catalog v0.5.2
 
 Complete reference for SDK-owned protocol operations. Each operation is broadcast as a `custom_json` on the Hive blockchain with `id = "nftlox_testnet"`.
 

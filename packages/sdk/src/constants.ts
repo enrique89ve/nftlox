@@ -1,7 +1,7 @@
-// NFTLox Protocol Constants - v0.5.1
+// NFTLox Protocol Constants - v0.5.2
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.5.1";
+export const PROTOCOL_VERSION = "0.5.2";
 export const MIN_PROTOCOL_VERSION = "0.5.0";
 export const HASH_VERSION = "v1";
 // Transaction Limits

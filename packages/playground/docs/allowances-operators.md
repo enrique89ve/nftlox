@@ -45,7 +45,7 @@ Grant or revoke a spender's permission to transfer a single NFT on your behalf.
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.1",
+	"protocolVersion": "0.5.2",
 	"operation": ["custom_json", { "..." }],
 	"keyType": "Posting"
 }

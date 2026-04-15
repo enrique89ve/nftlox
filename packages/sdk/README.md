@@ -112,7 +112,7 @@ const payload = makePayload("transfer", {
 | Export | Description |
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
-| `PROTOCOL_VERSION` | `"0.5.1"` |
+| `PROTOCOL_VERSION` | `"0.5.2"` |
 | `ALL_ACTIONS` | All 18 SDK protocol actions |
 | `CORE_ACTIONS` | 8 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |

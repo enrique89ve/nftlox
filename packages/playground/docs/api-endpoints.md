@@ -27,7 +27,7 @@ Sync status and node information.
 
 ```json
 {
-	"protocolVersion": "0.5.1",
+	"protocolVersion": "0.5.2",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -826,7 +826,7 @@ The API sets `Cache-Control` headers on all `GET` responses:
 
 The Build API constructs unsigned Hive `custom_json` operations for the NFTLox protocol. It does **not** broadcast transactions -- the client is responsible for signing the returned operations with the appropriate Hive key and broadcasting them to the blockchain.
 
-**Protocol version:** `0.5.1`
+**Protocol version:** `0.5.2`
 
 ---
 
@@ -837,9 +837,9 @@ All Build API endpoints return JSON with the following standard shape:
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.1",
+	"protocolVersion": "0.5.2",
 	"operation": ["custom_json", { ... }],
-	"payload": { "protocol": "nftlox_testnet", "version": "0.5.1", "action": "...", "data": { ... } },
+	"payload": { "protocol": "nftlox_testnet", "version": "0.5.2", "action": "...", "data": { ... } },
 	"keyType": "Posting"
 }
 ```
@@ -847,7 +847,7 @@ All Build API endpoints return JSON with the following standard shape:
 | Field             | Type       | Description                                                                 |
 |-------------------|------------|-----------------------------------------------------------------------------|
 | `success`         | `boolean`  | Whether the build succeeded.                                                |
-| `protocolVersion` | `string`   | Protocol version used (`0.5.1`).                                            |
+| `protocolVersion` | `string`   | Protocol version used (`0.5.2`).                                            |
 | `hashVersion`     | `string`   | Hash version (present on collection/seed endpoints): `v1`.                  |
 | `operation`       | `array`    | Hive operation tuple `["custom_json", {...}]`, ready to sign.               |
 | `payload`         | `object`   | The decoded protocol payload embedded inside the operation's `json` field.  |
@@ -1212,7 +1212,7 @@ Preview deterministic IDs without creating any operation. Useful for pre-computi
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.1",
+	"protocolVersion": "0.5.2",
 	"hashVersion": "v1",
 	"collectionId": "col_...",
 	"originDna": "...",
@@ -1308,7 +1308,7 @@ Buy a listed NFT. Returns multiple Hive operations: a `custom_json` payload plus
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.1",
+	"protocolVersion": "0.5.2",
 	"hiveOperations": [
 		["transfer", { "from": "buyer", "to": "seller", "amount": "9.900 HIVE", "memo": "NFTLox BUY:nft_abc" }],
 		["transfer", { "from": "buyer", "to": "nftlox", "amount": "0.100 HIVE", "memo": "NFTLox FEE:nft_abc" }],

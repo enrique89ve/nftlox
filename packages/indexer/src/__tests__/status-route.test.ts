@@ -44,7 +44,7 @@ mock.module("@/scanner/sync-engine.ts", () => ({
 mock.module("@/config.ts", () => ({
 	config: {
 		protocolId: "nftlox_testnet",
-		genesisBlock: 105327280,
+		genesisBlock: 105530500,
 		hiveAccount: "gametest.ing",
 		nodeUrl: "",
 		indexerRole: "both",
@@ -69,7 +69,7 @@ mock.module("@/protocol/index.ts", () => ({
 	percentageToBasisPoints: (percentage: number) => Math.round(percentage * 100),
 	SUPPORTED_CURRENCIES: ["HIVE", "HBD"],
 	ALL_ACTIONS: ["buy", "list"],
-	PROTOCOL_GENESIS_BLOCK: 105327280,
+	PROTOCOL_GENESIS_BLOCK: 105530500,
 }));
 
 const { Elysia } = await import("elysia");
@@ -88,7 +88,7 @@ describe("status route", () => {
 		expect(json.multisigClockDriftMs).toBe(20000);
 		expect(json.protocolFeeBps).toBe(250);
 		expect(json.maxRoyaltyBps).toBe(5000);
-		expect(json.canonicalGenesisBlock).toBe(105327280);
+		expect(json.canonicalGenesisBlock).toBe(105530500);
 		expect(json.partialIndex).toBe(false);
 		expect(json.genesisOffsetBlocks).toBe(0);
 	});

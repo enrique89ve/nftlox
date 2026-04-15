@@ -346,7 +346,7 @@ All variables are optional except `POSTGRES_PASSWORD`. The indexer uses protocol
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GENESIS_BLOCK` | `105327280` | Protocol genesis block. Override only for partial re-indexes |
+| `GENESIS_BLOCK` | `105530500` | Protocol genesis block. Override only for partial re-indexes |
 | `ALLOW_UNSAFE_GENESIS_BLOCK` | `false` | Allow starting after the canonical genesis block |
 | `BATCH_SIZE` | `1000` | Blocks per sync request |
 | `SYNC_INTERVAL_MS` | `3000` | Polling interval when caught up (ms) |

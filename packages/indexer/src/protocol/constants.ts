@@ -3,9 +3,9 @@
 // protocol-auth.test guards drift against the SDK action/auth catalog.
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.5.1";
+export const PROTOCOL_VERSION = "0.5.2";
 export const MIN_PROTOCOL_VERSION = "0.5.0";
-export const PROTOCOL_GENESIS_BLOCK = 105_327_280;
+export const PROTOCOL_GENESIS_BLOCK = 105_530_500;
 
 // Field Limits
 export const MAX_NAME_LENGTH = 100;

@@ -93,7 +93,7 @@ Working code for common workflows:
 | Property | Value |
 |----------|-------|
 | Protocol ID | `nftlox_testnet` |
-| Version | `0.5.1` |
+| Version | `0.5.2` |
 | Min Version | `0.5.0` |
 | Blockchain | Hive L1 |
 | Finality | ~3 seconds |
@@ -107,7 +107,7 @@ Working code for common workflows:
 ---
 
 <div class="nftlox-footer">
-	<span class="version-badge">v0.5.1</span>
+	<span class="version-badge">v0.5.2</span>
 	<br>
 	NFTLox Protocol -- Built on Hive L1
 </div>
