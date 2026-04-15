@@ -42,8 +42,6 @@ export async function handleNodeRegister(op: ParsedOperation, txn: Queryable): P
 			endpoint,
 			public_key,
 			status,
-			fee_paid_hbd,
-			fee_paid_hive,
 			block_num,
 			tx_id
 		) VALUES (
@@ -51,8 +49,6 @@ export async function handleNodeRegister(op: ParsedOperation, txn: Queryable): P
 			${endpoint},
 			${publicKey},
 			'active',
-			0,
-			0,
 			${op.blockNum},
 			${op.txId}
 		)

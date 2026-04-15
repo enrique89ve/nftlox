@@ -82,6 +82,22 @@ type CustomJsonAuthParseResult =
 	| Readonly<{ ok: true; signer: string; authLevel: AuthLevel }>
 	| Readonly<{ ok: false; signer: string | null; reason: string }>;
 
+/**
+ * NOTE on Hive multisig interop:
+ *
+ * HafAH's `required_auths` / `required_posting_auths` list the ACCOUNTS whose
+ * authority is required, not the individual keys. A single-account multisig
+ * (e.g. `alice` with threshold=2 signed by two keys) surfaces as
+ * `required_auths: ["alice"]` — so single-account multisig works transparently
+ * here because we only ever see the account name.
+ *
+ * What IS rejected below is multi-ACCOUNT co-signed custom_json
+ * (`required_auths: ["alice", "bob"]`). Every protocol action has exactly one
+ * signer role (creator, owner, buyer, operator...) so we have no well-defined
+ * routing for an op where two different accounts jointly sign. Accepting it
+ * would require schema + handler changes to disambiguate who the "signer" is.
+ * If a joint-signing use case (DAO, escrow) ever lands, revisit this.
+ */
 function parseCustomJsonAuth(value: CustomJsonOperationValue): CustomJsonAuthParseResult {
 	const activeAuths = value.required_auths;
 	const postingAuths = value.required_posting_auths;
@@ -99,7 +115,7 @@ function parseCustomJsonAuth(value: CustomJsonOperationValue): CustomJsonAuthPar
 		return {
 			ok: false,
 			signer,
-			reason: "Ambiguous authority: required_auths and required_posting_auths cannot both be non-empty",
+			reason: "Mixed authority levels: required_auths and required_posting_auths cannot both be non-empty",
 		};
 	}
 
@@ -107,7 +123,7 @@ function parseCustomJsonAuth(value: CustomJsonOperationValue): CustomJsonAuthPar
 		return {
 			ok: false,
 			signer,
-			reason: `Ambiguous active authority: expected exactly one signer, got ${activeAuths.length}`,
+			reason: `Multi-account co-signed custom_json not supported: ${activeAuths.length} active signers (single-account multisig works; only joint signing by distinct accounts is rejected)`,
 		};
 	}
 
@@ -115,7 +131,7 @@ function parseCustomJsonAuth(value: CustomJsonOperationValue): CustomJsonAuthPar
 		return {
 			ok: false,
 			signer,
-			reason: `Ambiguous posting authority: expected exactly one signer, got ${postingAuths.length}`,
+			reason: `Multi-account co-signed custom_json not supported: ${postingAuths.length} posting signers (single-account multisig works; only joint signing by distinct accounts is rejected)`,
 		};
 	}
 
@@ -148,6 +164,24 @@ function isValidOperationId(opId: unknown): boolean {
 	if (typeof opId === "number") return Number.isInteger(opId) && opId >= 0;
 	if (typeof opId === "string") return /^\d+$/.test(opId);
 	return false;
+}
+
+// ─── Prototype Pollution Guard ──────────────────────
+
+/**
+ * `JSON.parse` reviver that drops `__proto__` and `constructor` keys so
+ * user-supplied blockchain payloads cannot poison objects downstream.
+ *
+ * Without this, a payload like `{"data": {"__proto__": {"admin": true}}}`
+ * creates the key as an own property today, but any code that later spreads
+ * or merges that object with `Object.assign`, structured clone through
+ * prototype-aware libraries, or `for..in` loops without `hasOwnProperty`
+ * guards can escalate it into actual prototype pollution. Strip at the
+ * earliest boundary instead of auditing every consumer.
+ */
+function prototypePollutionReviver(key: string, value: unknown): unknown {
+	if (key === "__proto__" || key === "constructor") return undefined;
+	return value;
 }
 
 // ─── Payload Validation ─────────────────────────────
@@ -291,7 +325,7 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 
 		let payload: unknown;
 		try {
-			payload = JSON.parse(value.json);
+			payload = JSON.parse(value.json, prototypePollutionReviver);
 		} catch {
 			rejected.push({
 				blockNum: hafOp.block,
@@ -333,6 +367,23 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 				operationId: hafOp.operation_id,
 				signer: auth.signer,
 				reason: auth.reason,
+				rawPayload: payload,
+			});
+			continue;
+		}
+
+		// Defensive: a well-formed HafAH paginator scoped past genesis should never
+		// emit pre-genesis ops. If one slips through (upstream bug, misconfigured
+		// scan window, replayed stale data) reject it rather than let it mutate
+		// state — pre-genesis activity is out of protocol scope by definition.
+		// Placed last so format / auth issues surface with their specific reason.
+		if (hafOp.block < config.genesisBlock) {
+			rejected.push({
+				blockNum: hafOp.block,
+				txId: hafOp.trx_id,
+				operationId: hafOp.operation_id,
+				signer: auth.signer,
+				reason: `Operation at block ${hafOp.block} predates genesis ${config.genesisBlock}`,
 				rawPayload: payload,
 			});
 			continue;

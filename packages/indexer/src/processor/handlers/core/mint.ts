@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { COLLECTION_STATUS_ARCHIVED, getCollectionRules } from "@/db/queries/collections.ts";
+import { getCollectionRules } from "@/db/queries/collections.ts";
 import { insertNft, nftExists } from "@/db/queries/nfts.ts";
 import {
 	requireBoundedString,
@@ -39,7 +39,6 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	const collection = await getCollectionRules(collectionId, txn);
 	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
 	if (collection.creator !== op.signer) throw new Error(`Only the collection creator can mint in ${collectionId}`);
-	if (collection.status === COLLECTION_STATUS_ARCHIVED) throw new Error(`Collection ${collectionId} is archived`);
 
 	const metadata = optionalObject(d.metadata) ?? {};
 	const nftType = resolveNftType(optionalString(d.nftType), id);

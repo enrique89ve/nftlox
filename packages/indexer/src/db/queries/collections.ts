@@ -1,11 +1,9 @@
 import { sql, type Queryable, clampLimit } from "@/db/client.ts";
 import { NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "./nft-types.ts";
 
-export const COLLECTION_STATUS_ACTIVE = "active";
-export const COLLECTION_STATUS_ARCHIVED = "archived";
-export type CollectionStatus =
-	| typeof COLLECTION_STATUS_ACTIVE
-	| typeof COLLECTION_STATUS_ARCHIVED;
+// A collection row's presence in `collections` IS its "active" state. Archived
+// collections are moved to `archived_collections` and removed from `collections`,
+// so any row you can SELECT is live — no status column needed.
 
 export interface InsertCollectionParams {
 	id: string;
@@ -20,8 +18,6 @@ export interface InsertCollectionParams {
 	burnable: boolean;
 	royaltyPct: number;
 	royaltyRecipient: string | null;
-	feePaidHbd: number;
-	feePaidHive: number;
 	schema: unknown | null;
 	schemaVersion: number;
 	blockNum: number;
@@ -35,7 +31,6 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 			id, name, symbol, creator, total_potential,
 			description, image_url, external_url,
 			transferable, burnable, royalty_pct, royalty_recipient,
-			fee_paid_hbd, fee_paid_hive,
 			schema, schema_version,
 			block_num, tx_id, created_at
 		) VALUES (
@@ -44,7 +39,6 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 			${params.description}, ${params.imageUrl}, ${params.externalUrl},
 			${params.transferable}, ${params.burnable}, ${params.royaltyPct},
 			${params.royaltyRecipient},
-			${params.feePaidHbd}, ${params.feePaidHive},
 			${params.schema ? JSON.stringify(params.schema) : null}, ${params.schemaVersion},
 			${params.blockNum}, ${params.txId},
 			${params.createdAt}
@@ -59,7 +53,7 @@ export async function getCollectionById(id: string): Promise<Record<string, unkn
 		SELECT id, name, symbol, creator, total_potential,
 			description, image_url, external_url,
 			transferable, burnable, royalty_pct, royalty_recipient,
-			schema, schema_version, status, tx_id, created_at
+			schema, schema_version, tx_id, created_at
 		FROM collections
 		WHERE id = ${id}
 	`;
@@ -71,7 +65,6 @@ export interface CollectionRulesRow {
 	creator: string;
 	total_potential: number;
 	seed_count: number;
-	status: CollectionStatus;
 	transferable: boolean;
 	burnable: boolean;
 	royalty_pct: string;
@@ -83,7 +76,6 @@ export interface CollectionRulesRow {
 export interface CollectionArchiveSnapshotRow {
 	id: string;
 	creator: string;
-	status: CollectionStatus;
 	nft_count: number;
 }
 
@@ -92,7 +84,7 @@ export async function getCollectionRules(
 	txn: Queryable = sql,
 ): Promise<CollectionRulesRow | null> {
 	const [row] = await txn<CollectionRulesRow[]>`
-		SELECT c.id, c.creator, c.total_potential, c.status, c.transferable,
+		SELECT c.id, c.creator, c.total_potential, c.transferable,
 			c.burnable, c.royalty_pct, c.royalty_recipient,
 			c.schema, c.schema_version,
 			COALESCE(cs.seeds, 0)::int AS seed_count
@@ -111,7 +103,6 @@ export async function getCollectionArchiveSnapshot(
 		SELECT
 			c.id,
 			c.creator,
-			c.status,
 			COALESCE(cs.total, 0)::int AS nft_count
 		FROM collections c
 		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
@@ -168,7 +159,7 @@ const COLLECTION_LIST_COLUMNS = sql`
 	c.id, c.name, c.symbol, c.creator, c.total_potential,
 	c.description, c.image_url, c.external_url,
 	c.transferable, c.burnable, c.royalty_pct, c.royalty_recipient,
-	c.schema_version, c.status, c.tx_id, c.created_at,
+	c.schema_version, c.tx_id, c.created_at,
 	COALESCE(cs.seeds, 0)::int AS seed_count,
 	COALESCE(cs.instances, 0)::int AS instance_count
 `;
@@ -179,7 +170,6 @@ export async function listCollections(limit = 50, offset = 0) {
 		SELECT ${COLLECTION_LIST_COLUMNS}
 		FROM collections c
 		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
-		WHERE c.status = ${COLLECTION_STATUS_ACTIVE}
 		ORDER BY c.created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
 	`;
@@ -191,7 +181,7 @@ export async function getCollectionsByCreator(creator: string, limit = 50, offse
 		SELECT ${COLLECTION_LIST_COLUMNS}
 		FROM collections c
 		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
-		WHERE c.creator = ${creator} AND c.status = ${COLLECTION_STATUS_ACTIVE}
+		WHERE c.creator = ${creator}
 		ORDER BY c.created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}
 	`;

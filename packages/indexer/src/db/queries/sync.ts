@@ -62,6 +62,23 @@ export async function insertInvalidOperation(
 
 // ============ CONFIRMED OPERATIONS ============
 
+/**
+ * Fast existence check keyed on the PK. Used by the router to skip handler
+ * dispatch when an op has already been processed (e.g. crash-replay under
+ * `synchronous_commit=OFF`). Without this gate, replaying a successful
+ * transfer/buy re-adjusts owner_nft_counts and collection_stats, drifting
+ * the denormalized counters.
+ */
+export async function isOperationConfirmed(
+	operationId: string,
+	txn: Queryable = sql,
+): Promise<boolean> {
+	const [row] = await txn`
+		SELECT 1 AS ok FROM confirmed_operations WHERE operation_id = ${operationId}
+	`;
+	return row !== undefined;
+}
+
 export async function insertConfirmedOperation(
 	op: {
 		operationId: string;
@@ -92,9 +109,16 @@ export async function insertConfirmedOperation(
 // ============ EXPIRED OPERATIONS CLEANUP ============
 
 const RETENTION_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
+// confirmed_operations is primarily the crash-replay idempotency index for the
+// router. 2 days comfortably covers any realistic sync stall: a crash + restart
+// replays at most the un-committed tail, which is minutes to hours, not days.
+// Keeping longer just bloats the table without strengthening the guarantee —
+// the blockchain is the source of truth for historical operation lookups.
+const CONFIRMED_OPS_RETENTION_MS = RETENTION_MS;
 
 export async function cleanupExpiredOperations(): Promise<number> {
 	const cutoff = new Date(Date.now() - RETENTION_MS).toISOString();
+	const confirmedCutoff = new Date(Date.now() - CONFIRMED_OPS_RETENTION_MS).toISOString();
 	const invalid = await sql`
 		DELETE FROM invalid_operations WHERE indexed_at < ${cutoff}
 		RETURNING 1
@@ -103,7 +127,11 @@ export async function cleanupExpiredOperations(): Promise<number> {
 		DELETE FROM orphaned_buys WHERE created_at < ${cutoff}
 		RETURNING 1
 	`;
-	return invalid.length + orphaned.length;
+	const confirmed = await sql`
+		DELETE FROM confirmed_operations WHERE created_at < ${confirmedCutoff}
+		RETURNING 1
+	`;
+	return invalid.length + orphaned.length + confirmed.length;
 }
 
 // ============ OPERATION STATUS ============

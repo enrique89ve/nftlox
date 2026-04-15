@@ -1,7 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { createLogger } from "@/utils/logger.ts";
-import { insertInvalidOperation, insertOrphanedBuy, insertConfirmedOperation } from "@/db/queries/sync.ts";
+import { insertInvalidOperation, insertOrphanedBuy, insertConfirmedOperation, isOperationConfirmed } from "@/db/queries/sync.ts";
 import {
 	ACTION_BUY,
 	ACTION_CREATE_COLLECTION,
@@ -109,6 +109,14 @@ const handlers: Record<ProtocolAction, Handler> = {
  */
 export async function routeOperation(op: ParsedOperation, txn: Queryable): Promise<boolean> {
 	try {
+		// Idempotency gate: skip handler dispatch if this operation_id has already been
+		// confirmed. Protects against crash-replay drift in denormalized counters when
+		// `synchronous_commit=OFF` (used during massive sync) lets a committed tx be lost
+		// and the sync engine re-processes the same range.
+		if (await isOperationConfirmed(op.operationId, txn)) {
+			return true;
+		}
+
 		// op.action: ProtocolAction — validated by the parser (isProtocolAction guard).
 		// handlers: Record<ProtocolAction, Handler> — compile-time exhaustiveness enforced.
 		// Lookup is non-optional: if this compiles, the handler exists.

@@ -102,6 +102,11 @@ export function setRunning(value: boolean): void {
   running = value;
 }
 
+/** @internal — exposed for unit tests only. Resets module-level head-tracking state. */
+export function resetHeadTracker(): void {
+  lastKnownIrreversibleBlock = 0;
+}
+
 export function startSync(): void {
   running = true;
   log.info("Sync engine started", {
@@ -128,11 +133,19 @@ export async function stopSync(): Promise<void> {
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const CLOCK_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const LOCK_RETRY_INTERVAL_MS = 10_000;
-const LOCK_VERIFY_INTERVAL_MS = 30_000;
+
+// Sentinel thrown by syncCycle when verifyLockHeld() fails before a write.
+// syncLoop catches this specifically and re-acquires the lock before retrying.
+// A plain string match is used to avoid an extra custom-error class.
+const LOCK_LOST_MARKER = "SYNC_LOCK_LOST";
 
 let lastCleanup = 0;
 let lastClockCheck = 0;
-let lastLockVerify = 0;
+// Monotonic invariant: Hive's last_irreversible_block_num only moves forward.
+// Any endpoint response that reports a lower value than previously observed is
+// either lagging (stale node) or lying (compromised). Tracked across cycles so
+// a single endpoint that lies in one cycle cannot rewrite our frontier.
+let lastKnownIrreversibleBlock = 0;
 
 /**
  * Blocks until the advisory lock is acquired or `running` becomes false.
@@ -155,19 +168,6 @@ async function syncLoop(): Promise<void> {
 
   while (running) {
     try {
-      // Verify the dedicated lock connection is still alive.
-      // If the connection dropped, the advisory lock was auto-released by PG.
-      // We must re-acquire before processing any blocks.
-      if (Date.now() - lastLockVerify > LOCK_VERIFY_INTERVAL_MS) {
-        lastLockVerify = Date.now();
-        const held = await verifyLockHeld();
-        if (!held) {
-          log.error("Advisory lock lost — connection dropped. Re-acquiring...");
-          if (!(await waitForLock())) return;
-          lastLockVerify = Date.now();
-        }
-      }
-
       await syncCycle();
 
       if (Date.now() - lastCleanup > CLEANUP_INTERVAL_MS) {
@@ -184,9 +184,17 @@ async function syncLoop(): Promise<void> {
         await checkClockDrift().catch(() => {});
       }
     } catch (err) {
-      log.error("Sync cycle error", {
-        error: err instanceof Error ? err.message : String(err),
-      });
+      const message = err instanceof Error ? err.message : String(err);
+      // LOCK_LOST_MARKER: syncCycle aborted because the advisory lock dropped
+      // mid-batch. Re-acquire before the next cycle — do not sleep the normal
+      // backoff. Without this, another indexer could race in and write to the
+      // same cursor while we wait.
+      if (message.includes(LOCK_LOST_MARKER)) {
+        log.error("Advisory lock lost mid-cycle — re-acquiring");
+        if (!(await waitForLock())) return;
+        continue;
+      }
+      log.error("Sync cycle error", { error: message });
       await sleep(config.syncIntervalMs * 2);
     }
   }
@@ -202,9 +210,29 @@ export async function syncCycle(): Promise<void> {
     });
   }
 
-  let chain = await getBlockchainHead("fast");
-  if (chain.irreversibleBlock - lastBlock <= MASSIVE_THRESHOLD) {
-    chain = await getBlockchainHead();
+  // Always fetch head via multi-endpoint consensus — NEVER trust a single endpoint
+  // for the irreversible frontier. During massive sync the previous code trusted the
+  // "fast" single-endpoint path to avoid the extra RPCs; that lets one lying or stale
+  // node dictate how far we advance. The consensus cost is ~one RPC per endpoint per
+  // `syncIntervalMs` (default 3s) — trivial compared to the thousands of ops/block
+  // that depend on the irreversible frontier being correct.
+  const chain = await getBlockchainHead();
+
+  // Hive invariant: irreversibleBlock is monotonic forward. A response that regresses
+  // is either a stale node leaking through consensus or an attack — refuse to use it.
+  // Small backward jitter is tolerated (multiple endpoints, minor propagation delay),
+  // but anything beyond a few blocks is a red flag. Abort the cycle; next cycle retries.
+  const IRREVERSIBLE_REGRESSION_TOLERANCE = 3;
+  if (lastKnownIrreversibleBlock > 0
+    && chain.irreversibleBlock < lastKnownIrreversibleBlock - IRREVERSIBLE_REGRESSION_TOLERANCE) {
+    throw new Error(
+      `Irreversible block regressed: ${chain.irreversibleBlock} < ${lastKnownIrreversibleBlock} ` +
+      `(tolerance ${IRREVERSIBLE_REGRESSION_TOLERANCE}). Suspect stale or compromised endpoint. ` +
+      `Aborting cycle; will retry.`,
+    );
+  }
+  if (chain.irreversibleBlock > lastKnownIrreversibleBlock) {
+    lastKnownIrreversibleBlock = chain.irreversibleBlock;
   }
 
   // Process only up to the last irreversible block to prevent reorg-induced state divergence.
@@ -249,11 +277,23 @@ export async function syncCycle(): Promise<void> {
     const range1End = Math.min(current + blockRange - 1, irreversibleBlock);
 
     // --- Block continuity assertion ---
+    // Backward divergence (expectedStart < current) is recoverable: a crash mid-batch
+    // with synchronous_commit=OFF can lose the last_block advance — re-process from DB.
+    // Forward divergence (expectedStart > current) means another writer advanced the
+    // cursor without us processing those blocks. Silently jumping to expectedStart would
+    // skip ops in the gap. This is a data-integrity violation — abort immediately.
     const dbLastBlock = await getLastBlock();
     const expectedStart = dbLastBlock + 1;
-    if (current !== expectedStart) {
+    if (expectedStart > current) {
+      throw new Error(
+        `BLOCK CONTINUITY VIOLATION — DB cursor advanced past us. ` +
+        `dbLastBlock=${dbLastBlock} expectedStart=${expectedStart} current=${current}. ` +
+        `Refusing to skip blocks ${current}..${expectedStart - 1}.`,
+      );
+    }
+    if (expectedStart < current) {
       continuityFailures++;
-      log.error("BLOCK CONTINUITY VIOLATION — resetting cursor from DB", {
+      log.error("BLOCK CONTINUITY backward — resetting cursor from DB", {
         expected: expectedStart,
         actual: current,
         dbLastBlock,
@@ -261,7 +301,7 @@ export async function syncCycle(): Promise<void> {
       });
       if (continuityFailures >= MAX_CONTINUITY_FAILURES) {
         throw new Error(
-          `Block continuity failed ${continuityFailures} times — aborting cycle`,
+          `Block continuity backward-reset ${continuityFailures} times — aborting cycle`,
         );
       }
       current = expectedStart;
@@ -318,6 +358,17 @@ export async function syncCycle(): Promise<void> {
     const hasOps = batches.some(
       (b) => b.ops.length > 0 || b.rejected.length > 0,
     );
+
+    // Per-batch lock fence: verify the advisory lock is still held IMMEDIATELY
+    // before any state-mutating write. Replaces the previous 30s timer check,
+    // which left a ~30s window where a second indexer could race in after a
+    // dropped connection and both writers advance the same cursor. Fetching is
+    // idempotent read-only I/O so it's safe to run without the lock — only the
+    // write path below is guarded. If lost, throw LOCK_LOST_MARKER so syncLoop
+    // re-acquires before the next cycle instead of the normal error backoff.
+    if (!(await verifyLockHeld())) {
+      throw new Error(LOCK_LOST_MARKER);
+    }
 
     if (hasOps) {
       await withTransaction(async (txn) => {

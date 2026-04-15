@@ -11,11 +11,11 @@ import {
 	requireNumber,
 	requireObject,
 	requireBoolean,
-	optionalString,
 	optionalBoundedString,
 	optionalCollectionSchema,
 	collectionSchemaToRecord,
 	requireUsername,
+	optionalUsername,
 } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import {
@@ -56,9 +56,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 
 	if (await collectionExists(canonicalId, txn)) return [];
 
-	const transfer = await feeOracle.requireDynamicFee(op, PROTOCOL_COLLECTION_FEE_HBD, config.hiveAccount, creator);
-	const feePaidHbd = transfer.currency === "HBD" ? transfer.amount : 0;
-	const feePaidHive = transfer.currency === "HIVE" ? transfer.amount : 0;
+	await feeOracle.requireDynamicFee(op, PROTOCOL_COLLECTION_FEE_HBD, config.hiveAccount, creator);
 
 	const creatorCollectionCount = await countCollectionsByCreator(creator, txn);
 	await assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount);
@@ -79,6 +77,16 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const royaltyPct = requireNumber(rules.royaltyPct, "rules.royaltyPct");
 	if (royaltyPct < 0 || royaltyPct > 50) {
 		throw new Error(`royaltyPct must be between 0 and 50, got ${royaltyPct}`);
+	}
+
+	// Validate royaltyRecipient as a real Hive username at creation time. Buy-time
+	// downstream uses this value to route funds in `calculatePaymentSplit`; storing
+	// garbage here would either silently misroute royalties to a bogus account or
+	// fail every buy for the collection. When royaltyPct === 0 the field is optional,
+	// but any provided value must still be a well-formed username — no silent accept.
+	const royaltyRecipient = optionalUsername(rules.royaltyRecipient, "rules.royaltyRecipient");
+	if (royaltyPct > 0 && !royaltyRecipient) {
+		throw new Error("rules.royaltyRecipient is required when rules.royaltyPct > 0");
 	}
 
 	const totalPotential = requireNumber(d.totalPotential, "totalPotential");
@@ -109,9 +117,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		transferable,
 		burnable,
 		royaltyPct,
-		royaltyRecipient: optionalString(rules.royaltyRecipient),
-		feePaidHbd,
-		feePaidHive,
+		royaltyRecipient,
 		schema: rawSchema,
 		schemaVersion,
 		blockNum: op.blockNum,

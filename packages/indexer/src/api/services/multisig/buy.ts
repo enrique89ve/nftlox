@@ -42,6 +42,13 @@ export async function processBuyRequest(
 		),
 	};
 
+	// Per-NFT concurrency is serialized by the route-level multisig_locks
+	// acquire (see api/routes/multisig.ts). The lock covers the full Hive tx
+	// lifetime (MULTISIG_EXPIRATION_MS) so a second buyer cannot be co-signed
+	// before the first signed tx has had a chance to land or expire. Seller-
+	// side direct unlist/transfer races are irreducible and surface post-hoc
+	// in orphaned_buys.
+
 	const { nft, rules, nftTxId } = await validateNftState(request.nftId, request.buyer, ctx);
 	if (nft.listing_id !== request.listingId) {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "listingId does not match current listing");
@@ -131,6 +138,10 @@ async function validateNftState(
 	buyer: string,
 	ctx: MultisigProcessContext,
 ): Promise<NftStateResult> {
+	// Plain read — no FOR UPDATE. Concurrency between buyer requests is
+	// serialized by ctx.nftLock in processBuyRequest; concurrent non-multisig
+	// mutations (direct unlist/transfer broadcast to Hive by the seller) are
+	// irreducible and handled post-hoc via orphaned_buys.
 	const nftWithRules = await getNftWithCollectionRules(nftId, ctx.db);
 	if (!nftWithRules) {
 		throw createMultisigError("NFT_NOT_FOUND", `NFT '${nftId}' not found`);

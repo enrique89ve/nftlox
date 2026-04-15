@@ -112,7 +112,7 @@ async function seedCollection(txn: Queryable = sql) {
 		symbol: "TEST",
 		totalPotential: 1000,
 		metadata: { description: "A test collection", image: "https://example.com/img.png" },
-		rules: { transferable: true, burnable: true, royaltyPct: 5 },
+		rules: { transferable: true, burnable: true, royaltyPct: 5, royaltyRecipient: "alice" },
 	});
 	await handleCreateCollection(op, txn);
 }

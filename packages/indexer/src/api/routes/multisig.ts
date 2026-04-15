@@ -339,8 +339,12 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			set.status = 500;
 			return { ok: false, code: "INTERNAL_ERROR" as const, message: "Unexpected signing error" };
 		} finally {
+			// Release on failure so another buyer can retry immediately. On success
+			// we deliberately let the lock expire naturally (after
+			// MULTISIG_EXPIRATION_MS) so a second buyer can't be co-signed while
+			// the first signed tx is still within its broadcast window.
 			if (!signingSucceeded) {
-				await nftLock.release(body.nftId);
+				await nftLock.release(body.nftId, body.buyer);
 			}
 		}
 	}, {

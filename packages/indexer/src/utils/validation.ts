@@ -45,7 +45,10 @@ export interface VerifyTransfersParams {
  * Reusable for multisig pre-signing verification.
  *
  * When `consumedIndices` is provided (from a TransferPool), matched transfers are marked
- * as consumed so other operations in the same tx cannot reuse them.
+ * as consumed so other operations in the same tx cannot reuse them. Matches are staged
+ * locally and only committed to the shared pool once ALL expected transfers are found —
+ * otherwise a partial match on a failed verification would leave the pool dirty for
+ * the next operation in the same Hive tx.
  */
 export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 	const { transfers, buyer, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, nftId, consumedIndices } = params;
@@ -58,9 +61,14 @@ export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 
 	const AMOUNT_TOLERANCE = 0.0005;
 
+	// Stage matches here first. The shared `consumedIndices` is only mutated below,
+	// after all three expected transfers are successfully matched.
+	const staged: number[] = [];
+
 	function expectTransfer(to: string, expectedAmount: number, label: string, expectedMemo: string): void {
 		const matchIndex = transfers.findIndex((t, idx) =>
 			(!consumedIndices || !consumedIndices.has(idx)) &&
+			!staged.includes(idx) &&
 			t.from === buyer &&
 			t.to === to &&
 			t.currency === currency &&
@@ -72,7 +80,7 @@ export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 				`Missing ${label}: expected ${expectedAmount} ${currency} from @${buyer} to @${to} with memo '${expectedMemo}'`
 			);
 		}
-		consumedIndices?.add(matchIndex);
+		staged.push(matchIndex);
 	}
 
 	if (split.sellerAmount > 0) {
@@ -85,6 +93,11 @@ export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 
 	if (split.feeAmount > 0) {
 		expectTransfer(split.feeAccount, split.feeAmount, "protocol fee", `${MEMO_PREFIX_FEE}${nftId}`);
+	}
+
+	// Atomic commit: all three matches succeeded, now publish to the shared pool.
+	if (consumedIndices) {
+		for (const idx of staged) consumedIndices.add(idx);
 	}
 
 	return split;
@@ -124,6 +137,24 @@ export function requireUsername(value: unknown, fieldName: string): string {
 		throw new Error(`Invalid Hive username for ${fieldName} ("${str}"): ${error}`);
 	}
 	return str;
+}
+
+/**
+ * Validates a username only when a value is present. Use this for fields where
+ * absence is legal (e.g. royaltyRecipient when royaltyPct === 0) but a garbage
+ * string must be rejected. Returns null for undefined/null/empty input so the
+ * caller can treat "no recipient" uniformly.
+ */
+export function optionalUsername(value: unknown, fieldName: string): string | null {
+	if (value === undefined || value === null || value === "") return null;
+	if (typeof value !== "string") {
+		throw new Error(`Invalid ${fieldName}: expected string username, got ${typeof value}`);
+	}
+	const error = validateHiveUsername(value);
+	if (error) {
+		throw new Error(`Invalid Hive username for ${fieldName} ("${value}"): ${error}`);
+	}
+	return value;
 }
 
 const HIVE_DECIMAL_REGEX = /^(0|[1-9]\d*)\.\d{3}$/;

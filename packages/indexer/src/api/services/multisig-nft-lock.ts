@@ -1,15 +1,17 @@
 import { sql } from "@/db/client.ts";
 
-type AcquireResult =
+export type NftLockAcquireResult =
 	| { readonly acquired: true }
 	| { readonly acquired: false; readonly heldBy: string; readonly retryAfterMs: number };
 
-export function createMultisigNftLock(): {
-	readonly acquire: (nftId: string, buyer: string, expirationMs: number) => Promise<AcquireResult>;
-	readonly release: (nftId: string) => Promise<void>;
+export type MultisigNftLock = Readonly<{
+	readonly acquire: (nftId: string, buyer: string, expirationMs: number) => Promise<NftLockAcquireResult>;
+	readonly release: (nftId: string, buyer: string) => Promise<void>;
 	readonly cleanupExpired: () => Promise<void>;
 	readonly destroy: () => void;
-} {
+}>;
+
+export function createMultisigNftLock(): MultisigNftLock {
 	const cleanupTimer = setInterval(() => {
 		cleanupExpired().catch(() => {});
 	}, 60_000);
@@ -17,7 +19,7 @@ export function createMultisigNftLock(): {
 
 	const MAX_ACQUIRE_RETRIES = 2;
 
-	const acquire = async (nftId: string, buyer: string, expirationMs: number, attempt = 0): Promise<AcquireResult> => {
+	const acquire = async (nftId: string, buyer: string, expirationMs: number, attempt = 0): Promise<NftLockAcquireResult> => {
 		const expiresAt = new Date(Date.now() + expirationMs).toISOString();
 
 		// Atomic: delete expired + insert/update in a single statement to avoid TOCTOU
@@ -51,8 +53,11 @@ export function createMultisigNftLock(): {
 		return { acquired: false, heldBy: String(existing.buyer), retryAfterMs };
 	};
 
-	const release = async (nftId: string): Promise<void> => {
-		await sql`DELETE FROM multisig_locks WHERE nft_id = ${nftId}`;
+	// Buyer-scoped: only the buyer that acquired the lock can release it, so
+	// a late-arriving release from a previous buyer can never nuke an active
+	// lock held by someone else.
+	const release = async (nftId: string, buyer: string): Promise<void> => {
+		await sql`DELETE FROM multisig_locks WHERE nft_id = ${nftId} AND buyer = ${buyer}`;
 	};
 
 	const cleanupExpired = async (): Promise<void> => {

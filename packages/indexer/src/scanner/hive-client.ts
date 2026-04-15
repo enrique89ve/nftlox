@@ -412,28 +412,31 @@ export async function getCustomJsonInRange(fromBlock: number, toBlock: number, p
 		const result = await hafahWithFailover(fromBlock, toBlock, operationBegin, pageSize);
 		const ops = result.ops;
 
-		if (ops.length === 0) break;
-
 		// Filter to only our protocol operations
 		const ours = ops.filter(op => op.op.value.id === protocolId);
 		allOps.push(...ours);
 		pages++;
 
-		// Last page (incomplete) — no more data
-		if (ops.length < pageSize) break;
-
-		if (result.next_operation_begin) {
-			operationBegin = result.next_operation_begin;
-		} else {
-			break;
-		}
+		// Trust ONLY the cursor for termination. Using `ops.length < pageSize` as an
+		// early-exit heuristic is unsafe: some HAF nodes return fewer ops than requested
+		// while still offering `next_operation_begin`, which would silently drop the
+		// remaining pages. `ops.length === 0` with `next_operation_begin == null` is the
+		// only guaranteed end-of-stream signal.
+		if (result.next_operation_begin === null) break;
+		operationBegin = result.next_operation_begin;
 	}
 
 	if (pages >= maxPages) {
-		log.error("HafAH pagination safety limit reached — ops may be missing", {
-			fromBlock, toBlock, pages, maxPages, protocolOps: allOps.length,
-		});
-	} else if (allOps.length > 0) {
+		// MUST throw — returning a partial set would let the sync engine commit those ops
+		// and advance `last_block` past blocks whose ops were silently dropped, breaking
+		// the completeness invariant for ownership data. The sync loop will retry; if the
+		// overflow is real, the operator must reduce HAFAH_BLOCK_RANGE.
+		throw new Error(
+			`HafAH pagination overflow: range ${fromBlock}-${toBlock} exceeded ${maxPages} pages ` +
+			`× ${pageSize} ops/page. Reduce HAFAH_BLOCK_RANGE or investigate custom_json density.`,
+		);
+	}
+	if (allOps.length > 0) {
 		log.debug("HafAH found", { fromBlock, toBlock, pages, protocolOps: allOps.length });
 	}
 

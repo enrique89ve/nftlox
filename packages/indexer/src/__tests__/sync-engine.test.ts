@@ -40,8 +40,15 @@ mock.module("@/db/queries/sync.ts", () => ({
 	updateLastBlock: mockUpdateLastBlock,
 	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
 	insertInvalidOperation: mock(() => Promise.resolve()),
+}));
+
+// sync-lock lives in scanner/, not db/queries. Tests call syncCycle directly
+// without starting syncLoop, so the real dedicated-connection path would fail.
+// verifyLockHeld is mocked true so the per-batch fence treats the lock as held.
+mock.module("@/scanner/sync-lock.ts", () => ({
 	acquireSyncLock: mock(() => Promise.resolve(true)),
 	releaseSyncLock: mock(() => Promise.resolve()),
+	verifyLockHeld: mock(() => Promise.resolve(true)),
 }));
 
 mock.module("@/scanner/hive-client.ts", () => ({
@@ -79,7 +86,7 @@ mock.module("@/db/client.ts", () => ({
 }));
 
 // Import AFTER mocks so they take effect
-const { syncCycle, setRunning } = await import("@/scanner/sync-engine.ts");
+const { syncCycle, setRunning, resetHeadTracker } = await import("@/scanner/sync-engine.ts");
 const { isSynced, setSynced, getSyncProgress, updateSyncProgress, setSyncReporter } = await import("@/scanner/sync-state.ts");
 
 // ─── Helpers ────────────────────────────────────────
@@ -164,6 +171,7 @@ function resetAllMocks(): void {
 	setSynced(false);
 	updateSyncProgress({ lastBlock: 0, headBlock: 0, irreversibleBlock: 0 });
 	setRunning(true);
+	resetHeadTracker();
 }
 
 // ─── Tests ──────────────────────────────────────────
@@ -317,7 +325,7 @@ describe("syncCycle", () => {
 		expect(progress.irreversibleBlock).toBe(1020);
 	});
 
-	test("revalidates chain head exactly when catch-up is near live", async () => {
+	test("always fetches chain head via strict multi-endpoint consensus", async () => {
 		trackedLastBlock = 1000;
 		setupChainHead(1050, 1065);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
@@ -326,12 +334,14 @@ describe("syncCycle", () => {
 
 		await syncCycle();
 
-		expect(mockGetBlockchainHead.mock.calls).toHaveLength(2);
-		expect(mockGetBlockchainHead.mock.calls[0]?.[0]).toBe("fast");
-		expect(mockGetBlockchainHead.mock.calls[1]).toEqual([]);
+		// Single strict-consensus call — no fast-path shortcut, even near live.
+		// The previous two-step (fast → maybe strict) pattern let one endpoint
+		// dictate the irreversible frontier during massive sync.
+		expect(mockGetBlockchainHead.mock.calls).toHaveLength(1);
+		expect(mockGetBlockchainHead.mock.calls[0]).toEqual([]);
 	});
 
-	test("skips exact head revalidation during massive sync", async () => {
+	test("uses strict consensus even during massive sync (no fast shortcut)", async () => {
 		trackedLastBlock = 1000;
 		setupChainHead(6000);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
@@ -341,7 +351,7 @@ describe("syncCycle", () => {
 		await syncCycle();
 
 		expect(mockGetBlockchainHead.mock.calls).toHaveLength(1);
-		expect(mockGetBlockchainHead.mock.calls[0]?.[0]).toBe("fast");
+		expect(mockGetBlockchainHead.mock.calls[0]).toEqual([]);
 	});
 
 	test("processes multiple ranges with parallel fetch during massive sync", async () => {

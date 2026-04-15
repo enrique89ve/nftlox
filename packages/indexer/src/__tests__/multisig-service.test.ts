@@ -37,6 +37,7 @@ import {
 	generateListingNonce,
 	generateListingId,
 	generateDeterministicCollectionId,
+	PROTOCOL_COLLECTION_FEE_HBD,
 	type MultisigResponse,
 	type MultisigErrorCode,
 } from "@/protocol/index.ts";
@@ -91,16 +92,28 @@ async function seedCollection(
 	symbol = "MSTEST",
 	transferable = true,
 	royaltyPct = 0,
+	creator = "alice",
 ): Promise<string> {
-	const id = await generateDeterministicCollectionId("alice", name, symbol);
-	const op = makeOp(ACTION_CREATE_COLLECTION, {
-		id,
-		name,
-		symbol,
-		totalPotential: 1000,
-		metadata: { description: `Test collection ${name}`, image: "https://example.com/img.png" },
-		rules: { transferable, burnable: true, royaltyPct },
-	});
+	const id = await generateDeterministicCollectionId(creator, name, symbol);
+	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
+	const pairedTransfers = [
+		{ from: creator, to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: "" },
+	];
+	const rules: Record<string, unknown> = { transferable, burnable: true, royaltyPct };
+	if (royaltyPct > 0) rules.royaltyRecipient = creator;
+	const op = makeOp(
+		ACTION_CREATE_COLLECTION,
+		{
+			id,
+			name,
+			symbol,
+			totalPotential: 1000,
+			metadata: { description: `Test collection ${name}`, image: "https://example.com/img.png" },
+			rules,
+		},
+		NODE_ACCOUNT,
+		pairedTransfers,
+	);
 	await handleCreateCollection(op, sql);
 	return id;
 }

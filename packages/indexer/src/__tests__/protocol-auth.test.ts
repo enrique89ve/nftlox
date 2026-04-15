@@ -11,6 +11,7 @@ import {
 	POSTING_AUTH_ACTIONS,
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
+	PROTOCOL_GENESIS_BLOCK,
 	getAuthMismatchReason,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
@@ -18,12 +19,14 @@ import { parseHafAHOperations } from "@/scanner/operation-parser.ts";
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
 
 const TX_ID = "a".repeat(40);
+const POST_GENESIS_BLOCK = PROTOCOL_GENESIS_BLOCK + 1;
 
 function makeCustomJsonOperation(
 	action: ProtocolAction,
 	required_auths: string[],
 	required_posting_auths: string[],
 	version = PROTOCOL_VERSION,
+	block = POST_GENESIS_BLOCK,
 ): HafAHOperation {
 	return {
 		op: {
@@ -35,7 +38,7 @@ function makeCustomJsonOperation(
 				required_posting_auths,
 			},
 		},
-		block: 1,
+		block,
 		trx_id: TX_ID,
 		timestamp: "2026-01-01T00:00:00",
 		operation_id: "1",
@@ -91,16 +94,17 @@ describe("protocol auth parser", () => {
 		]);
 
 		expect(result.ops).toEqual([]);
-		expect(result.rejected[0]?.reason).toBe("Ambiguous authority: required_auths and required_posting_auths cannot both be non-empty");
+		expect(result.rejected[0]?.reason).toBe("Mixed authority levels: required_auths and required_posting_auths cannot both be non-empty");
 	});
 
-	test("rejects custom_json with multiple signers in one authority array", () => {
+	test("rejects multi-account co-signed custom_json (single-account multisig still passes)", () => {
 		const result = parseHafAHOperations([
 			makeCustomJsonOperation(ACTION_TRANSFER, [], ["alice", "bob"]),
 		]);
 
 		expect(result.ops).toEqual([]);
-		expect(result.rejected[0]?.reason).toBe("Ambiguous posting authority: expected exactly one signer, got 2");
+		expect(result.rejected[0]?.reason).toContain("Multi-account co-signed custom_json not supported");
+		expect(result.rejected[0]?.reason).toContain("2 posting signers");
 	});
 
 	test("rejects malformed protocol versions instead of accepting NaN comparisons", () => {
@@ -110,5 +114,53 @@ describe("protocol auth parser", () => {
 
 		expect(result.ops).toEqual([]);
 		expect(result.rejected[0]?.reason).toBe("Invalid version format: not-semver");
+	});
+
+	test("rejects well-formed op that predates genesis block", () => {
+		const result = parseHafAHOperations([
+			makeCustomJsonOperation(ACTION_TRANSFER, [], ["alice"], PROTOCOL_VERSION, PROTOCOL_GENESIS_BLOCK - 1),
+		]);
+
+		expect(result.ops).toEqual([]);
+		expect(result.rejected[0]?.reason).toContain("predates genesis");
+	});
+
+	test("strips __proto__ and constructor keys from payload data", () => {
+		const malicious = {
+			protocol: PROTOCOL_ID,
+			version: PROTOCOL_VERSION,
+			action: ACTION_TRANSFER,
+			data: {
+				from: "alice",
+				to: "bob",
+				nftId: "nft_1",
+				__proto__: { polluted: true },
+				constructor: { prototype: { polluted: true } },
+			},
+		};
+		const op: HafAHOperation = {
+			op: {
+				type: "custom_json",
+				value: {
+					id: PROTOCOL_ID,
+					json: JSON.stringify(malicious),
+					required_auths: [],
+					required_posting_auths: ["alice"],
+				},
+			},
+			block: POST_GENESIS_BLOCK,
+			trx_id: TX_ID,
+			timestamp: "2026-01-01T00:00:00",
+			operation_id: "1",
+			virtual_op: false,
+		};
+		const result = parseHafAHOperations([op]);
+
+		expect(result.rejected).toEqual([]);
+		expect(result.ops).toHaveLength(1);
+		const data = result.ops[0]?.data ?? {};
+		expect(Object.prototype.hasOwnProperty.call(data, "__proto__")).toBe(false);
+		expect(Object.prototype.hasOwnProperty.call(data, "constructor")).toBe(false);
+		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
 	});
 });
