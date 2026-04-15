@@ -420,9 +420,15 @@ export async function getCustomJsonInRange(fromBlock: number, toBlock: number, p
 		// Trust ONLY the cursor for termination. Using `ops.length < pageSize` as an
 		// early-exit heuristic is unsafe: some HAF nodes return fewer ops than requested
 		// while still offering `next_operation_begin`, which would silently drop the
-		// remaining pages. `ops.length === 0` with `next_operation_begin == null` is the
-		// only guaranteed end-of-stream signal.
-		if (result.next_operation_begin === null) break;
+		// remaining pages.
+		// End-of-stream signals from HafAH: `null` OR the string sentinel "0".
+		// The non-advancing-cursor guard is a defensive backstop against future server
+		// quirks — without it a stuck cursor would re-read the same page until maxPages.
+		if (
+			result.next_operation_begin === null ||
+			result.next_operation_begin === "0" ||
+			result.next_operation_begin === operationBegin
+		) break;
 		operationBegin = result.next_operation_begin;
 	}
 
