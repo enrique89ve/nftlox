@@ -4,3 +4,4 @@ export * from "./types";
 export * from "./username";
 export * from "./payment";
 export * from "./schema";
+export * from "./dna";
