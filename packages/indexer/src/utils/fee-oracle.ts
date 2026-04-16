@@ -15,6 +15,13 @@ interface FeedHistory {
 const PRICE_POLL_INTERVAL_MS = 3_600_000;
 const PRICE_STALE_THRESHOLD_MS = 14_400_000;
 
+// Fee tolerance for HIVE payments. Absorbs the price-drift window between
+// the bot's /api/status read and the handler's validateFee call. 2% (200 bps)
+// covers typical intra-hour HIVE/HBD volatility while leaving a hostile actor
+// no meaningful discount. HBD payments have no tolerance — they're pegged.
+export const FEE_TOLERANCE_BPS = 200;
+const FEE_TOLERANCE_MULTIPLIER = 1 - FEE_TOLERANCE_BPS / 10_000;
+
 let cachedPrice: { hbdPerHive: number; fetchedAt: number } | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -107,12 +114,14 @@ export function getPriceStatus(): Readonly<{
 	hbdPerHive: number | null;
 	fetchedAt: number | null;
 	stale: boolean;
+	toleranceBps: number;
 }> {
 	return {
 		available: cachedPrice !== null,
 		hbdPerHive: cachedPrice?.hbdPerHive ?? null,
 		fetchedAt: cachedPrice?.fetchedAt ?? null,
 		stale: !isPriceFresh(),
+		toleranceBps: FEE_TOLERANCE_BPS,
 	};
 }
 
@@ -129,7 +138,7 @@ export const feeOracle = {
 			const hbdPerHive = getMedianPrice();
 			if (hbdPerHive === null) return false;
 			const hiveRequired = target / hbdPerHive;
-			return paidAmount >= (hiveRequired * 0.995);
+			return paidAmount >= (hiveRequired * FEE_TOLERANCE_MULTIPLIER);
 		}
 
 		return false;

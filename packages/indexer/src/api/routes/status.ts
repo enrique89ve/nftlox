@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { getMedianPrice } from "@/utils/fee-oracle.ts";
+import { getPriceStatus } from "@/utils/fee-oracle.ts";
 import { getLastBlock, getSyncStatus, getOperationStatus } from "@/db/queries/sync.ts";
 import { getBlockchainHead } from "@/scanner/hive-client.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
@@ -112,14 +112,10 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 		const multisig = getMultisigHealth();
 		const blocksBehind = Math.max(0, chain.irreversibleBlock - lastBlock);
 		const inSync = chain.irreversibleBlock > 0 && blocksBehind <= SYNC_TOLERANCE_BLOCKS;
-		const genesisOffsetBlocks = Math.max(0, config.genesisBlock - PROTOCOL_GENESIS_BLOCK);
 		return {
 			protocolVersion: PROTOCOL_VERSION,
 			protocolId: config.protocolId,
-			genesisBlock: config.genesisBlock,
-			canonicalGenesisBlock: PROTOCOL_GENESIS_BLOCK,
-			partialIndex: genesisOffsetBlocks > 0,
-			genesisOffsetBlocks,
+			genesisBlock: PROTOCOL_GENESIS_BLOCK,
 			nodeAccount: config.hiveAccount,
 			nodeUrl: config.nodeUrl || null,
 			multisigEnabled: multisig.multisigEnabled,
@@ -129,6 +125,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			protocolFeeBps: PROTOCOL_FEE_BPS,
 			maxRoyaltyBps: percentageToBasisPoints(MAX_ROYALTY_PCT),
 			supportedCurrencies: SUPPORTED_CURRENCIES,
+			priceFeed: getPriceStatus(),
 			lastBlock,
 			headBlock: chain.headBlock,
 			irreversibleBlock: chain.irreversibleBlock,
@@ -138,7 +135,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 	}, {
 		detail: {
 			summary: "Sync status",
-			description: "Current indexer sync progress and protocol constants. Block fields are Hive block numbers. multisigClockDriftMs is expressed in milliseconds. protocolFeeBps and maxRoyaltyBps use basis points (100 = 1%, 5000 = 50%).",
+			description: "Current indexer sync progress and protocol constants. Block fields are Hive block numbers. multisigClockDriftMs is expressed in milliseconds. protocolFeeBps and maxRoyaltyBps use basis points (100 = 1%, 5000 = 50%). priceFeed.hbdPerHive and priceFeed.toleranceBps let bots compute hiveAmount = hbdTarget / hbdPerHive and pad by toleranceBps/10000 before signing.",
 		},
 	})
 	.get("/api/health", async ({ set }) => {
@@ -183,32 +180,4 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			description: "Returns per-operation status for all protocol operations in a Hive transaction. Includes NFT IDs for bounded per-NFT operations; bulk creation operations may return an empty ID list. A single tx can contain multiple custom_json ops, each tracked independently.",
 		},
 	})
-	.get("/api/fee-estimate", ({ query, set }) => {
-		const hbdTarget = typeof query.hbd === "string" ? parseFloat(query.hbd) : null;
-		if (!hbdTarget || isNaN(hbdTarget) || hbdTarget <= 0) {
-			return { error: "Missing or invalid 'hbd' query parameter" };
-		}
-
-		const ratio = getMedianPrice();
-		if (ratio === null) {
-			set.status = 503;
-			return { error: "Price feed unavailable or stale — cannot estimate HIVE amount" };
-		}
-
-		const hiveAmount = hbdTarget / ratio;
-
-		return {
-			hbdTarget,
-			ratio,
-			hiveAmount: parseFloat(hiveAmount.toFixed(3)),
-			hiveAmountString: `${hiveAmount.toFixed(3)} HIVE`
-		};
-	}, {
-		query: t.Object({
-			hbd: t.Optional(t.String()),
-		}),
-		detail: {
-			summary: "Dynamic Fee Oracle Estimation",
-			description: "Calculates the dynamic correct amount of HIVE needed to meet the specified HBD target using the internal L2 Node feed history.",
-		},
-	});
+	;
