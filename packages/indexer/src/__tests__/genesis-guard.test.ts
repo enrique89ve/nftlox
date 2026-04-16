@@ -6,28 +6,28 @@ describe("validateGenesisBlockSelection", () => {
 	test("accepts the canonical protocol genesis block", () => {
 		expect(() => validateGenesisBlockSelection({
 			genesisBlock: PROTOCOL_GENESIS_BLOCK,
-			allowUnsafeGenesisBlock: false,
 		})).not.toThrow();
 	});
 
-	test("accepts earlier genesis blocks", () => {
+	test("rejects any value other than the canonical genesis", () => {
 		expect(() => validateGenesisBlockSelection({
 			genesisBlock: PROTOCOL_GENESIS_BLOCK - 1,
-			allowUnsafeGenesisBlock: false,
-		})).not.toThrow();
-	});
+		})).toThrow("does not match protocol canonical genesis");
 
-	test("rejects later genesis blocks by default", () => {
 		expect(() => validateGenesisBlockSelection({
 			genesisBlock: PROTOCOL_GENESIS_BLOCK + 1,
-			allowUnsafeGenesisBlock: false,
-		})).toThrow("Unsafe GENESIS_BLOCK");
+		})).toThrow("does not match protocol canonical genesis");
 	});
 
-	test("allows later genesis blocks only with explicit override", () => {
-		expect(() => validateGenesisBlockSelection({
-			genesisBlock: PROTOCOL_GENESIS_BLOCK + 1,
-			allowUnsafeGenesisBlock: true,
-		})).not.toThrow();
+	test("rejects non-positive integers", () => {
+		expect(() => validateGenesisBlockSelection({ genesisBlock: 0 })).toThrow(
+			"must be a positive integer",
+		);
+		expect(() => validateGenesisBlockSelection({ genesisBlock: -1 })).toThrow(
+			"must be a positive integer",
+		);
+		expect(() => validateGenesisBlockSelection({ genesisBlock: 1.5 })).toThrow(
+			"must be a positive integer",
+		);
 	});
 });

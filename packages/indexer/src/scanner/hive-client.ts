@@ -454,6 +454,68 @@ export function getHafAHBlockRange(): number {
 	return HAFAH_BLOCK_RANGE;
 }
 
+// ============ BLOCK HEADERS ============
+
+function parseBlockId(result: unknown): string | null {
+	if (typeof result !== "object" || result === null) return null;
+	const root = result as Record<string, unknown>;
+	const headerContainer = root.block_id ? root : (root.block as Record<string, unknown> | undefined);
+	if (!headerContainer) return null;
+	const blockId = headerContainer.block_id;
+	if (typeof blockId !== "string" || blockId.length === 0) return null;
+	return blockId;
+}
+
+export type BlockIdObservation = Readonly<{
+	readonly endpoint: string;
+	readonly blockId: string;
+}>;
+
+/**
+ * Fans out `block_api.get_block` to every configured Hive endpoint in parallel
+ * and returns only the successful observations. Callers decide how many they
+ * need for a quorum; startup cross-check requires ≥2.
+ */
+export async function getBlockIdFromAllEndpoints(blockNum: number): Promise<ReadonlyArray<BlockIdObservation>> {
+	const results = await Promise.allSettled(
+		config.hiveEndpoints.map(async (endpoint) => {
+			const start = performance.now();
+			const response = await rpcCall<Record<string, unknown>>(
+				endpoint,
+				"block_api.get_block",
+				{ block_num: blockNum },
+			);
+			rpcHealth.recordSuccess(endpoint, performance.now() - start);
+			const blockId = parseBlockId(response);
+			if (!blockId) {
+				throw new Error(`block_api.get_block returned no block_id for block ${blockNum}`);
+			}
+			return { endpoint, blockId };
+		}),
+	);
+
+	const successes: BlockIdObservation[] = [];
+	for (let i = 0; i < results.length; i++) {
+		const result = results[i];
+		const endpoint = config.hiveEndpoints[i] ?? "";
+		if (!result) continue;
+		if (result.status === "fulfilled") {
+			successes.push(result.value);
+			continue;
+		}
+		const category = classifyError(result.reason);
+		const retryAfterMs = result.reason instanceof FetchError ? result.reason.retryAfterMs : undefined;
+		rpcHealth.recordFailure(endpoint, category, retryAfterMs);
+		log.warn("Block header probe failed", {
+			endpoint,
+			blockNum,
+			error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+			category,
+		});
+	}
+	return successes;
+}
+
 // ============ TRANSFER VERIFICATION (for buy payment checks) ============
 
 const NAI_TO_CURRENCY: Record<string, string> = {

@@ -40,6 +40,14 @@ mock.module("@/db/queries/sync.ts", () => ({
 	updateLastBlock: mockUpdateLastBlock,
 	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
 	insertInvalidOperation: mock(() => Promise.resolve()),
+	// Stubs keep the module's export shape complete so bun's process-wide
+	// mock registry doesn't starve sibling test files (e.g. status-route.test.ts).
+	getSyncStatus: mock(() => Promise.resolve({ lastBlock: 0, updatedAt: new Date() })),
+	getOperationStatus: mock(() => Promise.resolve([])),
+	getLastBlockForUpdate: mock(() => Promise.resolve(0)),
+	isOperationConfirmed: mock(() => Promise.resolve(false)),
+	insertConfirmedOperation: mock(() => Promise.resolve()),
+	insertOrphanedBuy: mock(() => Promise.resolve()),
 }));
 
 // sync-lock lives in scanner/, not db/queries. Tests call syncCycle directly
@@ -57,6 +65,10 @@ mock.module("@/scanner/hive-client.ts", () => ({
 	getHafAHBlockRange: mockGetHafAHBlockRange,
 	getTransfersInTransaction: mockGetTransfersInTransaction,
 	checkClockDrift: mock(() => Promise.resolve()),
+	// Kept so chain-anchors mock shape stays complete across test files.
+	getBlockIdFromAllEndpoints: mock((blockNum: number) =>
+		Promise.resolve([{ endpoint: "mock", blockId: `block_${blockNum}` }]),
+	),
 }));
 
 mock.module("@/scanner/operation-parser.ts", () => ({

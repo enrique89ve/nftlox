@@ -44,8 +44,10 @@ const toLogLevel = (val: string | undefined, fallback: LogLevel): LogLevel => {
 export const config = {
 	port: toInt(process.env.INDEXER_PORT, 3050),
 	databaseUrl: process.env.DATABASE_URL ?? (process.env.NODE_ENV === "production" ? "" : "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer"),
-	genesisBlock: toInt(process.env.GENESIS_BLOCK, PROTOCOL_GENESIS_BLOCK),
-	allowUnsafeGenesisBlock: toBool(process.env.ALLOW_UNSAFE_GENESIS_BLOCK, false),
+	// Genesis is a protocol invariant. Intentionally NOT read from env: the only
+	// legitimate "override" is editing the constant — protocol-auth.test guards
+	// that from drifting out of sync with the SDK.
+	genesisBlock: PROTOCOL_GENESIS_BLOCK,
 	protocolId: PROTOCOL_ID,
 	batchSize: toInt(process.env.BATCH_SIZE, 1000),
 	syncIntervalMs: toInt(process.env.SYNC_INTERVAL_MS, 3000),
@@ -79,10 +81,7 @@ export const config = {
 	multisigPowReplayCacheMax: toBoundedInt(process.env.MULTISIG_POW_REPLAY_CACHE_MAX, 10_000, 1, 1_000_000),
 } as const;
 
-validateGenesisBlockSelection({
-	genesisBlock: config.genesisBlock,
-	allowUnsafeGenesisBlock: config.allowUnsafeGenesisBlock,
-});
+validateGenesisBlockSelection({ genesisBlock: config.genesisBlock });
 
 if (config.hiveEndpoints.length === 0) {
 	throw new Error("HIVE_ENDPOINTS must contain at least one valid URL");

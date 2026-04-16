@@ -27,6 +27,14 @@ mock.module("@/db/queries/sync.ts", () => ({
 mock.module("@/scanner/hive-client.ts", () => ({
 	getBlockchainHead: () => Promise.resolve(mockChainStatus),
 	checkClockDrift: () => Promise.resolve({ ok: true, driftMs: 1000 }),
+	// Stubs keep chain-anchors.test.ts mock shape complete under bun's
+	// process-wide mock registry.
+	getBlockIdFromAllEndpoints: () => Promise.resolve([]),
+	getCustomJsonInRange: () => Promise.resolve([]),
+	getHafAHBlockRange: () => 0,
+	getTransfersInTransaction: () => Promise.resolve([]),
+	getHeadBlockNum: () => Promise.resolve(0),
+	selectConsensusHead: () => ({ headBlock: 0, irreversibleBlock: 0 }),
 }));
 
 mock.module("@/db/queries/stats.ts", () => ({
@@ -39,6 +47,16 @@ mock.module("@/scanner/sync-state.ts", () => ({
 
 mock.module("@/scanner/sync-engine.ts", () => ({
 	SYNC_TOLERANCE_BLOCKS: 5,
+}));
+
+mock.module("@/utils/fee-oracle.ts", () => ({
+	getPriceStatus: () => ({
+		available: true,
+		hbdPerHive: 0.3,
+		fetchedAt: fixedNowMs - 60_000,
+		stale: false,
+		toleranceBps: 200,
+	}),
 }));
 
 mock.module("@/config.ts", () => ({
@@ -88,9 +106,28 @@ describe("status route", () => {
 		expect(json.multisigClockDriftMs).toBe(20000);
 		expect(json.protocolFeeBps).toBe(250);
 		expect(json.maxRoyaltyBps).toBe(5000);
-		expect(json.canonicalGenesisBlock).toBe(105530500);
-		expect(json.partialIndex).toBe(false);
-		expect(json.genesisOffsetBlocks).toBe(0);
+		expect(json.genesisBlock).toBe(105530500);
+	});
+
+	test("exposes priceFeed so bots can compute HIVE amount without a second request", async () => {
+		const app = new Elysia().use(statusRoutes);
+		const response = await app.handle(new Request("http://localhost/api/status"));
+		const json = await response.json() as Record<string, unknown>;
+
+		expect(response.status).toBe(200);
+		expect(json.priceFeed).toEqual({
+			available: true,
+			hbdPerHive: 0.3,
+			fetchedAt: fixedNowMs - 60_000,
+			stale: false,
+			toleranceBps: 200,
+		});
+	});
+
+	test("legacy /api/fee-estimate is removed — priceFeed lives in /api/status now", async () => {
+		const app = new Elysia().use(statusRoutes);
+		const response = await app.handle(new Request("http://localhost/api/fee-estimate?hbd=0.1"));
+		expect(response.status).toBe(404);
 	});
 
 	test("returns combined healthy status when synced", async () => {

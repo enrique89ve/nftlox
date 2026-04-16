@@ -97,6 +97,7 @@ export type ValidatedTransaction = Readonly<{
 
 export type MultisigErrorCode =
 	| "NFT_LOCKED"
+	| "COLLECTION_LOCKED"
 	| "RATE_LIMITED"
 	| "INVALID_TX_STRUCTURE"
 	| "NFT_NOT_FOUND"
@@ -121,7 +122,7 @@ export type MultisigErrorCode =
 
 export type MultisigResponse =
 	| Readonly<{ ok: true; signature: string; digest: string; expiration: string }>
-	| Readonly<{ ok: false; code: MultisigErrorCode; message: string }>;
+	| Readonly<{ ok: false; code: MultisigErrorCode; message: string; retryAfterMs?: number }>;
 
 // ============ PROTOCOL PAYLOAD ============
 

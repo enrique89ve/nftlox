@@ -45,6 +45,13 @@ mock.module("@/db/queries/sync.ts", () => ({
 	insertInvalidOperation: mock(() => Promise.resolve()),
 	acquireSyncLock: mock(() => Promise.resolve(true)),
 	releaseSyncLock: mock(() => Promise.resolve()),
+	// Stubs keep the module's export shape complete for bun's process-wide mocks.
+	getSyncStatus: mock(() => Promise.resolve({ lastBlock: 0, updatedAt: new Date() })),
+	getOperationStatus: mock(() => Promise.resolve([])),
+	getLastBlockForUpdate: mock(() => Promise.resolve(0)),
+	isOperationConfirmed: mock(() => Promise.resolve(false)),
+	insertConfirmedOperation: mock(() => Promise.resolve()),
+	insertOrphanedBuy: mock(() => Promise.resolve()),
 }));
 
 mock.module("@/scanner/hive-client.ts", () => ({
@@ -53,6 +60,11 @@ mock.module("@/scanner/hive-client.ts", () => ({
 	getHafAHBlockRange: mockGetHafAHBlockRange,
 	getTransfersInTransaction: mockGetTransfersInTransaction,
 	checkClockDrift: mock(() => Promise.resolve()),
+	// Stub keeps chain-anchors.test.ts mock shape complete under bun's
+	// process-wide mock registry.
+	getBlockIdFromAllEndpoints: mock(() => Promise.resolve([])),
+	getHeadBlockNum: mock(() => Promise.resolve(0)),
+	selectConsensusHead: () => ({ headBlock: 0, irreversibleBlock: 0 }),
 }));
 
 mock.module("@/scanner/operation-parser.ts", () => ({

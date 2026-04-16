@@ -26,6 +26,7 @@ import {
 } from "./operation-parser.ts";
 import { routeOperation } from "@/processor/action-router.ts";
 import { markSyncActivity, setSynced, updateSyncProgress } from "./sync-state.ts";
+import { ChainAnchorMismatchError, verifyChainAnchors } from "./chain-anchors.ts";
 import { createLogger } from "@/utils/logger.ts";
 
 const log = createLogger("sync");
@@ -117,11 +118,20 @@ export function startSync(): void {
 
   checkClockDrift().catch(() => {});
 
-  syncLoop().catch((err) => {
-    log.error("Sync loop fatal error", {
-      error: err instanceof Error ? err.message : String(err),
+  // Chain-anchor verification is a hard gate before any writes: genesis block_id
+  // must agree with the live chain on ≥2 endpoints. If it doesn't, we exit so
+  // the orchestrator (systemd/Docker/k8s) can surface the failure instead of
+  // silently running against a divergent chain.
+  verifyChainAnchors()
+    .then(() => syncLoop())
+    .catch((err) => {
+      log.error("Sync loop fatal error", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      if (err instanceof ChainAnchorMismatchError) {
+        process.exit(1);
+      }
     });
-  });
 }
 
 export async function stopSync(): Promise<void> {
