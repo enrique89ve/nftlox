@@ -33,12 +33,10 @@ CREATE TABLE IF NOT EXISTS sync_state (
 	last_block BIGINT NOT NULL DEFAULT 0,
 	genesis_block BIGINT NOT NULL DEFAULT 0,
 	-- schema_hash pins this row to a known schema.sql content. On mismatch the
-	-- bootstrap truncates all data and re-syncs from genesis. Nullable so old
-	-- installs don't break while they upgrade through this migration.
+	-- bootstrap truncates all data and re-syncs from genesis (testnet policy).
 	schema_hash TEXT,
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS schema_hash TEXT;
 INSERT INTO sync_state (last_block) VALUES (0) ON CONFLICT (id) DO NOTHING;
 
 -- State root (singleton row) — incremental XOR over per-NFT SPV row hashes.
