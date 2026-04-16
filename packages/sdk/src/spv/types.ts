@@ -1,7 +1,7 @@
 // SPV "Boleto Suizo" - Types
 // Trustless verification system for NFTLox operations
 
-import type { ProtocolAction, SupportedCurrency } from "../constants.ts";
+import type { ProtocolAction, SupportedCurrency } from "@nftlox/protocol";
 
 // ============ L1 CLIENT CONFIG ============
 

@@ -1,7 +1,7 @@
 // NFTLox Indexer API Client
 // Portable client using only fetch() — works in browser, Bun, and Node.
 
-import type { PaymentInfo, MultisigRequest, MultisigResponse } from "./types";
+import type { PaymentInfo, MultisigRequest, MultisigResponse } from "@nftlox/protocol";
 import type { RequestMultisigOptions } from "./multisig.ts";
 import { resolveInstance } from "./inheritance.ts";
 import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow.ts";

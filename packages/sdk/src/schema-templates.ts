@@ -1,7 +1,7 @@
 // NFTLox Schema Templates & Builder
 // Pre-built schemas for common use cases + fluent API for custom schemas.
 
-import type { CollectionSchema, SchemaField, SchemaFieldType } from "./types";
+import type { CollectionSchema, SchemaField, SchemaFieldType } from "@nftlox/protocol";
 
 // ============ PRE-BUILT TEMPLATES ============
 

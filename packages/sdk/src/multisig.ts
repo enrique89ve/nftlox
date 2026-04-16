@@ -13,7 +13,7 @@ import type {
 	BuyMultisigRequest,
 	CreateCollectionMultisigRequest,
 	MultisigResponse,
-} from "./types";
+} from "@nftlox/protocol";
 import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow.ts";
 
 export type RequestMultisigOptions = Readonly<{

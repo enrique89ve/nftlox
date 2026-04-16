@@ -15,12 +15,12 @@
  *   - Listing ID / nonce determinism (list)
  */
 
-import type { ProtocolAction } from "./constants";
+import type { ProtocolAction } from "@nftlox/protocol";
 import {
 	ACTION_TRANSFER, ACTION_LIST, ACTION_BUY,
 	ACTION_BULK_DISTRIBUTE, ACTION_NFT_APPROVE, ACTION_NFT_TRANSFER_FROM,
 	ACTION_NFT_LEND, ACTION_UNLIST,
-} from "./constants";
+} from "@nftlox/protocol";
 
 export type NftState = Readonly<{
 	status: "active" | "listed" | "burned" | "lent";
