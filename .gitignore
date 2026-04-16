@@ -1,12 +1,7 @@
 node_modules/
 *.log
 .env
-docs/
-docs/**
-
-# Permit playground docs
-!packages/playground/docs/
-!packages/playground/docs/**
+docs_ref/
 
 OPERATIONS.md
 .claude/settings.json
