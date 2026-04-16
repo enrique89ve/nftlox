@@ -9,7 +9,6 @@ import {
 	generateOriginDna,
 	generateImageHash,
 	generateInstanceDna,
-	generateDeterministicInstanceId,
 	createPayload,
 	createHiveOperation,
 	getKeyType,
@@ -63,11 +62,15 @@ export async function buildSeed(
 	const owner = data.owner ?? data.signer;
 	const imageHash = await generateImageHash(data.imageUrl);
 	const instanceDna = await generateInstanceDna(seedId, originDna, data.edition, imageHash);
-	const nftId = await generateDeterministicInstanceId(seedId, data.edition);
 
+	// The seed's primary id IS the canonical seedId — not a derived instance id.
+	// Instances minted via bulk_distribute get their own `nft_<seedSuffix>_<n>_<hash>`
+	// id derived from (seedId, instanceNumber). Keeping these two namespaces
+	// separate lets the indexer enforce `isSeedId(id)` invariants downstream.
 	const nftData: NFTData = {
-		id: nftId,
+		id: seedId,
 		collectionId: data.collectionId,
+		artId: data.artId,
 		edition: data.edition,
 		owner,
 		nftType: "seed",
@@ -93,7 +96,7 @@ export async function buildSeed(
 		keyType: getKeyType("mint"),
 		signer: data.signer,
 		payload,
-		generatedIds: { seedId, nftId },
+		generatedIds: { seedId },
 		...(warnings.length > 0 && { warnings }),
 	};
 }

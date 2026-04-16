@@ -38,12 +38,14 @@ import {
 	MEMO_PREFIX_FEE,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	generateDeterministicCollectionId,
+	generateDeterministicSeedId,
 } from "@/protocol/index.ts";
 
 const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 const NODE_ACCOUNT = config.hiveAccount;
 
 let COL_ID: string;
+let SEED_SEC1 = "";
 
 let opCounter = 0;
 function makeOp(
@@ -106,7 +108,8 @@ async function seedCollection(txn: Queryable = sql) {
 
 async function seedMint(txn: Queryable = sql) {
 	await handleMint(makeOp(ACTION_MINT, {
-		id: "seed_sec1",
+		id: SEED_SEC1,
+		artId: "sec1",
 		collectionId: COL_ID,
 		edition: 1,
 		owner: "alice",
@@ -116,12 +119,12 @@ async function seedMint(txn: Queryable = sql) {
 }
 
 async function seedInstance(txn: Queryable = sql): Promise<string> {
-	const [row] = await txn`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'seed_sec1'`;
+	const [row] = await txn`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${SEED_SEC1}`;
 	const seedTxId = row!.tx_id as string;
 	await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
-		items: [{ seedId: "seed_sec1", quantity: 1, seedTxId }],
+		items: [{ seedId: SEED_SEC1, quantity: 1, seedTxId }],
 	}), txn);
-	const [inst] = await txn`SELECT id FROM nfts WHERE seed_id = 'seed_sec1' LIMIT 1`;
+	const [inst] = await txn`SELECT id FROM nfts WHERE seed_id = ${SEED_SEC1} LIMIT 1`;
 	return inst!.id as string;
 }
 
@@ -189,6 +192,7 @@ function makeBuyOp(
 describe("Security: Stale Listing Exploit Prevention", () => {
 	beforeAll(async () => {
 		COL_ID = await generateDeterministicCollectionId("alice", "Security Test Collection", "SEC");
+		SEED_SEC1 = await generateDeterministicSeedId(COL_ID, "sec1");
 		await sql.unsafe(`
 			DROP TABLE IF EXISTS nft_loans, nft_allowances, collection_allowances,
 				data_operators, orphaned_buys, invalid_operations, owner_nft_counts,
@@ -415,9 +419,9 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			await seedMint();
 
 			// Burn (transfer to "null") — hard deletes the row
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_sec1", to: "null" }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "null" }), sql);
 
-			const listData = await makeListData({ nftId: "seed_sec1" });
+			const listData = await makeListData({ nftId: SEED_SEC1 });
 			const listOp = makeOp(ACTION_LIST, listData);
 			await expect(handleList(listOp, sql)).rejects.toThrow("not found");
 		});
@@ -425,9 +429,9 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 		test("burned NFT is recorded in burned_nfts audit table", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_sec1", to: "null" }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "null" }), sql);
 
-			const [burned] = await sql`SELECT * FROM burned_nfts WHERE id = 'seed_sec1'`;
+			const [burned] = await sql`SELECT * FROM burned_nfts WHERE id = ${SEED_SEC1}`;
 			expect(burned).toBeDefined();
 			expect(burned!.burned_by).toBe("alice");
 			expect(burned!.collection_id).toBe(COL_ID);
@@ -448,7 +452,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			}), sql);
 
 			// Transfer alice's only NFT to bob
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_sec1", to: "bob" }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "bob" }), sql);
 
 			// Collection allowance should be cleaned up since alice has no more NFTs
 			const [allowance] = await sql`
@@ -475,16 +479,16 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 				SET status = 'listed', listing_id = 'exp_listing', listing_tx_id = 'tx_exp',
 					listing_price = 10, listing_currency = 'HIVE',
 					listing_expires_at = ${new Date("2023-01-01").toISOString()}
-				WHERE id = 'seed_sec1'
+				WHERE id = ${SEED_SEC1}
 			`;
 			await sql`UPDATE collection_stats SET listed = listed + 1 WHERE collection_id = ${COL_ID}`;
 
 			// Transfer should succeed (auto-clears expired listing)
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_sec1", to: "bob" }), sql);
+			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "bob" }), sql);
 
 			const [nft] = await sql`
 				SELECT owner, status, listing_id, listing_price
-				FROM nfts WHERE id = 'seed_sec1'
+				FROM nfts WHERE id = ${SEED_SEC1}
 			`;
 			expect(nft!.owner).toBe("bob");
 			expect(nft!.status).toBe("active");

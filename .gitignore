@@ -10,3 +10,4 @@ docs/**
 
 OPERATIONS.md
 .claude/settings.json
+.claude/scheduled_tasks.lock

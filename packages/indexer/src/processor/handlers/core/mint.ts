@@ -1,7 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
-import { insertNft, nftExists } from "@/db/queries/nfts.ts";
+import { insertNft, nftExists, isBurnedId } from "@/db/queries/nfts.ts";
 import {
 	requireBoundedString,
 	requireUsername,
@@ -19,8 +19,10 @@ import {
 	computeDataHash,
 	generateOriginDna,
 	generateInstanceDna,
+	generateDeterministicSeedId,
 	ACTION_MINT,
 	MAX_ID_LENGTH,
+	MAX_ART_ID_LENGTH,
 	MAX_NAME_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
 } from "@/protocol/index.ts";
@@ -29,11 +31,34 @@ const log = createLogger("mint");
 
 export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const d = op.data;
-	const id = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
+	const payloadId = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
 	const collectionId = requireBoundedString(d.collectionId, "collectionId", MAX_ID_LENGTH);
+	const artId = requireBoundedString(d.artId, "artId", MAX_ART_ID_LENGTH);
 
-	if (await nftExists(id, txn)) {
-		log.info("Mint skipped: NFT already exists", { nftId: id, signer: op.signer, txId: op.txId });
+	// Recompute the canonical seedId and reject any payload that tries to supply
+	// a non-canonical id. Same pattern as handleCreateCollection — the chain is
+	// the source of truth for the creator/collection/artId tuple, but the id
+	// itself is a pure function of that tuple, so clients cannot choose it.
+	const canonicalId = await generateDeterministicSeedId(collectionId, artId);
+	if (payloadId !== canonicalId) {
+		throw new Error(
+			`Non-canonical seedId: expected ${canonicalId} for (collection ${collectionId}, artId ${artId}), got ${payloadId}`,
+		);
+	}
+
+	// Resurrection guard: once an id has been burned it must never be re-minted,
+	// even if the (collectionId, artId) tuple would regenerate the same hash.
+	// Without this, a seed that reached distributed=0 could be burned and silently
+	// re-created under the same identity with different immutableData — breaking
+	// every downstream cache that treated the id as permanent.
+	if (await isBurnedId(canonicalId, txn)) {
+		throw new Error(
+			`Mint rejected: id ${canonicalId} was previously burned. Seed ids are not reusable after burn.`,
+		);
+	}
+
+	if (await nftExists(canonicalId, txn)) {
+		log.info("Mint skipped: NFT already exists", { nftId: canonicalId, signer: op.signer, txId: op.txId });
 		return [];
 	}
 	const collection = await getCollectionRules(collectionId, txn);
@@ -41,7 +66,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	if (collection.creator !== op.signer) throw new Error(`Only the collection creator can mint in ${collectionId}`);
 
 	const metadata = optionalObject(d.metadata) ?? {};
-	const nftType = resolveNftType(optionalString(d.nftType), id);
+	const nftType = resolveNftType(optionalString(d.nftType), canonicalId);
 	if (nftType !== "seed") {
 		throw new Error("Only seeds can be minted directly. Instances are created via bulk_distribute");
 	}
@@ -65,7 +90,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	const edition = optionalNumber(d.edition) ?? 1;
 	const imageHash = optionalString(metadata.imageHash) ?? "";
 	const originDna = await generateOriginDna(collectionId);
-	const instanceDna = await generateInstanceDna(id, originDna, edition, imageHash);
+	const instanceDna = await generateInstanceDna(canonicalId, originDna, edition, imageHash);
 	const ownerRaw = optionalString(d.owner);
 	const owner = ownerRaw ? requireUsername(ownerRaw, "owner") : op.signer;
 
@@ -75,7 +100,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	}
 
 	await insertNft({
-		id, collectionId, nftType: "seed",
+		id: canonicalId, collectionId, nftType: "seed",
 		edition,
 		owner,
 		originDna,
@@ -84,6 +109,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 		imageUrl: optionalBoundedString(metadata.imageUrl, "metadata.imageUrl", MAX_IMAGE_URL_LENGTH),
 		maxSupply,
 		seedId: null, instanceNumber: null,
+		artId,
 		immutableData: immutableData && Object.keys(immutableData).length > 0 ? immutableData : null,
 		dataOperationId: mutableData ? op.operationId : null,
 		dataHash,
@@ -97,5 +123,5 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 		createdAt: op.timestamp,
 	}, txn);
 
-	return [id];
+	return [canonicalId];
 }

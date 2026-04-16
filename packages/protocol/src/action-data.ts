@@ -53,6 +53,11 @@ export type NFTMetadata = {
 export type NFTData = {
 	readonly id: string;
 	readonly collectionId: string;
+	// Creator-chosen per-seed asset identifier. Required for `mint` (indexer
+	// recomputes `id = generateDeterministicSeedId(collectionId, artId)` and
+	// rejects mismatches). Omitted for instances — those derive their id from
+	// (seedId, instanceNumber) and inherit art via FK.
+	readonly artId?: string | undefined;
 	readonly edition: number;
 	readonly owner: string;
 	readonly nftType?: "seed" | "instance" | undefined;

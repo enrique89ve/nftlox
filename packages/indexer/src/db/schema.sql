@@ -101,6 +101,11 @@ CREATE TABLE IF NOT EXISTS nfts (
 	supply_exhausted BOOLEAN GENERATED ALWAYS AS (max_supply > 0 AND (distributed + reserved_supply) >= max_supply) STORED,
 	seed_id TEXT REFERENCES nfts(id) ON DELETE SET NULL,
 	instance_number INTEGER,
+	-- Creator-chosen per-seed asset identifier. Bound to seeds only via the
+	-- partial UNIQUE index below. Populated when indexer canonical-validates
+	-- `id = generateDeterministicSeedId(collection_id, art_id)`. Instances
+	-- inherit art via seed_id FK and leave art_id NULL.
+	art_id TEXT,
 	immutable_data JSONB,
 	data_operation_id TEXT,
 	data_hash TEXT,
@@ -362,6 +367,10 @@ CREATE INDEX IF NOT EXISTS idx_nfts_listed ON nfts(listing_price, listing_curren
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_recent ON nfts(created_at DESC) WHERE status = 'listed';
 CREATE INDEX IF NOT EXISTS idx_nfts_listing_id ON nfts(listing_id) WHERE listing_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_listing_expires ON nfts(listing_expires_at) WHERE status = 'listed' AND listing_expires_at IS NOT NULL;
+-- DB-level backstop against non-canonical seeds: two seeds in the same collection
+-- cannot share an art_id. Paired with the application-level canonical check in
+-- handleMint, this defends against a handler bug ever bypassing the recomputation.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nfts_collection_art_unique ON nfts(collection_id, art_id) WHERE nft_type = 'seed' AND art_id IS NOT NULL;
 
 -- Invalid operations: idx_invalid_ops_unique covers lookups by tx_id via leading col.
 -- (no standalone indexes — the unique partial index serves all query shapes)

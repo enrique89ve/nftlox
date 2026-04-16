@@ -18,6 +18,9 @@ export const MAX_DESCRIPTION_LENGTH = 250;
 export const MAX_IMAGE_URL_LENGTH = 500;
 export const MAX_URL_LENGTH = 500;
 export const MAX_ID_LENGTH = 128;
+// artId is a creator-chosen label bound to one seed within a collection. 64 chars
+// fits human-readable slugs ("hero-card-v2") without bloating payload or row size.
+export const MAX_ART_ID_LENGTH = 64;
 export const MIN_SYMBOL_LENGTH = 3;
 export const MAX_SYMBOL_LENGTH = 10;
 export const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;

@@ -192,6 +192,18 @@ export async function nftExists(id: string, txn: Queryable = sql): Promise<boole
 	return !!row;
 }
 
+/**
+ * Returns true when `id` was previously burned (exists in burned_nfts). Used by
+ * mint / bulk_distribute to prevent resurrection: once a deterministic id has
+ * been retired, the same id must never be re-created — even if the contender
+ * payload looks otherwise canonical. The burned_nfts table is append-only, so
+ * this check is O(1) via the PK index.
+ */
+export async function isBurnedId(id: string, txn: Queryable = sql): Promise<boolean> {
+	const [row] = await txn`SELECT 1 FROM burned_nfts WHERE id = ${id}`;
+	return !!row;
+}
+
 export async function getNftForProcessing(id: string, txn: Queryable = sql): Promise<NftProcessingRow | null> {
 	const [row] = await txn<NftProcessingRow[]>`
 		SELECT id, owner, status, nft_type, name, seed_id, max_supply, distributed, reserved_supply,

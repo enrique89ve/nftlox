@@ -126,20 +126,26 @@ describe("buildSeed consistency", () => {
 		expect(result.success).toBe(true);
 	});
 
-	test("generatedIds exposes both seedId (lineage) and nftId (instance)", async () => {
+	test("generatedIds exposes the canonical seedId", async () => {
 		const result = await buildSeed(validInput);
 		if (!result.success) throw new Error("Expected success");
 
 		expect(result.generatedIds?.seedId?.startsWith("seed_")).toBe(true);
-		expect(result.generatedIds?.nftId?.startsWith("nft_")).toBe(true);
-		expect(result.generatedIds?.nftId).toBe(result.payload.data.id);
+		expect(result.generatedIds?.seedId).toBe(result.payload.data.id);
 	});
 
-	test("payload.data.id is the instance ID (nft_), not the seed ID", async () => {
+	test("payload.data.id is the canonical seedId (seed_*)", async () => {
 		const result = await buildSeed(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		expect(result.payload.data.id.startsWith("nft_")).toBe(true);
+		expect(result.payload.data.id.startsWith("seed_")).toBe(true);
+	});
+
+	test("payload.data.artId is forwarded for indexer canonical validation", async () => {
+		const result = await buildSeed(validInput);
+		if (!result.success) throw new Error("Expected success");
+
+		expect(result.payload.data.artId).toBe(validInput.artId);
 	});
 
 	test("payload.data.id matches the ID inside operation JSON", async () => {
