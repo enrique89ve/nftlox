@@ -24,37 +24,74 @@ describe("buildCollection consistency", () => {
 			royaltyPct: 5,
 		},
 	};
+	const nodeAccount = "nftlox-node";
 
 	test("returns success=true with valid input", async () => {
-		const result = await buildCollection(validInput);
+		const result = await buildCollection(validInput, { nodeAccount });
 
 		expect(result.success).toBe(true);
 	});
 
+	test("fails when nodeAccount is not a valid Hive username", async () => {
+		const result = await buildCollection(validInput, { nodeAccount: "NOT VALID" });
+		expect(result.success).toBe(false);
+		if (result.success) throw new Error("Expected failure");
+		expect(result.errors[0]?.field).toBe("nodeAccount");
+	});
+
 	test("generatedIds.collectionId matches payload.data.id", async () => {
-		const result = await buildCollection(validInput);
+		const result = await buildCollection(validInput, { nodeAccount });
 		if (!result.success) throw new Error("Expected success");
 
 		expect(result.generatedIds?.collectionId).toBe(result.payload.data.id);
 	});
 
-	test("payload.data.id matches the ID inside operation JSON", async () => {
-		const result = await buildCollection(validInput);
+	test("emits [transfer, custom_json] with payload id matching canonical id", async () => {
+		const result = await buildCollection(validInput, { nodeAccount });
 		if (!result.success) throw new Error("Expected success");
 
-		const op = result.operations[0]! as HiveOperation;
-		const parsed = JSON.parse(op[1].json);
+		expect(result.operations).toHaveLength(2);
+		const [transfer, custom] = result.operations;
+		expect(transfer?.[0]).toBe("transfer");
+		expect(custom?.[0]).toBe("custom_json");
 
+		const customJson = custom as HiveOperation;
+		const parsed = JSON.parse(customJson[1].json);
 		expect(result.payload.data.id).toBe(parsed.data.id);
 	});
 
-	test("create_collection uses active auth (required_auths=[creator])", async () => {
-		const result = await buildCollection(validInput);
+	test("transfer is creator → nodeAccount with the canonical fee amount and memo", async () => {
+		const result = await buildCollection(validInput, { nodeAccount });
 		if (!result.success) throw new Error("Expected success");
 
-		const op = result.operations[0]! as HiveOperation;
-		expect(op[1].required_auths).toEqual([validInput.creator]);
-		expect(op[1].required_posting_auths).toEqual([]);
+		const transferOp = result.operations[0] as unknown as readonly ["transfer", Record<string, string>];
+		expect(transferOp[1]?.from).toBe(validInput.creator);
+		expect(transferOp[1]?.to).toBe(nodeAccount);
+		expect(transferOp[1]?.amount).toMatch(/^\d+\.\d{3} (HBD|HIVE)$/);
+		expect(transferOp[1]?.memo).toBe(`NFTLox collection fee:${result.generatedIds?.collectionId}`);
+	});
+
+	test("custom_json required_auths is [nodeAccount] (node co-signs)", async () => {
+		const result = await buildCollection(validInput, { nodeAccount });
+		if (!result.success) throw new Error("Expected success");
+
+		const customJson = result.operations[1] as HiveOperation;
+		expect(customJson[1].required_auths).toEqual([nodeAccount]);
+		expect(customJson[1].required_posting_auths).toEqual([]);
+	});
+
+	test("exposes coSigners pointing to op[1] = nodeAccount via multisig", async () => {
+		const result = await buildCollection(validInput, { nodeAccount });
+		if (!result.success) throw new Error("Expected success");
+
+		expect(result.signer).toBe(validInput.creator);
+		expect(result.keyType).toBe("Active");
+		expect(result.coSigners).toEqual([{
+			op: 1,
+			account: nodeAccount,
+			keyType: "Active",
+			via: "multisig",
+		}]);
 	});
 
 	test("schema appears in payload when provided", async () => {
@@ -66,7 +103,7 @@ describe("buildCollection consistency", () => {
 		const result = await buildCollection({
 			...validInput,
 			schema,
-		});
+		}, { nodeAccount });
 		if (!result.success) throw new Error("Expected success");
 
 		expect(result.payload.data.schema).toEqual(schema);

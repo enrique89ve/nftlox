@@ -23,6 +23,10 @@ Define the fields that your game needs before minting seeds. Immutable fields ar
 ```typescript
 import { buildCollection } from "nftlox-sdk";
 
+// buildCollection returns the 2-operation transaction required by the protocol:
+// op[0] transfer (creator → nodeAccount, fee) + op[1] custom_json (co-signed by node).
+// Both operations MUST be broadcast in the same Hive transaction; the indexer
+// pairs fees to payloads by txId only.
 const collection = await buildCollection({
 	name: "Ragnarok Cards",
 	symbol: "RGNRK",
@@ -49,7 +53,7 @@ const collection = await buildCollection({
 			{ name: "xp", type: "uint32" },
 		],
 	},
-});
+}, { nodeAccount: "nftlox-testnet" });
 ```
 
 ## 2. Mint Seed Templates

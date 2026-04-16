@@ -58,8 +58,8 @@ describe("protocol auth map", () => {
 		expect(ACTION_AUTH_LEVEL[ACTION_BUY]).toBe("active");
 		expect(Object.isFrozen(ACTION_AUTH_LEVEL)).toBe(true);
 		expect(ACTIVE_AUTH_ACTIONS).toEqual([ACTION_CREATE_COLLECTION, ACTION_BUY]);
-		expect(POSTING_AUTH_ACTIONS).toHaveLength(16);
-		expect(ALL_ACTIONS).toHaveLength(18);
+		expect(POSTING_AUTH_ACTIONS).toHaveLength(17);
+		expect(ALL_ACTIONS).toHaveLength(19);
 	});
 
 	test("pack actions are not native indexer protocol actions", () => {

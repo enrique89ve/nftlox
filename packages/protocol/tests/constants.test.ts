@@ -36,8 +36,8 @@ describe("constants", () => {
 			expect([...ALL_ACTIONS].sort()).toEqual([...combined].sort());
 		});
 
-		it("has exactly 18 actions", () => {
-			expect(ALL_ACTIONS.length).toBe(18);
+		it("has exactly 19 actions", () => {
+			expect(ALL_ACTIONS.length).toBe(19);
 		});
 
 		it("has no duplicates", () => {

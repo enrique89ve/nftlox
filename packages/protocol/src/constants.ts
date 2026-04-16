@@ -3,7 +3,7 @@
 // Both the indexer and SDK import from here.
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.5.2";
+export const PROTOCOL_VERSION = "0.5.3";
 export const MIN_PROTOCOL_VERSION = "0.5.0";
 export const HASH_VERSION = "v1";
 
@@ -67,6 +67,20 @@ export const MAX_TRANSFER_BATCH_SIZE = 50;
 export const MULTISIG_EXPIRATION_MS = 125_000;
 export const MAX_MULTISIG_OPERATIONS = 5;
 
+// Floor for opt-in listing in the PUBLIC node directory (l2_nodes). Running a
+// node is permissionless and does not require registration — a game or dapp
+// operator can index + serve privately without ever emitting `node_register`.
+// The HP gate only protects the discoverable directory against cheap sybil
+// listings. Skin-in-the-game is HP (self-staked OR delegated-in), not a fee.
+export const MIN_NODE_REGISTER_HIVE_POWER = 100;
+
+// Cadence for on-chain heartbeat (custom_json with current state-root hash).
+// Block time on Hive is 3s, so 5000 blocks ≈ 4h10m. Nodes that register must
+// publish a heartbeat at least every N blocks or listings are treated as stale
+// by consumers of `l2_nodes`. Missing the window does NOT kick the node; it
+// only affects trust signals in the discovery directory.
+export const MIN_HEARTBEAT_INTERVAL_BLOCKS = 5000;
+
 // Protocol Actions (Core)
 export const ACTION_CREATE_COLLECTION = "create_collection";
 export const ACTION_MINT = "mint";
@@ -76,6 +90,7 @@ export const ACTION_SET_DATA = "set_data";
 export const ACTION_EXTEND_SCHEMA = "extend_schema";
 export const ACTION_ARCHIVE_COLLECTION = "archive_collection";
 export const ACTION_NODE_REGISTER = "node_register";
+export const ACTION_NODE_HEARTBEAT = "node_heartbeat";
 
 // Protocol Actions (Marketplace)
 export const ACTION_LIST = "list";
@@ -105,6 +120,7 @@ export const CORE_ACTIONS = [
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
+	ACTION_NODE_HEARTBEAT,
 ] as const;
 
 export const MARKETPLACE_ACTIONS = [

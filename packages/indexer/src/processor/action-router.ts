@@ -21,6 +21,7 @@ import {
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
+	ACTION_NODE_HEARTBEAT,
 	getAuthMismatchReason,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
@@ -34,6 +35,7 @@ import { handleSetData } from "./handlers/core/set-data.ts";
 import { handleExtendSchema } from "./handlers/core/extend-schema.ts";
 import { handleArchiveCollection } from "./handlers/core/archive-collection.ts";
 import { handleNodeRegister } from "./handlers/core/node_register.ts";
+import { handleNodeHeartbeat } from "./handlers/core/node_heartbeat.ts";
 
 // Marketplace
 import { handleList } from "./handlers/marketplace/list.ts";
@@ -78,6 +80,7 @@ const handlers: Record<ProtocolAction, Handler> = {
 	[ACTION_EXTEND_SCHEMA]: handleExtendSchema,
 	[ACTION_ARCHIVE_COLLECTION]: handleArchiveCollection,
 	[ACTION_NODE_REGISTER]: handleNodeRegister,
+	[ACTION_NODE_HEARTBEAT]: handleNodeHeartbeat,
 
 	// Marketplace
 	[ACTION_LIST]: handleList,

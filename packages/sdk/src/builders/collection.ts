@@ -9,16 +9,72 @@ import {
 	createHiveOperation,
 	getKeyType,
 	MAX_NAME_LENGTH,
+	PROTOCOL_COLLECTION_FEE_HBD,
+	PROTOCOL_ID,
+	PROTOCOL_VERSION,
+	ACTION_CREATE_COLLECTION,
+	SUPPORTED_CURRENCIES,
+	validateHiveUsername,
 	type CollectionData,
 	type ArchiveCollectionData,
+	type HiveOperation,
+	type HiveTransferOperation,
+	type SupportedCurrency,
 } from "@nftlox/protocol";
 
+export type BuildCollectionOptions = Readonly<{
+	readonly nodeAccount: string;
+	readonly feeAmount?: string | undefined;
+	readonly feeCurrency?: SupportedCurrency | undefined;
+}>;
+
+/**
+ * Build the 2-operation transaction required by the NFTLox `create_collection`
+ * flow: op[0] is a fee transfer from the creator to the node account; op[1] is
+ * the protocol payload whose active-auth signer is the node account (co-signed
+ * via the multisig endpoint).
+ *
+ * Both operations MUST be broadcast in the same Hive transaction. The indexer
+ * pairs transfers to protocol ops by txId only — splitting them into separate
+ * transactions drops the payload and leaves the fee unclaimed.
+ *
+ * The caller wraps these operations with the Hive lib of their choice
+ * (hive-tx, @hiveio/wax, dhive, …), adds TaPoS/expiration, POSTs the unsigned
+ * tx to the node's `/multisig/collection` endpoint for co-signature, then
+ * attaches the creator's own active-key signature and broadcasts.
+ */
 export async function buildCollection(
 	input: CreateCollectionInput,
+	options: BuildCollectionOptions,
 ): Promise<KeychainResult<CollectionData>> {
 	const parsed = createCollectionInputSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
+	}
+
+	const nodeAccountError = validateHiveUsername(options.nodeAccount);
+	if (nodeAccountError) {
+		return {
+			success: false,
+			errors: [{ field: "nodeAccount", message: nodeAccountError, code: "invalid_username" }],
+		};
+	}
+
+	const feeCurrency: SupportedCurrency = options.feeCurrency ?? "HBD";
+	if (!(SUPPORTED_CURRENCIES as readonly string[]).includes(feeCurrency)) {
+		return {
+			success: false,
+			errors: [{ field: "feeCurrency", message: `Unsupported currency: ${feeCurrency}`, code: "invalid_currency" }],
+		};
+	}
+
+	const feeAmount = options.feeAmount ?? PROTOCOL_COLLECTION_FEE_HBD;
+	const parsedFee = Number.parseFloat(feeAmount);
+	if (!Number.isFinite(parsedFee) || parsedFee <= 0) {
+		return {
+			success: false,
+			errors: [{ field: "feeAmount", message: `Fee amount must be a positive number, got '${feeAmount}'`, code: "invalid_amount" }],
+		};
 	}
 
 	const data = parsed.data;
@@ -42,7 +98,6 @@ export async function buildCollection(
 		id: collectionId,
 		name: data.name,
 		symbol: data.symbol.toUpperCase(),
-		creator: data.creator,
 		totalPotential: data.totalPotential,
 		originDna,
 		metadata: data.metadata,
@@ -51,13 +106,36 @@ export async function buildCollection(
 	};
 
 	const payload = createPayload("create_collection", collectionData);
-	const operation = createHiveOperation(payload, data.creator);
+	// The protocol op is co-signed by the node; pass nodeAccount as the signer
+	// so createHiveOperation emits auth fields bound to the node account.
+	const customJsonOp = createHiveOperation(payload, options.nodeAccount);
+
+	const transferOp: HiveTransferOperation = [
+		"transfer",
+		{
+			from: data.creator,
+			to: options.nodeAccount,
+			amount: `${parsedFee.toFixed(3)} ${feeCurrency}`,
+			memo: `NFTLox collection fee:${collectionId}`,
+		},
+	];
 
 	return {
 		success: true,
-		operations: [operation],
-		keyType: getKeyType("create_collection"),
+		operations: [transferOp, customJsonOp],
+		// Creator signs op[0] (the transfer) directly with their active key.
+		// The node co-signs op[1] (the custom_json) via /multisig/collection —
+		// the caller obtains that signature separately and attaches it before
+		// broadcast. Modeling both signers explicitly avoids hiding the dual-
+		// signer reality behind a single `signer` field.
+		keyType: getKeyType(ACTION_CREATE_COLLECTION),
 		signer: data.creator,
+		coSigners: [{
+			op: 1,
+			account: options.nodeAccount,
+			keyType: getKeyType(ACTION_CREATE_COLLECTION),
+			via: "multisig",
+		}],
 		payload,
 		generatedIds: { collectionId, originDna },
 		...(warnings.length > 0 && { warnings }),

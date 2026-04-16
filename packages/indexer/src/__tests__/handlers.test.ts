@@ -1850,13 +1850,14 @@ describe("Handlers (integration)", () => {
 	// ─── signer validation (congruence fixes) ──────────────────
 
 	describe("signer validation", () => {
-		test("create_collection ignores creator field and uses fee payer", async () => {
+		test("create_collection derives creator from fee payer (canonical source)", async () => {
 			const { id: colId, data: colData } = await makeCanonicalCollection(
-				"alice", "Spoofed", "SPOOF",
+				"alice", "FromFeePayer", "FFP",
 			);
-			// Payload tries to spoof creator as "bob", but fee transfer is from "alice".
-			// Handler must derive creator from fee transfer, not from payload.
-			const op = makeCreateCollectionOp({ ...colData, creator: "bob" }, "alice");
+			// Payload no longer carries `creator` — indexer resolves it purely from
+			// `transfer.from`. Any stray `creator` key on `data` must be ignored (not
+			// validated) because the field has been removed from the protocol type.
+			const op = makeCreateCollectionOp(colData, "alice");
 			await handleCreateCollection(op, sql);
 
 			const [row] = await sql`SELECT creator FROM collections WHERE id = ${colId}`;

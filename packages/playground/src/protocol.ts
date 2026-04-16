@@ -62,11 +62,11 @@ function buildCollectionInput(
 	};
 }
 
-function unwrapCustomJsonOperation(operations: readonly unknown[]): HiveOperation {
-	const op = operations[0];
-	if (!Array.isArray(op) || op.length !== 2 || op[0] !== "custom_json") {
-		throw new Error("Expected first operation to be custom_json");
-	}
+function findCustomJsonOperation(
+	operations: ReadonlyArray<readonly [string, Record<string, unknown>]>,
+): HiveOperation {
+	const op = operations.find((candidate) => candidate[0] === "custom_json");
+	if (!op) throw new Error("Expected a custom_json operation in build output");
 	return op as unknown as HiveOperation;
 }
 
@@ -75,19 +75,20 @@ export async function createTestCollection(
 	name: string,
 	symbol: string,
 	totalPotential: number,
+	nodeAccount: string,
 	options?: CollectionOptions,
 ): Promise<{
 	payload: ProtocolPayload<CollectionData>;
 	operation: HiveOperation;
 }> {
 	const input = buildCollectionInput(creator, name, symbol, totalPotential, options);
-	const result = await buildCollection(input);
+	const result = await buildCollection(input, { nodeAccount });
 	if (!result.success) {
 		throw new Error(`Collection build failed: ${result.errors.map((e) => e.message).join(", ")}`);
 	}
 	return {
 		payload: result.payload,
-		operation: unwrapCustomJsonOperation(result.operations),
+		operation: findCustomJsonOperation(result.operations),
 	};
 }
 
@@ -204,33 +205,6 @@ export function previewBatchMint(
 
 // ============ DETERMINISTIC FUNCTIONS (Anti-Duplication) ============
 
-/**
- * Creates a test collection with deterministic ID.
- * Same creator + name + symbol always produces the same collectionId.
- */
-export async function createDeterministicCollection(
-	creator: string,
-	name: string,
-	symbol: string,
-	totalPotential: number,
-	options?: CollectionOptions,
-): Promise<{
-	payload: ProtocolPayload<CollectionData>;
-	operation: HiveOperation;
-	collectionId: string;
-}> {
-	const input = buildCollectionInput(creator, name, symbol, totalPotential, options);
-	const result = await buildCollection(input);
-	if (!result.success) {
-		throw new Error(`Collection build failed: ${result.errors.map((e) => e.message).join(", ")}`);
-	}
-	return {
-		payload: result.payload,
-		operation: unwrapCustomJsonOperation(result.operations),
-		collectionId: result.generatedIds!.collectionId!,
-	};
-}
-
 export interface DeterministicBatchMintResult {
 	collectionId: string;
 	collectionOriginDna: string;
@@ -278,7 +252,7 @@ export async function createDeterministicSeedMintOperations(
 			seedId: result.generatedIds!.seedId!,
 			name: nft.name,
 			maxSupply: nft.maxSupply,
-			operation: unwrapCustomJsonOperation(result.operations),
+			operation: findCustomJsonOperation(result.operations),
 		});
 	}
 

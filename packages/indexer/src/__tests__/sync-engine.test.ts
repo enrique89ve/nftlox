@@ -557,30 +557,19 @@ describe("syncCycle", () => {
 		expect(trackedLastBlock).toBe(6000);
 	});
 
-	test("enriches node_register operations with same-tx transfers", async () => {
+	test("does NOT enrich node_register with same-tx transfers (fee-less, HP-gated)", async () => {
 		trackedLastBlock = 1000;
 		setupChainHead(1001);
 		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
 		const nodeRegisterOp = fakeParsedOp(1001, ACTION_NODE_REGISTER);
-		const transfers = [{
-			from: "alice",
-			to: "nftlox",
-			amount: 100,
-			currency: "HBD",
-			memo: "node fee",
-		}];
 		mockParseHafAHOperations.mockReturnValue(wrapOps([nodeRegisterOp]));
-		mockGetTransfersInTransaction.mockResolvedValue(transfers);
 
 		await syncCycle();
 
-		expect(mockGetTransfersInTransaction).toHaveBeenCalledWith("tx_1001");
+		// node_register is NOT in transferBackedOps → no transfer RPC for its txId.
+		expect(mockGetTransfersInTransaction).not.toHaveBeenCalledWith("tx_1001");
 		expect(mockRouteOperation).toHaveBeenCalledWith(
-			expect.objectContaining({
-				action: ACTION_NODE_REGISTER,
-				pairedTransfers: transfers,
-				transferPool: expect.objectContaining({ transfers }),
-			}),
+			expect.objectContaining({ action: ACTION_NODE_REGISTER }),
 			expect.anything(),
 		);
 	});

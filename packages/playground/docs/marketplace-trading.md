@@ -66,7 +66,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/list \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.2",
+	"protocolVersion": "0.5.3",
 	"operation": ["custom_json", {
 		"required_auths": [],
 		"required_posting_auths": ["alice"],
@@ -75,7 +75,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/list \
 	}],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.5.2",
+		"version": "0.5.3",
 		"action": "list",
 		"data": {
 			"nftId": "nft_a1b2c3d4e5f6",
@@ -213,7 +213,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/buy \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.2",
+	"protocolVersion": "0.5.3",
 	"keyType": "Active",
 	"hiveOperations": [
 		["transfer", {
@@ -243,7 +243,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/buy \
 	],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.5.2",
+		"version": "0.5.3",
 		"action": "buy",
 		"data": {
 			"nftId": "nft_a1b2c3d4e5f6",
@@ -440,7 +440,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/unlist \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.2",
+	"protocolVersion": "0.5.3",
 	"operation": ["custom_json", {
 		"required_auths": [],
 		"required_posting_auths": ["alice"],
@@ -449,7 +449,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/unlist \
 	}],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.5.2",
+		"version": "0.5.3",
 		"action": "unlist",
 		"data": {
 			"nftId": "nft_a1b2c3d4e5f6"

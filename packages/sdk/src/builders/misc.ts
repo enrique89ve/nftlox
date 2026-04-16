@@ -7,6 +7,7 @@ import {
 	nftReturnInputSchema,
 	usernameSchema,
 	nodeRegisterInputSchema,
+	nodeHeartbeatInputSchema,
 } from "../schemas";
 import { formatZodError } from "./helpers";
 import type { KeychainResult } from "./types";
@@ -20,6 +21,7 @@ import {
 	type NftLendData,
 	type NftReturnData,
 	type NodeRegisterData,
+	type NodeHeartbeatData,
 } from "@nftlox/protocol";
 
 export const burnBuilderSchema = burnInputSchema;
@@ -204,6 +206,36 @@ export function buildNodeRegister(input: NodeRegisterBuilderInput): KeychainResu
 		success: true,
 		operations: [operation],
 		keyType: getKeyType("node_register"),
+		signer: data.nodeAccount,
+		payload,
+	};
+}
+
+export const nodeHeartbeatBuilderSchema = nodeHeartbeatInputSchema.extend({
+	nodeAccount: usernameSchema,
+});
+export type NodeHeartbeatBuilderInput = z.infer<typeof nodeHeartbeatBuilderSchema>;
+
+export function buildNodeHeartbeat(input: NodeHeartbeatBuilderInput): KeychainResult<NodeHeartbeatData> {
+	const parsed = nodeHeartbeatBuilderSchema.safeParse(input);
+	if (!parsed.success) {
+		return { success: false, errors: formatZodError(parsed.error) };
+	}
+	const data = parsed.data;
+
+	const nodeHeartbeatData: NodeHeartbeatData = {
+		blockNum: data.blockNum,
+		stateRoot: data.stateRoot,
+		indexerVersion: data.indexerVersion,
+	};
+
+	const payload = createPayload("node_heartbeat", nodeHeartbeatData);
+	const operation = createHiveOperation(payload, data.nodeAccount);
+
+	return {
+		success: true,
+		operations: [operation],
+		keyType: getKeyType("node_heartbeat"),
 		signer: data.nodeAccount,
 		payload,
 	};

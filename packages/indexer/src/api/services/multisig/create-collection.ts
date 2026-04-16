@@ -8,7 +8,6 @@ import {
 	validateBoundedPayloadString,
 	validateCommonTransactionStructure,
 	validateCustomJsonOperation,
-	validateNonEmptyString,
 	validatePayloadDataString,
 	validateRecord,
 	validateTransferBody,
@@ -47,7 +46,6 @@ export async function processCollectionRequest(
 	const requestShape = validateCollectionRequestShape(rawBody);
 	const transaction = await validateCollectionTransactionStructure(
 		requestShape.transaction,
-		requestShape.creator,
 		ctx,
 	);
 
@@ -92,26 +90,13 @@ function validateCollectionRequestShape(raw: unknown): CollectionRequestShape {
 		throw createMultisigError("INVALID_TX_STRUCTURE", "Request body must be a JSON object");
 	}
 
-	const creator = raw.creator === undefined
-		? null
-		: validateNonEmptyString(raw.creator, "Field 'creator' must be a non-empty string");
-
-	if (creator) {
-		const usernameError = validateHiveUsername(creator);
-		if (usernameError) {
-			throw createMultisigError("INVALID_TX_STRUCTURE", `Invalid creator username: ${usernameError}`);
-		}
-	}
-
 	return {
-		creator,
 		transaction: validateRecord(raw.transaction, "INVALID_TX_STRUCTURE", "Field 'transaction' must be an object"),
 	};
 }
 
 async function validateCollectionTransactionStructure(
 	tx: Record<string, unknown>,
-	expectedCreator: string | null,
 	ctx: MultisigCollectionContext,
 ): Promise<ValidatedCollectionTransaction> {
 	const validated = validateCommonTransactionStructure(tx);
@@ -124,7 +109,6 @@ async function validateCollectionTransactionStructure(
 
 	const transferOperations = await validateCollectionFeeTransfer(
 		validated.operations.slice(0, -1),
-		expectedCreator,
 		ctx.nodeAccount,
 	);
 	const customJsonOperation = validateCustomJsonOperation(
@@ -145,7 +129,6 @@ async function validateCollectionTransactionStructure(
 
 async function validateCollectionFeeTransfer(
 	ops: ReadonlyArray<TransactionOperationInput>,
-	expectedCreator: string | null,
 	nodeAccount: string,
 ): Promise<readonly [ValidatedTransferOp]> {
 	if (ops.length !== 1) {
@@ -164,13 +147,6 @@ async function validateCollectionFeeTransfer(
 	const usernameError = validateHiveUsername(from);
 	if (usernameError) {
 		throw createMultisigError("INVALID_TX_STRUCTURE", `Invalid creator username: ${usernameError}`);
-	}
-
-	if (expectedCreator !== null && from !== expectedCreator) {
-		throw createMultisigError(
-			"MISSING_BUYER_AUTH",
-			`Fee transfer 'from' must match creator ('${expectedCreator}'), got '${from}'`,
-		);
 	}
 
 	if (to !== nodeAccount) {
@@ -205,7 +181,6 @@ async function validateCollectionPayloadData(
 	const id = validateBoundedPayloadString(data.id, "id", MAX_ID_LENGTH);
 	const name = validateBoundedPayloadString(data.name, "name", MAX_NAME_LENGTH);
 	const symbol = validateCollectionSymbol(data.symbol);
-	validateOptionalPayloadCreator(data.creator, creator);
 
 	const canonicalId = await generateDeterministicCollectionId(creator, name, symbol);
 	if (id !== canonicalId) {
@@ -223,16 +198,6 @@ async function validateCollectionPayloadData(
 	validateCollectionRules(data.rules);
 	validateTotalPotential(data.totalPotential);
 	validateCollectionSchema(data.schema);
-}
-
-function validateOptionalPayloadCreator(value: unknown, creator: string): void {
-	if (value === undefined || value === null) return;
-	if (value !== creator) {
-		throw createMultisigError(
-			"INVALID_PROTOCOL_PAYLOAD",
-			`Payload creator mismatch: expected '${creator}', got '${String(value)}'`,
-		);
-	}
 }
 
 function validateCollectionMetadata(value: unknown): void {

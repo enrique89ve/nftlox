@@ -22,6 +22,7 @@ import { handleTransfer } from "@/processor/handlers/core/transfer.ts";
 import { handleList } from "@/processor/handlers/marketplace/list.ts";
 import { handleUnlist } from "@/processor/handlers/marketplace/unlist.ts";
 import { routeOperation } from "@/processor/action-router.ts";
+import { config } from "@/config.ts";
 import {
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
@@ -30,6 +31,7 @@ import {
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTIVE_AUTH_ACTIONS,
+	PROTOCOL_COLLECTION_FEE_HBD,
 	generateListingNonce,
 	generateListingId,
 	generateDeterministicCollectionId,
@@ -99,10 +101,36 @@ async function cleanDb() {
 	await sql`DELETE FROM collections`;
 	await sql`DELETE FROM invalid_operations`;
 	await sql`DELETE FROM orphaned_buys`;
+	// Router skips handler dispatch when operationId is already in confirmed_operations
+	// (crash-replay gate). Tests reuse hardcoded operationIds across cases, so wipe the
+	// table between tests — otherwise later cases silently no-op instead of minting.
+	await sql`DELETE FROM confirmed_operations`;
+}
+
+/**
+ * Builds a create_collection op with the node-account signer and a paired fee
+ * transfer from `creator`. Mirrors the enforced shape: `op.signer` must be the
+ * node account; the creator is derived from `pairedTransfers[0].from`.
+ * `overrides` may set `txId`, `operationId`, `blockNum` — `signer` and
+ * `pairedTransfers` are always injected by this helper and cannot be overridden.
+ */
+function makeCreateCollectionOp(
+	data: Record<string, unknown>,
+	creator = "alice",
+	overrides: { txId?: string; operationId?: string; blockNum?: number } = {},
+): ParsedOperation {
+	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
+	return makeOp(ACTION_CREATE_COLLECTION, data, {
+		...overrides,
+		signer: config.hiveAccount,
+		pairedTransfers: [
+			{ from: creator, to: config.hiveAccount, amount: feeAmount, currency: "HBD", memo: "" },
+		],
+	});
 }
 
 async function seedCollection(txn: Queryable = sql) {
-	await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, {
+	await handleCreateCollection(makeCreateCollectionOp({
 		id: COL_ID,
 		name: "Multi-Op Collection",
 		symbol: "MULTI",
@@ -466,14 +494,14 @@ describe("Multi-operation per transaction", () => {
 
 			const bobColId = await generateDeterministicCollectionId("bob", "Bob Collection", "BOB");
 			const bobSeedId = await canonicalSeedId("bob_block", bobColId);
-			const bobCreate = makeOp(ACTION_CREATE_COLLECTION, {
+			const bobCreate = makeCreateCollectionOp({
 				id: bobColId,
 				name: "Bob Collection",
 				symbol: "BOB",
 				totalPotential: 50,
 				metadata: { description: "Bob's", image: "https://example.com/bob.png" },
 				rules: { transferable: true, burnable: true, royaltyPct: 0 },
-			}, { signer: "bob", txId: "tx_bob_block", operationId: "op_bob_1", blockNum: SHARED_BLOCK });
+			}, "bob", { txId: "tx_bob_block", operationId: "op_bob_1", blockNum: SHARED_BLOCK });
 
 			const bobMint = makeOp(ACTION_MINT, {
 				id: bobSeedId,

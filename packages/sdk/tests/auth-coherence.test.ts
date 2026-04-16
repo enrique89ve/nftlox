@@ -23,6 +23,7 @@ import {
 	buildNftTransferFrom,
 	buildDataOperatorApprove,
 	buildNodeRegister,
+	buildNodeHeartbeat,
 } from "../src/index";
 
 // ============ STATIC: no builder may hardcode auth literals ============
@@ -241,5 +242,46 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 		});
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "indexer-node");
+	});
+
+	test("buildNodeHeartbeat", () => {
+		const r = buildNodeHeartbeat({
+			blockNum: 123456,
+			stateRoot: `sha256:${"a".repeat(64)}`,
+			indexerVersion: "0.5.3",
+			nodeAccount: "indexer-node",
+		});
+		if (!r.success) throw new Error("build failed");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "indexer-node");
+
+		const [, body] = r.operations[0] as HiveOperation;
+		const parsed = JSON.parse(body.json) as {
+			action: string;
+			data: { blockNum: number; stateRoot: string; indexerVersion: string };
+		};
+		expect(parsed.action).toBe("node_heartbeat");
+		expect(parsed.data.blockNum).toBe(123456);
+		expect(parsed.data.stateRoot).toBe(`sha256:${"a".repeat(64)}`);
+		expect(parsed.data.indexerVersion).toBe("0.5.3");
+	});
+
+	test("buildNodeHeartbeat rejects malformed stateRoot", () => {
+		const r = buildNodeHeartbeat({
+			blockNum: 100,
+			stateRoot: "nothex:zzz",
+			indexerVersion: "0.5.3",
+			nodeAccount: "indexer-node",
+		});
+		expect(r.success).toBe(false);
+	});
+
+	test("buildNodeHeartbeat rejects negative blockNum", () => {
+		const r = buildNodeHeartbeat({
+			blockNum: -1,
+			stateRoot: `sha256:${"b".repeat(64)}`,
+			indexerVersion: "0.5.3",
+			nodeAccount: "indexer-node",
+		});
+		expect(r.success).toBe(false);
 	});
 });

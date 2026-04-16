@@ -80,7 +80,7 @@ function logRejection(params: {
 }
 
 function logCollectionRejection(params: {
-	creator: string;
+	creator: string | null;
 	clientIp: string;
 	code: RejectionCode;
 	retryAfterMs?: number;
@@ -92,6 +92,27 @@ function logCollectionRejection(params: {
 		code,
 		retryAfterMs,
 	});
+}
+
+/**
+ * Peeks at the unvalidated request body to extract the fee transfer sender
+ * (the collection creator). Used for rate-limiting and logging BEFORE the
+ * full transaction validator runs. Returns null for any malformed shape —
+ * callers must treat that as "unknown creator" and fall back to IP-only
+ * rate limiting. The downstream validator is the source of truth; this is
+ * best-effort metadata only.
+ */
+function peekCollectionCreator(body: unknown): string | null {
+	if (body === null || typeof body !== "object") return null;
+	const tx = (body as { transaction?: unknown }).transaction;
+	if (tx === null || typeof tx !== "object") return null;
+	const ops = (tx as { operations?: unknown }).operations;
+	if (!Array.isArray(ops) || ops.length === 0) return null;
+	const first = ops[0];
+	if (!Array.isArray(first) || first.length < 2) return null;
+	if (first[0] !== "transfer") return null;
+	const from = (first[1] as { from?: unknown })?.from;
+	return typeof from === "string" && from.length > 0 ? from : null;
 }
 
 function getDisabledMessage(): string {
@@ -168,6 +189,14 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		const clientIp = resolveClientIp(request, socketIp);
 		const health = getMultisigHealth();
 
+		// The creator is the canonical sender of the fee transfer embedded in
+		// the request's transaction. We peek it at route-entry for rate-limiting
+		// and log correlation; the full validator downstream is the source of
+		// truth and will reject any malformed shape. When the peek fails we fall
+		// back to IP-only rate limiting — a malformed request still gets a 400
+		// from the validator, just without per-account throttling on this call.
+		const creator = peekCollectionCreator(body);
+
 		// Idempotency check runs before PoW so retries cost O(1) on a hit.
 		// Malformed keys fall through as if absent — we don't hard-fail a
 		// client that set the header with an unexpected format. Likewise, a
@@ -181,7 +210,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 				bodyHash = await hashIdempotencyBody(body);
 			} catch (err) {
 				log.warn("Idempotency body hash failed; proceeding without cache", {
-					creator: body.creator,
+					creator,
 					error: err instanceof Error ? err.message : String(err),
 				});
 			}
@@ -213,7 +242,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			set.status = 503;
 			const message = getDisabledMessage();
 			logCollectionRejection({
-				creator: body.creator,
+				creator,
 				clientIp,
 				code: "MULTISIG_DISABLED",
 			});
@@ -230,7 +259,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		});
 		if (!powResult.ok) {
 			logCollectionRejection({
-				creator: body.creator,
+				creator,
 				clientIp,
 				code: powResult.code,
 			});
@@ -238,22 +267,27 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			return { ok: false, code: powResult.code, message: powResult.message };
 		}
 
-		const creatorRateResult = buyerRateLimiter.check(body.creator);
-		if (!creatorRateResult.allowed) {
-			logCollectionRejection({
-				creator: body.creator,
-				clientIp,
-				code: "RATE_LIMITED",
-				retryAfterMs: creatorRateResult.retryAfterMs,
-			});
-			set.status = 429;
-			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${creatorRateResult.retryAfterMs}ms` };
+		// Skip per-creator rate limiting when the peek failed — the validator
+		// will reject the malformed tx with a 400, and the IP limiter below
+		// still throttles abusive traffic from a single source.
+		if (creator !== null) {
+			const creatorRateResult = buyerRateLimiter.check(creator);
+			if (!creatorRateResult.allowed) {
+				logCollectionRejection({
+					creator,
+					clientIp,
+					code: "RATE_LIMITED",
+					retryAfterMs: creatorRateResult.retryAfterMs,
+				});
+				set.status = 429;
+				return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${creatorRateResult.retryAfterMs}ms` };
+			}
 		}
 
 		const ipRateResult = ipRateLimiter.check(clientIp);
 		if (!ipRateResult.allowed) {
 			logCollectionRejection({
-				creator: body.creator,
+				creator,
 				clientIp,
 				code: "RATE_LIMITED",
 				retryAfterMs: ipRateResult.retryAfterMs,
@@ -266,7 +300,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId);
 			if (!result.ok) {
 				logCollectionRejection({
-					creator: body.creator,
+					creator,
 					clientIp,
 					code: result.code,
 					retryAfterMs: result.retryAfterMs,
@@ -286,7 +320,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			return result;
 		} catch (err) {
 			log.error("Unexpected collection multisig route error", {
-				creator: body.creator,
+				creator,
 				clientIp,
 				error: err instanceof Error ? err.message : String(err),
 			});
@@ -295,12 +329,11 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		}
 	}, {
 		body: t.Object({
-			creator: t.String({ minLength: 3, maxLength: 16, description: "Hive username of the collection creator" }),
 			transaction: multisigTransactionSchema,
 		}),
 		detail: {
 			summary: "Multisig-sign a collection creation transaction",
-			description: "Validates the collection fee transfer and payload, then signs the create_collection custom_json with the node active key.",
+			description: "Validates the collection fee transfer and payload, then signs the create_collection custom_json with the node active key. The creator is derived from the transaction's fee transfer sender.",
 		},
 	})
 

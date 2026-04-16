@@ -55,6 +55,7 @@ export {
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
+	ACTION_NODE_HEARTBEAT,
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTION_BUY,
@@ -165,6 +166,7 @@ export {
 	type NftLendData,
 	type NftReturnData,
 	type NodeRegisterData,
+	type NodeHeartbeatData,
 	// Multisig
 	type BuyMultisigRequest,
 	type CreateCollectionMultisigRequest,

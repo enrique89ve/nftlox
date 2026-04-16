@@ -19,11 +19,15 @@ export type CollectionRules = {
 	readonly royaltyRecipient?: string | undefined;
 };
 
+// The on-chain collection payload. `creator` is intentionally absent:
+// the indexer derives it from the fee `transfer.from` (canonical source),
+// and the `id` is a deterministic hash of (creator, name, symbol) — so the
+// creator is already bound to the id. Keeping it out of the payload removes
+// a redundant field and a whole class of drift/validation concerns.
 export type CollectionData = {
 	readonly id: string;
 	readonly name: string;
 	readonly symbol: string;
-	readonly creator: string;
 	readonly totalPotential: number;
 	readonly originDna: string;
 	readonly metadata: CollectionMetadata;
@@ -195,6 +199,19 @@ export type NodeRegisterData = {
 	readonly publicKey: string;
 };
 
+// Node heartbeat — periodic proof-of-liveness from registered nodes.
+// `stateRoot` is the current ownership state-root hash (see
+// `packages/indexer/src/utils/state-root-hash.ts`). Consumers compare it with
+// their own computed root when exchanging SPV proofs to detect divergence.
+export type NodeHeartbeatData = {
+	/** Head block the indexer had processed when this heartbeat was produced. */
+	readonly blockNum: number;
+	/** Ownership state-root hash, formatted as "sha256:<64-hex>". */
+	readonly stateRoot: string;
+	/** Semver of the indexer binary emitting the heartbeat. */
+	readonly indexerVersion: string;
+};
+
 // Multisig envelopes
 
 export type BuyMultisigRequest = Readonly<{
@@ -205,8 +222,11 @@ export type BuyMultisigRequest = Readonly<{
 	transaction: import("./types.ts").HiveTransactionObject;
 }>;
 
+// `creator` is intentionally absent. The multisig endpoint derives the creator
+// from the embedded `transaction.operations[0][1].from` (the fee transfer's
+// sender), which is the canonical source. Carrying a separate `creator` field
+// here would reintroduce the drift vector the payload cleanup removed.
 export type CreateCollectionMultisigRequest = Readonly<{
-	creator: string;
 	transaction: import("./types.ts").HiveTransactionObject;
 }>;
 

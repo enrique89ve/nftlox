@@ -5,6 +5,7 @@ import { connectWithRetry } from "./bootstrap.ts";
 import { initBeekeeperSigner, closeBeekeeperSigner } from "./api/services/beekeeper-signer.ts";
 import { startMultisigHealthMonitor, stopMultisigHealthMonitor } from "./api/services/multisig-health.ts";
 import { startPricePoller, stopPricePoller } from "./utils/fee-oracle.ts";
+import { startHeartbeatDaemon, stopHeartbeatDaemon } from "./services/heartbeat-daemon.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 import { dns } from "bun";
@@ -110,12 +111,15 @@ async function main(): Promise<void> {
 	// Main thread connects to DB for API queries
 	await connectWithRetry();
 
-	// Read key from env, init beekeeper, then wipe from JS memory.
+	// Read keys from env, init beekeeper, then wipe from JS memory.
+	// POSTING_KEY is only imported when NODE_REGISTER=true (config enforces presence).
 	const activeKey = process.env.ACTIVE_KEY ?? "";
+	const postingKey = config.nodeRegister ? (process.env.POSTING_KEY ?? "") : "";
 	const bkPassword = process.env.BEEKEEPER_PASSWORD ?? "";
 	if (activeKey) {
-		await initBeekeeperSigner(activeKey, bkPassword);
+		await initBeekeeperSigner(activeKey, bkPassword, postingKey || null);
 		delete process.env.ACTIVE_KEY;
+		delete process.env.POSTING_KEY;
 		delete process.env.BEEKEEPER_PASSWORD;
 	}
 
@@ -144,10 +148,16 @@ async function main(): Promise<void> {
 
 	// Sync engine runs on dedicated worker thread
 	startSyncWorker();
+
+	// Public-directory heartbeat emitter. No-ops when NODE_REGISTER=false or
+	// the operator hasn't yet emitted `node_register` — see the daemon for the
+	// exact preconditions.
+	await startHeartbeatDaemon();
 }
 
 async function shutdown(): Promise<void> {
 	log.info("Shutting down...");
+	stopHeartbeatDaemon();
 	stopSyncWorker();
 	stopMultisigHealthMonitor();
 	stopPricePoller();

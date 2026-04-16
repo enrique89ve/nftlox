@@ -298,3 +298,16 @@ export const nodeRegisterInputSchema = z.object({
 	publicKey: z.string().min(10, "Public key must be at least 10 characters"),
 });
 export type NodeRegisterInput = z.infer<typeof nodeRegisterInputSchema>;
+
+// Format must match `formatStateRoot()` in the indexer: lowercase hex, 64 chars.
+const stateRootSchema = z.string().regex(
+	/^sha256:[0-9a-f]{64}$/,
+	"stateRoot must be formatted as 'sha256:<64 lowercase hex chars>'",
+);
+
+export const nodeHeartbeatInputSchema = z.object({
+	blockNum: z.number().int().nonnegative("blockNum must be a non-negative integer"),
+	stateRoot: stateRootSchema,
+	indexerVersion: z.string().trim().min(1, "indexerVersion is required").max(32, "indexerVersion must be at most 32 characters"),
+});
+export type NodeHeartbeatInput = z.infer<typeof nodeHeartbeatInputSchema>;

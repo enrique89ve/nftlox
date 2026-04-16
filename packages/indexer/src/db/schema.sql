@@ -314,11 +314,32 @@ CREATE TABLE IF NOT EXISTS l2_nodes (
 	endpoint TEXT NOT NULL,
 	public_key TEXT NOT NULL,
 	status l2_node_status NOT NULL DEFAULT 'active',
+	-- Block number of the most recent accepted `node_heartbeat` from this account.
+	-- NULL until the first heartbeat. Written by `handleNodeHeartbeat`, also used
+	-- by the handler's rate-limit guard (MIN_HEARTBEAT_INTERVAL_BLOCKS).
+	last_heartbeat_block BIGINT,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Append-only heartbeat log. One row per accepted `node_heartbeat` op.
+-- `account` references `l2_nodes` so a heartbeat from an unregistered account is
+-- structurally impossible (the handler also rejects it up-front with a clear
+-- error message, but the FK is the last line of defence).
+CREATE TABLE IF NOT EXISTS l2_node_heartbeats (
+	id BIGSERIAL PRIMARY KEY,
+	account TEXT NOT NULL REFERENCES l2_nodes(account) ON DELETE CASCADE,
+	block_num BIGINT NOT NULL,
+	state_root TEXT NOT NULL,
+	indexer_version TEXT NOT NULL,
+	tx_id TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Serves "latest heartbeat from account" lookups (registry freshness displays,
+-- divergence probes). DESC on block_num keeps the top-N query index-only.
+CREATE INDEX IF NOT EXISTS idx_l2_node_heartbeats_account_block ON l2_node_heartbeats(account, block_num DESC);
 
 -- ============ MULTISIG LOCKS ============
 
