@@ -116,6 +116,43 @@ const RETENTION_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
 // the blockchain is the source of truth for historical operation lookups.
 const CONFIRMED_OPS_RETENTION_MS = RETENTION_MS;
 
+// Hard cap per retention table. Time-based TTL alone does not bound row count:
+// a bot flooding malformed ops can inflate `invalid_operations` faster than the
+// 2-day window evicts (e.g. 10 rps of invalids = ~1.7M rows before cutoff). This
+// cap ensures we always shed the oldest surplus so indexes stay small and the
+// retention job itself stays O(log n) on the ordering column.
+export const MAX_ROWS_PER_TABLE = 100_000;
+
+type RetentionSpec = Readonly<{
+	table: "invalid_operations" | "orphaned_buys" | "confirmed_operations";
+	pkColumn: "id" | "operation_id";
+	timeColumn: "indexed_at" | "created_at";
+}>;
+
+async function pruneExcessRows(spec: RetentionSpec): Promise<number> {
+	// Identifiers must be inlined with sql.unsafe — postgres.js only parameterizes
+	// literals, not table/column names. The RetentionSpec type is a closed union so
+	// no user-controlled string ever reaches this point.
+	const { table, pkColumn, timeColumn } = spec;
+	const [countRow] = await sql.unsafe(`SELECT COUNT(*)::int AS c FROM ${table}`);
+	const current = Number(countRow?.c ?? 0);
+	const excess = current - MAX_ROWS_PER_TABLE;
+	if (excess <= 0) return 0;
+	// Delete the oldest `excess` rows in a single statement. Using `pk IN (SELECT
+	// ... LIMIT excess)` means PG never materializes the full row set in memory —
+	// the planner drives the delete from the index scan on `timeColumn`.
+	const deleted = await sql.unsafe(`
+		DELETE FROM ${table}
+		WHERE ${pkColumn} IN (
+			SELECT ${pkColumn} FROM ${table}
+			ORDER BY ${timeColumn} ASC
+			LIMIT ${excess}
+		)
+		RETURNING 1
+	`);
+	return deleted.length;
+}
+
 export async function cleanupExpiredOperations(): Promise<number> {
 	const cutoff = new Date(Date.now() - RETENTION_MS).toISOString();
 	const confirmedCutoff = new Date(Date.now() - CONFIRMED_OPS_RETENTION_MS).toISOString();
@@ -131,7 +168,15 @@ export async function cleanupExpiredOperations(): Promise<number> {
 		DELETE FROM confirmed_operations WHERE created_at < ${confirmedCutoff}
 		RETURNING 1
 	`;
-	return invalid.length + orphaned.length + confirmed.length;
+	const [invalidExcess, orphanedExcess, confirmedExcess] = await Promise.all([
+		pruneExcessRows({ table: "invalid_operations", pkColumn: "id", timeColumn: "indexed_at" }),
+		pruneExcessRows({ table: "orphaned_buys", pkColumn: "id", timeColumn: "created_at" }),
+		pruneExcessRows({ table: "confirmed_operations", pkColumn: "operation_id", timeColumn: "created_at" }),
+	]);
+	return (
+		invalid.length + orphaned.length + confirmed.length
+		+ invalidExcess + orphanedExcess + confirmedExcess
+	);
 }
 
 // ============ OPERATION STATUS ============
