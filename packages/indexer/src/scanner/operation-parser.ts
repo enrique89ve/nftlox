@@ -2,7 +2,8 @@ import { config } from "@/config.ts";
 import {
 	MIN_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
-	ALL_ACTIONS,
+	TX_ID_REGEX,
+	isProtocolAction,
 	type AuthLevel,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
@@ -55,10 +56,6 @@ function isNonNullObject(value: unknown): value is Record<string, unknown> {
 
 function isStringArray(value: unknown): value is readonly string[] {
 	return Array.isArray(value) && value.every(item => typeof item === "string");
-}
-
-function isProtocolAction(value: string): value is ProtocolAction {
-	return (ALL_ACTIONS as readonly string[]).includes(value);
 }
 
 interface CustomJsonOperationValue {
@@ -151,9 +148,6 @@ function parseCustomJsonAuth(value: CustomJsonOperationValue): CustomJsonAuthPar
 }
 
 // ─── Format Validators ──────────────────────────────
-
-/** Hive transaction ID: first 20 bytes of SHA256 = 40 hex chars */
-const TX_ID_REGEX = /^[0-9a-f]{40}$/;
 
 function isValidTxId(txId: string): boolean {
 	return TX_ID_REGEX.test(txId);

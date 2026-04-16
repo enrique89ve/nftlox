@@ -36,6 +36,7 @@ import {
 	generateListingId,
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_FEE,
+	PROTOCOL_COLLECTION_FEE_HBD,
 	generateDeterministicCollectionId,
 } from "@/protocol/index.ts";
 
@@ -81,14 +82,26 @@ async function cleanDb() {
 }
 
 async function seedCollection(txn: Queryable = sql) {
-	await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, {
-		id: COL_ID,
-		name: "Security Test Collection",
-		symbol: "SEC",
-		totalPotential: 1000,
-		metadata: { description: "Security test", image: "https://example.com/img.png" },
-		rules: { transferable: true, burnable: true, royaltyPct: 5 },
-	}), txn);
+	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
+	const pairedTransfers = [
+		{ from: "alice", to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: "" },
+	];
+	await handleCreateCollection(
+		makeOp(
+			ACTION_CREATE_COLLECTION,
+			{
+				id: COL_ID,
+				name: "Security Test Collection",
+				symbol: "SEC",
+				totalPotential: 1000,
+				metadata: { description: "Security test", image: "https://example.com/img.png" },
+				rules: { transferable: true, burnable: true, royaltyPct: 5, royaltyRecipient: "alice" },
+			},
+			NODE_ACCOUNT,
+			pairedTransfers,
+		),
+		txn,
+	);
 }
 
 async function seedMint(txn: Queryable = sql) {
@@ -454,7 +467,9 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			await seedCollection();
 			await seedMint();
 
-			// Force-set an expired listing via SQL
+			// Force-set an expired listing via SQL. Must also bump collection_stats.listed
+			// or the transfer's auto-clear-listing step trips a CHECK constraint when it
+			// tries to decrement listed_count from 0.
 			await sql`
 				UPDATE nfts
 				SET status = 'listed', listing_id = 'exp_listing', listing_tx_id = 'tx_exp',
@@ -462,6 +477,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 					listing_expires_at = ${new Date("2023-01-01").toISOString()}
 				WHERE id = 'seed_sec1'
 			`;
+			await sql`UPDATE collection_stats SET listed = listed + 1 WHERE collection_id = ${COL_ID}`;
 
 			// Transfer should succeed (auto-clears expired listing)
 			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: "seed_sec1", to: "bob" }), sql);

@@ -24,6 +24,7 @@ import {
 	MAX_ROYALTY_PCT,
 	MAX_URL_LENGTH,
 	PROTOCOL_COLLECTION_FEE_HBD,
+	SYMBOL_REGEX,
 	generateDeterministicCollectionId,
 	validateHiveUsername,
 	validateSchemaDefinition,
@@ -38,7 +39,6 @@ import type {
 } from "./types.ts";
 
 const CREATE_COLLECTION_OPERATION_COUNT = 2;
-const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;
 
 export async function processCollectionRequest(
 	rawBody: unknown,

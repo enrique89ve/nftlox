@@ -3,10 +3,10 @@
  * Replaces blind `as` casts with fail-fast runtime checks at system boundaries.
  */
 
-import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import {
 	calculatePaymentSplit,
 	validateHiveUsername,
+	SYMBOL_REGEX,
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
@@ -109,8 +109,6 @@ export function requireString(value: unknown, fieldName: string): string {
 	}
 	return value;
 }
-
-const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;
 
 export function requireSymbol(value: unknown, fieldName: string): string {
 	const str = requireString(value, fieldName);
