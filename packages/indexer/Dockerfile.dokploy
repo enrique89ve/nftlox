@@ -1,3 +1,46 @@
+# syntax=docker/dockerfile:1.7
+
+# ───── Stage 1: Builder ─────
+# Builds a standalone bundle with @nftlox/protocol inlined. Runs in the
+# monorepo root context so Bun can resolve the workspace link.
+FROM oven/bun:1.3.11 AS builder
+
+WORKDIR /repo
+
+# Workspace manifests — copied first so `bun install` caches when source
+# changes but manifests don't. All workspaces (packages/*) must be
+# declared for bun to install against the frozen lockfile, even though
+# we only bundle the indexer.
+COPY package.json bun.lock ./
+COPY packages/protocol/package.json ./packages/protocol/
+COPY packages/indexer/package.json ./packages/indexer/
+COPY packages/sdk/package.json ./packages/sdk/
+COPY packages/packs-engine/package.json ./packages/packs-engine/
+COPY packages/playground/package.json ./packages/playground/
+
+# Install full workspace deps (dev + prod) — needed for the build step.
+RUN bun install --frozen-lockfile
+
+# Source code layers
+COPY packages/protocol/ ./packages/protocol/
+COPY packages/indexer/ ./packages/indexer/
+
+# Bundle: @nftlox/protocol gets inlined; heavy / native-backed deps stay
+# external so Bun can load them from node_modules at runtime (beekeeper
+# ships WASM; elysia / postgres have large runtimes that don't benefit
+# from bundling).
+WORKDIR /repo/packages/indexer
+RUN bun build src/index.ts \
+	--target=bun \
+	--outfile=dist/indexer.js \
+	--external @hiveio/beekeeper \
+	--external @elysiajs/cors \
+	--external @elysiajs/swagger \
+	--external elysia \
+	--external hive-tx \
+	--external postgres
+
+# ───── Stage 2: Runtime ─────
 FROM oven/bun:1.3.11
 
 ARG BUILD_TIME
@@ -13,14 +56,14 @@ LABEL io.nftlox.image.branch="${GIT_CURRENT_BRANCH}"
 
 WORKDIR /app
 
-# Dokploy is configured to build from packages/indexer, so use paths relative
-# to that package directory.
-COPY package.json bun.lock ./
+# Bundle + runtime scripts
+COPY --from=builder /repo/packages/indexer/dist ./dist
+COPY --from=builder /repo/packages/indexer/scripts ./scripts
 
-# Install only runtime dependencies for the standalone indexer package.
-RUN bun install --frozen-lockfile --production
-
-COPY . .
+# External npm deps — hoisted workspace node_modules from the builder.
+# @nftlox/protocol is bundled into dist/indexer.js, so the runtime never
+# needs to resolve the workspace symlink.
+COPY --from=builder /repo/node_modules ./node_modules
 
 RUN chmod +x /app/scripts/*.sh && \
 	chown -R bun:bun /app
@@ -29,6 +72,7 @@ USER bun
 
 ENV NODE_ENV=production
 ENV ENABLE_SWAGGER=false
+ENV INDEXER_ENTRY=dist/indexer.js
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
 	CMD ["/app/scripts/docker-healthcheck.sh"]
