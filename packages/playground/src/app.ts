@@ -1,6 +1,6 @@
 import {
   buildTransfer,
-  createBulkDistributePayload,
+  buildBulkDistribute,
   PROTOCOL_ID,
   type SeedNFTWithArtId,
   type HiveOperation,
@@ -1283,7 +1283,8 @@ async function distributeFromSeed(
   }
 
   // Use bulk_distribute: 1 single custom_json instead of 2N operations
-  const payload = createBulkDistributePayload({
+  const bulkResult = buildBulkDistribute({
+    signer: connectedUser,
     to,
     items: [
       {
@@ -1294,15 +1295,12 @@ async function distributeFromSeed(
     ],
   });
 
-  const operation: HiveOperation = [
-    "custom_json",
-    {
-      required_auths: [],
-      required_posting_auths: [connectedUser],
-      id: PROTOCOL_ID,
-      json: JSON.stringify(payload),
-    },
-  ];
+  if (!bulkResult.success) {
+    log(`Build bulk_distribute failed: ${bulkResult.errors.map((e) => e.message).join(", ")}`, "error");
+    return false;
+  }
+
+  const operation = bulkResult.operations[0] as HiveOperation;
 
   log(`Distributing ${quantity} instance(s) to @${to} via bulk_distribute...`);
 
@@ -2456,7 +2454,7 @@ async function nftDetailTransfer() {
   log(`Transferring to @${to}...`);
   (window as any).hive_keychain.requestBroadcast(
     connectedUser,
-    [buildResult.operation],
+    [buildResult.operations[0]],
     "Posting",
     (res: any) => {
       if (res.success) {
@@ -2537,7 +2535,7 @@ async function nftDetailTransferSeed() {
   log(`Transferring seed ownership to @${to}...`);
   (window as any).hive_keychain.requestBroadcast(
     connectedUser,
-    [buildResult.operation],
+    [buildResult.operations[0]],
     "Posting",
     (res: any) => {
       if (res.success) {

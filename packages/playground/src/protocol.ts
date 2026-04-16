@@ -4,14 +4,15 @@
 import {
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
-	createDeterministicCollectionPayload,
-	createDeterministicMintPayload,
-	toHiveOperation,
+	buildCollection,
+	buildSeed,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
-	type DeterministicCollectionInput,
+	type CreateCollectionInput,
+	type CollectionData,
 	type HiveOperation,
 	type ImportedNFT,
+	type ProtocolPayload,
 	type SeedNFTWithArtId,
 } from "nftlox-sdk";
 
@@ -36,14 +37,14 @@ export interface CollectionOptions {
 	description?: string;
 }
 
-export async function createTestCollection(
+function buildCollectionInput(
 	creator: string,
 	name: string,
 	symbol: string,
 	totalPotential: number,
 	options?: CollectionOptions,
-) {
-	const input: DeterministicCollectionInput = {
+): CreateCollectionInput {
+	return {
 		name,
 		symbol,
 		creator,
@@ -59,11 +60,35 @@ export async function createTestCollection(
 			royaltyRecipient: creator,
 		},
 	};
+}
 
-	const payload = await createDeterministicCollectionPayload(input);
-	const operation = toHiveOperation(payload, creator);
+function unwrapCustomJsonOperation(operations: readonly unknown[]): HiveOperation {
+	const op = operations[0];
+	if (!Array.isArray(op) || op.length !== 2 || op[0] !== "custom_json") {
+		throw new Error("Expected first operation to be custom_json");
+	}
+	return op as unknown as HiveOperation;
+}
 
-	return { payload, operation };
+export async function createTestCollection(
+	creator: string,
+	name: string,
+	symbol: string,
+	totalPotential: number,
+	options?: CollectionOptions,
+): Promise<{
+	payload: ProtocolPayload<CollectionData>;
+	operation: HiveOperation;
+}> {
+	const input = buildCollectionInput(creator, name, symbol, totalPotential, options);
+	const result = await buildCollection(input);
+	if (!result.success) {
+		throw new Error(`Collection build failed: ${result.errors.map((e) => e.message).join(", ")}`);
+	}
+	return {
+		payload: result.payload,
+		operation: unwrapCustomJsonOperation(result.operations),
+	};
 }
 
 // ============ SEED MINTING ============
@@ -190,40 +215,20 @@ export async function createDeterministicCollection(
 	totalPotential: number,
 	options?: CollectionOptions,
 ): Promise<{
-	payload: Awaited<ReturnType<typeof createDeterministicCollectionPayload>>;
+	payload: ProtocolPayload<CollectionData>;
 	operation: HiveOperation;
 	collectionId: string;
 }> {
-	const collectionId = await generateDeterministicCollectionId(creator, name, symbol);
-
-	const payload = await createDeterministicCollectionPayload({
-		name,
-		symbol,
-		creator,
-		totalPotential,
-		metadata: {
-			description: options?.description || `${name} - NFTLox Protocol Collection`,
-			image: options?.image || "https://placehold.co/400x400?text=NFT",
-		},
-		rules: {
-			transferable: true,
-			burnable: true,
-			royaltyPct: 5,
-			royaltyRecipient: creator,
-		},
-	});
-
-	const operation: HiveOperation = [
-		"custom_json",
-		{
-			required_auths: [],
-			required_posting_auths: [creator],
-			id: PROTOCOL_ID,
-			json: JSON.stringify(payload),
-		},
-	];
-
-	return { payload, operation, collectionId };
+	const input = buildCollectionInput(creator, name, symbol, totalPotential, options);
+	const result = await buildCollection(input);
+	if (!result.success) {
+		throw new Error(`Collection build failed: ${result.errors.map((e) => e.message).join(", ")}`);
+	}
+	return {
+		payload: result.payload,
+		operation: unwrapCustomJsonOperation(result.operations),
+		collectionId: result.generatedIds!.collectionId!,
+	};
 }
 
 export interface DeterministicBatchMintResult {
@@ -253,36 +258,27 @@ export async function createDeterministicSeedMintOperations(
 
 	for (let i = 0; i < nfts.length; i++) {
 		const nft = nfts[i]!;
-		const seedId = await generateDeterministicSeedId(collectionId, nft.artId);
-
-		const payload = await createDeterministicMintPayload({
+		const result = await buildSeed({
 			artId: nft.artId,
 			collectionId,
-			collectionOriginDna,
-			edition: i + 1,
+			signer: owner,
 			owner,
+			edition: i + 1,
 			name: nft.name,
-			description: nft.brief,
 			imageUrl: nft.imageUrl,
 			maxSupply: nft.maxSupply,
+			...(nft.brief !== undefined && { brief: nft.brief }),
 		});
-
-		const operation: HiveOperation = [
-			"custom_json",
-			{
-				required_auths: [],
-				required_posting_auths: [owner],
-				id: PROTOCOL_ID,
-				json: JSON.stringify(payload),
-			},
-		];
+		if (!result.success) {
+			throw new Error(`Seed build failed for artId=${nft.artId}: ${result.errors.map((e) => e.message).join(", ")}`);
+		}
 
 		seeds.push({
 			artId: nft.artId,
-			seedId,
+			seedId: result.generatedIds!.seedId!,
 			name: nft.name,
 			maxSupply: nft.maxSupply,
-			operation,
+			operation: unwrapCustomJsonOperation(result.operations),
 		});
 	}
 

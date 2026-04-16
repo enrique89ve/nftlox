@@ -24,7 +24,11 @@ describe("multisig Proof of Work", () => {
 		expect(hasLeadingZeroBits("007bcdef", 9)).toBe(true);
 		expect(hasLeadingZeroBits("000bcdef", 12)).toBe(true);
 		expect(hasLeadingZeroBits("000bcdef", 13)).toBe(false);
-		expect(hasLeadingZeroBits("10abcdef", 1)).toBe(false);
+		// "1" = 0b0001 — MSB is 0, so there is exactly 1 leading zero bit.
+		expect(hasLeadingZeroBits("10abcdef", 1)).toBe(true);
+		expect(hasLeadingZeroBits("10abcdef", 4)).toBe(false);
+		// "8" = 0b1000 — MSB is 1, so there are 0 leading zero bits.
+		expect(hasLeadingZeroBits("8abcdef0", 1)).toBe(false);
 	});
 
 	test("solves a valid low-difficulty token for a payload", async () => {
