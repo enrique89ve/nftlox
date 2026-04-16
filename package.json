@@ -13,8 +13,7 @@
 		"test": "bun run --filter '*' test",
 		"test:sdk": "bun test packages/sdk",
 		"test:indexer": "bun test packages/indexer",
-		"typecheck": "bun run --filter '*' typecheck",
-		"sync:auth": "bun run scripts/sync-auth-levels.ts",
-		"sync:auth:check": "bun run scripts/sync-auth-levels.ts --check"
+		"test:protocol": "bun test packages/protocol",
+		"typecheck": "bun run --filter '*' typecheck"
 	}
 }
