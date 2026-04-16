@@ -8,27 +8,25 @@ import {
 	isProtocolAction,
 	getAuthLevel,
 	getKeyType,
-	// Operation factories
-	createTransferOperation,
-	createBurnOperation,
-	createBulkDistributeOperation,
-	createListOperation,
-	createBuyOperation,
-	createNodeRegisterOperation,
-	createDeterministicCollectionOperation,
-	createNftApproveOperation,
-	createNftApproveAllOperation,
-	createDataOperatorApproveOperation,
-	// Posting operations
-	createSetDataOperation,
-	createArchiveCollectionOperation,
-	createSetDataFromOperation,
-	createUnlistOperation,
-	createNftTransferFromOperation,
-	createNftLendOperation,
-	createNftReturnOperation,
-	toHiveOperation,
+	createPayload,
+	createHiveOperation,
 	ACTION_TRANSFER,
+	ACTION_CREATE_COLLECTION,
+	ACTION_BUY,
+	ACTION_NODE_REGISTER,
+	ACTION_LIST,
+	ACTION_UNLIST,
+	ACTION_BULK_DISTRIBUTE,
+	ACTION_SET_DATA,
+	ACTION_ARCHIVE_COLLECTION,
+	ACTION_SET_DATA_FROM,
+	ACTION_NFT_APPROVE,
+	ACTION_NFT_APPROVE_ALL,
+	ACTION_DATA_OPERATOR_APPROVE,
+	ACTION_NFT_TRANSFER_FROM,
+	ACTION_NFT_LEND,
+	ACTION_NFT_RETURN,
+	type ProtocolAction,
 } from "../src/index";
 
 // ============ EXHAUSTIVENESS ============
@@ -64,8 +62,8 @@ describe("Authority exhaustiveness", () => {
 		expect(isProtocolAction("burn")).toBe(false);
 		expect(isProtocolAction("set_owner_data")).toBe(false);
 		expect(isProtocolAction(null)).toBe(false);
-		expect(() => getAuthLevel("pack_buy" as (typeof ALL_ACTIONS)[number])).toThrow("Unsupported protocol action: pack_buy");
-		expect(() => getKeyType("pack_buy" as (typeof ALL_ACTIONS)[number])).toThrow("Unsupported protocol action: pack_buy");
+		expect(() => getAuthLevel("pack_buy" as ProtocolAction)).toThrow("Unsupported protocol action: pack_buy");
+		expect(() => getKeyType("pack_buy" as ProtocolAction)).toThrow("Unsupported protocol action: pack_buy");
 	});
 
 	test("no action appears in both ACTIVE and POSTING", () => {
@@ -84,13 +82,20 @@ describe("Authority exhaustiveness", () => {
 
 // ============ ACTIVE KEY OPERATIONS ============
 
+function buildOp(action: ProtocolAction, signer: string, data: Record<string, unknown> = {}) {
+	const payload = createPayload(action, data);
+	return createHiveOperation(payload, signer);
+}
+
 describe("Active key operations use required_auths", () => {
-	test("create_collection", async () => {
-		const op = await createDeterministicCollectionOperation({
-			creator: "indexer-node",
+	test("create_collection", () => {
+		const op = buildOp(ACTION_CREATE_COLLECTION, "indexer-node", {
+			id: "col_1",
 			name: "Test Collection",
 			symbol: "TEST",
+			creator: "indexer-node",
 			totalPotential: 100,
+			originDna: "a".repeat(32),
 			metadata: { description: "Test", image: "https://example.com/image.png" },
 			rules: { transferable: true, burnable: true, royaltyPct: 5 },
 		});
@@ -98,151 +103,133 @@ describe("Active key operations use required_auths", () => {
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
-	test("buy (node account)", () => {
-		const op = createBuyOperation(
-			{ nftId: "nft_1", listingId: "list_1", listTxId: "a".repeat(40), txId: "b".repeat(40) },
-			"indexer-node",
-		);
-		expect(op[1].required_auths).toEqual(["indexer-node"]);
+	test("buy", () => {
+		const op = buildOp(ACTION_BUY, "buyer-alice", {
+			nftId: "nft_1",
+			listingId: "list_1",
+			listTxId: "a".repeat(40),
+			txId: "b".repeat(40),
+		});
+		expect(op[1].required_auths).toEqual(["buyer-alice"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
-
 });
 
 // ============ POSTING KEY OPERATIONS ============
 
 describe("Posting key operations use required_posting_auths", () => {
 	test("transfer", () => {
-		const op = createTransferOperation("nft_1", "alice", "bob");
+		const op = buildOp(ACTION_TRANSFER, "alice", { nftId: "nft_1", from: "alice", to: "bob" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("node_register", () => {
-		const op = createNodeRegisterOperation(
-			{ endpoint: "https://node.example.com", publicKey: "public-key-material" },
-			"indexer-node",
-		);
+		const op = buildOp(ACTION_NODE_REGISTER, "indexer-node", {
+			endpoint: "https://node.example.com",
+			publicKey: "public-key-material",
+		});
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["indexer-node"]);
 	});
 
-	test("burn", () => {
-		const op = createBurnOperation("nft_1", "alice");
+	test("burn (transfer to null)", () => {
+		const op = buildOp(ACTION_TRANSFER, "alice", { nftId: "nft_1", from: "alice", to: "null" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("list", () => {
-		const op = createListOperation(
-			{ nftId: "nft_1", price: { amount: "10.000", currency: "HIVE" } },
-			"alice",
-			"list_1",
-			"nonce_1",
-		);
+		const op = buildOp(ACTION_LIST, "alice", {
+			nftId: "nft_1",
+			listingId: "list_1",
+			listingNonce: "nonce_1",
+			price: { amount: "10.000", currency: "HIVE" },
+		});
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("nft_approve", () => {
-		const op = createNftApproveOperation(
-			{ spender: "bob", instanceId: "nft_1", approved: true },
-			"alice",
-		);
+		const op = buildOp(ACTION_NFT_APPROVE, "alice", {
+			spender: "bob",
+			instanceId: "nft_1",
+			approved: true,
+		});
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("nft_approve_all", () => {
-		const op = createNftApproveAllOperation(
-			{ spender: "bob", collectionId: "col_1", approved: true },
-			"alice",
-		);
+		const op = buildOp(ACTION_NFT_APPROVE_ALL, "alice", {
+			spender: "bob",
+			collectionId: "col_1",
+			approved: true,
+		});
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("data_operator_approve", () => {
-		const op = createDataOperatorApproveOperation(
-			{ collectionId: "col_1", operator: "bob", approved: true },
-			"alice",
-		);
+		const op = buildOp(ACTION_DATA_OPERATOR_APPROVE, "alice", {
+			collectionId: "col_1",
+			operator: "bob",
+			approved: true,
+		});
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("bulk_distribute", () => {
-		const op = createBulkDistributeOperation(
-			{ items: [{ seedId: "seed_1", quantity: 1, seedTxId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }] },
-			"alice",
-		);
+		const op = buildOp(ACTION_BULK_DISTRIBUTE, "alice", {
+			items: [{ seedId: "seed_1", quantity: 1, seedTxId: "a".repeat(40) }],
+		});
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("set_data", () => {
-		const op = createSetDataOperation(
-			{ nftId: "nft_1", instanceDna: "dna_1" },
-			"alice",
-		);
+		const op = buildOp(ACTION_SET_DATA, "alice", { nftId: "nft_1", instanceDna: "dna_1" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("archive_collection", () => {
-		const op = createArchiveCollectionOperation(
-			{ collectionId: "col_1" },
-			"alice",
-		);
+		const op = buildOp(ACTION_ARCHIVE_COLLECTION, "alice", { collectionId: "col_1" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("set_data_from", () => {
-		const op = createSetDataFromOperation(
-			{ nftId: "nft_1", instanceDna: "dna_1" },
-			"alice",
-		);
+		const op = buildOp(ACTION_SET_DATA_FROM, "alice", { nftId: "nft_1", instanceDna: "dna_1" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("unlist", () => {
-		const op = createUnlistOperation("nft_1", "alice");
+		const op = buildOp(ACTION_UNLIST, "alice", { nftId: "nft_1" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("nft_transfer_from", () => {
-		const op = createNftTransferFromOperation(
-			{ from: "alice", to: "bob", instanceId: "nft_1" },
-			"charlie",
-		);
+		const op = buildOp(ACTION_NFT_TRANSFER_FROM, "charlie", {
+			from: "alice",
+			to: "bob",
+			instanceId: "nft_1",
+		});
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["charlie"]);
 	});
 
 	test("nft_lend", () => {
-		const op = createNftLendOperation(
-			{ instanceId: "nft_1", borrower: "bob" },
-			"alice",
-		);
+		const op = buildOp(ACTION_NFT_LEND, "alice", { instanceId: "nft_1", borrower: "bob" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("nft_return", () => {
-		const op = createNftReturnOperation(
-			{ instanceId: "nft_1" },
-			"alice",
-		);
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
-	});
-
-	test("toHiveOperation (generic posting wrapper)", () => {
-		const payload = { protocol: "test", version: "0.1", action: ACTION_TRANSFER, data: {} } as const;
-		const op = toHiveOperation(payload, "alice");
+		const op = buildOp(ACTION_NFT_RETURN, "alice", { instanceId: "nft_1" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});

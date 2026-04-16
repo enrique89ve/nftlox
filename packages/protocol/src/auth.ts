@@ -55,11 +55,17 @@ export const ACTION_AUTH_LEVEL = Object.freeze(ACTION_AUTH_LEVEL_MAP);
 
 /** Get the auth level for any protocol action. */
 export function getAuthLevel(action: ProtocolAction): AuthLevel {
+	if (!isProtocolAction(action)) {
+		throw new Error(`Unsupported protocol action: ${String(action)}`);
+	}
 	return ACTION_AUTH_LEVEL[action];
 }
 
 /** Get the Keychain-compatible key type string for an action. */
 export function getKeyType(action: ProtocolAction): KeyType {
+	if (!isProtocolAction(action)) {
+		throw new Error(`Unsupported protocol action: ${String(action)}`);
+	}
 	return ACTION_AUTH_LEVEL[action] === "active" ? "Active" : "Posting";
 }
 

@@ -5,6 +5,7 @@ import {
 	buildCollection,
 	buildSeed,
 	type CreateCollectionInput,
+	type HiveOperation,
 } from "../src/index";
 
 describe("buildCollection consistency", () => {
@@ -30,27 +31,30 @@ describe("buildCollection consistency", () => {
 		expect(result.success).toBe(true);
 	});
 
-	test("generatedId matches payload.data.id", async () => {
+	test("generatedIds.collectionId matches payload.data.id", async () => {
 		const result = await buildCollection(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		expect(result.generatedId).toBe(result.payload.data.id);
+		expect(result.generatedIds?.collectionId).toBe(result.payload.data.id);
 	});
 
 	test("payload.data.id matches the ID inside operation JSON", async () => {
 		const result = await buildCollection(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		const parsed = JSON.parse(result.operation![1].json);
+		const op = result.operations[0]! as HiveOperation;
+		const parsed = JSON.parse(op[1].json);
 
 		expect(result.payload.data.id).toBe(parsed.data.id);
 	});
 
-	test("operation required_posting_auths equals [input.creator]", async () => {
+	test("create_collection uses active auth (required_auths=[creator])", async () => {
 		const result = await buildCollection(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		expect(result.operation![1].required_posting_auths).toEqual([validInput.creator]);
+		const op = result.operations[0]! as HiveOperation;
+		expect(op[1].required_auths).toEqual([validInput.creator]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("schema appears in payload when provided", async () => {
@@ -86,18 +90,21 @@ describe("buildArchiveCollection consistency", () => {
 		});
 		if (!result.success) throw new Error("Expected success");
 
-		const parsed = JSON.parse(result.operation![1].json);
+		const op = result.operations[0]! as HiveOperation;
+		const parsed = JSON.parse(op[1].json);
 		expect(result.payload.data.collectionId).toBe(parsed.data.collectionId);
 	});
 
-	test("operation required_posting_auths equals [creator]", () => {
+	test("archive_collection uses posting auth (required_posting_auths=[creator])", () => {
 		const result = buildArchiveCollection({
 			collectionId: "col_test_archive",
 			creator: "testcreator",
 		});
 		if (!result.success) throw new Error("Expected success");
 
-		expect(result.operation![1].required_posting_auths).toEqual(["testcreator"]);
+		const op = result.operations[0]! as HiveOperation;
+		expect(op[1].required_posting_auths).toEqual(["testcreator"]);
+		expect(op[1].required_auths).toEqual([]);
 	});
 });
 
@@ -119,25 +126,28 @@ describe("buildSeed consistency", () => {
 		expect(result.success).toBe(true);
 	});
 
-	test("generatedId matches payload.data.id", async () => {
+	test("generatedIds exposes both seedId (lineage) and nftId (instance)", async () => {
 		const result = await buildSeed(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		expect(result.generatedId).toBe(result.payload.data.id);
+		expect(result.generatedIds?.seedId?.startsWith("seed_")).toBe(true);
+		expect(result.generatedIds?.nftId?.startsWith("nft_")).toBe(true);
+		expect(result.generatedIds?.nftId).toBe(result.payload.data.id);
 	});
 
-	test("payload.data.id starts with seed_", async () => {
+	test("payload.data.id is the instance ID (nft_), not the seed ID", async () => {
 		const result = await buildSeed(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		expect(result.payload.data.id.startsWith("seed_")).toBe(true);
+		expect(result.payload.data.id.startsWith("nft_")).toBe(true);
 	});
 
 	test("payload.data.id matches the ID inside operation JSON", async () => {
 		const result = await buildSeed(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		const parsed = JSON.parse(result.operation![1].json);
+		const op = result.operations[0]! as HiveOperation;
+		const parsed = JSON.parse(op[1].json);
 
 		expect(result.payload.data.id).toBe(parsed.data.id);
 	});
@@ -146,7 +156,8 @@ describe("buildSeed consistency", () => {
 		const result = await buildSeed(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		expect(result.operation![1].required_posting_auths).toEqual([validInput.signer]);
+		const op = result.operations[0]! as HiveOperation;
+		expect(op[1].required_posting_auths).toEqual([validInput.signer]);
 	});
 
 	test("payload.data.owner is the recipient, not the signer", async () => {
@@ -154,7 +165,8 @@ describe("buildSeed consistency", () => {
 		if (!result.success) throw new Error("Expected success");
 
 		expect(result.payload.data.owner).toBe("testowner");
-		expect(result.operation![1].required_posting_auths).toEqual(["testcreator"]);
+		const op = result.operations[0]! as HiveOperation;
+		expect(op[1].required_posting_auths).toEqual(["testcreator"]);
 	});
 
 	test("owner defaults to signer when not provided", async () => {
@@ -163,7 +175,8 @@ describe("buildSeed consistency", () => {
 		if (!result.success) throw new Error("Expected success");
 
 		expect(result.payload.data.owner).toBe("testcreator");
-		expect(result.operation![1].required_posting_auths).toEqual(["testcreator"]);
+		const op = result.operations[0]! as HiveOperation;
+		expect(op[1].required_posting_auths).toEqual(["testcreator"]);
 	});
 
 	test("nftType is seed in the payload", async () => {

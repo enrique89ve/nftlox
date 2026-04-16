@@ -9,7 +9,8 @@ import {
 	canonicalJson,
 	computeDataHash,
 	VALID_SCHEMA_TYPES,
-} from "../src/schema-validation";
+	type CollectionSchema,
+} from "@nftlox/protocol";
 import {
 	createSchemaBuilder,
 	GAMING_SCHEMA,
@@ -20,7 +21,6 @@ import {
 	schemaFieldSchema,
 	extendSchemaInputSchema,
 } from "../src/schemas";
-import type { CollectionSchema } from "../src/types";
 
 // ============ validateValueAgainstType ============
 

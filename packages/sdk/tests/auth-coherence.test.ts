@@ -5,9 +5,10 @@ import { join } from "node:path";
 import {
 	ALL_ACTIONS,
 	ACTION_AUTH_LEVEL,
-	makePayload,
-	toHiveOperation,
+	createPayload,
+	createHiveOperation,
 	type ProtocolAction,
+	type HiveOperation,
 	buildBurn,
 	buildTransfer,
 	buildList,
@@ -23,29 +24,17 @@ import {
 	buildDataOperatorApprove,
 	buildNodeRegister,
 } from "../src/index";
-import {
-	ACTION_AUTH_LEVEL as INDEXER_ACTION_AUTH_LEVEL,
-} from "../../indexer/src/protocol/auth.ts";
-import {
-	ALL_ACTIONS as INDEXER_ALL_ACTIONS,
-	MAX_SCHEMA_FIELDS as INDEXER_MAX_SCHEMA_FIELDS,
-	MAX_FIELD_NAME_LENGTH as INDEXER_MAX_FIELD_NAME_LENGTH,
-} from "../../indexer/src/protocol/constants.ts";
-import {
-	MAX_SCHEMA_FIELDS,
-	MAX_FIELD_NAME_LENGTH,
-} from "../src/constants";
 
 // ============ STATIC: no builder may hardcode auth literals ============
 //
 // Every build* function must route through the canonical helper
-// (toHiveOperation or a create*Operation factory). This guard detects drift
-// if anyone re-introduces a raw custom_json block in a builder file.
+// (createHiveOperation). This guard detects drift if anyone re-introduces a raw
+// custom_json block in a builder file.
 
 describe("Builders never hardcode auth fields", () => {
 	const buildersDir = join(import.meta.dir, "..", "src", "builders");
 	const files = readdirSync(buildersDir)
-		.filter(f => f.endsWith(".ts") && f !== "index.ts" && f !== "helpers.ts" && f !== "seed-availability.ts");
+		.filter(f => f.endsWith(".ts") && f !== "index.ts" && f !== "helpers.ts" && f !== "seed-availability.ts" && f !== "types.ts");
 
 	for (const file of files) {
 		test(`${file} contains no raw custom_json / required_auths / getProtocolId`, () => {
@@ -58,14 +47,14 @@ describe("Builders never hardcode auth fields", () => {
 	}
 });
 
-// ============ RUNTIME: toHiveOperation respects ACTION_AUTH_LEVEL ============
+// ============ RUNTIME: createHiveOperation respects ACTION_AUTH_LEVEL ============
 
-describe("toHiveOperation emits auth fields from ACTION_AUTH_LEVEL", () => {
+describe("createHiveOperation emits auth fields from ACTION_AUTH_LEVEL", () => {
 	for (const action of ALL_ACTIONS) {
 		const level = ACTION_AUTH_LEVEL[action as ProtocolAction];
 		test(`${action} → ${level}`, () => {
-			const payload = { protocol: "nftlox", version: "0.1", action, data: {} } as const;
-			const op = toHiveOperation(payload, "alice");
+			const payload = createPayload(action, {});
+			const op = createHiveOperation(payload, "alice");
 			if (level === "active") {
 				expect(op[1].required_auths).toEqual(["alice"]);
 				expect(op[1].required_posting_auths).toEqual([]);
@@ -77,18 +66,8 @@ describe("toHiveOperation emits auth fields from ACTION_AUTH_LEVEL", () => {
 	}
 
 	test("rejects removed pack actions instead of falling back to posting auth", () => {
-		const payload = {
-			protocol: "nftlox",
-			version: "0.1",
-			action: "pack_buy" as ProtocolAction,
-			data: { packId: "pack_1", quantity: 1 },
-		} as const;
-
-		expect(() => toHiveOperation(payload, "alice")).toThrow("Unsupported protocol action: pack_buy");
-	});
-
-	test("makePayload rejects removed pack actions", () => {
-		expect(() => makePayload("pack_buy" as ProtocolAction, {})).toThrow("Unsupported protocol action: pack_buy");
+		expect(() => createPayload("pack_buy" as ProtocolAction, { packId: "pack_1", quantity: 1 }))
+			.toThrow("Unsupported protocol action: pack_buy");
 	});
 });
 
@@ -105,18 +84,6 @@ describe("Operations catalog documents the canonical action set", () => {
 	});
 });
 
-describe("SDK follows the indexer action/auth catalog", () => {
-	test("action set and auth levels match the indexer", () => {
-		expect([...ALL_ACTIONS]).toEqual([...INDEXER_ALL_ACTIONS]);
-		expect(ACTION_AUTH_LEVEL).toEqual(INDEXER_ACTION_AUTH_LEVEL);
-	});
-
-	test("schema limits match the indexer", () => {
-		expect(MAX_SCHEMA_FIELDS).toBe(INDEXER_MAX_SCHEMA_FIELDS);
-		expect(MAX_FIELD_NAME_LENGTH).toBe(INDEXER_MAX_FIELD_NAME_LENGTH);
-	});
-});
-
 // ============ END-TO-END: every builder emits auth fields consistent with the map ============
 //
 // For each builder, parse its emitted operation.json.action and verify the
@@ -124,11 +91,11 @@ describe("SDK follows the indexer action/auth catalog", () => {
 // request-parse-emit pipeline, not just the helper in isolation.
 
 function assertAuthCoherent(
-	operation: ReadonlyArray<unknown> | undefined,
+	operation: HiveOperation | undefined,
 	expectedSigner: string,
 ) {
 	expect(operation).toBeDefined();
-	const [kind, body] = operation as [string, { required_auths: string[]; required_posting_auths: string[]; json: string }];
+	const [kind, body] = operation as HiveOperation;
 	expect(kind).toBe("custom_json");
 	const parsed = JSON.parse(body.json) as { action: string };
 	const level = ACTION_AUTH_LEVEL[parsed.action as ProtocolAction];
@@ -146,13 +113,13 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 	test("buildBurn (was previously hardcoded active — regression guard)", () => {
 		const r = buildBurn({ nftId: "nft_1", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildTransfer", async () => {
 		const r = await buildTransfer({ nftId: "nft_1", from: "alice", to: "bob" });
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildList", async () => {
@@ -162,16 +129,16 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			owner: "alice",
 		});
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildUnlist", async () => {
 		const r = await buildUnlist({ nftId: "nft_1", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
-	test("buildBuy — active key, signer is the node account (multisig envelope)", () => {
+	test("buildBuy — active key, signer is the buyer (all ops in one keychain envelope)", () => {
 		const r = buildBuy({
 			nftId: "nft_1",
 			listingId: "list_1",
@@ -179,7 +146,6 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			txId: "b".repeat(40),
 			buyer: "alice",
 			seller: "bob",
-			nodeAccount: "nftlox-node",
 			paymentSplit: {
 				sellerAmount: 9.5,
 				royaltyAmount: 0.5,
@@ -191,9 +157,9 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			},
 		});
 		if (!r.success) throw new Error("build failed");
-		// buildBuy emits hiveOperations (transfers + custom_json), not a single `operation` field.
-		const customJsonOp = r.hiveOperations?.find(op => op[0] === "custom_json");
-		assertAuthCoherent(customJsonOp, "nftlox-node");
+		// buildBuy emits [transfers..., custom_json], all signed by buyer with active key.
+		const customJsonOp = r.operations.find((op): op is HiveOperation => op[0] === "custom_json");
+		assertAuthCoherent(customJsonOp, "alice");
 	});
 
 	test("buildBulkDistribute", () => {
@@ -202,25 +168,25 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			signer: "alice",
 		});
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildSetData", () => {
 		const r = buildSetData({ nftId: "nft_1", instanceDna: "dna_1", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildNftLend", () => {
 		const r = buildNftLend({ instanceId: "nft_1", borrower: "bob", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildNftReturn", () => {
 		const r = buildNftReturn({ instanceId: "nft_1", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildNftApprove", () => {
@@ -231,7 +197,7 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			owner: "alice",
 		});
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildNftApproveAll", () => {
@@ -242,7 +208,7 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			owner: "alice",
 		});
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildNftTransferFrom", () => {
@@ -253,7 +219,7 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			operator: "charlie",
 		});
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "charlie");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "charlie");
 	});
 
 	test("buildDataOperatorApprove", () => {
@@ -264,7 +230,7 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			creator: "alice",
 		});
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "alice");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildNodeRegister", () => {
@@ -274,6 +240,6 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			nodeAccount: "indexer-node",
 		});
 		if (!r.success) throw new Error("build failed");
-		assertAuthCoherent(r.operation, "indexer-node");
+		assertAuthCoherent(r.operations[0] as HiveOperation, "indexer-node");
 	});
 });

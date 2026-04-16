@@ -13,7 +13,6 @@ import {
 	ACTION_BUY,
 	ACTION_MINT,
 	ACTION_TRANSFER,
-	type ProtocolAction,
 } from "../src/constants.ts";
 
 describe("auth", () => {

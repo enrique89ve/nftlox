@@ -93,7 +93,7 @@ export async function buildSeed(
 		keyType: getKeyType("mint"),
 		signer: data.signer,
 		payload,
-		generatedIds: { seedId },
+		generatedIds: { seedId, nftId },
 		...(warnings.length > 0 && { warnings }),
 	};
 }
