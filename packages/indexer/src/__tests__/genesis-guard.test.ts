@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { validateGenesisBlockSelection } from "@/protocol/genesis-guard.ts";
-import { PROTOCOL_GENESIS_BLOCK } from "@/protocol/constants.ts";
+import {
+	validateGenesisBlockSelection,
+	PROTOCOL_GENESIS_BLOCK,
+} from "@/protocol/index.ts";
 
 describe("validateGenesisBlockSelection", () => {
 	test("accepts the canonical protocol genesis block", () => {

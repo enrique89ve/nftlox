@@ -1,6 +1,6 @@
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { Queryable } from "@/db/client.ts";
-import { MAX_URL_LENGTH } from "@/protocol/constants.ts";
+import { MAX_URL_LENGTH } from "@/protocol/index.ts";
 import { requireBoundedString } from "@/utils/validation.ts";
 
 const MAX_NODE_PUBLIC_KEY_LENGTH = 256;

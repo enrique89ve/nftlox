@@ -1,6 +1,10 @@
-// NFTLox Protocol Module — self-contained re-exports for the indexer.
+// Re-export canonical protocol contract from the shared package.
+export * from "@nftlox/protocol";
 
-export * from "./constants.ts";
-export * from "./auth.ts";
-export * from "./types.ts";
-export * from "./functions.ts";
+// Indexer-only extensions (not part of the cross-package contract).
+export {
+	PROTOCOL_GENESIS_BLOCK,
+	PROTOCOL_GENESIS_BLOCK_ID,
+	validateGenesisBlockSelection,
+	type GenesisBlockValidationInput,
+} from "./genesis-guard.ts";
