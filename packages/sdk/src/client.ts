@@ -302,26 +302,29 @@ export interface MarketplaceVolume {
 	total_fees: string;
 }
 
-export type OperationState = "confirmed" | "invalid" | "orphaned" | "unknown";
+export type OperationState = "confirmed" | "invalid" | "orphaned";
 
 export interface OperationStatusEntry {
-	status: OperationState;
-	operationId: string | null;
-	signer: string | null;
-	action: string | null;
-	reason: string | null;
-	blockNum: number | null;
-	timestamp: string | null;
-	nftIds: ReadonlyArray<string>;
+	readonly status: OperationState;
+	readonly operationId: string | null;
+	readonly signer: string | null;
+	readonly action: string | null;
+	readonly reason: string | null;
+	readonly blockNum: number | null;
+	readonly timestamp: string | null;
+	readonly nftIds: ReadonlyArray<string>;
 }
 
 export interface OperationStatusResult {
-	txId: string;
-	totalOperations: number;
-	confirmed: number;
-	invalid: number;
-	orphaned: number;
-	operations: ReadonlyArray<OperationStatusEntry>;
+	readonly txId: string;
+	// False when the indexer has no record of this txId yet (not broadcast,
+	// still propagating, or never seen). Poll again to disambiguate.
+	readonly indexed: boolean;
+	readonly totalOperations: number;
+	readonly confirmed: number;
+	readonly invalid: number;
+	readonly orphaned: number;
+	readonly operations: ReadonlyArray<OperationStatusEntry>;
 }
 
 export type CollectionsQueryParams = QueryParams & Readonly<{

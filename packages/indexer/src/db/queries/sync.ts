@@ -181,7 +181,7 @@ export async function cleanupExpiredOperations(): Promise<number> {
 
 // ============ OPERATION STATUS ============
 
-export type OperationStatus = "confirmed" | "invalid" | "orphaned" | "unknown";
+export type OperationStatus = "confirmed" | "invalid" | "orphaned";
 
 export interface OperationStatusEntry {
 	status: OperationStatus;
@@ -196,6 +196,9 @@ export interface OperationStatusEntry {
 
 export interface OperationStatusResult {
 	txId: string;
+	// False = no rows seen for this txId (not broadcast, still propagating, or
+	// never indexed). True = at least one protocol op was recorded.
+	indexed: boolean;
 	totalOperations: number;
 	confirmed: number;
 	invalid: number;
@@ -288,23 +291,16 @@ export async function getOperationStatus(
 	);
 
 	const countByStatus = (s: OperationStatus) => filtered.filter(e => e.status === s).length;
+	const totalOperations = filtered.length;
 
 	return {
 		txId,
-		totalOperations: filtered.length,
+		indexed: totalOperations > 0,
+		totalOperations,
 		confirmed: countByStatus("confirmed"),
 		invalid: countByStatus("invalid"),
 		orphaned: countByStatus("orphaned"),
-		operations: filtered.length > 0 ? filtered : [{
-			status: "unknown" as OperationStatus,
-			operationId: null,
-			signer: null,
-			action: null,
-			reason: null,
-			blockNum: null,
-			timestamp: null,
-			nftIds: [],
-		}],
+		operations: filtered,
 	};
 }
 
