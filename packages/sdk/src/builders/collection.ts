@@ -1,22 +1,21 @@
 import { z } from "zod";
-import { createCollectionInputSchema, archiveCollectionInputSchema, type CreateCollectionInput } from "../schemas";
+import { createCollectionInputSchema, archiveCollectionInputSchema, usernameSchema, type CreateCollectionInput } from "../schemas";
 import { formatZodError } from "./helpers";
+import type { KeychainResult } from "./types";
 import {
 	generateDeterministicCollectionId,
 	generateOriginDna,
-} from "../dna";
-import {
-	createArchiveCollectionPayload,
-	createDeterministicCollectionPayload,
-	createArchiveCollectionOperation,
-	toHiveOperation,
-	type DeterministicCollectionInput,
-} from "../payloads";
-import type { ArchiveCollectionData, BuildResult, CollectionData } from "../types";
-import { MAX_NAME_LENGTH } from "../constants";
-import { usernameSchema } from "../schemas";
+	createPayload,
+	createHiveOperation,
+	getKeyType,
+	MAX_NAME_LENGTH,
+	type CollectionData,
+	type ArchiveCollectionData,
+} from "@nftlox/protocol";
 
-export async function buildCollection(input: CreateCollectionInput): Promise<BuildResult<CollectionData>> {
+export async function buildCollection(
+	input: CreateCollectionInput,
+): Promise<KeychainResult<CollectionData>> {
 	const parsed = createCollectionInputSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -32,33 +31,36 @@ export async function buildCollection(input: CreateCollectionInput): Promise<Bui
 		warnings.push("Royalty percentage is high (>25%), consider reducing");
 	}
 
-	const generatedId = await generateDeterministicCollectionId(
+	const collectionId = await generateDeterministicCollectionId(
 		data.creator,
 		data.name,
 		data.symbol,
 	);
-	const originDna = await generateOriginDna(generatedId);
+	const originDna = await generateOriginDna(collectionId);
 
-	const collectionInput: DeterministicCollectionInput = {
-		creator: data.creator,
+	const collectionData: CollectionData = {
+		id: collectionId,
 		name: data.name,
-		symbol: data.symbol,
+		symbol: data.symbol.toUpperCase(),
+		creator: data.creator,
 		totalPotential: data.totalPotential,
+		originDna,
 		metadata: data.metadata,
 		rules: data.rules,
 		...(data.schema && { schema: data.schema }),
 	};
 
-	const payload = await createDeterministicCollectionPayload(collectionInput);
-	const operation = toHiveOperation(payload, data.creator);
+	const payload = createPayload("create_collection", collectionData);
+	const operation = createHiveOperation(payload, data.creator);
 
 	return {
 		success: true,
+		operations: [operation],
+		keyType: getKeyType("create_collection"),
+		signer: data.creator,
 		payload,
-		operation,
-		generatedId,
-		generatedIds: { collectionId: generatedId, originDna },
-		warnings: warnings.length > 0 ? warnings : undefined,
+		generatedIds: { collectionId, originDna },
+		...(warnings.length > 0 && { warnings }),
 	};
 }
 
@@ -69,19 +71,23 @@ export type ArchiveCollectionBuilderInput = z.infer<typeof archiveCollectionBuil
 
 export function buildArchiveCollection(
 	input: ArchiveCollectionBuilderInput,
-): BuildResult<ArchiveCollectionData> {
+): KeychainResult<ArchiveCollectionData> {
 	const parsed = archiveCollectionBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 
 	const data = parsed.data;
-	const payload = createArchiveCollectionPayload(data);
-	const operation = createArchiveCollectionOperation(data, data.creator);
+	const payload = createPayload("archive_collection", {
+		collectionId: data.collectionId,
+	} satisfies ArchiveCollectionData);
+	const operation = createHiveOperation(payload, data.creator);
 
 	return {
 		success: true,
+		operations: [operation],
+		keyType: getKeyType("archive_collection"),
+		signer: data.creator,
 		payload,
-		operation,
 	};
 }
