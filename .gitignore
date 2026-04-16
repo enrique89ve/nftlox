@@ -9,3 +9,4 @@ docs/**
 !packages/playground/docs/**
 
 OPERATIONS.md
+.claude/settings.json
