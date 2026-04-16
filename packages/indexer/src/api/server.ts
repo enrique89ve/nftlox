@@ -8,6 +8,7 @@ import { nftsRoutes } from "./routes/nfts.ts";
 import { usersRoutes } from "./routes/users.ts";
 import { marketplaceRoutes } from "./routes/marketplace.ts";
 import { statusRoutes } from "./routes/status.ts";
+import { stateRootRoutes } from "./routes/state-root.ts";
 import { multisigRoutes } from "./routes/multisig.ts";
 import { checkRateLimit } from "./middleware/rate-limiter.ts";
 import { getSyncStatus } from "@/db/queries/sync.ts";
@@ -157,6 +158,7 @@ export function startApiServer(): void {
 		.use(usersRoutes)
 		.use(marketplaceRoutes)
 		.use(statusRoutes)
+		.use(stateRootRoutes)
 		.use(multisigRoutes)
 		.listen({ port: config.port, idleTimeout: 30, maxRequestBodySize: 64 * 1024 });
 

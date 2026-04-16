@@ -17,6 +17,8 @@ export type BurnCtx = {
 	readonly owner: string;
 	readonly nftType: NftKind;
 	readonly collectionId: string;
+	/** Block at which the burn landed — advances state_meta.last_block_num. */
+	readonly blockNum: number;
 };
 
 export type ListingCtx = {

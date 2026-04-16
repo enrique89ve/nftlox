@@ -1,5 +1,7 @@
 import { testConnection, sql, withTransaction } from "./db/client.ts";
 import { cleanupInvalidMarketplaceListings } from "./db/queries/nfts.ts";
+import { bootstrapStateRootFromFullScan, getStateMeta } from "./db/queries/state-root.ts";
+import { emptyStateRoot, rootsEqual } from "./utils/state-root-hash.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 
@@ -45,15 +47,33 @@ async function ensurePostgres(): Promise<void> {
 	throw new Error("PostgreSQL failed to start within 30s");
 }
 
-async function runMigrations(): Promise<void> {
-	log.info("Running schema migrations...");
+let cachedSchemaSql: string | null = null;
+let cachedSchemaHash: string | null = null;
+
+async function loadSchema(): Promise<{ sql: string; hash: string }> {
+	if (cachedSchemaSql !== null && cachedSchemaHash !== null) {
+		return { sql: cachedSchemaSql, hash: cachedSchemaHash };
+	}
 	const schemaFile = Bun.file(import.meta.dir + "/db/schema.sql");
 	if (!await schemaFile.exists()) {
 		throw new Error("Schema file not found — cannot initialize database", {
 			cause: { path: schemaFile.name },
 		});
 	}
-	await sql.unsafe(await schemaFile.text());
+	const text = await schemaFile.text();
+	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+	const hex = Array.from(new Uint8Array(digest))
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("");
+	cachedSchemaSql = text;
+	cachedSchemaHash = `sha256:${hex}`;
+	return { sql: text, hash: cachedSchemaHash };
+}
+
+async function runMigrations(): Promise<void> {
+	log.info("Running schema migrations...");
+	const { sql: schemaText } = await loadSchema();
+	await sql.unsafe(schemaText);
 	log.info("Schema migrations completed");
 }
 
@@ -65,6 +85,33 @@ const DATA_TABLES = [
 	"collection_stats",
 	"nfts", "collections",
 ] as const;
+
+// Shared by every reset trigger (genesis change, schema drift). Truncates all
+// projected data and zeroes the singletons in a single transaction so the
+// sync cursor cannot advance over a half-wiped DB.
+async function wipeAllProjectedData(newSchemaHash: string | null): Promise<void> {
+	await withTransaction(async (txn) => {
+		for (const table of DATA_TABLES) {
+			await txn.unsafe(`TRUNCATE TABLE ${table} CASCADE`);
+		}
+		await txn`
+			UPDATE sync_state
+			SET last_block = 0,
+			    genesis_block = ${config.genesisBlock},
+			    schema_hash = ${newSchemaHash},
+			    updated_at = NOW()
+		`;
+		// Reset state_meta in-place (TRUNCATE + re-seed would race the singleton).
+		await txn`
+			UPDATE state_meta
+			SET state_root = decode(repeat('00', 32), 'hex'),
+			    nft_count = 0,
+			    last_block_num = 0,
+			    updated_at = NOW()
+			WHERE id = 1
+		`;
+	});
+}
 
 async function checkGenesisReset(): Promise<void> {
 	const [row] = await sql`SELECT genesis_block FROM sync_state WHERE id = 1`;
@@ -83,18 +130,36 @@ async function checkGenesisReset(): Promise<void> {
 		previous: storedGenesis,
 		current: config.genesisBlock,
 	});
-
-	await withTransaction(async (txn) => {
-		for (const table of DATA_TABLES) {
-			await txn.unsafe(`TRUNCATE TABLE ${table} CASCADE`);
-		}
-		await txn`
-			UPDATE sync_state
-			SET last_block = 0, genesis_block = ${config.genesisBlock}, updated_at = NOW()
-		`;
-	});
-
+	const { hash } = await loadSchema();
+	await wipeAllProjectedData(hash);
 	log.info("Database reset completed — syncing from new genesis block");
+}
+
+// Testnet policy: any change to schema.sql triggers a full projection wipe and
+// re-sync from genesis. We don't carry a migration chain — the chain is the
+// Hive blockchain itself, and re-indexing from genesis is deterministic.
+//
+// First-run (stored_hash == NULL) just records the current hash without a wipe
+// — there's no data to be inconsistent with a new schema.
+async function checkSchemaHashReset(): Promise<void> {
+	const { hash } = await loadSchema();
+	const [row] = await sql`SELECT schema_hash FROM sync_state WHERE id = 1`;
+	const stored = row?.schema_hash ?? null;
+
+	if (stored === hash) return;
+
+	if (stored === null) {
+		await sql`UPDATE sync_state SET schema_hash = ${hash}, updated_at = NOW() WHERE id = 1`;
+		log.info("Schema hash initialized", { hash });
+		return;
+	}
+
+	log.warn("SCHEMA HASH CHANGED — resetting all data (testnet policy)", {
+		previous: stored,
+		current: hash,
+	});
+	await wipeAllProjectedData(hash);
+	log.info("Database reset completed — re-syncing under new schema");
 }
 
 async function cleanupMarketplaceListings(): Promise<void> {
@@ -102,6 +167,25 @@ async function cleanupMarketplaceListings(): Promise<void> {
 	if (result.clearedListings === 0 && result.reconciledCollections === 0) return;
 
 	log.info("Marketplace listings reconciled", result);
+}
+
+// Rebuilds state_meta from a full nft scan when the singleton is still zero
+// but rows already exist — the case for indexers upgraded from a version that
+// didn't track the incremental root. Safe to run on every boot: when the
+// root is already populated, this no-ops in O(1).
+async function ensureStateRootBootstrapped(): Promise<void> {
+	const meta = await getStateMeta();
+	if (!rootsEqual(meta.state_root, emptyStateRoot())) return;
+	const [countRow] = await sql`SELECT COUNT(*)::bigint AS c FROM nfts`;
+	const nftCount = Number(countRow?.c ?? 0);
+	if (nftCount === 0) return;
+
+	log.info("Bootstrapping state_meta from nft full-scan", { nftCount });
+	const rebuilt = await withTransaction((txn) => bootstrapStateRootFromFullScan(txn));
+	log.info("state_meta bootstrapped", {
+		nft_count: rebuilt.nft_count,
+		last_block_num: rebuilt.last_block_num,
+	});
 }
 
 export async function connectWithRetry(): Promise<void> {
@@ -114,8 +198,10 @@ export async function connectWithRetry(): Promise<void> {
 			}
 			await testConnection();
 			await runMigrations();
+			await checkSchemaHashReset();
 			await checkGenesisReset();
 			await cleanupMarketplaceListings();
+			await ensureStateRootBootstrapped();
 			return;
 		} catch (err) {
 			if (attempt === 1) log.info("Waiting for database...");

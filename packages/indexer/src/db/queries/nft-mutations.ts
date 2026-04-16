@@ -2,6 +2,29 @@ import { sql, type Queryable } from "@/db/client.ts";
 import type { InsertNftParams, OwnerChangeCtx, BurnCtx, ListingCtx, NftStatus } from "./nft-types.ts";
 import { NFT_KIND_INSTANCE, NFT_STATUS_ACTIVE, NFT_STATUS_LISTED } from "./nft-types.ts";
 import { adjustOwnerNftCount, recordCollectionMint, adjustCollectionListed, recordCollectionBurn } from "./nft-counters.ts";
+import { applyStateRootDeltaToDb } from "./state-root.ts";
+import type { NftStateRow } from "@/utils/state-root-hash.ts";
+
+// Reads the SPV-visible fields that contribute to the state-root hash. Must
+// be called with the same txn that is about to mutate the row, and BEFORE
+// the UPDATE/DELETE, otherwise we'd XOR a stale/already-modified snapshot.
+async function readStateRow(nftId: string, txn: Queryable): Promise<NftStateRow | null> {
+	const [row] = await txn`
+		SELECT id, owner, previous_owner, owner_action, owner_operation_id, owner_block_num
+		FROM nfts
+		WHERE id = ${nftId}
+		FOR UPDATE
+	`;
+	if (!row) return null;
+	return {
+		id: String(row.id),
+		owner: String(row.owner),
+		previous_owner: row.previous_owner === null ? null : String(row.previous_owner),
+		owner_action: String(row.owner_action),
+		owner_operation_id: String(row.owner_operation_id),
+		owner_block_num: Number(row.owner_block_num),
+	};
+}
 
 export type MarketplaceListingCleanupResult = Readonly<{
 	readonly clearedListings: number;
@@ -42,6 +65,15 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 	if (result.count > 0) {
 		await adjustOwnerNftCount(params.owner, params.nftType, 1, txn);
 		await recordCollectionMint(params.collectionId, params.nftType, txn);
+		const newRow: NftStateRow = {
+			id: params.id,
+			owner: params.owner,
+			previous_owner: null,
+			owner_action: params.ownerAction,
+			owner_operation_id: params.ownerOperationId,
+			owner_block_num: params.ownerBlockNum,
+		};
+		await applyStateRootDeltaToDb({ type: "insert", newRow, blockNum: params.ownerBlockNum }, txn);
 	}
 	return result.count > 0;
 }
@@ -53,6 +85,11 @@ export async function updateNftOwner(
 	ctx: OwnerChangeCtx,
 	txn: Queryable = sql,
 ): Promise<void> {
+	// Read old SPV row under FOR UPDATE before mutating, so the state-root
+	// delta is computed against the exact pre-image of the UPDATE. Any crash
+	// between here and writeRoot rolls back the entire batch.
+	const oldRow = await readStateRow(nftId, txn);
+	if (!oldRow) throw new Error(`updateNftOwner: nft ${nftId} not found`);
 	await txn`
 		UPDATE nfts
 		SET owner = ${newOwner}, status = ${NFT_STATUS_ACTIVE},
@@ -69,6 +106,18 @@ export async function updateNftOwner(
 	if (ctx.wasListed) {
 		await adjustCollectionListed(ctx.collectionId, -1, txn);
 	}
+	const newRow: NftStateRow = {
+		id: nftId,
+		owner: newOwner,
+		previous_owner: ctx.oldOwner,
+		owner_action: ctx.ownerAction,
+		owner_operation_id: ownerOperationId,
+		owner_block_num: ctx.ownerBlockNum,
+	};
+	await applyStateRootDeltaToDb(
+		{ type: "update", oldRow, newRow, blockNum: ctx.ownerBlockNum },
+		txn,
+	);
 }
 
 export async function updateNftStatus(nftId: string, status: NftStatus, txn: Queryable = sql) {
@@ -83,6 +132,12 @@ export async function hardDeleteNft(
 	ctx: BurnCtx,
 	txn: Queryable = sql,
 ): Promise<void> {
+	// Lock + read SPV snapshot before DELETE so we XOR out the exact hash
+	// that was previously XORed in on insert/update. Without FOR UPDATE, a
+	// racing handler could delete the row first and leave us with nothing
+	// to un-hash — that's the failure mode the state-root tests call out.
+	const oldRow = await readStateRow(nftId, txn);
+	if (!oldRow) throw new Error(`hardDeleteNft: nft ${nftId} not found`);
 	await txn`
 		INSERT INTO burned_nfts (id, collection_id, burned_by, tx_id, operation_id)
 		VALUES (${nftId}, ${ctx.collectionId}, ${burnedBy}, ${txId}, ${operationId})
@@ -91,6 +146,7 @@ export async function hardDeleteNft(
 	await txn`DELETE FROM nfts WHERE id = ${nftId}`;
 	await adjustOwnerNftCount(ctx.owner, ctx.nftType, -1, txn);
 	await recordCollectionBurn(ctx.collectionId, ctx.nftType, txn);
+	await applyStateRootDeltaToDb({ type: "delete", oldRow, blockNum: ctx.blockNum }, txn);
 }
 
 export async function updateNftListing(

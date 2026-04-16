@@ -117,6 +117,7 @@ Interactive documentation available at `http://localhost:3050/swagger` (disabled
 | `GET /api/status` | Sync progress (lastBlock, headBlock, blocksBehind, multisigEnabled) |
 | `GET /api/health` | Combined health response: HTTP status follows liveness and the JSON includes both `liveness` and `readiness` |
 | `GET /api/stats` | Protocol totals (collections, NFTs, listed, burned, etc.) |
+| `GET /api/state-root` | Incremental XOR commitment over all NFT SPV rows — two indexers on the same stream converge bit-for-bit |
 
 ### Collections
 | Endpoint | Description |
@@ -129,12 +130,36 @@ Interactive documentation available at `http://localhost:3050/swagger` (disabled
 ### NFTs
 | Endpoint | Description |
 |----------|-------------|
+| `GET /api/nfts?ids=a,b,c` | Batch read up to 200 NFTs in one round-trip (returns `{ items, missing }`) |
 | `GET /api/nfts/:id` | NFT details |
 | `GET /api/nfts/:id/owner` | Fast current-owner claim (`owner`, operation anchor, block, claim hash) |
 | `GET /api/nfts/:id/ownership` | Canonical ownership proof for SDK/HafAH verification |
 | `GET /api/nfts/:id/proof` | Compatibility alias for the ownership proof contract |
 | `GET /api/nfts/:id/loan` | Active loan custody for this NFT, separate from ownership |
 | `GET /api/nfts/:id/instances` | Instances distributed from this seed |
+
+#### SPV provenance contract
+
+Every NFT-returning endpoint includes the following fields so clients can
+verify current ownership against HafAH without trusting the indexer:
+
+| Field | Meaning |
+|-------|---------|
+| `owner` | Current owner account |
+| `previous_owner` | Account that held the NFT before the latest change (`null` at mint) |
+| `owner_action` | Protocol action that last changed ownership (`mint`, `bulk_distribute`, `transfer`, `nft_transfer_from`, `buy`) |
+| `owner_operation_id` | HafAH operation id of that action |
+| `owner_block_num` | Block in which the action landed |
+
+A client picks any HafAH lookup path to re-derive `tx_id`, signatures, and the
+full `custom_json` body independently of the indexer — for example:
+
+- `GET {hafah}/operations/{owner_operation_id}` — single-operation lookup
+- `GET {hafah}/accounts/:account/operations?operation-types=18` — account history
+- `condenser_api.get_ops_in_block({block_num: owner_block_num})` — whole-block scan
+
+The contract is guarded by `src/__tests__/nfts-provenance-contract.test.ts`,
+which fails if any endpoint drops one of the five fields.
 
 ### Users
 | Endpoint | Description |
@@ -346,8 +371,6 @@ All variables are optional except `POSTGRES_PASSWORD`. The indexer uses protocol
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GENESIS_BLOCK` | `105530500` | Protocol genesis block. Override only for partial re-indexes |
-| `ALLOW_UNSAFE_GENESIS_BLOCK` | `false` | Allow starting after the canonical genesis block |
 | `BATCH_SIZE` | `1000` | Blocks per sync request |
 | `SYNC_INTERVAL_MS` | `3000` | Polling interval when caught up (ms) |
 | `HIVE_ENDPOINTS` | syncad, mahdiyari, hive.blog | Comma-separated Hive API endpoints (must support HafAH) |

@@ -32,9 +32,29 @@ CREATE TABLE IF NOT EXISTS sync_state (
 	id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
 	last_block BIGINT NOT NULL DEFAULT 0,
 	genesis_block BIGINT NOT NULL DEFAULT 0,
+	-- schema_hash pins this row to a known schema.sql content. On mismatch the
+	-- bootstrap truncates all data and re-syncs from genesis. Nullable so old
+	-- installs don't break while they upgrade through this migration.
+	schema_hash TEXT,
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS schema_hash TEXT;
 INSERT INTO sync_state (last_block) VALUES (0) ON CONFLICT (id) DO NOTHING;
+
+-- State root (singleton row) — incremental XOR over per-NFT SPV row hashes.
+-- See src/utils/state-root-hash.ts for the algorithm and invariants.
+-- state_root is stored as raw 32-byte BYTEA (not hex) so XOR arithmetic runs
+-- in application code against Uint8Array without parse overhead. Endpoint
+-- serializes to "sha256:<64-hex>" for on-wire use.
+CREATE TABLE IF NOT EXISTS state_meta (
+	id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+	state_root BYTEA NOT NULL CHECK (octet_length(state_root) = 32),
+	nft_count BIGINT NOT NULL DEFAULT 0 CHECK (nft_count >= 0),
+	last_block_num BIGINT NOT NULL DEFAULT 0,
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO state_meta (id, state_root) VALUES (1, decode(repeat('00', 32), 'hex'))
+	ON CONFLICT (id) DO NOTHING;
 
 -- Collections
 CREATE TABLE IF NOT EXISTS collections (
@@ -145,6 +165,10 @@ CREATE TABLE IF NOT EXISTS invalid_operations (
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invalid_ops_unique ON invalid_operations(tx_id, COALESCE(operation_id, '')) WHERE tx_id IS NOT NULL;
+-- Serves both the time-based TTL DELETE and the size-based pruning (MAX_ROWS_PER_TABLE).
+-- Without it, retention degenerates to a seq scan as the table grows — exactly the
+-- failure mode the pruner exists to prevent under a flooding bot.
+CREATE INDEX IF NOT EXISTS idx_invalid_ops_indexed_at ON invalid_operations(indexed_at);
 
 -- Confirmed operations (append-only tracking of successful handler executions).
 -- Stores immutable NFT IDs for lightweight per-NFT operations. Bulk creation ops
@@ -177,6 +201,9 @@ CREATE TABLE IF NOT EXISTS orphaned_buys (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_orphaned_buys_unique ON orphaned_buys(tx_id, COALESCE(operation_id, ''));
+-- Serves both the time-based TTL DELETE and the size-based pruning (MAX_ROWS_PER_TABLE).
+-- Same rationale as idx_invalid_ops_indexed_at.
+CREATE INDEX IF NOT EXISTS idx_orphaned_buys_created_at ON orphaned_buys(created_at);
 
 -- ============ ALLOWANCE TABLES ============
 
@@ -298,6 +325,19 @@ CREATE TABLE IF NOT EXISTS multisig_locks (
 	expires_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_multisig_locks_expires ON multisig_locks(expires_at);
+
+-- Scoped by (creator, symbol): two concurrent create_collection signings for the
+-- same (creator, symbol) would both broadcast a tx; only one wins on-chain and
+-- the loser forfeits the fee. Lock prevents double-sign without serializing
+-- legitimate distinct collections from the same creator.
+CREATE TABLE IF NOT EXISTS multisig_collection_locks (
+	creator TEXT NOT NULL,
+	symbol TEXT NOT NULL,
+	holder TEXT NOT NULL,
+	expires_at TIMESTAMPTZ NOT NULL,
+	PRIMARY KEY (creator, symbol)
+);
+CREATE INDEX IF NOT EXISTS idx_multisig_collection_locks_expires ON multisig_collection_locks(expires_at);
 
 -- ============ INDEXES ============
 --
