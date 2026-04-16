@@ -30,7 +30,7 @@ import {
 } from "@/protocol/index.ts";
 import type {
 	CollectionRequestShape,
-	MultisigProcessContext,
+	MultisigCollectionContext,
 	TransactionOperationInput,
 	ValidatedCollectionPayload,
 	ValidatedCollectionTransaction,
@@ -42,7 +42,7 @@ const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;
 
 export async function processCollectionRequest(
 	rawBody: unknown,
-	ctx: MultisigProcessContext,
+	ctx: MultisigCollectionContext,
 ) {
 	const requestShape = validateCollectionRequestShape(rawBody);
 	const transaction = await validateCollectionTransactionStructure(
@@ -51,7 +51,40 @@ export async function processCollectionRequest(
 		ctx,
 	);
 
-	return ctx.sign(transaction);
+	// After validation the creator + symbol are known; acquire the per-
+	// (creator, symbol) lock BEFORE signing so two concurrent requests for the
+	// same collection can't both get co-signed (only one wins on-chain and the
+	// loser forfeits the fee). Holder is a per-request UUID, so a same-creator
+	// same-symbol parallel request gets rejected instead of refreshing the slot.
+	const transferOp = transaction.transferOperations[0];
+	if (!transferOp) {
+		throw createMultisigError("INVALID_TX_STRUCTURE", "Missing fee transfer after validation");
+	}
+	const creator = transferOp.from;
+	const symbol = String(transaction.customJsonOperation.payload.data.symbol);
+	const acquisition = await ctx.collectionLock.acquire(creator, symbol);
+	if (!acquisition.acquired) {
+		throw createMultisigError(
+			"COLLECTION_LOCKED",
+			`A collection signing for ${creator}/${symbol} is already in flight. Retry after ${acquisition.retryAfterMs}ms`,
+			{ retryAfterMs: acquisition.retryAfterMs },
+		);
+	}
+
+	let signingSucceeded = false;
+	try {
+		const response = await ctx.sign(transaction);
+		if (response.ok) {
+			signingSucceeded = true;
+		}
+		return response;
+	} finally {
+		// On success, leave the lock to expire naturally so a second request can't
+		// be signed while the first tx is still within its broadcast window.
+		if (!signingSucceeded) {
+			await ctx.collectionLock.release(creator, symbol);
+		}
+	}
 }
 
 function validateCollectionRequestShape(raw: unknown): CollectionRequestShape {
@@ -79,7 +112,7 @@ function validateCollectionRequestShape(raw: unknown): CollectionRequestShape {
 async function validateCollectionTransactionStructure(
 	tx: Record<string, unknown>,
 	expectedCreator: string | null,
-	ctx: MultisigProcessContext,
+	ctx: MultisigCollectionContext,
 ): Promise<ValidatedCollectionTransaction> {
 	const validated = validateCommonTransactionStructure(tx);
 	if (validated.operations.length !== CREATE_COLLECTION_OPERATION_COUNT) {
@@ -166,7 +199,7 @@ async function validateCollectionFeeTransfer(
 async function validateCollectionPayloadData(
 	payload: ValidatedCollectionPayload,
 	creator: string,
-	ctx: MultisigProcessContext,
+	ctx: MultisigCollectionContext,
 ): Promise<void> {
 	const data = payload.data;
 	const id = validateBoundedPayloadString(data.id, "id", MAX_ID_LENGTH);
@@ -265,7 +298,7 @@ function validateCollectionSchema(value: unknown): void {
 		throw createMultisigError(
 			"INVALID_PROTOCOL_PAYLOAD",
 			`Invalid schema: ${cause instanceof Error ? cause.message : String(cause)}`,
-			cause,
+			{ cause },
 		);
 	}
 }

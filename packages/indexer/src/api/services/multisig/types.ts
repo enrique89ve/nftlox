@@ -102,9 +102,26 @@ export type SignResult = Readonly<{
 
 export type MultisigSign = (transaction: ValidatedTransaction) => Promise<MultisigResponse>;
 
-export type MultisigProcessContext = Readonly<{
+export type CollectionLockAcquisition =
+	| Readonly<{ readonly acquired: true }>
+	| Readonly<{ readonly acquired: false; readonly heldBy: string; readonly retryAfterMs: number }>;
+
+export type CollectionLockHandle = Readonly<{
+	readonly acquire: (creator: string, symbol: string) => Promise<CollectionLockAcquisition>;
+	readonly release: (creator: string, symbol: string) => Promise<void>;
+}>;
+
+// Buy path needs only the shared services; create-collection also needs the
+// per-(creator,symbol) lock. Splitting the context type lets TypeScript reject
+// any attempt to read collectionLock from the buy handler and lets the service
+// layer skip UUID allocation for the buy dispatch.
+export type MultisigBaseContext = Readonly<{
 	readonly db: Queryable;
 	readonly nodeAccount: string;
 	readonly protocolId: string;
 	readonly sign: MultisigSign;
+}>;
+
+export type MultisigCollectionContext = MultisigBaseContext & Readonly<{
+	readonly collectionLock: CollectionLockHandle;
 }>;

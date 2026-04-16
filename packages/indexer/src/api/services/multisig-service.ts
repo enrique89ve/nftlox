@@ -6,6 +6,7 @@
  */
 
 import { createSigningQueue } from "@/api/services/signing-queue.ts";
+import { createMultisigCollectionLock } from "@/api/services/multisig-collection-lock.ts";
 import { processBuyRequest } from "@/api/services/multisig/buy.ts";
 import { processCollectionRequest } from "@/api/services/multisig/create-collection.ts";
 import { mapErrorToMultisigResponse } from "@/api/services/multisig/errors.ts";
@@ -16,11 +17,17 @@ import {
 } from "@/api/services/multisig/transaction.ts";
 import { createLogger } from "@/utils/logger.ts";
 import type { Queryable } from "@/db/client.ts";
-import { ACTION_CREATE_COLLECTION, type MultisigResponse } from "@/protocol/index.ts";
-import type { MultisigProcessContext, ValidatedTransaction } from "@/api/services/multisig/types.ts";
+import { ACTION_CREATE_COLLECTION, MULTISIG_EXPIRATION_MS, type MultisigResponse } from "@/protocol/index.ts";
+import type {
+	CollectionLockHandle,
+	MultisigBaseContext,
+	MultisigCollectionContext,
+	ValidatedTransaction,
+} from "@/api/services/multisig/types.ts";
 
 const log = createLogger("multisig-service");
 const signingQueue = createSigningQueue();
+const collectionLock = createMultisigCollectionLock();
 
 export function getSigningQueueMetrics() {
 	return signingQueue.getMetrics();
@@ -35,7 +42,8 @@ export async function processMultisigRequest(
 	try {
 		const { transaction } = validateBaseRequestShape(rawBody);
 		const action = detectMultisigAction(transaction, protocolId);
-		const ctx: MultisigProcessContext = {
+
+		const baseCtx: MultisigBaseContext = {
 			db,
 			nodeAccount,
 			protocolId,
@@ -43,13 +51,28 @@ export async function processMultisigRequest(
 		};
 
 		if (action === ACTION_CREATE_COLLECTION) {
-			return await processCollectionRequest(rawBody, ctx);
+			// Per-request holder lets two concurrent signings of the same (creator,
+			// symbol) fight for the lock: only the first wins, second gets
+			// COLLECTION_LOCKED with retryAfterMs propagated back.
+			const collectionCtx: MultisigCollectionContext = {
+				...baseCtx,
+				collectionLock: buildCollectionLockHandle(crypto.randomUUID()),
+			};
+			return await processCollectionRequest(rawBody, collectionCtx);
 		}
 
-		return await processBuyRequest(rawBody, ctx);
+		return await processBuyRequest(rawBody, baseCtx);
 	} catch (err) {
 		return mapErrorToMultisigResponse(err, log);
 	}
+}
+
+function buildCollectionLockHandle(holder: string): CollectionLockHandle {
+	return {
+		acquire: (creator, symbol) =>
+			collectionLock.acquire(creator, symbol, holder, MULTISIG_EXPIRATION_MS),
+		release: (creator, symbol) => collectionLock.release(creator, symbol, holder),
+	};
 }
 
 async function signValidatedTransaction(transaction: ValidatedTransaction): Promise<MultisigResponse> {

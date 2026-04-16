@@ -10,6 +10,13 @@ import { resolveClientIp } from "@/api/middleware/client-ip.ts";
 import { NFTLOX_POW_HEADER, validateMultisigPow } from "@/api/middleware/pow-validator.ts";
 import { getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import { calculatePaymentSplit, MULTISIG_EXPIRATION_MS } from "@/protocol/index.ts";
+import {
+	IDEMPOTENCY_HEADER,
+	IDEMPOTENCY_REPLAY_HEADER,
+	createIdempotencyCache,
+	hashIdempotencyBody,
+	isValidIdempotencyKey,
+} from "@/api/services/idempotency-cache.ts";
 
 const log = createLogger("multisig-route");
 
@@ -24,6 +31,20 @@ const ipRateLimiter = createMultisigRateLimiter(
 );
 
 const nftLock = createMultisigNftLock();
+
+// TTL = MULTISIG_EXPIRATION_MS: cached signatures expire with the underlying
+// transaction. Cap = 10_000 entries matches the PoW replay cache — similar
+// working-set, similar memory budget.
+const COLLECTION_IDEMPOTENCY_MAX_ENTRIES = 10_000;
+const collectionIdempotency = createIdempotencyCache({
+	ttlMs: MULTISIG_EXPIRATION_MS,
+	maxEntries: COLLECTION_IDEMPOTENCY_MAX_ENTRIES,
+});
+
+// Only terminal responses are cached. Transient states (rate limit, lock
+// contention, signer outage) must re-evaluate on retry — caching them would
+// bind the client to a stale failure past its natural resolution window.
+const CACHEABLE_STATUSES: ReadonlySet<number> = new Set([200, 400, 422]);
 
 type RejectionCode =
 	| "MULTISIG_DISABLED"
@@ -147,6 +168,47 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		const clientIp = resolveClientIp(request, socketIp);
 		const health = getMultisigHealth();
 
+		// Idempotency check runs before PoW so retries cost O(1) on a hit.
+		// Malformed keys fall through as if absent — we don't hard-fail a
+		// client that set the header with an unexpected format. Likewise, a
+		// body that can't be canonicalized (shouldn't happen past Elysia's
+		// schema, but defensive) degrades to "no cache" rather than 500.
+		const rawIdempotencyKey = request.headers.get(IDEMPOTENCY_HEADER);
+		const idempotencyKey = isValidIdempotencyKey(rawIdempotencyKey) ? rawIdempotencyKey : null;
+		let bodyHash: string | null = null;
+		if (idempotencyKey) {
+			try {
+				bodyHash = await hashIdempotencyBody(body);
+			} catch (err) {
+				log.warn("Idempotency body hash failed; proceeding without cache", {
+					creator: body.creator,
+					error: err instanceof Error ? err.message : String(err),
+				});
+			}
+		}
+		if (idempotencyKey && bodyHash) {
+			const cached = collectionIdempotency.lookup(idempotencyKey, bodyHash);
+			if (cached.type === "hit") {
+				set.status = cached.status;
+				set.headers[IDEMPOTENCY_REPLAY_HEADER] = "true";
+				return cached.body;
+			}
+			if (cached.type === "mismatch") {
+				set.status = 422;
+				return {
+					ok: false,
+					code: "IDEMPOTENCY_MISMATCH",
+					message: "Idempotency-Key reused with a different request body",
+				};
+			}
+		}
+
+		const storeResponse = (status: number, responseBody: unknown): void => {
+			if (!idempotencyKey || !bodyHash) return;
+			if (!CACHEABLE_STATUSES.has(status)) return;
+			collectionIdempotency.store(idempotencyKey, bodyHash, status, responseBody);
+		};
+
 		if (!health.multisigEnabled) {
 			set.status = 503;
 			const message = getDisabledMessage();
@@ -207,9 +269,20 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 					creator: body.creator,
 					clientIp,
 					code: result.code,
+					retryAfterMs: result.retryAfterMs,
 				});
-				set.status = 400;
+				if (result.code === "COLLECTION_LOCKED") {
+					set.status = 409;
+					if (result.retryAfterMs !== undefined) {
+						// Retry-After is expressed in seconds per RFC 7231; round up so
+						// clients never retry a millisecond before the lock frees.
+						set.headers["Retry-After"] = String(Math.ceil(result.retryAfterMs / 1000));
+					}
+				} else {
+					set.status = 400;
+				}
 			}
+			storeResponse(typeof set.status === "number" ? set.status : 200, result);
 			return result;
 		} catch (err) {
 			log.error("Unexpected collection multisig route error", {

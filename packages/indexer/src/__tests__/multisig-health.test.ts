@@ -6,6 +6,14 @@ let signerReady = true;
 mock.module("@/scanner/hive-client.ts", () => ({
 	checkClockDrift: mockCheckClockDrift,
 	getBlockchainHead: () => Promise.resolve({ headBlock: 0, irreversibleBlock: 0 }),
+	// Stubs keep chain-anchors.test.ts mock shape complete under bun's
+	// process-wide mock registry.
+	getBlockIdFromAllEndpoints: () => Promise.resolve([]),
+	getCustomJsonInRange: () => Promise.resolve([]),
+	getHafAHBlockRange: () => 0,
+	getTransfersInTransaction: () => Promise.resolve([]),
+	getHeadBlockNum: () => Promise.resolve(0),
+	selectConsensusHead: () => ({ headBlock: 0, irreversibleBlock: 0 }),
 }));
 
 mock.module("@/api/services/beekeeper-signer.ts", () => ({

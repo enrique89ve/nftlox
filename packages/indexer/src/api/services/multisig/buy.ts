@@ -15,7 +15,7 @@ import {
 import { validateHiveUsername } from "@/protocol/index.ts";
 import { verifyTransfers, type TransferRecord } from "@/utils/validation.ts";
 import type {
-	MultisigProcessContext,
+	MultisigBaseContext,
 	MultisigRules,
 	NftStateResult,
 	ValidatedBuyPayload,
@@ -24,7 +24,7 @@ import type {
 
 export async function processBuyRequest(
 	rawBody: unknown,
-	ctx: MultisigProcessContext,
+	ctx: MultisigBaseContext,
 ) {
 	const requestShape = validateBuyRequestShape(rawBody);
 	const usernameError = validateHiveUsername(requestShape.buyer);
@@ -136,7 +136,7 @@ function validateBuyPayloadData(
 async function validateNftState(
 	nftId: string,
 	buyer: string,
-	ctx: MultisigProcessContext,
+	ctx: MultisigBaseContext,
 ): Promise<NftStateResult> {
 	// Plain read — no FOR UPDATE. Concurrency between buyer requests is
 	// serialized by ctx.nftLock in processBuyRequest; concurrent non-multisig
@@ -229,7 +229,7 @@ function validatePaymentSplit(
 		throw createMultisigError(
 			"INVALID_PAYMENT_SPLIT",
 			cause instanceof Error ? cause.message : "Payment split verification failed",
-			cause,
+			{ cause },
 		);
 	}
 }

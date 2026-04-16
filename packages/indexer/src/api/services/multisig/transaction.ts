@@ -452,7 +452,7 @@ function parseProtocolPayload(json: string): ParsedProtocolPayload {
 	try {
 		parsed = JSON.parse(json);
 	} catch (cause) {
-		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "custom_json.json is not valid JSON", cause);
+		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "custom_json.json is not valid JSON", { cause });
 	}
 
 	if (!isRecord(parsed)) {

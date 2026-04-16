@@ -6,21 +6,29 @@ import type { MultisigErrorCode, MultisigResponse } from "@/protocol/index.ts";
 
 export type MultisigDomainError = Error & Readonly<{
 	readonly code: MultisigErrorCode;
+	readonly retryAfterMs?: number;
 }>;
 
 type ErrorLogger = Readonly<{
 	readonly error: (message: string, data?: unknown) => void;
 }>;
 
+export type MultisigErrorDetails = Readonly<{
+	readonly cause?: unknown;
+	readonly retryAfterMs?: number;
+}>;
+
 export function createMultisigError(
 	code: MultisigErrorCode,
 	message: string,
-	cause?: unknown,
+	details: MultisigErrorDetails = {},
 ): MultisigDomainError {
+	const { cause, retryAfterMs } = details;
 	const error = new Error(message, cause === undefined ? undefined : { cause }) as MultisigDomainError;
 	return Object.assign(error, {
 		name: "MultisigError",
 		code,
+		...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
 	});
 }
 
@@ -34,7 +42,12 @@ export function isMultisigError(value: unknown): value is MultisigDomainError {
 
 export function mapErrorToMultisigResponse(err: unknown, log: ErrorLogger): MultisigResponse {
 	if (isMultisigError(err)) {
-		return { ok: false, code: err.code, message: err.message };
+		return {
+			ok: false,
+			code: err.code,
+			message: err.message,
+			...(err.retryAfterMs !== undefined ? { retryAfterMs: err.retryAfterMs } : {}),
+		};
 	}
 
 	if (isSigningQueueFullError(err)) {
