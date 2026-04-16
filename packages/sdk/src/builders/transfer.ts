@@ -1,10 +1,14 @@
 import { z } from "zod";
-import { usernameSchema, seedProvenanceSchema } from "../schemas";
+import { seedProvenanceSchema, usernameSchema } from "../schemas";
 import { formatZodError } from "./helpers";
-import { generateImageHash } from "../dna";
-import { ACTION_TRANSFER } from "../constants";
-import { makePayload, toHiveOperation } from "../payloads";
-import type { BuildResult, TransferData, ProtocolPayload } from "../types";
+import type { KeychainResult } from "./types";
+import {
+	generateImageHash,
+	createPayload,
+	createHiveOperation,
+	getKeyType,
+	type TransferData,
+} from "@nftlox/protocol";
 
 export const transferBuilderSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1, "Invalid NFT ID format"),
@@ -12,14 +16,15 @@ export const transferBuilderSchema = seedProvenanceSchema.extend({
 	to: usernameSchema,
 	imageUrl: z.string().url("Invalid image URL format").optional(),
 	imageHash: z.string().optional(),
-}).refine(data => data.from !== data.to, {
+}).refine((data) => data.from !== data.to, {
 	message: "Cannot transfer to yourself",
 	path: ["to"],
 });
-
 export type TransferBuilderInput = z.infer<typeof transferBuilderSchema>;
 
-export async function buildTransfer(input: TransferBuilderInput): Promise<BuildResult<TransferData>> {
+export async function buildTransfer(
+	input: TransferBuilderInput,
+): Promise<KeychainResult<TransferData>> {
 	const parsed = transferBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -34,7 +39,7 @@ export async function buildTransfer(input: TransferBuilderInput): Promise<BuildR
 
 	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
 
-	const payload: ProtocolPayload<TransferData> = makePayload(ACTION_TRANSFER, {
+	const transferData: TransferData = {
 		nftId: data.nftId,
 		from: data.from,
 		to: data.to,
@@ -42,14 +47,17 @@ export async function buildTransfer(input: TransferBuilderInput): Promise<BuildR
 		...(imageHash && { imageHash }),
 		...(data.seedId && { seedId: data.seedId }),
 		...(data.seedTxId && { seedTxId: data.seedTxId }),
-	});
+	};
 
-	const operation = toHiveOperation(payload, data.from);
+	const payload = createPayload("transfer", transferData);
+	const operation = createHiveOperation(payload, data.from);
 
 	return {
 		success: true,
+		operations: [operation],
+		keyType: getKeyType("transfer"),
+		signer: data.from,
 		payload,
-		operation,
-		warnings: warnings.length > 0 ? warnings : undefined,
+		...(warnings.length > 0 && { warnings }),
 	};
 }
