@@ -62,7 +62,7 @@ mock.module("@/utils/fee-oracle.ts", () => ({
 mock.module("@/config.ts", () => ({
 	config: {
 		protocolId: "nftlox_testnet",
-		genesisBlock: 105530500,
+		genesisBlock: 105558142,
 		hiveAccount: "gametest.ing",
 		nodeUrl: "",
 		indexerRole: "both",
@@ -87,7 +87,7 @@ mock.module("@/protocol/index.ts", () => ({
 	percentageToBasisPoints: (percentage: number) => Math.round(percentage * 100),
 	SUPPORTED_CURRENCIES: ["HIVE", "HBD"],
 	ALL_ACTIONS: ["buy", "list"],
-	PROTOCOL_GENESIS_BLOCK: 105530500,
+	PROTOCOL_GENESIS_BLOCK: 105558142,
 }));
 
 const { Elysia } = await import("elysia");
@@ -106,7 +106,7 @@ describe("status route", () => {
 		expect(json.multisigClockDriftMs).toBe(20000);
 		expect(json.protocolFeeBps).toBe(250);
 		expect(json.maxRoyaltyBps).toBe(5000);
-		expect(json.genesisBlock).toBe(105530500);
+		expect(json.genesisBlock).toBe(105558142);
 	});
 
 	test("exposes priceFeed so bots can compute HIVE amount without a second request", async () => {

@@ -5,10 +5,10 @@
 export const PROTOCOL_ID = "nftlox_testnet";
 export const PROTOCOL_VERSION = "0.5.2";
 export const MIN_PROTOCOL_VERSION = "0.5.0";
-export const PROTOCOL_GENESIS_BLOCK = 105_530_500;
+export const PROTOCOL_GENESIS_BLOCK = 105_558_142;
 // Anchor hash for PROTOCOL_GENESIS_BLOCK. Verified against ≥2 Hive endpoints at
 // startup so a hostile HafAH cannot hand us a fabricated chain from scratch.
-export const PROTOCOL_GENESIS_BLOCK_ID = "064a448482ac5e78779eaec64524f45df72e6b1a";
+export const PROTOCOL_GENESIS_BLOCK_ID = "064ab07e3120a699bb297c171ca29329976b7194";
 
 // Field Limits
 export const MAX_NAME_LENGTH = 100;
