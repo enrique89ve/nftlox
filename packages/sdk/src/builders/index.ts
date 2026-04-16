@@ -5,7 +5,5 @@ export * from "./market";
 export * from "./transfer";
 export * from "./misc";
 export * from "./approve";
-
 export { computeSeedAvailability, type SeedAvailability } from "./seed-availability";
-
-export type { BuildResult, ValidationError } from "../types";
+export type { KeychainResult, ValidationError } from "./types";
