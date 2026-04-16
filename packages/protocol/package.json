@@ -1,0 +1,23 @@
+{
+	"name": "@nftlox/protocol",
+	"version": "0.1.0",
+	"description": "NFTLox Protocol — canonical types, constants, and pure functions",
+	"module": "src/index.ts",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "bunx tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	}
+}
