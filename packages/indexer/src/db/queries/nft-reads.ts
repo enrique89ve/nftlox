@@ -11,6 +11,9 @@ import type {
 	NftKind,
 } from "./nft-types.ts";
 
+// postgres.js sql.array needs the PG type OID. 25 = TEXT, used for id lists.
+const PG_TEXT_OID = 25;
+
 type NumericRowValue = number | string;
 
 type NftOwnerClaimRow = Readonly<{
@@ -97,6 +100,41 @@ export async function getNftById(id: string) {
 		WHERE n.id = ${id}
 	`;
 	return row ?? null;
+}
+
+/**
+ * Batch read variant of getNftById. Single round-trip via `id = ANY($1)`.
+ * Row shape matches getNftById so callers can treat single/batch uniformly.
+ * Missing ids are NOT represented here — the route layer diffs input vs
+ * returned rows and emits `missing: string[]` alongside the items.
+ */
+export async function getNftsByIds(ids: readonly string[]) {
+	if (ids.length === 0) return [];
+	return sql`
+		SELECT
+			n.id, n.collection_id, n.nft_type, n.status, n.edition, n.owner,
+			COALESCE(NULLIF(n.name, ''), s.name) AS name,
+			COALESCE(n.image_url, s.image_url) AS image_url,
+			COALESCE(n.origin_dna, s.origin_dna) AS origin_dna,
+			n.instance_dna,
+			COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
+			n.data_hash, n.schema_version,
+			n.max_supply, n.distributed, n.supply_exhausted,
+			n.seed_id, n.instance_number,
+			n.previous_owner, n.owner_operation_id, n.owner_action, n.owner_block_num::int AS owner_block_num,
+			n.created_tx_id AS tx_id, n.created_at,
+			co.signer AS minted_by,
+			n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
+			n.listing_expires_at, n.listing_marketplace,
+			s.created_tx_id AS seed_tx_id,
+			CASE WHEN n.listing_expires_at IS NOT NULL AND n.listing_expires_at <= NOW()
+				THEN true ELSE false
+			END AS listing_expired
+		FROM nfts n
+		LEFT JOIN nfts s ON s.id = n.seed_id
+		LEFT JOIN confirmed_operations co ON co.operation_id = n.created_operation_id
+		WHERE n.id = ANY(${sql.array([...ids], PG_TEXT_OID)})
+	`;
 }
 
 export async function getNftOwnerClaim(id: string): Promise<NftOwnerClaim | null> {
