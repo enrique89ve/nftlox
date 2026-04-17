@@ -29,6 +29,8 @@ COPY packages/indexer/ ./packages/indexer/
 # external so Bun can load them from node_modules at runtime (beekeeper
 # ships WASM; elysia / postgres have large runtimes that don't benefit
 # from bundling).
+#
+# Build both main bundle and sync-worker bundle (Web Workers can't be embedded).
 WORKDIR /repo/packages/indexer
 RUN bun build src/index.ts \
 	--target=bun \
@@ -38,6 +40,11 @@ RUN bun build src/index.ts \
 	--external @elysiajs/swagger \
 	--external elysia \
 	--external hive-tx \
+	--external postgres && \
+	bun build src/scanner/sync-worker.ts \
+	--target=bun \
+	--outfile=dist/sync-worker.js \
+	--external @hiveio/beekeeper \
 	--external postgres
 
 # ───── Stage 2: Runtime ─────

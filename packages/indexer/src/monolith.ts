@@ -56,7 +56,13 @@ function scheduleSyncWorkerRestart(): void {
 }
 
 function startSyncWorker(): void {
-	const worker = new Worker(new URL("./scanner/sync-worker.ts", import.meta.url).href);
+	// In bundle: sync-worker is at /app/packages/indexer/dist/sync-worker.js
+	// In dev: sync-worker is at src/scanner/sync-worker.ts (relative to this file)
+	const workerPath = import.meta.url.startsWith("file:///app")
+		? "/app/packages/indexer/dist/sync-worker.js"
+		: new URL("./scanner/sync-worker.ts", import.meta.url).href;
+
+	const worker = new Worker(workerPath);
 
 	worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
 		const msg = event.data;
