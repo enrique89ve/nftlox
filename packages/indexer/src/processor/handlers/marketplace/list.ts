@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, updateNftListing, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { getNftForProcessing, getNftForProcessingForUpdate, updateNftListing, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireHiveAmount, optionalNumber, optionalString } from "@/utils/validation.ts";
@@ -19,7 +19,7 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 		throw new Error(`Invalid listingId format: must start with '${LISTING_ID_PREFIX}'`);
 	}
 
-	const nft = await getNftForProcessing(nftId, txn);
+	const nft = await getNftForProcessingForUpdate(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
 	assertActionable(nft, nftId);

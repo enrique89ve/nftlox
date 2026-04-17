@@ -1,13 +1,13 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, updateNftStatus, NFT_STATUS_ACTIVE, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
+import { getNftForProcessing, getNftForProcessingForUpdate, updateNftStatus, NFT_STATUS_ACTIVE, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
 import { getLoan, deleteLoan } from "@/db/queries/loans.ts";
 import { requireString } from "@/utils/validation.ts";
 
 export async function handleNftReturn(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 
-	const nft = await getNftForProcessing(instanceId, txn);
+	const nft = await getNftForProcessingForUpdate(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
 	if (nft.status !== NFT_STATUS_LENT) throw new Error(`NFT is not lent: ${instanceId}`);
 

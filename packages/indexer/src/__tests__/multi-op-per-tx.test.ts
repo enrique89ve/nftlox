@@ -558,6 +558,50 @@ describe("Multi-operation per transaction", () => {
 			const [nft] = await sql`SELECT owner FROM nfts WHERE id = ${chainId}`;
 			expect(nft!.owner).toBe("charlie");
 		});
+
+		test("double transfer of same NFT in same block — second fails with owner changed", async () => {
+			await seedCollection();
+			const doubleId = await canonicalSeedId("double_transfer", COL_ID);
+
+			// Mint NFT with owner=alice
+			await withTransaction((txn) => handleMint(makeOp(ACTION_MINT, {
+				id: doubleId,
+				artId: "double_transfer",
+				collectionId: COL_ID,
+				edition: 1,
+				owner: "alice",
+				maxSupply: 1,
+				metadata: { name: "Double", imageUrl: "https://example.com/d.png", imageHash: "d1" },
+			}), txn));
+
+			const sharedTxId = "tx_double_transfer";
+
+			// Op 1: alice transfers to bob (should succeed)
+			const transfer1 = makeOp(ACTION_TRANSFER, {
+				nftIds: [doubleId], to: "bob",
+			}, { txId: sharedTxId, operationId: "op_double_1", blockNum: SHARED_BLOCK, signer: "alice" });
+
+			// Op 2: alice transfers to charlie (should fail — alice no longer owns it)
+			const transfer2 = makeOp(ACTION_TRANSFER, {
+				nftIds: [doubleId], to: "charlie",
+			}, { txId: sharedTxId, operationId: "op_double_2", blockNum: SHARED_BLOCK, signer: "alice" });
+
+			// Process both transfers via routeOperation (which captures errors in invalid_operations)
+			await withTransaction((txn) => routeOperation(transfer1, txn));
+			await withTransaction((txn) => routeOperation(transfer2, txn));
+
+			// Verify: NFT is now owned by bob
+			const [nft] = await sql`SELECT owner FROM nfts WHERE id = ${doubleId}`;
+			expect(nft!.owner).toBe("bob");
+
+			// Verify: second operation is recorded as invalid (router captures the error)
+			const [invalid] = await sql`
+				SELECT operation_id, reason FROM invalid_operations
+				WHERE operation_id = 'op_double_2'
+			`;
+			expect(invalid).toBeDefined();
+			expect(invalid!.reason).toContain("not owner");
+		});
 	});
 
 	// ─── Scenario 5: Bulk distribute with shared tx_id ──────

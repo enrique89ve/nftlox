@@ -214,6 +214,17 @@ export async function getNftForProcessing(id: string, txn: Queryable = sql): Pro
 	return row ?? null;
 }
 
+export async function getNftForProcessingForUpdate(id: string, txn: Queryable): Promise<NftProcessingRow | null> {
+	const [row] = await txn<NftProcessingRow[]>`
+		SELECT id, owner, status, nft_type, name, seed_id, max_supply, distributed, reserved_supply,
+		       collection_id, instance_dna,
+		       listing_id, listing_tx_id, listing_price, listing_currency, listing_expires_at, listing_marketplace, data_operation_id
+		FROM nfts WHERE id = ${id}
+		FOR UPDATE
+	`;
+	return row ?? null;
+}
+
 export async function getNftWithCollectionRules(
 	id: string,
 	txn: Queryable = sql,
@@ -230,6 +241,27 @@ export async function getNftWithCollectionRules(
 		JOIN collections c ON c.id = n.collection_id
 		LEFT JOIN nfts s ON s.id = n.seed_id
 		WHERE n.id = ${id}
+	`;
+	return row ?? null;
+}
+
+export async function getNftWithCollectionRulesForUpdate(
+	id: string,
+	txn: Queryable,
+): Promise<NftWithRulesRow | null> {
+	const [row] = await txn<NftWithRulesRow[]>`
+		SELECT
+			n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_supply, n.distributed,
+			n.reserved_supply,
+			n.collection_id, n.instance_dna, n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
+			n.listing_expires_at, n.listing_marketplace, n.data_operation_id, n.created_tx_id,
+			c.creator, c.transferable, c.burnable, c.royalty_pct, c.royalty_recipient,
+			s.created_tx_id AS seed_created_tx_id
+		FROM nfts n
+		JOIN collections c ON c.id = n.collection_id
+		LEFT JOIN nfts s ON s.id = n.seed_id
+		WHERE n.id = ${id}
+		FOR UPDATE OF n
 	`;
 	return row ?? null;
 }

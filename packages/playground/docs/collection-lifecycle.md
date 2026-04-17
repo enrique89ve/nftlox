@@ -458,6 +458,8 @@ Collection (totalPotential: 3)
 
 ## 7. Ownership Provenance
 
+For the full creator/owner cascade, see [Ownership Model](ownership-model.md).
+
 NFTs include an `owner_operation_id` field plus a `previous_owner` field. Together they describe the current ownership edge without storing a full ownership history:
 
 - **Set at mint / bulk distribute** with `previous_owner = null`.

@@ -17,7 +17,7 @@ This guide covers the NFTLox permission model, recommended account architecture 
 | **Approved operator** | `set_data_from` | Posting |
 | **Approved spender** | `nft_transfer_from` | Posting |
 
-**Key distinction**: The collection creator controls the **schema and metadata**. The seed owner controls **custody and distribution exclusively** — the collection creator has NO distribution rights over seeds they don't own. Seeds with distributed instances (`distributed > 0`) cannot be transferred, listed, sold, delegated, or lent.
+**Key distinction**: The collection creator controls the **schema and metadata**. The seed owner controls **custody and distribution exclusively** -- the collection creator has NO distribution rights over seeds they don't own. Seeds with distributed instances (`distributed > 0`) cannot be transferred, listed, sold, delegated, or lent. For the full cascade, see [Ownership Model](ownership-model.md).
 
 ### Key Types
 

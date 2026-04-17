@@ -2,6 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import {
   getNftForProcessing,
+  getNftForProcessingForUpdate,
   updateNftOwner,
   hardDeleteNft,
 } from "@/db/queries/nfts.ts";
@@ -69,7 +70,7 @@ async function processSingleTransfer(
   to: string,
   txn: Queryable,
 ): Promise<void> {
-  const nft = await getNftForProcessing(nftId, txn);
+  const nft = await getNftForProcessingForUpdate(nftId, txn);
   if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
   const { hadExpiredListing } = assertOwnershipChangeable(
@@ -110,7 +111,7 @@ async function processBurn(
   nftId: string,
   txn: Queryable,
 ): Promise<void> {
-  const nft = await getNftForProcessing(nftId, txn);
+  const nft = await getNftForProcessingForUpdate(nftId, txn);
   if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
   assertActionable(nft, nftId);

@@ -67,6 +67,7 @@ Then follow the [Getting Started guide](getting-started.md) to make your first A
 | [Data Formats](data-formats.md) | Field constraints, validation rules, accepted values |
 | **Core Features** | |
 | [Collection Lifecycle](collection-lifecycle.md) | Create, extend schema, archive collections |
+| [Ownership Model](ownership-model.md) | Creator, seed owner, instance origin, and provenance rules |
 | [Marketplace Trading](marketplace-trading.md) | List, buy, unlist with multisig buyer protection |
 | [Allowances & Operators](allowances-operators.md) | ERC-721-style approvals, data operators, delegated access |
 | [NFT Lending](lending-system.md) | Peer-to-peer lending with ownership retention |

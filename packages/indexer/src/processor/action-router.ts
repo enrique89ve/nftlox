@@ -1,4 +1,5 @@
 import type { Queryable } from "@/db/client.ts";
+import { getStateRootBuffer, getTxSavepointHandle } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { insertInvalidOperation, insertOrphanedBuy, insertConfirmedOperation, isOperationConfirmed } from "@/db/queries/sync.ts";
@@ -139,7 +140,25 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 		}
 
 		try {
-			const nftIds = await handler(op, txn);
+			const buffer = getStateRootBuffer(txn);
+			const snap = buffer.checkpoint();
+			const txHandle = getTxSavepointHandle(txn);
+
+			const nftIds = await txHandle
+				.savepoint((spSql) => {
+					// Attach the buffer and handle to the savepoint-scoped transaction so handlers
+					// can access them via getStateRootBuffer() and getTxSavepointHandle().
+					(spSql as any).__nftlox_buffer = buffer;
+					(spSql as any).__nftlox_handle = txHandle;
+					return handler(op, spSql as unknown as Queryable);
+				})
+				.catch((err) => {
+					// postgres.js already executed ROLLBACK TO SAVEPOINT automatically.
+					// Revert the in-memory buffer to match the reverted database state.
+					buffer.rollbackTo(snap);
+					throw err;
+				});
+
 			await insertConfirmedOperation({
 				operationId: op.operationId,
 				txId: op.txId,

@@ -28,6 +28,8 @@ export type StateRootBuffer = Readonly<{
 	isEmpty: () => boolean;
 	iter: () => IterableIterator<NetEntry>;
 	maxBlockNum: () => number;
+	checkpoint: () => Map<string, NetEntry>;
+	rollbackTo: (snap: Map<string, NetEntry>) => void;
 }>;
 
 // Exhaustive narrowing of the discriminated union. The `never` default is a
@@ -91,5 +93,16 @@ export function createStateRootBuffer(): StateRootBuffer {
 		return max;
 	}
 
-	return Object.freeze({ queue, size, isEmpty, iter, maxBlockNum });
+	function checkpoint(): Map<string, NetEntry> {
+		return new Map(entries);
+	}
+
+	function rollbackTo(snap: Map<string, NetEntry>): void {
+		entries.clear();
+		for (const [k, v] of snap) {
+			entries.set(k, v);
+		}
+	}
+
+	return Object.freeze({ queue, size, isEmpty, iter, maxBlockNum, checkpoint, rollbackTo });
 }

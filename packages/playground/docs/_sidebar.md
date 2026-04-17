@@ -6,6 +6,7 @@
 
 - **Core Features**
 	- [Collection Lifecycle](collection-lifecycle.md)
+	- [Ownership Model](ownership-model.md)
 	- [Marketplace Trading](marketplace-trading.md)
 	- [Allowances & Operators](allowances-operators.md)
 	- [NFT Lending](lending-system.md)

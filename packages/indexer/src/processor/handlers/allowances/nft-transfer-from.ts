@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, updateNftOwner } from "@/db/queries/nfts.ts";
+import { getNftForProcessing, getNftForProcessingForUpdate, updateNftOwner } from "@/db/queries/nfts.ts";
 import type { OwnerChangeCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import {
@@ -22,7 +22,7 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 
 	if (from === to) throw new Error("Cannot transfer to yourself");
 
-	const nft = await getNftForProcessing(instanceId, txn);
+	const nft = await getNftForProcessingForUpdate(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
 
 	const { hadExpiredListing } = assertOwnershipChangeable(nft, instanceId, op.timestamp);

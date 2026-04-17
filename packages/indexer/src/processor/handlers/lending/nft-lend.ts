@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, updateNftStatus, NFT_STATUS_ACTIVE, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
+import { getNftForProcessing, getNftForProcessingForUpdate, updateNftStatus, NFT_STATUS_ACTIVE, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { insertLoan, getLoan } from "@/db/queries/loans.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
@@ -13,7 +13,7 @@ export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promis
 
 	if (borrower === op.signer) throw new Error("Cannot lend to yourself");
 
-	const nft = await getNftForProcessing(instanceId, txn);
+	const nft = await getNftForProcessingForUpdate(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
 	if (nft.status !== NFT_STATUS_ACTIVE) throw new Error(`NFT must be active to lend, current status: ${nft.status}`);
 	assertNotSeed(nft, instanceId);

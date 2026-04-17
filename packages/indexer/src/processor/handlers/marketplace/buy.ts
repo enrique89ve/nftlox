@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftWithCollectionRules, updateNftOwner, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { getNftWithCollectionRules, getNftWithCollectionRulesForUpdate, updateNftOwner, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import type { OwnerChangeCtx } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { insertSale } from "@/db/queries/marketplace-history.ts";
@@ -37,7 +37,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	if (!rawBuyer) throw new Error("No payment transfers found for buy action");
 	const buyer = requireUsername(rawBuyer, "buyer");
 
-	const nft = await getNftWithCollectionRules(nftId, txn);
+	const nft = await getNftWithCollectionRulesForUpdate(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 	// assertActionable rejects burned + lent; status check below rejects anything not listed.
 	// Combined: only NFTs with status=listed pass through.

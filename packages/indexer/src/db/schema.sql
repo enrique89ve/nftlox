@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS collections (
 	external_url TEXT,
 	transferable BOOLEAN NOT NULL DEFAULT TRUE,
 	burnable BOOLEAN NOT NULL DEFAULT TRUE,
-	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (royalty_pct >= 0 AND royalty_pct <= 100),
+	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (royalty_pct >= 0 AND royalty_pct <= 50),
 	royalty_recipient TEXT,
 	schema JSONB,
 	schema_version INTEGER NOT NULL DEFAULT 0,
