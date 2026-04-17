@@ -2,7 +2,7 @@ import { sql, type Queryable } from "@/db/client.ts";
 import type { InsertNftParams, OwnerChangeCtx, BurnCtx, ListingCtx, NftStatus } from "./nft-types.ts";
 import { NFT_KIND_INSTANCE, NFT_STATUS_ACTIVE, NFT_STATUS_LISTED } from "./nft-types.ts";
 import { adjustOwnerNftCount, recordCollectionMint, adjustCollectionListed, recordCollectionBurn } from "./nft-counters.ts";
-import { queueStateRootDelta } from "./state-root.ts";
+import { queueStateRootDelta, parseNftStateRow } from "./state-root.ts";
 import { getStateRootBuffer } from "@/db/client.ts";
 import type { NftStateRow } from "@/utils/state-root-hash.ts";
 
@@ -17,14 +17,7 @@ async function readStateRow(nftId: string, txn: Queryable): Promise<NftStateRow 
 		FOR UPDATE
 	`;
 	if (!row) return null;
-	return {
-		id: String(row.id),
-		owner: String(row.owner),
-		previous_owner: row.previous_owner === null ? null : String(row.previous_owner),
-		owner_action: String(row.owner_action),
-		owner_operation_id: String(row.owner_operation_id),
-		owner_block_num: Number(row.owner_block_num),
-	};
+	return parseNftStateRow(row as Record<string, unknown>);
 }
 
 export type MarketplaceListingCleanupResult = Readonly<{

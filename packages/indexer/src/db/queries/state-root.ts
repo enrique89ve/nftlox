@@ -30,6 +30,76 @@ export type StateMetaRow = Readonly<{
 	updated_at: string;
 }>;
 
+function describeValue(v: unknown): string {
+	if (v === null) return "null";
+	if (v === undefined) return "undefined";
+	if (typeof v === "string") return `string(length=${v.length})`;
+	return typeof v;
+}
+
+// Guards the DB→hash boundary. Every NftStateRow that feeds the state-root
+// XOR algebra MUST come through this parser. A silent `String(null) → "null"`
+// or `Number(undefined) → NaN` would hash to a valid-looking 32 bytes and
+// only surface weeks later as an audit divergence — by then state_meta is
+// already corrupt across every indexer replica.
+export function parseNftStateRow(row: Record<string, unknown>): NftStateRow {
+	const id = row.id;
+	if (typeof id !== "string" || id.length === 0) {
+		throw new Error(`NftStateRow.id: expected non-empty string, got ${describeValue(id)}`);
+	}
+	const owner = row.owner;
+	if (typeof owner !== "string" || owner.length === 0) {
+		throw new Error(`NftStateRow.owner: expected non-empty string, got ${describeValue(owner)} (id=${id})`);
+	}
+	const previousOwnerRaw = row.previous_owner;
+	let previous_owner: string | null;
+	if (previousOwnerRaw === null) {
+		previous_owner = null;
+	} else if (typeof previousOwnerRaw === "string" && previousOwnerRaw.length > 0) {
+		previous_owner = previousOwnerRaw;
+	} else {
+		throw new Error(
+			`NftStateRow.previous_owner: expected null or non-empty string, got ${describeValue(previousOwnerRaw)} (id=${id})`,
+		);
+	}
+	const ownerAction = row.owner_action;
+	if (typeof ownerAction !== "string" || ownerAction.length === 0) {
+		throw new Error(`NftStateRow.owner_action: expected non-empty string, got ${describeValue(ownerAction)} (id=${id})`);
+	}
+	const ownerOperationId = row.owner_operation_id;
+	if (typeof ownerOperationId !== "string" || ownerOperationId.length === 0) {
+		throw new Error(
+			`NftStateRow.owner_operation_id: expected non-empty string, got ${describeValue(ownerOperationId)} (id=${id})`,
+		);
+	}
+	const ownerBlockRaw = row.owner_block_num;
+	let owner_block_num: number;
+	if (typeof ownerBlockRaw === "number") {
+		owner_block_num = ownerBlockRaw;
+	} else if (typeof ownerBlockRaw === "bigint") {
+		owner_block_num = Number(ownerBlockRaw);
+	} else if (typeof ownerBlockRaw === "string") {
+		owner_block_num = Number(ownerBlockRaw);
+	} else {
+		throw new Error(
+			`NftStateRow.owner_block_num: expected number|bigint|string, got ${describeValue(ownerBlockRaw)} (id=${id})`,
+		);
+	}
+	if (!Number.isFinite(owner_block_num) || !Number.isInteger(owner_block_num) || owner_block_num < 0) {
+		throw new Error(
+			`NftStateRow.owner_block_num: expected non-negative integer, got ${describeValue(ownerBlockRaw)} (id=${id})`,
+		);
+	}
+	return {
+		id,
+		owner,
+		previous_owner,
+		owner_action: ownerAction,
+		owner_operation_id: ownerOperationId,
+		owner_block_num,
+	};
+}
+
 const STATE_META_ID = 1;
 
 function toUint8(value: unknown): Uint8Array {
@@ -93,14 +163,7 @@ export async function bootstrapStateRootFromFullScan(
 			`;
 			if (page.length === 0) return;
 			for (const row of page) {
-				yield {
-					id: String(row.id),
-					owner: String(row.owner),
-					previous_owner: row.previous_owner === null ? null : String(row.previous_owner),
-					owner_action: String(row.owner_action),
-					owner_operation_id: String(row.owner_operation_id),
-					owner_block_num: Number(row.owner_block_num),
-				};
+				yield parseNftStateRow(row as Record<string, unknown>);
 			}
 			lastId = String(page[page.length - 1]!.id);
 			if (page.length < BOOTSTRAP_PAGE_SIZE) return;
