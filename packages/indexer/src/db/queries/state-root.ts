@@ -8,7 +8,6 @@ import {
 	xorInto,
 	STATE_ROOT_BYTES,
 	type NftStateRow,
-	type StateRootDelta,
 } from "@/utils/state-root-hash.ts";
 import type { StateRootBuffer, BufferedMutation } from "@/utils/state-root-buffer.ts";
 
@@ -72,72 +71,6 @@ export async function getStateMeta(txn: Queryable = sql): Promise<StateMetaRow> 
 		last_block_num: lastBlockNum,
 		updated_at: String(row.updated_at),
 	};
-}
-
-// Reads state_meta WITH a row lock so the caller sees a consistent snapshot
-// and the subsequent UPDATE cannot race another session. Caller MUST be in
-// the same transaction that mutates the NFT row.
-async function selectForUpdate(txn: Queryable): Promise<Uint8Array> {
-	const [row] = await txn`
-		SELECT state_root FROM state_meta
-		WHERE id = ${STATE_META_ID}
-		FOR UPDATE
-	`;
-	if (!row) throw new Error("state_meta row missing — schema bootstrap did not run");
-	const buffer = toUint8(row.state_root);
-	assertRootBytes(buffer);
-	return buffer;
-}
-
-// Writes the new root + counter delta + block advance. Block advance is
-// monotonic (never moves backwards) so a late handler in the same batch
-// does not regress the cursor.
-async function writeRoot(
-	txn: Queryable,
-	newRoot: Uint8Array,
-	countDelta: number,
-	blockNum: number,
-): Promise<void> {
-	assertRootBytes(newRoot);
-	await txn`
-		UPDATE state_meta
-		SET state_root = ${Buffer.from(newRoot)},
-		    nft_count = nft_count + ${countDelta},
-		    last_block_num = GREATEST(last_block_num, ${blockNum}),
-		    updated_at = NOW()
-		WHERE id = ${STATE_META_ID}
-	`;
-}
-
-export type StateRootMutation =
-	| Readonly<{ type: "insert"; newRow: NftStateRow; blockNum: number }>
-	| Readonly<{ type: "update"; oldRow: NftStateRow; newRow: NftStateRow; blockNum: number }>
-	| Readonly<{ type: "delete"; oldRow: NftStateRow; blockNum: number }>;
-
-function countDeltaOf(mutation: StateRootMutation): number {
-	switch (mutation.type) {
-		case "insert": return 1;
-		case "delete": return -1;
-		case "update": return 0;
-	}
-}
-
-function toDelta(mutation: StateRootMutation): StateRootDelta {
-	switch (mutation.type) {
-		case "insert": return { type: "insert", newRow: mutation.newRow };
-		case "delete": return { type: "delete", oldRow: mutation.oldRow };
-		case "update": return { type: "update", oldRow: mutation.oldRow, newRow: mutation.newRow };
-	}
-}
-
-// Apply a single mutation atomically with the caller's transaction.
-export async function applyStateRootDeltaToDb(
-	mutation: StateRootMutation,
-	txn: Queryable,
-): Promise<void> {
-	const current = await selectForUpdate(txn);
-	const next = await applyDelta(current, toDelta(mutation));
-	await writeRoot(txn, next, countDeltaOf(mutation), mutation.blockNum);
 }
 
 // One-time bootstrap: rebuild the root from a full scan over the current
@@ -220,12 +153,10 @@ export async function getFormattedStateRoot(): Promise<Readonly<{
 // reference without touching the hashing module directly.
 export { computeStateRootFullScan };
 
-// ============ DEFERRED APPLY (R4) ============
-
-// Queues a delta into the tx-scoped buffer. Replaces applyStateRootDeltaToDb
-// for hot-path writes — the buffer is flushed exactly once per transaction by
-// withTransaction(), eliminating the per-mutation SELECT … FOR UPDATE contention
-// that otherwise caps throughput at ~1-3k ops/sec regardless of hardware.
+// Queues a delta into the tx-scoped buffer. The buffer is flushed exactly once
+// per transaction by withTransaction(), eliminating the per-mutation
+// SELECT … FOR UPDATE contention that otherwise caps throughput at ~1-3k
+// ops/sec regardless of hardware.
 export function queueStateRootDelta(
 	buffer: StateRootBuffer,
 	mutation: BufferedMutation,
