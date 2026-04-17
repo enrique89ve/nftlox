@@ -4,10 +4,13 @@ import {
 	computeStateRootFullScan,
 	emptyStateRoot,
 	formatStateRoot,
+	hashRow,
+	xorInto,
 	STATE_ROOT_BYTES,
 	type NftStateRow,
 	type StateRootDelta,
 } from "@/utils/state-root-hash.ts";
+import type { StateRootBuffer, BufferedMutation } from "@/utils/state-root-buffer.ts";
 
 // DB adapter for the incremental state-root.
 //
@@ -216,3 +219,64 @@ export async function getFormattedStateRoot(): Promise<Readonly<{
 // Re-export full-scan for audit jobs that want to compare incremental vs
 // reference without touching the hashing module directly.
 export { computeStateRootFullScan };
+
+// ============ DEFERRED APPLY (R4) ============
+
+// Queues a delta into the tx-scoped buffer. Replaces applyStateRootDeltaToDb
+// for hot-path writes — the buffer is flushed exactly once per transaction by
+// withTransaction(), eliminating the per-mutation SELECT … FOR UPDATE contention
+// that otherwise caps throughput at ~1-3k ops/sec regardless of hardware.
+export function queueStateRootDelta(
+	buffer: StateRootBuffer,
+	mutation: BufferedMutation,
+): void {
+	buffer.queue(mutation);
+}
+
+// Flushes the net buffer to state_meta in a single SELECT + UPDATE. Called by
+// withTransaction() just before the tx commits. No-op when the buffer is empty
+// (pure-read tx, or a tx that touched only non-SPV columns like listing price).
+export async function flushStateRootBuffer(
+	buffer: StateRootBuffer,
+	txn: Queryable,
+): Promise<void> {
+	if (buffer.isEmpty()) return;
+
+	const [row] = await txn`
+		SELECT state_root FROM state_meta
+		WHERE id = ${STATE_META_ID}
+		FOR UPDATE
+	`;
+	if (!row) throw new Error("state_meta row missing — schema bootstrap did not run");
+	let root = toUint8(row.state_root);
+	assertRootBytes(root);
+
+	let countDelta = 0;
+
+	for (const entry of buffer.iter()) {
+		const { firstOld, lastNew } = entry;
+		if (firstOld === null && lastNew === null) continue; // insert+delete cancels out
+
+		if (firstOld !== null) {
+			const oldHash = await hashRow(firstOld);
+			root = xorInto(root, oldHash);
+		}
+		if (lastNew !== null) {
+			const newHash = await hashRow(lastNew);
+			root = xorInto(root, newHash);
+		}
+		if (firstOld === null && lastNew !== null) countDelta += 1;
+		else if (firstOld !== null && lastNew === null) countDelta -= 1;
+		// else: net update — countDelta unchanged
+	}
+
+	const maxBlock = buffer.maxBlockNum();
+	await txn`
+		UPDATE state_meta
+		SET state_root = ${Buffer.from(root)},
+		    nft_count = nft_count + ${countDelta},
+		    last_block_num = GREATEST(last_block_num, ${maxBlock}),
+		    updated_at = NOW()
+		WHERE id = ${STATE_META_ID}
+	`;
+}
