@@ -8,7 +8,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach, mock } from "bun:test";
-import { sql } from "@/db/client.ts";
+import { sql, withTransaction } from "@/db/client.ts";
 import { processMultisigRequest } from "@/api/services/multisig-service.ts";
 
 // Mock beekeeper signer — rejection tests never reach signing
@@ -115,7 +115,7 @@ async function seedCollection(
 		NODE_ACCOUNT,
 		pairedTransfers,
 	);
-	await handleCreateCollection(op, sql);
+	await withTransaction((txn) => handleCreateCollection(op, txn));
 	return id;
 }
 
@@ -130,15 +130,15 @@ async function seedMint(artId: string, collectionId: string): Promise<string> {
 		maxSupply: 10,
 		metadata: { name: `NFT ${artId}`, imageUrl: "https://example.com/nft.png", imageHash: "img_abc" },
 	});
-	await handleMint(op, sql);
+	await withTransaction((txn) => handleMint(op, txn));
 	return nftId;
 }
 
 async function seedInstance(seedId: string): Promise<string> {
 	const [seed] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${seedId}`;
-	await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+	await withTransaction((txn) => handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
 		items: [{ seedId, quantity: 1, seedTxId: seed!.tx_id }],
-	}), sql);
+	}), txn));
 	const [inst] = await sql`SELECT id FROM nfts WHERE seed_id = ${seedId} LIMIT 1`;
 	return inst!.id as string;
 }
@@ -159,7 +159,7 @@ async function makeListData(nftId: string, priceAmount = "10.000") {
 
 async function listNft(nftId: string, priceAmount = "10.000") {
 	const listData = await makeListData(nftId, priceAmount);
-	await handleList(makeOp(ACTION_LIST, listData), sql);
+	await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn));
 	const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${nftId}`;
 	return { listingId: nft!.listing_id as string, listTxId: nft!.listing_tx_id as string, nftTxId: nft!.tx_id as string };
 }

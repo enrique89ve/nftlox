@@ -13,7 +13,7 @@
  * 5. Audit trail distinguishes every op even within the same tx
  */
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
-import { sql, type Queryable } from "@/db/client.ts";
+import { sql, withTransaction, type Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { handleCreateCollection } from "@/processor/handlers/core/create-collection.ts";
 import { handleMint } from "@/processor/handlers/core/mint.ts";
@@ -129,15 +129,22 @@ function makeCreateCollectionOp(
 	});
 }
 
-async function seedCollection(txn: Queryable = sql) {
-	await handleCreateCollection(makeCreateCollectionOp({
+async function seedCollection(txn?: Queryable): Promise<void> {
+	const op = makeCreateCollectionOp({
 		id: COL_ID,
 		name: "Multi-Op Collection",
 		symbol: "MULTI",
 		totalPotential: 100,
 		metadata: { description: "Multi-op test", image: "https://example.com/img.png" },
 		rules: { transferable: true, burnable: true, royaltyPct: 0 },
-	}), txn);
+	});
+	if (txn) {
+		await handleCreateCollection(op, txn);
+		return;
+	}
+	await withTransaction(async (t) => {
+		await handleCreateCollection(op, t);
+	});
 }
 
 async function makeListData(nftId: string, owner = "alice"): Promise<Record<string, unknown>> {
@@ -209,8 +216,8 @@ describe("Multi-operation per transaction", () => {
 			}, { txId: sharedTxId, operationId: "op_mint_b" });
 
 			// Process sequentially as the sync engine would
-			await handleMint(mint1, sql);
-			await handleMint(mint2, sql);
+			await withTransaction((txn) => handleMint(mint1, txn));
+			await withTransaction((txn) => handleMint(mint2, txn));
 
 			// Both seeds should exist with the same tx_id
 			const seeds = await sql`
@@ -242,11 +249,11 @@ describe("Multi-operation per transaction", () => {
 			];
 
 			// First pass
-			for (const op of ops) await handleMint(op, sql);
+			for (const op of ops) await withTransaction((txn) => handleMint(op, txn));
 			const countBefore = await sql`SELECT COUNT(*)::int AS n FROM nfts WHERE created_tx_id = ${sharedTxId}`;
 
 			// Replay (same ops again)
-			for (const op of ops) await handleMint(op, sql);
+			for (const op of ops) await withTransaction((txn) => handleMint(op, txn));
 			const countAfter = await sql`SELECT COUNT(*)::int AS n FROM nfts WHERE created_tx_id = ${sharedTxId}`;
 
 			expect(countBefore[0]!.n).toBe(2);
@@ -273,12 +280,12 @@ describe("Multi-operation per transaction", () => {
 				metadata: { name: "MintList", imageUrl: "https://example.com/ml.png", imageHash: "ml_h" },
 			}, { txId: sharedTxId, operationId: "op_ml_mint" });
 
-			await handleMint(mintOp, sql);
+			await withTransaction((txn) => handleMint(mintOp, txn));
 
 			// Op 2: distribute an instance, then list the instance (different operation_id, same tx_id)
-			await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+			await withTransaction((txn) => handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
 				items: [{ seedId: mintListId, quantity: 1, seedTxId: sharedTxId }],
-			}, { txId: sharedTxId, operationId: "op_ml_distribute" }), sql);
+			}, { txId: sharedTxId, operationId: "op_ml_distribute" }), txn));
 			const [instance] = await sql`SELECT id FROM nfts WHERE seed_id = ${mintListId} LIMIT 1`;
 			const instanceId = instance!.id as string;
 			const listData = await makeListData(instanceId);
@@ -286,7 +293,7 @@ describe("Multi-operation per transaction", () => {
 				txId: sharedTxId,
 				operationId: "op_ml_list",
 			});
-			await handleList(listOp, sql);
+			await withTransaction((txn) => handleList(listOp, txn));
 
 			const [nft] = await sql`SELECT status, listing_price, created_tx_id AS tx_id, listing_tx_id FROM nfts WHERE id = ${instanceId}`;
 			expect(nft!.status).toBe("listed");
@@ -330,8 +337,8 @@ describe("Multi-operation per transaction", () => {
 			}, { txId: sharedTxId, operationId: "op_invalid" });
 
 			// Route both through action-router (infallible — records invalid ops)
-			await routeOperation(validMint, sql);
-			await routeOperation(invalidMint, sql);
+			await withTransaction((txn) => routeOperation(validMint, txn));
+			await withTransaction((txn) => routeOperation(invalidMint, txn));
 
 			// Valid op should have created the NFT
 			const [nft] = await sql`SELECT id FROM nfts WHERE id = ${validId}`;
@@ -377,8 +384,8 @@ describe("Multi-operation per transaction", () => {
 				metadata: { name: "Bad2", imageUrl: "https://example.com/b2.png", imageHash: "b2" },
 			}, { txId: sharedTxId, operationId: "op_bad_2" });
 
-			await routeOperation(invalid1, sql);
-			await routeOperation(invalid2, sql);
+			await withTransaction((txn) => routeOperation(invalid1, txn));
+			await withTransaction((txn) => routeOperation(invalid2, txn));
 
 			// Both must be recorded — old index (tx_id, action) would have lost one
 			const invalids = await sql`
@@ -423,7 +430,7 @@ describe("Multi-operation per transaction", () => {
 			const allOps = [validOps[0]!, validOps[1]!, invalidOp, validOps[2]!, validOps[3]!];
 
 			for (const op of allOps) {
-				await routeOperation(op, sql);
+				await withTransaction((txn) => routeOperation(op, txn));
 			}
 
 			// 4 valid NFTs created
@@ -459,8 +466,8 @@ describe("Multi-operation per transaction", () => {
 			const op1 = makeOp(ACTION_MINT, mintData, { txId: sharedTxId, operationId: "op_dup_1" });
 			const op2 = makeOp(ACTION_MINT, mintData, { txId: sharedTxId, operationId: "op_dup_2" });
 
-			await routeOperation(op1, sql);
-			await routeOperation(op2, sql);
+			await withTransaction((txn) => routeOperation(op1, txn));
+			await withTransaction((txn) => routeOperation(op2, txn));
 
 			// Only 1 NFT should exist (nftExists check is by id, not operation_id)
 			const nfts = await sql`SELECT id FROM nfts WHERE id = ${replayDupId}`;
@@ -514,9 +521,9 @@ describe("Multi-operation per transaction", () => {
 			}, { signer: "bob", txId: "tx_bob_block", operationId: "op_bob_2", blockNum: SHARED_BLOCK });
 
 			// All three in the same block, processed sequentially
-			await handleMint(aliceMint, sql);
-			await handleCreateCollection(bobCreate, sql);
-			await handleMint(bobMint, sql);
+			await withTransaction((txn) => handleMint(aliceMint, txn));
+			await withTransaction((txn) => handleCreateCollection(bobCreate, txn));
+			await withTransaction((txn) => handleMint(bobMint, txn));
 
 			// Verify all created correctly
 			const [aliceNft] = await sql`SELECT owner, created_block_num FROM nfts WHERE id = ${aliceSeedId}`;
@@ -532,7 +539,7 @@ describe("Multi-operation per transaction", () => {
 			const chainId = await canonicalSeedId("chain", COL_ID);
 
 			// Mint
-			await handleMint(makeOp(ACTION_MINT, {
+			await withTransaction((txn) => handleMint(makeOp(ACTION_MINT, {
 				id: chainId,
 				artId: "chain",
 				collectionId: COL_ID,
@@ -540,17 +547,17 @@ describe("Multi-operation per transaction", () => {
 				owner: "alice",
 				maxSupply: 1,
 				metadata: { name: "Chain", imageUrl: "https://example.com/c.png", imageHash: "ch" },
-			}), sql);
+			}), txn));
 
 			// Transfer A→B (tx_1 in block)
-			await handleTransfer(makeOp(ACTION_TRANSFER, {
+			await withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, {
 				nftId: chainId, to: "bob",
-			}, { txId: "tx_chain_1", operationId: "op_chain_1", blockNum: SHARED_BLOCK }), sql);
+			}, { txId: "tx_chain_1", operationId: "op_chain_1", blockNum: SHARED_BLOCK }), txn));
 
 			// Transfer B→C (tx_2 in same block, different tx)
-			await handleTransfer(makeOp(ACTION_TRANSFER, {
+			await withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, {
 				nftId: chainId, to: "charlie",
-			}, { signer: "bob", txId: "tx_chain_2", operationId: "op_chain_2", blockNum: SHARED_BLOCK }), sql);
+			}, { signer: "bob", txId: "tx_chain_2", operationId: "op_chain_2", blockNum: SHARED_BLOCK }), txn));
 
 			const [nft] = await sql`SELECT owner FROM nfts WHERE id = ${chainId}`;
 			expect(nft!.owner).toBe("charlie");
@@ -566,7 +573,7 @@ describe("Multi-operation per transaction", () => {
 			const bulkSharedId = await canonicalSeedId("bulk_shared", COL_ID);
 
 			// Op 1: mint a seed
-			await handleMint(makeOp(ACTION_MINT, {
+			await withTransaction((txn) => handleMint(makeOp(ACTION_MINT, {
 				id: bulkSharedId,
 				artId: "bulk_shared",
 				collectionId: COL_ID,
@@ -574,16 +581,16 @@ describe("Multi-operation per transaction", () => {
 				owner: "alice",
 				maxSupply: 10,
 				metadata: { name: "BulkShared", imageUrl: "https://example.com/bs.png", imageHash: "bsh" },
-			}, { txId: sharedTxId, operationId: "op_bs_mint" }), sql);
+			}, { txId: sharedTxId, operationId: "op_bs_mint" }), txn));
 
 			// Get the seed tx_id for bulk_distribute
 			const [seedRow] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${bulkSharedId}`;
 			const seedTxId = seedRow!.tx_id as string;
 
 			// Op 2: bulk distribute from the same seed, same tx_id
-			await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+			await withTransaction((txn) => handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
 				items: [{ seedId: bulkSharedId, quantity: 2, seedTxId }],
-			}, { txId: sharedTxId, operationId: "op_bs_dist" }), sql);
+			}, { txId: sharedTxId, operationId: "op_bs_dist" }), txn));
 
 			// Should have 1 seed + 2 instances = 3 NFTs total
 			const nfts = await sql`
@@ -607,7 +614,7 @@ describe("Multi-operation per transaction", () => {
 			const listUnlistId = await canonicalSeedId("list_unlist", COL_ID);
 
 			// Mint first
-			await handleMint(makeOp(ACTION_MINT, {
+			await withTransaction((txn) => handleMint(makeOp(ACTION_MINT, {
 				id: listUnlistId,
 				artId: "list_unlist",
 				collectionId: COL_ID,
@@ -615,27 +622,27 @@ describe("Multi-operation per transaction", () => {
 				owner: "alice",
 				maxSupply: 1,
 				metadata: { name: "ListUnlist", imageUrl: "https://example.com/lu.png", imageHash: "luh" },
-			}), sql);
+			}), txn));
 
 			const sharedTxId = "tx_list_unlist_same";
 
 			const [seed] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${listUnlistId}`;
-			await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+			await withTransaction((txn) => handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
 				items: [{ seedId: listUnlistId, quantity: 1, seedTxId: seed!.tx_id }],
-			}), sql);
+			}), txn));
 			const [instance] = await sql`SELECT id FROM nfts WHERE seed_id = ${listUnlistId} LIMIT 1`;
 			const instanceId = instance!.id as string;
 
 			// Op 1: list
 			const listData = await makeListData(instanceId);
-			await handleList(makeOp(ACTION_LIST, listData, {
+			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData, {
 				txId: sharedTxId, operationId: "op_list",
-			}), sql);
+			}), txn));
 
 			// Op 2: unlist (same tx_id, different operation_id)
-			await handleUnlist(makeOp(ACTION_UNLIST, { nftId: instanceId }, {
+			await withTransaction((txn) => handleUnlist(makeOp(ACTION_UNLIST, { nftId: instanceId }, {
 				txId: sharedTxId, operationId: "op_unlist",
-			}), sql);
+			}), txn));
 
 			const [nft] = await sql`SELECT status, listing_price FROM nfts WHERE id = ${instanceId}`;
 			expect(nft!.status).toBe("active");
