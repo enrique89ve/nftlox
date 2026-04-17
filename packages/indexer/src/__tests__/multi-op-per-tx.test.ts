@@ -14,7 +14,7 @@
  */
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { sql, type Queryable } from "@/db/client.ts";
-import type { ParsedOperation, AuthLevel } from "@/scanner/operation-parser.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { handleCreateCollection } from "@/processor/handlers/core/create-collection.ts";
 import { handleMint } from "@/processor/handlers/core/mint.ts";
 import { handleBulkDistribute } from "@/processor/handlers/core/bulk-distribute.ts";
@@ -31,10 +31,21 @@ import {
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTIVE_AUTH_ACTIONS,
+	PROTOCOL_COLLECTION_FEE_HBD,
 	generateListingNonce,
 	generateListingId,
 	generateDeterministicCollectionId,
+	generateDeterministicSeedId,
 } from "@/protocol/index.ts";
+
+/**
+ * Resolves the canonical seedId for a given artId. Mirrors the indexer's
+ * canonical enforcement so fixtures can reference seeds via short human-readable
+ * artIds while the handler receives the authoritative hash.
+ */
+async function canonicalSeedId(artId: string, collectionId: string): Promise<string> {
+	return generateDeterministicSeedId(collectionId, artId);
+}
 
 const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 const SHARED_BLOCK = 90000200;
@@ -90,10 +101,36 @@ async function cleanDb() {
 	await sql`DELETE FROM collections`;
 	await sql`DELETE FROM invalid_operations`;
 	await sql`DELETE FROM orphaned_buys`;
+	// Router skips handler dispatch when operationId is already in confirmed_operations
+	// (crash-replay gate). Tests reuse hardcoded operationIds across cases, so wipe the
+	// table between tests — otherwise later cases silently no-op instead of minting.
+	await sql`DELETE FROM confirmed_operations`;
+}
+
+/**
+ * Builds a create_collection op with the node-account signer and a paired fee
+ * transfer from `creator`. Mirrors the enforced shape: `op.signer` must be the
+ * node account; the creator is derived from `pairedTransfers[0].from`.
+ * `overrides` may set `txId`, `operationId`, `blockNum` — `signer` and
+ * `pairedTransfers` are always injected by this helper and cannot be overridden.
+ */
+function makeCreateCollectionOp(
+	data: Record<string, unknown>,
+	creator = "alice",
+	overrides: { txId?: string; operationId?: string; blockNum?: number } = {},
+): ParsedOperation {
+	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
+	return makeOp(ACTION_CREATE_COLLECTION, data, {
+		...overrides,
+		signer: config.hiveAccount,
+		pairedTransfers: [
+			{ from: creator, to: config.hiveAccount, amount: feeAmount, currency: "HBD", memo: "" },
+		],
+	});
 }
 
 async function seedCollection(txn: Queryable = sql) {
-	await handleCreateCollection(makeOp(ACTION_CREATE_COLLECTION, {
+	await handleCreateCollection(makeCreateCollectionOp({
 		id: COL_ID,
 		name: "Multi-Op Collection",
 		symbol: "MULTI",
@@ -148,8 +185,12 @@ describe("Multi-operation per transaction", () => {
 			await seedCollection();
 			const sharedTxId = "tx_shared_mint_001";
 
+			const seedA = await canonicalSeedId("multi_a", COL_ID);
+			const seedB = await canonicalSeedId("multi_b", COL_ID);
+
 			const mint1 = makeOp(ACTION_MINT, {
-				id: "seed_multi_a",
+				id: seedA,
+				artId: "multi_a",
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
@@ -158,7 +199,8 @@ describe("Multi-operation per transaction", () => {
 			}, { txId: sharedTxId, operationId: "op_mint_a" });
 
 			const mint2 = makeOp(ACTION_MINT, {
-				id: "seed_multi_b",
+				id: seedB,
+				artId: "multi_b",
 				collectionId: COL_ID,
 				edition: 2,
 				owner: "alice",
@@ -175,8 +217,7 @@ describe("Multi-operation per transaction", () => {
 				SELECT id, created_tx_id AS tx_id FROM nfts WHERE created_tx_id = ${sharedTxId} ORDER BY id
 			`;
 			expect(seeds.length).toBe(2);
-			expect(seeds[0]!.id).toBe("seed_multi_a");
-			expect(seeds[1]!.id).toBe("seed_multi_b");
+			expect(seeds.map(s => s.id).sort()).toEqual([seedA, seedB].sort());
 			expect(seeds[0]!.tx_id).toBe(sharedTxId);
 			expect(seeds[1]!.tx_id).toBe(sharedTxId);
 		});
@@ -184,15 +225,17 @@ describe("Multi-operation per transaction", () => {
 		test("replay of multi-mint tx is fully idempotent", async () => {
 			await seedCollection();
 			const sharedTxId = "tx_replay_mint";
+			const replayA = await canonicalSeedId("replay_a", COL_ID);
+			const replayB = await canonicalSeedId("replay_b", COL_ID);
 
 			const ops = [
 				makeOp(ACTION_MINT, {
-					id: "seed_replay_a", collectionId: COL_ID, edition: 1,
+					id: replayA, artId: "replay_a", collectionId: COL_ID, edition: 1,
 					owner: "alice", maxSupply: 3,
 					metadata: { name: "Replay A", imageUrl: "https://example.com/a.png", imageHash: "h1" },
 				}, { txId: sharedTxId, operationId: "op_r1" }),
 				makeOp(ACTION_MINT, {
-					id: "seed_replay_b", collectionId: COL_ID, edition: 2,
+					id: replayB, artId: "replay_b", collectionId: COL_ID, edition: 2,
 					owner: "alice", maxSupply: 3,
 					metadata: { name: "Replay B", imageUrl: "https://example.com/b.png", imageHash: "h2" },
 				}, { txId: sharedTxId, operationId: "op_r2" }),
@@ -217,10 +260,12 @@ describe("Multi-operation per transaction", () => {
 		test("mint and list with the same tx_id both succeed", async () => {
 			await seedCollection();
 			const sharedTxId = "tx_mint_and_list";
+			const mintListId = await canonicalSeedId("mintlist", COL_ID);
 
 			// Op 1: mint seed
 			const mintOp = makeOp(ACTION_MINT, {
-				id: "seed_mintlist",
+				id: mintListId,
+				artId: "mintlist",
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
@@ -232,9 +277,9 @@ describe("Multi-operation per transaction", () => {
 
 			// Op 2: distribute an instance, then list the instance (different operation_id, same tx_id)
 			await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
-				items: [{ seedId: "seed_mintlist", quantity: 1, seedTxId: sharedTxId }],
+				items: [{ seedId: mintListId, quantity: 1, seedTxId: sharedTxId }],
 			}, { txId: sharedTxId, operationId: "op_ml_distribute" }), sql);
-			const [instance] = await sql`SELECT id FROM nfts WHERE seed_id = 'seed_mintlist' LIMIT 1`;
+			const [instance] = await sql`SELECT id FROM nfts WHERE seed_id = ${mintListId} LIMIT 1`;
 			const instanceId = instance!.id as string;
 			const listData = await makeListData(instanceId);
 			const listOp = makeOp(ACTION_LIST, listData, {
@@ -259,10 +304,13 @@ describe("Multi-operation per transaction", () => {
 		test("valid op succeeds even when another op in the same tx fails", async () => {
 			await seedCollection();
 			const sharedTxId = "tx_mixed_validity";
+			const validId = await canonicalSeedId("valid", COL_ID);
+			const invalidId = await canonicalSeedId("invalid", "col_does_not_exist");
 
 			// Op 1: valid mint
 			const validMint = makeOp(ACTION_MINT, {
-				id: "seed_valid",
+				id: validId,
+				artId: "valid",
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
@@ -272,7 +320,8 @@ describe("Multi-operation per transaction", () => {
 
 			// Op 2: invalid mint (non-existent collection)
 			const invalidMint = makeOp(ACTION_MINT, {
-				id: "seed_invalid",
+				id: invalidId,
+				artId: "invalid",
 				collectionId: "col_does_not_exist",
 				edition: 1,
 				owner: "alice",
@@ -285,11 +334,11 @@ describe("Multi-operation per transaction", () => {
 			await routeOperation(invalidMint, sql);
 
 			// Valid op should have created the NFT
-			const [nft] = await sql`SELECT id FROM nfts WHERE id = 'seed_valid'`;
+			const [nft] = await sql`SELECT id FROM nfts WHERE id = ${validId}`;
 			expect(nft).toBeDefined();
 
 			// Invalid op should NOT have created anything
-			const [ghost] = await sql`SELECT id FROM nfts WHERE id = 'seed_invalid'`;
+			const [ghost] = await sql`SELECT id FROM nfts WHERE id = ${invalidId}`;
 			expect(ghost).toBeUndefined();
 
 			// Invalid op should be recorded with its own operation_id
@@ -304,10 +353,13 @@ describe("Multi-operation per transaction", () => {
 
 		test("two invalid ops with the same action in the same tx are both recorded", async () => {
 			const sharedTxId = "tx_double_invalid";
+			const bad1 = await canonicalSeedId("bad_1", "col_fake_1");
+			const bad2 = await canonicalSeedId("bad_2", "col_fake_2");
 
 			// Two invalid mints (same action, same tx, different operation_id)
 			const invalid1 = makeOp(ACTION_MINT, {
-				id: "seed_bad_1",
+				id: bad1,
+				artId: "bad_1",
 				collectionId: "col_fake_1",
 				edition: 1,
 				owner: "alice",
@@ -316,7 +368,8 @@ describe("Multi-operation per transaction", () => {
 			}, { txId: sharedTxId, operationId: "op_bad_1" });
 
 			const invalid2 = makeOp(ACTION_MINT, {
-				id: "seed_bad_2",
+				id: bad2,
+				artId: "bad_2",
 				collectionId: "col_fake_2",
 				edition: 1,
 				owner: "alice",
@@ -347,9 +400,13 @@ describe("Multi-operation per transaction", () => {
 			const sharedTxId = "tx_5ops_max";
 
 			const validSeeds = ["a", "b", "c", "d"];
+			const validIds = await Promise.all(
+				validSeeds.map(l => canonicalSeedId(`5op_${l}`, COL_ID)),
+			);
+			const invalidSeedId = await canonicalSeedId("5op_bad", "col_nonexistent");
 			const validOps = validSeeds.map((letter, i) =>
 				makeOp(ACTION_MINT, {
-					id: `seed_5op_${letter}`, collectionId: COL_ID, edition: i + 1,
+					id: validIds[i]!, artId: `5op_${letter}`, collectionId: COL_ID, edition: i + 1,
 					owner: "alice", maxSupply: 5,
 					metadata: { name: `5op ${letter.toUpperCase()}`, imageUrl: `https://example.com/5${letter}.png`, imageHash: `5${letter}h` },
 				}, { txId: sharedTxId, operationId: `op_5_${i + 1}` }),
@@ -357,7 +414,7 @@ describe("Multi-operation per transaction", () => {
 
 			// Op 3 (index 2): invalid mint — bad collection, sits between valid ops
 			const invalidOp = makeOp(ACTION_MINT, {
-				id: "seed_5op_bad", collectionId: "col_nonexistent",
+				id: invalidSeedId, artId: "5op_bad", collectionId: "col_nonexistent",
 				edition: 1, owner: "alice", maxSupply: 1,
 				metadata: { name: "Bad", imageUrl: "https://example.com/bad.png", imageHash: "bad" },
 			}, { txId: sharedTxId, operationId: "op_5_3" });
@@ -372,9 +429,7 @@ describe("Multi-operation per transaction", () => {
 			// 4 valid NFTs created
 			const nfts = await sql`SELECT id FROM nfts WHERE created_tx_id = ${sharedTxId} ORDER BY id`;
 			expect(nfts.length).toBe(4);
-			expect(nfts.map(n => n.id)).toEqual(
-				validSeeds.map(l => `seed_5op_${l}`),
-			);
+			expect(nfts.map(n => n.id).sort()).toEqual([...validIds].sort());
 
 			// 1 invalid recorded with correct operation_id
 			const invalids = await sql`
@@ -385,17 +440,18 @@ describe("Multi-operation per transaction", () => {
 			expect(invalids[0]!.reason).toContain("not found");
 
 			// Ghost NFT never created
-			const [ghost] = await sql`SELECT id FROM nfts WHERE id = 'seed_5op_bad'`;
+			const [ghost] = await sql`SELECT id FROM nfts WHERE id = ${invalidSeedId}`;
 			expect(ghost).toBeUndefined();
 		});
 
 		test("same operation replayed with different operation_id is idempotent", async () => {
 			await seedCollection();
 			const sharedTxId = "tx_replay_same_op";
+			const replayDupId = await canonicalSeedId("replay_dup", COL_ID);
 
 			// Same mint payload, two different operation_ids (simulating replay / duplicate broadcast)
 			const mintData = {
-				id: "seed_replay_dup", collectionId: COL_ID, edition: 1,
+				id: replayDupId, artId: "replay_dup", collectionId: COL_ID, edition: 1,
 				owner: "alice", maxSupply: 5,
 				metadata: { name: "Dup", imageUrl: "https://example.com/dup.png", imageHash: "duph" },
 			};
@@ -407,7 +463,7 @@ describe("Multi-operation per transaction", () => {
 			await routeOperation(op2, sql);
 
 			// Only 1 NFT should exist (nftExists check is by id, not operation_id)
-			const nfts = await sql`SELECT id FROM nfts WHERE id = 'seed_replay_dup'`;
+			const nfts = await sql`SELECT id FROM nfts WHERE id = ${replayDupId}`;
 			expect(nfts.length).toBe(1);
 
 			// Second op should NOT be in invalid_operations (it returned early, not threw)
@@ -423,10 +479,12 @@ describe("Multi-operation per transaction", () => {
 	describe("multiple transactions in the same block", () => {
 		test("different signers can each mint in the same block", async () => {
 			await seedCollection();
+			const aliceSeedId = await canonicalSeedId("alice_block", COL_ID);
 
 			// Alice mints in tx_A, bob creates collection + mints in tx_B, same block
 			const aliceMint = makeOp(ACTION_MINT, {
-				id: "seed_alice_block",
+				id: aliceSeedId,
+				artId: "alice_block",
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
@@ -435,17 +493,19 @@ describe("Multi-operation per transaction", () => {
 			}, { txId: "tx_alice_block", operationId: "op_alice_1", blockNum: SHARED_BLOCK });
 
 			const bobColId = await generateDeterministicCollectionId("bob", "Bob Collection", "BOB");
-			const bobCreate = makeOp(ACTION_CREATE_COLLECTION, {
+			const bobSeedId = await canonicalSeedId("bob_block", bobColId);
+			const bobCreate = makeCreateCollectionOp({
 				id: bobColId,
 				name: "Bob Collection",
 				symbol: "BOB",
 				totalPotential: 50,
 				metadata: { description: "Bob's", image: "https://example.com/bob.png" },
 				rules: { transferable: true, burnable: true, royaltyPct: 0 },
-			}, { signer: "bob", txId: "tx_bob_block", operationId: "op_bob_1", blockNum: SHARED_BLOCK });
+			}, "bob", { txId: "tx_bob_block", operationId: "op_bob_1", blockNum: SHARED_BLOCK });
 
 			const bobMint = makeOp(ACTION_MINT, {
-				id: "seed_bob_block",
+				id: bobSeedId,
+				artId: "bob_block",
 				collectionId: bobColId,
 				edition: 1,
 				owner: "bob",
@@ -459,8 +519,8 @@ describe("Multi-operation per transaction", () => {
 			await handleMint(bobMint, sql);
 
 			// Verify all created correctly
-			const [aliceNft] = await sql`SELECT owner, created_block_num FROM nfts WHERE id = 'seed_alice_block'`;
-			const [bobNft] = await sql`SELECT owner, created_block_num FROM nfts WHERE id = 'seed_bob_block'`;
+			const [aliceNft] = await sql`SELECT owner, created_block_num FROM nfts WHERE id = ${aliceSeedId}`;
+			const [bobNft] = await sql`SELECT owner, created_block_num FROM nfts WHERE id = ${bobSeedId}`;
 			expect(aliceNft!.owner).toBe("alice");
 			expect(bobNft!.owner).toBe("bob");
 			expect(Number(aliceNft!.created_block_num)).toBe(SHARED_BLOCK);
@@ -469,10 +529,12 @@ describe("Multi-operation per transaction", () => {
 
 		test("transfer chain within the same block (A→B then B→C)", async () => {
 			await seedCollection();
+			const chainId = await canonicalSeedId("chain", COL_ID);
 
 			// Mint
 			await handleMint(makeOp(ACTION_MINT, {
-				id: "seed_chain",
+				id: chainId,
+				artId: "chain",
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
@@ -482,15 +544,15 @@ describe("Multi-operation per transaction", () => {
 
 			// Transfer A→B (tx_1 in block)
 			await handleTransfer(makeOp(ACTION_TRANSFER, {
-				nftId: "seed_chain", to: "bob",
+				nftId: chainId, to: "bob",
 			}, { txId: "tx_chain_1", operationId: "op_chain_1", blockNum: SHARED_BLOCK }), sql);
 
 			// Transfer B→C (tx_2 in same block, different tx)
 			await handleTransfer(makeOp(ACTION_TRANSFER, {
-				nftId: "seed_chain", to: "charlie",
+				nftId: chainId, to: "charlie",
 			}, { signer: "bob", txId: "tx_chain_2", operationId: "op_chain_2", blockNum: SHARED_BLOCK }), sql);
 
-			const [nft] = await sql`SELECT owner FROM nfts WHERE id = 'seed_chain'`;
+			const [nft] = await sql`SELECT owner FROM nfts WHERE id = ${chainId}`;
 			expect(nft!.owner).toBe("charlie");
 		});
 	});
@@ -501,10 +563,12 @@ describe("Multi-operation per transaction", () => {
 		test("bulk distribute + mint sharing tx_id do not collide", async () => {
 			await seedCollection();
 			const sharedTxId = "tx_bulk_mint_shared";
+			const bulkSharedId = await canonicalSeedId("bulk_shared", COL_ID);
 
 			// Op 1: mint a seed
 			await handleMint(makeOp(ACTION_MINT, {
-				id: "seed_bulk_shared",
+				id: bulkSharedId,
+				artId: "bulk_shared",
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
@@ -513,12 +577,12 @@ describe("Multi-operation per transaction", () => {
 			}, { txId: sharedTxId, operationId: "op_bs_mint" }), sql);
 
 			// Get the seed tx_id for bulk_distribute
-			const [seedRow] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'seed_bulk_shared'`;
+			const [seedRow] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${bulkSharedId}`;
 			const seedTxId = seedRow!.tx_id as string;
 
 			// Op 2: bulk distribute from the same seed, same tx_id
 			await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
-				items: [{ seedId: "seed_bulk_shared", quantity: 2, seedTxId }],
+				items: [{ seedId: bulkSharedId, quantity: 2, seedTxId }],
 			}, { txId: sharedTxId, operationId: "op_bs_dist" }), sql);
 
 			// Should have 1 seed + 2 instances = 3 NFTs total
@@ -540,10 +604,12 @@ describe("Multi-operation per transaction", () => {
 	describe("list then unlist in the same tx", () => {
 		test("list and immediate unlist in the same tx leaves NFT active", async () => {
 			await seedCollection();
+			const listUnlistId = await canonicalSeedId("list_unlist", COL_ID);
 
 			// Mint first
 			await handleMint(makeOp(ACTION_MINT, {
-				id: "seed_list_unlist",
+				id: listUnlistId,
+				artId: "list_unlist",
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
@@ -553,11 +619,11 @@ describe("Multi-operation per transaction", () => {
 
 			const sharedTxId = "tx_list_unlist_same";
 
-			const [seed] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = 'seed_list_unlist'`;
+			const [seed] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${listUnlistId}`;
 			await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
-				items: [{ seedId: "seed_list_unlist", quantity: 1, seedTxId: seed!.tx_id }],
+				items: [{ seedId: listUnlistId, quantity: 1, seedTxId: seed!.tx_id }],
 			}), sql);
-			const [instance] = await sql`SELECT id FROM nfts WHERE seed_id = 'seed_list_unlist' LIMIT 1`;
+			const [instance] = await sql`SELECT id FROM nfts WHERE seed_id = ${listUnlistId} LIMIT 1`;
 			const instanceId = instance!.id as string;
 
 			// Op 1: list

@@ -37,6 +37,7 @@ import {
 	generateListingNonce,
 	generateListingId,
 	generateDeterministicCollectionId,
+	generateDeterministicSeedId,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	type MultisigResponse,
 	type MultisigErrorCode,
@@ -118,19 +119,22 @@ async function seedCollection(
 	return id;
 }
 
-async function seedMint(nftId = "seed_test1", collectionId: string) {
+async function seedMint(artId: string, collectionId: string): Promise<string> {
+	const nftId = await generateDeterministicSeedId(collectionId, artId);
 	const op = makeOp(ACTION_MINT, {
 		id: nftId,
+		artId,
 		collectionId,
 		edition: 1,
 		owner: "alice",
 		maxSupply: 10,
-		metadata: { name: `NFT ${nftId}`, imageUrl: "https://example.com/nft.png", imageHash: "img_abc" },
+		metadata: { name: `NFT ${artId}`, imageUrl: "https://example.com/nft.png", imageHash: "img_abc" },
 	});
 	await handleMint(op, sql);
+	return nftId;
 }
 
-async function seedInstance(seedId = "seed_test1"): Promise<string> {
+async function seedInstance(seedId: string): Promise<string> {
 	const [seed] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${seedId}`;
 	await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
 		items: [{ seedId, quantity: 1, seedTxId: seed!.tx_id }],
@@ -167,8 +171,8 @@ async function seedListedInstance(): Promise<Readonly<{
 	readonly nftTxId: string;
 }>> {
 	const colId = await seedCollection();
-	await seedMint("seed_test1", colId);
-	const nftId = await seedInstance();
+	const seedId = await seedMint("test1", colId);
+	const nftId = await seedInstance(seedId);
 	const listing = await listNft(nftId);
 	return { nftId, ...listing };
 }
@@ -340,8 +344,8 @@ describe("Multisig service (regression)", () => {
 	describe("non-transferable collection guards", () => {
 		test("rejects co-sign for non-transferable collection", async () => {
 			const colId = await seedCollection("Locked Col", "LOCKED", false);
-			await seedMint("seed_locked1", colId);
-			const nftId = await seedInstance("seed_locked1");
+			const seedId = await seedMint("locked1", colId);
+			const nftId = await seedInstance(seedId);
 
 			const { listingId, listTxId } = await forceListViaSql(nftId);
 
@@ -363,8 +367,8 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects co-sign for non-transferable even with royalties", async () => {
 			const colId = await seedCollection("Locked Roy", "LOCKROY", false, 10);
-			await seedMint("seed_locked_roy1", colId);
-			const nftId = await seedInstance("seed_locked_roy1");
+			const seedId = await seedMint("locked_roy1", colId);
+			const nftId = await seedInstance(seedId);
 
 			const { listingId, listTxId } = await forceListViaSql(nftId);
 
@@ -402,11 +406,11 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects co-sign for unlisted NFT", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
+			const seedId = await seedMint("test1", colId);
 
 			const body = makeMultisigBody({
 				buyer: "bob",
-				nftId: "seed_test1",
+				nftId: seedId,
 				listingId: "list_fake",
 				listTxId: "tx_fake",
 				seller: "alice",
@@ -418,8 +422,8 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects co-sign when buyer is owner", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
-			const nftId = await seedInstance();
+			const seedId = await seedMint("test1", colId);
+			const nftId = await seedInstance(seedId);
 			const { listingId, listTxId, nftTxId } = await listNft(nftId);
 
 			const body = makeMultisigBody({
@@ -437,8 +441,8 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects co-sign for expired listing", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
-			const nftId = await seedInstance();
+			const seedId = await seedMint("test1", colId);
+			const nftId = await seedInstance(seedId);
 
 			// Force-list with past expiry
 			await sql`
@@ -466,12 +470,12 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects co-sign for legacy listed seed", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
-			const { listingId, listTxId } = await forceListViaSql("seed_test1");
+			const seedId = await seedMint("test1", colId);
+			const { listingId, listTxId } = await forceListViaSql(seedId);
 
 			const body = makeMultisigBody({
 				buyer: "bob",
-				nftId: "seed_test1",
+				nftId: seedId,
 				listingId,
 				listTxId,
 				seller: "alice",
@@ -553,8 +557,8 @@ describe("Multisig service (regression)", () => {
 	describe("transaction structure validation", () => {
 		test("rejects wrong node account in custom_json", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
-			const nftId = await seedInstance();
+			const seedId = await seedMint("test1", colId);
+			const nftId = await seedInstance(seedId);
 			const { listingId, listTxId, nftTxId } = await listNft(nftId);
 
 			const body = makeMultisigBody({
@@ -578,8 +582,8 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects wrong protocol ID in custom_json", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
-			const nftId = await seedInstance();
+			const seedId = await seedMint("test1", colId);
+			const nftId = await seedInstance(seedId);
 			const { listingId, listTxId, nftTxId } = await listNft(nftId);
 
 			const body = makeMultisigBody({
@@ -602,8 +606,8 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects transfer from non-buyer account", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
-			const nftId = await seedInstance();
+			const seedId = await seedMint("test1", colId);
+			const nftId = await seedInstance(seedId);
 			const { listingId, listTxId, nftTxId } = await listNft(nftId);
 
 			const body = makeMultisigBody({
@@ -626,8 +630,8 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects transfer operation with invalid shape", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
-			const nftId = await seedInstance();
+			const seedId = await seedMint("test1", colId);
+			const nftId = await seedInstance(seedId);
 			const { listingId, listTxId, nftTxId } = await listNft(nftId);
 
 			const body = makeMultisigBody({
@@ -647,8 +651,8 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects non-empty signatures array", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
-			const nftId = await seedInstance();
+			const seedId = await seedMint("test1", colId);
+			const nftId = await seedInstance(seedId);
 			const { listingId, listTxId, nftTxId } = await listNft(nftId);
 
 			const body = makeMultisigBody({
@@ -668,8 +672,8 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects expiration too soon", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
-			const nftId = await seedInstance();
+			const seedId = await seedMint("test1", colId);
+			const nftId = await seedInstance(seedId);
 			const { listingId, listTxId } = await listNft(nftId);
 
 			const body = makeMultisigBody({
@@ -690,8 +694,8 @@ describe("Multisig service (regression)", () => {
 
 		test("rejects expiration too far in the future", async () => {
 			const colId = await seedCollection();
-			await seedMint("seed_test1", colId);
-			const nftId = await seedInstance();
+			const seedId = await seedMint("test1", colId);
+			const nftId = await seedInstance(seedId);
 			const { listingId, listTxId } = await listNft(nftId);
 
 			const body = makeMultisigBody({

@@ -18,7 +18,7 @@
 //   comes from HafAH, not from this root. The root is a comparison tool,
 //   not a proof of correctness.
 
-import { canonicalJson } from "@/utils/canonical-json.ts";
+import { canonicalJson } from "@/protocol/index.ts";
 
 // ============ ROW SHAPE ============
 

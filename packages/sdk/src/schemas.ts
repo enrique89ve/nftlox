@@ -11,41 +11,16 @@ import {
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	SYMBOL_REGEX,
 	TX_ID_REGEX,
-} from "./constants";
-// Hive asset precision: exactly 3 decimal places, no leading zeros (except "0.xxx")
-const HIVE_DECIMAL_REGEX = /^(0|[1-9]\d*)\.\d{3}$/;
+	validateHiveUsername,
+} from "@nftlox/protocol";
+
+export { validateHiveUsername };
 
 // Safe URL: only http:// and https:// protocols (blocks javascript:, data:, etc.)
 const httpUrlSchema = z.string().url().refine(
 	(val) => /^https?:\/\//i.test(val),
 	{ message: "URL must use http or https protocol" },
 );
-
-// ============ HIVE USERNAME VALIDATION ============
-// Mirrors hive-tx validateUsername() rules exactly:
-// - 3-16 chars total
-// - Dot-separated segments, each >= 3 chars
-// - Each segment starts with lowercase letter
-// - Each segment contains only lowercase letters, digits, hyphens
-// - Each segment ends with lowercase letter or digit
-
-export function validateHiveUsername(username: string): string | null {
-	if (!username) return "Account name should not be empty.";
-	if (username.length < 3) return "Account name should be longer.";
-	if (username.length > 16) return "Account name should be shorter.";
-
-	const suffix = /\./.test(username)
-		? "Each account segment should "
-		: "Account name should ";
-
-	for (const segment of username.split(".")) {
-		if (!/^[a-z]/.test(segment)) return suffix + "start with a lowercase letter.";
-		if (!/^[a-z0-9-]*$/.test(segment)) return suffix + "have only lowercase letters, digits, or dashes.";
-		if (!/[a-z0-9]$/.test(segment)) return suffix + "end with a lowercase letter or digit.";
-		if (segment.length < 3) return suffix + "be longer.";
-	}
-	return null;
-}
 
 // ============ REUSABLE SCHEMAS ============
 
@@ -323,3 +298,16 @@ export const nodeRegisterInputSchema = z.object({
 	publicKey: z.string().min(10, "Public key must be at least 10 characters"),
 });
 export type NodeRegisterInput = z.infer<typeof nodeRegisterInputSchema>;
+
+// Format must match `formatStateRoot()` in the indexer: lowercase hex, 64 chars.
+const stateRootSchema = z.string().regex(
+	/^sha256:[0-9a-f]{64}$/,
+	"stateRoot must be formatted as 'sha256:<64 lowercase hex chars>'",
+);
+
+export const nodeHeartbeatInputSchema = z.object({
+	blockNum: z.number().int().nonnegative("blockNum must be a non-negative integer"),
+	stateRoot: stateRootSchema,
+	indexerVersion: z.string().trim().min(1, "indexerVersion is required").max(32, "indexerVersion must be at most 32 characters"),
+});
+export type NodeHeartbeatInput = z.infer<typeof nodeHeartbeatInputSchema>;

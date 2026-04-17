@@ -1,16 +1,17 @@
 // Build routes — construct Hive operations via SDK builders
 import { Transaction } from "hive-tx";
 import {
-	ACTION_CREATE_COLLECTION,
+	ACTION_EXTEND_SCHEMA,
 	PROTOCOL_VERSION,
-	PROTOCOL_ID,
 	HASH_VERSION,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	requestCreateCollectionMultisig,
-	createExtendSchemaOperation,
-	createExtendSchemaPayload,
 	extendSchemaInputSchema,
 	usernameSchema,
+	createPayload,
+	createHiveOperation,
+	getKeyType,
+	type HiveTransactionObject,
 	// Builders
 	buildCollection,
 	buildArchiveCollection,
@@ -73,6 +74,13 @@ function keyTypeFromOp(operation: unknown): "Active" | "Posting" {
 	return op[1]?.required_auths?.length ? "Active" : "Posting";
 }
 
+/** hive-tx's Transaction uses concrete Hive operation unions; the SDK accepts a
+ * structurally narrower shape. They are wire-compatible, so widen the type at
+ * the boundary without losing runtime shape. */
+function asProtocolTransaction(tx: unknown): HiveTransactionObject {
+	return tx as HiveTransactionObject;
+}
+
 function buildRoute(handler: (body: any) => Response | Promise<Response>): { POST: RouteHandler } {
 	return {
 		POST: async (req: Request) => {
@@ -90,25 +98,32 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	// ============ EXISTING BUILD ENDPOINTS ============
 
 	"/api/build/collection": buildRoute(async (body) => {
-		const result = await buildCollection(body);
+		const statusRes = await fetch(`${INDEXER_URL}/api/status`);
+		if (!statusRes.ok) return json({ success: false, error: "Indexer status unavailable" }, 502);
+		const statusRaw: unknown = await statusRes.json();
+		if (!isIndexerStatusResponse(statusRaw) || !statusRaw.nodeAccount) {
+			return json({ success: false, error: "Indexer node account unavailable" }, 502);
+		}
+
+		const result = await buildCollection(body, { nodeAccount: statusRaw.nodeAccount });
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
+
+		const customJsonOp = result.operations.find((op) => op[0] === "custom_json");
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			hashVersion: HASH_VERSION,
-			collectionId: result.generatedId,
+			collectionId: result.generatedIds?.collectionId,
 			generatedIds: result.generatedIds,
-			operation: result.operation,
+			operations: result.operations,
+			operation: customJsonOp,
 			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
+			keyType: result.keyType,
 			warnings: result.warnings,
 		});
 	}),
 
 	"/api/build/collection-multisig": buildRoute(async (body) => {
-		const result = await buildCollection(body);
-		if (!result.success) return json({ success: false, errors: result.errors }, 400);
-
 		const statusRes = await fetch(`${INDEXER_URL}/api/status`);
 		if (!statusRes.ok) {
 			return json({ success: false, error: "Indexer status unavailable" }, 502);
@@ -122,32 +137,27 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			return json({ success: false, error: "Indexer node account unavailable" }, 502);
 		}
 
+		const result = await buildCollection(body, { nodeAccount: status.nodeAccount });
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
+
 		const tx = new Transaction({ expiration: TX_EXPIRATION_MS });
-		await tx.addOperation("transfer", {
-			from: body.creator,
-			to: status.nodeAccount,
-			amount: `${PROTOCOL_COLLECTION_FEE_HBD} HBD`,
-			memo: `NFTLox collection fee:${result.generatedId}`,
-		});
-		await tx.addOperation("custom_json", {
-			required_auths: [status.nodeAccount],
-			required_posting_auths: [],
-			id: PROTOCOL_ID,
-			json: JSON.stringify({
-				protocol: PROTOCOL_ID,
-				version: PROTOCOL_VERSION,
-				action: ACTION_CREATE_COLLECTION,
-				data: result.payload.data,
-			}),
-		});
+		for (const [opName, opBody] of result.operations) {
+			// hive-tx's Operation union types auth arrays as mutable `string[]`,
+			// while our protocol contract exposes them as `readonly string[]` to
+			// prevent in-place mutation of built operations. The wire shape is
+			// identical — widen through `unknown` at this library boundary.
+			await tx.addOperation(
+				opName as Parameters<Transaction["addOperation"]>[0],
+				opBody as unknown as Parameters<Transaction["addOperation"]>[1],
+			);
+		}
 
 		if (!tx.transaction) {
 			return json({ success: false, error: "Transaction building failed" }, 500);
 		}
 
 		const multisigRequest = {
-			creator: body.creator,
-			transaction: tx.transaction,
+			transaction: asProtocolTransaction(tx.transaction),
 		};
 		const multisigResult = await requestCreateCollectionMultisig(INDEXER_URL, multisigRequest);
 
@@ -163,13 +173,13 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			hashVersion: HASH_VERSION,
-			collectionId: result.generatedId,
+			collectionId: result.generatedIds?.collectionId,
 			generatedIds: result.generatedIds,
 			transaction: tx.transaction,
 			nodeSignature: multisigResult.signature,
 			digest: multisigResult.digest,
 			payload: result.payload,
-			keyType: "Active",
+			keyType: result.keyType,
 			fee: {
 				amount: PROTOCOL_COLLECTION_FEE_HBD,
 				currency: "HBD",
@@ -199,8 +209,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			if (!seedResult.success) return null;
 			return {
 				artId: seed.artId,
-				seedId: seedResult.generatedId,
-				operation: seedResult.operation,
+				seedId: seedResult.generatedIds?.seedId,
+				operation: seedResult.operations[0],
 			};
 		}));
 		const validOps = operations.filter(Boolean);
@@ -229,9 +239,9 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
+			operation: result.operations[0],
 			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
+			keyType: keyTypeFromOp(result.operations[0]),
 			warnings: result.warnings,
 		});
 	}),
@@ -242,9 +252,9 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
+			operation: result.operations[0],
 			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -254,9 +264,9 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
+			operation: result.operations[0],
 			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -266,9 +276,9 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
+			operation: result.operations[0],
 			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -278,9 +288,9 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
+			operation: result.operations[0],
 			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -290,7 +300,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			hiveOperations: (result as any).hiveOperations,
+			hiveOperations: result.operations,
 			payload: result.payload,
 			keyType: "Active",
 		});
@@ -329,9 +339,9 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
+			operation: result.operations[0],
 			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -341,9 +351,9 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
+			operation: result.operations[0],
 			payload: result.payload,
-			keyType: keyTypeFromOp(result.operation),
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -353,14 +363,14 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		const parsedCreator = usernameSchema.safeParse(body.creator);
 		if (!parsedCreator.success) return json({ success: false, errors: parsedCreator.error.issues }, 400);
 
-		const operation = createExtendSchemaOperation(parsedInput.data, parsedCreator.data);
-		const payload = createExtendSchemaPayload(parsedInput.data);
+		const payload = createPayload("extend_schema", parsedInput.data);
+		const operation = createHiveOperation(payload, parsedCreator.data);
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			operation,
 			payload,
-			keyType: keyTypeFromOp(operation),
+			keyType: getKeyType(ACTION_EXTEND_SCHEMA),
 		});
 	}),
 
@@ -372,8 +382,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			keyType: keyTypeFromOp(result.operation),
+			operation: result.operations[0],
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -383,8 +393,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			keyType: keyTypeFromOp(result.operation),
+			operation: result.operations[0],
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -394,8 +404,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			keyType: keyTypeFromOp(result.operation),
+			operation: result.operations[0],
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -407,8 +417,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			keyType: keyTypeFromOp(result.operation),
+			operation: result.operations[0],
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -418,8 +428,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			keyType: keyTypeFromOp(result.operation),
+			operation: result.operations[0],
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -431,8 +441,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			keyType: keyTypeFromOp(result.operation),
+			operation: result.operations[0],
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 
@@ -442,8 +452,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
-			operation: result.operation,
-			keyType: keyTypeFromOp(result.operation),
+			operation: result.operations[0],
+			keyType: keyTypeFromOp(result.operations[0]),
 		});
 	}),
 };

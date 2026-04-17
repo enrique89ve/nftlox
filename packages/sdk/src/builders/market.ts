@@ -1,17 +1,31 @@
 import { z } from "zod";
 import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema } from "../schemas";
 import { formatZodError } from "./helpers";
-import { generateImageHash, generateListingNonce, generateListingId } from "../dna";
-import { ACTION_LIST, ACTION_BUY, ACTION_UNLIST, MEMO_PREFIX_BUY, MEMO_PREFIX_ROYALTY, MEMO_PREFIX_FEE } from "../constants";
-import { makePayload, toHiveOperation, createBuyOperation } from "../payloads";
-import type { BuildResult, ListingData, UnlistData, ProtocolPayload, HiveOperation, BuyData, HiveTransferOperation } from "../types";
+import type { KeychainResult } from "./types";
+import {
+	generateImageHash,
+	generateListingNonce,
+	generateListingId,
+	createPayload,
+	createHiveOperation,
+	getKeyType,
+	MEMO_PREFIX_BUY,
+	MEMO_PREFIX_ROYALTY,
+	MEMO_PREFIX_FEE,
+	type ListingData,
+	type UnlistData,
+	type BuyData,
+	type HiveTransferOperation,
+} from "@nftlox/protocol";
 
 export const listBuilderSchema = listInputSchema.extend({
 	owner: usernameSchema,
 });
 export type ListBuilderInput = z.infer<typeof listBuilderSchema>;
 
-export async function buildList(input: ListBuilderInput): Promise<BuildResult<ListingData>> {
+export async function buildList(
+	input: ListBuilderInput,
+): Promise<KeychainResult<ListingData>> {
 	const parsed = listBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -37,7 +51,7 @@ export async function buildList(input: ListBuilderInput): Promise<BuildResult<Li
 		nonce: listingNonce,
 	});
 
-	const payloadData: ListingData = {
+	const listingData: ListingData = {
 		nftId: data.nftId,
 		listingId,
 		listingNonce,
@@ -50,14 +64,17 @@ export async function buildList(input: ListBuilderInput): Promise<BuildResult<Li
 		...(data.marketplace && { marketplace: data.marketplace }),
 	};
 
-	const payload: ProtocolPayload<ListingData> = makePayload(ACTION_LIST, payloadData);
-	const operation = toHiveOperation(payload, data.owner);
+	const payload = createPayload("list", listingData);
+	const operation = createHiveOperation(payload, data.owner);
 
 	return {
 		success: true,
+		operations: [operation],
+		keyType: getKeyType("list"),
+		signer: data.owner,
 		payload,
-		operation,
-		warnings: warnings.length > 0 ? warnings : undefined,
+		generatedIds: { listingId, listingNonce },
+		...(warnings.length > 0 && { warnings }),
 	};
 }
 
@@ -66,7 +83,9 @@ export const unlistBuilderSchema = unlistInputSchema.extend({
 });
 export type UnlistBuilderInput = z.infer<typeof unlistBuilderSchema>;
 
-export async function buildUnlist(input: UnlistBuilderInput): Promise<BuildResult<UnlistData>> {
+export async function buildUnlist(
+	input: UnlistBuilderInput,
+): Promise<KeychainResult<UnlistData>> {
 	const parsed = unlistBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -81,7 +100,7 @@ export async function buildUnlist(input: UnlistBuilderInput): Promise<BuildResul
 
 	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
 
-	const payloadData: UnlistData = {
+	const unlistData: UnlistData = {
 		nftId: data.nftId,
 		...(data.imageUrl && { imageUrl: data.imageUrl }),
 		...(imageHash && { imageHash }),
@@ -89,14 +108,16 @@ export async function buildUnlist(input: UnlistBuilderInput): Promise<BuildResul
 		...(data.seedTxId && { seedTxId: data.seedTxId }),
 	};
 
-	const payload: ProtocolPayload<UnlistData> = makePayload(ACTION_UNLIST, payloadData);
-	const operation = toHiveOperation(payload, data.owner);
+	const payload = createPayload("unlist", unlistData);
+	const operation = createHiveOperation(payload, data.owner);
 
 	return {
 		success: true,
+		operations: [operation],
+		keyType: getKeyType("unlist"),
+		signer: data.owner,
 		payload,
-		operation,
-		warnings: warnings.length > 0 ? warnings : undefined,
+		...(warnings.length > 0 && { warnings }),
 	};
 }
 
@@ -113,39 +134,37 @@ export const paymentSplitSchema = z.object({
 export const buyBuilderSchema = buyInputSchema.extend({
 	buyer: usernameSchema,
 	seller: usernameSchema,
-	nodeAccount: usernameSchema,
 	paymentSplit: paymentSplitSchema,
 });
 export type BuyBuilderInput = z.infer<typeof buyBuilderSchema>;
 
-export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
+export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 	const parsed = buyBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 
 	const data = parsed.data;
-	const warnings: string[] = [];
 
 	if (data.buyer === data.seller) {
 		return { success: false, errors: [{ field: "buyer", message: "Cannot buy your own NFT", code: "CANNOT_BUY_OWN" }] };
 	}
 
-	const payload: ProtocolPayload<BuyData> = makePayload(ACTION_BUY, {
+	const buyData: BuyData = {
 		nftId: data.nftId,
 		listingId: data.listingId,
 		listTxId: data.listTxId,
 		txId: data.txId,
 		...(data.seedId && { seedId: data.seedId }),
 		...(data.seedTxId && { seedTxId: data.seedTxId }),
-	});
+	};
 
-	const payloadOperation = createBuyOperation(payload.data, data.nodeAccount);
+	const payload = createPayload("buy", buyData);
+	const buyCustomJson = createHiveOperation(payload, data.buyer);
 
 	const paymentSplit = data.paymentSplit;
 	const currencyExt = paymentSplit.currency;
 	const precision = 3;
-
 	const formatAmount = (amt: number) => amt.toFixed(precision) + " " + currencyExt;
 
 	const transfers: HiveTransferOperation[] = [];
@@ -185,8 +204,9 @@ export function buildBuy(input: BuyBuilderInput): BuildResult<BuyData> {
 
 	return {
 		success: true,
+		operations: [...transfers, buyCustomJson],
+		keyType: getKeyType("buy"),
+		signer: data.buyer,
 		payload,
-		hiveOperations: [...transfers, payloadOperation],
-		warnings: warnings.length > 0 ? warnings : undefined,
 	};
 }

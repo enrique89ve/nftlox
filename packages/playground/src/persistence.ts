@@ -152,16 +152,16 @@ export function updateSessionStatus(
 	const session = getSession(sessionId);
 	if (!session) return null;
 
-	session.status = status;
+	const now = Date.now();
+	const updated: MintingSession = {
+		...session,
+		status,
+		...(status === "validated" && { validatedAt: now }),
+		...(status === "complete" && { completedAt: now }),
+	};
 
-	if (status === "validated") {
-		session.validatedAt = Date.now();
-	} else if (status === "complete") {
-		session.completedAt = Date.now();
-	}
-
-	saveSession(session);
-	return session;
+	saveSession(updated);
+	return updated;
 }
 
 /**
@@ -175,13 +175,14 @@ export function updateCollectionBroadcast(
 	const session = getSession(sessionId);
 	if (!session) return null;
 
-	session.collectionBroadcast = { status, txId };
-	if (status === "confirmed") {
-		session.status = "seeds_partial";
-	}
+	const updated: MintingSession = {
+		...session,
+		collectionBroadcast: { status, ...(txId !== undefined && { txId }) },
+		...(status === "confirmed" && { status: "seeds_partial" as const }),
+	};
 
-	saveSession(session);
-	return session;
+	saveSession(updated);
+	return updated;
 }
 
 /**
@@ -196,23 +197,22 @@ export function updateSeedBatch(
 	const session = getSession(sessionId);
 	if (!session) return null;
 
-	const batchIndex = session.seedBatches.findIndex(b => b.batchNumber === batchNumber);
-	if (batchIndex >= 0) {
-		session.seedBatches[batchIndex]!.status = status;
-		if (txId) {
-			session.seedBatches[batchIndex]!.txId = txId;
-		}
-	}
+	const newBatches = session.seedBatches.map((batch) =>
+		batch.batchNumber === batchNumber
+			? { ...batch, status, ...(txId !== undefined && { txId }) }
+			: batch,
+	);
 
-	// Check if all batches are confirmed
-	const allConfirmed = session.seedBatches.every(b => b.status === "confirmed");
-	if (allConfirmed && session.seedBatches.length > 0) {
-		session.status = "complete";
-		session.completedAt = Date.now();
-	}
+	const allConfirmed = newBatches.length > 0 && newBatches.every((b) => b.status === "confirmed");
 
-	saveSession(session);
-	return session;
+	const updated: MintingSession = {
+		...session,
+		seedBatches: newBatches,
+		...(allConfirmed && { status: "complete" as const, completedAt: Date.now() }),
+	};
+
+	saveSession(updated);
+	return updated;
 }
 
 /**
@@ -225,14 +225,17 @@ export function initializeSeedBatches(
 	const session = getSession(sessionId);
 	if (!session) return null;
 
-	session.seedBatches = batches.map(b => ({
-		batchNumber: b.batchNumber,
-		status: "pending",
-		seedIds: b.seedIds,
-	}));
+	const updated: MintingSession = {
+		...session,
+		seedBatches: batches.map((b) => ({
+			batchNumber: b.batchNumber,
+			status: "pending" as const,
+			seedIds: b.seedIds,
+		})),
+	};
 
-	saveSession(session);
-	return session;
+	saveSession(updated);
+	return updated;
 }
 
 // ============ SESSION RECOVERY ============

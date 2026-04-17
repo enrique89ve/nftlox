@@ -7,7 +7,6 @@ import {
 } from "nftlox-sdk";
 import {
 	createTestCollection,
-	createDeterministicCollection,
 	createDeterministicSeedMintOperations,
 	loadSampleNFTsWithArtId,
 	previewBatchMint,
@@ -58,12 +57,13 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 					name: string;
 					symbol: string;
 					totalPotential: number;
+					nodeAccount: string;
 					image?: string;
 					description?: string;
 				};
 
-				if (!body.creator || !body.name || !body.symbol) {
-					return json({ error: "Missing required fields: creator, name, symbol" }, 400);
+				if (!body.creator || !body.name || !body.symbol || !body.nodeAccount) {
+					return json({ error: "Missing required fields: creator, name, symbol, nodeAccount" }, 400);
 				}
 
 				const { payload, operation } = await createTestCollection(
@@ -71,6 +71,7 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 					body.name,
 					body.symbol,
 					body.totalPotential || 1000000,
+					body.nodeAccount,
 					{ image: body.image, description: body.description },
 				);
 

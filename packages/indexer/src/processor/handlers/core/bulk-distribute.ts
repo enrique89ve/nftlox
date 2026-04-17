@@ -3,6 +3,7 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import {
 	insertNft,
 	nftExists,
+	isBurnedId,
 	getSeedWithSchemaForUpdate,
 	incrementDistributedBy,
 } from "@/db/queries/nfts.ts";
@@ -112,6 +113,18 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 			if (await nftExists(instanceId, txn)) continue;
 
+			// Defense-in-depth against resurrection of a burned instance. The
+			// `distributed` counter is monotonic so this branch is unreachable in
+			// normal flow (burning an instance never rewinds distributed). It
+			// matters under pathological scenarios: a reorg that rewinds state
+			// below a prior burn, or a future code change that decrements
+			// distributed. Cheap O(1) check — always worth paying.
+			if (await isBurnedId(instanceId, txn)) {
+				throw new Error(
+					`bulk_distribute rejected: instance id ${instanceId} was previously burned`,
+				);
+			}
+
 			const instanceDna = await generateDeterministicInstanceDna(
 				seedId, instanceNumber, op.txId, op.blockNum,
 			);
@@ -130,6 +143,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				maxSupply: 0,
 				seedId,
 				instanceNumber,
+				artId: null,
 				immutableData: null,
 				dataOperationId: mutableData ? op.operationId : null,
 				dataHash,

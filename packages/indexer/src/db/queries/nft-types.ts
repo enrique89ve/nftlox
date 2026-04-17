@@ -76,6 +76,8 @@ export type InsertNftParams = {
 	readonly distributed?: number;
 	readonly seedId: string | null;
 	readonly instanceNumber: number | null;
+	/** Creator-chosen asset id bound to the canonical seed. NULL for instances. */
+	readonly artId: string | null;
 	readonly immutableData: Record<string, unknown> | null;
 	readonly dataOperationId: string | null;
 	readonly dataHash: string | null;

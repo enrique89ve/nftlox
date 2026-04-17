@@ -21,6 +21,7 @@
 		"typescript": "^5"
 	},
 	"dependencies": {
+		"@nftlox/protocol": "workspace:*",
 		"zod": "^4.3.6"
 	}
 }

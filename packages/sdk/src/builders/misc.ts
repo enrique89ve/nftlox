@@ -1,37 +1,54 @@
 import { z } from "zod";
-import { burnInputSchema, setDataInputSchema, setDataFromInputSchema, nftLendInputSchema, nftReturnInputSchema } from "../schemas";
-import { formatZodError } from "./helpers";
 import {
-	createBurnPayload,
-	createBulkBurnPayload,
-	createSetDataPayload,
-	createSetDataFromPayload,
-	createNftLendPayload,
-	createNftReturnPayload,
-	createNodeRegisterPayload,
-	toHiveOperation,
-} from "../payloads";
-import type { BuildResult, TransferData, SetDataData, SetDataFromData, NftLendData, NftReturnData, NodeRegisterData } from "../types";
-import { usernameSchema, nodeRegisterInputSchema } from "../schemas";
+	burnInputSchema,
+	setDataInputSchema,
+	setDataFromInputSchema,
+	nftLendInputSchema,
+	nftReturnInputSchema,
+	usernameSchema,
+	nodeRegisterInputSchema,
+	nodeHeartbeatInputSchema,
+} from "../schemas";
+import { formatZodError } from "./helpers";
+import type { KeychainResult } from "./types";
+import {
+	createPayload,
+	createHiveOperation,
+	getKeyType,
+	type TransferData,
+	type SetDataData,
+	type SetDataFromData,
+	type NftLendData,
+	type NftReturnData,
+	type NodeRegisterData,
+	type NodeHeartbeatData,
+} from "@nftlox/protocol";
 
 export const burnBuilderSchema = burnInputSchema;
 export type BurnBuilderInput = z.infer<typeof burnBuilderSchema>;
 
-export function buildBurn(input: BurnBuilderInput): BuildResult<TransferData> {
+// Burn = transfer to "null". Supports single nftId or bulk nftIds.
+export function buildBurn(input: BurnBuilderInput): KeychainResult<TransferData> {
 	const parsed = burnBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 	const data = parsed.data;
 
-	const isBulk = Boolean(data.nftIds);
-	const payload = isBulk
-		? createBulkBurnPayload(data.nftIds!, data.owner)
-		: createBurnPayload(data.nftId!, data.owner);
+	const transferData: TransferData = data.nftIds
+		? { nftIds: data.nftIds, from: data.owner, to: "null" }
+		: { nftId: data.nftId!, from: data.owner, to: "null" };
 
-	const operation = toHiveOperation(payload, data.owner);
+	const payload = createPayload("transfer", transferData);
+	const operation = createHiveOperation(payload, data.owner);
 
-	return { success: true, payload, operation };
+	return {
+		success: true,
+		operations: [operation],
+		keyType: getKeyType("transfer"),
+		signer: data.owner,
+		payload,
+	};
 }
 
 export const setDataBuilderSchema = setDataInputSchema.extend({
@@ -39,17 +56,32 @@ export const setDataBuilderSchema = setDataInputSchema.extend({
 });
 export type SetDataBuilderInput = z.infer<typeof setDataBuilderSchema>;
 
-export function buildSetData(input: SetDataBuilderInput): BuildResult<SetDataData> {
+export function buildSetData(input: SetDataBuilderInput): KeychainResult<SetDataData> {
 	const parsed = setDataBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 	const data = parsed.data;
-	
-	const payload = createSetDataPayload(data);
-	const operation = toHiveOperation(payload, data.owner);
 
-	return { success: true, payload, operation };
+	const setDataData: SetDataData = {
+		nftId: data.nftId,
+		instanceDna: data.instanceDna,
+		...(data.data && { data: data.data }),
+		...(data.mutableData && { mutableData: data.mutableData }),
+		...(data.seedId && { seedId: data.seedId }),
+		...(data.seedTxId && { seedTxId: data.seedTxId }),
+	};
+
+	const payload = createPayload("set_data", setDataData);
+	const operation = createHiveOperation(payload, data.owner);
+
+	return {
+		success: true,
+		operations: [operation],
+		keyType: getKeyType("set_data"),
+		signer: data.owner,
+		payload,
+	};
 }
 
 export const setDataFromBuilderSchema = setDataFromInputSchema.extend({
@@ -57,17 +89,32 @@ export const setDataFromBuilderSchema = setDataFromInputSchema.extend({
 });
 export type SetDataFromBuilderInput = z.infer<typeof setDataFromBuilderSchema>;
 
-export function buildSetDataFrom(input: SetDataFromBuilderInput): BuildResult<SetDataFromData> {
+export function buildSetDataFrom(input: SetDataFromBuilderInput): KeychainResult<SetDataFromData> {
 	const parsed = setDataFromBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 	const data = parsed.data;
 
-	const payload = createSetDataFromPayload(data);
-	const operation = toHiveOperation(payload, data.operator);
+	const setDataFromData: SetDataFromData = {
+		nftId: data.nftId,
+		instanceDna: data.instanceDna,
+		...(data.data && { data: data.data }),
+		...(data.mutableData && { mutableData: data.mutableData }),
+		...(data.seedId && { seedId: data.seedId }),
+		...(data.seedTxId && { seedTxId: data.seedTxId }),
+	};
 
-	return { success: true, payload, operation };
+	const payload = createPayload("set_data_from", setDataFromData);
+	const operation = createHiveOperation(payload, data.operator);
+
+	return {
+		success: true,
+		operations: [operation],
+		keyType: getKeyType("set_data_from"),
+		signer: data.operator,
+		payload,
+	};
 }
 
 export const nftLendBuilderSchema = nftLendInputSchema.extend({
@@ -75,7 +122,7 @@ export const nftLendBuilderSchema = nftLendInputSchema.extend({
 });
 export type NftLendBuilderInput = z.infer<typeof nftLendBuilderSchema>;
 
-export function buildNftLend(input: NftLendBuilderInput): BuildResult<NftLendData> {
+export function buildNftLend(input: NftLendBuilderInput): KeychainResult<NftLendData> {
 	const parsed = nftLendBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -86,10 +133,23 @@ export function buildNftLend(input: NftLendBuilderInput): BuildResult<NftLendDat
 		return { success: false, errors: [{ field: "borrower", message: "Cannot lend to yourself", code: "LEND_TO_SELF" }] };
 	}
 
-	const payload = createNftLendPayload(data);
-	const operation = toHiveOperation(payload, data.owner);
+	const nftLendData: NftLendData = {
+		instanceId: data.instanceId,
+		borrower: data.borrower,
+		...(data.seedId && { seedId: data.seedId }),
+		...(data.seedTxId && { seedTxId: data.seedTxId }),
+	};
 
-	return { success: true, payload, operation };
+	const payload = createPayload("nft_lend", nftLendData);
+	const operation = createHiveOperation(payload, data.owner);
+
+	return {
+		success: true,
+		operations: [operation],
+		keyType: getKeyType("nft_lend"),
+		signer: data.owner,
+		payload,
+	};
 }
 
 export const nftReturnBuilderSchema = nftReturnInputSchema.extend({
@@ -97,17 +157,29 @@ export const nftReturnBuilderSchema = nftReturnInputSchema.extend({
 });
 export type NftReturnBuilderInput = z.infer<typeof nftReturnBuilderSchema>;
 
-export function buildNftReturn(input: NftReturnBuilderInput): BuildResult<NftReturnData> {
+export function buildNftReturn(input: NftReturnBuilderInput): KeychainResult<NftReturnData> {
 	const parsed = nftReturnBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 	const data = parsed.data;
 
-	const payload = createNftReturnPayload(data);
-	const operation = toHiveOperation(payload, data.owner);
+	const nftReturnData: NftReturnData = {
+		instanceId: data.instanceId,
+		...(data.seedId && { seedId: data.seedId }),
+		...(data.seedTxId && { seedTxId: data.seedTxId }),
+	};
 
-	return { success: true, payload, operation };
+	const payload = createPayload("nft_return", nftReturnData);
+	const operation = createHiveOperation(payload, data.owner);
+
+	return {
+		success: true,
+		operations: [operation],
+		keyType: getKeyType("nft_return"),
+		signer: data.owner,
+		payload,
+	};
 }
 
 export const nodeRegisterBuilderSchema = nodeRegisterInputSchema.extend({
@@ -115,15 +187,56 @@ export const nodeRegisterBuilderSchema = nodeRegisterInputSchema.extend({
 });
 export type NodeRegisterBuilderInput = z.infer<typeof nodeRegisterBuilderSchema>;
 
-export function buildNodeRegister(input: NodeRegisterBuilderInput): BuildResult<NodeRegisterData> {
+export function buildNodeRegister(input: NodeRegisterBuilderInput): KeychainResult<NodeRegisterData> {
 	const parsed = nodeRegisterBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 	const data = parsed.data;
 
-	const payload = createNodeRegisterPayload(data);
-	const operation = toHiveOperation(payload, data.nodeAccount);
+	const nodeRegisterData: NodeRegisterData = {
+		endpoint: data.endpoint,
+		publicKey: data.publicKey,
+	};
 
-	return { success: true, payload, operation };
+	const payload = createPayload("node_register", nodeRegisterData);
+	const operation = createHiveOperation(payload, data.nodeAccount);
+
+	return {
+		success: true,
+		operations: [operation],
+		keyType: getKeyType("node_register"),
+		signer: data.nodeAccount,
+		payload,
+	};
+}
+
+export const nodeHeartbeatBuilderSchema = nodeHeartbeatInputSchema.extend({
+	nodeAccount: usernameSchema,
+});
+export type NodeHeartbeatBuilderInput = z.infer<typeof nodeHeartbeatBuilderSchema>;
+
+export function buildNodeHeartbeat(input: NodeHeartbeatBuilderInput): KeychainResult<NodeHeartbeatData> {
+	const parsed = nodeHeartbeatBuilderSchema.safeParse(input);
+	if (!parsed.success) {
+		return { success: false, errors: formatZodError(parsed.error) };
+	}
+	const data = parsed.data;
+
+	const nodeHeartbeatData: NodeHeartbeatData = {
+		blockNum: data.blockNum,
+		stateRoot: data.stateRoot,
+		indexerVersion: data.indexerVersion,
+	};
+
+	const payload = createPayload("node_heartbeat", nodeHeartbeatData);
+	const operation = createHiveOperation(payload, data.nodeAccount);
+
+	return {
+		success: true,
+		operations: [operation],
+		keyType: getKeyType("node_heartbeat"),
+		signer: data.nodeAccount,
+		payload,
+	};
 }

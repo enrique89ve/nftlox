@@ -9,6 +9,7 @@ import {
 	MEMO_PREFIX_FEE,
 	fetchPaymentInfo,
 	requestBuyMultisig,
+	type HiveTransactionObject,
 	type PaymentInfo,
 	type MultisigResponse,
 } from "nftlox-sdk";
@@ -149,7 +150,7 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 					nftId: body.nftId,
 					listingId: info.listingId,
 					listTxId: info.listTxId,
-					transaction: tx.transaction,
+					transaction: tx.transaction as unknown as HiveTransactionObject,
 				};
 				const multisigResult = await requestBuyMultisig(INDEXER_URL, multisigRequest);
 

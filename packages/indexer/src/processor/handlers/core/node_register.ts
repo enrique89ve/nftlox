@@ -1,7 +1,8 @@
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { Queryable } from "@/db/client.ts";
-import { MAX_URL_LENGTH } from "@/protocol/constants.ts";
+import { MAX_URL_LENGTH, MIN_NODE_REGISTER_HIVE_POWER } from "@/protocol/index.ts";
 import { requireBoundedString } from "@/utils/validation.ts";
+import { getEffectiveHivePower } from "@/scanner/hive-client.ts";
 
 const MAX_NODE_PUBLIC_KEY_LENGTH = 256;
 
@@ -31,9 +32,35 @@ function requireNodePublicKey(value: unknown): string {
 	return publicKey;
 }
 
+/**
+ * Anti-sybil gate for the PUBLIC node directory. Running a node is
+ * permissionless and does not require any registration — a game or dapp
+ * operator can index the chain and serve their own app without ever
+ * emitting `node_register`. This op is only for nodes that *opt in* to be
+ * listed in `l2_nodes` and discovered by clients, and that is what the HP
+ * floor protects against (cheap sybil listings).
+ *
+ * Skin-in-the-game is HP itself (self-staked + received delegations −
+ * out-delegations), which is reversible but subject to the 13-week Hive
+ * power-down schedule. No fee is charged.
+ */
+async function requireSufficientHivePower(account: string): Promise<void> {
+	const hp = await getEffectiveHivePower(account);
+	if (hp === null) {
+		throw new Error(`Unable to verify Hive Power for account '${account}' (public node directory)`);
+	}
+	if (hp < MIN_NODE_REGISTER_HIVE_POWER) {
+		throw new Error(
+			`Account '${account}' has ${hp.toFixed(3)} HP, public node directory requires at least ${MIN_NODE_REGISTER_HIVE_POWER} HP (private nodes do not need to register)`,
+		);
+	}
+}
+
 export async function handleNodeRegister(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const endpoint = requireNodeEndpoint(op.data.endpoint);
 	const publicKey = requireNodePublicKey(op.data.publicKey);
+
+	await requireSufficientHivePower(op.signer);
 
 	// Insert into l2_nodes DB table
 	await txn`

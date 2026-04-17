@@ -67,10 +67,17 @@ export const config = {
 	indexerRole: toIndexerRole(process.env.INDEXER_ROLE),
 	// Node public info
 	nodeUrl: process.env.NODE_URL ?? "",
+	// Public-directory opt-in. When true, the startup routine imports POSTING_KEY
+	// into beekeeper, the node emits `node_register` once its HP is ≥ threshold,
+	// and a background job emits `node_heartbeat` every MIN_HEARTBEAT_INTERVAL_BLOCKS.
+	// When false, the node indexes + serves privately and never touches the
+	// public `l2_nodes` directory — a valid, first-class configuration.
+	nodeRegister: toBool(process.env.NODE_REGISTER, false),
 	// Multisig (buy transaction signing)
-	// NOTE: ACTIVE_KEY and BEEKEEPER_PASSWORD are read directly from process.env
-	// at startup (monolith.ts / api.ts), never stored in config — prevents the WIF
-	// from lingering in V8 heap as a frozen string after beekeeper import.
+	// NOTE: ACTIVE_KEY, POSTING_KEY, and BEEKEEPER_PASSWORD are read directly from
+	// process.env at startup (monolith.ts / api.ts), never stored in config —
+	// prevents the WIFs from lingering in V8 heap as frozen strings after beekeeper
+	// import.
 	multisigRateLimitMax: toInt(process.env.MULTISIG_RATE_LIMIT_MAX, 10),
 	multisigRateLimitWindowMs: toInt(process.env.MULTISIG_RATE_LIMIT_WINDOW_MS, 60_000),
 	multisigIpRateLimitMax: toInt(process.env.MULTISIG_IP_RATE_LIMIT_MAX, 30),
@@ -89,6 +96,12 @@ if (config.hiveEndpoints.length === 0) {
 
 if (!config.hiveAccount) {
 	throw new Error("HIVE_ACCOUNT must be a valid non-empty account name");
+}
+
+if (config.nodeRegister && !process.env.POSTING_KEY) {
+	throw new Error(
+		"NODE_REGISTER=true requires POSTING_KEY — set POSTING_KEY (the hive account's posting WIF) in your .env, or set NODE_REGISTER=false to run the node privately without public-directory registration",
+	);
 }
 
 if (config.nodeEnv === "production") {

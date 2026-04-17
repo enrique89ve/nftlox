@@ -1,143 +1,90 @@
 # NFTLox
 
-Monorepo for the **NFTLox Protocol** -- Polymorphic Ownership infrastructure on Hive blockchain.
+> Polymorphic ownership infrastructure on Hive blockchain. Encode NFT operations as deterministic `custom_json` on Hive L1 and reconstruct state through indexing — no smart contracts, no gas fees.
+
+Traditional NFT protocols force you into rigid smart contract environments. NFTLox takes a different approach: operations are deterministic `custom_json` payloads on Hive L1, and protocol state is reconstructed by indexing them. The result is fast, free to transact, and fully verifiable.
+
+If you are building a game with collectible cards, items, or characters, NFTLox gives you typed schemas, seed/instance distribution, and mutable data fields your game server can update in real time — all anchored to an L1 blockchain with 3-second finality.
+
+## Features
+
+- **No smart contracts** — operations are `custom_json` on Hive L1; the protocol is enforced by deterministic indexing.
+- **Typed schemas** — define immutable, mutable, and owner-editable fields per collection with strict validation.
+- **Seed / instance model** — mint a seed template, distribute instances from it; each instance gets unique deterministic DNA.
+- **Zero transaction fees** — Hive L1 uses resource credits, not gas; end users pay nothing.
+- **3-second finality** — operations confirmed in the next Hive block.
+- **Composable operators** — lending, allowances, and data operators let game servers act on behalf of users.
+- **Built-in marketplace** — list, buy, and unlist with multisig buyer protection.
+- **SPV verification** — browser-side trustless verification against Hive L1.
 
 ## Packages
 
 | Package | Description | Port |
-|---------|-------------|------|
-| [`packages/sdk`](./packages/sdk) | Core protocol library (types, payloads, DNA, builders, multisig, SPV) | -- |
-| [`packages/packs-engine`](./packages/packs-engine) | Pure optional extension for pack definition and distribution planning | -- |
+|---|---|---|
+| [`packages/sdk`](./packages/sdk) | Core protocol library — types, payloads, builders, multisig, SPV | — |
+| [`packages/packs-engine`](./packages/packs-engine) | Optional external library for pack definition and `bulk_distribute` planning | — |
 | [`packages/indexer`](./packages/indexer) | Blockchain scanner + PostgreSQL + REST API + Swagger | 3050 |
-| [`packages/playground`](./packages/playground) | Web UI for testing with Hive Keychain | 3040 |
-
-## Quick Start
-
-```bash
-# Install all dependencies
-bun install
-
-# Start the indexer (auto-launches PostgreSQL via Docker)
-bun run dev:indexer
-
-# Start the playground
-bun run dev:playground
-```
-
-## Run Only The Indexer
-
-If you only want to operate an indexer node, work from `packages/indexer`. The package now carries its own `Dockerfile`, `compose` files, scripts, and `bun.lock`.
-If that package is later split into its own repository, the same commands apply from that repository root.
-
-For development:
-
-```bash
-cd packages/indexer
-cp .env.example .env
-./scripts/compose.sh dev up -d
-cd ../..
-bun run dev:indexer
-```
-
-For a Linux/Ubuntu server behind Dokploy, Coolify, Traefik, or another external proxy:
-
-```bash
-cd packages/indexer
-cp .env.example .env
-./scripts/compose.sh dokploy up -d
-```
-
-For a VPS with the bundled Nginx overlay:
-
-```bash
-cd packages/indexer
-cp .env.example .env
-./scripts/compose.sh server up -d
-```
-
-To build the image directly from `packages/indexer`:
-
-```bash
-cd packages/indexer
-./scripts/build-image.sh nftlox-indexer
-```
-
-If Docker bridge networking is flaky on your machine, use:
-
-```bash
-cd packages/indexer
-DOCKER_BUILD_NETWORK=host ./scripts/build-image.sh nftlox-indexer
-```
-
-The monorepo is still convenient for development, but the indexer deployment path no longer needs SDK runtime code in the container image.
-
-## Development Workflow
-
-This is a **Bun workspaces** monorepo. Changes in the SDK are immediately available to the indexer and playground -- no publishing needed.
-
-```bash
-# Run all tests
-bun run test
-
-# Run tests for a specific package
-bun run test:sdk
-bun run test:indexer
-
-# TypeScript check all packages
-bun run typecheck
-```
-
-### Making SDK Changes
-
-1. Edit files in `packages/sdk/src/`
-2. Run `bun run test:sdk` to verify
-3. The indexer and playground automatically see the changes (workspace link)
-
-### Adding a New Protocol Action
-
-1. Add the action constant in `packages/sdk/src/constants.ts`
-2. Add the type in `packages/sdk/src/types.ts`
-3. Create the payload function in `packages/sdk/src/payloads.ts`
-4. Add Zod schema in `packages/sdk/src/schemas.ts`
-5. Add builder in `packages/sdk/src/builders/`
-6. Export from `packages/sdk/src/index.ts`
-7. Add handler in `packages/indexer/src/processor/handlers/`
-8. Register in `packages/indexer/src/processor/action-router.ts`
-
-## Documentation
-
-- [Development Guide](./docs/contributing/development-guide.md)
-- [Database Migration Strategy](./docs/contributing/database-migrations.md)
-- [Protocol Spec](./docs/spec/protocol-spec.md)
+| [`packages/playground`](./packages/playground) | Web UI for testing with Hive Keychain (also serves the public docs site) | 3040 |
 
 ## Architecture
 
 ```
-Hive Blockchain (L1)
-    |
-    v
-packages/sdk ─────────── Types, Payloads, Builders, Multisig, SPV
-    |                         |
-    v                         v
-packages/indexer          packages/playground
-    |                         |
-    v                         v
-PostgreSQL + REST API     Browser UI + Keychain
-(port 3050 + Swagger)     (port 3040)
-    ^
-    |
-SPV "Boleto Suizo" ──── Trustless verification via HAFAH REST API
-(browser verifies L1)
+Your App                              Hive L1
+--------                              -------
+
+  SDK / fetch()                       custom_json operation
+       |                                    |
+       v                                    v
+  Build payload  ─── builds ──────>   Broadcast to
+  (unsigned)                          Hive RPC node
+                                            |
+                                            v
+                                       NFTLox indexer
+                                       (reads L1, validates,
+                                        reconstructs state)
+                                            |
+                                            v
+  Query API  <─── reads state ──────  PostgreSQL
+  (public, no auth)
 ```
 
-## Protocol Features
+**Write path:** build an unsigned payload via the SDK, sign client-side with a Hive key (Keychain or otherwise), broadcast to any Hive RPC node. The indexer detects the operation and updates state.
 
-- **17 SDK protocol actions**: Core, Marketplace, Allowances, Lending, Data Operators
-- **Multisig buy**: Node co-signs buy transactions to protect buyer funds (HIVE transfers + NFT transfer are atomic)
-- **SPV Verification**: Browser-side trustless verification against Hive L1
-- **Ownership Proofs**: Fast owner reads from PostgreSQL, verified by resolving `owner_operation_id` through HAFAH/Hive L1
-- **NFT Lending**: Protocol-level lend/return without ownership transfer
-- **Cross-Game Composability**: Data operators can write to NFTs across games
+**Read path:** query the indexer REST API for collections, NFTs, users, marketplace listings, and operators. No authentication required.
+
+## Quick start
+
+```bash
+bun install
+bun run dev:indexer       # auto-launches PostgreSQL via Docker
+bun run dev:playground    # in another terminal
+```
+
+Open the playground at <http://localhost:3040> and the indexer Swagger UI at <http://localhost:3050/swagger>.
+
+## Documentation
+
+The canonical NFTLox documentation site lives in [`packages/playground/docs/`](./packages/playground/docs/). Suggested reading order:
+
+- [Getting Started](./packages/playground/docs/getting-started.md) — first API call, mint an NFT in under 5 minutes.
+- [Game Integration](./packages/playground/docs/game-integration.md) — full game-developer walkthrough.
+- [SDK Functions](./packages/playground/docs/sdk-functions.md) — exports, builders, schemas.
+- [API Endpoints](./packages/playground/docs/api-endpoints.md) — full REST reference.
+
+For deployment of the indexer (Docker, Compose, Dokploy, Nginx, build-image), see [`packages/playground/docs/contributing/indexer-deployment.md`](./packages/playground/docs/contributing/indexer-deployment.md).
+
+## Development
+
+This is a **Bun workspaces** monorepo. SDK changes are immediately visible to the indexer and playground via workspace links — no publishing needed.
+
+```bash
+bun run test          # all tests
+bun run test:sdk      # one package
+bun run test:indexer  # indexer-only
+bun run typecheck     # all packages
+```
+
+Contributor guides live under [`packages/playground/docs/contributing/`](./packages/playground/docs/contributing/) (development workflow, database migrations, indexer deployment).
 
 ## License
 

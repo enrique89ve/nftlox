@@ -177,7 +177,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 		}),
 		detail: {
 			summary: "Operation status by transaction ID",
-			description: "Returns per-operation status for all protocol operations in a Hive transaction. Includes NFT IDs for bounded per-NFT operations; bulk creation operations may return an empty ID list. A single tx can contain multiple custom_json ops, each tracked independently.",
+			description: "Returns per-operation status for all protocol operations in a Hive transaction. Top-level `indexed` is true when at least one op for this txId is on record; false means the txId has not been seen yet (unbroadcast, still propagating, or never indexed) — in that case `operations` is `[]` and all counters are 0. Always responds 200 for a syntactically valid hex[40] txId so polling bots can retry without distinguishing transport errors. A single tx can contain multiple custom_json ops, each tracked independently with its own `operationId`; bulk creation operations may return an empty `nftIds` list.",
 		},
 	})
 	;

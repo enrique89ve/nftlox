@@ -1,8 +1,7 @@
 // Multisig Proof of Work validator.
 // The cache is process-local by design, matching the existing in-memory rate limiters.
 
-import type { MultisigErrorCode } from "@/protocol/index.ts";
-import { canonicalJson } from "@/utils/canonical-json.ts";
+import { canonicalJson, type MultisigErrorCode } from "@/protocol/index.ts";
 
 export const NFTLOX_POW_HEADER = "X-NFTLox-PoW";
 export const MULTISIG_POW_VERSION = "v1";

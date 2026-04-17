@@ -1,22 +1,23 @@
 import { z } from "zod";
 import { usernameSchema } from "../schemas";
 import { formatZodError } from "./helpers";
+import { validateArtId, validateArtIdArray } from "../dna";
+import type { KeychainResult } from "./types";
+import type { ValidationError } from "./types";
 import {
 	generateDeterministicSeedId,
 	generateOriginDna,
-	validateArtId,
-	validateArtIdArray,
-} from "../dna";
-import {
-	createDeterministicMintPayload,
-	toHiveOperation,
-	type DeterministicMintInput,
-} from "../payloads";
-import type { BuildResult, NFTData, ProtocolPayload, ValidationError } from "../types";
-import { MAX_NAME_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_IMAGE_URL_LENGTH, ACTION_MINT } from "../constants";
-import { makePayload } from "../payloads";
+	generateImageHash,
+	generateInstanceDna,
+	createPayload,
+	createHiveOperation,
+	getKeyType,
+	MAX_NAME_LENGTH,
+	MAX_DESCRIPTION_LENGTH,
+	MAX_IMAGE_URL_LENGTH,
+	type NFTData,
+} from "@nftlox/protocol";
 
-// We keep SeedInput internal to builders as per old architecture, or export it.
 export const seedInputSchema = z.object({
 	artId: z.string(),
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH, `Name must be at most ${MAX_NAME_LENGTH} characters`),
@@ -34,7 +35,9 @@ export const seedBuilderInputSchema = seedInputSchema.extend({
 	collectionBlock: z.number().int().nonnegative().optional(),
 });
 
-export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): Promise<BuildResult<NFTData>> {
+export async function buildSeed(
+	input: z.infer<typeof seedBuilderInputSchema>,
+): Promise<KeychainResult<NFTData>> {
 	const parsed = seedBuilderInputSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -43,7 +46,10 @@ export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): 
 
 	const artIdValidation = validateArtId(data.artId);
 	if (!artIdValidation.valid) {
-		return { success: false, errors: [{ field: "artId", message: artIdValidation.error!, code: "INVALID_ARTID" }] };
+		return {
+			success: false,
+			errors: [{ field: "artId", message: artIdValidation.error!, code: "INVALID_ARTID" }],
+		};
 	}
 
 	const warnings: string[] = [];
@@ -51,37 +57,52 @@ export async function buildSeed(input: z.infer<typeof seedBuilderInputSchema>): 
 		warnings.push("Max supply is very large (>10000), ensure this is intentional");
 	}
 
-	const generatedId = await generateDeterministicSeedId(data.collectionId, data.artId);
+	const seedId = await generateDeterministicSeedId(data.collectionId, data.artId);
 	const originDna = await generateOriginDna(data.collectionId);
-
 	const owner = data.owner ?? data.signer;
+	const imageHash = await generateImageHash(data.imageUrl);
+	const instanceDna = await generateInstanceDna(seedId, originDna, data.edition, imageHash);
 
-	const mintInput: DeterministicMintInput = {
-		artId: data.artId,
+	// The seed's primary id IS the canonical seedId — not a derived instance id.
+	// Instances minted via bulk_distribute get their own `nft_<seedSuffix>_<n>_<hash>`
+	// id derived from (seedId, instanceNumber). Keeping these two namespaces
+	// separate lets the indexer enforce `isSeedId(id)` invariants downstream.
+	const nftData: NFTData = {
+		id: seedId,
 		collectionId: data.collectionId,
-		collectionOriginDna: originDna,
+		artId: data.artId,
 		edition: data.edition,
 		owner,
 		nftType: "seed",
-		name: data.name,
-		description: data.brief,
-		imageUrl: data.imageUrl,
-		maxSupply: data.maxSupply,
+		originDna,
+		instanceDna,
+		mintedBy: data.signer,
 		...(data.collectionBlock !== undefined && { collectionBlock: data.collectionBlock }),
+		metadata: {
+			name: data.name,
+			...(data.brief !== undefined && { description: data.brief }),
+			imageUrl: data.imageUrl,
+			imageHash,
+		},
+		maxSupply: data.maxSupply,
 	};
 
-	const payload = await createDeterministicMintPayload(mintInput);
-	const operation = toHiveOperation(payload, data.signer);
+	const payload = createPayload("mint", nftData);
+	const operation = createHiveOperation(payload, data.signer);
 
 	return {
 		success: true,
+		operations: [operation],
+		keyType: getKeyType("mint"),
+		signer: data.signer,
 		payload,
-		operation,
-		generatedId,
-		generatedIds: { seedId: generatedId },
-		warnings: warnings.length > 0 ? warnings : undefined,
+		generatedIds: { seedId },
+		...(warnings.length > 0 && { warnings }),
 	};
 }
+
+// Batch seed planning: validates artIds + pre-computes seed IDs.
+// Returns a plan (no operations). Consumers iterate and call buildSeed per item.
 
 export const seedBatchInputSchema = z.object({
 	collectionId: z.string().min(1, "Collection ID is required"),
@@ -91,20 +112,28 @@ export const seedBatchInputSchema = z.object({
 });
 export type SeedBatchInput = z.infer<typeof seedBatchInputSchema>;
 
-export interface SeedBatchPayload {
-	collectionId: string;
-	owner: string;
-	seeds: Array<{
-		seedId: string;
-		artId: string;
-		name: string;
-		imageUrl: string;
-		maxSupply: number;
-		brief?: string;
-	}>;
-}
+export type SeedBatchPlanItem = {
+	readonly seedId: string;
+	readonly artId: string;
+	readonly name: string;
+	readonly imageUrl: string;
+	readonly maxSupply: number;
+	readonly brief?: string | undefined;
+};
 
-export async function buildSeedBatch(input: SeedBatchInput): Promise<BuildResult<SeedBatchPayload>> {
+export type SeedBatchPlan =
+	| {
+		readonly success: true;
+		readonly collectionId: string;
+		readonly owner: string;
+		readonly signer: string;
+		readonly seeds: readonly SeedBatchPlanItem[];
+		readonly generatedIds: Readonly<Record<string, string>>;
+		readonly warnings?: readonly string[] | undefined;
+	}
+	| { readonly success: false; readonly errors: readonly ValidationError[] };
+
+export async function buildSeedBatch(input: SeedBatchInput): Promise<SeedBatchPlan> {
 	const parsed = seedBatchInputSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -119,10 +148,18 @@ export async function buildSeedBatch(input: SeedBatchInput): Promise<BuildResult
 
 	if (!artIdValidation.valid) {
 		for (const error of artIdValidation.formatErrors) {
-			errors.push({ field: `seeds[${error.index}].artId`, message: error.error, code: "INVALID_ARTID" });
+			errors.push({
+				field: `seeds[${error.index}].artId`,
+				message: error.error,
+				code: "INVALID_ARTID",
+			});
 		}
 		for (const duplicate of artIdValidation.duplicates) {
-			errors.push({ field: "seeds", message: `Duplicate artId: ${duplicate}`, code: "DUPLICATE_ARTID" });
+			errors.push({
+				field: "seeds",
+				message: `Duplicate artId: ${duplicate}`,
+				code: "DUPLICATE_ARTID",
+			});
 		}
 	}
 
@@ -138,33 +175,32 @@ export async function buildSeedBatch(input: SeedBatchInput): Promise<BuildResult
 
 	const batchOwner = data.owner ?? data.signer;
 
-	const processedSeeds = await Promise.all(data.seeds.map(async (seed) => {
-		const seedId = await generateDeterministicSeedId(data.collectionId, seed.artId);
-		return {
-			seedId,
-			artId: seed.artId,
-			name: seed.name,
-			imageUrl: seed.imageUrl,
-			maxSupply: seed.maxSupply,
-			brief: seed.brief,
-		};
-	}));
+	const processedSeeds: SeedBatchPlanItem[] = await Promise.all(
+		data.seeds.map(async (seed) => {
+			const seedId = await generateDeterministicSeedId(data.collectionId, seed.artId);
+			return {
+				seedId,
+				artId: seed.artId,
+				name: seed.name,
+				imageUrl: seed.imageUrl,
+				maxSupply: seed.maxSupply,
+				...(seed.brief !== undefined && { brief: seed.brief }),
+			};
+		}),
+	);
 
-	const payload: ProtocolPayload<SeedBatchPayload> = makePayload(ACTION_MINT, {
-		collectionId: data.collectionId,
-		owner: batchOwner,
-		seeds: processedSeeds,
-	});
-
-	const seedIds: Record<string, string> = {};
+	const generatedIds: Record<string, string> = {};
 	for (const seed of processedSeeds) {
-		seedIds[seed.artId] = seed.seedId;
+		generatedIds[seed.artId] = seed.seedId;
 	}
 
 	return {
 		success: true,
-		payload,
-		generatedIds: seedIds,
-		warnings: warnings.length > 0 ? warnings : undefined,
+		collectionId: data.collectionId,
+		owner: batchOwner,
+		signer: data.signer,
+		seeds: processedSeeds,
+		generatedIds,
+		...(warnings.length > 0 && { warnings }),
 	};
 }

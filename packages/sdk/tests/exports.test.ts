@@ -10,8 +10,8 @@ import {
 	PROTOCOL_ID,
 	buildArchiveCollection,
 	buildCollection,
-	createArchiveCollectionPayload,
-	createDeterministicCollectionPayload,
+	createPayload,
+	createHiveOperation,
 	generateOriginDna,
 } from "../src/index";
 
@@ -113,12 +113,12 @@ describe("Existing exports still work (no regressions)", () => {
 		expect(typeof buildArchiveCollection).toBe("function");
 	});
 
-	test("createDeterministicCollectionPayload is a function", () => {
-		expect(typeof createDeterministicCollectionPayload).toBe("function");
+	test("createPayload is a function", () => {
+		expect(typeof createPayload).toBe("function");
 	});
 
-	test("createArchiveCollectionPayload is a function", () => {
-		expect(typeof createArchiveCollectionPayload).toBe("function");
+	test("createHiveOperation is a function", () => {
+		expect(typeof createHiveOperation).toBe("function");
 	});
 
 	test("generateOriginDna is a function", () => {

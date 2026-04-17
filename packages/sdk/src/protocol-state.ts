@@ -1,7 +1,7 @@
 // Runtime protocol state — initialized from the indexer API.
 // Falls back to constants if not initialized (offline mode).
 
-import { PROTOCOL_VERSION, PROTOCOL_ID } from "./constants";
+import { PROTOCOL_VERSION, PROTOCOL_ID } from "@nftlox/protocol";
 
 type ProtocolState = {
 	version: string;

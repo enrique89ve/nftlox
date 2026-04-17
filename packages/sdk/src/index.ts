@@ -1,8 +1,10 @@
-// NFTLox Protocol - Public API
-// Typed schemas + data tracking
+// @nftlox/sdk — NFTLox Protocol SDK
+// Public API: re-exports the wire protocol from @nftlox/protocol and adds
+// the SDK-only builders, clients, SPV verifiers, and persistence helpers.
 
-// ============ CONSTANTS ============
+// ============ PROTOCOL (re-exported from @nftlox/protocol) ============
 export {
+	// Constants
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
 	MIN_PROTOCOL_VERSION,
@@ -18,47 +20,45 @@ export {
 	MIN_SYMBOL_LENGTH,
 	MAX_SYMBOL_LENGTH,
 	SYMBOL_REGEX,
+	TX_ID_REGEX,
 	ORIGIN_DNA_LENGTH,
 	INSTANCE_DNA_LENGTH,
 	ACCESS_KEY_LENGTH,
 	INSTANCE_ID_HASH_LENGTH,
+	HIVE_CUSTOM_JSON_MAX_BYTES,
+	SAFE_PAYLOAD_MAX_BYTES,
+	MAX_BULK_DISTRIBUTE_ITEMS,
+	MAX_TRANSFER_BATCH_SIZE,
+	MAX_SCHEMA_FIELDS,
+	MAX_FIELD_NAME_LENGTH,
 	SUPPORTED_CURRENCIES,
-	BASIS_POINTS_DENOMINATOR,
 	MAX_ROYALTY_PCT,
 	MIN_PRICE_AMOUNT,
+	BASIS_POINTS_DENOMINATOR,
 	PROTOCOL_FEE_BPS,
 	DEFAULT_FEE_ACCOUNT,
 	PROTOCOL_COLLECTION_FEE_HBD,
-	calculatePaymentSplit,
-	calculateBasisPointsAmount,
-	percentageToBasisPoints,
-	roundHive,
-	type PaymentSplit,
-	HIVE_CUSTOM_JSON_MAX_BYTES,
-	SAFE_PAYLOAD_MAX_BYTES,
+	MEMO_PREFIX_BUY,
+	MEMO_PREFIX_ROYALTY,
+	MEMO_PREFIX_FEE,
+	LISTING_ID_PREFIX,
+	LISTING_NONCE_LENGTH,
+	LISTING_HASH_LENGTH,
+	MULTISIG_EXPIRATION_MS,
+	MAX_MULTISIG_OPERATIONS,
+	// Actions
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
 	ACTION_BULK_DISTRIBUTE,
-	MAX_BULK_DISTRIBUTE_ITEMS,
-	MAX_TRANSFER_BATCH_SIZE,
 	ACTION_SET_DATA,
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
-	MAX_SCHEMA_FIELDS,
-	MAX_FIELD_NAME_LENGTH,
+	ACTION_NODE_HEARTBEAT,
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTION_BUY,
-	LISTING_ID_PREFIX,
-	LISTING_NONCE_LENGTH,
-	LISTING_HASH_LENGTH,
-	MEMO_PREFIX_BUY,
-	MEMO_PREFIX_ROYALTY,
-	MEMO_PREFIX_FEE,
-	MULTISIG_EXPIRATION_MS,
-	MAX_MULTISIG_OPERATIONS,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
 	ACTION_NFT_TRANSFER_FROM,
@@ -66,19 +66,62 @@ export {
 	ACTION_NFT_RETURN,
 	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_SET_DATA_FROM,
+	ALL_ACTIONS,
 	CORE_ACTIONS,
 	MARKETPLACE_ACTIONS,
 	APPROVE_ACTIONS,
 	LENDING_ACTIONS,
 	DATA_OPERATOR_ACTIONS,
-	ALL_ACTIONS,
 	ACTIVE_AUTH_ACTIONS,
 	POSTING_AUTH_ACTIONS,
 	ACTION_AUTH_LEVEL,
+	// Auth
+	isProtocolAction,
 	getAuthLevel,
 	getKeyType,
-	isProtocolAction,
+	getAuthMismatchReason,
+	// Payment
+	calculatePaymentSplit,
+	calculateBasisPointsAmount,
+	percentageToBasisPoints,
+	roundHive,
+	// Username
+	validateHiveUsername,
+	// Payload
+	createPayload,
+	createHiveOperation,
+	PayloadTooLargeError,
+	// Schema
+	canonicalJson,
+	computeDataHash,
+	VALID_SCHEMA_TYPES,
+	validateValueAgainstType,
+	validateSchemaDefinition,
+	validateMintData,
+	validateMutableUpdate,
+	validateMutableSnapshot,
+	mergeSchemas,
+	// DNA
+	generateHash,
+	generateOriginDna,
+	generateInstanceDna,
+	generateImageHash,
+	generateDeterministicCollectionId,
+	generateDeterministicSeedId,
+	generateDeterministicInstanceId,
+	generateDeterministicInstanceDna,
+	generateDeterministicAccessKey,
+	generateInstanceId,
+	extractSeedId,
+	extractInstanceNumber,
+	isSeedId,
+	isInstanceId,
+	generateListingNonce,
+	generateListingId,
+	// Types
+	type ProtocolAction,
 	type AuthLevel,
+	type KeyType,
 	type ActiveAuthAction,
 	type PostingAuthAction,
 	type CoreAction,
@@ -86,186 +129,80 @@ export {
 	type ApproveAction,
 	type LendingAction,
 	type DataOperatorAction,
-	type ProtocolAction,
 	type SupportedCurrency,
-} from "./constants";
+	type ProtocolPayload,
+	type HiveOperation,
+	type HiveTransferOperation,
+	type HiveTransactionObject,
+	type HiveCustomJsonBody,
+	type HiveTransferBody,
+	type Price,
+	type PaymentSplit,
+	type SeedProvenance,
+	type SchemaFieldType,
+	type SchemaField,
+	type CollectionSchema,
+	type CreatePayloadOptions,
+	// Action-data types
+	type CollectionMetadata,
+	type CollectionRules,
+	type CollectionData,
+	type ArchiveCollectionData,
+	type ExtendSchemaData,
+	type NFTMetadata,
+	type NFTData,
+	type BulkDistributeItem,
+	type BulkDistributeData,
+	type TransferData,
+	type SetDataData,
+	type SetDataFromData,
+	type DataOperatorApproveData,
+	type ListingData,
+	type UnlistData,
+	type BuyData,
+	type NftApproveData,
+	type NftApproveAllData,
+	type NftTransferFromData,
+	type NftLendData,
+	type NftReturnData,
+	type NodeRegisterData,
+	type NodeHeartbeatData,
+	// Multisig
+	type BuyMultisigRequest,
+	type CreateCollectionMultisigRequest,
+	type MultisigRequest,
+	type MultisigErrorCode,
+	type MultisigResponse,
+	type PaymentInfo,
+} from "@nftlox/protocol";
 
-// ============ TYPES ============
-export type {
-	// Schema types
-	SchemaFieldType,
-	SchemaField,
-	CollectionSchema,
-	ExtendSchemaData,
-	// Core types
-	HiveOperation,
-	Price,
-	CollectionMetadata,
-	CollectionRules,
-	CollectionData,
-	ArchiveCollectionData,
-	NFTMetadata,
-	NFTData,
-	SeedProvenance,
-	BulkDistributeItem,
-	BulkDistributeData,
-	BulkDistributeInput,
-	TransferData,
-	SetDataData,
-	SetDataInput,
-	DataOperatorApproveData,
-	DataOperatorApproveInput,
-	SetDataFromData,
-	SetDataFromInput,
-	ListingData,
-	UnlistData,
-	BuyData,
-	HiveTransactionObject,
-	MultisigErrorCode,
-	MultisigResponse,
-	BuyMultisigRequest,
-	CreateCollectionMultisigRequest,
-	MultisigRequest,
-	PaymentInfo,
-	ProtocolPayload,
-	CreateCollectionInput,
-	ArchiveCollectionInput,
-	MintInput,
-	ListInput,
-	BuyInput,
-	UnlistInput,
-	ImportedNFT,
-	HiveTransferOperation,
-	// Anti-duplication types
-	SeedNFTWithArtId,
-	MintingSession,
-	// Approve & TransferFrom types
-	NftApproveData,
-	NftApproveInput,
-	NftApproveAllData,
-	NftApproveAllInput,
-	NftTransferFromData,
-	NftTransferFromInput,
-	// Lending types
-	NftLendData,
-	NftLendInput,
-	NftReturnData,
-	NftReturnInput,
-	NodeRegisterData,
-	NodeRegisterInput,
-} from "./types";
-
-// ============ DNA GENERATION ============
+// ============ SDK-ONLY: ART ID ============
 export {
-	generateHash,
-	generateOriginDna,
-	generateInstanceDna,
-	generateImageHash,
-	// Seed & Instance helpers
-	generateInstanceId,
-	extractSeedId,
-	extractInstanceNumber,
-	isSeedId,
-	isInstanceId,
-	// ArtId validation & sanitization
 	sanitizeArtId,
 	generateArtIdFromName,
 	validateArtId,
 	validateArtIdArray,
 	type ArtIdValidationResult,
-	// Deterministic ID generation (SHA-256)
-	generateDeterministicCollectionId,
-	generateDeterministicSeedId,
-	generateDeterministicInstanceId,
-	// Listing ID
-	generateListingNonce,
-	generateListingId,
-	// Deterministic instance DNA for bulk_distribute
-	generateDeterministicInstanceDna,
-	generateDeterministicAccessKey,
-} from "./dna";
+	type ArtIdArrayValidation,
+} from "./artid";
 
-// ============ PAYLOAD CREATION ============
-export {
-	// Payload creators
-	createBulkDistributePayload,
-	createBulkDistributeOperation,
-	createTransferPayload,
-	createBulkTransferPayload,
-	createBulkBurnPayload,
-	createSetDataPayload,
-	createDataOperatorApprovePayload,
-	createDataOperatorApproveOperation,
-	createSetDataFromPayload,
-	createSetDataFromOperation,
-	createExtendSchemaPayload,
-	createExtendSchemaOperation,
-	createArchiveCollectionPayload,
-	createArchiveCollectionOperation,
-	createListPayload,
-	createUnlistPayload,
-	createBuyPayload,
-	createBuyOperation,
-	// Operation creators
-	createTransferOperation,
-	createBurnOperation,
-	createBulkBurnOperation,
-	createSetDataOperation,
-	createListOperation,
-	createUnlistOperation,
-	// Deterministic payload & operation creation (anti-duplication)
-	createDeterministicCollectionPayload,
-	createDeterministicCollectionOperation,
-	createDeterministicMintPayload,
-	createDeterministicMintOperation,
-	toHiveOperation,
-	type DeterministicCollectionInput,
-	type DeterministicMintInput,
-	// Approve & TransferFrom payloads & operations
-	createNftApprovePayload,
-	createNftApproveOperation,
-	createNftApproveAllPayload,
-	createNftApproveAllOperation,
-	createNftTransferFromPayload,
-	createNftTransferFromOperation,
-	// Lending payloads & operations
-	createNftLendPayload,
-	createNftLendOperation,
-	createNftReturnPayload,
-	createNftReturnOperation,
-	createNodeRegisterPayload,
-	createNodeRegisterOperation,
-	PayloadTooLargeError,
-	makePayload,
-} from "./payloads";
+// ============ SDK-ONLY: SESSION TYPES ============
+export type { SeedNFTWithArtId, MintingSession } from "./types";
 
-// ============ PROTOCOL STATE ============
-export {
-	initProtocol,
-	getProtocolVersion,
-	getProtocolId,
-	isInitialized,
-} from "./protocol-state";
-
-// ============ SCHEMAS ============
+// ============ SDK-ONLY: ZOD SCHEMAS ============
 export * from "./schemas";
+
+// ============ SDK-ONLY: BUILDERS ============
+export * from "./builders";
+
+// ============ SDK-ONLY: PROTOCOL STATE ============
+export { initProtocol, getProtocolVersion, getProtocolId, isInitialized } from "./protocol-state";
+
+// ============ SDK-ONLY: NFT OPERATION PRE-VALIDATION ============
 export { validateNftOperation } from "./validate";
 export type { NftState, PreValidationResult } from "./validate";
 
-// ============ SCHEMA VALIDATION ============
-export {
-	VALID_SCHEMA_TYPES,
-	canonicalJson,
-	computeDataHash,
-	validateValueAgainstType,
-	validateSchemaDefinition,
-	validateMintData,
-	validateMutableUpdate,
-	validateMutableSnapshot,
-	mergeSchemas,
-} from "./schema-validation";
-
-// ============ SCHEMA TEMPLATES ============
+// ============ SDK-ONLY: SCHEMA TEMPLATES ============
 export {
 	GAMING_SCHEMA,
 	ART_SCHEMA,
@@ -280,10 +217,7 @@ export {
 	createSchemaBuilder,
 } from "./schema-templates";
 
-// ============ BUILDERS ============
-export * from "./builders";
-
-// ============ MULTISIG CLIENT ============
+// ============ SDK-ONLY: MULTISIG CLIENT ============
 export {
 	fetchPaymentInfo,
 	requestBuyMultisig,
@@ -303,55 +237,13 @@ export {
 	solveMultisigPow,
 } from "./pow";
 
+// ============ SDK-ONLY: SPV VERIFICATION ============
+export * from "./spv";
 
-// ============ SPV VERIFICATION ============
-export {
-	// Types
-	type HiveL1Config,
-	type HafahTransaction,
-	type HafahOperationRecord,
-	type L1ParsedOperation,
-	type VerificationStatus,
-	type OnChainVerificationResult,
-	type OwnershipVerifyParams,
-	type OwnershipVerificationResult,
-	type OwnershipCheckResult,
-	type DeterministicDerivationParams,
-	type DeterministicDerivationResult,
-	type OnChainVerifyParams,
-	type ListingPriceVerifyParams,
-	type ListingPriceVerificationResult,
-	type OnChainPrice,
-	type ResolveOperationByIdParams,
-	type ResolvedOperationById,
-	type ResolveMutableDataParams,
-	type ResolvedMutableData,
-	// Constants
-	DEFAULT_HIVE_ENDPOINTS,
-	DEFAULT_HIVE_TIMEOUT_MS,
-	// L1 Client
-	HiveRpcError,
-	createDefaultL1Config,
-	fetchTransaction,
-	fetchOperationById,
-	fetchOperationId,
-	fetchOperationIds,
-	fetchFromHiveRpc,
-	parseAllNftloxOperations,
-	parseNftloxOperation,
-	resolveOperationById,
-	resolveMutableDataFromOperation,
-	// Verifiers
-	verifyDeterministicDerivation,
-	verifyOperationOnChain,
-	verifyNftOwnership,
-	verifyListingPrice,
-} from "./spv";
-
-// ============ INHERITANCE (Zero-Duplication) ============
+// ============ SDK-ONLY: INHERITANCE ============
 export { resolveInstance } from "./inheritance";
 
-// ============ INDEXER CLIENT ============
+// ============ SDK-ONLY: INDEXER CLIENT ============
 export {
 	createIndexerClient,
 	IndexerError,
@@ -379,5 +271,5 @@ export {
 	type UserNftsQueryParams,
 } from "./client";
 
-// ============ UTILS ============
+// ============ SDK-ONLY: UTILS ============
 export * from "./utils/tx-sizing";

@@ -9,9 +9,9 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 | Export | Description |
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
-| `PROTOCOL_VERSION` | `"0.5.2"` |
-| `ALL_ACTIONS` | All 18 SDK protocol actions |
-| `CORE_ACTIONS` | 8 core actions |
+| `PROTOCOL_VERSION` | `"0.5.3"` |
+| `ALL_ACTIONS` | All 19 SDK protocol actions |
+| `CORE_ACTIONS` | 9 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |
 | `APPROVE_ACTIONS` | 3 approve/transferFrom actions |
 | `LENDING_ACTIONS` | 2 lending actions (nft_lend, nft_return) |
@@ -85,6 +85,7 @@ Higher-level functions that validate input via Zod schemas, generate determinist
 | `buildSetData()` | Validate + build set-data |
 | `buildArchiveCollection()` | Validate + build archive collection |
 | `buildNodeRegister()` | Validate + build node registration |
+| `buildNodeHeartbeat()` | Validate + build node heartbeat (state-root announce) |
 | `buildSetDataFrom()` | Validate + build set-data-from |
 | `buildNftApprove()` | Validate + build NFT approve |
 | `buildNftApproveAll()` | Validate + build collection-wide approve |

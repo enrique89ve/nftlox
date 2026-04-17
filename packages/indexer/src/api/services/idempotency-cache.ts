@@ -10,7 +10,7 @@
 // the first response — that would silently send the caller a signature for a
 // transaction they didn't ask for.
 
-import { canonicalJson } from "@/utils/canonical-json.ts";
+import { canonicalJson } from "@/protocol/index.ts";
 
 // Stripe-compatible key shape. Short enough to fit comfortably in headers,
 // long enough to make collision trivial. `-` and `_` are URL-safe so keys can

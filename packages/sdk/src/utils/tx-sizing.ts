@@ -1,5 +1,4 @@
-import { MAX_JSON_SIZE } from "../constants";
-import type { HiveOperation } from "../types";
+import { MAX_JSON_SIZE, type HiveOperation } from "@nftlox/protocol";
 
 export interface TxValidationResult {
 	valid: boolean;

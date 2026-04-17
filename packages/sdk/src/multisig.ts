@@ -13,7 +13,7 @@ import type {
 	BuyMultisigRequest,
 	CreateCollectionMultisigRequest,
 	MultisigResponse,
-} from "./types";
+} from "@nftlox/protocol";
 import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow.ts";
 
 export type RequestMultisigOptions = Readonly<{
@@ -157,7 +157,10 @@ export async function requestBuyMultisig(
 
 /**
  * Request multisig signing for a CREATE_COLLECTION transaction.
- * Validates collection fee transfer + create_collection payload.
+ * Validates the fee transfer + create_collection payload, then co-signs the
+ * custom_json with the node's active key. The creator is derived from the
+ * embedded `transaction.operations[0][1].from` (the fee transfer sender);
+ * no separate creator field is required on the request body.
  */
 export async function requestCreateCollectionMultisig(
 	indexerUrl: string,

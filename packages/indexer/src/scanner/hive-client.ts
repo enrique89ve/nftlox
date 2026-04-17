@@ -553,6 +553,61 @@ function parseTransferAmount(raw: unknown): { amount: number; currency: string }
 	return null;
 }
 
+// ============ HIVE POWER (for node_register anti-sybil gate) ============
+
+/**
+ * Parses a legacy Hive asset string like "12.345678 VESTS" or "1.000 HIVE".
+ * Returns null on any shape mismatch — callers treat that as "unknown".
+ */
+function parseAssetString(raw: unknown): { amount: number; symbol: string } | null {
+	if (typeof raw !== "string") return null;
+	const parts = raw.split(" ");
+	if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+	const amount = Number.parseFloat(parts[0]);
+	if (!Number.isFinite(amount)) return null;
+	return { amount, symbol: parts[1] };
+}
+
+/**
+ * Effective Hive Power for an account, in HIVE units, counting both self-
+ * staked and received (delegated-in) vests. Used by the node_register handler
+ * to gate registration without charging a fee.
+ *
+ *   effective_vests = vesting_shares + received_vesting_shares - delegated_vesting_shares
+ *   HP              = effective_vests × (total_vesting_fund_hive / total_vesting_shares)
+ *
+ * Returns `null` if the account does not exist or if the asset fields are
+ * missing/malformed — the caller decides how to treat that (today: reject).
+ */
+export async function getEffectiveHivePower(account: string): Promise<number | null> {
+	const [accountsResult, globalProps] = await Promise.all([
+		callWithFailover<unknown[]>("condenser_api.get_accounts", [[account]]),
+		callWithFailover<Record<string, unknown>>("condenser_api.get_dynamic_global_properties", []),
+	]);
+
+	if (!Array.isArray(accountsResult) || accountsResult.length === 0) return null;
+	const acct = accountsResult[0];
+	if (acct === null || typeof acct !== "object") return null;
+	const a = acct as Record<string, unknown>;
+
+	const vesting = parseAssetString(a.vesting_shares);
+	const received = parseAssetString(a.received_vesting_shares);
+	const delegated = parseAssetString(a.delegated_vesting_shares);
+	const fund = parseAssetString(globalProps.total_vesting_fund_hive);
+	const totalVests = parseAssetString(globalProps.total_vesting_shares);
+
+	if (!vesting || !received || !delegated || !fund || !totalVests) return null;
+	if (vesting.symbol !== "VESTS" || received.symbol !== "VESTS" || delegated.symbol !== "VESTS") return null;
+	if (fund.symbol !== "HIVE" || totalVests.symbol !== "VESTS") return null;
+	if (totalVests.amount <= 0) return null;
+
+	const effectiveVests = vesting.amount + received.amount - delegated.amount;
+	if (effectiveVests <= 0) return 0;
+
+	const ratio = fund.amount / totalVests.amount;
+	return effectiveVests * ratio;
+}
+
 /**
  * Fetch all operations in a specific transaction by txId via JSON-RPC,
  * then extract transfer operations. Direct lookup — no block scan needed.

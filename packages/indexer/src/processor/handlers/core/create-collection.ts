@@ -42,6 +42,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const creator = requireUsername(rawCreator, "creator");
 
 	const d = op.data;
+
 	const payloadId = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
 	const name = requireBoundedString(d.name, "name", MAX_NAME_LENGTH);
 	const symbol = requireSymbol(d.symbol, "symbol");

@@ -1,4 +1,4 @@
-# NFTLox Protocol Operations Catalog v0.5.2
+# NFTLox Protocol Operations Catalog v0.5.3
 
 Complete reference for SDK-owned protocol operations. Each operation is broadcast as a `custom_json` on the Hive blockchain with `id = "nftlox_testnet"`.
 
@@ -15,21 +15,22 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | 5 | `set_data` | Core | posting | Creator updates mutable data of an NFT (requires schema) |
 | 6 | `extend_schema` | Core | posting | Creator adds fields to a collection schema |
 | 7 | `archive_collection` | Core | posting | Archives an empty collection |
-| 8 | `node_register` | Core | posting | Registers an L2 node after fee validation |
-| 9 | `list` | Marketplace | posting | Lists an NFT for sale |
-| 10 | `unlist` | Marketplace | posting | Removes an NFT from the marketplace |
-| 11 | `buy` | Marketplace | active | Buys a listed NFT (multisig with node) |
-| 12 | `nft_approve` | Approve | posting | Approves a spender for ONE specific NFT |
-| 13 | `nft_approve_all` | Approve | posting | Approves a spender for ALL NFTs in a collection |
-| 14 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
-| 15 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
-| 16 | `nft_return` | Lending | posting | Returns a lent NFT |
-| 17 | `data_operator_approve` | DataOperator | posting | Authorizes an external operator for a collection |
-| 18 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
+| 8 | `node_register` | Core | posting | Opt-in listing in the public `l2_nodes` directory (≥100 HP) |
+| 9 | `node_heartbeat` | Core | posting | Periodic proof-of-liveness + ownership state-root hash |
+| 10 | `list` | Marketplace | posting | Lists an NFT for sale |
+| 11 | `unlist` | Marketplace | posting | Removes an NFT from the marketplace |
+| 12 | `buy` | Marketplace | active | Buys a listed NFT (multisig with node) |
+| 13 | `nft_approve` | Approve | posting | Approves a spender for ONE specific NFT |
+| 14 | `nft_approve_all` | Approve | posting | Approves a spender for ALL NFTs in a collection |
+| 15 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
+| 16 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
+| 17 | `nft_return` | Lending | posting | Returns a lent NFT |
+| 18 | `data_operator_approve` | DataOperator | posting | Authorizes an external operator for a collection |
+| 19 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
 
 ---
 
-## Core (8 operations)
+## Core (9 operations)
 
 ### 1. `create_collection`
 
@@ -250,7 +251,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 ### 8. `node_register`
 
 **SDK constant**: `ACTION_NODE_REGISTER`
-**Description**: Registers or updates an L2 node endpoint after validating the required registration fee.
+**Description**: Opts the node account into the public `l2_nodes` discovery directory. Running a node is permissionless — only nodes that want to be listed for clients to find must emit this op.
 **Key authority**: posting -- the node account signs the `custom_json`.
 **Signer role**: Must be the node account being registered.
 
@@ -260,24 +261,44 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | `endpoint` | string | yes | Public HTTPS endpoint for the node |
 | `publicKey` | string | yes | Public key used by the node |
 
-**Paired transfer**:
-- The transaction must include a fee transfer from the node account to the protocol treasury.
-- The fee oracle validates the fee against the required HBD value.
-
 **Indexer validations**:
 - `endpoint` and `publicKey` must be present and valid strings
-- Fee transfer must come from the registering node
-- Fee transfer must go to the protocol treasury
-- Fee must meet the current node registration requirement
+- Signer must have ≥`MIN_NODE_REGISTER_HIVE_POWER` effective Hive Power (self-staked + received delegations − out-delegations). No fee is charged; the HP itself is the skin-in-the-game.
 
-**State changes**: Upserts `l2_nodes` for the signer with endpoint, public key, active status, fee totals, block number, and transaction ID.
-**Restrictions**: Missing fee transfer, wrong fee payer, wrong fee recipient, or insufficient fee -> rejected.
+**State changes**: Upserts `l2_nodes` for the signer with endpoint, public key, active status, block number, and transaction ID.
+**Restrictions**: Insufficient effective HP or unresolvable account -> rejected.
+
+---
+
+### 9. `node_heartbeat`
+
+**SDK constant**: `ACTION_NODE_HEARTBEAT`
+**Description**: Periodic proof-of-liveness from a registered node. Carries the current ownership state-root hash so SPV clients can compare roots across nodes.
+**Key authority**: posting -- the node account signs the `custom_json`.
+**Signer role**: Must match an existing entry in `l2_nodes` (rejected otherwise).
+
+**SDK payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `blockNum` | number | yes | Head block the indexer had processed at heartbeat time |
+| `stateRoot` | string | yes | Ownership state-root hash, formatted `sha256:<64-hex>` |
+| `indexerVersion` | string | yes | Semver of the emitting indexer binary |
+
+**Indexer validations**:
+- `blockNum` must be a non-negative integer
+- `stateRoot` must match `/^sha256:[0-9a-f]{64}$/`
+- `indexerVersion` must be 1–32 chars
+- Signer must be registered in `l2_nodes`
+- Consecutive heartbeats from the same node must be at least `MIN_HEARTBEAT_INTERVAL_BLOCKS` apart (spam guard)
+
+**State changes**: Inserts a row into `l2_node_heartbeats` and updates `l2_nodes.last_heartbeat_block` for the signer.
+**Restrictions**: Unregistered signer, malformed state-root, or heartbeat emitted too soon -> rejected.
 
 ---
 
 ## Marketplace (3 operations)
 
-### 9. `list`
+### 10. `list`
 
 **SDK constant**: `ACTION_LIST`
 **Description**: Lists an NFT for sale on the marketplace with price and currency.
@@ -310,7 +331,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ---
 
-### 10. `unlist`
+### 11. `unlist`
 
 **SDK constant**: `ACTION_UNLIST`
 **Description**: Removes an NFT from the marketplace.
@@ -332,7 +353,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ---
 
-### 11. `buy`
+### 12. `buy`
 
 **SDK constant**: `ACTION_BUY`
 **Description**: Buys a listed NFT. Special operation: the node co-signs with active key (multisig). The buyer is extracted from paired transfers, not from the signer.
@@ -371,7 +392,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ## Approve/Delegation (3 operations)
 
-### 12. `nft_approve`
+### 13. `nft_approve`
 
 **SDK constant**: `ACTION_NFT_APPROVE`
 **Description**: Approves a spender to transfer ONE specific NFT from the owner.
@@ -396,7 +417,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ---
 
-### 13. `nft_approve_all`
+### 14. `nft_approve_all`
 
 **SDK constant**: `ACTION_NFT_APPROVE_ALL`
 **Description**: Approves a spender to transfer ALL of the signer's NFTs in a collection. Analogous to ERC-721 `setApprovalForAll`.
@@ -419,7 +440,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ---
 
-### 14. `nft_transfer_from`
+### 15. `nft_transfer_from`
 
 **SDK constant**: `ACTION_NFT_TRANSFER_FROM`
 **Description**: An approved spender transfers an NFT from the owner to another recipient.
@@ -447,7 +468,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ## Lending (2 operations)
 
-### 15. `nft_lend`
+### 16. `nft_lend`
 
 **SDK constant**: `ACTION_NFT_LEND`
 **Description**: Lends an NFT to a borrower. The NFT is locked (cannot be transferred, listed, burned, or approved).
@@ -472,7 +493,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ---
 
-### 16. `nft_return`
+### 17. `nft_return`
 
 **SDK constant**: `ACTION_NFT_RETURN`
 **Description**: Returns a lent NFT. Both the lender and the borrower can execute this action.
@@ -496,7 +517,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ## Data Operators (2 operations)
 
-### 17. `data_operator_approve`
+### 18. `data_operator_approve`
 
 **SDK constant**: `ACTION_DATA_OPERATOR_APPROVE`
 **Description**: The collection creator authorizes an external operator to modify mutable data of NFTs in that collection.
@@ -520,7 +541,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ---
 
-### 18. `set_data_from`
+### 19. `set_data_from`
 
 **SDK constant**: `ACTION_SET_DATA_FROM`
 **Description**: An approved operator modifies the mutable data (`mutable_data`) of an NFT. Works identically to `set_data` but signed by an authorized operator instead of the creator. Requires the collection to have a defined schema.

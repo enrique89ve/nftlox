@@ -5,6 +5,7 @@ import { initBeekeeperSigner, closeBeekeeperSigner } from "./api/services/beekee
 import { startMultisigHealthMonitor, stopMultisigHealthMonitor } from "./api/services/multisig-health.ts";
 import { startPricePoller, stopPricePoller } from "./utils/fee-oracle.ts";
 import { createLogger } from "./utils/logger.ts";
+import { config } from "./config.ts";
 import { PROTOCOL_VERSION, PROTOCOL_GENESIS_BLOCK } from "./protocol/index.ts";
 
 const log = createLogger("api");
@@ -14,13 +15,16 @@ async function main(): Promise<void> {
 
 	await connectWithRetry();
 
-	// Read key from env, init beekeeper, then wipe from process.env.
+	// Read keys from env, init beekeeper, then wipe from process.env.
 	// Keys are never stored in config to avoid lingering in V8 heap as frozen strings.
+	// POSTING_KEY is only imported when NODE_REGISTER=true (config enforces presence).
 	const activeKey = process.env.ACTIVE_KEY ?? "";
+	const postingKey = config.nodeRegister ? (process.env.POSTING_KEY ?? "") : "";
 	const bkPassword = process.env.BEEKEEPER_PASSWORD ?? "";
 	if (activeKey) {
-		await initBeekeeperSigner(activeKey, bkPassword);
+		await initBeekeeperSigner(activeKey, bkPassword, postingKey || null);
 		delete process.env.ACTIVE_KEY;
+		delete process.env.POSTING_KEY;
 		delete process.env.BEEKEEPER_PASSWORD;
 	}
 

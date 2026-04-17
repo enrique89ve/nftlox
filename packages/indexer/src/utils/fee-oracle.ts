@@ -1,7 +1,7 @@
 import { createLogger } from "./logger.ts";
 import { config } from "@/config.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { DEFAULT_FEE_ACCOUNT } from "@/protocol/constants.ts";
+import { DEFAULT_FEE_ACCOUNT } from "@/protocol/index.ts";
 
 const log = createLogger("fee-oracle");
 

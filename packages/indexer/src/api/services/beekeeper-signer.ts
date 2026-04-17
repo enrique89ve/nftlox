@@ -1,13 +1,19 @@
 /**
- * Beekeeper-based transaction signer.
+ * Beekeeper-based transaction signer — dual-key (active + optional posting).
  *
- * Stores the active key inside beekeeper's WASM memory so it never
- * lives as a plain JS string after initialization. The wallet is
- * temporary (in-memory only, no file persistence).
+ * Stores the WIFs inside beekeeper's WASM memory so they never live as plain
+ * JS strings after initialization. The wallet is in-memory only (no file
+ * persistence across process restarts).
+ *
+ * Why two keys:
+ *   - `active`  → signs marketplace flows (`buy`, `create_collection` multisig).
+ *   - `posting` → signs permissionless node ops (`node_register`, `node_heartbeat`)
+ *                 when `NODE_REGISTER=true`. Optional; absent when the operator
+ *                 runs a private (unregistered) node.
  *
  * Lifecycle:
- *   init()   — call once at startup; imports the key and caches the session.
- *   sign()   — sign a hex digest; reuses the cached session.
+ *   init()   — call once at startup; imports keys and caches the session.
+ *   sign*()  — sign a hex digest; selector picks which key to use.
  *   close()  — tear down WASM; call on graceful shutdown.
  */
 
@@ -17,32 +23,45 @@ import createBeekeeper, {
 	type IBeekeeperUnlockedWallet,
 } from "@hiveio/beekeeper";
 import { createLogger } from "@/utils/logger.ts";
+import { redactError } from "@/utils/redact.ts";
 
 const log = createLogger("beekeeper-signer");
 
 const WALLET_NAME = "nftlox-multisig";
-const SESSION_SALT = "nftlox-indexer";
 
 // ============ STATE ============
 
 let bkInstance: IBeekeeperInstance | null = null;
 let bkSession: IBeekeeperSession | null = null;
 let bkWallet: IBeekeeperUnlockedWallet | null = null;
-let cachedPublicKey: string | null = null;
-let initPromise: Promise<string> | null = null;
+let cachedActivePublicKey: string | null = null;
+let cachedPostingPublicKey: string | null = null;
+let initPromise: Promise<InitResult> | null = null;
+
+export type InitResult = Readonly<{
+	activePublicKey: string;
+	postingPublicKey: string | null;
+}>;
 
 // ============ PUBLIC API ============
 
 /**
- * Initialize beekeeper: create instance, session, wallet, and import key.
- * After this call the WIF string is no longer needed — all signing goes
+ * Initialize beekeeper: create instance, session, wallet, and import keys.
+ * After this call the WIF strings are no longer needed — all signing goes
  * through beekeeper's WASM memory.
+ *
+ * `postingKeyWif` is optional. When null/undefined, only active signing is
+ * available (posting-signed ops throw).
  *
  * Safe to call concurrently — uses a promise barrier to prevent double init.
  */
-export function initBeekeeperSigner(activeKeyWif: string, walletPassword: string): Promise<string> {
+export function initBeekeeperSigner(
+	activeKeyWif: string,
+	walletPassword: string,
+	postingKeyWif?: string | null,
+): Promise<InitResult> {
 	if (!initPromise) {
-		initPromise = doInit(activeKeyWif, walletPassword).catch((err) => {
+		initPromise = doInit(activeKeyWif, walletPassword, postingKeyWif ?? null).catch((err) => {
 			initPromise = null;
 			throw err;
 		});
@@ -50,7 +69,11 @@ export function initBeekeeperSigner(activeKeyWif: string, walletPassword: string
 	return initPromise;
 }
 
-async function doInit(activeKeyWif: string, walletPassword: string): Promise<string> {
+async function doInit(
+	activeKeyWif: string,
+	walletPassword: string,
+	postingKeyWif: string | null,
+): Promise<InitResult> {
 	if (!walletPassword) {
 		throw new Error("BEEKEEPER_PASSWORD is required — set it in your .env");
 	}
@@ -64,7 +87,10 @@ async function doInit(activeKeyWif: string, walletPassword: string): Promise<str
 			storageRoot,
 			unlockTimeout: 31_536_000,
 		});
-		bkSession = bkInstance.createSession(SESSION_SALT);
+		// Salt must be random & unique per session — beekeeper derives the
+		// session token from it; static salts risk collisions across
+		// processes sharing storage (README requirement, even under inMemory).
+		bkSession = bkInstance.createSession(crypto.randomUUID());
 
 		let wallet: IBeekeeperUnlockedWallet;
 
@@ -83,17 +109,26 @@ async function doInit(activeKeyWif: string, walletPassword: string): Promise<str
 
 		bkWallet = wallet;
 
-		cachedPublicKey = await wallet.importKey(activeKeyWif);
+		cachedActivePublicKey = await wallet.importKey(activeKeyWif);
+
+		if (postingKeyWif) {
+			cachedPostingPublicKey = await wallet.importKey(postingKeyWif);
+		}
+
 		log.info("Beekeeper signer initialized", {
-			publicKey: cachedPublicKey,
+			activePublicKey: cachedActivePublicKey,
+			postingPublicKey: cachedPostingPublicKey,
 			storageRoot,
 			isTemporary: wallet.isTemporary,
 		});
 
-		return cachedPublicKey;
+		return {
+			activePublicKey: cachedActivePublicKey,
+			postingPublicKey: cachedPostingPublicKey,
+		};
 	} catch (err) {
 		cleanupState();
-		throw err;
+		throw redactError(err);
 	}
 }
 
@@ -101,33 +136,68 @@ function cleanupState(): void {
 	bkWallet = null;
 	bkSession = null;
 	bkInstance = null;
-	cachedPublicKey = null;
+	cachedActivePublicKey = null;
+	cachedPostingPublicKey = null;
 }
 
 /**
- * Sign a transaction digest (hex string).
- * Returns the signature in the format Hive expects.
+ * Sign a transaction digest (hex string) with the active key.
+ * Used for marketplace flows (`buy`, `create_collection` multisig).
  */
 export function signWithBeekeeper(sigDigestHex: string): string {
-	if (!bkWallet || !cachedPublicKey) {
+	if (!bkWallet || !cachedActivePublicKey) {
 		throw new Error("Beekeeper signer not initialized — call initBeekeeperSigner() first");
 	}
+	return signWithCachedKey(sigDigestHex, cachedActivePublicKey);
+}
 
+/**
+ * Sign a transaction digest (hex string) with the posting key.
+ * Used for node ops (`node_register`, `node_heartbeat`).
+ *
+ * Throws if beekeeper was initialized without a posting key — callers should
+ * only invoke this when `config.nodeRegister === true`.
+ */
+export function signPostingDigest(sigDigestHex: string): string {
+	if (!bkWallet) {
+		throw new Error("Beekeeper signer not initialized — call initBeekeeperSigner() first");
+	}
+	if (!cachedPostingPublicKey) {
+		throw new Error(
+			"Posting key not imported — pass POSTING_KEY to initBeekeeperSigner() or set NODE_REGISTER=false",
+		);
+	}
+	return signWithCachedKey(sigDigestHex, cachedPostingPublicKey);
+}
+
+function signWithCachedKey(sigDigestHex: string, publicKey: string): string {
 	try {
-		return bkWallet.signDigest(cachedPublicKey, sigDigestHex);
-	} catch (err: any) {
-		// Log detailed state if signing fails — helps diagnose "not found in unlocked wallets"
-		const wallets = bkSession ? bkSession.listWallets().map((w) => ({ name: w.name, unlocked: !!w.unlocked })) : [];
+		return bkWallet!.signDigest(publicKey, sigDigestHex);
+	} catch (err) {
+		// Sanitize first — a malicious input could cause beekeeper to emit an
+		// error whose message/stack embeds a WIF. Never let that reach logs
+		// or bubble unredacted to upstream handlers.
+		const safe = redactError(err);
+		const wallets = safeListWallets();
 		const keys = bkWallet ? (tryGetPublicKeys(bkWallet) ?? []) : [];
 
 		log.error("Beekeeper signing failed", {
-			error: err?.message || String(err),
-			requestedKey: cachedPublicKey,
+			error: safe.message,
+			requestedKey: publicKey,
 			activeWallets: wallets,
 			keysInCurrentWallet: keys,
 		});
 
-		throw err;
+		throw safe;
+	}
+}
+
+function safeListWallets(): ReadonlyArray<{ name: string; unlocked: boolean }> {
+	if (!bkSession) return [];
+	try {
+		return bkSession.listWallets().map((w) => ({ name: w.name, unlocked: !!w.unlocked }));
+	} catch {
+		return [];
 	}
 }
 
@@ -139,28 +209,49 @@ function tryGetPublicKeys(wallet: IBeekeeperUnlockedWallet): string[] | null {
 	}
 }
 
-/** True when the signer has been initialized and is ready to sign. */
+/** True when the signer has been initialized and is ready to sign (active). */
 export function isBeekeeperReady(): boolean {
-	return bkWallet !== null && cachedPublicKey !== null;
+	return bkWallet !== null && cachedActivePublicKey !== null;
 }
 
-/** Returns the public key derived from the imported active key. */
+/** True when posting signing is available (i.e., POSTING_KEY was imported). */
+export function isPostingSignerReady(): boolean {
+	return bkWallet !== null && cachedPostingPublicKey !== null;
+}
+
+/** Returns the active public key derived from the imported active WIF. */
 export function getSignerPublicKey(): string | null {
-	return cachedPublicKey;
+	return cachedActivePublicKey;
+}
+
+/** Returns the posting public key if imported, else null. */
+export function getPostingSignerPublicKey(): string | null {
+	return cachedPostingPublicKey;
 }
 
 /**
  * Graceful shutdown: lock wallet, close session, delete WASM instance.
+ *
+ * Module state is nulled BEFORE awaiting WASM teardown so a concurrent
+ * `signWithBeekeeper` / `signPostingDigest` caller fails fast through the
+ * init guard instead of racing into a closed session and triggering a raw
+ * WASM error. `initPromise` is also reset so a future `initBeekeeperSigner`
+ * (tests, hot-restart) actually re-runs `doInit` instead of returning the
+ * stale cached `InitResult`.
  */
 export async function closeBeekeeperSigner(): Promise<void> {
-	if (bkSession) {
-		try { bkSession.close(); } catch { /* may already be closed */ }
-	}
-	if (bkInstance) {
-		try { await bkInstance.delete(); } catch { /* best-effort */ }
-	}
+	const session = bkSession;
+	const instance = bkInstance;
 
 	cleanupState();
+	initPromise = null;
+
+	if (session) {
+		try { session.close(); } catch { /* may already be closed */ }
+	}
+	if (instance) {
+		try { await instance.delete(); } catch { /* best-effort */ }
+	}
 
 	log.info("Beekeeper signer closed");
 }

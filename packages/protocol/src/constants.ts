@@ -1,14 +1,16 @@
-// NFTLox Indexer protocol catalog.
-// Keep this explicit so the indexer only accepts actions it can process.
-// protocol-auth.test guards drift against the SDK action/auth catalog.
+// NFTLox Protocol — canonical constants.
+// Authoritative source of truth for all protocol-level constants.
+// Both the indexer and SDK import from here.
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.5.2";
+export const PROTOCOL_VERSION = "0.5.3";
 export const MIN_PROTOCOL_VERSION = "0.5.0";
-export const PROTOCOL_GENESIS_BLOCK = 105_558_142;
-// Anchor hash for PROTOCOL_GENESIS_BLOCK. Verified against ≥2 Hive endpoints at
-// startup so a hostile HafAH cannot hand us a fabricated chain from scratch.
-export const PROTOCOL_GENESIS_BLOCK_ID = "064ab07e3120a699bb297c171ca29329976b7194";
+export const HASH_VERSION = "v1";
+
+// Transaction Limits
+export const MAX_JSON_SIZE = 8000;
+export const MAX_OPERATIONS_PER_TX = 5;
+export const TX_DELAY_MS = 4000;
 
 // Field Limits
 export const MAX_NAME_LENGTH = 100;
@@ -16,6 +18,13 @@ export const MAX_DESCRIPTION_LENGTH = 250;
 export const MAX_IMAGE_URL_LENGTH = 500;
 export const MAX_URL_LENGTH = 500;
 export const MAX_ID_LENGTH = 128;
+// artId is a creator-chosen label bound to one seed within a collection. 64 chars
+// fits human-readable slugs ("hero-card-v2") without bloating payload or row size.
+export const MAX_ART_ID_LENGTH = 64;
+export const MIN_SYMBOL_LENGTH = 3;
+export const MAX_SYMBOL_LENGTH = 10;
+export const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;
+export const TX_ID_REGEX = /^[0-9a-f]{40}$/;
 
 // DNA Constants
 export const ORIGIN_DNA_LENGTH = 16;
@@ -30,10 +39,7 @@ export const MIN_PRICE_AMOUNT = "0.001";
 export const BASIS_POINTS_DENOMINATOR = 10_000;
 export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
-
-// L2 Constants
 export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
-export const HIVE_CUSTOM_JSON_MAX_BYTES = 8192;
 
 // Memo Prefixes (Marketplace)
 export const MEMO_PREFIX_BUY = "NFTLox BUY:";
@@ -45,19 +51,35 @@ export const LISTING_ID_PREFIX = "list_";
 export const LISTING_NONCE_LENGTH = 12;
 export const LISTING_HASH_LENGTH = 32;
 
+// Payload Limits
+export const HIVE_CUSTOM_JSON_MAX_BYTES = 8192;
+export const SAFE_PAYLOAD_MAX_BYTES = Math.floor(HIVE_CUSTOM_JSON_MAX_BYTES * 0.9);
+
 // Schema Constants
 export const MAX_SCHEMA_FIELDS = 64;
 export const MAX_FIELD_NAME_LENGTH = 64;
 
-// Bulk Distribute Limits
+// Batch Limits
 export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
-
-// Transfer/Burn Batch Limits
 export const MAX_TRANSFER_BATCH_SIZE = 50;
 
 // Multisig Constants
 export const MULTISIG_EXPIRATION_MS = 125_000;
 export const MAX_MULTISIG_OPERATIONS = 5;
+
+// Floor for opt-in listing in the PUBLIC node directory (l2_nodes). Running a
+// node is permissionless and does not require registration — a game or dapp
+// operator can index + serve privately without ever emitting `node_register`.
+// The HP gate only protects the discoverable directory against cheap sybil
+// listings. Skin-in-the-game is HP (self-staked OR delegated-in), not a fee.
+export const MIN_NODE_REGISTER_HIVE_POWER = 100;
+
+// Cadence for on-chain heartbeat (custom_json with current state-root hash).
+// Block time on Hive is 3s, so 5000 blocks ≈ 4h10m. Nodes that register must
+// publish a heartbeat at least every N blocks or listings are treated as stale
+// by consumers of `l2_nodes`. Missing the window does NOT kick the node; it
+// only affects trust signals in the discovery directory.
+export const MIN_HEARTBEAT_INTERVAL_BLOCKS = 5000;
 
 // Protocol Actions (Core)
 export const ACTION_CREATE_COLLECTION = "create_collection";
@@ -68,6 +90,7 @@ export const ACTION_SET_DATA = "set_data";
 export const ACTION_EXTEND_SCHEMA = "extend_schema";
 export const ACTION_ARCHIVE_COLLECTION = "archive_collection";
 export const ACTION_NODE_REGISTER = "node_register";
+export const ACTION_NODE_HEARTBEAT = "node_heartbeat";
 
 // Protocol Actions (Marketplace)
 export const ACTION_LIST = "list";
@@ -87,7 +110,7 @@ export const ACTION_NFT_RETURN = "nft_return";
 export const ACTION_DATA_OPERATOR_APPROVE = "data_operator_approve";
 export const ACTION_SET_DATA_FROM = "set_data_from";
 
-// Action Arrays
+// Category arrays
 export const CORE_ACTIONS = [
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
@@ -97,6 +120,7 @@ export const CORE_ACTIONS = [
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
+	ACTION_NODE_HEARTBEAT,
 ] as const;
 
 export const MARKETPLACE_ACTIONS = [
@@ -137,3 +161,11 @@ export type LendingAction = (typeof LENDING_ACTIONS)[number];
 export type DataOperatorAction = (typeof DATA_OPERATOR_ACTIONS)[number];
 export type ProtocolAction = (typeof ALL_ACTIONS)[number];
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+
+/** Runtime guard: returns true if value is a known ProtocolAction string. */
+export function isProtocolAction(value: unknown): value is ProtocolAction {
+	return (
+		typeof value === "string" &&
+		(ALL_ACTIONS as readonly string[]).includes(value)
+	);
+}

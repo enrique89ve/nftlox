@@ -75,7 +75,6 @@ export type BuyRequestShape = Readonly<{
 }>;
 
 export type CollectionRequestShape = Readonly<{
-	readonly creator: string | null;
 	readonly transaction: Record<string, unknown>;
 }>;
 

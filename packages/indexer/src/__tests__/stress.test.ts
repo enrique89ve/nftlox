@@ -43,8 +43,6 @@ mock.module("@/db/queries/sync.ts", () => ({
 	updateLastBlock: mockUpdateLastBlock,
 	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
 	insertInvalidOperation: mock(() => Promise.resolve()),
-	acquireSyncLock: mock(() => Promise.resolve(true)),
-	releaseSyncLock: mock(() => Promise.resolve()),
 	// Stubs keep the module's export shape complete for bun's process-wide mocks.
 	getSyncStatus: mock(() => Promise.resolve({ lastBlock: 0, updatedAt: new Date() })),
 	getOperationStatus: mock(() => Promise.resolve([])),
@@ -52,6 +50,15 @@ mock.module("@/db/queries/sync.ts", () => ({
 	isOperationConfirmed: mock(() => Promise.resolve(false)),
 	insertConfirmedOperation: mock(() => Promise.resolve()),
 	insertOrphanedBuy: mock(() => Promise.resolve()),
+}));
+
+// sync-lock lives in scanner/, not db/queries. Tests call syncCycle directly
+// without starting syncLoop, so the real dedicated-connection path would fail.
+// verifyLockHeld is mocked true so the per-batch fence treats the lock as held.
+mock.module("@/scanner/sync-lock.ts", () => ({
+	acquireSyncLock: mock(() => Promise.resolve(true)),
+	releaseSyncLock: mock(() => Promise.resolve()),
+	verifyLockHeld: mock(() => Promise.resolve(true)),
 }));
 
 mock.module("@/scanner/hive-client.ts", () => ({
@@ -93,7 +100,7 @@ mock.module("@/db/client.ts", () => ({
 	closePool: () => Promise.resolve(),
 }));
 
-const { syncCycle, setRunning } = await import("@/scanner/sync-engine.ts");
+const { syncCycle, setRunning, resetHeadTracker } = await import("@/scanner/sync-engine.ts");
 const { setSynced, updateSyncProgress } = await import("@/scanner/sync-state.ts");
 
 // ─── Lightweight API Server (simulates real endpoints with realistic delays) ───
@@ -253,6 +260,7 @@ describe("stress: API responsiveness during sync", () => {
 		mockParseHafAHOperations.mockImplementation((): ParseResult => ({ ops: [], rejected: [] }));
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		setRunning(true);
+		resetHeadTracker();
 	});
 
 	test("should respond to 500 API requests while sync cycle runs", async () => {

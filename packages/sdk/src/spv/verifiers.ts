@@ -18,7 +18,7 @@ import {
 	MEMO_PREFIX_FEE,
 	SUPPORTED_CURRENCIES,
 	type SupportedCurrency,
-} from "../constants.ts";
+} from "@nftlox/protocol";
 import {
 	fetchTransaction,
 	parseNftloxOperation,

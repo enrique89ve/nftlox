@@ -83,6 +83,7 @@ const DATA_TABLES = [
 	"data_operators",
 	"orphaned_buys", "invalid_operations", "owner_nft_counts",
 	"collection_stats",
+	"l2_node_heartbeats", "l2_nodes",
 	"nfts", "collections",
 ] as const;
 
