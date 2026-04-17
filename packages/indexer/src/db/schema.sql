@@ -513,3 +513,45 @@ CREATE TRIGGER trg_prevent_nft_owner_block_regression
 	BEFORE UPDATE OF owner_block_num ON nfts
 	FOR EACH ROW
 	EXECUTE FUNCTION prevent_nft_owner_block_regression();
+
+-- Freeze the structural identity of a collection. Only `schema` and
+-- `schema_version` are legitimately mutable (set_schema flow via
+-- updateCollectionSchema). Every other column is either the structural
+-- identity (id/creator/symbol/total_potential) or the audit trail anchored
+-- to the Hive block (block_num/tx_id/created_at). Policy fields (name,
+-- description, image_url, royalty_*, transferable, burnable) are left free
+-- so a future update_collection op can touch them without a schema change.
+
+CREATE OR REPLACE FUNCTION prevent_collection_immutable_update()
+RETURNS TRIGGER AS $$
+BEGIN
+	IF NEW.id IS DISTINCT FROM OLD.id THEN
+		RAISE EXCEPTION 'collections.id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.creator IS DISTINCT FROM OLD.creator THEN
+		RAISE EXCEPTION 'collections.creator is immutable for %', OLD.id;
+	END IF;
+	IF NEW.symbol IS DISTINCT FROM OLD.symbol THEN
+		RAISE EXCEPTION 'collections.symbol is immutable for %', OLD.id;
+	END IF;
+	IF NEW.total_potential IS DISTINCT FROM OLD.total_potential THEN
+		RAISE EXCEPTION 'collections.total_potential is immutable for %', OLD.id;
+	END IF;
+	IF NEW.block_num IS DISTINCT FROM OLD.block_num THEN
+		RAISE EXCEPTION 'collections.block_num is immutable for %', OLD.id;
+	END IF;
+	IF NEW.tx_id IS DISTINCT FROM OLD.tx_id THEN
+		RAISE EXCEPTION 'collections.tx_id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+		RAISE EXCEPTION 'collections.created_at is immutable for %', OLD.id;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_collection_immutable_update ON collections;
+CREATE TRIGGER trg_prevent_collection_immutable_update
+	BEFORE UPDATE ON collections
+	FOR EACH ROW
+	EXECUTE FUNCTION prevent_collection_immutable_update();
