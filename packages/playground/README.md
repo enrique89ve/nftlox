@@ -1,120 +1,74 @@
-# NFTLox Playground
+# @nftlox/playground
 
-Web UI for testing the NFTLox Protocol on Hive blockchain. Vanilla HTML/TypeScript frontend served by a Bun HTTP server that proxies the indexer API and builds Hive operations via the SDK.
+> Browser harness for testing NFTLox actions with Hive Keychain. Also serves the public documentation site.
+
+**Default port:** 3040
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) v1.0+
 - [Hive Keychain](https://hive-keychain.com/) browser extension
-- NFTLox Indexer running on port 3050
+- NFTLox indexer running on port 3050
 
-## Quick Start
+## Quick start
 
 ```bash
-# From the monorepo root
 bun install
 bun run dev:playground
 ```
 
-Open `http://localhost:3040` in your browser.
+Open <http://localhost:3040>. The playground requires the Hive Keychain browser extension.
 
-## Features
+## What it demonstrates
 
-- **Collections**: Create collections with metadata and rules
-- **Collection lifecycle**: Archive empty collections while retaining on-chain history
-- **Minting**: Mint seed NFTs with deterministic IDs and anti-duplication
-- **Distribution**: Bulk distribute instances from seeds
-- **Transfers**: Transfer NFTs with atomic notifications (0.001 HIVE)
-- **Marketplace**: List, unlist, and browse listings
-- **Multisig buy**: Purchase NFTs via node co-signed transactions (cosign with indexer node)
-- **Lending**: Lend/return NFTs at protocol level
-- **Permissions**: NFT approvals, collection-wide approvals, data operators
-- **SPV Verification**: Trustless verification of ownership and transactions against Hive L1
-- **Search**: Look up users and NFTs
-- **Debug**: Test server-side signing and multisig buy flow end-to-end
+- Creating collections with metadata, rules, and typed schemas.
+- Minting seeds with deterministic IDs and anti-duplication.
+- Bulk distributing instances from seeds.
+- Transferring, burning, listing, buying NFTs (multisig buy with node co-signature).
+- Lending / returning NFTs at protocol level.
+- NFT approvals, collection-wide approvals, and data operators.
+- SPV trustless verification of ownership against Hive L1.
+- Debug endpoints for server-side signing and end-to-end multisig flow.
 
 ## Routes
 
-### Query API (Indexer proxy)
+### Query API (indexer proxy)
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/user/:username` | User's NFTs |
-| `GET /api/user/:username/collections` | User's collections |
-| `GET /api/nft/:nftId` | NFT details |
-| `GET /api/nft/:nftId/details` | NFT with parent/instances |
-| `GET /api/collections` | Active collections |
-| `GET /api/collection/:id` | Active collection details |
-| `GET /api/collection/:id/nfts` | Collection NFTs |
-| `GET /api/collection/:id/stats` | Collection statistics |
-| `GET /api/collection/:id/exists` | Collection existence check |
-| `GET /api/seed/:seedId/instances` | Seed instances |
-| `GET /api/seed/:id/exists` | Seed existence check |
-| `GET /api/marketplace/listings` | Active listings |
-| `GET /api/stats` | Protocol stats |
-| `GET /api/status` | Sync status |
-| `GET /api/health` | Health check |
+Proxies the indexer REST API — users, NFTs, collections, marketplace listings, stats, status, health.
 
 ### Build API (20 endpoints)
 
-All `POST` endpoints that validate input and return Hive operations ready for Keychain signing:
-
-| Endpoint | Action |
-|----------|--------|
-| `/api/build/collection` | Create collection |
-| `/api/build/collection-multisig` | Create collection with node co-signature |
-| `/api/build/seeds` | Mint seed batch |
-| `/api/build/bulk-distribute` | Bulk distribute |
-| `/api/build/transfer` | Transfer NFT |
-| `/api/build/list` | List on marketplace |
-| `/api/build/unlist` | Remove listing |
-| `/api/build/buy` | Buy NFT |
-| `/api/build/burn` | Burn NFT |
-| `/api/build/set-data` | Update mutable data (creator) |
-| `/api/build/archive-collection` | Archive empty collection |
-| `/api/build/extend-schema` | Add fields to collection schema |
-| `/api/build/preview-ids` | Preview deterministic IDs |
-| `/api/build/nft-approve` | Approve NFT spender |
-| `/api/build/nft-approve-all` | Approve collection-wide |
-| `/api/build/nft-transfer-from` | Transfer as spender |
-| `/api/build/nft-lend` | Lend NFT |
-| `/api/build/nft-return` | Return lent NFT |
-| `/api/build/data-operator-approve` | Approve data operator |
-| `/api/build/set-data-from` | Write data as operator |
-
-### Debug API
-
-| Endpoint | Description |
-|----------|-------------|
-| `POST /api/debug/server-transfer` | Server-only signing test (no Keychain) |
-| `POST /api/debug/multisig-buy` | End-to-end multisig buy flow (builds tx, gets node signature) |
+All `POST /api/build/*` endpoints that validate input and return Hive operations ready for Keychain signing: `collection`, `seeds`, `bulk-distribute`, `transfer`, `list`, `unlist`, `buy`, `burn`, `set-data`, `archive-collection`, `extend-schema`, `nft-approve`, `nft-approve-all`, `nft-transfer-from`, `nft-lend`, `nft-return`, `data-operator-approve`, `set-data-from`, `preview-ids`, `collection-multisig`.
 
 ### Other APIs
 
 | Endpoint | Description |
-|----------|-------------|
+|---|---|
 | `POST /api/spv/verify-ownership` | SPV ownership verification |
 | `POST /api/spv/verify-on-chain` | SPV on-chain verification |
 | `POST /api/validate/pre-mint` | Pre-mint validation |
 | `GET /api/protocol/version` | Protocol version info |
-| `GET /api/protocol/info` | Full protocol info |
+| `POST /api/debug/server-transfer` | Server-only signing test (no Keychain) |
+| `POST /api/debug/multisig-buy` | End-to-end multisig buy flow |
 
-## Collection Status
+## Public documentation site
 
-Collections use an explicit lifecycle status in indexer responses:
-
-- `active`: visible in public collection queries and open for normal mutations
-- `archived`: retained in the indexer database but hidden from the standard collection query endpoints
-
-The playground only shows active collections in browse flows. Archiving is exposed through `/api/build/archive-collection` and will only succeed when the collection has no seeds or instances.
+The `docs/` directory inside this package is the canonical NFTLox documentation site (Docsify). It is the single source of truth for all shareable documentation — public, contributor, and protocol spec.
 
 ## Configuration
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+|---|---|---|
 | `INDEXER_URL` | `http://localhost:3050` | Indexer API base URL |
 | `HIVE_ACCOUNT` | (empty) | Hive account for debug server signing |
 | `ACTIVE_KEY` | (empty) | Active key for debug server signing |
+
+## Scripts
+
+| Script | Description |
+|---|---|
+| `bun run dev` | Start the playground (dev) |
+| `bun run start` | Start the playground (prod) |
 
 ## License
 
