@@ -56,14 +56,14 @@ LABEL io.nftlox.image.branch="${GIT_CURRENT_BRANCH}"
 
 WORKDIR /app
 
-# Bundle + runtime scripts
-COPY --from=builder /repo/packages/indexer/dist ./dist
-COPY --from=builder /repo/packages/indexer/scripts ./scripts
-
-# External npm deps — hoisted workspace node_modules from the builder.
-# @nftlox/protocol is bundled into dist/indexer.js, so the runtime never
-# needs to resolve the workspace symlink.
+# Preserve the workspace layout so Bun's isolated install layout resolves.
+# External deps (postgres, elysia, etc.) live as symlinks in
+# packages/indexer/node_modules/* that point at ../../../node_modules/.bun/*,
+# which only works if both node_modules trees exist at the same relative paths.
 COPY --from=builder /repo/node_modules ./node_modules
+COPY --from=builder /repo/packages/indexer/node_modules ./packages/indexer/node_modules
+COPY --from=builder /repo/packages/indexer/dist ./packages/indexer/dist
+COPY --from=builder /repo/packages/indexer/scripts ./scripts
 
 RUN chmod +x /app/scripts/*.sh && \
 	chown -R bun:bun /app
@@ -72,7 +72,7 @@ USER bun
 
 ENV NODE_ENV=production
 ENV ENABLE_SWAGGER=false
-ENV INDEXER_ENTRY=dist/indexer.js
+ENV INDEXER_ENTRY=packages/indexer/dist/indexer.js
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
 	CMD ["/app/scripts/docker-healthcheck.sh"]
