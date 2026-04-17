@@ -54,7 +54,13 @@ async function loadSchema(): Promise<{ sql: string; hash: string }> {
 	if (cachedSchemaSql !== null && cachedSchemaHash !== null) {
 		return { sql: cachedSchemaSql, hash: cachedSchemaHash };
 	}
-	const schemaFile = Bun.file(import.meta.dir + "/db/schema.sql");
+	// In bundle: schema is at /app/packages/indexer/db/schema.sql
+	// In dev: schema is at ./db/schema.sql relative to src/bootstrap.ts
+	let schemaPath = import.meta.dir + "/db/schema.sql";
+	if (!await Bun.file(schemaPath).exists()) {
+		schemaPath = "/app/packages/indexer/db/schema.sql";
+	}
+	const schemaFile = Bun.file(schemaPath);
 	if (!await schemaFile.exists()) {
 		throw new Error("Schema file not found — cannot initialize database", {
 			cause: { path: schemaFile.name },
