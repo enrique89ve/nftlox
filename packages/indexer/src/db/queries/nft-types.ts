@@ -19,6 +19,8 @@ export type BurnCtx = {
 	readonly collectionId: string;
 	/** Block at which the burn landed — advances state_meta.last_block_num. */
 	readonly blockNum: number;
+	/** Hive block timestamp (ISO-8601). Audit row in burned_nfts.created_at. */
+	readonly createdAt: string;
 };
 
 export type ListingCtx = {

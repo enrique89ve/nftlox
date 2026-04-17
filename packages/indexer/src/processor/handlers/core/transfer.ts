@@ -142,6 +142,7 @@ async function processBurn(
     nftType: nft.nft_type,
     collectionId: nft.collection_id,
     blockNum: op.blockNum,
+    createdAt: op.timestamp,
   };
   await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
   await hardDeleteNft(nftId, op.signer, op.txId, op.operationId, ctx, txn);

@@ -149,8 +149,8 @@ export async function hardDeleteNft(
 	const oldRow = await readStateRow(nftId, txn);
 	if (!oldRow) throw new Error(`hardDeleteNft: nft ${nftId} not found`);
 	await txn`
-		INSERT INTO burned_nfts (id, collection_id, burned_by, tx_id, operation_id)
-		VALUES (${nftId}, ${ctx.collectionId}, ${burnedBy}, ${txId}, ${operationId})
+		INSERT INTO burned_nfts (id, collection_id, burned_by, tx_id, operation_id, created_at)
+		VALUES (${nftId}, ${ctx.collectionId}, ${burnedBy}, ${txId}, ${operationId}, ${ctx.createdAt})
 		ON CONFLICT (id) DO NOTHING
 	`;
 	await txn`DELETE FROM nfts WHERE id = ${nftId}`;

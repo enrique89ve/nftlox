@@ -150,7 +150,8 @@ CREATE TABLE IF NOT EXISTS burned_nfts (
 	collection_id TEXT NOT NULL,
 	burned_by TEXT NOT NULL,
 	tx_id TEXT NOT NULL,
-	operation_id TEXT NOT NULL
+	operation_id TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL
 );
 
 -- Invalid operations (audit trail)

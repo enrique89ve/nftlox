@@ -1109,6 +1109,7 @@ describe("Handlers (integration)", () => {
 			const [burned] = await sql`SELECT * FROM burned_nfts WHERE id = ${SEED_TEST1}`;
 			expect(burned).toBeDefined();
 			expect(burned!.burned_by).toBe("alice");
+			expect(burned!.created_at).toBeInstanceOf(Date);
 		});
 
 		test("rejects double burn", async () => {
