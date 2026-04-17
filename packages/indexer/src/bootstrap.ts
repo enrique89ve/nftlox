@@ -194,7 +194,9 @@ export async function connectWithRetry(): Promise<void> {
 	while (true) {
 		try {
 			attempt++;
-			if (config.nodeEnv !== "production") {
+			// Only start local Postgres if DATABASE_URL is not configured.
+			// Production (external DB) sets DATABASE_URL; dev mode relies on local container.
+			if (!config.databaseUrl) {
 				await ensurePostgres();
 			}
 			await testConnection();
