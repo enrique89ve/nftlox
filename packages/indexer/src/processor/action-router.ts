@@ -105,7 +105,6 @@ const handlers: Record<ProtocolAction, Handler> = {
  * Routes an operation to its handler. This function is INFALLIBLE — it never throws.
  * If a handler fails, the error is recorded in invalid_operations and processing continues.
  * This guarantees that a single bad operation can never stall the sync loop or cause block gaps.
- * Pattern inspired by nft-tracker's `process_action` EXCEPTION WHEN OTHERS handler.
  *
  * Returns true if the handler executed successfully, false otherwise.
  * Used by the sync engine's circuit breaker to detect systematic failures.

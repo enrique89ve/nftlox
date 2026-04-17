@@ -96,4 +96,26 @@ describe("StateRootBuffer", () => {
 		buf.queue({ type: "insert", newRow: row("nft-3", "c", 120), blockNum: 120 });
 		expect(buf.maxBlockNum()).toBe(150);
 	});
+
+	it("preserves higher blockNum when a later same-nft mutation uses a lower block", () => {
+		const buf = createStateRootBuffer();
+		const a = row("nft-1", "alice");
+		const b = row("nft-1", "bob");
+		buf.queue({ type: "update", oldRow: a, newRow: b, blockNum: 105 });
+		buf.queue({ type: "update", oldRow: b, newRow: a, blockNum: 100 });
+		const [entry] = [...buf.iter()];
+		expect(entry?.blockNum).toBe(105);
+		expect(buf.maxBlockNum()).toBe(105);
+	});
+
+	it("iter() is independently re-iterable across calls", () => {
+		const buf = createStateRootBuffer();
+		buf.queue({ type: "insert", newRow: row("nft-1", "alice"), blockNum: 100 });
+		buf.queue({ type: "insert", newRow: row("nft-2", "bob"), blockNum: 101 });
+		const first = [...buf.iter()];
+		const second = [...buf.iter()];
+		expect(first).toHaveLength(2);
+		expect(second).toHaveLength(2);
+		expect(first).toEqual(second);
+	});
 });

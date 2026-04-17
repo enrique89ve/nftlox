@@ -60,13 +60,13 @@ CREATE TABLE IF NOT EXISTS collections (
 	name TEXT NOT NULL,
 	symbol VARCHAR(10) NOT NULL CHECK (symbol ~ '^[A-Z][A-Z0-9]{2,9}$'),
 	creator TEXT NOT NULL,
-	total_potential INTEGER NOT NULL DEFAULT 0,
+	total_potential INTEGER NOT NULL DEFAULT 0 CHECK (total_potential >= 0),
 	description TEXT,
 	image_url TEXT,
 	external_url TEXT,
 	transferable BOOLEAN NOT NULL DEFAULT TRUE,
 	burnable BOOLEAN NOT NULL DEFAULT TRUE,
-	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
+	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (royalty_pct >= 0 AND royalty_pct <= 100),
 	royalty_recipient TEXT,
 	schema JSONB,
 	schema_version INTEGER NOT NULL DEFAULT 0,
@@ -150,7 +150,8 @@ CREATE TABLE IF NOT EXISTS burned_nfts (
 	collection_id TEXT NOT NULL,
 	burned_by TEXT NOT NULL,
 	tx_id TEXT NOT NULL,
-	operation_id TEXT NOT NULL
+	operation_id TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL
 );
 
 -- Invalid operations (audit trail)
@@ -284,6 +285,7 @@ CREATE TABLE IF NOT EXISTS sales (
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
+	CHECK (seller <> buyer),
 	UNIQUE (nft_id, listing_id, tx_id)
 );
 
@@ -418,3 +420,163 @@ CREATE INDEX IF NOT EXISTS idx_sales_nft ON sales(nft_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_collection ON sales(collection_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_seller ON sales(seller, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
+
+-- ============================================================================
+-- TRIGGERS — defense-in-depth against projection corruption
+-- ============================================================================
+--
+-- The application code never attempts to UPDATE these columns post-insert; the
+-- triggers exist to catch a future handler bug, schema drift, or manual ad-hoc
+-- SQL that would silently corrupt projected state and desynchronize the
+-- cross-replica state_root hash.
+--
+-- IS DISTINCT FROM is NULL-safe: (NULL, NULL) → false (no change), (NULL, 'x')
+-- → true, ('x', 'x') → false. Plain `=` would treat NULL transitions as
+-- "unchanged" and let them through silently.
+
+CREATE OR REPLACE FUNCTION prevent_nft_immutable_update()
+RETURNS TRIGGER AS $$
+BEGIN
+	IF NEW.id IS DISTINCT FROM OLD.id THEN
+		RAISE EXCEPTION 'nfts.id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.collection_id IS DISTINCT FROM OLD.collection_id THEN
+		RAISE EXCEPTION 'nfts.collection_id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.nft_type IS DISTINCT FROM OLD.nft_type THEN
+		RAISE EXCEPTION 'nfts.nft_type is immutable for %', OLD.id;
+	END IF;
+	IF NEW.edition IS DISTINCT FROM OLD.edition THEN
+		RAISE EXCEPTION 'nfts.edition is immutable for %', OLD.id;
+	END IF;
+	IF NEW.origin_dna IS DISTINCT FROM OLD.origin_dna THEN
+		RAISE EXCEPTION 'nfts.origin_dna is immutable for %', OLD.id;
+	END IF;
+	IF NEW.instance_dna IS DISTINCT FROM OLD.instance_dna THEN
+		RAISE EXCEPTION 'nfts.instance_dna is immutable for %', OLD.id;
+	END IF;
+	IF NEW.name IS DISTINCT FROM OLD.name THEN
+		RAISE EXCEPTION 'nfts.name is immutable for %', OLD.id;
+	END IF;
+	IF NEW.image_url IS DISTINCT FROM OLD.image_url THEN
+		RAISE EXCEPTION 'nfts.image_url is immutable for %', OLD.id;
+	END IF;
+	IF NEW.max_supply IS DISTINCT FROM OLD.max_supply THEN
+		RAISE EXCEPTION 'nfts.max_supply is immutable for %', OLD.id;
+	END IF;
+	IF NEW.seed_id IS DISTINCT FROM OLD.seed_id THEN
+		RAISE EXCEPTION 'nfts.seed_id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.instance_number IS DISTINCT FROM OLD.instance_number THEN
+		RAISE EXCEPTION 'nfts.instance_number is immutable for %', OLD.id;
+	END IF;
+	IF NEW.art_id IS DISTINCT FROM OLD.art_id THEN
+		RAISE EXCEPTION 'nfts.art_id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.immutable_data IS DISTINCT FROM OLD.immutable_data THEN
+		RAISE EXCEPTION 'nfts.immutable_data is immutable for %', OLD.id;
+	END IF;
+	IF NEW.schema_version IS DISTINCT FROM OLD.schema_version THEN
+		RAISE EXCEPTION 'nfts.schema_version is immutable for %', OLD.id;
+	END IF;
+	IF NEW.created_operation_id IS DISTINCT FROM OLD.created_operation_id
+	   OR NEW.created_block_num IS DISTINCT FROM OLD.created_block_num
+	   OR NEW.created_tx_id IS DISTINCT FROM OLD.created_tx_id
+	   OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+		RAISE EXCEPTION 'nfts.created_* fields are immutable for %', OLD.id;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_nft_immutable_update ON nfts;
+CREATE TRIGGER trg_prevent_nft_immutable_update
+	BEFORE UPDATE ON nfts
+	FOR EACH ROW
+	EXECUTE FUNCTION prevent_nft_immutable_update();
+
+-- owner_block_num is monotonically non-decreasing. A regression means a
+-- stale/out-of-order apply would hash against an older ownership snapshot and
+-- silently fork state_root across replicas.
+CREATE OR REPLACE FUNCTION prevent_nft_owner_block_regression()
+RETURNS TRIGGER AS $$
+BEGIN
+	IF NEW.owner_block_num < OLD.owner_block_num THEN
+		RAISE EXCEPTION
+			'nfts.owner_block_num regression for % (old=%, new=%) — SPV invariant violation',
+			OLD.id, OLD.owner_block_num, NEW.owner_block_num;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_nft_owner_block_regression ON nfts;
+CREATE TRIGGER trg_prevent_nft_owner_block_regression
+	BEFORE UPDATE OF owner_block_num ON nfts
+	FOR EACH ROW
+	EXECUTE FUNCTION prevent_nft_owner_block_regression();
+
+-- Freeze the structural identity of a collection. Only `schema` and
+-- `schema_version` are legitimately mutable (set_schema flow via
+-- updateCollectionSchema). Every other column is either the structural
+-- identity (id/creator/symbol/total_potential) or the audit trail anchored
+-- to the Hive block (block_num/tx_id/created_at). Policy fields (name,
+-- description, image_url, royalty_*, transferable, burnable) are left free
+-- so a future update_collection op can touch them without a schema change.
+
+CREATE OR REPLACE FUNCTION prevent_collection_immutable_update()
+RETURNS TRIGGER AS $$
+BEGIN
+	IF NEW.id IS DISTINCT FROM OLD.id THEN
+		RAISE EXCEPTION 'collections.id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.creator IS DISTINCT FROM OLD.creator THEN
+		RAISE EXCEPTION 'collections.creator is immutable for %', OLD.id;
+	END IF;
+	IF NEW.symbol IS DISTINCT FROM OLD.symbol THEN
+		RAISE EXCEPTION 'collections.symbol is immutable for %', OLD.id;
+	END IF;
+	IF NEW.total_potential IS DISTINCT FROM OLD.total_potential THEN
+		RAISE EXCEPTION 'collections.total_potential is immutable for %', OLD.id;
+	END IF;
+	IF NEW.block_num IS DISTINCT FROM OLD.block_num THEN
+		RAISE EXCEPTION 'collections.block_num is immutable for %', OLD.id;
+	END IF;
+	IF NEW.tx_id IS DISTINCT FROM OLD.tx_id THEN
+		RAISE EXCEPTION 'collections.tx_id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+		RAISE EXCEPTION 'collections.created_at is immutable for %', OLD.id;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_collection_immutable_update ON collections;
+CREATE TRIGGER trg_prevent_collection_immutable_update
+	BEFORE UPDATE ON collections
+	FOR EACH ROW
+	EXECUTE FUNCTION prevent_collection_immutable_update();
+
+-- `schema_versions` is the append-only hash chain recording every set_schema
+-- operation per collection (prev_hash linking each row to its predecessor).
+-- Application code only INSERTs. Any UPDATE silently invalidates the chain
+-- from that row forward, and the corruption is invisible until a future
+-- schema audit recomputes hashes. Block UPDATE entirely — DELETE stays
+-- allowed because archiveCollection relies on ON DELETE CASCADE from
+-- `collections` to tear down versioned rows as part of a full collection
+-- teardown.
+
+CREATE OR REPLACE FUNCTION prevent_schema_versions_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+	RAISE EXCEPTION 'schema_versions is append-only (collection_id=%, version=%)',
+		OLD.collection_id, OLD.version;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_schema_versions_mutation ON schema_versions;
+CREATE TRIGGER trg_prevent_schema_versions_mutation
+	BEFORE UPDATE ON schema_versions
+	FOR EACH ROW
+	EXECUTE FUNCTION prevent_schema_versions_mutation();

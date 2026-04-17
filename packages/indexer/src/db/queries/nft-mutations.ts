@@ -2,7 +2,8 @@ import { sql, type Queryable } from "@/db/client.ts";
 import type { InsertNftParams, OwnerChangeCtx, BurnCtx, ListingCtx, NftStatus } from "./nft-types.ts";
 import { NFT_KIND_INSTANCE, NFT_STATUS_ACTIVE, NFT_STATUS_LISTED } from "./nft-types.ts";
 import { adjustOwnerNftCount, recordCollectionMint, adjustCollectionListed, recordCollectionBurn } from "./nft-counters.ts";
-import { applyStateRootDeltaToDb } from "./state-root.ts";
+import { queueStateRootDelta, parseNftStateRow } from "./state-root.ts";
+import { getStateRootBuffer } from "@/db/client.ts";
 import type { NftStateRow } from "@/utils/state-root-hash.ts";
 
 // Reads the SPV-visible fields that contribute to the state-root hash. Must
@@ -16,14 +17,7 @@ async function readStateRow(nftId: string, txn: Queryable): Promise<NftStateRow 
 		FOR UPDATE
 	`;
 	if (!row) return null;
-	return {
-		id: String(row.id),
-		owner: String(row.owner),
-		previous_owner: row.previous_owner === null ? null : String(row.previous_owner),
-		owner_action: String(row.owner_action),
-		owner_operation_id: String(row.owner_operation_id),
-		owner_block_num: Number(row.owner_block_num),
-	};
+	return parseNftStateRow(row as Record<string, unknown>);
 }
 
 export type MarketplaceListingCleanupResult = Readonly<{
@@ -63,8 +57,13 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 		ON CONFLICT (id) DO NOTHING
 	`;
 	if (result.count > 0) {
-		await adjustOwnerNftCount(params.owner, params.nftType, 1, txn);
-		await recordCollectionMint(params.collectionId, params.nftType, txn);
+		// Queue the state-root delta BEFORE any counter update. Counters
+		// (adjustOwnerNftCount, recordCollectionMint) can throw — if they do,
+		// routeOperation swallows the error and withTransaction still commits.
+		// If the delta were queued AFTER the counters, a counter-update failure
+		// would leave the nfts row committed with no matching state-root delta
+		// → silent divergence. queueStateRootDelta is a sync memory op and
+		// cannot fail, so moving it first closes that window.
 		const newRow: NftStateRow = {
 			id: params.id,
 			owner: params.owner,
@@ -73,7 +72,13 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			owner_operation_id: params.ownerOperationId,
 			owner_block_num: params.ownerBlockNum,
 		};
-		await applyStateRootDeltaToDb({ type: "insert", newRow, blockNum: params.ownerBlockNum }, txn);
+		queueStateRootDelta(getStateRootBuffer(txn), {
+			type: "insert",
+			newRow,
+			blockNum: params.ownerBlockNum,
+		});
+		await adjustOwnerNftCount(params.owner, params.nftType, 1, txn);
+		await recordCollectionMint(params.collectionId, params.nftType, txn);
 	}
 	return result.count > 0;
 }
@@ -87,7 +92,7 @@ export async function updateNftOwner(
 ): Promise<void> {
 	// Read old SPV row under FOR UPDATE before mutating, so the state-root
 	// delta is computed against the exact pre-image of the UPDATE. Any crash
-	// between here and writeRoot rolls back the entire batch.
+	// between here and the buffered flush rolls back the entire batch.
 	const oldRow = await readStateRow(nftId, txn);
 	if (!oldRow) throw new Error(`updateNftOwner: nft ${nftId} not found`);
 	await txn`
@@ -101,11 +106,9 @@ export async function updateNftOwner(
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE id = ${nftId}
 	`;
-	await adjustOwnerNftCount(ctx.oldOwner, ctx.nftType, -1, txn);
-	await adjustOwnerNftCount(newOwner, ctx.nftType, 1, txn);
-	if (ctx.wasListed) {
-		await adjustCollectionListed(ctx.collectionId, -1, txn);
-	}
+	// Queue the delta BEFORE counter updates. See insertNft for rationale —
+	// any counter failure between here and the state-root flush would leave
+	// the committed nfts row without a corresponding delta.
 	const newRow: NftStateRow = {
 		id: nftId,
 		owner: newOwner,
@@ -114,10 +117,17 @@ export async function updateNftOwner(
 		owner_operation_id: ownerOperationId,
 		owner_block_num: ctx.ownerBlockNum,
 	};
-	await applyStateRootDeltaToDb(
-		{ type: "update", oldRow, newRow, blockNum: ctx.ownerBlockNum },
-		txn,
-	);
+	queueStateRootDelta(getStateRootBuffer(txn), {
+		type: "update",
+		oldRow,
+		newRow,
+		blockNum: ctx.ownerBlockNum,
+	});
+	await adjustOwnerNftCount(ctx.oldOwner, ctx.nftType, -1, txn);
+	await adjustOwnerNftCount(newOwner, ctx.nftType, 1, txn);
+	if (ctx.wasListed) {
+		await adjustCollectionListed(ctx.collectionId, -1, txn);
+	}
 }
 
 export async function updateNftStatus(nftId: string, status: NftStatus, txn: Queryable = sql) {
@@ -139,14 +149,19 @@ export async function hardDeleteNft(
 	const oldRow = await readStateRow(nftId, txn);
 	if (!oldRow) throw new Error(`hardDeleteNft: nft ${nftId} not found`);
 	await txn`
-		INSERT INTO burned_nfts (id, collection_id, burned_by, tx_id, operation_id)
-		VALUES (${nftId}, ${ctx.collectionId}, ${burnedBy}, ${txId}, ${operationId})
+		INSERT INTO burned_nfts (id, collection_id, burned_by, tx_id, operation_id, created_at)
+		VALUES (${nftId}, ${ctx.collectionId}, ${burnedBy}, ${txId}, ${operationId}, ${ctx.createdAt})
 		ON CONFLICT (id) DO NOTHING
 	`;
 	await txn`DELETE FROM nfts WHERE id = ${nftId}`;
+	// Queue the delta BEFORE counter updates. See insertNft for rationale.
+	queueStateRootDelta(getStateRootBuffer(txn), {
+		type: "delete",
+		oldRow,
+		blockNum: ctx.blockNum,
+	});
 	await adjustOwnerNftCount(ctx.owner, ctx.nftType, -1, txn);
 	await recordCollectionBurn(ctx.collectionId, ctx.nftType, txn);
-	await applyStateRootDeltaToDb({ type: "delete", oldRow, blockNum: ctx.blockNum }, txn);
 }
 
 export async function updateNftListing(

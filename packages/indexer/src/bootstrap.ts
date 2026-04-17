@@ -83,24 +83,55 @@ async function runMigrations(): Promise<void> {
 	log.info("Schema migrations completed");
 }
 
-// Ordered by foreign key dependencies (children first)
-const DATA_TABLES = [
-	"nft_loans", "nft_allowances", "collection_allowances",
-	"data_operators",
-	"orphaned_buys", "invalid_operations", "owner_nft_counts",
-	"collection_stats",
-	"l2_node_heartbeats", "l2_nodes",
-	"nfts", "collections",
-] as const;
+// Singletons are reset in-place via UPDATE. TRUNCATE'ing them would wipe the
+// id=1 row and break the subsequent UPDATE ... WHERE id = 1 (0 rows affected).
+// Every new singleton MUST be added here AND have an explicit reset UPDATE in
+// wipeAllProjectedData below.
+export const STATE_SINGLETONS: ReadonlySet<string> = new Set(["state_meta", "sync_state"]);
+
+// Builds the TRUNCATE statement that wipes every projected table in one shot.
+// Pure so it can be unit-tested without a live DB. Returns null when the
+// schema has no non-singleton tables — caller treats that as "install not
+// run" and throws, which is the correct failure mode for a wipe over an
+// empty schema (we'd mask a broken install otherwise).
+export function buildProjectionTruncateStmt(allTableNames: readonly string[]): string | null {
+	const targets = allTableNames.filter((name) => !STATE_SINGLETONS.has(name));
+	if (targets.length === 0) return null;
+	const quoted = targets.map(quoteSqlIdentifier).join(", ");
+	return `TRUNCATE TABLE ${quoted} CASCADE`;
+}
+
+// Defensive identifier quoting. information_schema returns valid PG
+// identifiers, but we still quote + escape embedded double-quotes so a
+// future code path that feeds untrusted names through here cannot inject
+// SQL. Identical semantics to PostgreSQL's quote_ident().
+function quoteSqlIdentifier(name: string): string {
+	return `"${name.replace(/"/g, '""')}"`;
+}
 
 // Shared by every reset trigger (genesis change, schema drift). Truncates all
 // projected data and zeroes the singletons in a single transaction so the
 // sync cursor cannot advance over a half-wiped DB.
+//
+// Table list is queried at runtime from information_schema — adding a new
+// projected table to schema.sql is picked up automatically on the next
+// reset. This eliminates the drift class where a manual list forgets a new
+// table and leaves orphan rows after a schema-hash bump.
 async function wipeAllProjectedData(newSchemaHash: string | null): Promise<void> {
 	await withTransaction(async (txn) => {
-		for (const table of DATA_TABLES) {
-			await txn.unsafe(`TRUNCATE TABLE ${table} CASCADE`);
+		const rows = await txn<{ table_name: string }[]>`
+			SELECT table_name
+			FROM information_schema.tables
+			WHERE table_schema = 'public'
+			  AND table_type = 'BASE TABLE'
+		`;
+		const stmt = buildProjectionTruncateStmt(rows.map((r) => r.table_name));
+		if (stmt === null) {
+			throw new Error(
+				"wipeAllProjectedData: no non-singleton tables found in schema 'public' — schema install did not run",
+			);
 		}
+		await txn.unsafe(stmt);
 		await txn`
 			UPDATE sync_state
 			SET last_block = 0,

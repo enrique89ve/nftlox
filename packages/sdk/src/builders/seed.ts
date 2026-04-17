@@ -18,12 +18,18 @@ import {
 	type NFTData,
 } from "@nftlox/protocol";
 
+const seedDataSchema = z.record(z.string(), z.unknown()).refine(
+	(obj) => Object.keys(obj).length <= 64,
+	"Data object cannot exceed 64 fields",
+);
+
 export const seedInputSchema = z.object({
 	artId: z.string(),
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH, `Name must be at most ${MAX_NAME_LENGTH} characters`),
 	imageUrl: z.string().url("Invalid image URL format").max(MAX_IMAGE_URL_LENGTH, `Image URL must be at most ${MAX_IMAGE_URL_LENGTH} characters`),
 	maxSupply: z.number().int().positive("Max supply must be greater than 0"),
 	brief: z.string().max(MAX_DESCRIPTION_LENGTH, `Brief must be at most ${MAX_DESCRIPTION_LENGTH} characters`).optional(),
+	immutableData: seedDataSchema.optional(),
 });
 export type SeedInput = z.infer<typeof seedInputSchema>;
 
@@ -85,6 +91,7 @@ export async function buildSeed(
 			imageHash,
 		},
 		maxSupply: data.maxSupply,
+		...(data.immutableData !== undefined && { immutableData: data.immutableData }),
 	};
 
 	const payload = createPayload("mint", nftData);
@@ -119,6 +126,7 @@ export type SeedBatchPlanItem = {
 	readonly imageUrl: string;
 	readonly maxSupply: number;
 	readonly brief?: string | undefined;
+	readonly immutableData?: Record<string, unknown> | undefined;
 };
 
 export type SeedBatchPlan =
@@ -185,6 +193,7 @@ export async function buildSeedBatch(input: SeedBatchInput): Promise<SeedBatchPl
 				imageUrl: seed.imageUrl,
 				maxSupply: seed.maxSupply,
 				...(seed.brief !== undefined && { brief: seed.brief }),
+				...(seed.immutableData !== undefined && { immutableData: seed.immutableData }),
 			};
 		}),
 	);

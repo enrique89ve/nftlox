@@ -6,7 +6,7 @@
  * listings, allowances, and prevents stale buy attempts in every transfer path.
  */
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
-import { sql, type Queryable } from "@/db/client.ts";
+import { sql, withTransaction, type Queryable } from "@/db/client.ts";
 import type { ParsedOperation, AuthLevel } from "@/scanner/operation-parser.ts";
 import { handleCreateCollection } from "@/processor/handlers/core/create-collection.ts";
 import { handleMint } from "@/processor/handlers/core/mint.ts";
@@ -83,31 +83,35 @@ async function cleanDb() {
 	await sql`DELETE FROM collections`;
 }
 
-async function seedCollection(txn: Queryable = sql) {
+async function seedCollection(txn?: Queryable): Promise<void> {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 	const pairedTransfers = [
 		{ from: "alice", to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: "" },
 	];
-	await handleCreateCollection(
-		makeOp(
-			ACTION_CREATE_COLLECTION,
-			{
-				id: COL_ID,
-				name: "Security Test Collection",
-				symbol: "SEC",
-				totalPotential: 1000,
-				metadata: { description: "Security test", image: "https://example.com/img.png" },
-				rules: { transferable: true, burnable: true, royaltyPct: 5, royaltyRecipient: "alice" },
-			},
-			NODE_ACCOUNT,
-			pairedTransfers,
-		),
-		txn,
+	const op = makeOp(
+		ACTION_CREATE_COLLECTION,
+		{
+			id: COL_ID,
+			name: "Security Test Collection",
+			symbol: "SEC",
+			totalPotential: 1000,
+			metadata: { description: "Security test", image: "https://example.com/img.png" },
+			rules: { transferable: true, burnable: true, royaltyPct: 5, royaltyRecipient: "alice" },
+		},
+		NODE_ACCOUNT,
+		pairedTransfers,
 	);
+	if (txn) {
+		await handleCreateCollection(op, txn);
+		return;
+	}
+	await withTransaction(async (t) => {
+		await handleCreateCollection(op, t);
+	});
 }
 
-async function seedMint(txn: Queryable = sql) {
-	await handleMint(makeOp(ACTION_MINT, {
+async function seedMint(txn?: Queryable): Promise<void> {
+	const op = makeOp(ACTION_MINT, {
 		id: SEED_SEC1,
 		artId: "sec1",
 		collectionId: COL_ID,
@@ -115,17 +119,35 @@ async function seedMint(txn: Queryable = sql) {
 		owner: "alice",
 		maxSupply: 10,
 		metadata: { name: "Security Seed", imageUrl: "https://example.com/nft.png", imageHash: "sec_hash" },
-	}), txn);
+	});
+	if (txn) {
+		await handleMint(op, txn);
+		return;
+	}
+	await withTransaction(async (t) => {
+		await handleMint(op, t);
+	});
 }
 
-async function seedInstance(txn: Queryable = sql): Promise<string> {
-	const [row] = await txn`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${SEED_SEC1}`;
-	const seedTxId = row!.tx_id as string;
-	await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
-		items: [{ seedId: SEED_SEC1, quantity: 1, seedTxId }],
-	}), txn);
-	const [inst] = await txn`SELECT id FROM nfts WHERE seed_id = ${SEED_SEC1} LIMIT 1`;
-	return inst!.id as string;
+async function seedInstance(txn?: Queryable): Promise<string> {
+	if (txn) {
+		const [row] = await txn`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${SEED_SEC1}`;
+		const seedTxId = row!.tx_id as string;
+		await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+			items: [{ seedId: SEED_SEC1, quantity: 1, seedTxId }],
+		}), txn);
+		const [inst] = await txn`SELECT id FROM nfts WHERE seed_id = ${SEED_SEC1} LIMIT 1`;
+		return inst!.id as string;
+	}
+	return withTransaction(async (t) => {
+		const [row] = await t`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${SEED_SEC1}`;
+		const seedTxId = row!.tx_id as string;
+		await handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+			items: [{ seedId: SEED_SEC1, quantity: 1, seedTxId }],
+		}), t);
+		const [inst] = await t`SELECT id FROM nfts WHERE seed_id = ${SEED_SEC1} LIMIT 1`;
+		return inst!.id as string;
+	});
 }
 
 async function makeListData(params: {
@@ -161,7 +183,7 @@ async function makeListData(params: {
 
 async function listNft(nftId: string, owner = "alice", priceAmount = "10.000") {
 	const listData = await makeListData({ nftId, owner, priceAmount });
-	await handleList(makeOp(ACTION_LIST, listData, owner), sql);
+	await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData, owner), txn));
 	const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${nftId}`;
 	return {
 		listingId: nft!.listing_id as string,
@@ -193,12 +215,8 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 	beforeAll(async () => {
 		COL_ID = await generateDeterministicCollectionId("alice", "Security Test Collection", "SEC");
 		SEED_SEC1 = await generateDeterministicSeedId(COL_ID, "sec1");
-		await sql.unsafe(`
-			DROP TABLE IF EXISTS nft_loans, nft_allowances, collection_allowances,
-				data_operators, orphaned_buys, invalid_operations, owner_nft_counts,
-				collection_stats, burned_nfts, nfts, collections, sync_state CASCADE
-		`);
-		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status CASCADE");
+		// Drift-immune wipe — see handlers.test.ts for the rationale.
+		await sql.unsafe(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
 		const schemaFile = Bun.file(import.meta.dir + "/../db/schema.sql");
 		await sql.unsafe(await schemaFile.text());
 	});
@@ -230,10 +248,10 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			expect(listed!.listing_id).toBe(listingId);
 
 			// Alice unlists first (required to transfer)
-			await handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), sql);
+			await withTransaction((txn) => handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), txn));
 
 			// Alice transfers to Bob
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "bob" }), sql);
+			await withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "bob" }), txn));
 
 			// Verify listing fields are NULLed after transfer
 			const [afterTransfer] = await sql`
@@ -249,7 +267,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 
 			// Attacker (eve) tries to buy using stale listing data
 			const staleBuyOp = makeBuyOp(instId, listingId, listTxId, txId, "eve", "alice");
-			await expect(handleBuy(staleBuyOp, sql)).rejects.toThrow("not listed");
+			await expect(withTransaction((txn) => handleBuy(staleBuyOp, txn))).rejects.toThrow("not listed");
 		});
 
 		test("cannot transfer a listed NFT (must unlist first)", async () => {
@@ -259,7 +277,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			await listNft(instId);
 
 			const transferOp = makeOp(ACTION_TRANSFER, { nftId: instId, to: "bob" });
-			await expect(handleTransfer(transferOp, sql)).rejects.toThrow("listed for sale");
+			await expect(withTransaction((txn) => handleTransfer(transferOp, txn))).rejects.toThrow("listed for sale");
 		});
 	});
 
@@ -273,18 +291,18 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			const instId = await seedInstance();
 
 			// Alice approves gameshop as operator for this instance
-			await handleNftApprove(makeOp(ACTION_NFT_APPROVE, {
+			await withTransaction((txn) => handleNftApprove(makeOp(ACTION_NFT_APPROVE, {
 				spender: "gameshop", instanceId: instId, approved: true,
-			}), sql);
+			}), txn));
 
 			// Verify allowance exists
 			const [allowanceBefore] = await sql`SELECT * FROM nft_allowances WHERE nft_id = ${instId}`;
 			expect(allowanceBefore).toBeDefined();
 
 			// gameshop transfers alice's NFT to charlie
-			await handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
+			await withTransaction((txn) => handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
 				from: "alice", to: "charlie", instanceId: instId,
-			}, "gameshop"), sql);
+			}, "gameshop"), txn));
 
 			// Verify listing fields are clean
 			const [nft] = await sql`
@@ -307,20 +325,20 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			const instId = await seedInstance();
 
 			// Alice approves gameshop
-			await handleNftApprove(makeOp(ACTION_NFT_APPROVE, {
+			await withTransaction((txn) => handleNftApprove(makeOp(ACTION_NFT_APPROVE, {
 				spender: "gameshop", instanceId: instId, approved: true,
-			}), sql);
+			}), txn));
 
 			// gameshop transfers to charlie
-			await handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
+			await withTransaction((txn) => handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
 				from: "alice", to: "charlie", instanceId: instId,
-			}, "gameshop"), sql);
+			}, "gameshop"), txn));
 
 			// gameshop tries again with stale approval — must fail
 			const staleTransfer = makeOp(ACTION_NFT_TRANSFER_FROM, {
 				from: "charlie", to: "eve", instanceId: instId,
 			}, "gameshop");
-			await expect(handleNftTransferFrom(staleTransfer, sql)).rejects.toThrow("not approved");
+			await expect(withTransaction((txn) => handleNftTransferFrom(staleTransfer, txn))).rejects.toThrow("not approved");
 		});
 	});
 
@@ -336,7 +354,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 
 			// Bob buys
 			const buyOp = makeBuyOp(instId, listingId, listTxId, txId, "bob", "alice");
-			await handleBuy(buyOp, sql);
+			await withTransaction((txn) => handleBuy(buyOp, txn));
 
 			// Verify ownership changed and listing cleared
 			const [nft] = await sql`
@@ -349,7 +367,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 
 			// Replay: eve tries to buy with exact same stale listing data
 			const replayOp = makeBuyOp(instId, listingId, listTxId, txId, "eve", "alice");
-			await expect(handleBuy(replayOp, sql)).rejects.toThrow("not listed");
+			await expect(withTransaction((txn) => handleBuy(replayOp, txn))).rejects.toThrow("not listed");
 		});
 
 		test("after buy, new owner can list at different price without conflict", async () => {
@@ -360,7 +378,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 
 			// Bob buys at 10 HIVE
 			const buyOp = makeBuyOp(instId, listingId, listTxId, txId, "bob", "alice");
-			await handleBuy(buyOp, sql);
+			await withTransaction((txn) => handleBuy(buyOp, txn));
 
 			// Bob re-lists at 20 HIVE — must generate a fresh listingId
 			const newListing = await listNft(instId, "bob", "20.000");
@@ -387,7 +405,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			const { listTxId, txId } = await listNft(instId);
 
 			const forgedBuy = makeBuyOp(instId, "forged_listing_id", listTxId, txId, "eve", "alice");
-			await expect(handleBuy(forgedBuy, sql)).rejects.toThrow("listingId mismatch");
+			await expect(withTransaction((txn) => handleBuy(forgedBuy, txn))).rejects.toThrow("listingId mismatch");
 		});
 
 		test("fabricated listTxId is rejected", async () => {
@@ -397,7 +415,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			const { listingId, txId } = await listNft(instId);
 
 			const forgedBuy = makeBuyOp(instId, listingId, "forged_tx_id", txId, "eve", "alice");
-			await expect(handleBuy(forgedBuy, sql)).rejects.toThrow("listTxId mismatch");
+			await expect(withTransaction((txn) => handleBuy(forgedBuy, txn))).rejects.toThrow("listTxId mismatch");
 		});
 
 		test("fabricated txId is rejected", async () => {
@@ -407,7 +425,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			const { listingId, listTxId } = await listNft(instId);
 
 			const forgedBuy = makeBuyOp(instId, listingId, listTxId, "forged_nft_tx", "eve", "alice");
-			await expect(handleBuy(forgedBuy, sql)).rejects.toThrow("txId mismatch");
+			await expect(withTransaction((txn) => handleBuy(forgedBuy, txn))).rejects.toThrow("txId mismatch");
 		});
 	});
 
@@ -419,17 +437,17 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			await seedMint();
 
 			// Burn (transfer to "null") — hard deletes the row
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "null" }), sql);
+			await withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "null" }), txn));
 
 			const listData = await makeListData({ nftId: SEED_SEC1 });
 			const listOp = makeOp(ACTION_LIST, listData);
-			await expect(handleList(listOp, sql)).rejects.toThrow("not found");
+			await expect(withTransaction((txn) => handleList(listOp, txn))).rejects.toThrow("not found");
 		});
 
 		test("burned NFT is recorded in burned_nfts audit table", async () => {
 			await seedCollection();
 			await seedMint();
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "null" }), sql);
+			await withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "null" }), txn));
 
 			const [burned] = await sql`SELECT * FROM burned_nfts WHERE id = ${SEED_SEC1}`;
 			expect(burned).toBeDefined();
@@ -447,12 +465,12 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			await seedMint();
 
 			// Approve gameshop for entire collection
-			await handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
+			await withTransaction((txn) => handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
 				spender: "gameshop", collectionId: COL_ID, approved: true,
-			}), sql);
+			}), txn));
 
 			// Transfer alice's only NFT to bob
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "bob" }), sql);
+			await withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "bob" }), txn));
 
 			// Collection allowance should be cleaned up since alice has no more NFTs
 			const [allowance] = await sql`
@@ -484,7 +502,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			await sql`UPDATE collection_stats SET listed = listed + 1 WHERE collection_id = ${COL_ID}`;
 
 			// Transfer should succeed (auto-clears expired listing)
-			await handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "bob" }), sql);
+			await withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_SEC1, to: "bob" }), txn));
 
 			const [nft] = await sql`
 				SELECT owner, status, listing_id, listing_price
@@ -516,7 +534,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 
 			// Even with matching IDs, expired listing must be rejected
 			const buyOp = makeBuyOp(instId, expListingId, expListTxId, nftTxId, "bob", "alice");
-			await expect(handleBuy(buyOp, sql)).rejects.toThrow("expired");
+			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("expired");
 		});
 	});
 
@@ -540,7 +558,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 				nftId: instId, listingId, listTxId, txId,
 			}, "eve", transfers);
 
-			await expect(handleBuy(attackOp, sql)).rejects.toThrow("node account");
+			await expect(withTransaction((txn) => handleBuy(attackOp, txn))).rejects.toThrow("node account");
 		});
 	});
 });

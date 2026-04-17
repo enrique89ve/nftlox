@@ -4,10 +4,12 @@ import {
 	computeStateRootFullScan,
 	emptyStateRoot,
 	formatStateRoot,
+	hashRow,
+	xorInto,
 	STATE_ROOT_BYTES,
 	type NftStateRow,
-	type StateRootDelta,
 } from "@/utils/state-root-hash.ts";
+import type { StateRootBuffer, BufferedMutation } from "@/utils/state-root-buffer.ts";
 
 // DB adapter for the incremental state-root.
 //
@@ -27,6 +29,76 @@ export type StateMetaRow = Readonly<{
 	last_block_num: number;
 	updated_at: string;
 }>;
+
+function describeValue(v: unknown): string {
+	if (v === null) return "null";
+	if (v === undefined) return "undefined";
+	if (typeof v === "string") return `string(length=${v.length})`;
+	return typeof v;
+}
+
+// Guards the DB→hash boundary. Every NftStateRow that feeds the state-root
+// XOR algebra MUST come through this parser. A silent `String(null) → "null"`
+// or `Number(undefined) → NaN` would hash to a valid-looking 32 bytes and
+// only surface weeks later as an audit divergence — by then state_meta is
+// already corrupt across every indexer replica.
+export function parseNftStateRow(row: Record<string, unknown>): NftStateRow {
+	const id = row.id;
+	if (typeof id !== "string" || id.length === 0) {
+		throw new Error(`NftStateRow.id: expected non-empty string, got ${describeValue(id)}`);
+	}
+	const owner = row.owner;
+	if (typeof owner !== "string" || owner.length === 0) {
+		throw new Error(`NftStateRow.owner: expected non-empty string, got ${describeValue(owner)} (id=${id})`);
+	}
+	const previousOwnerRaw = row.previous_owner;
+	let previous_owner: string | null;
+	if (previousOwnerRaw === null) {
+		previous_owner = null;
+	} else if (typeof previousOwnerRaw === "string" && previousOwnerRaw.length > 0) {
+		previous_owner = previousOwnerRaw;
+	} else {
+		throw new Error(
+			`NftStateRow.previous_owner: expected null or non-empty string, got ${describeValue(previousOwnerRaw)} (id=${id})`,
+		);
+	}
+	const ownerAction = row.owner_action;
+	if (typeof ownerAction !== "string" || ownerAction.length === 0) {
+		throw new Error(`NftStateRow.owner_action: expected non-empty string, got ${describeValue(ownerAction)} (id=${id})`);
+	}
+	const ownerOperationId = row.owner_operation_id;
+	if (typeof ownerOperationId !== "string" || ownerOperationId.length === 0) {
+		throw new Error(
+			`NftStateRow.owner_operation_id: expected non-empty string, got ${describeValue(ownerOperationId)} (id=${id})`,
+		);
+	}
+	const ownerBlockRaw = row.owner_block_num;
+	let owner_block_num: number;
+	if (typeof ownerBlockRaw === "number") {
+		owner_block_num = ownerBlockRaw;
+	} else if (typeof ownerBlockRaw === "bigint") {
+		owner_block_num = Number(ownerBlockRaw);
+	} else if (typeof ownerBlockRaw === "string") {
+		owner_block_num = Number(ownerBlockRaw);
+	} else {
+		throw new Error(
+			`NftStateRow.owner_block_num: expected number|bigint|string, got ${describeValue(ownerBlockRaw)} (id=${id})`,
+		);
+	}
+	if (!Number.isFinite(owner_block_num) || !Number.isInteger(owner_block_num) || owner_block_num < 0) {
+		throw new Error(
+			`NftStateRow.owner_block_num: expected non-negative integer, got ${describeValue(ownerBlockRaw)} (id=${id})`,
+		);
+	}
+	return {
+		id,
+		owner,
+		previous_owner,
+		owner_action: ownerAction,
+		owner_operation_id: ownerOperationId,
+		owner_block_num,
+	};
+}
 
 const STATE_META_ID = 1;
 
@@ -71,72 +143,6 @@ export async function getStateMeta(txn: Queryable = sql): Promise<StateMetaRow> 
 	};
 }
 
-// Reads state_meta WITH a row lock so the caller sees a consistent snapshot
-// and the subsequent UPDATE cannot race another session. Caller MUST be in
-// the same transaction that mutates the NFT row.
-async function selectForUpdate(txn: Queryable): Promise<Uint8Array> {
-	const [row] = await txn`
-		SELECT state_root FROM state_meta
-		WHERE id = ${STATE_META_ID}
-		FOR UPDATE
-	`;
-	if (!row) throw new Error("state_meta row missing — schema bootstrap did not run");
-	const buffer = toUint8(row.state_root);
-	assertRootBytes(buffer);
-	return buffer;
-}
-
-// Writes the new root + counter delta + block advance. Block advance is
-// monotonic (never moves backwards) so a late handler in the same batch
-// does not regress the cursor.
-async function writeRoot(
-	txn: Queryable,
-	newRoot: Uint8Array,
-	countDelta: number,
-	blockNum: number,
-): Promise<void> {
-	assertRootBytes(newRoot);
-	await txn`
-		UPDATE state_meta
-		SET state_root = ${Buffer.from(newRoot)},
-		    nft_count = nft_count + ${countDelta},
-		    last_block_num = GREATEST(last_block_num, ${blockNum}),
-		    updated_at = NOW()
-		WHERE id = ${STATE_META_ID}
-	`;
-}
-
-export type StateRootMutation =
-	| Readonly<{ type: "insert"; newRow: NftStateRow; blockNum: number }>
-	| Readonly<{ type: "update"; oldRow: NftStateRow; newRow: NftStateRow; blockNum: number }>
-	| Readonly<{ type: "delete"; oldRow: NftStateRow; blockNum: number }>;
-
-function countDeltaOf(mutation: StateRootMutation): number {
-	switch (mutation.type) {
-		case "insert": return 1;
-		case "delete": return -1;
-		case "update": return 0;
-	}
-}
-
-function toDelta(mutation: StateRootMutation): StateRootDelta {
-	switch (mutation.type) {
-		case "insert": return { type: "insert", newRow: mutation.newRow };
-		case "delete": return { type: "delete", oldRow: mutation.oldRow };
-		case "update": return { type: "update", oldRow: mutation.oldRow, newRow: mutation.newRow };
-	}
-}
-
-// Apply a single mutation atomically with the caller's transaction.
-export async function applyStateRootDeltaToDb(
-	mutation: StateRootMutation,
-	txn: Queryable,
-): Promise<void> {
-	const current = await selectForUpdate(txn);
-	const next = await applyDelta(current, toDelta(mutation));
-	await writeRoot(txn, next, countDeltaOf(mutation), mutation.blockNum);
-}
-
 // One-time bootstrap: rebuild the root from a full scan over the current
 // nfts table. Safe to re-run; always overwrites. Streams in pages so memory
 // stays bounded even at 10M rows.
@@ -157,14 +163,7 @@ export async function bootstrapStateRootFromFullScan(
 			`;
 			if (page.length === 0) return;
 			for (const row of page) {
-				yield {
-					id: String(row.id),
-					owner: String(row.owner),
-					previous_owner: row.previous_owner === null ? null : String(row.previous_owner),
-					owner_action: String(row.owner_action),
-					owner_operation_id: String(row.owner_operation_id),
-					owner_block_num: Number(row.owner_block_num),
-				};
+				yield parseNftStateRow(row as Record<string, unknown>);
 			}
 			lastId = String(page[page.length - 1]!.id);
 			if (page.length < BOOTSTRAP_PAGE_SIZE) return;
@@ -216,3 +215,62 @@ export async function getFormattedStateRoot(): Promise<Readonly<{
 // Re-export full-scan for audit jobs that want to compare incremental vs
 // reference without touching the hashing module directly.
 export { computeStateRootFullScan };
+
+// Queues a delta into the tx-scoped buffer. The buffer is flushed exactly once
+// per transaction by withTransaction(), eliminating the per-mutation
+// SELECT … FOR UPDATE contention that otherwise caps throughput at ~1-3k
+// ops/sec regardless of hardware.
+export function queueStateRootDelta(
+	buffer: StateRootBuffer,
+	mutation: BufferedMutation,
+): void {
+	buffer.queue(mutation);
+}
+
+// Flushes the net buffer to state_meta in a single SELECT + UPDATE. Called by
+// withTransaction() just before the tx commits. No-op when the buffer is empty
+// (pure-read tx, or a tx that touched only non-SPV columns like listing price).
+export async function flushStateRootBuffer(
+	buffer: StateRootBuffer,
+	txn: Queryable,
+): Promise<void> {
+	if (buffer.isEmpty()) return;
+
+	const [row] = await txn`
+		SELECT state_root FROM state_meta
+		WHERE id = ${STATE_META_ID}
+		FOR UPDATE
+	`;
+	if (!row) throw new Error("state_meta row missing — schema bootstrap did not run");
+	let root = toUint8(row.state_root);
+	assertRootBytes(root);
+
+	let countDelta = 0;
+
+	for (const entry of buffer.iter()) {
+		const { firstOld, lastNew } = entry;
+		if (firstOld === null && lastNew === null) continue; // insert+delete cancels out
+
+		if (firstOld !== null) {
+			const oldHash = await hashRow(firstOld);
+			root = xorInto(root, oldHash);
+		}
+		if (lastNew !== null) {
+			const newHash = await hashRow(lastNew);
+			root = xorInto(root, newHash);
+		}
+		if (firstOld === null && lastNew !== null) countDelta += 1;
+		else if (firstOld !== null && lastNew === null) countDelta -= 1;
+		// else: net update — countDelta unchanged
+	}
+
+	const maxBlock = buffer.maxBlockNum();
+	await txn`
+		UPDATE state_meta
+		SET state_root = ${Buffer.from(root)},
+		    nft_count = nft_count + ${countDelta},
+		    last_block_num = GREATEST(last_block_num, ${maxBlock}),
+		    updated_at = NOW()
+		WHERE id = ${STATE_META_ID}
+	`;
+}
