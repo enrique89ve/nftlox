@@ -555,3 +555,26 @@ CREATE TRIGGER trg_prevent_collection_immutable_update
 	BEFORE UPDATE ON collections
 	FOR EACH ROW
 	EXECUTE FUNCTION prevent_collection_immutable_update();
+
+-- `schema_versions` is the append-only hash chain recording every set_schema
+-- operation per collection (prev_hash linking each row to its predecessor).
+-- Application code only INSERTs. Any UPDATE silently invalidates the chain
+-- from that row forward, and the corruption is invisible until a future
+-- schema audit recomputes hashes. Block UPDATE entirely — DELETE stays
+-- allowed because archiveCollection relies on ON DELETE CASCADE from
+-- `collections` to tear down versioned rows as part of a full collection
+-- teardown.
+
+CREATE OR REPLACE FUNCTION prevent_schema_versions_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+	RAISE EXCEPTION 'schema_versions is append-only (collection_id=%, version=%)',
+		OLD.collection_id, OLD.version;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_schema_versions_mutation ON schema_versions;
+CREATE TRIGGER trg_prevent_schema_versions_mutation
+	BEFORE UPDATE ON schema_versions
+	FOR EACH ROW
+	EXECUTE FUNCTION prevent_schema_versions_mutation();

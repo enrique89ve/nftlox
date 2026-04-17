@@ -279,13 +279,12 @@ describe("Handlers (integration)", () => {
 		COL_ID = await generateDeterministicCollectionId("alice", "Test Collection", "TEST");
 		SEED_TEST1 = await canonicalSeedId("test1");
 		SEED_TEST2 = await canonicalSeedId("test2");
-		// Drop all tables to ensure clean schema (testnet only)
-		await sql.unsafe(`
-			DROP TABLE IF EXISTS nft_loans, nft_allowances, collection_allowances,
-				data_operators, orphaned_buys, invalid_operations, owner_nft_counts,
-				collection_stats, burned_nfts, nfts, collections, sync_state CASCADE
-		`);
-		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status CASCADE");
+		// Drift-immune wipe: nuke the whole `public` schema instead of a
+		// hand-maintained DROP TABLE list. Previous list-based wipes silently
+		// skipped newer tables (schema_versions, sales, confirmed_operations,
+		// etc.), leaving stale structure that stripped FK constraints when
+		// CASCADE propagated. Testnet-only — never run this on a live DB.
+		await sql.unsafe(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
 		const schemaFile = Bun.file(import.meta.dir + "/../db/schema.sql");
 		await sql.unsafe(await schemaFile.text());
 	});

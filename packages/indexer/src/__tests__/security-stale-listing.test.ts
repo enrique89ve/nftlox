@@ -215,12 +215,8 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 	beforeAll(async () => {
 		COL_ID = await generateDeterministicCollectionId("alice", "Security Test Collection", "SEC");
 		SEED_SEC1 = await generateDeterministicSeedId(COL_ID, "sec1");
-		await sql.unsafe(`
-			DROP TABLE IF EXISTS nft_loans, nft_allowances, collection_allowances,
-				data_operators, orphaned_buys, invalid_operations, owner_nft_counts,
-				collection_stats, burned_nfts, nfts, collections, sync_state CASCADE
-		`);
-		await sql.unsafe("DROP TYPE IF EXISTS nft_kind, nft_status CASCADE");
+		// Drift-immune wipe — see handlers.test.ts for the rationale.
+		await sql.unsafe(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
 		const schemaFile = Bun.file(import.meta.dir + "/../db/schema.sql");
 		await sql.unsafe(await schemaFile.text());
 	});
