@@ -418,3 +418,98 @@ CREATE INDEX IF NOT EXISTS idx_sales_nft ON sales(nft_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_collection ON sales(collection_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_seller ON sales(seller, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
+
+-- ============================================================================
+-- TRIGGERS — defense-in-depth against projection corruption
+-- ============================================================================
+--
+-- The application code never attempts to UPDATE these columns post-insert; the
+-- triggers exist to catch a future handler bug, schema drift, or manual ad-hoc
+-- SQL that would silently corrupt projected state and desynchronize the
+-- cross-replica state_root hash.
+--
+-- IS DISTINCT FROM is NULL-safe: (NULL, NULL) → false (no change), (NULL, 'x')
+-- → true, ('x', 'x') → false. Plain `=` would treat NULL transitions as
+-- "unchanged" and let them through silently.
+
+CREATE OR REPLACE FUNCTION prevent_nft_immutable_update()
+RETURNS TRIGGER AS $$
+BEGIN
+	IF NEW.id IS DISTINCT FROM OLD.id THEN
+		RAISE EXCEPTION 'nfts.id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.collection_id IS DISTINCT FROM OLD.collection_id THEN
+		RAISE EXCEPTION 'nfts.collection_id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.nft_type IS DISTINCT FROM OLD.nft_type THEN
+		RAISE EXCEPTION 'nfts.nft_type is immutable for %', OLD.id;
+	END IF;
+	IF NEW.edition IS DISTINCT FROM OLD.edition THEN
+		RAISE EXCEPTION 'nfts.edition is immutable for %', OLD.id;
+	END IF;
+	IF NEW.origin_dna IS DISTINCT FROM OLD.origin_dna THEN
+		RAISE EXCEPTION 'nfts.origin_dna is immutable for %', OLD.id;
+	END IF;
+	IF NEW.instance_dna IS DISTINCT FROM OLD.instance_dna THEN
+		RAISE EXCEPTION 'nfts.instance_dna is immutable for %', OLD.id;
+	END IF;
+	IF NEW.name IS DISTINCT FROM OLD.name THEN
+		RAISE EXCEPTION 'nfts.name is immutable for %', OLD.id;
+	END IF;
+	IF NEW.image_url IS DISTINCT FROM OLD.image_url THEN
+		RAISE EXCEPTION 'nfts.image_url is immutable for %', OLD.id;
+	END IF;
+	IF NEW.max_supply IS DISTINCT FROM OLD.max_supply THEN
+		RAISE EXCEPTION 'nfts.max_supply is immutable for %', OLD.id;
+	END IF;
+	IF NEW.seed_id IS DISTINCT FROM OLD.seed_id THEN
+		RAISE EXCEPTION 'nfts.seed_id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.instance_number IS DISTINCT FROM OLD.instance_number THEN
+		RAISE EXCEPTION 'nfts.instance_number is immutable for %', OLD.id;
+	END IF;
+	IF NEW.art_id IS DISTINCT FROM OLD.art_id THEN
+		RAISE EXCEPTION 'nfts.art_id is immutable for %', OLD.id;
+	END IF;
+	IF NEW.immutable_data IS DISTINCT FROM OLD.immutable_data THEN
+		RAISE EXCEPTION 'nfts.immutable_data is immutable for %', OLD.id;
+	END IF;
+	IF NEW.schema_version IS DISTINCT FROM OLD.schema_version THEN
+		RAISE EXCEPTION 'nfts.schema_version is immutable for %', OLD.id;
+	END IF;
+	IF NEW.created_operation_id IS DISTINCT FROM OLD.created_operation_id
+	   OR NEW.created_block_num IS DISTINCT FROM OLD.created_block_num
+	   OR NEW.created_tx_id IS DISTINCT FROM OLD.created_tx_id
+	   OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+		RAISE EXCEPTION 'nfts.created_* fields are immutable for %', OLD.id;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_nft_immutable_update ON nfts;
+CREATE TRIGGER trg_prevent_nft_immutable_update
+	BEFORE UPDATE ON nfts
+	FOR EACH ROW
+	EXECUTE FUNCTION prevent_nft_immutable_update();
+
+-- owner_block_num is monotonically non-decreasing. A regression means a
+-- stale/out-of-order apply would hash against an older ownership snapshot and
+-- silently fork state_root across replicas.
+CREATE OR REPLACE FUNCTION prevent_nft_owner_block_regression()
+RETURNS TRIGGER AS $$
+BEGIN
+	IF NEW.owner_block_num < OLD.owner_block_num THEN
+		RAISE EXCEPTION
+			'nfts.owner_block_num regression for % (old=%, new=%) — SPV invariant violation',
+			OLD.id, OLD.owner_block_num, NEW.owner_block_num;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_nft_owner_block_regression ON nfts;
+CREATE TRIGGER trg_prevent_nft_owner_block_regression
+	BEFORE UPDATE OF owner_block_num ON nfts
+	FOR EACH ROW
+	EXECUTE FUNCTION prevent_nft_owner_block_regression();
