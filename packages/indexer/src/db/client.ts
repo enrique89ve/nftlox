@@ -1,6 +1,8 @@
 import pgClient from "postgres";
 import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
+import { createStateRootBuffer, type StateRootBuffer } from "@/utils/state-root-buffer.ts";
+import { flushStateRootBuffer } from "@/db/queries/state-root.ts";
 
 const log = createLogger("db");
 
@@ -25,21 +27,49 @@ export const sql = pgClient(config.databaseUrl, {
  */
 export type Queryable = typeof sql;
 
+// WeakMap keyed on the tx handle; entry GC'd automatically when the tx
+// completes and the txSql reference is released.
+const txBuffers = new WeakMap<object, StateRootBuffer>();
+
 /**
- * Wraps sql.begin() with Queryable-typed callback.
+ * Returns the StateRootBuffer attached to the given transaction handle.
+ * Throws if called outside withTransaction — all SPV-affecting mutations
+ * MUST run inside a transaction so a crash mid-batch rolls back cleanly.
+ */
+export function getStateRootBuffer(txn: Queryable): StateRootBuffer {
+	const buf = txBuffers.get(txn as unknown as object);
+	if (!buf) {
+		throw new Error(
+			"getStateRootBuffer: no buffer attached. Call within withTransaction().",
+		);
+	}
+	return buf;
+}
+
+/**
+ * Wraps sql.begin() with Queryable-typed callback and a state-root buffer.
  *
- * postgres.TransactionSql and Sql<{}> share the same tagged-template callable interface —
- * all query functions in this codebase use only that interface, never pool-only methods.
- * The single cast (TransactionSql → Queryable) is structurally sound and contained here
- * so callers and query functions never see the postgres internals.
+ * postgres.TransactionSql and Sql<{}> share the same tagged-template callable interface.
+ * The cast (TransactionSql → Queryable) is structurally sound — all query functions
+ * in this codebase use only that interface, never pool-only methods.
+ *
+ * Buffer lifecycle: created on entry, attached via WeakMap keyed on the tx handle,
+ * flushed in a single SELECT+UPDATE before the tx commits. If flush throws, the
+ * whole tx rolls back together with the user fn's writes — no divergence possible.
  */
 export async function withTransaction<T>(fn: (txn: Queryable) => Promise<T>): Promise<T> {
-	// TransactionSql and Sql<{}> share the same tagged-template callable interface.
-	// The cast (TransactionSql → Queryable) is structurally sound — all query functions
-	// in this codebase use only that interface, never pool-only methods (begin/end).
-	// The outer `as T` is needed because sql.begin() returns UnwrapPromiseArray<T>
-	// which TypeScript cannot resolve to T in generic contexts.
-	const result = await sql.begin(txSql => fn(txSql as unknown as Queryable));
+	const result = await sql.begin(async (txSql) => {
+		const txn = txSql as unknown as Queryable;
+		const buffer = createStateRootBuffer();
+		txBuffers.set(txSql as unknown as object, buffer);
+		try {
+			const r = await fn(txn);
+			await flushStateRootBuffer(buffer, txn);
+			return r;
+		} finally {
+			txBuffers.delete(txSql as unknown as object);
+		}
+	});
 	return result as T;
 }
 
