@@ -41,9 +41,11 @@ describe("DNA generation", () => {
 	});
 
 	test("generateDeterministicInstanceId format", async () => {
-		const id = await generateDeterministicInstanceId("seed_abc123", 1);
+		const seedId = await generateDeterministicSeedId("col_test", "art-001");
+		const id = await generateDeterministicInstanceId(seedId, 1);
 		expect(id.startsWith("nft_")).toBe(true);
-		expect(id).toContain("_1_");
+		expect(id.endsWith("_1")).toBe(true);
+		expect(id).toMatch(/^nft_[a-f0-9]{20}_\d+$/);
 	});
 
 	test("isSeedId / isInstanceId guards", async () => {

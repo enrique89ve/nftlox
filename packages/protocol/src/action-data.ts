@@ -2,6 +2,7 @@
 // These define the `data` shape for each ProtocolAction's ProtocolPayload.
 
 import type { CollectionSchema, SchemaField, Price, SeedProvenance } from "./types.ts";
+import type { NftKind } from "./constants.ts";
 
 // Collection
 
@@ -64,7 +65,7 @@ export type NFTData = {
 	readonly artId?: string | undefined;
 	readonly edition: number;
 	readonly owner: string;
-	readonly nftType?: "seed" | "instance" | undefined;
+	readonly nftType?: NftKind | undefined;
 	readonly originDna: string;
 	readonly instanceDna: string;
 	readonly uniqueAccessKey?: string | undefined;

@@ -6,9 +6,19 @@ import {
 	INSTANCE_DNA_LENGTH,
 	ACCESS_KEY_LENGTH,
 	INSTANCE_ID_HASH_LENGTH,
+	COLLECTION_ID_HASH_LENGTH,
 	LISTING_ID_PREFIX,
 	LISTING_NONCE_LENGTH,
 	LISTING_HASH_LENGTH,
+	HASH_DOMAIN_COL,
+	HASH_DOMAIN_ORIGIN,
+	HASH_DOMAIN_SEED,
+	HASH_DOMAIN_INST,
+	HASH_DOMAIN_DNA,
+	HASH_DOMAIN_KEY,
+	HASH_DOMAIN_INSTANCE,
+	HASH_DOMAIN_IMG,
+	HASH_DOMAIN_LISTING,
 } from "./constants.ts";
 
 // Hash
@@ -25,7 +35,7 @@ export async function generateHash(input: string): Promise<string> {
 // Origin DNA (collection-level)
 
 export async function generateOriginDna(collectionId: string): Promise<string> {
-	const input = `nftlox:origin:${collectionId}`;
+	const input = `${HASH_DOMAIN_ORIGIN}${collectionId}`;
 	const fullHash = await generateHash(input);
 	return "o" + fullHash.slice(0, ORIGIN_DNA_LENGTH - 1).toUpperCase();
 }
@@ -38,7 +48,7 @@ export async function generateInstanceDna(
 	edition: number,
 	imageHash: string,
 ): Promise<string> {
-	const input = `nftlox:instance:${nftId}:${originDna}:${edition}:${imageHash}`;
+	const input = `${HASH_DOMAIN_INSTANCE}${nftId}:${originDna}:${edition}:${imageHash}`;
 	const fullHash = await generateHash(input);
 	return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
 }
@@ -46,7 +56,7 @@ export async function generateInstanceDna(
 // Image Hash
 
 export async function generateImageHash(imageUrl: string): Promise<string> {
-	const input = `nftlox:img:${imageUrl}`;
+	const input = `${HASH_DOMAIN_IMG}${imageUrl}`;
 	const fullHash = await generateHash(input);
 	return `img_${fullHash.slice(0, 16)}`;
 }
@@ -58,16 +68,16 @@ export async function generateDeterministicCollectionId(
 	name: string,
 	symbol: string,
 ): Promise<string> {
-	const input = `nftlox:col:${creator.toLowerCase()}:${name}:${symbol.toUpperCase()}`;
+	const input = `${HASH_DOMAIN_COL}${creator.toLowerCase()}:${name}:${symbol.toUpperCase()}`;
 	const hash = await generateHash(input);
-	return `col_${hash.slice(0, 14)}`;
+	return `col_${hash.slice(0, COLLECTION_ID_HASH_LENGTH)}`;
 }
 
 export async function generateDeterministicSeedId(
 	collectionId: string,
 	artId: string,
 ): Promise<string> {
-	const input = `nftlox:seed:${collectionId}:${artId.toLowerCase()}`;
+	const input = `${HASH_DOMAIN_SEED}${collectionId}:${artId.toLowerCase()}`;
 	const hash = await generateHash(input);
 	return `seed_${hash.slice(0, 20)}`;
 }
@@ -76,10 +86,8 @@ export async function generateDeterministicInstanceId(
 	seedId: string,
 	instanceNumber: number,
 ): Promise<string> {
-	const input = `nftlox:inst:${seedId}:${instanceNumber}`;
-	const hash = await generateHash(input);
 	const seedSuffix = seedId.replace("seed_", "");
-	return `nft_${seedSuffix}_${instanceNumber}_${hash.slice(0, INSTANCE_ID_HASH_LENGTH)}`;
+	return `nft_${seedSuffix}_${instanceNumber}`;
 }
 
 /** Thin wrapper for backwards-compatible import name. */
@@ -97,43 +105,19 @@ export function isSeedId(id: string): boolean {
 }
 
 export function isInstanceId(id: string): boolean {
-	if (!id.startsWith("nft_")) return false;
-	const withoutPrefix = id.slice(4);
-	const lastUnderscore = withoutPrefix.lastIndexOf("_");
-	if (lastUnderscore === -1) return false;
-	const hash = withoutPrefix.slice(lastUnderscore + 1);
-	if (!/^[a-f0-9]+$/.test(hash)) return false;
-	const beforeHash = withoutPrefix.slice(0, lastUnderscore);
-	const secondLastUnderscore = beforeHash.lastIndexOf("_");
-	if (secondLastUnderscore === -1) return false;
-	return /^\d+$/.test(beforeHash.slice(secondLastUnderscore + 1));
+	return /^nft_[a-f0-9]{20}_\d+$/.test(id);
 }
 
 export function extractSeedId(instanceId: string): string | null {
-	if (!instanceId.startsWith("nft_")) return null;
-	const withoutPrefix = instanceId.slice(4);
-	const lastUnderscore = withoutPrefix.lastIndexOf("_");
-	if (lastUnderscore === -1) return null;
-	const beforeHash = withoutPrefix.slice(0, lastUnderscore);
-	const secondLastUnderscore = beforeHash.lastIndexOf("_");
-	if (secondLastUnderscore === -1) return null;
-	const instanceNum = beforeHash.slice(secondLastUnderscore + 1);
-	if (!/^\d+$/.test(instanceNum)) return null;
-	const seedSuffix = beforeHash.slice(0, secondLastUnderscore);
-	return `seed_${seedSuffix}`;
+	const match = instanceId.match(/^nft_([a-f0-9]{20})_\d+$/);
+	if (!match || !match[1]) return null;
+	return `seed_${match[1]}`;
 }
 
 export function extractInstanceNumber(instanceId: string): number | null {
-	if (!instanceId.startsWith("nft_")) return null;
-	const withoutPrefix = instanceId.slice(4);
-	const lastUnderscore = withoutPrefix.lastIndexOf("_");
-	if (lastUnderscore === -1) return null;
-	const beforeHash = withoutPrefix.slice(0, lastUnderscore);
-	const secondLastUnderscore = beforeHash.lastIndexOf("_");
-	if (secondLastUnderscore === -1) return null;
-	const instanceNum = beforeHash.slice(secondLastUnderscore + 1);
-	if (!/^\d+$/.test(instanceNum)) return null;
-	return parseInt(instanceNum, 10);
+	const match = instanceId.match(/^nft_[a-f0-9]{20}_(\d+)$/);
+	if (!match || !match[1]) return null;
+	return parseInt(match[1], 10);
 }
 
 // Bulk-distribute deterministic DNA + access keys
@@ -144,7 +128,7 @@ export async function generateDeterministicInstanceDna(
 	txId: string,
 	blockNum: number,
 ): Promise<string> {
-	const input = `nftlox:dna:${seedId}:${instanceNumber}:${txId}:${blockNum}`;
+	const input = `${HASH_DOMAIN_DNA}${seedId}:${instanceNumber}:${txId}:${blockNum}`;
 	const fullHash = await generateHash(input);
 	return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
 }
@@ -154,7 +138,7 @@ export async function generateDeterministicAccessKey(
 	owner: string,
 	txId: string,
 ): Promise<string> {
-	const input = `nftlox:key:${instanceDna}:${owner}:${txId}`;
+	const input = `${HASH_DOMAIN_KEY}${instanceDna}:${owner}:${txId}`;
 	const fullHash = await generateHash(input);
 	return fullHash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
 }
@@ -174,7 +158,7 @@ export async function generateListingId(params: {
 	readonly expiresAt: number;
 	readonly nonce: string;
 }): Promise<string> {
-	const input = `nftlox:listing:v1:${params.nftId}:${params.owner}:${params.marketplace}:${params.priceAmount}:${params.priceCurrency}:${params.expiresAt}:${params.nonce}`;
+	const input = `${HASH_DOMAIN_LISTING}${params.nftId}:${params.owner}:${params.marketplace}:${params.priceAmount}:${params.priceCurrency}:${params.expiresAt}:${params.nonce}`;
 	const hash = await generateHash(input);
 	return LISTING_ID_PREFIX + hash.slice(0, LISTING_HASH_LENGTH);
 }

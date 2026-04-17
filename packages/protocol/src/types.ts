@@ -46,7 +46,7 @@ export type PaymentSplit = {
 	readonly feeAmount: number;
 	readonly feeAccount: string;
 	readonly totalPrice: number;
-	readonly currency: string;
+	readonly currency: SupportedCurrency;
 };
 
 // Seed Provenance

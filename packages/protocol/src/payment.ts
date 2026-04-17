@@ -2,6 +2,7 @@ import {
 	MAX_ROYALTY_PCT,
 	PROTOCOL_FEE_BPS,
 	BASIS_POINTS_DENOMINATOR,
+	type SupportedCurrency,
 } from "./constants.ts";
 import type { PaymentSplit } from "./types.ts";
 
@@ -22,7 +23,7 @@ export function calculateBasisPointsAmount(
 
 export function calculatePaymentSplit(
 	totalPrice: number,
-	currency: string,
+	currency: SupportedCurrency,
 	royaltyPct: number,
 	royaltyRecipient: string | null,
 	seller: string,

@@ -2,6 +2,7 @@ import {
 	MAX_SCHEMA_FIELDS,
 	MAX_FIELD_NAME_LENGTH,
 } from "./constants.ts";
+import { generateHash } from "./dna.ts";
 import type {
 	CollectionSchema,
 	SchemaField,
@@ -33,11 +34,7 @@ export async function computeDataHash(
 	data: Record<string, unknown>,
 ): Promise<string> {
 	const json = canonicalJson(data);
-	const encoded = new TextEncoder().encode(json);
-	const buffer = await crypto.subtle.digest("SHA-256", encoded);
-	const hex = Array.from(new Uint8Array(buffer))
-		.map((b) => b.toString(16).padStart(2, "0"))
-		.join("");
+	const hex = await generateHash(json);
 	return `sha256:${hex}`;
 }
 
@@ -288,12 +285,11 @@ export function validateMintData(
 	return errors;
 }
 
-export function validateMutableUpdate(
+function validateImmutableGuard(
 	schema: CollectionSchema,
 	mutableData: Record<string, unknown>,
-): ValidationError[] {
-	const errors: ValidationError[] = [];
-
+	errors: ValidationError[],
+): void {
 	const immutableNames = new Set(schema.immutable.map((f) => f.name));
 	for (const key of Object.keys(mutableData)) {
 		if (immutableNames.has(key)) {
@@ -304,6 +300,15 @@ export function validateMutableUpdate(
 			});
 		}
 	}
+}
+
+export function validateMutableUpdate(
+	schema: CollectionSchema,
+	mutableData: Record<string, unknown>,
+): ValidationError[] {
+	const errors: ValidationError[] = [];
+
+	validateImmutableGuard(schema, mutableData, errors);
 
 	errors.push(
 		...validateDataAgainstFields(
@@ -323,16 +328,7 @@ export function validateMutableSnapshot(
 ): ValidationError[] {
 	const errors: ValidationError[] = [];
 
-	const immutableNames = new Set(schema.immutable.map((f) => f.name));
-	for (const key of Object.keys(mutableData)) {
-		if (immutableNames.has(key)) {
-			errors.push({
-				field: `mutableData.${key}`,
-				message: `Field "${key}" is immutable and cannot be modified`,
-				code: "FIELD_IMMUTABLE",
-			});
-		}
-	}
+	validateImmutableGuard(schema, mutableData, errors);
 
 	errors.push(
 		...validateDataAgainstFields(

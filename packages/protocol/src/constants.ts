@@ -3,8 +3,8 @@
 // Both the indexer and SDK import from here.
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.5.3";
-export const MIN_PROTOCOL_VERSION = "0.5.0";
+export const PROTOCOL_VERSION = "0.6.0";
+export const MIN_PROTOCOL_VERSION = "0.6.0";
 export const HASH_VERSION = "v1";
 
 // Transaction Limits
@@ -31,6 +31,7 @@ export const ORIGIN_DNA_LENGTH = 16;
 export const INSTANCE_DNA_LENGTH = 20;
 export const ACCESS_KEY_LENGTH = 8;
 export const INSTANCE_ID_HASH_LENGTH = 20;
+export const COLLECTION_ID_HASH_LENGTH = 20;  // was 14 (56 bits) — now 80 bits to match other IDs
 
 // Marketplace Constants
 export const SUPPORTED_CURRENCIES = ["HIVE", "HBD"] as const;
@@ -153,6 +154,19 @@ export const ALL_ACTIONS = [
 	...DATA_OPERATOR_ACTIONS,
 ] as const;
 
+// Hash Domain Separators
+// Permanent pre-image commitments. Changing any separator post-mainnet would cause
+// all derived IDs to diverge from historical on-chain data. Treat as immutable.
+export const HASH_DOMAIN_COL = "nftlox:col:";
+export const HASH_DOMAIN_ORIGIN = "nftlox:origin:";
+export const HASH_DOMAIN_SEED = "nftlox:seed:";
+export const HASH_DOMAIN_INST = "nftlox:inst:";
+export const HASH_DOMAIN_DNA = "nftlox:dna:";
+export const HASH_DOMAIN_KEY = "nftlox:key:";
+export const HASH_DOMAIN_INSTANCE = "nftlox:instance:";
+export const HASH_DOMAIN_IMG = "nftlox:img:";
+export const HASH_DOMAIN_LISTING = "nftlox:listing:v1:";
+
 // Type exports
 export type CoreAction = (typeof CORE_ACTIONS)[number];
 export type MarketplaceAction = (typeof MARKETPLACE_ACTIONS)[number];
@@ -161,6 +175,7 @@ export type LendingAction = (typeof LENDING_ACTIONS)[number];
 export type DataOperatorAction = (typeof DATA_OPERATOR_ACTIONS)[number];
 export type ProtocolAction = (typeof ALL_ACTIONS)[number];
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+export type NftKind = "seed" | "instance";
 
 /** Runtime guard: returns true if value is a known ProtocolAction string. */
 export function isProtocolAction(value: unknown): value is ProtocolAction {
