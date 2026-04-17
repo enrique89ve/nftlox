@@ -27,7 +27,6 @@ mock.module("@/db/queries/state-root.ts", () => ({
 		last_block_num: 0,
 		updated_at: fixedUpdatedAt,
 	}),
-	applyStateRootDeltaToDb: () => Promise.resolve(),
 	bootstrapStateRootFromFullScan: () => Promise.resolve({
 		state_root: new Uint8Array(32),
 		nft_count: 0,

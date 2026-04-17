@@ -1,7 +1,7 @@
 import type { NftStateRow } from "./state-root-hash.ts";
 
-// A delta queued by a handler during a transaction. Same shape as the old
-// StateRootMutation but lives in memory until the tx commits.
+// Discriminated union of the three SPV-affecting row changes: insert, update,
+// delete. Lives in memory until the tx commits.
 export type BufferedMutation =
 	| Readonly<{ type: "insert"; newRow: NftStateRow; blockNum: number }>
 	| Readonly<{ type: "update"; oldRow: NftStateRow; newRow: NftStateRow; blockNum: number }>

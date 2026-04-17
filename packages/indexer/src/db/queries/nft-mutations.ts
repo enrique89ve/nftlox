@@ -92,7 +92,7 @@ export async function updateNftOwner(
 ): Promise<void> {
 	// Read old SPV row under FOR UPDATE before mutating, so the state-root
 	// delta is computed against the exact pre-image of the UPDATE. Any crash
-	// between here and writeRoot rolls back the entire batch.
+	// between here and the buffered flush rolls back the entire batch.
 	const oldRow = await readStateRow(nftId, txn);
 	if (!oldRow) throw new Error(`updateNftOwner: nft ${nftId} not found`);
 	await txn`
