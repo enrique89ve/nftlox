@@ -83,12 +83,17 @@ async function runMigrations(): Promise<void> {
 	log.info("Schema migrations completed");
 }
 
-// Ordered by foreign key dependencies (children first)
+// Ordered by foreign key dependencies (children first). Every projected table
+// MUST be listed — a schema-hash reset that misses a table leaves committed
+// rows that reference a genesis-block-0 sync_state, so replay will duplicate
+// them at the same pk or poison state_meta via un-wiped SPV rows.
 const DATA_TABLES = [
-	"nft_loans", "nft_allowances", "collection_allowances",
+	"nft_loans", "nft_allowances", "collection_allowances", "schema_versions",
 	"data_operators",
-	"orphaned_buys", "invalid_operations", "owner_nft_counts",
-	"collection_stats",
+	"orphaned_buys", "invalid_operations", "confirmed_operations",
+	"owner_nft_counts", "collection_stats",
+	"sales", "burned_nfts", "archived_collections",
+	"multisig_locks", "multisig_collection_locks",
 	"l2_node_heartbeats", "l2_nodes",
 	"nfts", "collections",
 ] as const;
