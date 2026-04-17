@@ -197,6 +197,9 @@ describe("buildSeed consistency", () => {
 		if (!result.success) throw new Error("Expected success");
 
 		expect(result.payload.data.immutableData).toEqual(immutableData);
+		const payloadData = result.payload.data as Record<string, unknown>;
+		expect("schema" in payloadData).toBe(false);
+		expect("mutableData" in payloadData).toBe(false);
 
 		const op = result.operations[0]! as HiveOperation;
 		const parsed = JSON.parse(op[1].json) as {
