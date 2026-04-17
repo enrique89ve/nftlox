@@ -60,13 +60,13 @@ CREATE TABLE IF NOT EXISTS collections (
 	name TEXT NOT NULL,
 	symbol VARCHAR(10) NOT NULL CHECK (symbol ~ '^[A-Z][A-Z0-9]{2,9}$'),
 	creator TEXT NOT NULL,
-	total_potential INTEGER NOT NULL DEFAULT 0,
+	total_potential INTEGER NOT NULL DEFAULT 0 CHECK (total_potential >= 0),
 	description TEXT,
 	image_url TEXT,
 	external_url TEXT,
 	transferable BOOLEAN NOT NULL DEFAULT TRUE,
 	burnable BOOLEAN NOT NULL DEFAULT TRUE,
-	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
+	royalty_pct NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (royalty_pct >= 0 AND royalty_pct <= 100),
 	royalty_recipient TEXT,
 	schema JSONB,
 	schema_version INTEGER NOT NULL DEFAULT 0,
@@ -285,6 +285,7 @@ CREATE TABLE IF NOT EXISTS sales (
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
+	CHECK (seller <> buyer),
 	UNIQUE (nft_id, listing_id, tx_id)
 );
 
