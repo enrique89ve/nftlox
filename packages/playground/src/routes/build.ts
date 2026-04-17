@@ -11,6 +11,7 @@ import {
 	createPayload,
 	createHiveOperation,
 	getKeyType,
+	type HiveOperation,
 	type HiveTransactionObject,
 	// Builders
 	buildCollection,
@@ -60,6 +61,29 @@ type CollectionMultisigResponse = {
 	message?: string;
 }
 
+type BuildSeedsRequestSeed = Readonly<{
+	artId: string;
+	name: string;
+	imageUrl: string;
+	maxSupply: number;
+	brief?: string | undefined;
+	immutableData?: Record<string, unknown> | undefined;
+}>;
+
+type BuildSeedsRequest = Readonly<{
+	collectionId: string;
+	signer?: string | undefined;
+	owner?: string | undefined;
+	seeds: readonly BuildSeedsRequestSeed[];
+}>;
+
+type BuiltSeedOperation = Readonly<{
+	artId: string;
+	seedId?: string | undefined;
+	immutableData?: Record<string, unknown> | undefined;
+	operation: HiveOperation;
+}>;
+
 function isIndexerStatusResponse(v: unknown): v is IndexerStatusResponse {
 	return typeof v === "object" && v !== null;
 }
@@ -79,6 +103,10 @@ function keyTypeFromOp(operation: unknown): "Active" | "Posting" {
  * the boundary without losing runtime shape. */
 function asProtocolTransaction(tx: unknown): HiveTransactionObject {
 	return tx as HiveTransactionObject;
+}
+
+function isBuiltSeedOperation(value: BuiltSeedOperation | null): value is BuiltSeedOperation {
+	return value !== null;
 }
 
 function buildRoute(handler: (body: any) => Response | Promise<Response>): { POST: RouteHandler } {
@@ -190,38 +218,43 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/seeds": buildRoute(async (body) => {
-		const signer = body.signer ?? body.owner;
-		const result = await buildSeedBatch({ ...body, signer });
+		const requestBody = body as BuildSeedsRequest;
+		const signer = requestBody.signer ?? requestBody.owner ?? "";
+		const result = await buildSeedBatch({ ...requestBody, signer, seeds: [...requestBody.seeds] });
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 
-		const operations = await Promise.all(body.seeds.map(async (seed: any) => {
+		const operations: Array<BuiltSeedOperation | null> = await Promise.all(requestBody.seeds.map(async (seed) => {
 			const seedResult = await buildSeed({
 				artId: seed.artId,
-				collectionId: body.collectionId,
+				collectionId: requestBody.collectionId,
 				name: seed.name,
 				imageUrl: seed.imageUrl,
 				maxSupply: seed.maxSupply,
-				signer,
-				owner: body.owner,
+				signer: result.signer,
+				owner: requestBody.owner,
 				edition: 1,
 				brief: seed.brief,
+				...(seed.immutableData !== undefined && { immutableData: seed.immutableData }),
 			});
 			if (!seedResult.success) return null;
+			const operation = seedResult.operations[0];
+			if (operation?.[0] !== "custom_json") return null;
 			return {
 				artId: seed.artId,
 				seedId: seedResult.generatedIds?.seedId,
-				operation: seedResult.operations[0],
-			};
+				...(seed.immutableData !== undefined && { immutableData: seed.immutableData }),
+				operation,
+			} satisfies BuiltSeedOperation;
 		}));
-		const validOps = operations.filter(Boolean);
+		const validOps = operations.filter(isBuiltSeedOperation);
 
-		const batches = splitOperationsIntoBatches(validOps.map((o: any) => o.operation!));
+		const batches = splitOperationsIntoBatches(validOps.map((operationItem) => operationItem.operation));
 
 		return json({
 			success: true,
 			protocolVersion: PROTOCOL_VERSION,
 			hashVersion: HASH_VERSION,
-			collectionId: body.collectionId,
+			collectionId: requestBody.collectionId,
 			generatedIds: result.generatedIds,
 			seeds: validOps,
 			batches: batches.map((batch, i) => ({

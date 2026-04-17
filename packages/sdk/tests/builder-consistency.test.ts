@@ -4,6 +4,7 @@ import {
 	buildArchiveCollection,
 	buildCollection,
 	buildSeed,
+	buildSeedBatch,
 	type CreateCollectionInput,
 	type HiveOperation,
 } from "../src/index";
@@ -185,6 +186,27 @@ describe("buildSeed consistency", () => {
 		expect(result.payload.data.artId).toBe(validInput.artId);
 	});
 
+	test("preserves immutableData in payload and custom_json", async () => {
+		const immutableData = {
+			card_id: 1001,
+			rarity: "legendary",
+			attack: 7,
+			health: 5,
+		};
+		const result = await buildSeed({ ...validInput, immutableData });
+		if (!result.success) throw new Error("Expected success");
+
+		expect(result.payload.data.immutableData).toEqual(immutableData);
+
+		const op = result.operations[0]! as HiveOperation;
+		const parsed = JSON.parse(op[1].json) as {
+			readonly data: {
+				readonly immutableData?: Record<string, unknown>;
+			};
+		};
+		expect(parsed.data.immutableData).toEqual(immutableData);
+	});
+
 	test("payload.data.id matches the ID inside operation JSON", async () => {
 		const result = await buildSeed(validInput);
 		if (!result.success) throw new Error("Expected success");
@@ -227,5 +249,34 @@ describe("buildSeed consistency", () => {
 		if (!result.success) throw new Error("Expected success");
 
 		expect(result.payload.data.nftType).toBe("seed");
+	});
+
+	test("buildSeedBatch preserves immutableData per seed", async () => {
+		const firstImmutableData = { card_id: 1001, rarity: "legendary" };
+		const secondImmutableData = { card_id: 1002, rarity: "common" };
+		const result = await buildSeedBatch({
+			collectionId: validInput.collectionId,
+			signer: validInput.signer,
+			seeds: [
+				{
+					artId: "art-batch-001",
+					name: "Batch Seed One",
+					imageUrl: "https://example.com/batch-one.png",
+					maxSupply: 10,
+					immutableData: firstImmutableData,
+				},
+				{
+					artId: "art-batch-002",
+					name: "Batch Seed Two",
+					imageUrl: "https://example.com/batch-two.png",
+					maxSupply: 20,
+					immutableData: secondImmutableData,
+				},
+			],
+		});
+		if (!result.success) throw new Error("Expected success");
+
+		expect(result.seeds[0]?.immutableData).toEqual(firstImmutableData);
+		expect(result.seeds[1]?.immutableData).toEqual(secondImmutableData);
 	});
 });
