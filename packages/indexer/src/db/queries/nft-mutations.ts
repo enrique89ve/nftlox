@@ -2,7 +2,8 @@ import { sql, type Queryable } from "@/db/client.ts";
 import type { InsertNftParams, OwnerChangeCtx, BurnCtx, ListingCtx, NftStatus } from "./nft-types.ts";
 import { NFT_KIND_INSTANCE, NFT_STATUS_ACTIVE, NFT_STATUS_LISTED } from "./nft-types.ts";
 import { adjustOwnerNftCount, recordCollectionMint, adjustCollectionListed, recordCollectionBurn } from "./nft-counters.ts";
-import { applyStateRootDeltaToDb } from "./state-root.ts";
+import { queueStateRootDelta } from "./state-root.ts";
+import { getStateRootBuffer } from "@/db/client.ts";
 import type { NftStateRow } from "@/utils/state-root-hash.ts";
 
 // Reads the SPV-visible fields that contribute to the state-root hash. Must
@@ -73,7 +74,11 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			owner_operation_id: params.ownerOperationId,
 			owner_block_num: params.ownerBlockNum,
 		};
-		await applyStateRootDeltaToDb({ type: "insert", newRow, blockNum: params.ownerBlockNum }, txn);
+		queueStateRootDelta(getStateRootBuffer(txn), {
+			type: "insert",
+			newRow,
+			blockNum: params.ownerBlockNum,
+		});
 	}
 	return result.count > 0;
 }
@@ -114,10 +119,12 @@ export async function updateNftOwner(
 		owner_operation_id: ownerOperationId,
 		owner_block_num: ctx.ownerBlockNum,
 	};
-	await applyStateRootDeltaToDb(
-		{ type: "update", oldRow, newRow, blockNum: ctx.ownerBlockNum },
-		txn,
-	);
+	queueStateRootDelta(getStateRootBuffer(txn), {
+		type: "update",
+		oldRow,
+		newRow,
+		blockNum: ctx.ownerBlockNum,
+	});
 }
 
 export async function updateNftStatus(nftId: string, status: NftStatus, txn: Queryable = sql) {
@@ -146,7 +153,11 @@ export async function hardDeleteNft(
 	await txn`DELETE FROM nfts WHERE id = ${nftId}`;
 	await adjustOwnerNftCount(ctx.owner, ctx.nftType, -1, txn);
 	await recordCollectionBurn(ctx.collectionId, ctx.nftType, txn);
-	await applyStateRootDeltaToDb({ type: "delete", oldRow, blockNum: ctx.blockNum }, txn);
+	queueStateRootDelta(getStateRootBuffer(txn), {
+		type: "delete",
+		oldRow,
+		blockNum: ctx.blockNum,
+	});
 }
 
 export async function updateNftListing(
