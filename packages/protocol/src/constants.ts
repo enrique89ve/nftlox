@@ -1,79 +1,33 @@
 // NFTLox Protocol — canonical constants.
 // Authoritative source of truth for all protocol-level constants.
 // Both the indexer and SDK import from here.
+//
+// Sections are grouped by conceptual layer:
+//   - Identity & versioning            (PROTOCOL_ID, PROTOCOL_VERSION, ...)
+//   - On-chain consensus               (rules every node MUST agree on)
+//   - Node API policy                  (per-node behavior, NOT consensus)
+//   - Payload / transaction limits     (Hive custom_json constraints)
+//   - Field & schema limits            (validation bounds)
+//   - DNA / ID derivation              (hash lengths, prefixes)
+//   - Marketplace                      (currencies, fees, memos)
+//   - Batch limits                     (bulk-op caps)
+//   - Hash domain separators           (immutable — see note below)
+//   - Action names                     (protocol actions)
+
+// ============================================================================
+// Identity & versioning
+// ============================================================================
 
 export const PROTOCOL_ID = "nftlox_testnet";
 export const PROTOCOL_VERSION = "0.6.0";
 export const MIN_PROTOCOL_VERSION = "0.6.0";
 export const HASH_VERSION = "v1";
 
-// Transaction Limits
-export const MAX_JSON_SIZE = 8000;
-export const MAX_OPERATIONS_PER_TX = 5;
-export const TX_DELAY_MS = 4000;
-
-// Field Limits
-export const MAX_NAME_LENGTH = 100;
-export const MAX_DESCRIPTION_LENGTH = 250;
-export const MAX_IMAGE_URL_LENGTH = 500;
-export const MAX_URL_LENGTH = 500;
-export const MAX_ID_LENGTH = 128;
-// artId is a creator-chosen label bound to one seed within a collection. 64 chars
-// fits human-readable slugs ("hero-card-v2") without bloating payload or row size.
-export const MAX_ART_ID_LENGTH = 64;
-export const MIN_SYMBOL_LENGTH = 3;
-export const MAX_SYMBOL_LENGTH = 10;
-export const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;
-export const TX_ID_REGEX = /^[0-9a-f]{40}$/;
-
-// DNA Constants
-export const ORIGIN_DNA_LENGTH = 16;
-export const INSTANCE_DNA_LENGTH = 20;
-export const ACCESS_KEY_LENGTH = 8;
-export const INSTANCE_ID_HASH_LENGTH = 20;
-export const COLLECTION_ID_HASH_LENGTH = 20;  // was 14 (56 bits) — now 80 bits to match other IDs
-
-// Marketplace Constants
-export const SUPPORTED_CURRENCIES = ["HIVE", "HBD"] as const;
-export const MAX_ROYALTY_PCT = 50;
-export const MIN_PRICE_AMOUNT = "0.001";
-export const BASIS_POINTS_DENOMINATOR = 10_000;
-export const PROTOCOL_FEE_BPS = 100;
-export const DEFAULT_FEE_ACCOUNT = "nftlox";
-export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
-
-// Memo Prefixes (Marketplace)
-export const MEMO_PREFIX_BUY = "NFTLox BUY:";
-export const MEMO_PREFIX_ROYALTY = "NFTLox ROY:";
-export const MEMO_PREFIX_FEE = "NFTLox FEE:";
-
-// Listing Constants
-export const LISTING_ID_PREFIX = "list_";
-export const LISTING_NONCE_LENGTH = 12;
-export const LISTING_HASH_LENGTH = 32;
-
-// Payload Limits
-export const HIVE_CUSTOM_JSON_MAX_BYTES = 8192;
-export const SAFE_PAYLOAD_MAX_BYTES = Math.floor(HIVE_CUSTOM_JSON_MAX_BYTES * 0.9);
-
-// Schema Constants
-export const MAX_SCHEMA_FIELDS = 64;
-export const MAX_FIELD_NAME_LENGTH = 64;
-
-// Batch Limits
-export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
-export const MAX_TRANSFER_BATCH_SIZE = 50;
-
-// Multisig Constants
-export const MULTISIG_EXPIRATION_MS = 125_000;
-export const MAX_MULTISIG_OPERATIONS = 5;
-
-// Max block gap between the Hive HEAD and the indexer's last-processed block
-// that still allows /api/multisig to sign. Exceeding this means the API would
-// read a stale NFT snapshot and could co-sign against state that has since
-// been invalidated (unlist/transfer/burn in an un-indexed block). Hive block
-// time is 3s, so 3 blocks ≈ 9s.
-export const MULTISIG_LAG_MAX_BLOCKS = 3;
+// ============================================================================
+// On-chain consensus
+// Rules every indexer implementation MUST enforce identically. Changing any of
+// these is a protocol upgrade and requires coordinated network-wide rollout.
+// ============================================================================
 
 // Cooldown blocks an unlist stays pending before materializing to 'active'.
 // During the window the NFT keeps status='listed' so a multisig-signed buy
@@ -89,6 +43,23 @@ export const UNLIST_DELAY_BLOCKS = 3;
 // listings. Skin-in-the-game is HP (self-staked OR delegated-in), not a fee.
 export const MIN_NODE_REGISTER_HIVE_POWER = 100;
 
+// ============================================================================
+// Node API policy
+// Per-node behavior. A node operator MAY tune these without breaking consensus
+// — they only affect that node's HTTP surface (multisig signing, discovery).
+// Clients negotiate via /api/status.
+// ============================================================================
+
+export const MULTISIG_EXPIRATION_MS = 125_000;
+export const MAX_MULTISIG_OPERATIONS = 5;
+
+// Max block gap between the Hive HEAD and the indexer's last-processed block
+// that still allows /api/multisig to sign. Exceeding this means the API would
+// read a stale NFT snapshot and could co-sign against state that has since
+// been invalidated (unlist/transfer/burn in an un-indexed block). Hive block
+// time is 3s, so 3 blocks ≈ 9s.
+export const MULTISIG_LAG_MAX_BLOCKS = 3;
+
 // Cadence for on-chain heartbeat (custom_json with current state-root hash).
 // Block time on Hive is 3s, so 5000 blocks ≈ 4h10m. Nodes that register must
 // publish a heartbeat at least every N blocks or listings are treated as stale
@@ -96,7 +67,80 @@ export const MIN_NODE_REGISTER_HIVE_POWER = 100;
 // only affects trust signals in the discovery directory.
 export const MIN_HEARTBEAT_INTERVAL_BLOCKS = 5000;
 
-// Protocol Actions (Core)
+// ============================================================================
+// Payload / transaction limits
+// ============================================================================
+
+export const MAX_JSON_SIZE = 8000;
+export const MAX_OPERATIONS_PER_TX = 5;
+export const TX_DELAY_MS = 4000;
+export const HIVE_CUSTOM_JSON_MAX_BYTES = 8192;
+export const SAFE_PAYLOAD_MAX_BYTES = Math.floor(HIVE_CUSTOM_JSON_MAX_BYTES * 0.9);
+
+// ============================================================================
+// Field & schema limits
+// ============================================================================
+
+export const MAX_NAME_LENGTH = 100;
+export const MAX_DESCRIPTION_LENGTH = 250;
+export const MAX_IMAGE_URL_LENGTH = 500;
+export const MAX_URL_LENGTH = 500;
+export const MAX_ID_LENGTH = 128;
+// artId is a creator-chosen label bound to one seed within a collection. 64 chars
+// fits human-readable slugs ("hero-card-v2") without bloating payload or row size.
+export const MAX_ART_ID_LENGTH = 64;
+export const MIN_SYMBOL_LENGTH = 3;
+export const MAX_SYMBOL_LENGTH = 10;
+export const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;
+export const TX_ID_REGEX = /^[0-9a-f]{40}$/;
+
+export const MAX_SCHEMA_FIELDS = 64;
+export const MAX_FIELD_NAME_LENGTH = 64;
+
+// ============================================================================
+// DNA / ID derivation
+// ============================================================================
+
+export const ORIGIN_DNA_LENGTH = 16;
+export const INSTANCE_DNA_LENGTH = 20;
+export const ACCESS_KEY_LENGTH = 8;
+export const INSTANCE_ID_HASH_LENGTH = 20;
+export const COLLECTION_ID_HASH_LENGTH = 20;  // was 14 (56 bits) — now 80 bits to match other IDs
+
+// ============================================================================
+// Marketplace
+// ============================================================================
+
+export const SUPPORTED_CURRENCIES = ["HIVE", "HBD"] as const;
+export const MAX_ROYALTY_PCT = 50;
+export const MIN_PRICE_AMOUNT = "0.001";
+export const BASIS_POINTS_DENOMINATOR = 10_000;
+export const PROTOCOL_FEE_BPS = 100;
+export const DEFAULT_FEE_ACCOUNT = "nftlox";
+export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
+
+// Memo prefixes (marketplace transfers)
+export const MEMO_PREFIX_BUY = "NFTLox BUY:";
+export const MEMO_PREFIX_ROYALTY = "NFTLox ROY:";
+export const MEMO_PREFIX_FEE = "NFTLox FEE:";
+
+// Listings
+export const LISTING_ID_PREFIX = "list_";
+export const LISTING_NONCE_LENGTH = 12;
+export const LISTING_HASH_LENGTH = 32;
+
+// ============================================================================
+// Batch limits
+// ============================================================================
+
+export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
+export const MAX_TRANSFER_BATCH_SIZE = 50;
+
+// ============================================================================
+// Protocol actions
+// ============================================================================
+
+// Core
 export const ACTION_CREATE_COLLECTION = "create_collection";
 export const ACTION_MINT = "mint";
 export const ACTION_TRANSFER = "transfer";
@@ -107,21 +151,21 @@ export const ACTION_ARCHIVE_COLLECTION = "archive_collection";
 export const ACTION_NODE_REGISTER = "node_register";
 export const ACTION_NODE_HEARTBEAT = "node_heartbeat";
 
-// Protocol Actions (Marketplace)
+// Marketplace
 export const ACTION_LIST = "list";
 export const ACTION_UNLIST = "unlist";
 export const ACTION_BUY = "buy" as const;
 
-// Protocol Actions (Approve & TransferFrom)
+// Approve & TransferFrom
 export const ACTION_NFT_APPROVE = "nft_approve";
 export const ACTION_NFT_APPROVE_ALL = "nft_approve_all";
 export const ACTION_NFT_TRANSFER_FROM = "nft_transfer_from";
 
-// Protocol Actions (Lending)
+// Lending
 export const ACTION_NFT_LEND = "nft_lend";
 export const ACTION_NFT_RETURN = "nft_return";
 
-// Protocol Actions (Data Operators)
+// Data operators
 export const ACTION_DATA_OPERATOR_APPROVE = "data_operator_approve";
 export const ACTION_SET_DATA_FROM = "set_data_from";
 
@@ -168,9 +212,13 @@ export const ALL_ACTIONS = [
 	...DATA_OPERATOR_ACTIONS,
 ] as const;
 
-// Hash Domain Separators
-// Permanent pre-image commitments. Changing any separator post-mainnet would cause
-// all derived IDs to diverge from historical on-chain data. Treat as immutable.
+// ============================================================================
+// Hash domain separators
+// Permanent pre-image commitments. Changing any separator post-mainnet would
+// cause all derived IDs to diverge from historical on-chain data. Treat as
+// immutable.
+// ============================================================================
+
 export const HASH_DOMAIN_COL = "nftlox:col:";
 export const HASH_DOMAIN_ORIGIN = "nftlox:origin:";
 export const HASH_DOMAIN_SEED = "nftlox:seed:";
@@ -181,7 +229,10 @@ export const HASH_DOMAIN_INSTANCE = "nftlox:instance:";
 export const HASH_DOMAIN_IMG = "nftlox:img:";
 export const HASH_DOMAIN_LISTING = "nftlox:listing:v1:";
 
+// ============================================================================
 // Type exports
+// ============================================================================
+
 export type CoreAction = (typeof CORE_ACTIONS)[number];
 export type MarketplaceAction = (typeof MARKETPLACE_ACTIONS)[number];
 export type ApproveAction = (typeof APPROVE_ACTIONS)[number];

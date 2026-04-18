@@ -1,7 +1,13 @@
 // NFTLox Protocol — action-specific data payload types.
 // These define the `data` shape for each ProtocolAction's ProtocolPayload.
 
-import type { CollectionSchema, SchemaField, Price, SeedProvenance } from "./types";
+import type {
+	CollectionSchema,
+	HiveTransactionObject,
+	Price,
+	SchemaField,
+	SeedProvenance,
+} from "./types";
 import type { NftKind } from "./constants";
 
 // Collection
@@ -215,38 +221,38 @@ export type NodeHeartbeatData = {
 
 // Multisig envelopes
 
-export type BuyMultisigRequest = Readonly<{
-	buyer: string;
-	nftId: string;
-	listingId: string;
-	listTxId: string;
-	transaction: import("./types").HiveTransactionObject;
-}>;
+export type BuyMultisigRequest = {
+	readonly buyer: string;
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
+	readonly transaction: HiveTransactionObject;
+};
 
 // `creator` is intentionally absent. The multisig endpoint derives the creator
 // from the embedded `transaction.operations[0][1].from` (the fee transfer's
 // sender), which is the canonical source. Carrying a separate `creator` field
 // here would reintroduce the drift vector the payload cleanup removed.
-export type CreateCollectionMultisigRequest = Readonly<{
-	transaction: import("./types").HiveTransactionObject;
-}>;
+export type CreateCollectionMultisigRequest = {
+	readonly transaction: HiveTransactionObject;
+};
 
 export type MultisigRequest = BuyMultisigRequest | CreateCollectionMultisigRequest;
 
-export type PaymentInfo = Readonly<{
-	nftId: string;
-	listingId: string;
-	listTxId: string;
-	seller: string;
+export type PaymentInfo = {
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
+	readonly seller: string;
 	/** Decimal Hive asset, 3 decimals. */
-	totalPrice: number;
-	currency: string;
-	sellerAmount: number;
-	royaltyAmount: number;
-	royaltyRecipient: string | null;
-	feeAmount: number;
-	feeAccount: string;
-	nodeAccount: string;
-	txId: string;
-	seedTxId: string | null;
-}>;
+	readonly totalPrice: number;
+	readonly currency: string;
+	readonly sellerAmount: number;
+	readonly royaltyAmount: number;
+	readonly royaltyRecipient: string | null;
+	readonly feeAmount: number;
+	readonly feeAccount: string;
+	readonly nodeAccount: string;
+	readonly txId: string;
+	readonly seedTxId: string | null;
+};

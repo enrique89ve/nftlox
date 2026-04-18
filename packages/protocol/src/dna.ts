@@ -100,22 +100,36 @@ export async function generateInstanceId(
 
 // ID guards & extraction
 
+// Regex built from INSTANCE_ID_HASH_LENGTH so the hash-length constant is the
+// single source of truth. A mismatch between this regex and the id emitted by
+// generateDeterministicInstanceId would silently break extractSeedId/
+// extractInstanceNumber at runtime.
+const INSTANCE_ID_REGEX = new RegExp(
+	`^nft_[a-f0-9]{${INSTANCE_ID_HASH_LENGTH}}_\\d+$`,
+);
+const INSTANCE_ID_SEED_CAPTURE_REGEX = new RegExp(
+	`^nft_([a-f0-9]{${INSTANCE_ID_HASH_LENGTH}})_\\d+$`,
+);
+const INSTANCE_ID_NUMBER_CAPTURE_REGEX = new RegExp(
+	`^nft_[a-f0-9]{${INSTANCE_ID_HASH_LENGTH}}_(\\d+)$`,
+);
+
 export function isSeedId(id: string): boolean {
 	return id.startsWith("seed_");
 }
 
 export function isInstanceId(id: string): boolean {
-	return /^nft_[a-f0-9]{20}_\d+$/.test(id);
+	return INSTANCE_ID_REGEX.test(id);
 }
 
 export function extractSeedId(instanceId: string): string | null {
-	const match = instanceId.match(/^nft_([a-f0-9]{20})_\d+$/);
+	const match = instanceId.match(INSTANCE_ID_SEED_CAPTURE_REGEX);
 	if (!match || !match[1]) return null;
 	return `seed_${match[1]}`;
 }
 
 export function extractInstanceNumber(instanceId: string): number | null {
-	const match = instanceId.match(/^nft_[a-f0-9]{20}_(\d+)$/);
+	const match = instanceId.match(INSTANCE_ID_NUMBER_CAPTURE_REGEX);
 	if (!match || !match[1]) return null;
 	return parseInt(match[1], 10);
 }

@@ -76,14 +76,14 @@ export type HiveTransferBody = {
 
 export type HiveTransferOperation = readonly ["transfer", HiveTransferBody];
 
-export type HiveTransactionObject = Readonly<{
-	ref_block_num: number;
-	ref_block_prefix: number;
-	expiration: string;
-	operations: ReadonlyArray<readonly [string, Record<string, unknown>]>;
-	extensions: ReadonlyArray<unknown>;
-	signatures: ReadonlyArray<string>;
-}>;
+export type HiveTransactionObject = {
+	readonly ref_block_num: number;
+	readonly ref_block_prefix: number;
+	readonly expiration: string;
+	readonly operations: ReadonlyArray<readonly [string, Record<string, unknown>]>;
+	readonly extensions: ReadonlyArray<unknown>;
+	readonly signatures: ReadonlyArray<string>;
+};
 
 // Protocol Payload
 
@@ -123,5 +123,15 @@ export type MultisigErrorCode =
 	| "INTERNAL_ERROR";
 
 export type MultisigResponse =
-	| Readonly<{ ok: true; signature: string; digest: string; expiration: string }>
-	| Readonly<{ ok: false; code: MultisigErrorCode; message: string; retryAfterMs?: number | undefined }>;
+	| {
+			readonly ok: true;
+			readonly signature: string;
+			readonly digest: string;
+			readonly expiration: string;
+	  }
+	| {
+			readonly ok: false;
+			readonly code: MultisigErrorCode;
+			readonly message: string;
+			readonly retryAfterMs?: number | undefined;
+	  };
