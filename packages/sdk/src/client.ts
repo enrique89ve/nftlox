@@ -511,8 +511,6 @@ export interface IndexerClient {
 	getListings(params?: ListingsQueryParams): Promise<IndexerNftSummary[]>;
 	getSales(params?: SalesQueryParams): Promise<ReadonlyArray<MarketplaceSale>>;
 	getSalesVolume(params?: SalesVolumeQueryParams): Promise<ReadonlyArray<MarketplaceVolume>>;
-	/** @deprecated Use getSalesVolume(params) instead. */
-	getVolume(params?: SalesVolumeQueryParams): Promise<ReadonlyArray<MarketplaceVolume>>;
 
 	// Operations
 	getOperationStatus(txId: string, params?: OperationStatusQueryParams): Promise<OperationStatusResult>;
@@ -595,8 +593,6 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 		getSales: (params) =>
 			get<MarketplaceSale[]>(baseUrl, "/api/marketplace/sales", params, http),
 		getSalesVolume: (params) =>
-			get<MarketplaceVolume[]>(baseUrl, "/api/marketplace/volume", params, http),
-		getVolume: (params) =>
 			get<MarketplaceVolume[]>(baseUrl, "/api/marketplace/volume", params, http),
 
 		// ---- Operations ----

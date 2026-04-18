@@ -101,16 +101,6 @@ export class IndexerError extends NftloxError {
 		this.data = init.data;
 	}
 
-	/** @deprecated Use `statusCode`. Kept for backwards compatibility. */
-	get status(): number {
-		return this.statusCode ?? 0;
-	}
-
-	/** @deprecated Use `responseBody`. Kept for backwards compatibility. */
-	get body(): string {
-		return this.responseBody ?? "";
-	}
-
 	static override isInstance(error: unknown): error is IndexerError {
 		return NftloxError.hasMarker(error, INDEXER_MARKER);
 	}

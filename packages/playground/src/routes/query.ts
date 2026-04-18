@@ -22,7 +22,7 @@ async function safeHandler(fn: () => Promise<Response>): Promise<Response> {
 		return await fn();
 	} catch (e) {
 		if (e instanceof IndexerError) {
-			return json({ error: e.body }, e.status);
+			return json({ error: e.responseBody ?? e.message }, e.statusCode ?? 500);
 		}
 		return json({ error: String(e) }, 500);
 	}
@@ -247,7 +247,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 				await indexer.getCollection(id);
 				return json({ collectionId: id, exists: true });
 			} catch (e) {
-				if (e instanceof IndexerError && e.status === 404) {
+				if (e instanceof IndexerError && e.statusCode === 404) {
 					return json({ collectionId: id, exists: false });
 				}
 				throw e;
@@ -268,7 +268,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 				const nft = await indexer.getNft(id);
 				return json({ seedId: id, exists: nft.nft_type === "seed" });
 			} catch (e) {
-				if (e instanceof IndexerError && e.status === 404) {
+				if (e instanceof IndexerError && e.statusCode === 404) {
 					return json({ seedId: id, exists: false });
 				}
 				throw e;

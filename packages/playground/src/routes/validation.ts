@@ -86,7 +86,7 @@ export const validationRoutes: Record<string, { POST: RouteHandler }> = {
 					await indexer.getCollection(collectionId);
 					colExists = true;
 				} catch (e) {
-					if (e instanceof IndexerError && e.status === 404) {
+					if (e instanceof IndexerError && e.statusCode === 404) {
 						colExists = false;
 					} else {
 						throw e;
