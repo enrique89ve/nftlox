@@ -2,8 +2,6 @@
 
 `nftlox-sdk` is a pure TypeScript library with one job: **produce unsigned Hive operations that satisfy the NFTLox protocol**. It has no HTTP server, no hidden key management, no wallet coupling. You sign what it builds; you broadcast from wherever you want.
 
-This page walks the mental model end-to-end. For the full type-level inventory, see the [SDK Reference](reference.md).
-
 ## Install
 
 ```bash
@@ -18,122 +16,25 @@ Runtime targets: browsers, Node ≥ 18, Bun ≥ 1.0, Deno. Every hashing primiti
 
 ## The shape of every builder
 
-Every `build*` function returns the same discriminated union:
-
-```typescript
-type KeychainResult<T> =
-	| {
-		success: true;
-		operations: ReadonlyArray<HiveOperation | HiveTransferOperation>;
-		keyType: "Active" | "Posting";
-		signer: string;
-		coSigners?: readonly CoSigner[];
-		payload: ProtocolPayload<T>;
-		generatedIds?: Record<string, string>;
-		warnings?: readonly string[];
-	  }
-	| { success: false; errors: readonly ValidationError[] };
-```
-
-The three rules that follow from this shape:
+Every `build*` function returns a `KeychainResult<T>` discriminated union. Three rules:
 
 1. **Narrow on `success` before touching anything else.** Errors are strongly typed (`{ field, message, code }`) and safe to surface directly in a form.
-2. **`operations` is ready to sign.** It is already in Hive's tuple format `["custom_json", { … }]` / `["transfer", { … }]`. Hand it straight to `hive-tx`, `@hiveio/wax`, or `@hiveio/dhive`.
-3. **`keyType` tells you which key.** `"Active"` only for `create_collection` and `buy`; `"Posting"` for everything else. Treat this value as authoritative — do not hardcode key types in your UI.
+2. **`operations` is ready to sign.** Already in Hive's tuple format `["custom_json", { … }]` / `["transfer", { … }]`. Hand it straight to `hive-tx`, `@hiveio/wax`, or `@hiveio/dhive`.
+3. **`keyType` tells you which key.** `"Active"` only for `create_collection` and `buy`; `"Posting"` for everything else.
 
-## Three flavors of flow
+For the full type definition see [SDK Reference — KeychainResult](reference.md#the-keychainresultt-contract).
 
-Every on-chain action in NFTLox collapses into one of three shapes. Recognizing which one you have changes how you broadcast.
+## Three signing flows
 
-### 1. Single-signer, posting auth (the common case)
+Every action falls into one of three shapes — recognizing which one changes how you broadcast:
 
-Mint a seed, transfer, list, unlist, approve, lend — 17 of 20 actions.
+| Flow | Triggered by | Signers |
+|---|---|---|
+| **Posting, single-signer** | 18 of 20 builders | You, posting key |
+| **Active + node multisig** | `buildBuy` | You (active) + node via `/api/multisig` |
+| **Active + dual-signer** | `buildCollection` | You (active) + node via `/api/multisig/collection` |
 
-```
-build → sign(posting) → broadcast
-```
-
-Example with `buildTransfer`:
-
-```typescript
-import { buildTransfer } from "nftlox-sdk";
-import hive from "hive-tx";
-
-const result = await buildTransfer({
-	nftId: "nft_abc…_7",
-	from: "alice",
-	to: "bob",
-});
-
-if (!result.success) {
-	// { field, message, code }[]
-	console.error(result.errors);
-	return;
-}
-
-const tx = new hive.Transaction();
-await tx.create(result.operations as [string, object][]);
-tx.sign(hive.PrivateKey.from(process.env.HIVE_POSTING_KEY!));
-await tx.broadcast();
-```
-
-### 2. Single-signer, active auth + node multisig (buy)
-
-```
-build → sign(active) → POST /api/multisig → merge signatures → broadcast
-```
-
-`buildBuy` already produces the ordered `[...transfers, custom_json]` sequence with the right memos. Get the exact payment split from `client.getPaymentInfo(nftId)` — don't compute it yourself.
-
-```typescript
-import { buildBuy, createIndexerClient, requestBuyMultisig } from "nftlox-sdk";
-
-const client = createIndexerClient(INDEXER);
-const payment = await client.getPaymentInfo("nft_…");
-
-const result = buildBuy({
-	buyer: "alice",
-	seller: payment.seller,
-	nftId: payment.nftId,
-	listingId: payment.listingId,
-	listTxId: payment.listTxId,
-	txId: payment.txId,
-	paymentSplit: {
-		sellerAmount: payment.sellerAmount,
-		royaltyAmount: payment.royaltyAmount,
-		royaltyRecipient: payment.royaltyRecipient,
-		feeAmount: payment.feeAmount,
-		feeAccount: payment.feeAccount,
-		totalPrice: payment.totalPrice,
-		currency: payment.currency as "HIVE" | "HBD",
-	},
-});
-// …wrap, sign active, co-sign via requestBuyMultisig, broadcast
-```
-
-See [Signing & Broadcasting](../broadcasting.md) for the merge-signatures step.
-
-### 3. Two-op, dual-signer (create_collection)
-
-```
-build → sign op[0] (active, creator) → POST /api/multisig/collection (node signs op[1]) → broadcast
-```
-
-`buildCollection` returns **two operations in one transaction**: a fee transfer from the creator, and a `custom_json` whose active-auth signer is the node account. Splitting them across transactions drops the payload — they must ship together.
-
-```typescript
-const result = await buildCollection(input, {
-	indexerBaseUrl: "https://api-nftlox.hivecreators.co",
-	requireMultisigReady: true,
-});
-
-if (result.success) {
-	console.log("Fee:", result.operations[0]);        // transfer
-	console.log("Payload:", result.operations[1]);    // custom_json co-signed by node
-	console.log("You will sign as:", result.signer);  // the creator, Active key
-	console.log("Node co-signs op[1]:", result.coSigners?.[0]?.account);
-}
-```
+For runnable code for each flow with hive-tx, dhive, wax, and Keychain, see [Signing & Broadcasting](../broadcasting.md).
 
 ## Pre-computing deterministic IDs
 
@@ -151,17 +52,16 @@ const seedId = await generateDeterministicSeedId(colId, "warrior");
 const nftId  = await generateDeterministicInstanceId(seedId, 1);
 ```
 
-This is the right pattern for:
-
+Use cases:
 - **Optimistic UI** — render the deep link before the block confirms.
 - **Cross-references** — an immutable_data field can reference an unlaunched collection.
-- **Airdrop scripts** — precompute every recipient's instance ID, then broadcast the batch.
+- **Airdrop scripts** — precompute every recipient's instance ID before you broadcast.
 
-`buildCollection`, `buildSeed`, and `buildList` expose the same values they compute via `result.generatedIds` — prefer that over re-hashing yourself.
+`buildCollection`, `buildSeed`, and `buildList` expose computed IDs via `result.generatedIds` — prefer that over re-hashing yourself.
 
-## Schemas in one call
+## Schema builder
 
-`createSchemaBuilder()` is a fluent typed builder for `CollectionSchema`. TypeScript enforces that field names are valid identifiers and field types are one of the 24 accepted primitives/arrays (`string`, `bool`, `uint8-64`, `int8-64`, `float`, `double`, and `[]` variants).
+`createSchemaBuilder()` is a fluent typed builder for `CollectionSchema`. TypeScript enforces that field names are valid identifiers and types are one of the 24 accepted primitives/arrays (`string`, `bool`, `uint8-64`, `int8-64`, `float`, `double`, and `[]` variants).
 
 ```typescript
 import { createSchemaBuilder } from "nftlox-sdk";
@@ -172,82 +72,48 @@ const schema = createSchemaBuilder()
 	.mutable("xp", "uint32")
 	.mutable("wins", "uint32")
 	.build();
-
-const result = await buildCollection({
-	name: "Heroes",
-	symbol: "HERO",
-	creator: "alice",
-	totalPotential: 1_000,
-	metadata: { description: "Playable hero cards", image: "https://…" },
-	rules: { transferable: true, burnable: true, royaltyPct: 5 },
-	schema,
-}, { indexerBaseUrl: INDEXER });
 ```
 
-Immutable fields can only be set at mint time; mutable fields can be updated with `buildSetData` or `buildSetDataFrom` (operator-delegated). Schemas are append-only via `buildExtendSchema`.
+Immutable fields are set at mint time and frozen forever. Mutable fields can be updated with `buildSetData` (owner) or `buildSetDataFrom` (approved operator). Schemas are append-only via `buildExtendSchema`.
 
 ## Reading indexed state
 
-`createIndexerClient(baseUrl)` produces a typed `IndexerClient`. All methods are thin, typed wrappers around unauthenticated `GET` endpoints — no keys required.
+`createIndexerClient(baseUrl)` produces a typed `IndexerClient`. All methods are thin wrappers around unauthenticated `GET` endpoints — no keys required.
 
 ```typescript
 import { createIndexerClient } from "nftlox-sdk";
 
 const client = createIndexerClient("https://api-nftlox.hivecreators.co");
 
-const status    = await client.getStatus();
-const stats     = await client.getStats();
-const userNfts  = await client.getUserNfts("alice", { status: "active", type: "seed" });
-const listings  = await client.getListings({ sort: "price_asc", currency: "HIVE" });
-const nft       = await client.getNft("nft_…");
-const proof     = await client.getNftProof("nft_…");   // SPV-compatible ownership proof
-const loan      = await client.getNftLoan("nft_…");
+const status   = await client.getStatus();
+const userNfts = await client.getUserNfts("alice", { status: "active", type: "seed" });
+const listings = await client.getListings({ sort: "price_asc", currency: "HIVE" });
+const nft      = await client.getNft("nft_…");
+const proof    = await client.getNftProof("nft_…");
 
-// Wait for a freshly broadcast tx to be indexed:
-const status = await client.getOperationStatus(broadcastTxId);
+// Wait for a broadcast tx to be indexed:
+const opStatus = await client.getOperationStatus(broadcastTxId);
 // { indexed, totalOperations, confirmed, invalid, orphaned, operations[] }
 ```
 
-Inject a custom `fetch` via `createIndexerClient(url, { fetch })` for tests, proxying, or custom retry logic.
+Inject a custom `fetch` via `createIndexerClient(url, { fetch })` for tests or proxying.
 
-## Broadcasting helpers for large flows
+## Bulk launch — `buildCollectionWithSeeds`
 
-### Bulk minting with `buildCollectionWithSeeds`
+One-shot planner for launching a collection and all its seeds. Returns `collectionStep` (dual-signer, active key) and `seedBatches[]` (posting-only, auto-sized below Hive's 8 KiB cap).
 
-`buildCollectionWithSeeds` is the one-shot planner for launching a collection **and** all of its seeds. It returns:
+See [Seed Ceremony](../use-cases/seed-ceremony.md) for the complete runnable script.
 
-- `collectionStep` — the 2-op dual-signer transaction (creator active key + node multisig).
-- `seedBatches[]` — N posting-only transactions, each sized by `calculateMaxOperationsPerTx` so the payload never exceeds 90% of Hive's 8 KiB cap.
-
-```typescript
-const plan = await buildCollectionWithSeeds({
-	name: "Heroes",
-	symbol: "HERO",
-	creator: "alice",
-	totalPotential: 0,
-	metadata: { description: "Heroes of Ragnarok", image: "https://…" },
-	rules: { transferable: true, burnable: true, royaltyPct: 5 },
-	seeds: [ /* array of 30 seeds */ ],
-}, { indexerBaseUrl: INDEXER });
-
-if (!plan.success) return console.error(plan.errors);
-
-// 1. Broadcast collectionStep (creator signs active, node co-signs)
-// 2. Broadcast seedBatches[0..N] (creator signs posting each time)
-```
-
-See [the Seed Ceremony](../use-cases/seed-ceremony.md) for a complete script.
-
-### Transaction sizing primitives
+## Transaction sizing primitives
 
 ```typescript
 import { splitIntoBatches, calculateMaxOperationsPerTx } from "nftlox-sdk";
 
-const perTx = calculateMaxOperationsPerTx(sampleCustomJson);
+const perTx   = calculateMaxOperationsPerTx(sampleCustomJson);
 const batches = splitIntoBatches(items, Math.min(perTx, MAX_OPERATIONS_PER_TX));
 ```
 
-Use these when you build your own orchestrators (mass airdrop, schema migrations, L2 bridges) and want the same sizing guarantees `buildCollectionWithSeeds` uses internally.
+Use these when building your own orchestrators (mass airdrops, schema migrations) to get the same sizing guarantees `buildCollectionWithSeeds` uses internally.
 
 ## Error handling
 
@@ -258,15 +124,14 @@ try {
 	const sig = await requestBuyMultisig(INDEXER, request);
 } catch (err) {
 	if (err instanceof MultisigError) {
-		// err.code: "NFT_LOCKED" | "RATE_LIMITED" | "INDEXER_LAGGED" | …
-		// err.retryAfterMs: number | undefined
+		// err.code, err.retryAfterMs
 	} else if (err instanceof IndexerError) {
 		// err.statusCode, err.responseBody, err.url
 	}
 }
 ```
 
-All SDK errors extend `NftloxError`, which carries `.url` and a stable `.name`. Validation errors never throw — they live inside `result.errors`.
+All SDK errors extend `NftloxError`. Validation errors never throw — they live inside `result.errors`.
 
 ## When to reach for the SDK vs the indexer API
 
@@ -278,13 +143,12 @@ All SDK errors extend `NftloxError`, which carries `.url` and a stable `.name`. 
 | Co-sign a `buy` | `client.multisig(…)` or `requestBuyMultisig` |
 | Co-sign a `create_collection` | `requestCreateCollectionMultisig` |
 | Ship a full collection with seeds | `buildCollectionWithSeeds` |
-| Stream indexed data | `client.get*` + your own poller |
 
-The indexer **never** has the user's keys. It exposes read endpoints and two narrow co-signing endpoints (`/api/multisig`, `/api/multisig/collection`). Everything else is client-side.
+The indexer never has the user's keys. It exposes read endpoints and two narrow co-signing endpoints. Everything else is client-side.
 
 ## Next
 
-- [Signing & Broadcasting](../broadcasting.md) — how to merge signatures for the multisig flows.
-- [Data Formats](../data-formats.md) — the on-chain shape of every payload.
-- [SDK Reference](reference.md) — full inventory of exports.
-- [Seed Ceremony](../use-cases/seed-ceremony.md) — runnable end-to-end flow.
+- [SDK Reference](reference.md) — full type-level inventory of every builder, helper, and constant.
+- [Signing & Broadcasting](../broadcasting.md) — runnable signing code for all three flows.
+- [Seed Ceremony](../use-cases/seed-ceremony.md) — end-to-end launch script.
+- [Data Formats](../data-formats.md) — on-chain payload shape for every action.

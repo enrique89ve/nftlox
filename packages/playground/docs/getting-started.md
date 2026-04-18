@@ -72,27 +72,13 @@ The SDK owns stage 1 only. It is intentionally **transport-agnostic**: it return
 
 ### The `KeychainResult<T>` contract
 
-Every `build*` function returns the same tagged union:
+Every `build*` function returns the same discriminated union. Three rules:
 
-```typescript
-type KeychainResult<T> =
-	| {
-		success: true;
-		operations: ReadonlyArray<HiveOperation | HiveTransferOperation>;
-		keyType: "Active" | "Posting";     // key the primary signer must use
-		signer: string;                     // the primary signer account
-		coSigners?: readonly CoSigner[];    // extra signers (node multisig)
-		payload: ProtocolPayload<T>;        // the custom_json body (for inspection)
-		generatedIds?: Record<string, string>;
-		warnings?: readonly string[];
-	  }
-	| {
-		success: false;
-		errors: readonly ValidationError[];
-	  };
-```
+1. **Check `success` first** — every other field is only valid on the happy path.
+2. **`operations` is ready to sign** — already in Hive's `["custom_json", {...}]` / `["transfer", {...}]` tuple format.
+3. **`keyType` is authoritative** — `"Active"` only for `create_collection` and `buy`; `"Posting"` for everything else.
 
-Check `success` first; every other field is only valid on the happy path. `operations` is already in Hive's `["custom_json", {...}]` or `["transfer", {...}]` tuple format — just hand it to your signer.
+For the full type definition see [SDK Reference](sdk/reference.md#the-keychainresultt-contract).
 
 ## Your first mutation — mint a seed
 

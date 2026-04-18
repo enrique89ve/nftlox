@@ -53,26 +53,7 @@ Only the keys you pass are touched. Pass a partial object; other mutable fields 
 
 ## Game server updates on behalf of players — `buildSetDataFrom`
 
-A game server should never ask players for their posting keys. Instead, the **collection creator** delegates "mutable data" rights to an operator account (typically the game's backend account) via `buildDataOperatorApprove`. The operator then signs `set_data_from` with its own posting key.
-
-### Step 1 — creator grants the operator
-
-Run this once, from the collection creator account.
-
-```typescript
-import { buildDataOperatorApprove } from "nftlox-sdk";
-
-const result = buildDataOperatorApprove({
-	creator: "alice",             // the collection creator
-	collectionId: "col_…",
-	operator: "ragnarok-server",  // the game server account
-	approved: true,
-});
-```
-
-Broadcast with the creator's posting key. After one block the approval is live.
-
-### Step 2 — operator updates any NFT in the collection
+A game server should never ask players for their posting keys. Instead, the **collection creator** grants an operator account (the game's backend) "mutable data" rights via `buildDataOperatorApprove`. The operator then signs `set_data_from` with its own posting key — no player key is ever exposed.
 
 ```typescript
 import { buildSetDataFrom } from "nftlox-sdk";
@@ -98,7 +79,7 @@ async function recordMatchResult(nftId: string, win: boolean) {
 }
 ```
 
-Revoke the approval any time by broadcasting the same `buildDataOperatorApprove` call with `approved: false`.
+For the one-time approval setup (`buildDataOperatorApprove`) and the full security boundary, see [Allowances & Operators](../guides/allowances.md#data-operators--builddataoperatorapprove).
 
 ## Race conditions & read-modify-write
 
