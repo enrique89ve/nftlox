@@ -4,30 +4,40 @@ import { createLogger } from "../utils/logger.ts";
 const log = createLogger("migration-runner");
 
 async function getSchemaPath(): Promise<string> {
-	let path = import.meta.dir + "/schema.sql";
-	if (!await Bun.file(path).exists()) {
-		path = "/app/packages/indexer/db/schema.sql";
-	}
-	if (!await Bun.file(path).exists()) {
-		throw new Error("schema.sql not found");
-	}
-	return path;
-}
-
-async function getMigrationsPath(): Promise<string> {
 	const candidates = [
-		import.meta.dir + "/migrations",
-		"/app/packages/indexer/db/migrations",
-		"/app/src/db/migrations",
+		"/app/packages/indexer/db/schema.sql",
+		"/app/src/db/schema.sql",
+		import.meta.dir + "/schema.sql",
 	];
 
 	for (const path of candidates) {
-		if (await Bun.file(path).exists()) {
+		const exists = await Bun.file(path).exists();
+		log.debug(`Checking schema path: ${path}`, { exists });
+		if (exists) {
 			return path;
 		}
 	}
 
-	throw new Error("migrations directory not found");
+	throw new Error(`schema.sql not found. Tried: ${candidates.join(", ")}`);
+}
+
+async function getMigrationsPath(): Promise<string> {
+	const candidates = [
+		"/app/packages/indexer/db/migrations",
+		"/app/src/db/migrations",
+		import.meta.dir + "/migrations",
+	];
+
+	for (const path of candidates) {
+		const exists = await Bun.file(path).exists();
+		log.debug(`Checking migrations path: ${path}`, { exists });
+		if (exists) {
+			log.info(`Using migrations directory: ${path}`);
+			return path;
+		}
+	}
+
+	throw new Error(`migrations directory not found. Tried: ${candidates.join(", ")}`);
 }
 
 async function computeChecksum(content: string): Promise<string> {
