@@ -265,17 +265,17 @@ describe("deterministic instance ID", () => {
 		expect(id.startsWith("nft_")).toBe(true);
 	});
 
-	test("contains instance number", async () => {
+	test("ends with instance number", async () => {
 		const id = await generateDeterministicInstanceId("seed_abc123", 42);
-		expect(id).toContain("_42_");
+		expect(id.endsWith("_42")).toBe(true);
 	});
 
-	test("hash suffix is 20 hex characters", async () => {
+	test("has three underscore-separated parts", async () => {
 		const id = await generateDeterministicInstanceId("seed_abc123", 1);
 		const parts = id.split("_");
-		const hashSuffix = parts[parts.length - 1]!;
-		expect(hashSuffix.length).toBe(20);
-		expect(hashSuffix).toMatch(/^[a-f0-9]{20}$/);
+		expect(parts.length).toBe(3);
+		expect(parts[0]).toBe("nft");
+		expect(parts[2]).toBe("1");
 	});
 });
 

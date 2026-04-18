@@ -10,11 +10,10 @@ import {
 } from "../src/dna";
 
 describe("Instance ID Generation", () => {
-	test("generateInstanceId returns format nft_[20hex]_[N]_[20hex]", async () => {
+	test("generateInstanceId returns format nft_[20hex]_[N]", async () => {
 		const seedId = await generateDeterministicSeedId("col_test", "dragon-fire");
 		const instanceId = await generateInstanceId(seedId, 1);
-		expect(instanceId.startsWith("nft_")).toBe(true);
-		expect(instanceId).toContain("_1_");
+		expect(instanceId).toMatch(/^nft_[a-f0-9]{20}_1$/);
 	});
 
 	test("generateInstanceId includes instance number", async () => {
@@ -23,9 +22,9 @@ describe("Instance ID Generation", () => {
 		const id5 = await generateInstanceId(seedId, 5);
 		const id99 = await generateInstanceId(seedId, 99);
 
-		expect(id1).toContain("_1_");
-		expect(id5).toContain("_5_");
-		expect(id99).toContain("_99_");
+		expect(id1.endsWith("_1")).toBe(true);
+		expect(id5.endsWith("_5")).toBe(true);
+		expect(id99.endsWith("_99")).toBe(true);
 	});
 
 	test("generateInstanceId is deterministic", async () => {
@@ -44,13 +43,12 @@ describe("Instance ID Generation", () => {
 		expect(ids.size).toBe(50);
 	});
 
-	test("hash suffix is 20 hex characters", async () => {
+	test("seed-derived hash is 20 hex characters", async () => {
 		const seedId = await generateDeterministicSeedId("col_test", "art-01");
 		const instanceId = await generateInstanceId(seedId, 1);
-		const lastUnderscore = instanceId.lastIndexOf("_");
-		const hashSuffix = instanceId.slice(lastUnderscore + 1);
-		expect(hashSuffix.length).toBe(20);
-		expect(hashSuffix).toMatch(/^[a-f0-9]{20}$/);
+		const parts = instanceId.split("_");
+		expect(parts.length).toBe(3);
+		expect(parts[1]).toMatch(/^[a-f0-9]{20}$/);
 	});
 });
 
