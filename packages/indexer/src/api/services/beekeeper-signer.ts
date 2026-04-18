@@ -115,12 +115,7 @@ async function doInit(
 			cachedPostingPublicKey = await wallet.importKey(postingKeyWif);
 		}
 
-		log.info("Beekeeper signer initialized", {
-			activePublicKey: cachedActivePublicKey,
-			postingPublicKey: cachedPostingPublicKey,
-			storageRoot,
-			isTemporary: wallet.isTemporary,
-		});
+		log.info("Beekeeper signer initialized successfully");
 
 		return {
 			activePublicKey: cachedActivePublicKey,
