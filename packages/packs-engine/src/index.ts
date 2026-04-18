@@ -26,6 +26,7 @@ export const generateDeterministicPackId = rng.generateDeterministicPackId;
 export const isPackId = rng.isPackId;
 export const deterministicRng = rng.deterministicRng;
 export const resolveDropTable = rng.resolveDropTable;
+export const buildPackOpenSeed = rng.buildPackOpenSeed;
 
 export const assertValidPackDefinition = packDefinition.assertValidPackDefinition;
 export const createPackDefinition = packDefinition.createPackDefinition;

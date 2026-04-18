@@ -1,18 +1,18 @@
-import type { BulkDistributeItem, Price } from "nftlox-sdk";
+import type { BulkDistributeItem } from "@nftlox/protocol";
 
 export interface PackDropEntry {
 	readonly seedId: string;
 	readonly weight: number;
 }
 
+// Minimal pack definition: only fields the engine consumes. Presentation
+// metadata (name-as-display, description, imageUrl, price) belongs in the
+// game backend — packs are external to the protocol.
 export interface PackDefinitionInput {
 	readonly collectionId: string;
 	readonly name: string;
-	readonly description?: string;
-	readonly imageUrl?: string;
 	readonly dropTable: readonly PackDropEntry[];
 	readonly itemsPerPack: number;
-	readonly price?: Price;
 	readonly maxSupply: number;
 }
 

@@ -1,8 +1,13 @@
 import { createHash } from "crypto";
 
+// Runtime: Node.js ≥18 and Bun. This module is NOT browser-safe because
+// `deterministicRng` uses Node's `crypto.createHash` for synchronous hashing
+// inside the drop-table selection loop. Pack opening is always server-side —
+// it needs blockchain-anchored context (txId, blockNum) that only a backend
+// with indexer access can provide — so this is a deliberate constraint.
+
 /**
- * Async SHA-256 hash using Web Crypto (crypto.subtle).
- * Universal across browsers, Node 18+, Bun, Deno.
+ * Async SHA-256 via Web Crypto. Used only by `generateDeterministicPackId`.
  */
 async function generateHash(input: string): Promise<string> {
 	const encoder = new TextEncoder();
@@ -34,14 +39,12 @@ export function isPackId(id: string): boolean {
 }
 
 /**
- * Deterministic RNG using SHA-256.
- * Returns a number in [0, 1) with 53-bit precision (JS safe integer range).
- * Same seed + index always produces the same result.
+ * Deterministic RNG using SHA-256. Returns a number in [0, 1) with 53-bit
+ * precision. Same seed + index always produces the same result.
  *
- * Uses the first 7 bytes of SHA-256 to construct a 53-bit integer,
- * then divides by 2^53 for uniform distribution in [0, 1).
- *
- * Sync version (crypto.createHash) because resolveDropTable() calls it in a tight loop.
+ * Uses the first 7 bytes of SHA-256 to construct a 53-bit integer, then
+ * divides by 2^53 for uniform distribution in [0, 1). Sync (Node
+ * `crypto.createHash`) because `resolveDropTable()` calls it in a tight loop.
  */
 export function deterministicRng(seed: string, index: number): number {
 	const input = `nftlox:rng:${seed}:${index}`;
@@ -49,6 +52,27 @@ export function deterministicRng(seed: string, index: number): number {
 	const hi = hash.readUInt32BE(0) >>> 11; // top 21 bits
 	const lo = hash.readUInt32BE(4);        // next 32 bits = 53 total
 	return (hi * 0x100000000 + lo) / 0x20000000000000; // / 2^53
+}
+
+/**
+ * Builds the RNG seed string used by pack opening. Exposed so games that
+ * implement their own selection logic can reuse the deterministic format
+ * without reimplementing the canonical layout.
+ *
+ * Fields are joined with `:` — safe today because none of the expected
+ * values (hex txIds, `seed_…`/`nft_…` ids, `pack_…` ids, Hive usernames,
+ * integers) contain a literal colon. Changing this format breaks
+ * reproducibility of any previously published pack opening.
+ */
+export function buildPackOpenSeed(params: {
+	readonly txId: string;
+	readonly operationId: string;
+	readonly blockNum: number;
+	readonly owner: string;
+	readonly packDefinitionId: string;
+	readonly packIndex: number;
+}): string {
+	return `${params.txId}:${params.operationId}:${params.blockNum}:${params.owner}:${params.packDefinitionId}:${params.packIndex}`;
 }
 
 /**

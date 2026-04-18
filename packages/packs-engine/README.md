@@ -15,6 +15,14 @@ Packs are **not** part of the native NFTLox protocol. This package lives outside
 
 Pack balances, payments, inventory, idempotency persistence, database state, and SPV verification of pack-opening claims. Those concerns belong in an external backend.
 
+## Two contracts every integrator must know
+
+1. **The signer must own every seed in the drop table.**
+	`bulk_distribute` is validated by the indexer with `seed.owner === op.signer` for each item (see `packages/indexer/src/processor/handlers/core/bulk-distribute.ts`). A single "pack vault" account (e.g. `game-pack-vault`) must hold all seeds referenced by the pack. If your game splits seed ownership across accounts, you need one pack signer per owning account.
+
+2. **Reservation is off-chain bookkeeping.**
+	The indexer stores a `reserved_supply` column on seeds, but **no protocol action mutates it**, and the public API does not expose it. `computeReservedSupply()`, `validateReservationDemand()`, and `plan.reservationConsumption` are advisory — they tell your backend how much supply to reserve internally so two players cannot both drain the same seed. Persist that state in your own database, decrement on successful `bulk_distribute` broadcasts, and release on failure.
+
 ## Install
 
 ```bash
@@ -35,7 +43,7 @@ import {
 	buildPackOpenPlan,
 	computeReservedSupply,
 } from "nftlox-packs-engine";
-import { buildBulkDistribute } from "nftlox-sdk";
+import { buildBulkDistribute, snapshotFromIndexerSeed } from "nftlox-sdk";
 
 // Define a pack with a drop table
 const pack = await createPackDefinition({
@@ -53,14 +61,21 @@ const pack = await createPackDefinition({
 // Check how much seed supply needs reserving
 const demand = computeReservedSupply(pack);
 
+// Fetch each seed from the indexer API and adapt it to the engine's snapshot
+// shape. `reserved` is your backend's own counter — pass 0 if you don't track
+// reservations yet.
+const seedSnapshots = await Promise.all(
+	["seed_common", "seed_rare", "seed_legendary"].map(async (id) => {
+		const res = await fetch(`https://api-nftlox.hivecreators.co/api/nfts/${id}`);
+		const nft = await res.json();
+		return snapshotFromIndexerSeed(nft, myBackend.getReservedFor(id));
+	}),
+);
+
 // Open a pack — deterministic selection from a blockchain-derived seed
 const plan = buildPackOpenPlan({
 	definition: pack,
-	seedSnapshots: [
-		{ seedId: "seed_common", seedTxId: "a".repeat(40), maxSupply: 500, distributed: 20, reserved: 100 },
-		{ seedId: "seed_rare", seedTxId: "b".repeat(40), maxSupply: 200, distributed: 5, reserved: 40 },
-		{ seedId: "seed_legendary", seedTxId: "c".repeat(40), maxSupply: 50, distributed: 0, reserved: 10 },
-	],
+	seedSnapshots,
 	context: {
 		txId: "d".repeat(40),
 		operationId: "pack-open-1",
@@ -93,6 +108,7 @@ const distribution = await buildBulkDistribute({
 | `validateReservationDemand()` | Check if supply meets reservation demand |
 | `buildPackOpenPlan()` | Resolve a deterministic pack opening |
 | `selectPackSeedIds()` | Low-level seed selection from drop table |
+| `buildPackOpenSeed()` | Canonical RNG seed string — useful if you write a custom resolver |
 | `generateDeterministicPackId()` | Deterministic pack ID generation |
 | `isPackId()` | ID type check |
 | `deterministicRng()` | Seeded RNG for reproducible openings |
@@ -109,7 +125,11 @@ const distribution = await buildBulkDistribute({
 
 ## Compatibility
 
-The package supports **Node.js and Bun**. Node.js uses the compiled ESM entry at `dist/index.js`; Bun uses the `bun` export condition and can execute `src/index.ts` directly.
+The package supports **Node.js ≥18 and Bun** — server-side only. `deterministicRng()` uses Node's synchronous `crypto.createHash` for speed inside the selection loop, so the module is not browser-safe. Pack opening is always a backend concern anyway because it needs blockchain-anchored context (`txId`, `blockNum`) that only a server with indexer access can provide.
+
+## Pack metadata
+
+The engine deliberately does **not** model `description`, `imageUrl`, `price`, or other presentation data. Packs are external to the protocol — your backend owns its own pack catalog, UI copy, and pricing. Pass only what the engine needs: `collectionId`, `name`, `dropTable`, `itemsPerPack`, `maxSupply`.
 
 ## Documentation
 

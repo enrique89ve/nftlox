@@ -267,9 +267,14 @@ for (const batch of collectionPlan.seedBatches) {
 
 Packs are an external game mechanic. They are not a native NFTLox protocol action. The packs engine is a deterministic planner that turns a pack definition and current seed supply snapshots into `bulk_distribute` items.
 
+Two rules the engine itself does not enforce:
+
+- **Signer = seed owner.** The indexer rejects `bulk_distribute` unless `op.signer === seed.owner` for every item. Every seed in the drop table must be owned by the account that signs the distribution (your pack vault).
+- **Reservation is off-chain.** No protocol action mutates the indexer's `reserved_supply` column, and the public API does not expose it. `computeReservedSupply()` and `plan.reservationConsumption` are advisory numbers your game backend must persist and decrement in its own database.
+
 | Part | Meaning |
 |---|---|
-| `PackDefinition` | Collection ID, pack name, drop table, `itemsPerPack`, price, and `maxSupply` |
+| `PackDefinition` | Collection ID, pack name, drop table, `itemsPerPack`, and `maxSupply`. Presentation metadata (description, image, price) lives in the game's backend, not in the engine. |
 | Drop table | Weighted list of `seedId` values that can appear in a pack |
 | Reserved supply | Per-seed amount that should be held back for pack openings |
 | Seed snapshot | Current `seedId`, `seedTxId`, `maxSupply`, `distributed`, and `reserved` state |
@@ -283,7 +288,7 @@ import {
 	createPackDefinition,
 	validateReservationDemand,
 } from "nftlox-packs-engine";
-import { buildBulkDistribute } from "nftlox-sdk";
+import { buildBulkDistribute, snapshotFromIndexerSeed } from "nftlox-sdk";
 
 const requireSeedId = (artId: string): string => {
 	const seedId = collectionPlan.generatedIds[artId];
@@ -313,21 +318,18 @@ const requireSeedTxId = (seedId: string): string => {
 	return txId;
 };
 
+// Pull live supply from the indexer and adapt each response to the engine's
+// snapshot shape. The `reserved` argument is what YOUR backend has reserved
+// internally — there is no on-chain reservation action.
+const fetchSeed = async (seedId: string) => {
+	const res = await fetch(`${indexerBaseUrl}/nfts/${seedId}`);
+	if (!res.ok) throw new Error(`Seed ${seedId} not found on indexer`);
+	return res.json() as Promise<{ id: string; max_supply: number; distributed: number; tx_id: string }>;
+};
+
 const seedSnapshots = [
-	{
-		seedId: warriorSeedId,
-		seedTxId: requireSeedTxId(warriorSeedId),
-		maxSupply: 500,
-		distributed: 0,
-		reserved: reservedSupply[warriorSeedId] ?? 0,
-	},
-	{
-		seedId: mageSeedId,
-		seedTxId: requireSeedTxId(mageSeedId),
-		maxSupply: 250,
-		distributed: 0,
-		reserved: reservedSupply[mageSeedId] ?? 0,
-	},
+	snapshotFromIndexerSeed(await fetchSeed(warriorSeedId), gameBackend.reservedFor(warriorSeedId)),
+	snapshotFromIndexerSeed(await fetchSeed(mageSeedId), gameBackend.reservedFor(mageSeedId)),
 ];
 
 validateReservationDemand(pack, seedSnapshots);

@@ -1,6 +1,6 @@
-import type { BulkDistributeItem } from "nftlox-sdk";
+import type { BulkDistributeItem } from "@nftlox/protocol";
 import { MAX_PACK_OPEN_BATCH } from "./constants";
-import { resolveDropTable } from "./rng";
+import { buildPackOpenSeed, resolveDropTable } from "./rng";
 import type {
 	PackDefinition,
 	PackOpenContext,
@@ -22,10 +22,6 @@ function getReservationMap(
 	return new Map(Object.entries(reservationAvailabilityBySeed));
 }
 
-function createRngSeed(definitionId: string, context: PackOpenContext, packIndex: number): string {
-	return `${context.txId}:${context.operationId}:${context.blockNum}:${context.owner}:${definitionId}:${packIndex}`;
-}
-
 export function selectPackSeedIds(
 	definition: PackDefinition,
 	context: Omit<PackOpenContext, "quantity">,
@@ -35,7 +31,14 @@ export function selectPackSeedIds(
 	return resolveDropTable(
 		[...definition.dropTable],
 		definition.itemsPerPack,
-		createRngSeed(definition.id, { ...context, quantity: 1 }, packIndex),
+		buildPackOpenSeed({
+			txId: context.txId,
+			operationId: context.operationId,
+			blockNum: context.blockNum,
+			owner: context.owner,
+			packDefinitionId: definition.id,
+			packIndex,
+		}),
 	);
 }
 

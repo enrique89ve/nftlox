@@ -1,6 +1,6 @@
 {
 	"name": "nftlox-packs-engine",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Pure packs logic extension for NFTLox",
 	"license": "MIT",
 	"author": "NFTLox",
@@ -34,7 +34,7 @@
 		}
 	},
 	"scripts": {
-		"build": "bun build ./src/index.ts --target=node --format=esm --outdir=dist --external nftlox-sdk && bunx tsc -p tsconfig.build.json",
+		"build": "bun build ./src/index.ts --target=node --format=esm --outdir=dist --external @nftlox/protocol && bunx tsc -p tsconfig.build.json",
 		"prepack": "bun run build",
 		"test": "bun test",
 		"typecheck": "bunx tsc --noEmit"
@@ -47,7 +47,7 @@
 		"node": ">=18.0.0"
 	},
 	"dependencies": {
-		"nftlox-sdk": "workspace:*"
+		"@nftlox/protocol": "workspace:*"
 	},
 	"publishConfig": {
 		"access": "public"
