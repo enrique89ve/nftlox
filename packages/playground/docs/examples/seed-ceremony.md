@@ -15,7 +15,7 @@ Define your card database. Each card will become one seed on-chain.
 
 ```typescript
 interface CardDefinition {
-	readonly artId: string;       // Unique within collection, max 14 chars
+	readonly artId: string;       // Unique within collection, max 32 chars
 	readonly name: string;
 	readonly imageUrl: string;
 	readonly maxSupply: number;   // Max instances that can be distributed
@@ -122,7 +122,7 @@ import {
 	type DeterministicCollectionInput,
 	type DeterministicMintInput,
 	type CollectionSchema,
-} from "nftlox-sdk";
+} from "@nftlox/sdk";
 import hive from "hive-tx";
 
 // ---------------------------------------------------------------
@@ -442,7 +442,7 @@ If you prefer not to manage Hive signing directly, you can use the playground's 
 
 ```typescript
 // Build seeds via the playground API
-const response = await fetch("https://nftloxtest.hivecreators.co/api/build/seeds", {
+const response = await fetch("https://api-nftlox.hivecreators.co/api/build/seeds", {
 	method: "POST",
 	headers: { "Content-Type": "application/json" },
 	body: JSON.stringify({

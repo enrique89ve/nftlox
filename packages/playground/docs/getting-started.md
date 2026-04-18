@@ -27,7 +27,7 @@ Response:
 
 ```json
 {
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -103,7 +103,7 @@ The build API constructs unsigned Hive `custom_json` operations. It validates yo
 ### Example: Create a collection
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/collection \
 	-H "Content-Type: application/json" \
 	-d '{
 		"creator": "your-hive-user",
@@ -127,14 +127,14 @@ Response:
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"hashVersion": "v1",
 	"collectionId": "deterministic-id-here",
 	"generatedIds": { "collectionId": "..." },
 	"operation": ["custom_json", { ... }],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.5.3",
+		"version": "0.6.0",
 		"action": "create_collection",
 		"data": { ... }
 	}
@@ -196,7 +196,7 @@ async function signAndBroadcast(
 }
 
 // Usage with a build API response:
-const buildResponse = await fetch("https://nftloxtest.hivecreators.co/api/build/transfer", {
+const buildResponse = await fetch("https://api-nftlox.hivecreators.co/api/build/transfer", {
 	method: "POST",
 	headers: { "Content-Type": "application/json" },
 	body: JSON.stringify({

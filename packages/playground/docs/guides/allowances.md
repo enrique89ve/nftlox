@@ -45,7 +45,7 @@ Grant or revoke a spender's permission to transfer a single NFT on your behalf.
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"operation": ["custom_json", { "..." }],
 	"keyType": "Posting"
 }
@@ -54,7 +54,7 @@ Grant or revoke a spender's permission to transfer a single NFT on your behalf.
 ### SDK
 
 ```typescript
-import { buildNftApprove } from "nftlox-sdk";
+import { buildNftApprove } from "@nftlox/sdk";
 
 const result = buildNftApprove({
 	owner: "alice",
@@ -97,7 +97,7 @@ Grant or revoke a spender's permission to transfer **all** NFTs you own within a
 ### SDK
 
 ```typescript
-import { buildNftApproveAll } from "nftlox-sdk";
+import { buildNftApproveAll } from "@nftlox/sdk";
 
 const result = buildNftApproveAll({
 	owner: "alice",
@@ -142,7 +142,7 @@ Optional provenance fields: `seedId`, `seedTxId`.
 ### SDK
 
 ```typescript
-import { buildNftTransferFrom } from "nftlox-sdk";
+import { buildNftTransferFrom } from "@nftlox/sdk";
 
 const result = buildNftTransferFrom({
 	operator: "marketplace-bot",
@@ -181,7 +181,7 @@ Authorize a Hive account to update mutable data on NFTs within your collection. 
 ### SDK
 
 ```typescript
-import { buildDataOperatorApprove } from "nftlox-sdk";
+import { buildDataOperatorApprove } from "@nftlox/sdk";
 
 const result = buildDataOperatorApprove({
 	creator: "ragnarok-game",
@@ -227,7 +227,7 @@ Optional provenance fields: `seedId`, `seedTxId`.
 ### SDK
 
 ```typescript
-import { createSetDataFromOperation, type SetDataFromInput } from "nftlox-sdk";
+import { createSetDataFromOperation, type SetDataFromInput } from "@nftlox/sdk";
 
 const input: SetDataFromInput = {
 	nftId: "nft_a1b2c3d4_1_ef56",

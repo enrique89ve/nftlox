@@ -3,7 +3,7 @@
 This document consolidates all NFTLox API endpoints into a single reference. Endpoints are organized into two categories:
 
 - **Query API (GET)** -- Read-only endpoints served by the indexer for querying protocol state. Base URL: `https://api-nftlox.hivecreators.co/api/`
-- **Build API (POST)** -- Write endpoints that construct unsigned Hive `custom_json` operations. The client is responsible for signing and broadcasting. Base URL: `https://nftloxtest.hivecreators.co` (playground server).
+- **Build API (POST)** -- Write endpoints that construct unsigned Hive `custom_json` operations. The client is responsible for signing and broadcasting. Base URL: `https://api-nftlox.hivecreators.co` (playground server).
 
 All endpoints return JSON. The Query API enforces a rate limit of **1000 requests per minute per IP** with standard rate limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`). While the indexer is syncing, data endpoints return `503 Service Unavailable` with `Retry-After: 30`. Only `/api/health` and `/api/status` are available during sync.
 
@@ -27,7 +27,7 @@ Sync status and node information.
 
 ```json
 {
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -826,7 +826,7 @@ The API sets `Cache-Control` headers on all `GET` responses:
 
 The Build API constructs unsigned Hive `custom_json` operations for the NFTLox protocol. It does **not** broadcast transactions -- the client is responsible for signing the returned operations with the appropriate Hive key and broadcasting them to the blockchain.
 
-**Protocol version:** `0.5.3`
+**Protocol version:** `0.6.0`
 
 ---
 
@@ -837,9 +837,9 @@ All Build API endpoints return JSON with the following standard shape:
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"operation": ["custom_json", { ... }],
-	"payload": { "protocol": "nftlox_testnet", "version": "0.5.3", "action": "...", "data": { ... } },
+	"payload": { "protocol": "nftlox_testnet", "version": "0.6.0", "action": "...", "data": { ... } },
 	"keyType": "Posting"
 }
 ```
@@ -847,7 +847,7 @@ All Build API endpoints return JSON with the following standard shape:
 | Field             | Type       | Description                                                                 |
 |-------------------|------------|-----------------------------------------------------------------------------|
 | `success`         | `boolean`  | Whether the build succeeded.                                                |
-| `protocolVersion` | `string`   | Protocol version used (`0.5.3`).                                            |
+| `protocolVersion` | `string`   | Protocol version used (`0.6.0`).                                            |
 | `hashVersion`     | `string`   | Hash version (present on collection/seed endpoints): `v1`.                  |
 | `operation`       | `array`    | Hive operation tuple `["custom_json", {...}]`, ready to sign.               |
 | `payload`         | `object`   | The decoded protocol payload embedded inside the operation's `json` field.  |
@@ -929,7 +929,7 @@ Schema field types: `string`, `bool`, `uint8`, `uint16`, `uint32`, `uint64`, `in
 **curl example:**
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/collection \
 	-H "Content-Type: application/json" \
 	-d '{
 		"name": "Dragon Cards",
@@ -973,7 +973,7 @@ Archive a collection. Prevents new seed mints; existing NFTs remain fully functi
 **curl example:**
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/archive-collection \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/archive-collection \
 	-H "Content-Type: application/json" \
 	-d '{
 		"creator": "alice",
@@ -1016,7 +1016,7 @@ Mint seed NFTs for a collection. Returns operations batched into groups of up to
 **curl example:**
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/seeds \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/seeds \
 	-H "Content-Type: application/json" \
 	-d '{
 		"collectionId": "col_abc123",
@@ -1063,7 +1063,7 @@ Distribute instances from seeds to a recipient. Creates NFT instances from exist
 **curl example:**
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/bulk-distribute \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/bulk-distribute \
 	-H "Content-Type: application/json" \
 	-d '{
 		"signer": "alice",
@@ -1212,7 +1212,7 @@ Preview deterministic IDs without creating any operation. Useful for pre-computi
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"hashVersion": "v1",
 	"collectionId": "col_...",
 	"originDna": "...",
@@ -1252,7 +1252,7 @@ List an NFT for sale on the marketplace.
 **curl example:**
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/list \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/list \
 	-H "Content-Type: application/json" \
 	-d '{
 		"nftId": "nft_abc123",
@@ -1308,7 +1308,7 @@ Buy a listed NFT. Returns multiple Hive operations: a `custom_json` payload plus
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"hiveOperations": [
 		["transfer", { "from": "buyer", "to": "seller", "amount": "9.900 HIVE", "memo": "NFTLox BUY:nft_abc" }],
 		["transfer", { "from": "buyer", "to": "nftlox", "amount": "0.100 HIVE", "memo": "NFTLox FEE:nft_abc" }],

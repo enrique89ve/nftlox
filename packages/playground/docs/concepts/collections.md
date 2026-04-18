@@ -1,4 +1,4 @@
-# Collection Lifecycle
+# Collections
 
 A collection is the top-level container in NFTLox. Every NFT (seed or instance) belongs to exactly one collection. This page covers the full lifecycle: creation, schema definition, schema extension, and archival.
 
@@ -44,28 +44,27 @@ Each subsequent `extend_schema` call increments the version (see [Extending a Sc
 ### SDK Builder
 
 ```typescript
-import { buildCollection } from "nftlox-sdk";
+import { buildCollection } from "@nftlox/sdk";
 
 const result = await buildCollection({
-	name: "Ragnarok Cards",
-	symbol: "RGNRK",
-	creator: "ragnarok-admin",
-	totalPotential: 2134,
+	name: "My Collection",
+	symbol: "MYCOL",
+	creator: "game-admin",
+	totalPotential: 1000,
 	metadata: {
-		description: "Norse Mythos Card Game",
+		description: "Collection for game assets",
 		image: "https://example.com/collection.webp",
 	},
 	rules: {
 		transferable: true,
 		burnable: true,
 		royaltyPct: 5,
-		royaltyRecipient: "ragnarok-treasury",
+		royaltyRecipient: "game-treasury",
 	},
 	schema: {
 		immutable: [
-			{ name: "card_id", type: "uint32" },
 			{ name: "rarity", type: "string" },
-			{ name: "base_attack", type: "uint16" },
+			{ name: "base_power", type: "uint16" },
 		],
 		mutable: [
 			{ name: "level", type: "uint8" },
@@ -89,15 +88,15 @@ The builder returns warnings (not errors) for edge cases:
 ### Build API
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/collection \
 	-H "Content-Type: application/json" \
 	-d '{
-		"name": "Ragnarok Cards",
-		"symbol": "RGNRK",
-		"creator": "ragnarok-admin",
-		"totalPotential": 2134,
+		"name": "My Collection",
+		"symbol": "MYCOL",
+		"creator": "game-admin",
+		"totalPotential": 1000,
 		"metadata": {
-			"description": "Norse Mythos Card Game",
+			"description": "Collection for game assets",
 			"image": "https://example.com/collection.webp"
 		},
 		"rules": {
@@ -113,7 +112,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"collectionId": "a1b2c3d4...",
 	"generatedIds": {
 		"collectionId": "a1b2c3d4...",
@@ -122,7 +121,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/collection \
 	"operation": ["custom_json", { ... }],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.5.3",
+		"version": "0.6.0",
 		"action": "create_collection",
 		"data": { ... }
 	}
@@ -170,26 +169,9 @@ A schema defines **typed fields** for NFT data within the collection. It has two
 | `immutable` | Locked at mint time, never changes | Mint | -- (read-only) |
 | `mutable` | Can be updated after mint | Mint (optional) | Creator or approved data operators |
 
-### Supported Field Types
+### Field Types and Constraints
 
-**Scalar types:**
-
-| Type | Range |
-|---|---|
-| `string` | Any UTF-8 string |
-| `bool` | `true` / `false` |
-| `uint8` | 0 -- 255 |
-| `uint16` | 0 -- 65,535 |
-| `uint32` | 0 -- 4,294,967,295 |
-| `uint64` | 0 -- `Number.MAX_SAFE_INTEGER` |
-| `int8` | -128 -- 127 |
-| `int16` | -32,768 -- 32,767 |
-| `int32` | -2,147,483,648 -- 2,147,483,647 |
-| `int64` | `Number.MIN_SAFE_INTEGER` -- `Number.MAX_SAFE_INTEGER` |
-| `float` | Finite IEEE 754 float |
-| `double` | Finite IEEE 754 double |
-
-**Array types:** Append `[]` to any scalar type (e.g. `string[]`, `uint32[]`, `bool[]`).
+For complete list of supported field types (scalar and array), validation rules, and constraints, see [Data Formats Reference](../data-formats.md#schema-definition).
 
 ### Field Name Rules
 
@@ -202,13 +184,11 @@ A schema defines **typed fields** for NFT data within the collection. It has two
 ### Schema Builder (Fluent API)
 
 ```typescript
-import { createSchemaBuilder } from "nftlox-sdk";
+import { createSchemaBuilder } from "@nftlox/sdk";
 
 const schema = createSchemaBuilder()
-	.immutable("card_id", "uint32")
 	.immutable("rarity", "string")
-	.immutable("base_attack", "uint16")
-	.immutable("base_health", "uint16")
+	.immutable("base_power", "uint16")
 	.immutable("keywords", "string[]")
 	.mutable("level", "uint8")
 	.mutable("xp", "uint32")
@@ -228,7 +208,7 @@ The SDK includes ready-to-use templates for common use cases:
 | `MUSIC_SCHEMA` | artist, album, track_number, duration_seconds, genre | play_count, license_url | Music NFTs |
 
 ```typescript
-import { GAMING_SCHEMA } from "nftlox-sdk";
+import { GAMING_SCHEMA } from "@nftlox/sdk";
 
 const result = await buildCollection({
 	name: "My Game Items",
@@ -247,8 +227,6 @@ const result = await buildCollection({
 	schema: GAMING_SCHEMA,
 });
 ```
-
-Ragnarok-specific templates are also available: `RAGNAROK_MINION_SCHEMA`, `RAGNAROK_SPELL_SCHEMA`, `RAGNAROK_WEAPON_SCHEMA`, `RAGNAROK_PET_SCHEMA`, `RAGNAROK_ARMOR_SCHEMA`, `RAGNAROK_HERO_SCHEMA`.
 
 ---
 
@@ -281,42 +259,33 @@ This hash chain provides a tamper-evident audit trail of all schema changes.
 ### SDK Usage
 
 ```typescript
-import { createExtendSchemaPayload, createExtendSchemaOperation } from "nftlox-sdk";
+import { buildExtendSchema } from "@nftlox/sdk";
 
-const payload = createExtendSchemaPayload({
+const result = buildExtendSchema({
+	creator: "game-admin",
 	collectionId: "a1b2c3d4...",
-	newImmutableFields: [
-		{ name: "element", type: "string" },
-	],
 	newMutableFields: [
-		{ name: "losses", type: "uint32" },
-		{ name: "equipped", type: "string[]" },
+		{ name: "enchantments", type: "string[]" },
+		{ name: "durability", type: "uint16" },
 	],
 });
 
-// Wrap into a Hive custom_json operation (posting key)
-const operation = createExtendSchemaOperation(
-	{
-		collectionId: "a1b2c3d4...",
-		newMutableFields: [
-			{ name: "losses", type: "uint32" },
-		],
-	},
-	"ragnarok-admin",
-);
+if (result.success) {
+	console.log(result.operation); // ready-to-sign (posting key)
+	console.log(result.payload);
+}
 ```
 
 ### Build API
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/extend-schema \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/extend-schema \
 	-H "Content-Type: application/json" \
 	-d '{
-		"creator": "ragnarok-admin",
+		"creator": "game-admin",
 		"collectionId": "a1b2c3d4...",
 		"newMutableFields": [
-			{ "name": "losses", "type": "uint32" },
-			{ "name": "equipped", "type": "string[]" }
+			{ "name": "durability", "type": "uint16" }
 		]
 	}'
 ```
@@ -326,17 +295,16 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/extend-schema \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"operation": ["custom_json", { ... }],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.5.3",
+		"version": "0.6.0",
 		"action": "extend_schema",
 		"data": {
 			"collectionId": "a1b2c3d4...",
 			"newMutableFields": [
-				{ "name": "losses", "type": "uint32" },
-				{ "name": "equipped", "type": "string[]" }
+				{ "name": "durability", "type": "uint16" }
 			]
 		}
 	},
@@ -388,10 +356,10 @@ All of the following must be true:
 ### SDK Usage
 
 ```typescript
-import { buildArchiveCollection } from "nftlox-sdk";
+import { buildArchiveCollection } from "@nftlox/sdk";
 
 const result = buildArchiveCollection({
-	creator: "ragnarok-admin",
+	creator: "game-admin",
 	collectionId: "a1b2c3d4...",
 });
 
@@ -404,10 +372,10 @@ if (result.success) {
 ### Build API
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/archive-collection \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/archive-collection \
 	-H "Content-Type: application/json" \
 	-d '{
-		"creator": "ragnarok-admin",
+		"creator": "game-admin",
 		"collectionId": "a1b2c3d4..."
 	}'
 ```
@@ -417,11 +385,11 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/archive-collection \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"operation": ["custom_json", { ... }],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.5.3",
+		"version": "0.6.0",
 		"action": "archive_collection",
 		"data": {
 			"collectionId": "a1b2c3d4..."
@@ -458,7 +426,7 @@ Collection (totalPotential: 3)
 
 ## 7. Ownership Provenance
 
-For the full creator/owner cascade, see [Ownership Model](ownership-model.md).
+For the full creator/owner cascade, see [Ownership Model](ownership.md).
 
 NFTs include an `owner_operation_id` field plus a `previous_owner` field. Together they describe the current ownership edge without storing a full ownership history:
 
@@ -495,7 +463,7 @@ List collections with optional filtering.
 | `offset` | number | 0 | Pagination offset |
 
 ```bash
-curl "https://api-nftlox.hivecreators.co/api/collections?creator=ragnarok-admin&limit=10"
+curl "https://api-nftlox.hivecreators.co/api/collections?creator=game-admin&limit=10"
 ```
 
 ### GET /api/collections/:id
@@ -571,13 +539,13 @@ Most build endpoints return an unsigned Hive `custom_json` operation. Collection
 Utility endpoint to preview the deterministic collection ID, origin DNA, and seed IDs before creating anything on-chain.
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/preview-ids \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/preview-ids \
 	-H "Content-Type: application/json" \
 	-d '{
-		"creator": "ragnarok-admin",
-		"name": "Ragnarok Cards",
-		"symbol": "RGNRK",
-		"artIds": ["fire-sword", "ice-shield"]
+		"creator": "game-admin",
+		"name": "My Collection",
+		"symbol": "MYCOL",
+		"artIds": ["item-1", "item-2"]
 	}'
 ```
 
@@ -586,12 +554,12 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/preview-ids \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"collectionId": "a1b2c3d4...",
 	"originDna": "e5f6a7b8...",
 	"seedIds": {
-		"fire-sword": "seed-id-1...",
-		"ice-shield": "seed-id-2..."
+		"item-1": "seed-id-1...",
+		"item-2": "seed-id-2..."
 	}
 }
 ```

@@ -49,7 +49,7 @@ For most use cases, use the **builders** -- they validate input and generate det
 ## Create a Collection
 
 ```typescript
-import { buildCollection } from "nftlox-sdk";
+import { buildCollection } from "@nftlox/sdk";
 
 const result = buildCollection({
 	name: "Ragnarok Cards",
@@ -100,7 +100,7 @@ console.log("Collection ID:", result.generatedId);
 ### Single seed
 
 ```typescript
-import { buildSeed } from "nftlox-sdk";
+import { buildSeed } from "@nftlox/sdk";
 
 const result = buildSeed({
 	artId: "odin-001",
@@ -120,7 +120,7 @@ const result = buildSeed({
 ### With immutableData (typed schema)
 
 ```typescript
-import { createDeterministicMintPayload } from "nftlox-sdk";
+import { createDeterministicMintPayload } from "@nftlox/sdk";
 
 const payload = createDeterministicMintPayload({
 	artId: "odin-001",
@@ -147,7 +147,7 @@ const payload = createDeterministicMintPayload({
 ### Batch seeds
 
 ```typescript
-import { buildSeedBatch } from "nftlox-sdk";
+import { buildSeedBatch } from "@nftlox/sdk";
 
 const result = buildSeedBatch({
 	collectionId: "col_abc123",
@@ -192,7 +192,7 @@ if (result.success) {
 ## Bulk Distribute (Create Instances)
 
 ```typescript
-import { buildBulkDistribute } from "nftlox-sdk";
+import { buildBulkDistribute } from "@nftlox/sdk";
 
 const result = buildBulkDistribute({
 	signer: "ragnarok-admin",
@@ -219,7 +219,7 @@ const result = buildBulkDistribute({
 ### As collection creator
 
 ```typescript
-import { buildSetData } from "nftlox-sdk";
+import { buildSetData } from "@nftlox/sdk";
 
 const result = buildSetData({
 	nftId: "nft_abc123_1_xyz",
@@ -238,7 +238,7 @@ const result = buildSetData({
 If your game server is a different account than the collection creator:
 
 ```typescript
-import { buildDataOperatorApprove, buildSetDataFrom } from "nftlox-sdk";
+import { buildDataOperatorApprove, buildSetDataFrom } from "@nftlox/sdk";
 
 // 1. Creator approves game server as operator (one-time)
 const approveResult = buildDataOperatorApprove({
@@ -265,7 +265,7 @@ const updateResult = buildSetDataFrom({
 ## Transfer, Burn, List
 
 ```typescript
-import { buildTransfer, buildBurn, buildList, buildUnlist } from "nftlox-sdk";
+import { buildTransfer, buildBurn, buildList, buildUnlist } from "@nftlox/sdk";
 
 // Transfer
 const transfer = buildTransfer({
@@ -299,7 +299,7 @@ const unlist = buildUnlist({
 ## Lending
 
 ```typescript
-import { buildNftLend, buildNftReturn } from "nftlox-sdk";
+import { buildNftLend, buildNftReturn } from "@nftlox/sdk";
 
 // Lend to a player
 const lend = buildNftLend({
@@ -324,7 +324,7 @@ import {
 	buildNftApprove,
 	buildNftApproveAll,
 	buildNftTransferFrom,
-} from "nftlox-sdk";
+} from "@nftlox/sdk";
 
 // Approve a spender for one NFT
 const approve = buildNftApprove({
@@ -364,7 +364,7 @@ import {
 	validateArtId,
 	isSeedId,
 	isInstanceId,
-} from "nftlox-sdk";
+} from "@nftlox/sdk";
 
 // Deterministic IDs (same input = same output, always)
 const collectionId = generateDeterministicCollectionId("ragnarok-admin", "Ragnarok Cards", "RGNRK");

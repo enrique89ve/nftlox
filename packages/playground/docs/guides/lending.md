@@ -58,7 +58,7 @@ When an NFT is returned:
 ```json
 {
 	"protocol": "nftlox_testnet",
-	"version": "0.5.3",
+	"version": "0.6.0",
 	"action": "nft_lend",
 	"data": {
 		"instanceId": "inst_abc123",
@@ -91,7 +91,7 @@ When an NFT is returned:
 ```json
 {
 	"protocol": "nftlox_testnet",
-	"version": "0.5.3",
+	"version": "0.6.0",
 	"action": "nft_return",
 	"data": {
 		"instanceId": "inst_abc123"
@@ -159,7 +159,7 @@ Build an unsigned `nft_lend` operation.
 **Request:**
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/nft-lend \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/nft-lend \
 	-H "Content-Type: application/json" \
 	-d '{
 		"owner": "alice",
@@ -185,7 +185,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/nft-lend \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"operation": [
 		"custom_json",
 		{
@@ -219,7 +219,7 @@ Build an unsigned `nft_return` operation.
 **Request:**
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/nft-return \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/nft-return \
 	-H "Content-Type: application/json" \
 	-d '{
 		"signer": "bob",
@@ -245,7 +245,7 @@ Note: The `signer` field in the request body maps to `owner` internally.
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"operation": [
 		"custom_json",
 		{
@@ -266,7 +266,7 @@ Note: The `signer` field in the request body maps to `owner` internally.
 ### Lend an NFT
 
 ```typescript
-import { buildNftLend } from "nftlox-sdk";
+import { buildNftLend } from "@nftlox/sdk";
 
 const result = buildNftLend({
 	owner: "alice",
@@ -286,7 +286,7 @@ if (!result.success) {
 ### Return a Lent NFT
 
 ```typescript
-import { buildNftReturn } from "nftlox-sdk";
+import { buildNftReturn } from "@nftlox/sdk";
 
 // Borrower returns
 const result = buildNftReturn({
@@ -303,26 +303,26 @@ if (result.success) {
 ### Using Payload Creators Directly
 
 ```typescript
-import { createNftLendPayload, createNftReturnPayload } from "nftlox-sdk";
+import { createNftLendPayload, createNftReturnPayload } from "@nftlox/sdk";
 
 // Lend
 const lendPayload = createNftLendPayload({
 	instanceId: "inst_abc123",
 	borrower: "bob",
 });
-// → { protocol: "nftlox_testnet", version: "0.5.3", action: "nft_lend", data: { instanceId: "inst_abc123", borrower: "bob" } }
+// → { protocol: "nftlox_testnet", version: "0.6.0", action: "nft_lend", data: { instanceId: "inst_abc123", borrower: "bob" } }
 
 // Return
 const returnPayload = createNftReturnPayload({
 	instanceId: "inst_abc123",
 });
-// → { protocol: "nftlox_testnet", version: "0.5.3", action: "nft_return", data: { instanceId: "inst_abc123" } }
+// → { protocol: "nftlox_testnet", version: "0.6.0", action: "nft_return", data: { instanceId: "inst_abc123" } }
 ```
 
 ### Using Operation Creators
 
 ```typescript
-import { createNftLendOperation, createNftReturnOperation } from "nftlox-sdk";
+import { createNftLendOperation, createNftReturnOperation } from "@nftlox/sdk";
 
 // Lend operation (owner signs with posting key)
 const lendOp = createNftLendOperation(

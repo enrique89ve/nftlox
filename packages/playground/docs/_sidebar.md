@@ -4,28 +4,29 @@
 	- [Signing & Broadcasting](broadcasting.md)
 	- [Data Formats](data-formats.md)
 
-- **Core Features**
-	- [Collection Lifecycle](collection-lifecycle.md)
-	- [Ownership Model](ownership-model.md)
-	- [Marketplace Trading](marketplace-trading.md)
-	- [Allowances & Operators](allowances-operators.md)
-	- [NFT Lending](lending-system.md)
-	- [SPV Verification](spv-verification.md)
+- **Core Concepts**
+	- [Collections](concepts/collections.md)
+	- [Ownership Model](concepts/ownership.md)
+	- [Key Security](concepts/security.md)
 
-- **Game Integration**
-	- [Architecture & Flow](game-integration.md)
+- **Guides**
+	- [Marketplace Trading](guides/marketplace.md)
+	- [Allowances & Operators](guides/allowances.md)
+	- [NFT Lending](guides/lending.md)
+	- [SPV Verification](guides/spv.md)
 
-- **Security**
-	- [Key Security & Permissions](key-security.md)
-
-- **API Reference**
-	- [API Endpoints](api-endpoints.md)
-	- [SDK Functions](sdk-functions.md)
-	- [Error Codes](error-codes.md)
+- **Use Cases**
+	- [Game Development](use-cases/games.md)
 
 - **SDK**
-	- [Direct Usage](using-sdk.md)
+	- [Using the SDK](sdk/overview.md)
+	- [SDK Reference](sdk/reference.md)
+
+- **Reference**
+	- [API Endpoints](reference/api.md)
+	- [Error Codes](reference/errors.md)
 
 - **Examples**
 	- [Seed Ceremony](examples/seed-ceremony.md)
 	- [Mutable Data](examples/mutable-data.md)
+	- [Card Game (TCG)](examples/games/card-game.md)

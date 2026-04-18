@@ -52,7 +52,7 @@ Builds an unsigned `custom_json` operation that lists an NFT for sale. The SDK g
 **Example request:**
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/list \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/list \
 	-H "Content-Type: application/json" \
 	-d '{
 		"owner": "alice",
@@ -66,7 +66,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/list \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"operation": ["custom_json", {
 		"required_auths": [],
 		"required_posting_auths": ["alice"],
@@ -75,7 +75,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/list \
 	}],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.5.3",
+		"version": "0.6.0",
 		"action": "list",
 		"data": {
 			"nftId": "nft_a1b2c3d4e5f6",
@@ -90,7 +90,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/list \
 ### SDK usage
 
 ```typescript
-import { buildList } from "nftlox-sdk";
+import { buildList } from "@nftlox/sdk";
 
 const result = await buildList({
 	owner: "alice",
@@ -186,7 +186,7 @@ Use the payment info to build the full transaction with all transfer operations.
 | `paymentSplit` | object | yes | Full split object from payment info |
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/buy \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/buy \
 	-H "Content-Type: application/json" \
 	-d '{
 		"buyer": "bob",
@@ -213,7 +213,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/buy \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"keyType": "Active",
 	"hiveOperations": [
 		["transfer", {
@@ -243,7 +243,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/buy \
 	],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.5.3",
+		"version": "0.6.0",
 		"action": "buy",
 		"data": {
 			"nftId": "nft_a1b2c3d4e5f6",
@@ -329,7 +329,7 @@ const result = await tx.broadcast();
 ### SDK usage (full flow)
 
 ```typescript
-import { createIndexerClient, buildBuy } from "nftlox-sdk";
+import { createIndexerClient, buildBuy } from "@nftlox/sdk";
 
 const client = createIndexerClient("https://api-nftlox.hivecreators.co");
 
@@ -427,7 +427,7 @@ Builds an unsigned `custom_json` that cancels an active listing. Uses **posting 
 **Example request:**
 
 ```bash
-curl -X POST https://nftloxtest.hivecreators.co/api/build/unlist \
+curl -X POST https://api-nftlox.hivecreators.co/api/build/unlist \
 	-H "Content-Type: application/json" \
 	-d '{
 		"owner": "alice",
@@ -440,7 +440,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/unlist \
 ```json
 {
 	"success": true,
-	"protocolVersion": "0.5.3",
+	"protocolVersion": "0.6.0",
 	"operation": ["custom_json", {
 		"required_auths": [],
 		"required_posting_auths": ["alice"],
@@ -449,7 +449,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/unlist \
 	}],
 	"payload": {
 		"protocol": "nftlox_testnet",
-		"version": "0.5.3",
+		"version": "0.6.0",
 		"action": "unlist",
 		"data": {
 			"nftId": "nft_a1b2c3d4e5f6"
@@ -461,7 +461,7 @@ curl -X POST https://nftloxtest.hivecreators.co/api/build/unlist \
 ### SDK usage
 
 ```typescript
-import { buildUnlist } from "nftlox-sdk";
+import { buildUnlist } from "@nftlox/sdk";
 
 const result = await buildUnlist({
 	owner: "alice",
@@ -596,7 +596,7 @@ curl "https://api-nftlox.hivecreators.co/api/marketplace/listings?currency=HIVE&
 ### SDK usage
 
 ```typescript
-import { createIndexerClient } from "nftlox-sdk";
+import { createIndexerClient } from "@nftlox/sdk";
 
 const client = createIndexerClient("https://api-nftlox.hivecreators.co");
 

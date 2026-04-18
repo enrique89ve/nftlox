@@ -9,7 +9,7 @@ Quick-lookup reference for all exports from the `nftlox-sdk` package. For instal
 | Export | Description |
 |--------|-------------|
 | `PROTOCOL_ID` | `"nftlox_testnet"` |
-| `PROTOCOL_VERSION` | `"0.5.3"` |
+| `PROTOCOL_VERSION` | `"0.6.0"` |
 | `ALL_ACTIONS` | All 19 SDK protocol actions |
 | `CORE_ACTIONS` | 9 core actions |
 | `MARKETPLACE_ACTIONS` | 3 marketplace actions (list, unlist, buy) |
@@ -102,7 +102,7 @@ Higher-level functions that validate input via Zod schemas, generate determinist
 Pure function to validate an NFT operation against current state before broadcasting. No API calls — the caller passes NFT data fetched from `GET /api/nfts/:id`.
 
 ```typescript
-import { validateNftOperation, ACTION_TRANSFER } from "nftlox-sdk";
+import { validateNftOperation, ACTION_TRANSFER } from "@nftlox/sdk";
 
 const nft = await indexer.getNft("seed_abc123");
 const result = validateNftOperation(ACTION_TRANSFER, nft, "alice", nft.id);
