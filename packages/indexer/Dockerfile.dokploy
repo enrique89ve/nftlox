@@ -25,6 +25,9 @@ RUN bun install --frozen-lockfile
 COPY packages/protocol/ ./packages/protocol/
 COPY packages/indexer/ ./packages/indexer/
 
+# Verify migrations directory exists in builder
+RUN ls -la /repo/packages/indexer/src/db/ && echo "---" && ls -la /repo/packages/indexer/src/db/migrations/ || echo "migrations directory NOT FOUND in builder"
+
 # Bundle: @nftlox/protocol gets inlined; heavy / native-backed deps stay
 # external so Bun can load them from node_modules at runtime (beekeeper
 # ships WASM; elysia / postgres have large runtimes that don't benefit

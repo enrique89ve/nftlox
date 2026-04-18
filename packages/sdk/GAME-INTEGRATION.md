@@ -21,7 +21,7 @@ Create collection
 Define the fields that your game needs before minting seeds. Immutable fields are copied into each distributed instance, while mutable fields can be updated later.
 
 ```typescript
-import { buildCollection } from "nftlox-sdk";
+import { buildCollection } from "@nftlox/sdk";
 
 // buildCollection returns the 2-operation transaction required by the protocol:
 // op[0] transfer (creator → nodeAccount, fee) + op[1] custom_json (co-signed by node).
@@ -53,7 +53,66 @@ const collection = await buildCollection({
 			{ name: "xp", type: "uint32" },
 		],
 	},
-}, { nodeAccount: "nftlox-testnet" });
+}, { nodeAccount: "nftlox" });
+```
+
+## 1b. Automated Collection + Seeds (No Keychain)
+
+For backend services that manage collections and seeds programmatically, use `buildCollectionWithSeeds` to generate a complete plan with one function call. This orchestrator validates input, pre-computes all IDs, and returns operations ready to sign and broadcast.
+
+```typescript
+import { buildCollectionWithSeeds } from "@nftlox/sdk";
+
+const plan = await buildCollectionWithSeeds({
+	// Collection metadata
+	creator: "ragnarok-game",
+	name: "Ragnarok Heroes",
+	symbol: "RAGH",
+	totalPotential: 1000,
+	metadata: {
+		description: "NFT heroes for Ragnarok Online game",
+		image: "https://example.com/collection.png",
+	},
+	rules: {
+		transferable: true,
+		burnable: false,
+		royaltyPct: 5,
+		royaltyRecipient: "ragnarok-treasury",
+	},
+	schema: {
+		immutable: [
+			{ name: "rarity", type: "string" },
+			{ name: "class", type: "string" },
+		],
+	},
+	// Array of seeds to create
+	seeds: [
+		{
+			artId: "hero-warrior-001",
+			name: "Warrior #1",
+			imageUrl: "https://example.com/heroes/warrior-001.png",
+			maxSupply: 100,
+			brief: "Common warrior",
+			immutableData: { rarity: "common", class: "warrior" },
+		},
+		// ... more seeds
+	],
+	// Optional: different owner
+	owner: "ragnarok-treasury",
+}, { nodeAccount: "nftlox", feeCurrency: "HBD", feeAmount: "0.100" });
+
+if (!plan.success) {
+	console.error("Validation failed:", plan.errors);
+	return;
+}
+
+console.log(`Collection: ${plan.collectionId}`);
+console.log(`Seeds: ${plan.totalSeedCount}`);
+console.log(`Batches: ${plan.seedBatches.length}`);
+
+// plan.collectionStep has the collection creation operations
+// plan.seedBatches[] has each seed batch operations
+// Use hive-tx to sign and broadcast each step
 ```
 
 ## 2. Mint Seed Templates
@@ -61,7 +120,7 @@ const collection = await buildCollection({
 A seed is the master NFT for a card, item, character, or other game asset. Instances distributed from a seed inherit its immutable data.
 
 ```typescript
-import { buildSeed } from "nftlox-sdk";
+import { buildSeed } from "@nftlox/sdk";
 
 const seed = await buildSeed({
 	artId: "odin-001",
@@ -86,7 +145,7 @@ const seed = await buildSeed({
 Use `bulk_distribute` when a player earns, receives, or purchases game assets. Aggregate duplicate seed IDs before building the operation.
 
 ```typescript
-import { buildBulkDistribute } from "nftlox-sdk";
+import { buildBulkDistribute } from "@nftlox/sdk";
 
 const distribution = buildBulkDistribute({
 	signer: "ragnarok-admin",
@@ -107,7 +166,7 @@ const distribution = buildBulkDistribute({
 Use `set_data` when the collection creator writes mutable data. Use `set_data_from` after approving a game server as a data operator.
 
 ```typescript
-import { buildDataOperatorApprove, buildSetDataFrom } from "nftlox-sdk";
+import { buildDataOperatorApprove, buildSetDataFrom } from "@nftlox/sdk";
 
 const approval = buildDataOperatorApprove({
 	collectionId: "col_abc123",
@@ -132,7 +191,7 @@ const update = buildSetDataFrom({
 The SPV module lets a client verify the current owner claim against Hive L1 without trusting the indexer response.
 
 ```typescript
-import { createDefaultL1Config, verifyNftOwnership } from "nftlox-sdk";
+import { createDefaultL1Config, verifyNftOwnership } from "@nftlox/sdk";
 
 const ownership = await verifyNftOwnership({
 	nftId: "nft_abc123",

@@ -57,7 +57,7 @@ The SDK re-exports the wire protocol from `@nftlox/protocol` and adds builders, 
 | **Action constants** | `ACTION_MINT`, `ACTION_TRANSFER`, `ACTION_LIST`, `ACTION_BUY`, `ACTION_BULK_DISTRIBUTE`, … (19 total) |
 | **Auth helpers** | `isProtocolAction()`, `getAuthLevel()`, `getKeyType()`, `ACTION_AUTH_LEVEL` |
 | **Payment** | `calculatePaymentSplit()`, `calculateBasisPointsAmount()` |
-| **Builders** | `buildCollection()`, `buildSeed()`, `buildSeedBatch()`, `buildBulkDistribute()`, `buildTransfer()`, `buildList()`, `buildBuy()`, `buildSetData()`, `buildNftLend()`, `buildNftReturn()`, `buildNodeHeartbeat()`, … |
+| **Builders** | `buildCollection()`, `buildExtendSchema()`, `buildArchiveCollection()`, `buildSeed()`, `buildSeedBatch()`, `buildCollectionWithSeeds()`, `buildBulkDistribute()`, `buildTransfer()`, `buildList()`, `buildBuy()`, `buildSetData()`, `buildSetDataFrom()`, `buildNftApprove()`, `buildNftApproveAll()`, `buildNftTransferFrom()`, `buildNftLend()`, `buildNftReturn()`, `buildNodeRegister()`, `buildNodeHeartbeat()`, `buildDataOperatorApprove()`, `buildBurn()` |
 | **Zod schemas** | `createCollectionInputSchema`, `mintInputSchema`, `bulkDistributeInputSchema`, `listInputSchema`, … |
 | **Multisig client** | `fetchPaymentInfo()`, `requestBuyMultisig()`, `requestCreateCollectionMultisig()` |
 | **SPV verification** | `verifyNftOwnership()`, `verifyOperationOnChain()`, `fetchTransaction()` |
