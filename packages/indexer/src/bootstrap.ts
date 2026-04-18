@@ -1,4 +1,5 @@
 import { testConnection, sql, withTransaction } from "./db/client.ts";
+import { runMigrations } from "./db/migration-runner.ts";
 import { cleanupInvalidMarketplaceListings } from "./db/queries/nfts.ts";
 import { bootstrapStateRootFromFullScan, getStateMeta } from "./db/queries/state-root.ts";
 import { emptyStateRoot, rootsEqual } from "./utils/state-root-hash.ts";
@@ -47,47 +48,13 @@ async function ensurePostgres(): Promise<void> {
 	throw new Error("PostgreSQL failed to start within 30s");
 }
 
-let cachedSchemaSql: string | null = null;
-let cachedSchemaHash: string | null = null;
-
-async function loadSchema(): Promise<{ sql: string; hash: string }> {
-	if (cachedSchemaSql !== null && cachedSchemaHash !== null) {
-		return { sql: cachedSchemaSql, hash: cachedSchemaHash };
-	}
-	// In bundle: schema is at /app/packages/indexer/db/schema.sql
-	// In dev: schema is at ./db/schema.sql relative to src/bootstrap.ts
-	let schemaPath = import.meta.dir + "/db/schema.sql";
-	if (!await Bun.file(schemaPath).exists()) {
-		schemaPath = "/app/packages/indexer/db/schema.sql";
-	}
-	const schemaFile = Bun.file(schemaPath);
-	if (!await schemaFile.exists()) {
-		throw new Error("Schema file not found — cannot initialize database", {
-			cause: { path: schemaFile.name },
-		});
-	}
-	const text = await schemaFile.text();
-	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-	const hex = Array.from(new Uint8Array(digest))
-		.map((b) => b.toString(16).padStart(2, "0"))
-		.join("");
-	cachedSchemaSql = text;
-	cachedSchemaHash = `sha256:${hex}`;
-	return { sql: text, hash: cachedSchemaHash };
-}
-
-async function runMigrations(): Promise<void> {
-	log.info("Running schema migrations...");
-	const { sql: schemaText } = await loadSchema();
-	await sql.unsafe(schemaText);
-	log.info("Schema migrations completed");
-}
 
 // Singletons are reset in-place via UPDATE. TRUNCATE'ing them would wipe the
 // id=1 row and break the subsequent UPDATE ... WHERE id = 1 (0 rows affected).
 // Every new singleton MUST be added here AND have an explicit reset UPDATE in
 // wipeAllProjectedData below.
-export const STATE_SINGLETONS: ReadonlySet<string> = new Set(["state_meta", "sync_state"]);
+// schema_migrations tracks applied migrations and must not be truncated.
+export const STATE_SINGLETONS: ReadonlySet<string> = new Set(["state_meta", "sync_state", "schema_migrations"]);
 
 // Builds the TRUNCATE statement that wipes every projected table in one shot.
 // Pure so it can be unit-tested without a live DB. Returns null when the
@@ -168,36 +135,8 @@ async function checkGenesisReset(): Promise<void> {
 		previous: storedGenesis,
 		current: config.genesisBlock,
 	});
-	const { hash } = await loadSchema();
-	await wipeAllProjectedData(hash);
+	await wipeAllProjectedData(null);
 	log.info("Database reset completed — syncing from new genesis block");
-}
-
-// Testnet policy: any change to schema.sql triggers a full projection wipe and
-// re-sync from genesis. We don't carry a migration chain — the chain is the
-// Hive blockchain itself, and re-indexing from genesis is deterministic.
-//
-// First-run (stored_hash == NULL) just records the current hash without a wipe
-// — there's no data to be inconsistent with a new schema.
-async function checkSchemaHashReset(): Promise<void> {
-	const { hash } = await loadSchema();
-	const [row] = await sql`SELECT schema_hash FROM sync_state WHERE id = 1`;
-	const stored = row?.schema_hash ?? null;
-
-	if (stored === hash) return;
-
-	if (stored === null) {
-		await sql`UPDATE sync_state SET schema_hash = ${hash}, updated_at = NOW() WHERE id = 1`;
-		log.info("Schema hash initialized", { hash });
-		return;
-	}
-
-	log.warn("SCHEMA HASH CHANGED — resetting all data (testnet policy)", {
-		previous: stored,
-		current: hash,
-	});
-	await wipeAllProjectedData(hash);
-	log.info("Database reset completed — re-syncing under new schema");
 }
 
 async function cleanupMarketplaceListings(): Promise<void> {
@@ -238,7 +177,6 @@ export async function connectWithRetry(): Promise<void> {
 			}
 			await testConnection();
 			await runMigrations();
-			await checkSchemaHashReset();
 			await checkGenesisReset();
 			await cleanupMarketplaceListings();
 			await ensureStateRootBootstrapped();

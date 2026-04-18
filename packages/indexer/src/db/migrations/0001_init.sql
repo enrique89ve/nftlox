@@ -580,11 +580,3 @@ CREATE TRIGGER trg_prevent_schema_versions_mutation
 	BEFORE UPDATE ON schema_versions
 	FOR EACH ROW
 	EXECUTE FUNCTION prevent_schema_versions_mutation();
-
--- ============ MIGRATION CONTROL ============
-
-CREATE TABLE IF NOT EXISTS schema_migrations (
-	version TEXT PRIMARY KEY,
-	applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	checksum TEXT NOT NULL
-);
