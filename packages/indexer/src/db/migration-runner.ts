@@ -15,14 +15,19 @@ async function getSchemaPath(): Promise<string> {
 }
 
 async function getMigrationsPath(): Promise<string> {
-	let path = import.meta.dir + "/migrations";
-	if (!await Bun.file(path).exists()) {
-		path = "/app/src/db/migrations";
+	const candidates = [
+		import.meta.dir + "/migrations",
+		"/app/packages/indexer/db/migrations",
+		"/app/src/db/migrations",
+	];
+
+	for (const path of candidates) {
+		if (await Bun.file(path).exists()) {
+			return path;
+		}
 	}
-	if (!await Bun.file(path).exists()) {
-		throw new Error("migrations directory not found");
-	}
-	return path;
+
+	throw new Error("migrations directory not found");
 }
 
 async function computeChecksum(content: string): Promise<string> {
