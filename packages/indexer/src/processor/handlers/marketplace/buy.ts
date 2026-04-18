@@ -4,7 +4,7 @@ import { getNftWithCollectionRules, getNftWithCollectionRulesForUpdate, updateNf
 import type { OwnerChangeCtx } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { insertSale } from "@/db/queries/marketplace-history.ts";
-import { requireString, requireUsername, verifyTransfers } from "@/utils/validation.ts";
+import { requireString, requireUsername, verifyTransfers, requireSupportedCurrency } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
 import { config } from "@/config.ts";
@@ -69,10 +69,10 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	}
 
 	const totalPrice = Number(nft.listing_price);
-	const currency = nft.listing_currency;
-	if (Number.isNaN(totalPrice) || totalPrice <= 0 || !currency) {
+	if (Number.isNaN(totalPrice) || totalPrice <= 0 || !nft.listing_currency) {
 		throw new Error("NFT has no valid listing price");
 	}
+	const currency = requireSupportedCurrency(nft.listing_currency, "listing_currency");
 
 	const royaltyPct = Number(nft.royalty_pct ?? 0);
 	if (royaltyPct < 0 || royaltyPct > 50) {

@@ -10,7 +10,9 @@ import {
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
+	SUPPORTED_CURRENCIES,
 	type PaymentSplit,
+	type SupportedCurrency,
 	type CollectionSchema,
 	type SchemaField,
 	type SchemaFieldType,
@@ -26,12 +28,30 @@ export interface TransferRecord {
 	memo: string;
 }
 
+const SUPPORTED_CURRENCIES_SET = new Set<string>(SUPPORTED_CURRENCIES);
+
+export function requireSupportedCurrency(
+	value: unknown,
+	fieldName: string = "currency",
+): SupportedCurrency {
+	if (typeof value !== "string") {
+		throw new Error(`${fieldName} must be a string, got ${typeof value}`);
+	}
+	const upper = value.toUpperCase();
+	if (!SUPPORTED_CURRENCIES_SET.has(upper)) {
+		throw new Error(
+			`${fieldName} must be one of ${SUPPORTED_CURRENCIES.join(", ")}, got "${value}"`,
+		);
+	}
+	return upper as SupportedCurrency;
+}
+
 export interface VerifyTransfersParams {
 	transfers: TransferRecord[];
 	buyer: string;
 	seller: string;
 	totalPrice: number;
-	currency: string;
+	currency: SupportedCurrency;
 	royaltyPct: number;
 	royaltyRecipient: string | null;
 	feeAccount: string;

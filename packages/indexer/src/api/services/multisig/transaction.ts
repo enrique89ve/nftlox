@@ -6,7 +6,10 @@ import {
 	ACTION_CREATE_COLLECTION,
 	HIVE_CUSTOM_JSON_MAX_BYTES,
 	MAX_MULTISIG_OPERATIONS,
+	MIN_PROTOCOL_VERSION,
+	isProtocolAction,
 	type MultisigErrorCode,
+	type ProtocolAction,
 } from "@/protocol/index.ts";
 import type {
 	BuyRequestShape,
@@ -36,9 +39,15 @@ type TransactionHeader = Readonly<{
 }>;
 
 type ParsedProtocolPayload = Readonly<{
-	readonly action: string;
+	readonly protocol: string;
+	readonly version: string;
+	readonly action: ProtocolAction;
 	readonly data: Record<string, unknown>;
 }>;
+
+type ProtocolVersionParts = readonly [number, number, number];
+
+const PROTOCOL_VERSION_REGEX = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 export function validateBaseRequestShape(raw: unknown): Readonly<{ readonly transaction: Record<string, unknown> }> {
 	if (!isRecord(raw)) {
@@ -109,7 +118,7 @@ export function detectMultisigAction(
 	}
 
 	validateCustomJsonId(lastOperation.body.id, protocolId);
-	const payload = parseProtocolPayload(validateCustomJsonString(lastOperation.body.json));
+	const payload = parseProtocolPayload(validateCustomJsonString(lastOperation.body.json), protocolId);
 	if (payload.action === ACTION_BUY || payload.action === ACTION_CREATE_COLLECTION) {
 		return payload.action;
 	}
@@ -173,7 +182,7 @@ export function validateCustomJsonOperation<Payload extends ValidatedPayload>(
 	op: TransactionOperationInput,
 	nodeAccount: string,
 	protocolId: string,
-	parsePayload: (json: string) => Payload,
+	parsePayload: (json: string, protocolId: string) => Payload,
 ): ValidatedCustomJsonOp<Payload> {
 	if (op.name !== "custom_json") {
 		throw createMultisigError(
@@ -188,12 +197,12 @@ export function validateCustomJsonOperation<Payload extends ValidatedPayload>(
 		required_posting_auths: validateRequiredPostingAuths(op.body.required_posting_auths),
 		id: validateCustomJsonId(op.body.id, protocolId),
 		json,
-		payload: parsePayload(json),
+		payload: parsePayload(json, protocolId),
 	};
 }
 
-export function parseBuyPayload(json: string): ValidatedBuyPayload {
-	const parsed = parseProtocolPayload(json);
+export function parseBuyPayload(json: string, protocolId: string): ValidatedBuyPayload {
+	const parsed = parseProtocolPayload(json, protocolId);
 	if (parsed.action !== ACTION_BUY) {
 		throw createMultisigError(
 			"INVALID_PROTOCOL_PAYLOAD",
@@ -212,8 +221,8 @@ export function parseBuyPayload(json: string): ValidatedBuyPayload {
 	};
 }
 
-export function parseCollectionPayload(json: string): ValidatedCollectionPayload {
-	const parsed = parseProtocolPayload(json);
+export function parseCollectionPayload(json: string, protocolId: string): ValidatedCollectionPayload {
+	const parsed = parseProtocolPayload(json, protocolId);
 	if (parsed.action !== ACTION_CREATE_COLLECTION) {
 		throw createMultisigError(
 			"INVALID_PROTOCOL_PAYLOAD",
@@ -447,7 +456,7 @@ function validateCustomJsonString(value: unknown): string {
 	return value;
 }
 
-function parseProtocolPayload(json: string): ParsedProtocolPayload {
+function parseProtocolPayload(json: string, protocolId: string): ParsedProtocolPayload {
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(json);
@@ -459,15 +468,80 @@ function parseProtocolPayload(json: string): ParsedProtocolPayload {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "Parsed custom_json.json must be an object");
 	}
 
+	if (parsed.protocol !== protocolId) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload protocol must be '${protocolId}', got '${String(parsed.protocol)}'`,
+		);
+	}
+
+	const version = validateProtocolVersion(parsed.version);
+
 	if (typeof parsed.action !== "string") {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "Payload action must be a string");
+	}
+
+	if (!isProtocolAction(parsed.action)) {
+		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", `Unknown action: ${parsed.action}`);
 	}
 
 	if (!isRecord(parsed.data)) {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "Payload must have a 'data' object");
 	}
 
-	return { action: parsed.action, data: parsed.data };
+	return { protocol: protocolId, version, action: parsed.action, data: parsed.data };
+}
+
+function validateProtocolVersion(value: unknown): string {
+	if (typeof value !== "string") {
+		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "Missing or invalid version");
+	}
+
+	if (!parseProtocolVersion(value)) {
+		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", `Invalid version format: ${value}`);
+	}
+
+	if (compareVersions(value, MIN_PROTOCOL_VERSION) < 0) {
+		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", `Version ${value} below minimum ${MIN_PROTOCOL_VERSION}`);
+	}
+
+	return value;
+}
+
+function parseProtocolVersion(version: string): ProtocolVersionParts | null {
+	const match = PROTOCOL_VERSION_REGEX.exec(version);
+	if (!match) return null;
+
+	const majorText = match[1];
+	const minorText = match[2];
+	const patchText = match[3];
+	if (!majorText || !minorText || !patchText) return null;
+
+	const major = Number(majorText);
+	const minor = Number(minorText);
+	const patch = Number(patchText);
+
+	return [major, minor, patch];
+}
+
+function compareVersions(a: string, b: string): number {
+	const partsA = parseProtocolVersion(a);
+	const partsB = parseProtocolVersion(b);
+	if (!partsA || !partsB) {
+		throw new Error(
+			`Invalid protocol version comparison: '${a}' vs '${b}'`,
+			{ cause: new Error(`One or both versions failed to parse`) },
+		);
+	}
+
+	for (let index = 0; index < 3; index++) {
+		const numberA = partsA[index] ?? 0;
+		const numberB = partsB[index] ?? 0;
+		if (numberA < numberB) return -1;
+		if (numberA > numberB) return 1;
+	}
+
+	return 0;
 }
 
 function toHiveTxOperations(tx: ValidatedTransaction): TransactionType["operations"] {

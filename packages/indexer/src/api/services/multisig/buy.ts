@@ -13,7 +13,7 @@ import {
 	validateNonEmptyString,
 } from "@/api/services/multisig/transaction.ts";
 import { validateHiveUsername } from "@/protocol/index.ts";
-import { verifyTransfers, type TransferRecord } from "@/utils/validation.ts";
+import { verifyTransfers, requireSupportedCurrency, type TransferRecord } from "@/utils/validation.ts";
 import type {
 	MultisigBaseContext,
 	MultisigRules,
@@ -210,7 +210,7 @@ function validatePaymentSplit(
 			buyer: transfers[0]?.from ?? "",
 			seller: nft.owner,
 			totalPrice,
-			currency: nft.listing_currency,
+			currency: requireSupportedCurrency(nft.listing_currency, "listing_currency"),
 			royaltyPct,
 			royaltyRecipient: rules.royalty_recipient,
 			feeAccount: nodeAccount,

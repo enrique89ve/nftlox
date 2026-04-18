@@ -10,6 +10,7 @@ import { resolveClientIp } from "@/api/middleware/client-ip.ts";
 import { NFTLOX_POW_HEADER, validateMultisigPow } from "@/api/middleware/pow-validator.ts";
 import { getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import { calculatePaymentSplit, MULTISIG_EXPIRATION_MS } from "@/protocol/index.ts";
+import { requireSupportedCurrency } from "@/utils/validation.ts";
 import {
 	IDEMPOTENCY_HEADER,
 	IDEMPOTENCY_REPLAY_HEADER,
@@ -155,7 +156,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 
 		const royaltyPct = Number(nft.royalty_pct ?? 0);
 		const royaltyRecipient = nft.royalty_recipient ?? null;
-		const currency = nft.listing_currency;
+		const currency = requireSupportedCurrency(nft.listing_currency, "listing_currency");
 
 		const split = calculatePaymentSplit(totalPrice, currency, royaltyPct, royaltyRecipient, nft.owner, config.hiveAccount);
 

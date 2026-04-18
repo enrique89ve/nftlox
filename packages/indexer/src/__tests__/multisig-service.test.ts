@@ -39,6 +39,7 @@ import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	PROTOCOL_COLLECTION_FEE_HBD,
+	PROTOCOL_VERSION,
 	type MultisigResponse,
 	type MultisigErrorCode,
 } from "@/protocol/index.ts";
@@ -69,7 +70,7 @@ function makeOp(
 		signer,
 		authLevel,
 		action: action as ParsedOperation["action"],
-		version: "0.2.1",
+		version: PROTOCOL_VERSION,
 		data,
 		pairedTransfers,
 	};
@@ -198,6 +199,19 @@ function makeExpiration(offsetMs = 60_000): string {
 	return new Date(Date.now() + offsetMs).toISOString().replace("Z", "").split(".")[0]!;
 }
 
+function makeProtocolPayload(
+	action: string,
+	data: unknown,
+	overrides: Partial<Readonly<{ protocol: string; version: string }>> = {},
+): Record<string, unknown> {
+	return {
+		protocol: overrides.protocol ?? PROTOCOL_ID,
+		version: overrides.version ?? PROTOCOL_VERSION,
+		action,
+		data,
+	};
+}
+
 /**
  * Builds a structurally valid multisig request body that passes
  * shape + transaction structure validation, reaching NFT state checks.
@@ -210,7 +224,7 @@ function makeMultisigBody(params: {
 	nftTxId?: string;
 	seller: string;
 	price?: number;
-	currency?: string;
+	currency?: "HIVE" | "HBD";
 	royaltyPct?: number;
 	royaltyRecipient?: string | null;
 	expirationOffsetMs?: number;
@@ -258,10 +272,10 @@ function makeMultisigBody(params: {
 		required_auths: [NODE_ACCOUNT],
 		required_posting_auths: [],
 		id: PROTOCOL_ID,
-		json: JSON.stringify({
-			action: ACTION_BUY,
-			data: { nftId, txId: nftTxId, listingId, listTxId },
-		}),
+		json: JSON.stringify(makeProtocolPayload(
+			ACTION_BUY,
+			{ nftId, txId: nftTxId, listingId, listTxId },
+		)),
 	}];
 
 	return {
@@ -750,7 +764,7 @@ describe("Multisig service (regression)", () => {
 			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
 		});
 
-		test("rejects payload action different from buy", async () => {
+		test("rejects legacy action/data payload before signing", async () => {
 			const { nftId, listingId, listTxId, nftTxId } = await seedListedInstance();
 
 			const body = makeMultisigBody({
@@ -763,9 +777,83 @@ describe("Multisig service (regression)", () => {
 			});
 
 			setCustomJsonPayload(body, {
-				action: "list",
+				action: ACTION_BUY,
 				data: { nftId, txId: nftTxId, listingId, listTxId },
 			});
+
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
+			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
+			if (!result.ok) {
+				expect(result.message).toContain("Payload protocol");
+			}
+		});
+
+		test("rejects protocol mismatch inside payload", async () => {
+			const { nftId, listingId, listTxId, nftTxId } = await seedListedInstance();
+
+			const body = makeMultisigBody({
+				buyer: "bob",
+				nftId,
+				listingId,
+				listTxId,
+				nftTxId,
+				seller: "alice",
+			});
+
+			setCustomJsonPayload(body, makeProtocolPayload(
+				ACTION_BUY,
+				{ nftId, txId: nftTxId, listingId, listTxId },
+				{ protocol: "nftlox_evil" },
+			));
+
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
+			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
+			if (!result.ok) {
+				expect(result.message).toContain("Payload protocol");
+			}
+		});
+
+		test("rejects payload version below protocol minimum", async () => {
+			const { nftId, listingId, listTxId, nftTxId } = await seedListedInstance();
+
+			const body = makeMultisigBody({
+				buyer: "bob",
+				nftId,
+				listingId,
+				listTxId,
+				nftTxId,
+				seller: "alice",
+			});
+
+			setCustomJsonPayload(body, makeProtocolPayload(
+				ACTION_BUY,
+				{ nftId, txId: nftTxId, listingId, listTxId },
+				{ version: "0.0.1" },
+			));
+
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
+			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
+			if (!result.ok) {
+				expect(result.message).toContain("below minimum");
+			}
+		});
+
+		test("rejects payload action different from buy", async () => {
+			const { nftId, listingId, listTxId, nftTxId } = await seedListedInstance();
+
+			const body = makeMultisigBody({
+				buyer: "bob",
+				nftId,
+				listingId,
+				listTxId,
+				nftTxId,
+				seller: "alice",
+			});
+
+			setCustomJsonPayload(body, makeProtocolPayload(
+				ACTION_LIST,
+				{ nftId, txId: nftTxId, listingId, listTxId },
+			));
 
 			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
@@ -783,10 +871,7 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			setCustomJsonPayload(body, {
-				action: ACTION_BUY,
-				data: null,
-			});
+			setCustomJsonPayload(body, makeProtocolPayload(ACTION_BUY, null));
 
 			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
@@ -841,10 +926,10 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			setCustomJsonPayload(body, {
-				action: ACTION_BUY,
-				data: { nftId: "seed_wrong", txId: nftTxId, listingId, listTxId },
-			});
+			setCustomJsonPayload(body, makeProtocolPayload(
+				ACTION_BUY,
+				{ nftId: "seed_wrong", txId: nftTxId, listingId, listTxId },
+			));
 
 			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
@@ -865,10 +950,10 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			setCustomJsonPayload(body, {
-				action: ACTION_BUY,
-				data: { nftId, txId: "tx_wrong", listingId, listTxId },
-			});
+			setCustomJsonPayload(body, makeProtocolPayload(
+				ACTION_BUY,
+				{ nftId, txId: "tx_wrong", listingId, listTxId },
+			));
 
 			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
@@ -889,10 +974,10 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			setCustomJsonPayload(body, {
-				action: ACTION_BUY,
-				data: { nftId, txId: nftTxId, listingId: "list_wrong", listTxId },
-			});
+			setCustomJsonPayload(body, makeProtocolPayload(
+				ACTION_BUY,
+				{ nftId, txId: nftTxId, listingId: "list_wrong", listTxId },
+			));
 
 			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");
@@ -913,10 +998,10 @@ describe("Multisig service (regression)", () => {
 				seller: "alice",
 			});
 
-			setCustomJsonPayload(body, {
-				action: ACTION_BUY,
-				data: { nftId, txId: nftTxId, listingId, listTxId: "tx_wrong" },
-			});
+			setCustomJsonPayload(body, makeProtocolPayload(
+				ACTION_BUY,
+				{ nftId, txId: nftTxId, listingId, listTxId: "tx_wrong" },
+			));
 
 			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "INVALID_PROTOCOL_PAYLOAD");

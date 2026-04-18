@@ -9,6 +9,7 @@ import {
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
+	PROTOCOL_VERSION,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	PROTOCOL_COLLECTION_FEE_HBD,
@@ -44,7 +45,8 @@ function makeOp(
 	};
 	return {
 		blockNum: overrides.blockNum ?? 1,
-		timestamp: new Date(),
+		timestamp: new Date().toISOString(),
+		version: PROTOCOL_VERSION,
 		txId: overrides.txId ?? `tx_sp_iso_${Date.now()}_${Math.random()}`,
 		operationId: overrides.operationId ?? `op_sp_iso_${Date.now()}_${Math.random()}`,
 		signer,

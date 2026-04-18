@@ -89,7 +89,7 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 			buyer: "buyer",
 			seller: "seller",
 			totalPrice: 10,
-			currency: "HIVE",
+			currency: "HIVE" as const,
 			royaltyPct: 10,
 			royaltyRecipient: "artist",
 			feeAccount: "feeacc",
