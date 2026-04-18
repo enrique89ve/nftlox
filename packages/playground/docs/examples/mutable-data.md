@@ -56,7 +56,7 @@ Sign the `operation` with the creator's **posting key** and broadcast to Hive.
 ### SDK Usage
 
 ```typescript
-import { createSetDataOperation, type SetDataInput } from "@nftlox/sdk";
+import { createSetDataOperation, type SetDataInput } from "nftlox-sdk";
 
 const input: SetDataInput = {
 	nftId: "nft_a1b2c3d4_1_ef56",
@@ -118,7 +118,7 @@ The collection creator broadcasts this once:
 import {
 	createSetDataFromOperation,
 	type SetDataFromInput,
-} from "@nftlox/sdk";
+} from "nftlox-sdk";
 
 const input: SetDataFromInput = {
 	nftId: "nft_a1b2c3d4_1_ef56",
@@ -150,7 +150,7 @@ import {
 	MAX_OPERATIONS_PER_TX,
 	PROTOCOL_ID,
 	type SetDataFromInput,
-} from "@nftlox/sdk";
+} from "nftlox-sdk";
 import hive from "hive-tx";
 
 const GAME_SERVER = "ragnarok-server";

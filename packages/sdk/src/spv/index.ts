@@ -17,12 +17,12 @@ export type {
 	ResolvedOperationById,
 	ResolveMutableDataParams,
 	ResolvedMutableData,
-} from "./types.ts";
+} from "./types";
 
 export {
 	DEFAULT_HIVE_ENDPOINTS,
 	DEFAULT_HIVE_TIMEOUT_MS,
-} from "./constants.ts";
+} from "./constants";
 
 export {
 	HiveRpcError,
@@ -36,7 +36,7 @@ export {
 	parseAllNftloxOperations,
 	resolveOperationById,
 	resolveMutableDataFromOperation,
-} from "./hive-l1-client.ts";
+} from "./hive-l1-client";
 
 export {
 	verifyDeterministicDerivation,
@@ -46,4 +46,4 @@ export {
 	type DeterministicDerivationParams,
 	type DeterministicDerivationResult,
 	type OnChainVerifyParams,
-} from "./verifiers.ts";
+} from "./verifiers";

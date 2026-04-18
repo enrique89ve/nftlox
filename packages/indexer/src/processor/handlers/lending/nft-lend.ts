@@ -6,12 +6,19 @@ import { insertLoan, getLoan } from "@/db/queries/loans.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertNotSeed } from "@/utils/status-checks.ts";
+import { assertNoActiveMultisigLock } from "@/utils/multisig-locks.ts";
 
 export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 	const borrower = requireUsername(op.data.borrower, "borrower");
 
 	if (borrower === op.signer) throw new Error("Cannot lend to yourself");
+
+	// Defense-in-depth: by construction a lock can only live while status='listed'
+	// and lend requires status='active', so this gate rarely fires. We check it
+	// anyway so any future protocol change that loosens lend's status invariant
+	// cannot silently reintroduce the race.
+	await assertNoActiveMultisigLock(instanceId, op.timestamp, txn);
 
 	const nft = await getNftForProcessingForUpdate(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);

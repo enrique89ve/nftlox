@@ -3,8 +3,8 @@ import {
 	PROTOCOL_FEE_BPS,
 	BASIS_POINTS_DENOMINATOR,
 	type SupportedCurrency,
-} from "./constants.ts";
-import type { PaymentSplit } from "./types.ts";
+} from "./constants";
+import type { PaymentSplit } from "./types";
 
 export function roundHive(n: number): number {
 	return Math.round(n * 1000) / 1000;

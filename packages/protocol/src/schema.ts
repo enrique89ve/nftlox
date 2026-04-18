@@ -1,14 +1,14 @@
 import {
 	MAX_SCHEMA_FIELDS,
 	MAX_FIELD_NAME_LENGTH,
-} from "./constants.ts";
-import { generateHash } from "./dna.ts";
+} from "./constants";
+import { generateHash } from "./dna";
 import type {
 	CollectionSchema,
 	SchemaField,
 	SchemaFieldType,
 	ValidationError,
-} from "./types.ts";
+} from "./types";
 
 // Canonical JSON
 

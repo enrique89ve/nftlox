@@ -15,6 +15,7 @@ import { handleTransfer } from "@/processor/handlers/core/transfer.ts";
 import { handleList } from "@/processor/handlers/marketplace/list.ts";
 import { handleUnlist } from "@/processor/handlers/marketplace/unlist.ts";
 import { handleBuy } from "@/processor/handlers/marketplace/buy.ts";
+import { materializePendingUnlists } from "@/db/queries/nft-mutations.ts";
 import { handleNftApprove } from "@/processor/handlers/allowances/nft-approve.ts";
 import { handleNftApproveAll } from "@/processor/handlers/allowances/nft-approve-all.ts";
 import { handleNftTransferFrom } from "@/processor/handlers/allowances/nft-transfer-from.ts";
@@ -39,6 +40,7 @@ import {
 	PROTOCOL_COLLECTION_FEE_HBD,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
+	UNLIST_DELAY_BLOCKS,
 } from "@/protocol/index.ts";
 
 const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
@@ -247,8 +249,14 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 			expect(listed!.status).toBe("listed");
 			expect(listed!.listing_id).toBe(listingId);
 
-			// Alice unlists first (required to transfer)
-			await withTransaction((txn) => handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), txn));
+			// Alice unlists first (required to transfer). Unlist is two-phase
+			// now — handler sets pending_unlist_block, materialization flips
+			// status to 'active' after UNLIST_DELAY_BLOCKS.
+			const unlistOp = makeOp(ACTION_UNLIST, { nftId: instId });
+			await withTransaction((txn) => handleUnlist(unlistOp, txn));
+			await withTransaction((txn) => materializePendingUnlists(
+				unlistOp.blockNum + UNLIST_DELAY_BLOCKS, UNLIST_DELAY_BLOCKS, txn,
+			));
 
 			// Alice transfers to Bob
 			await withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "bob" }), txn));

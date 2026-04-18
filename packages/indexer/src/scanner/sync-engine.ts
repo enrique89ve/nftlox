@@ -3,9 +3,11 @@ import { withTransaction } from "@/db/client.ts";
 import {
   getLastBlock,
   updateLastBlock,
+  updateHiveHeadBlock,
   cleanupExpiredOperations,
   insertInvalidOperation,
 } from "@/db/queries/sync.ts";
+import { materializePendingUnlists } from "@/db/queries/nft-mutations.ts";
 import {
   acquireSyncLock,
   releaseSyncLock,
@@ -18,7 +20,11 @@ import {
   getTransfersInTransaction,
   checkClockDrift,
 } from "./hive-client.ts";
-import { ACTION_BUY, ACTION_CREATE_COLLECTION } from "@/protocol/index.ts";
+import {
+  ACTION_BUY,
+  ACTION_CREATE_COLLECTION,
+  UNLIST_DELAY_BLOCKS,
+} from "@/protocol/index.ts";
 import {
   parseHafAHOperations,
   type RejectedOperation,
@@ -254,6 +260,11 @@ export async function syncCycle(): Promise<void> {
   const headBlock = chain.headBlock;
   const behind = irreversibleBlock - lastBlock;
 
+  // Persist HEAD independently from last_block so /api/multisig can evaluate
+  // (hive_head_block − last_block) for its lag gate even when the indexer is
+  // actively catching up a large gap. The UPDATE only moves forward.
+  await updateHiveHeadBlock(headBlock);
+
   updateSyncProgress({ lastBlock, headBlock, irreversibleBlock });
 
   // API readiness: mark as synced when within tolerance (small natural lag).
@@ -382,12 +393,17 @@ export async function syncCycle(): Promise<void> {
       throw new Error(LOCK_LOST_MARKER);
     }
 
-    if (hasOps) {
-      await withTransaction(async (txn) => {
-        if (isMassive) {
-          await txn`SET LOCAL synchronous_commit = OFF`;
-        }
+    // Single transaction per batch. materializePendingUnlists runs even when the
+    // range has no ops — a deferred unlist from an earlier block can become due
+    // in a quiet window, and the cursor must not advance past the deadline
+    // without materializing. The partial index keeps the UPDATE at ~zero cost
+    // when no rows are due.
+    await withTransaction(async (txn) => {
+      if (isMassive && hasOps) {
+        await txn`SET LOCAL synchronous_commit = OFF`;
+      }
 
+      if (hasOps) {
         let consecutiveFailures = 0;
         for (const batch of batches) {
           for (const rej of batch.rejected) {
@@ -418,12 +434,11 @@ export async function syncCycle(): Promise<void> {
             }
           }
         }
+      }
 
-        await updateLastBlock(lastBatch.to, txn);
-      });
-    } else {
-      await updateLastBlock(lastBatch.to);
-    }
+      await materializePendingUnlists(lastBatch.to, UNLIST_DELAY_BLOCKS, txn);
+      await updateLastBlock(lastBatch.to, txn);
+    });
 
     // Yield between batches during massive sync so Postgres can serve API queries.
     if (isMassive) {

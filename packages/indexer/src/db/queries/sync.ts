@@ -33,6 +33,21 @@ export async function updateLastBlock(blockNum: number, txn: Queryable = sql): P
 	`;
 }
 
+/**
+ * Persists the latest observed Hive HEAD block. Read by /api/multisig to
+ * enforce the lag gate: if (hive_head_block - last_block) > MULTISIG_LAG_MAX_BLOCKS,
+ * signing is refused. Updated each sync cycle after the chain-consensus fetch,
+ * independently from last_block so the lag signal stays fresh even when the
+ * indexer is actively catching up on a large gap.
+ */
+export async function updateHiveHeadBlock(blockNum: number, txn: Queryable = sql): Promise<void> {
+	await txn`
+		UPDATE sync_state
+		SET hive_head_block = ${blockNum}
+		WHERE id = 1 AND hive_head_block < ${blockNum}
+	`;
+}
+
 export async function insertInvalidOperation(
 	op: {
 		blockNum: number;

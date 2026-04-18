@@ -103,7 +103,8 @@ export async function updateNftOwner(
 		    owner_action = ${ctx.ownerAction},
 		    owner_block_num = ${ctx.ownerBlockNum},
 		    listing_id = NULL, listing_tx_id = NULL,
-		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
+		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL,
+		    pending_unlist_block = NULL
 		WHERE id = ${nftId}
 	`;
 	// Queue the delta BEFORE counter updates. See insertNft for rationale —
@@ -180,7 +181,8 @@ export async function updateNftListing(
 			UPDATE nfts
 			SET status = ${NFT_STATUS_ACTIVE},
 			    listing_id = NULL, listing_tx_id = NULL,
-			    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
+			    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL,
+			    pending_unlist_block = NULL
 			WHERE id = ${nftId}
 		`;
 		if (ctx.wasListed) {
@@ -200,6 +202,80 @@ export async function updateNftListing(
 			await adjustCollectionListed(ctx.collectionId, 1, txn);
 		}
 	}
+}
+
+/**
+ * Flags an NFT as being unlisted. The NFT keeps `status = 'listed'` so any
+ * multisig-signed buy already in flight can still settle inside the
+ * UNLIST_DELAY_BLOCKS window. The actual clearing of listing fields happens
+ * in `materializePendingUnlists`, which the sync engine invokes at block
+ * close once the delay has elapsed.
+ *
+ * `collection_stats.listed` is intentionally NOT decremented here — the NFT
+ * is still considered listed during the pending window. It decrements when
+ * materialization clears the row.
+ */
+export async function markPendingUnlist(
+	nftId: string,
+	blockNum: number,
+	txn: Queryable,
+): Promise<void> {
+	const result = await txn`
+		UPDATE nfts
+		SET pending_unlist_block = ${blockNum}
+		WHERE id = ${nftId}
+		  AND status = ${NFT_STATUS_LISTED}
+		  AND pending_unlist_block IS NULL
+	`;
+	if (result.count === 0) {
+		throw new Error(`markPendingUnlist: nft ${nftId} not listed or already pending`);
+	}
+}
+
+/**
+ * Materializes every pending unlist whose delay window has fully elapsed as of
+ * `blockNum`. Runs inside the block's outer transaction AFTER all ops in the
+ * block have been routed, so it sees the final in-block state.
+ *
+ * Decrements `collection_stats.listed` per materialized row. Batched so a bulk
+ * materialization stays O(rows-to-materialize) rather than O(rows * round-trip).
+ */
+export async function materializePendingUnlists(
+	blockNum: number,
+	delayBlocks: number,
+	txn: Queryable,
+): Promise<number> {
+	const threshold = blockNum - delayBlocks;
+	const rows = await txn<Array<{ readonly collection_id: string }>>`
+		UPDATE nfts
+		SET status = ${NFT_STATUS_ACTIVE},
+		    pending_unlist_block = NULL,
+		    listing_id = NULL, listing_tx_id = NULL,
+		    listing_price = NULL, listing_currency = NULL,
+		    listing_expires_at = NULL, listing_marketplace = NULL
+		WHERE pending_unlist_block IS NOT NULL
+		  AND pending_unlist_block <= ${threshold}
+		  AND status = ${NFT_STATUS_LISTED}
+		RETURNING collection_id
+	`;
+
+	if (rows.length === 0) return 0;
+
+	// Aggregate per-collection so stats are decremented once per collection
+	// instead of once per NFT — a collection with 50 simultaneous unlists
+	// materializes in ONE stats update. adjustCollectionListed is 1|-1 typed
+	// (per-NFT invariant); bulk decrements need a direct UPDATE.
+	const perCollection = new Map<string, number>();
+	for (const row of rows) {
+		perCollection.set(row.collection_id, (perCollection.get(row.collection_id) ?? 0) + 1);
+	}
+	for (const [collectionId, count] of perCollection) {
+		await txn`
+			UPDATE collection_stats SET listed = listed - ${count}
+			WHERE collection_id = ${collectionId}
+		`;
+	}
+	return rows.length;
 }
 
 export async function incrementDistributedBy(seedId: string, quantity: number, txn: Queryable = sql) {

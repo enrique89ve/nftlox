@@ -4,7 +4,6 @@ import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { processMultisigRequest } from "@/api/services/multisig-service.ts";
 import { createMultisigRateLimiter } from "@/api/services/multisig-rate-limiter.ts";
-import { createMultisigNftLock } from "@/api/services/multisig-nft-lock.ts";
 import { getMultisigHealth } from "@/api/services/multisig-health.ts";
 import { resolveClientIp } from "@/api/middleware/client-ip.ts";
 import { NFTLOX_POW_HEADER, validateMultisigPow } from "@/api/middleware/pow-validator.ts";
@@ -31,8 +30,6 @@ const ipRateLimiter = createMultisigRateLimiter(
 	config.multisigIpRateLimitWindowMs,
 );
 
-const nftLock = createMultisigNftLock();
-
 // TTL = MULTISIG_EXPIRATION_MS: cached signatures expire with the underlying
 // transaction. Cap = 10_000 entries matches the PoW replay cache — similar
 // working-set, similar memory budget.
@@ -53,6 +50,22 @@ type RejectionCode =
 	| "NFT_LOCKED"
 	| "INTERNAL_ERROR"
 	| string;
+
+function mapBuyErrorToStatus(code: string): number {
+	switch (code) {
+		case "NFT_LOCKED":
+			return 409;
+		case "INDEXER_LAGGED":
+			return 503;
+		case "SIGNING_QUEUE_FULL":
+		case "SIGNING_TIMEOUT":
+			return 503;
+		case "INTERNAL_ERROR":
+			return 500;
+		default:
+			return 400;
+	}
+}
 
 const multisigTransactionSchema = t.Object({
 	ref_block_num: t.Number(),
@@ -403,37 +416,24 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${ipRateResult.retryAfterMs}ms` };
 		}
 
-		// Acquire per-NFT lock to prevent two buyers co-signing the same NFT
-		const lockResult = await nftLock.acquire(body.nftId, body.buyer, MULTISIG_EXPIRATION_MS);
-		if (!lockResult.acquired) {
-			logRejection({
-				buyer: body.buyer,
-				nftId: body.nftId,
-				clientIp,
-				code: "NFT_LOCKED",
-				retryAfterMs: lockResult.retryAfterMs,
-			});
-			set.status = 409;
-			return {
-				ok: false,
-				code: "NFT_LOCKED",
-				message: `NFT is being purchased by another buyer. Retry after ${lockResult.retryAfterMs}ms`,
-			};
-		}
-
-		let signingSucceeded = false;
+		// Lock acquisition moved into processBuyRequest (post-validation) so an
+		// unvalidated body can no longer pin arbitrary NFTs — that was a DoS
+		// vector on this route. See api/services/multisig/buy.ts for the
+		// acquisition + release flow.
 		try {
 			const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId);
-			if (result.ok) {
-				signingSucceeded = true;
-			} else {
+			if (!result.ok) {
 				logRejection({
 					buyer: body.buyer,
 					nftId: body.nftId,
 					clientIp,
 					code: result.code,
+					retryAfterMs: result.retryAfterMs,
 				});
-				set.status = 400;
+				set.status = mapBuyErrorToStatus(result.code);
+				if (result.code === "NFT_LOCKED" && result.retryAfterMs !== undefined) {
+					set.headers["Retry-After"] = String(Math.ceil(result.retryAfterMs / 1000));
+				}
 			}
 			return result;
 		} catch (err) {
@@ -445,14 +445,6 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			});
 			set.status = 500;
 			return { ok: false, code: "INTERNAL_ERROR" as const, message: "Unexpected signing error" };
-		} finally {
-			// Release on failure so another buyer can retry immediately. On success
-			// we deliberately let the lock expire naturally (after
-			// MULTISIG_EXPIRATION_MS) so a second buyer can't be co-signed while
-			// the first signed tx is still within its broadcast window.
-			if (!signingSucceeded) {
-				await nftLock.release(body.nftId, body.buyer);
-			}
 		}
 	}, {
 		body: t.Object({

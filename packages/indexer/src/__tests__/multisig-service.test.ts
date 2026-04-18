@@ -77,6 +77,7 @@ function makeOp(
 }
 
 async function cleanDb() {
+	await sql`DELETE FROM multisig_locks`;
 	await sql`DELETE FROM nft_loans`;
 	await sql`DELETE FROM data_operators`;
 	await sql`DELETE FROM nft_allowances`;
@@ -1081,6 +1082,88 @@ describe("Multisig service (regression)", () => {
 				expect(result.digest).toMatch(/^[0-9a-f]{40}$/);
 				expect(result.expiration).toBe(getTransactionExpiration(body));
 			}
+		});
+	});
+
+	// Lag gate: blocks signing when the indexer is more than MULTISIG_LAG_MAX_BLOCKS
+	// behind Hive's observed HEAD. The service compares sync_state.hive_head_block
+	// (updated every cycle from the chain consensus fetch) against sync_state.last_block
+	// (advanced after each processed block). Without this gate, the signing node could
+	// co-sign a buy against NFT state that has since changed on-chain.
+	describe("lag gate", () => {
+		async function setSyncState(lastBlock: number, hiveHeadBlock: number) {
+			await sql`
+				UPDATE sync_state
+				SET last_block = ${lastBlock}, hive_head_block = ${hiveHeadBlock}
+				WHERE id = 1
+			`;
+		}
+
+		// Reset sync_state after each test so other describe blocks see defaults.
+		beforeEach(async () => {
+			await setSyncState(0, 0);
+		});
+
+		test("lag EQUAL to the max threshold passes through", async () => {
+			const { nftId, listingId, listTxId, nftTxId } = await seedListedInstance();
+			// lag = 3, MULTISIG_LAG_MAX_BLOCKS = 3 → 3 > 3 is false → pass
+			await setSyncState(1000, 1003);
+
+			const body = makeMultisigBody({
+				buyer: "bob", nftId, listingId, listTxId, nftTxId, seller: "alice",
+			});
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
+
+			expect(result.ok).toBe(true);
+		});
+
+		test("lag ABOVE the max threshold returns INDEXER_LAGGED with retryAfterMs", async () => {
+			const { nftId, listingId, listTxId, nftTxId } = await seedListedInstance();
+			// lag = 4, MULTISIG_LAG_MAX_BLOCKS = 3 → reject
+			await setSyncState(1000, 1004);
+
+			const body = makeMultisigBody({
+				buyer: "bob", nftId, listingId, listTxId, nftTxId, seller: "alice",
+			});
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
+
+			assertRejected(result, "INDEXER_LAGGED");
+			if (!result.ok) {
+				expect(result.message).toContain("blocks behind");
+				expect(result.retryAfterMs).toBeGreaterThan(0);
+			}
+		});
+
+		test("large lag produces a proportionally larger retryAfterMs", async () => {
+			const { nftId, listingId, listTxId, nftTxId } = await seedListedInstance();
+			await setSyncState(1000, 1050); // 50 blocks behind
+
+			const body = makeMultisigBody({
+				buyer: "bob", nftId, listingId, listTxId, nftTxId, seller: "alice",
+			});
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
+
+			assertRejected(result, "INDEXER_LAGGED");
+			if (!result.ok) {
+				// ≥ (deficit 48) * 3000ms = 144_000ms
+				expect(result.retryAfterMs).toBeGreaterThanOrEqual(144_000);
+			}
+		});
+
+		test("lag gate fires BEFORE NFT lookup — ghost NFT still returns INDEXER_LAGGED", async () => {
+			// Even though the NFT id is bogus, the lag check short-circuits first.
+			await setSyncState(1000, 1050);
+
+			const body = makeMultisigBody({
+				buyer: "bob",
+				nftId: "nft_does_not_exist",
+				listingId: "listing_ghost",
+				listTxId: "tx_ghost",
+				seller: "alice",
+			});
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
+
+			assertRejected(result, "INDEXER_LAGGED");
 		});
 	});
 });

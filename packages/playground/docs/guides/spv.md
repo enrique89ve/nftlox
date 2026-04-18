@@ -39,7 +39,7 @@ import {
 	createDefaultL1Config,
 	verifyNftOwnership,
 	type OwnershipVerificationResult,
-} from "@nftlox/sdk/spv";
+} from "nftlox-sdk";
 
 const result: OwnershipVerificationResult = await verifyNftOwnership({
 	nftId: "nft_abc123",
@@ -74,7 +74,7 @@ interface OwnershipVerificationResult {
 ## Verify Deterministic Derivation
 
 ```typescript
-import { verifyDeterministicDerivation } from "@nftlox/sdk/spv";
+import { verifyDeterministicDerivation } from "nftlox-sdk";
 
 const derived = await verifyDeterministicDerivation({
 	seedId: "seed_abc123",
@@ -94,7 +94,7 @@ console.log(derived.accessKey);
 ## Verify Listing Price
 
 ```typescript
-import { createDefaultL1Config, verifyListingPrice } from "@nftlox/sdk/spv";
+import { createDefaultL1Config, verifyListingPrice } from "nftlox-sdk";
 
 const result = await verifyListingPrice({
 	listTxId: "abc123def456789012345678901234567890abcd",
@@ -117,7 +117,7 @@ if (result.status !== "verified") {
 import {
 	createDefaultL1Config,
 	verifyOperationOnChain,
-} from "@nftlox/sdk/spv";
+} from "nftlox-sdk";
 
 const result = await verifyOperationOnChain({
 	txId: "abc123def456789012345678901234567890abcd",
@@ -136,7 +136,7 @@ console.log(result.message);
 ## Configuration
 
 ```typescript
-import { createDefaultL1Config } from "@nftlox/sdk/spv";
+import { createDefaultL1Config } from "nftlox-sdk";
 
 const l1Config = createDefaultL1Config();
 l1Config.endpoints = ["https://api.hive.blog"];

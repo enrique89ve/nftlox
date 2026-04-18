@@ -266,7 +266,7 @@ Note: The `signer` field in the request body maps to `owner` internally.
 ### Lend an NFT
 
 ```typescript
-import { buildNftLend } from "@nftlox/sdk";
+import { buildNftLend } from "nftlox-sdk";
 
 const result = buildNftLend({
 	owner: "alice",
@@ -286,7 +286,7 @@ if (!result.success) {
 ### Return a Lent NFT
 
 ```typescript
-import { buildNftReturn } from "@nftlox/sdk";
+import { buildNftReturn } from "nftlox-sdk";
 
 // Borrower returns
 const result = buildNftReturn({
@@ -303,7 +303,7 @@ if (result.success) {
 ### Using Payload Creators Directly
 
 ```typescript
-import { createNftLendPayload, createNftReturnPayload } from "@nftlox/sdk";
+import { createNftLendPayload, createNftReturnPayload } from "nftlox-sdk";
 
 // Lend
 const lendPayload = createNftLendPayload({
@@ -322,7 +322,7 @@ const returnPayload = createNftReturnPayload({
 ### Using Operation Creators
 
 ```typescript
-import { createNftLendOperation, createNftReturnOperation } from "@nftlox/sdk";
+import { createNftLendOperation, createNftReturnOperation } from "nftlox-sdk";
 
 // Lend operation (owner signs with posting key)
 const lendOp = createNftLendOperation(

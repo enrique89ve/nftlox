@@ -1,3 +1,8 @@
+import * as constants from "./constants";
+import * as rng from "./rng";
+import * as packDefinition from "./pack-definition";
+import * as openPlan from "./open-plan";
+
 export type {
 	PackDropEntry,
 	PackDefinitionInput,
@@ -9,31 +14,23 @@ export type {
 	PackSelection,
 	ReservationConsumption,
 	PackOpenPlan,
-} from "./types.ts";
+} from "./types";
 
-export {
-	MAX_DROP_TABLE_ENTRIES,
-	MAX_ITEMS_PER_PACK,
-	MAX_PACK_OPEN_BATCH,
-	MIN_DROP_WEIGHT,
-	MAX_DROP_WEIGHT,
-} from "./constants.ts";
+export const MAX_DROP_TABLE_ENTRIES = constants.MAX_DROP_TABLE_ENTRIES;
+export const MAX_ITEMS_PER_PACK = constants.MAX_ITEMS_PER_PACK;
+export const MAX_PACK_OPEN_BATCH = constants.MAX_PACK_OPEN_BATCH;
+export const MIN_DROP_WEIGHT = constants.MIN_DROP_WEIGHT;
+export const MAX_DROP_WEIGHT = constants.MAX_DROP_WEIGHT;
 
-export {
-	generateDeterministicPackId,
-	isPackId,
-	deterministicRng,
-	resolveDropTable,
-} from "./rng.ts";
+export const generateDeterministicPackId = rng.generateDeterministicPackId;
+export const isPackId = rng.isPackId;
+export const deterministicRng = rng.deterministicRng;
+export const resolveDropTable = rng.resolveDropTable;
 
-export {
-	assertValidPackDefinition,
-	createPackDefinition,
-	computeReservedSupply,
-	validateReservationDemand,
-} from "./pack-definition.ts";
+export const assertValidPackDefinition = packDefinition.assertValidPackDefinition;
+export const createPackDefinition = packDefinition.createPackDefinition;
+export const computeReservedSupply = packDefinition.computeReservedSupply;
+export const validateReservationDemand = packDefinition.validateReservationDemand;
 
-export {
-	selectPackSeedIds,
-	buildPackOpenPlan,
-} from "./open-plan.ts";
+export const selectPackSeedIds = openPlan.selectPackSeedIds;
+export const buildPackOpenPlan = openPlan.buildPackOpenPlan;

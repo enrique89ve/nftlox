@@ -39,6 +39,8 @@ Response:
 }
 ```
 
+`nodeAccount` is the Hive account that co-signs node-controlled multisig flows. SDK bots can read it with `createIndexerClient(baseUrl).getMultisigNodeAccount()` or by passing `indexerBaseUrl` to `buildCollection()` / `buildCollectionWithSeeds()`.
+
 ## Reading Data
 
 All read endpoints are `GET` requests. No authentication is required.

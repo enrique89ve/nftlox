@@ -122,7 +122,7 @@ import {
 	type DeterministicCollectionInput,
 	type DeterministicMintInput,
 	type CollectionSchema,
-} from "@nftlox/sdk";
+} from "nftlox-sdk";
 import hive from "hive-tx";
 
 // ---------------------------------------------------------------

@@ -24,7 +24,7 @@ import {
 	ACTION_NFT_RETURN,
 	isProtocolAction,
 	type ProtocolAction,
-} from "./constants.ts";
+} from "./constants";
 
 export type AuthLevel = "active" | "posting";
 

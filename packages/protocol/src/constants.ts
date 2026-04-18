@@ -68,6 +68,20 @@ export const MAX_TRANSFER_BATCH_SIZE = 50;
 export const MULTISIG_EXPIRATION_MS = 125_000;
 export const MAX_MULTISIG_OPERATIONS = 5;
 
+// Max block gap between the Hive HEAD and the indexer's last-processed block
+// that still allows /api/multisig to sign. Exceeding this means the API would
+// read a stale NFT snapshot and could co-sign against state that has since
+// been invalidated (unlist/transfer/burn in an un-indexed block). Hive block
+// time is 3s, so 3 blocks ≈ 9s.
+export const MULTISIG_LAG_MAX_BLOCKS = 3;
+
+// Cooldown blocks an unlist stays pending before materializing to 'active'.
+// During the window the NFT keeps status='listed' so a multisig-signed buy
+// already in flight can still settle. 3 blocks pairs with
+// MULTISIG_LAG_MAX_BLOCKS so every signed buy outlives its originating
+// unlist race deterministically across all indexers.
+export const UNLIST_DELAY_BLOCKS = 3;
+
 // Floor for opt-in listing in the PUBLIC node directory (l2_nodes). Running a
 // node is permissionless and does not require registration — a game or dapp
 // operator can index + serve privately without ever emitting `node_register`.

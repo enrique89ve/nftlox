@@ -6,6 +6,9 @@ import {
 	txIdSchema,
 	usernameSchema,
 	priceSchema,
+	fetchNodeAccount,
+	fetchMultisigNodeAccount,
+	resolveNodeAccountFromStatus,
 	// Existing exports (regression check)
 	PROTOCOL_ID,
 	buildArchiveCollection,
@@ -32,6 +35,12 @@ describe("New exports exist and have the correct type", () => {
 
 	test("priceSchema is a Zod schema (has .safeParse)", () => {
 		expect(typeof priceSchema.safeParse).toBe("function");
+	});
+
+	test("node account helpers are functions", () => {
+		expect(typeof fetchNodeAccount).toBe("function");
+		expect(typeof fetchMultisigNodeAccount).toBe("function");
+		expect(typeof resolveNodeAccountFromStatus).toBe("function");
 	});
 });
 

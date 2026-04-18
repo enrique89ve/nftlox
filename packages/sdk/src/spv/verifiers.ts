@@ -5,7 +5,7 @@ import {
 	generateDeterministicInstanceId,
 	generateDeterministicInstanceDna,
 	generateDeterministicAccessKey,
-} from "../dna.ts";
+} from "../dna";
 import {
 	ACTION_MINT,
 	ACTION_BULK_DISTRIBUTE,
@@ -23,7 +23,7 @@ import {
 	fetchTransaction,
 	parseNftloxOperation,
 	resolveOperationById,
-} from "./hive-l1-client.ts";
+} from "./hive-l1-client";
 import type {
 	HiveL1Config,
 	OnChainVerificationResult,
@@ -34,7 +34,7 @@ import type {
 	ListingPriceVerifyParams,
 	ListingPriceVerificationResult,
 	OnChainPrice,
-} from "./types.ts";
+} from "./types";
 
 // ============ PURE VERIFIERS (no network) ============
 

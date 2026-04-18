@@ -90,7 +90,7 @@ curl -X POST https://api-nftlox.hivecreators.co/api/build/list \
 ### SDK usage
 
 ```typescript
-import { buildList } from "@nftlox/sdk";
+import { buildList } from "nftlox-sdk";
 
 const result = await buildList({
 	owner: "alice",
@@ -329,7 +329,7 @@ const result = await tx.broadcast();
 ### SDK usage (full flow)
 
 ```typescript
-import { createIndexerClient, buildBuy } from "@nftlox/sdk";
+import { createIndexerClient, buildBuy } from "nftlox-sdk";
 
 const client = createIndexerClient("https://api-nftlox.hivecreators.co");
 
@@ -461,7 +461,7 @@ curl -X POST https://api-nftlox.hivecreators.co/api/build/unlist \
 ### SDK usage
 
 ```typescript
-import { buildUnlist } from "@nftlox/sdk";
+import { buildUnlist } from "nftlox-sdk";
 
 const result = await buildUnlist({
 	owner: "alice",
@@ -596,7 +596,7 @@ curl "https://api-nftlox.hivecreators.co/api/marketplace/listings?currency=HIVE&
 ### SDK usage
 
 ```typescript
-import { createIndexerClient } from "@nftlox/sdk";
+import { createIndexerClient } from "nftlox-sdk";
 
 const client = createIndexerClient("https://api-nftlox.hivecreators.co");
 

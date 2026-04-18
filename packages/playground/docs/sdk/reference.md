@@ -69,7 +69,7 @@ Each payload creator has a matching `create*Operation()` that wraps it in a `cus
 
 ## Builders (Zod-validated, standalone pure functions)
 
-Higher-level functions that validate input via Zod schemas, generate deterministic IDs, and return a `BuildResult` with `payload`, `operation`, and optional `generatedId`/`warnings`.
+Higher-level functions validate input via Zod schemas, generate deterministic IDs, and return a `KeychainResult` with `payload`, `operations`, and optional `generatedIds`/`warnings`. Bulk collection creation returns a `CollectionCreationPlan`.
 
 | Function | Description |
 |----------|-------------|
@@ -102,7 +102,7 @@ Higher-level functions that validate input via Zod schemas, generate determinist
 Pure function to validate an NFT operation against current state before broadcasting. No API calls — the caller passes NFT data fetched from `GET /api/nfts/:id`.
 
 ```typescript
-import { validateNftOperation, ACTION_TRANSFER } from "@nftlox/sdk";
+import { validateNftOperation, ACTION_TRANSFER } from "nftlox-sdk";
 
 const nft = await indexer.getNft("seed_abc123");
 const result = validateNftOperation(ACTION_TRANSFER, nft, "alice", nft.id);
@@ -126,15 +126,18 @@ Related types: `NftState`, `PreValidationResult`.
 
 ## Multisig Client
 
-Functions for interacting with an indexer node's multisig endpoints (buy flow).
+Functions for interacting with an indexer node's multisig endpoints and resolving the node account used for co-signatures.
 
 | Function | Description |
 |----------|-------------|
+| `resolveNodeAccountFromStatus(status, options?)` | Extract and validate `nodeAccount` from `/api/status` |
+| `fetchNodeAccount(indexerUrl, options?)` | Fetch `/api/status` and return the node account |
+| `fetchMultisigNodeAccount(indexerUrl)` | Fetch the node account and require multisig readiness |
 | `fetchPaymentInfo(indexerUrl, nftId)` | Fetch payment split for building a buy tx |
 | `requestBuyMultisig(indexerUrl, request)` | Send unsigned buy tx for node co-signature |
 | `requestCreateCollectionMultisig(indexerUrl, request)` | Send unsigned collection tx for node co-signature |
 
-Related types: `BuyMultisigRequest`, `CreateCollectionMultisigRequest`, `MultisigResponse`, `MultisigErrorCode`, `PaymentInfo`.
+Related types: `ResolveNodeAccountOptions`, `BuyMultisigRequest`, `CreateCollectionMultisigRequest`, `MultisigResponse`, `MultisigErrorCode`, `PaymentInfo`.
 
 ---
 
@@ -145,12 +148,15 @@ Portable API client using only `fetch()` -- works in browser, Bun, and Node.
 ```typescript
 const indexer = createIndexerClient("http://localhost:3050");
 const status = await indexer.getStatus();
+const nodeAccount = await indexer.getMultisigNodeAccount();
 const nft = await indexer.getNft("nft_abc123");
 ```
 
 | Method | Description |
 |--------|-------------|
 | `getStatus()` | Sync status |
+| `getNodeAccount(options?)` | Return the validated node account from status |
+| `getMultisigNodeAccount()` | Return node account only if multisig is enabled and signer-ready |
 | `getHealth()` | Health check |
 | `getStats()` | Protocol statistics |
 | `getCollections(params?)` | List collections |
@@ -235,4 +241,4 @@ Trustless verification -- the browser reads Hive L1 directly and replays determi
 
 ## Types
 
-All TypeScript interfaces are exported: `CollectionData`, `NFTData`, `ProtocolPayload`, `Price`, `HiveOperation`, `NftLendData`, `BuyData`, `PaymentInfo`, `MultisigRequest`, `MultisigResponse`, `BuildResult`, `ValidationError`, and more.
+All TypeScript interfaces are exported: `CollectionData`, `NFTData`, `ProtocolPayload`, `Price`, `HiveOperation`, `NftLendData`, `BuyData`, `PaymentInfo`, `MultisigRequest`, `MultisigResponse`, `KeychainResult`, `ValidationError`, and more.

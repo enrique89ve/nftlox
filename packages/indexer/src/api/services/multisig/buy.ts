@@ -12,10 +12,12 @@ import {
 	validatePayloadDataString,
 	validateNonEmptyString,
 } from "@/api/services/multisig/transaction.ts";
-import { validateHiveUsername } from "@/protocol/index.ts";
+import { validateHiveUsername, UNLIST_DELAY_BLOCKS } from "@/protocol/index.ts";
 import { verifyTransfers, requireSupportedCurrency, type TransferRecord } from "@/utils/validation.ts";
+import type { Queryable } from "@/db/client.ts";
 import type {
 	MultisigBaseContext,
+	MultisigBuyContext,
 	MultisigRules,
 	NftStateResult,
 	ValidatedBuyPayload,
@@ -24,7 +26,7 @@ import type {
 
 export async function processBuyRequest(
 	rawBody: unknown,
-	ctx: MultisigBaseContext,
+	ctx: MultisigBuyContext,
 ) {
 	const requestShape = validateBuyRequestShape(rawBody);
 	const usernameError = validateHiveUsername(requestShape.buyer);
@@ -42,12 +44,21 @@ export async function processBuyRequest(
 		),
 	};
 
-	// Per-NFT concurrency is serialized by the route-level multisig_locks
-	// acquire (see api/routes/multisig.ts). The lock covers the full Hive tx
-	// lifetime (MULTISIG_EXPIRATION_MS) so a second buyer cannot be co-signed
-	// before the first signed tx has had a chance to land or expire. Seller-
-	// side direct unlist/transfer races are irreducible and surface post-hoc
-	// in orphaned_buys.
+	// Lag gate: before signing, the indexer must be caught up to within
+	// lagMaxBlocks of Hive's observed HEAD. Otherwise the NFT state we're
+	// validating against is stale and the signing node could co-sign against
+	// a listing that has since been unlisted/transferred/burned. Clients get
+	// a 503 with retryAfterMs so the UX can back off gracefully.
+	const syncState = await readSyncState(ctx.db);
+	const lag = syncState.hiveHeadBlock - syncState.lastBlock;
+	if (lag > ctx.lagMaxBlocks) {
+		const retryAfterMs = estimateLagRetryMs(lag, ctx.lagMaxBlocks);
+		throw createMultisigError(
+			"INDEXER_LAGGED",
+			`Indexer is ${lag} blocks behind Hive HEAD (max ${ctx.lagMaxBlocks}); retry in ~${retryAfterMs}ms`,
+			{ retryAfterMs },
+		);
+	}
 
 	const { nft, rules, nftTxId } = await validateNftState(request.nftId, request.buyer, ctx);
 	if (nft.listing_id !== request.listingId) {
@@ -55,6 +66,23 @@ export async function processBuyRequest(
 	}
 	if (nft.listing_tx_id !== request.listTxId) {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "listTxId does not match current listing");
+	}
+
+	// If the seller has already broadcast `unlist`, the NFT keeps status='listed'
+	// during UNLIST_DELAY_BLOCKS but a fresh buy signed now would likely land
+	// past the deadline and be rejected by the indexer. Refuse to sign unless
+	// the deadline is at least one block past the assumed landing block
+	// (hive_head_block + 1, conservative).
+	if (nft.pending_unlist_block !== null) {
+		const deadline = nft.pending_unlist_block + UNLIST_DELAY_BLOCKS;
+		const assumedLanding = syncState.hiveHeadBlock + 1;
+		if (assumedLanding > deadline) {
+			throw createMultisigError(
+				"NFT_NOT_LISTED",
+				`NFT ${request.nftId} has a pending unlist (block ${nft.pending_unlist_block}); ` +
+					`deadline ${deadline} is past assumed landing ${assumedLanding}`,
+			);
+		}
 	}
 
 	validateBuyPayloadData(
@@ -73,7 +101,65 @@ export async function processBuyRequest(
 		ctx.nodeAccount,
 	);
 
-	return ctx.sign(request.transaction);
+	// Per-NFT lock lives for MULTISIG_EXPIRATION_MS and is consulted by the
+	// indexer's transfer/transfer_from/unlist/burn/lend handlers. While a
+	// matching lock exists those actions are rejected; only the matching buy
+	// (same listing_id + list_tx_id) consumes it on landing. Deliberately
+	// acquired AFTER all validation so an unvalidated body can never pin
+	// arbitrary NFTs — the earlier route-level acquisition was a DoS vector.
+	const lockResult = await ctx.nftLock.acquire({
+		nftId: request.nftId,
+		buyer: request.buyer,
+		listingId: request.listingId,
+		listTxId: request.listTxId,
+		snapshotBlock: syncState.lastBlock,
+		expirationMs: ctx.lockExpirationMs,
+	});
+	if (!lockResult.acquired) {
+		throw createMultisigError(
+			"NFT_LOCKED",
+			`NFT ${request.nftId} is being purchased by '${lockResult.heldBy}'. Retry after ${lockResult.retryAfterMs}ms`,
+			{ retryAfterMs: lockResult.retryAfterMs },
+		);
+	}
+
+	try {
+		const response = await ctx.sign(request.transaction);
+		if (!response.ok) {
+			// Sign failed: release so another buyer can retry immediately.
+			// On success we let the lock expire naturally to protect the
+			// signed tx's broadcast window.
+			await ctx.nftLock.release(request.nftId, request.buyer);
+		}
+		return response;
+	} catch (err) {
+		await ctx.nftLock.release(request.nftId, request.buyer);
+		throw err;
+	}
+}
+
+type SyncStateSnapshot = Readonly<{ readonly lastBlock: number; readonly hiveHeadBlock: number }>;
+
+async function readSyncState(db: Queryable): Promise<SyncStateSnapshot> {
+	const [row] = await db`SELECT last_block, hive_head_block FROM sync_state WHERE id = 1`;
+	if (!row) {
+		throw createMultisigError("INTERNAL_ERROR", "sync_state row missing — indexer not initialized");
+	}
+	const lastBlock = Number(row.last_block);
+	const hiveHeadBlock = Number(row.hive_head_block);
+	if (!Number.isFinite(lastBlock) || !Number.isFinite(hiveHeadBlock)) {
+		throw createMultisigError("INTERNAL_ERROR", "sync_state row has invalid block numbers");
+	}
+	return { lastBlock, hiveHeadBlock };
+}
+
+// Hive block time is 3s. Back-pressure the client long enough that the
+// indexer can catch up (overshoot the deficit by one block) so a naive
+// retry loop converges rather than hammering the API.
+const HIVE_BLOCK_TIME_MS = 3000;
+function estimateLagRetryMs(lag: number, lagMaxBlocks: number): number {
+	const deficit = Math.max(1, lag - lagMaxBlocks + 1);
+	return deficit * HIVE_BLOCK_TIME_MS;
 }
 
 function validateBuyTransactionStructure(

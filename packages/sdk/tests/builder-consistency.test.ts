@@ -3,11 +3,68 @@ import { test, expect, describe } from "bun:test";
 import {
 	buildArchiveCollection,
 	buildCollection,
+	createIndexerClient,
 	buildSeed,
 	buildSeedBatch,
+	resolveNodeAccountFromStatus,
 	type CreateCollectionInput,
 	type HiveOperation,
 } from "../src/index";
+
+type MockFetch = (
+	input: Parameters<typeof fetch>[0],
+	init?: Parameters<typeof fetch>[1],
+) => ReturnType<typeof fetch>;
+
+async function withMockFetch<T>(mockFetch: MockFetch, run: () => Promise<T>): Promise<T> {
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = mockFetch as typeof fetch;
+	try {
+		return await run();
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+}
+
+const readyStatus = {
+	protocolVersion: "0.6.0",
+	protocolId: "nftlox_testnet",
+	nodeAccount: "nftlox-node",
+	nodeUrl: "https://indexer.test",
+	multisigEnabled: true,
+	multisigSignerReady: true,
+	multisigClockDriftOk: true,
+	lastBlock: 100,
+	headBlock: 100,
+	blocksBehind: 0,
+	inSync: true,
+};
+
+describe("node account resolution", () => {
+	test("extracts nodeAccount from status", () => {
+		expect(resolveNodeAccountFromStatus(readyStatus)).toBe("nftlox-node");
+	});
+
+	test("requires multisig readiness when requested", () => {
+		expect(() => resolveNodeAccountFromStatus({
+			...readyStatus,
+			multisigSignerReady: false,
+		}, { requireMultisigReady: true })).toThrow("multisig signer is not ready");
+	});
+
+	test("indexer client exposes explicit node account helpers", async () => {
+		const mockFetch: MockFetch = async () => new Response(JSON.stringify(readyStatus), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+
+		await withMockFetch(mockFetch, async () => {
+			const client = createIndexerClient("https://indexer.test");
+			expect(await client.getNodeAccount()).toBe("nftlox-node");
+			expect(await client.getMultisigNodeAccount()).toBe("nftlox-node");
+		});
+	});
+});
 
 describe("buildCollection consistency", () => {
 	const validInput: CreateCollectionInput = {
@@ -38,6 +95,25 @@ describe("buildCollection consistency", () => {
 		expect(result.success).toBe(false);
 		if (result.success) throw new Error("Expected failure");
 		expect(result.errors[0]?.field).toBe("nodeAccount");
+	});
+
+	test("can resolve nodeAccount from indexerBaseUrl", async () => {
+		const mockFetch: MockFetch = async () => new Response(JSON.stringify(readyStatus), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+
+		await withMockFetch(mockFetch, async () => {
+			const result = await buildCollection(validInput, { indexerBaseUrl: "https://indexer.test" });
+			if (!result.success) throw new Error("Expected success");
+
+			const transferOp = result.operations[0] as unknown as readonly ["transfer", Record<string, string>];
+			const customJson = result.operations[1] as HiveOperation;
+
+			expect(transferOp[1]?.to).toBe("nftlox-node");
+			expect(customJson[1].required_auths).toEqual(["nftlox-node"]);
+			expect(result.coSigners?.[0]?.account).toBe("nftlox-node");
+		});
 	});
 
 	test("generatedIds.collectionId matches payload.data.id", async () => {

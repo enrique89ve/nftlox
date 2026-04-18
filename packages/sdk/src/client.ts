@@ -2,9 +2,9 @@
 // Portable client using only fetch() — works in browser, Bun, and Node.
 
 import type { PaymentInfo, MultisigRequest, MultisigResponse } from "@nftlox/protocol";
-import type { RequestMultisigOptions } from "./multisig.ts";
-import { resolveInstance } from "./inheritance.ts";
-import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow.ts";
+import { resolveNodeAccountFromStatus, type RequestMultisigOptions, type ResolveNodeAccountOptions } from "./multisig";
+import { resolveInstance } from "./inheritance";
+import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow";
 
 // ============ ERROR ============
 
@@ -438,6 +438,8 @@ async function post<T>(
 export interface IndexerClient {
 	// Status
 	getStatus(): Promise<SyncStatus>;
+	getNodeAccount(options?: ResolveNodeAccountOptions): Promise<string>;
+	getMultisigNodeAccount(): Promise<string>;
 	getHealth(): Promise<HealthStatus>;
 	getStats(): Promise<ProtocolStats>;
 
@@ -487,9 +489,16 @@ export interface IndexerClient {
  * indexer to prevent SSRF. Do not pass user-controlled URLs.
  */
 export function createIndexerClient(baseUrl: string): IndexerClient {
+	const getStatus = () => get<SyncStatus>(baseUrl, "/api/status");
+
 	return {
 		// ---- Status ----
-		getStatus: () => get<SyncStatus>(baseUrl, "/api/status"),
+		getStatus,
+		getNodeAccount: async (options) => resolveNodeAccountFromStatus(await getStatus(), options),
+		getMultisigNodeAccount: async () => resolveNodeAccountFromStatus(
+			await getStatus(),
+			{ requireMultisigReady: true },
+		),
 		getHealth: () => get<HealthStatus>(baseUrl, "/api/health"),
 		getStats: () => get<ProtocolStats>(baseUrl, "/api/stats"),
 

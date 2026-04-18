@@ -9,7 +9,9 @@
 		"moduleResolution": "bundler",
 		"baseUrl": ".",
 		"paths": {
-			"@/*": ["src/*"]
+			"@/*": ["src/*"],
+			"@nftlox/protocol": ["../protocol/src/index.ts"],
+			"nftlox-sdk": ["../sdk/src/index.ts"]
 		},
 		"allowImportingTsExtensions": true,
 		"verbatimModuleSyntax": true,

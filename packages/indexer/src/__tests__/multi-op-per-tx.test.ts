@@ -21,6 +21,7 @@ import { handleBulkDistribute } from "@/processor/handlers/core/bulk-distribute.
 import { handleTransfer } from "@/processor/handlers/core/transfer.ts";
 import { handleList } from "@/processor/handlers/marketplace/list.ts";
 import { handleUnlist } from "@/processor/handlers/marketplace/unlist.ts";
+import { materializePendingUnlists } from "@/db/queries/nft-mutations.ts";
 import { routeOperation } from "@/processor/action-router.ts";
 import { config } from "@/config.ts";
 import {
@@ -36,6 +37,7 @@ import {
 	generateListingId,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
+	UNLIST_DELAY_BLOCKS,
 } from "@/protocol/index.ts";
 
 /**
@@ -679,10 +681,20 @@ describe("Multi-operation per transaction", () => {
 				txId: sharedTxId, operationId: "op_list",
 			}), txn));
 
-			// Op 2: unlist (same tx_id, different operation_id)
+			// Op 2: unlist (same tx_id, different operation_id).
+			// Unlist is now two-phase: sets pending_unlist_block; materialization
+			// at block + UNLIST_DELAY_BLOCKS flips status back to 'active'.
 			await withTransaction((txn) => handleUnlist(makeOp(ACTION_UNLIST, { nftId: instanceId }, {
 				txId: sharedTxId, operationId: "op_unlist",
 			}), txn));
+
+			const [pending] = await sql`SELECT status, pending_unlist_block FROM nfts WHERE id = ${instanceId}`;
+			expect(pending!.status).toBe("listed");
+			expect(Number(pending!.pending_unlist_block)).toBe(SHARED_BLOCK);
+
+			await withTransaction((txn) => materializePendingUnlists(
+				SHARED_BLOCK + UNLIST_DELAY_BLOCKS, UNLIST_DELAY_BLOCKS, txn,
+			));
 
 			const [nft] = await sql`SELECT status, listing_price FROM nfts WHERE id = ${instanceId}`;
 			expect(nft!.status).toBe("active");

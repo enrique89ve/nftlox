@@ -10,6 +10,7 @@ import {
 } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertOwnershipChangeable, assertNotSeed } from "@/utils/status-checks.ts";
+import { assertNoActiveMultisigLock } from "@/utils/multisig-locks.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { ACTION_NFT_TRANSFER_FROM } from "@/protocol/index.ts";
 
@@ -21,6 +22,10 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 
 	if (from === to) throw new Error("Cannot transfer to yourself");
+
+	// Delegated transfer races a co-signed buy identically to a direct transfer.
+	// Gate first so the savepoint never touches allowance tables on rejection.
+	await assertNoActiveMultisigLock(instanceId, op.timestamp, txn);
 
 	const nft = await getNftForProcessingForUpdate(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);

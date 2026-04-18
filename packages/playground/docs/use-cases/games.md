@@ -40,41 +40,54 @@ Define your NFT types upfront with **typed schemas**—immutable stats (rarity, 
 ### Example: RPG Loot System
 
 ```typescript
-import { buildCollection, GAMING_SCHEMA } from "@nftlox/sdk";
+import { buildCollection } from "nftlox-sdk";
 
-const lootCollection = await buildCollection({
-	creator: "game-treasury",
-	name: "Mystic Loot",
-	symbol: "LOOT",
-	totalPotential: 10000,
-	metadata: {
-		description: "In-game equipment with dynamic stats",
-		image: "https://example.com/loot-banner.png",
-		externalUrl: "https://game.example.com",
-	},
-	rules: {
-		transferable: true,
-		burnable: false, // Loot cannot be destroyed; must be returned to treasury
-		royaltyPct: 5,
-		royaltyRecipient: "game-treasury",
-	},
-	schema: {
-		immutable: [
-			{ name: "item_type", type: "string" }, // "sword", "shield", "helmet"
-			{ name: "rarity", type: "string" },    // "common", "rare", "epic", "legendary"
-			{ name: "base_attack", type: "uint16" },
-			{ name: "base_defense", type: "uint16" },
-		],
-		mutable: [
-			{ name: "level", type: "uint8" },
-			{ name: "durability", type: "uint16" },
-			{ name: "owner_level", type: "uint8" }, // minimum level to equip
-			{ name: "enchantments", type: "string[]" },
-		],
-	},
-});
+const INDEXER_URL = "https://api-nftlox.hivecreators.co";
 
-console.log(`✓ Loot collection: ${lootCollection.generatedIds.collectionId}`);
+const lootCollection = await buildCollection(
+	{
+		creator: "game-treasury",
+		name: "Mystic Loot",
+		symbol: "LOOT",
+		totalPotential: 10000,
+		metadata: {
+			description: "In-game equipment with dynamic stats",
+			image: "https://example.com/loot-banner.png",
+			externalUrl: "https://game.example.com",
+		},
+		rules: {
+			transferable: true,
+			burnable: false, // Loot cannot be destroyed; must be returned to treasury
+			royaltyPct: 5,
+			royaltyRecipient: "game-treasury",
+		},
+		schema: {
+			immutable: [
+				{ name: "item_type", type: "string" }, // "sword", "shield", "helmet"
+				{ name: "rarity", type: "string" },    // "common", "rare", "epic", "legendary"
+				{ name: "base_attack", type: "uint16" },
+				{ name: "base_defense", type: "uint16" },
+			],
+			mutable: [
+				{ name: "level", type: "uint8" },
+				{ name: "durability", type: "uint16" },
+				{ name: "owner_level", type: "uint8" }, // minimum level to equip
+				{ name: "enchantments", type: "string[]" },
+			],
+		},
+	},
+	{
+		indexerBaseUrl: INDEXER_URL,
+		feeCurrency: "HBD",
+		feeAmount: "0.100",
+	},
+);
+
+if (!lootCollection.success) {
+	throw new Error(`Collection build failed: ${JSON.stringify(lootCollection.errors)}`);
+}
+
+console.log(`✓ Loot collection: ${lootCollection.generatedIds?.collectionId}`);
 ```
 
 ---
@@ -86,7 +99,9 @@ For bulk NFT creation at launch, use `buildCollectionWithSeeds` to generate a co
 ### Example: 250 Hero Cards
 
 ```typescript
-import { buildCollectionWithSeeds } from "@nftlox/sdk";
+import { buildCollectionWithSeeds } from "nftlox-sdk";
+
+const INDEXER_URL = "https://api-nftlox.hivecreators.co";
 
 const plan = await buildCollectionWithSeeds(
 	{
@@ -133,7 +148,7 @@ const plan = await buildCollectionWithSeeds(
 		owner: "game-treasury",
 	},
 	{
-		nodeAccount: "nftlox",
+		indexerBaseUrl: INDEXER_URL,
 		feeCurrency: "HBD",
 		feeAmount: "0.100",
 	},
@@ -159,7 +174,7 @@ console.log(`✓ Batches: ${plan.seedBatches.length}`);
 When a player earns or purchases an item, distribute an **instance** from a seed using `bulk_distribute`.
 
 ```typescript
-import { buildBulkDistribute } from "@nftlox/sdk";
+import { buildBulkDistribute } from "nftlox-sdk";
 
 // Player loots 3 items after defeating a boss
 const loot = await buildBulkDistribute({
@@ -193,7 +208,7 @@ Update in-game stats on-chain via `set_data` (creator) or `set_data_from` (if ga
 ### As Collection Creator
 
 ```typescript
-import { buildSetData } from "@nftlox/sdk";
+import { buildSetData } from "nftlox-sdk";
 
 // Update player level and experience
 const update = await buildSetData({
@@ -211,7 +226,7 @@ const update = await buildSetData({
 For scalability, approve your game server as a **data operator** once, then it can update all NFTs without requiring the creator's key.
 
 ```typescript
-import { buildDataOperatorApprove, buildSetDataFrom } from "@nftlox/sdk";
+import { buildDataOperatorApprove, buildSetDataFrom } from "nftlox-sdk";
 
 // Step 1: Creator approves game server (one-time, per collection)
 const approval = await buildDataOperatorApprove({
@@ -242,7 +257,7 @@ const serverUpdate = await buildSetDataFrom({
 Enable guild banks, rental systems, or tournament loot shares via peer-to-peer lending.
 
 ```typescript
-import { buildNftLend, buildNftReturn } from "@nftlox/sdk";
+import { buildNftLend, buildNftReturn } from "nftlox-sdk";
 
 // Player lends hero to friend for 7 days
 const lend = await buildNftLend({
@@ -271,7 +286,7 @@ const lendReturn = await buildNftReturn({
 List items for sale with royalty enforcement on every transaction.
 
 ```typescript
-import { buildList, createIndexerClient, buildBuy } from "@nftlox/sdk";
+import { buildList, createIndexerClient, buildBuy } from "nftlox-sdk";
 
 // Player lists sword for 10 HIVE
 const listing = await buildList({
@@ -301,7 +316,7 @@ const buy = await buildBuy({
 Let players trustlessly verify item ownership on their client without trusting the indexer.
 
 ```typescript
-import { verifyNftOwnership, createDefaultL1Config } from "@nftlox/sdk";
+import { verifyNftOwnership, createDefaultL1Config } from "nftlox-sdk";
 
 // Player verifies they own an item (samples up to 3 events from Hive L1)
 const proof = await verifyNftOwnership({
@@ -330,12 +345,14 @@ import * as HiveTx from "@hiveio/wax";
 import {
 	buildCollectionWithSeeds,
 	buildBulkDistribute,
-	buildSetDataFrom,
-	buildNftLend,
 	createIndexerClient,
-} from "@nftlox/sdk";
+	requestCreateCollectionMultisig,
+} from "nftlox-sdk";
 
-const indexer = createIndexerClient("https://api-nftlox.hivecreators.co");
+const INDEXER_URL = "https://api-nftlox.hivecreators.co";
+const indexer = createIndexerClient(INDEXER_URL);
+const nodeAccount = await indexer.getMultisigNodeAccount();
+console.log(`Node co-signer: ${nodeAccount}`);
 
 // 1. Create collection + seeds
 const plan = await buildCollectionWithSeeds(
@@ -361,8 +378,12 @@ const plan = await buildCollectionWithSeeds(
 			},
 		],
 	},
-	{ nodeAccount: "nftlox", feeCurrency: "HBD", feeAmount: "0.100" },
+	{ indexerBaseUrl: INDEXER_URL, feeCurrency: "HBD", feeAmount: "0.100" },
 );
+
+if (!plan.success) {
+	throw new Error(`Plan build failed: ${JSON.stringify(plan.errors)}`);
+}
 
 // 2. Sign & broadcast collection step
 const creatorKey = process.env.CREATOR_ACTIVE_KEY!;
@@ -376,16 +397,14 @@ const signedTx = collectionTx
 	.finalize();
 
 // Request node co-signature for multisig
-const multisigRes = await fetch(
-	"https://api-nftlox.hivecreators.co/api/multisig",
-	{
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ transaction: signedTx }),
-	},
-);
-const { signature: nodeSignature } = await multisigRes.json();
-const finalTx = HiveTx.updateSignature(signedTx, nodeSignature);
+const multisig = await requestCreateCollectionMultisig(INDEXER_URL, {
+	transaction: signedTx,
+});
+if (!multisig.ok) {
+	throw new Error(`Node multisig failed: ${multisig.message}`);
+}
+
+const finalTx = HiveTx.updateSignature(signedTx, multisig.signature);
 
 const client = HiveTx.createClient("https://api.hive.blog");
 await client.broadcast.sendChainTransaction(finalTx);

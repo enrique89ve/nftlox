@@ -2,11 +2,11 @@
 // Uses HAFAH REST API with fetch (zero dependencies, browser-compatible)
 
 import { MIN_PROTOCOL_VERSION, isProtocolAction, computeDataHash, type ProtocolAction } from "@nftlox/protocol";
-import { getProtocolId } from "../protocol-state.ts";
+import { getProtocolId } from "../protocol-state";
 import {
 	DEFAULT_HIVE_ENDPOINTS,
 	DEFAULT_HIVE_TIMEOUT_MS,
-} from "./constants.ts";
+} from "./constants";
 import type {
 	HafahOperationRecord,
 	HiveL1Config,
@@ -16,7 +16,7 @@ import type {
 	ResolvedOperationById,
 	ResolveMutableDataParams,
 	ResolvedMutableData,
-} from "./types.ts";
+} from "./types";
 
 // ============ ERRORS ============
 

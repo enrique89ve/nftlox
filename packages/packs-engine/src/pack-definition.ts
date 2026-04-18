@@ -3,9 +3,9 @@ import {
 	MAX_DROP_WEIGHT,
 	MAX_ITEMS_PER_PACK,
 	MIN_DROP_WEIGHT,
-} from "./constants.ts";
-import { generateDeterministicPackId } from "./rng.ts";
-import type { PackDefinition, PackDefinitionInput, PackDropEntry, ReservationDemand, SeedSupplySnapshot } from "./types.ts";
+} from "./constants";
+import { generateDeterministicPackId } from "./rng";
+import type { PackDefinition, PackDefinitionInput, PackDropEntry, ReservationDemand, SeedSupplySnapshot } from "./types";
 
 function assertFiniteInteger(value: number, field: string): void {
 	if (!Number.isFinite(value) || !Number.isInteger(value)) {

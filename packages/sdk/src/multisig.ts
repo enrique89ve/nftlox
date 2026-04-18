@@ -14,10 +14,15 @@ import type {
 	CreateCollectionMultisigRequest,
 	MultisigResponse,
 } from "@nftlox/protocol";
-import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow.ts";
+import { validateHiveUsername } from "@nftlox/protocol";
+import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow";
 
 export type RequestMultisigOptions = Readonly<{
 	powBits?: number;
+}>;
+
+export type ResolveNodeAccountOptions = Readonly<{
+	readonly requireMultisigReady?: boolean;
 }>;
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -29,6 +34,73 @@ function extractErrorMessage(body: unknown): string {
 		return String(body.error);
 	}
 	return "Unknown error";
+}
+
+function statusUrl(indexerUrl: string): string {
+	return new URL("/api/status", indexerUrl).toString();
+}
+
+function assertOptionalBoolean(value: unknown, field: string): boolean | undefined {
+	if (value === undefined) return undefined;
+	if (typeof value !== "boolean") {
+		throw new Error(`Protocol status malformed: ${field} must be boolean when present`);
+	}
+	return value;
+}
+
+export function resolveNodeAccountFromStatus(
+	raw: unknown,
+	options: ResolveNodeAccountOptions = {},
+): string {
+	if (!isObject(raw)) {
+		throw new Error("Protocol status malformed: not an object");
+	}
+
+	const nodeAccount = raw.nodeAccount;
+	if (typeof nodeAccount !== "string") {
+		throw new Error("Protocol status malformed: nodeAccount must be string");
+	}
+
+	const usernameError = validateHiveUsername(nodeAccount);
+	if (usernameError) {
+		throw new Error(`Protocol status malformed: invalid nodeAccount '${nodeAccount}': ${usernameError}`);
+	}
+
+	if (options.requireMultisigReady) {
+		const multisigEnabled = assertOptionalBoolean(raw.multisigEnabled, "multisigEnabled");
+		const multisigSignerReady = assertOptionalBoolean(raw.multisigSignerReady, "multisigSignerReady");
+		const multisigClockDriftOk = assertOptionalBoolean(raw.multisigClockDriftOk, "multisigClockDriftOk");
+
+		if (multisigEnabled !== true) {
+			throw new Error(`Indexer node '${nodeAccount}' does not have multisig enabled`);
+		}
+		if (multisigSignerReady !== true) {
+			throw new Error(`Indexer node '${nodeAccount}' multisig signer is not ready`);
+		}
+		if (multisigClockDriftOk === false) {
+			throw new Error(`Indexer node '${nodeAccount}' multisig clock drift check failed`);
+		}
+	}
+
+	return nodeAccount;
+}
+
+export async function fetchNodeAccount(
+	indexerUrl: string,
+	options: ResolveNodeAccountOptions = {},
+): Promise<string> {
+	const res = await fetch(statusUrl(indexerUrl));
+	if (!res.ok) {
+		const body = await res.json().catch(() => null);
+		throw new Error(`Protocol status failed (${res.status}): ${extractErrorMessage(body)}`);
+	}
+
+	const raw: unknown = await res.json();
+	return resolveNodeAccountFromStatus(raw, options);
+}
+
+export function fetchMultisigNodeAccount(indexerUrl: string): Promise<string> {
+	return fetchNodeAccount(indexerUrl, { requireMultisigReady: true });
 }
 
 const PAYMENT_INFO_STRING_FIELDS = [

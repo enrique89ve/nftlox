@@ -19,6 +19,7 @@ import {
   assertNotListed,
   assertSeedNotDistributed,
 } from "@/utils/status-checks.ts";
+import { assertNoActiveMultisigLock } from "@/utils/multisig-locks.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { ACTION_TRANSFER, MAX_TRANSFER_BATCH_SIZE } from "@/protocol/index.ts";
 
@@ -70,6 +71,10 @@ async function processSingleTransfer(
   to: string,
   txn: Queryable,
 ): Promise<void> {
+  // Block transfer while an in-flight buy has locked this NFT on our node.
+  // Checked before any state mutation so the savepoint rolls back cleanly.
+  await assertNoActiveMultisigLock(nftId, op.timestamp, txn);
+
   const nft = await getNftForProcessingForUpdate(nftId, txn);
   if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
@@ -111,6 +116,11 @@ async function processBurn(
   nftId: string,
   txn: Queryable,
 ): Promise<void> {
+  // Burn (transfer to 'null') destroys the NFT — incompatible with an
+  // in-flight buy. Reject up-front so the savepoint reverts without touching
+  // `nfts`.
+  await assertNoActiveMultisigLock(nftId, op.timestamp, txn);
+
   const nft = await getNftForProcessingForUpdate(nftId, txn);
   if (!nft) throw new Error(`NFT not found: ${nftId}`);
 

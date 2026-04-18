@@ -4,9 +4,9 @@ import {
 	PROTOCOL_VERSION,
 	isProtocolAction,
 	type ProtocolAction,
-} from "./constants.ts";
-import { ACTION_AUTH_LEVEL } from "./auth.ts";
-import type { ProtocolPayload, HiveOperation } from "./types.ts";
+} from "./constants";
+import { ACTION_AUTH_LEVEL } from "./auth";
+import type { ProtocolPayload, HiveOperation } from "./types";
 
 export type CreatePayloadOptions = {
 	readonly protocol?: string | undefined;

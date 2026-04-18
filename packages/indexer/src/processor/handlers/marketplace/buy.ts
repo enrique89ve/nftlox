@@ -7,8 +7,12 @@ import { insertSale } from "@/db/queries/marketplace-history.ts";
 import { requireString, requireUsername, verifyTransfers, requireSupportedCurrency } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
+import { consumeMultisigLockIfMatches } from "@/utils/multisig-locks.ts";
+import { createLogger } from "@/utils/logger.ts";
 import { config } from "@/config.ts";
-import { ACTION_BUY } from "@/protocol/index.ts";
+import { ACTION_BUY, UNLIST_DELAY_BLOCKS } from "@/protocol/index.ts";
+
+const log = createLogger("handler:buy");
 
 /**
  * Processes a `buy` action AFTER it appears on-chain (post-multisig broadcast).
@@ -46,6 +50,20 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	if (nft.status !== NFT_STATUS_LISTED) throw new Error(`NFT not listed: ${nftId}`);
 	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
 		throw new Error(`Listing has expired for NFT: ${nftId}`);
+	}
+	// Reject buys that land past the unlist-delay window. An unlist at block X
+	// keeps the NFT comprable through block X + UNLIST_DELAY_BLOCKS inclusive;
+	// beyond that the sync engine will materialize the unlist at block close
+	// anyway, so a late buy here would either race the materialization or
+	// settle against a logically-unlisted NFT.
+	if (nft.pending_unlist_block !== null) {
+		const deadline = nft.pending_unlist_block + UNLIST_DELAY_BLOCKS;
+		if (op.blockNum > deadline) {
+			throw new Error(
+				`unlist_effective: NFT ${nftId} was unlisted at block ${nft.pending_unlist_block}, ` +
+					`deadline ${deadline}, buy arrived at block ${op.blockNum}`,
+			);
+		}
 	}
 	if (nft.owner === buyer) throw new Error(`Cannot buy own NFT: ${nftId}`);
 
@@ -97,6 +115,31 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	});
 
 	validateTransferCount(transfers, split, op.transferPool?.consumed);
+
+	// Consume the multisig lock iff the buy matches (nftId + buyer + listing_id
+	// + list_tx_id). A non-matching active lock means another node co-signed a
+	// different buyer — accept THIS buy (another node's signed tx won the
+	// race) but leave the foreign lock intact so it still protects its own
+	// in-flight tx. A missing lock is normal on multi-node setups where the
+	// signing node's lock lives in a different DB.
+	const lockOutcome = await consumeMultisigLockIfMatches({
+		nftId,
+		buyer,
+		listingId,
+		listTxId,
+		blockTimestamp: op.timestamp,
+		txn,
+	});
+	if (lockOutcome.outcome === "foreign_lock") {
+		log.warn("buy accepted despite foreign multisig lock — another node co-signed a different buyer", {
+			nftId,
+			block: op.blockNum,
+			foreignBuyer: lockOutcome.lock.buyer,
+			foreignListing: lockOutcome.lock.listing_id,
+			acceptedBuyer: buyer,
+			acceptedListing: listingId,
+		});
+	}
 
 	await insertSale({
 		nftId,

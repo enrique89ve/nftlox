@@ -19,6 +19,7 @@ import { handleDataOperatorApprove } from "@/processor/handlers/allowances/data-
 import { handleSetDataFrom } from "@/processor/handlers/allowances/set-data-from.ts";
 import { getCollectionStats, listCollections } from "@/db/queries/collections.ts";
 import { cleanupInvalidMarketplaceListings, queryNfts } from "@/db/queries/nfts.ts";
+import { materializePendingUnlists } from "@/db/queries/nft-mutations.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
 import { multisigRoutes } from "@/api/routes/multisig.ts";
 import {
@@ -46,6 +47,7 @@ import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	PROTOCOL_COLLECTION_FEE_HBD,
+	UNLIST_DELAY_BLOCKS,
 } from "@/protocol/index.ts";
 
 const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
@@ -1183,11 +1185,23 @@ describe("Handlers (integration)", () => {
 			expect(Number(listed!.listing_price)).toBe(10);
 			expect(listed!.listing_currency).toBe("HIVE");
 
-			await withTransaction((txn) => handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), txn));
+			const unlistOp = makeOp(ACTION_UNLIST, { nftId: instId });
+			await withTransaction((txn) => handleUnlist(unlistOp, txn));
 
-			const [unlisted] = await sql`SELECT status, listing_price FROM nfts WHERE id = ${instId}`;
+			// Unlist is now two-phase: handler sets pending_unlist_block,
+			// materialization flips status='active' after UNLIST_DELAY_BLOCKS.
+			const [pending] = await sql`SELECT status, pending_unlist_block FROM nfts WHERE id = ${instId}`;
+			expect(pending!.status).toBe("listed");
+			expect(Number(pending!.pending_unlist_block)).toBe(unlistOp.blockNum);
+
+			await withTransaction((txn) => materializePendingUnlists(
+				unlistOp.blockNum + UNLIST_DELAY_BLOCKS, UNLIST_DELAY_BLOCKS, txn,
+			));
+
+			const [unlisted] = await sql`SELECT status, listing_price, pending_unlist_block FROM nfts WHERE id = ${instId}`;
 			expect(unlisted!.status).toBe("active");
 			expect(unlisted!.listing_price).toBeNull();
+			expect(unlisted!.pending_unlist_block).toBeNull();
 		});
 
 		test("rejects list of seed NFTs", async () => {
@@ -1688,8 +1702,12 @@ describe("Handlers (integration)", () => {
 			const listData2 = await makeListData({ nftId: instId, priceAmount: "50.000" });
 			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData2), txn));
 
-			// Alice quita el listado
-			await withTransaction((txn) => handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), txn));
+			// Alice quita el listado (two-phase: handler + materialize after delay)
+			const unlistOp = makeOp(ACTION_UNLIST, { nftId: instId });
+			await withTransaction((txn) => handleUnlist(unlistOp, txn));
+			await withTransaction((txn) => materializePendingUnlists(
+				unlistOp.blockNum + UNLIST_DELAY_BLOCKS, UNLIST_DELAY_BLOCKS, txn,
+			));
 
 			// Ahora gameshop puede mover el NFT
 			await withTransaction((txn) => handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
@@ -2336,13 +2354,21 @@ describe("Handlers (integration)", () => {
 			expect(await ownerCounts("alice")).toMatchObject({ total: 2, seeds: 1, instances: 1 });
 		});
 
-		test("unlist decrements listed counter", async () => {
+		test("unlist decrements listed counter after materialization", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
 			await withTransaction(async (txn) => handleList(makeOp(ACTION_LIST, await makeListData({ nftId: instId })), txn));
-			await withTransaction((txn) => handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), txn));
 
+			const unlistOp = makeOp(ACTION_UNLIST, { nftId: instId });
+			await withTransaction((txn) => handleUnlist(unlistOp, txn));
+			// listed counter only moves on materialization — during the delay the
+			// NFT is still listed, so stats must not change yet.
+			expect(await collStats(COL_ID)).toMatchObject({ listed: 1 });
+
+			await withTransaction((txn) => materializePendingUnlists(
+				unlistOp.blockNum + UNLIST_DELAY_BLOCKS, UNLIST_DELAY_BLOCKS, txn,
+			));
 			expect(await collStats(COL_ID)).toMatchObject({ listed: 0 });
 		});
 

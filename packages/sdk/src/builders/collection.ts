@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createCollectionInputSchema, archiveCollectionInputSchema, extendSchemaInputSchema, usernameSchema, type CreateCollectionInput } from "../schemas";
 import { formatZodError } from "./helpers";
-import type { KeychainResult } from "./types";
+import type { KeychainResult, ValidationError } from "./types";
 import {
 	generateDeterministicCollectionId,
 	generateOriginDna,
@@ -22,12 +22,59 @@ import {
 	type HiveTransferOperation,
 	type SupportedCurrency,
 } from "@nftlox/protocol";
+import { fetchNodeAccount } from "../multisig";
 
-export type BuildCollectionOptions = Readonly<{
-	readonly nodeAccount: string;
+export type BuildCollectionBaseOptions = Readonly<{
 	readonly feeAmount?: string | undefined;
 	readonly feeCurrency?: SupportedCurrency | undefined;
 }>;
+
+export type BuildCollectionOptions = BuildCollectionBaseOptions & (
+	| Readonly<{
+			readonly nodeAccount: string;
+			readonly indexerBaseUrl?: never;
+			readonly requireMultisigReady?: never;
+	  }>
+	| Readonly<{
+			readonly indexerBaseUrl: string;
+			readonly nodeAccount?: never;
+			readonly requireMultisigReady?: boolean | undefined;
+	  }>
+);
+
+async function resolveCollectionNodeAccount(options: BuildCollectionOptions): Promise<string | ValidationError> {
+	if (typeof options.nodeAccount === "string") {
+		const nodeAccountError = validateHiveUsername(options.nodeAccount);
+		if (nodeAccountError) {
+			return { field: "nodeAccount", message: nodeAccountError, code: "invalid_username" };
+		}
+		return options.nodeAccount;
+	}
+
+	if (typeof options.indexerBaseUrl !== "string") {
+		return {
+			field: "nodeAccount",
+			message: "Either nodeAccount or indexerBaseUrl is required",
+			code: "node_account_required",
+		};
+	}
+
+	try {
+		return await fetchNodeAccount(options.indexerBaseUrl, {
+			requireMultisigReady: options.requireMultisigReady ?? true,
+		});
+	} catch (error) {
+		return {
+			field: "indexerBaseUrl",
+			message: error instanceof Error ? error.message : String(error),
+			code: "node_account_resolution_failed",
+		};
+	}
+}
+
+function isValidationError(value: string | ValidationError): value is ValidationError {
+	return typeof value !== "string";
+}
 
 /**
  * Build the 2-operation transaction required by the NFTLox `create_collection`
@@ -41,7 +88,7 @@ export type BuildCollectionOptions = Readonly<{
  *
  * The caller wraps these operations with the Hive lib of their choice
  * (hive-tx, @hiveio/wax, dhive, …), adds TaPoS/expiration, POSTs the unsigned
- * tx to the node's `/multisig/collection` endpoint for co-signature, then
+ * tx to the node's `/api/multisig/collection` endpoint for co-signature, then
  * attaches the creator's own active-key signature and broadcasts.
  */
 export async function buildCollection(
@@ -53,13 +100,11 @@ export async function buildCollection(
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 
-	const nodeAccountError = validateHiveUsername(options.nodeAccount);
-	if (nodeAccountError) {
-		return {
-			success: false,
-			errors: [{ field: "nodeAccount", message: nodeAccountError, code: "invalid_username" }],
-		};
+	const nodeAccountResult = await resolveCollectionNodeAccount(options);
+	if (isValidationError(nodeAccountResult)) {
+		return { success: false, errors: [nodeAccountResult] };
 	}
+	const nodeAccount = nodeAccountResult;
 
 	const feeCurrency: SupportedCurrency = options.feeCurrency ?? "HBD";
 	if (!(SUPPORTED_CURRENCIES as readonly string[]).includes(feeCurrency)) {
@@ -109,13 +154,13 @@ export async function buildCollection(
 	const payload = createPayload("create_collection", collectionData);
 	// The protocol op is co-signed by the node; pass nodeAccount as the signer
 	// so createHiveOperation emits auth fields bound to the node account.
-	const customJsonOp = createHiveOperation(payload, options.nodeAccount);
+	const customJsonOp = createHiveOperation(payload, nodeAccount);
 
 	const transferOp: HiveTransferOperation = [
 		"transfer",
 		{
 			from: data.creator,
-			to: options.nodeAccount,
+			to: nodeAccount,
 			amount: `${parsedFee.toFixed(3)} ${feeCurrency}`,
 			memo: `NFTLox collection fee:${collectionId}`,
 		},
@@ -133,7 +178,7 @@ export async function buildCollection(
 		signer: data.creator,
 		coSigners: [{
 			op: 1,
-			account: options.nodeAccount,
+			account: nodeAccount,
 			keyType: getKeyType(ACTION_CREATE_COLLECTION),
 			via: "multisig",
 		}],

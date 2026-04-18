@@ -14,6 +14,7 @@
 	- [Allowances & Operators](guides/allowances.md)
 	- [NFT Lending](guides/lending.md)
 	- [SPV Verification](guides/spv.md)
+	- [Game Bot Testing](guides/game-bot-testing.md)
 
 - **Use Cases**
 	- [Game Development](use-cases/games.md)

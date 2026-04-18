@@ -38,6 +38,7 @@ const mockTxn = Object.assign(
 mock.module("@/db/queries/sync.ts", () => ({
 	getLastBlock: mockGetLastBlock,
 	updateLastBlock: mockUpdateLastBlock,
+	updateHiveHeadBlock: mock(() => Promise.resolve()),
 	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
 	insertInvalidOperation: mock(() => Promise.resolve()),
 	// Stubs keep the module's export shape complete so bun's process-wide
@@ -48,6 +49,12 @@ mock.module("@/db/queries/sync.ts", () => ({
 	isOperationConfirmed: mock(() => Promise.resolve(false)),
 	insertConfirmedOperation: mock(() => Promise.resolve()),
 	insertOrphanedBuy: mock(() => Promise.resolve()),
+}));
+
+// sync-engine imports materializePendingUnlists from nft-mutations; stub it to
+// avoid pulling in the real module (which chains to getStateRootBuffer).
+mock.module("@/db/queries/nft-mutations.ts", () => ({
+	materializePendingUnlists: mock(() => Promise.resolve(0)),
 }));
 
 // sync-lock lives in scanner/, not db/queries. Tests call syncCycle directly
@@ -253,7 +260,7 @@ describe("syncCycle", () => {
 		expect(mockWithTransaction).toHaveBeenCalled();
 	});
 
-	test("advances cursor without transaction when no ops", async () => {
+	test("advances cursor inside the shared materializer tx when no ops", async () => {
 		trackedLastBlock = 1000;
 		setupChainHead(1020);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
@@ -264,8 +271,10 @@ describe("syncCycle", () => {
 
 		// Should still advance the cursor
 		expect(mockUpdateLastBlock).toHaveBeenCalled();
-		// Should NOT use a transaction
-		expect(mockWithTransaction).not.toHaveBeenCalled();
+		// Per-cycle transaction now wraps the cursor update AND the
+		// materializePendingUnlists sweep, even on empty batches.
+		expect(mockWithTransaction).toHaveBeenCalled();
+		expect(mockRouteOperation).not.toHaveBeenCalled();
 	});
 
 	test("toggles synced around non-massive catch-up in the same cycle", async () => {
@@ -508,8 +517,9 @@ describe("syncCycle", () => {
 		expect(trackedLastBlock).toBe(3000);
 		// No ops processed
 		expect(mockRouteOperation).not.toHaveBeenCalled();
-		// No transaction needed
-		expect(mockWithTransaction).not.toHaveBeenCalled();
+		// Per-cycle transaction still opens for the unlist materializer + cursor
+		// update, even when zero protocol ops landed in the range.
+		expect(mockWithTransaction).toHaveBeenCalled();
 	});
 
 	test("processes only protocol ops when mixed with foreign custom_json", async () => {
@@ -587,7 +597,8 @@ describe("syncCycle", () => {
 		expect(trackedLastBlock).toBe(51000);
 		// Zero ops processed
 		expect(mockRouteOperation).not.toHaveBeenCalled();
-		// No transactions opened
-		expect(mockWithTransaction).not.toHaveBeenCalled();
+		// A transaction is opened per batch cycle to wrap the cursor update and
+		// the materializer sweep — empty-batch cycles still need it.
+		expect(mockWithTransaction).toHaveBeenCalled();
 	});
 });

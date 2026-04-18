@@ -1,8 +1,8 @@
 // NFTLox Protocol — action-specific data payload types.
 // These define the `data` shape for each ProtocolAction's ProtocolPayload.
 
-import type { CollectionSchema, SchemaField, Price, SeedProvenance } from "./types.ts";
-import type { NftKind } from "./constants.ts";
+import type { CollectionSchema, SchemaField, Price, SeedProvenance } from "./types";
+import type { NftKind } from "./constants";
 
 // Collection
 
@@ -220,7 +220,7 @@ export type BuyMultisigRequest = Readonly<{
 	nftId: string;
 	listingId: string;
 	listTxId: string;
-	transaction: import("./types.ts").HiveTransactionObject;
+	transaction: import("./types").HiveTransactionObject;
 }>;
 
 // `creator` is intentionally absent. The multisig endpoint derives the creator
@@ -228,7 +228,7 @@ export type BuyMultisigRequest = Readonly<{
 // sender), which is the canonical source. Carrying a separate `creator` field
 // here would reintroduce the drift vector the payload cleanup removed.
 export type CreateCollectionMultisigRequest = Readonly<{
-	transaction: import("./types.ts").HiveTransactionObject;
+	transaction: import("./types").HiveTransactionObject;
 }>;
 
 export type MultisigRequest = BuyMultisigRequest | CreateCollectionMultisigRequest;

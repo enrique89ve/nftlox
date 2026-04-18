@@ -2,12 +2,29 @@
 	"name": "nftlox-packs-engine",
 	"version": "0.1.0",
 	"description": "Pure packs logic extension for NFTLox",
-	"module": "src/index.ts",
 	"type": "module",
+	"sideEffects": false,
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"source": "./src/index.ts",
+	"files": [
+		"dist",
+		"src",
+		"README.md"
+	],
 	"exports": {
-		".": "./src/index.ts"
+		"./package.json": "./package.json",
+		".": {
+			"types": "./dist/index.d.ts",
+			"bun": "./src/index.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
 	},
 	"scripts": {
+		"build": "bun build ./src/index.ts --target=node --format=esm --outdir=dist --external nftlox-sdk && bunx tsc -p tsconfig.build.json",
+		"prepack": "bun run build",
 		"test": "bun test",
 		"typecheck": "bunx tsc --noEmit"
 	},
@@ -15,12 +32,16 @@
 		"@types/bun": "latest"
 	},
 	"engines": {
+		"bun": ">=1.0.0",
 		"node": ">=18.0.0"
 	},
 	"peerDependencies": {
 		"typescript": "^5"
 	},
 	"dependencies": {
-		"nftlox-sdk": "workspace:*"
+		"nftlox-sdk": "^0.2.1"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }

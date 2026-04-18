@@ -111,6 +111,10 @@ export type NftProcessingRow = {
 	readonly listing_currency: string | null;
 	readonly listing_expires_at: string | null;
 	readonly listing_marketplace: string | null;
+	/** Block at which `unlist` was emitted. NULL unless inside the
+	 *  UNLIST_DELAY_BLOCKS window; cleared when the sync engine materializes
+	 *  the unlist to `status='active'`. */
+	readonly pending_unlist_block: number | null;
 	readonly data_operation_id: string | null;
 };
 

@@ -1,4 +1,4 @@
-import type { IndexerNftSummary } from "./client.ts";
+import type { IndexerNftSummary } from "./client";
 
 /** Campos que un instance hereda del seed cuando son null/vacios */
 const INHERITABLE_FIELDS = ["name", "image_url", "origin_dna", "immutable_data"] as const;

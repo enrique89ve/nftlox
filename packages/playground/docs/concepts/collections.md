@@ -44,40 +44,45 @@ Each subsequent `extend_schema` call increments the version (see [Extending a Sc
 ### SDK Builder
 
 ```typescript
-import { buildCollection } from "@nftlox/sdk";
+import { buildCollection } from "nftlox-sdk";
 
-const result = await buildCollection({
-	name: "My Collection",
-	symbol: "MYCOL",
-	creator: "game-admin",
-	totalPotential: 1000,
-	metadata: {
-		description: "Collection for game assets",
-		image: "https://example.com/collection.webp",
+const INDEXER_URL = "https://api-nftlox.hivecreators.co";
+
+const result = await buildCollection(
+	{
+		name: "My Collection",
+		symbol: "MYCOL",
+		creator: "game-admin",
+		totalPotential: 1000,
+		metadata: {
+			description: "Collection for game assets",
+			image: "https://example.com/collection.webp",
+		},
+		rules: {
+			transferable: true,
+			burnable: true,
+			royaltyPct: 5,
+			royaltyRecipient: "game-treasury",
+		},
+		schema: {
+			immutable: [
+				{ name: "rarity", type: "string" },
+				{ name: "base_power", type: "uint16" },
+			],
+			mutable: [
+				{ name: "level", type: "uint8" },
+				{ name: "xp", type: "uint32" },
+			],
+		},
 	},
-	rules: {
-		transferable: true,
-		burnable: true,
-		royaltyPct: 5,
-		royaltyRecipient: "game-treasury",
-	},
-	schema: {
-		immutable: [
-			{ name: "rarity", type: "string" },
-			{ name: "base_power", type: "uint16" },
-		],
-		mutable: [
-			{ name: "level", type: "uint8" },
-			{ name: "xp", type: "uint32" },
-		],
-	},
-});
+	{ indexerBaseUrl: INDEXER_URL, feeCurrency: "HBD", feeAmount: "0.100" },
+);
 
 if (result.success) {
-	console.log(result.generatedIds.collectionId); // deterministic ID
-	console.log(result.generatedIds.originDna);     // origin DNA hash
-	console.log(result.operation);                   // ready-to-sign Hive operation
-	console.log(result.warnings);                    // optional warnings
+	console.log(result.generatedIds?.collectionId); // deterministic ID
+	console.log(result.generatedIds?.originDna);    // origin DNA hash
+	console.log(result.operations);                 // transfer + custom_json operations
+	console.log(result.warnings);                   // optional warnings
 }
 ```
 
@@ -184,7 +189,7 @@ For complete list of supported field types (scalar and array), validation rules,
 ### Schema Builder (Fluent API)
 
 ```typescript
-import { createSchemaBuilder } from "@nftlox/sdk";
+import { createSchemaBuilder } from "nftlox-sdk";
 
 const schema = createSchemaBuilder()
 	.immutable("rarity", "string")
@@ -208,24 +213,27 @@ The SDK includes ready-to-use templates for common use cases:
 | `MUSIC_SCHEMA` | artist, album, track_number, duration_seconds, genre | play_count, license_url | Music NFTs |
 
 ```typescript
-import { GAMING_SCHEMA } from "@nftlox/sdk";
+import { buildCollection, GAMING_SCHEMA } from "nftlox-sdk";
 
-const result = await buildCollection({
-	name: "My Game Items",
-	symbol: "ITEMS",
-	creator: "game-account",
-	totalPotential: 10000,
-	metadata: {
-		description: "In-game equipment and weapons",
-		image: "https://example.com/items.webp",
+const result = await buildCollection(
+	{
+		name: "My Game Items",
+		symbol: "ITEMS",
+		creator: "game-account",
+		totalPotential: 10000,
+		metadata: {
+			description: "In-game equipment and weapons",
+			image: "https://example.com/items.webp",
+		},
+		rules: {
+			transferable: true,
+			burnable: true,
+			royaltyPct: 0,
+		},
+		schema: GAMING_SCHEMA,
 	},
-	rules: {
-		transferable: true,
-		burnable: true,
-		royaltyPct: 0,
-	},
-	schema: GAMING_SCHEMA,
-});
+	{ indexerBaseUrl: "https://api-nftlox.hivecreators.co" },
+);
 ```
 
 ---
@@ -259,7 +267,7 @@ This hash chain provides a tamper-evident audit trail of all schema changes.
 ### SDK Usage
 
 ```typescript
-import { buildExtendSchema } from "@nftlox/sdk";
+import { buildExtendSchema } from "nftlox-sdk";
 
 const result = buildExtendSchema({
 	creator: "game-admin",
@@ -271,7 +279,7 @@ const result = buildExtendSchema({
 });
 
 if (result.success) {
-	console.log(result.operation); // ready-to-sign (posting key)
+	console.log(result.operations[0]); // ready-to-sign (posting key)
 	console.log(result.payload);
 }
 ```
@@ -356,7 +364,7 @@ All of the following must be true:
 ### SDK Usage
 
 ```typescript
-import { buildArchiveCollection } from "@nftlox/sdk";
+import { buildArchiveCollection } from "nftlox-sdk";
 
 const result = buildArchiveCollection({
 	creator: "game-admin",
@@ -364,7 +372,7 @@ const result = buildArchiveCollection({
 });
 
 if (result.success) {
-	console.log(result.operation); // ready-to-sign (posting key)
+	console.log(result.operations[0]); // ready-to-sign (posting key)
 	console.log(result.payload);
 }
 ```

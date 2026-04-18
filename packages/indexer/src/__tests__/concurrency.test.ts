@@ -37,6 +37,7 @@ const mockWithTransaction = mock(async (fn: (txn: unknown) => Promise<void>) => 
 mock.module("@/db/queries/sync.ts", () => ({
 	getLastBlock: mockGetLastBlock,
 	updateLastBlock: mockUpdateLastBlock,
+	updateHiveHeadBlock: mock(() => Promise.resolve()),
 	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
 	insertInvalidOperation: mock(() => Promise.resolve()),
 	// Stubs keep the module's export shape complete for bun's process-wide mocks.
@@ -46,6 +47,12 @@ mock.module("@/db/queries/sync.ts", () => ({
 	isOperationConfirmed: mock(() => Promise.resolve(false)),
 	insertConfirmedOperation: mock(() => Promise.resolve()),
 	insertOrphanedBuy: mock(() => Promise.resolve()),
+}));
+
+// sync-engine imports materializePendingUnlists from nft-mutations; stub it to
+// avoid pulling in the real module (which chains to getStateRootBuffer).
+mock.module("@/db/queries/nft-mutations.ts", () => ({
+	materializePendingUnlists: mock(() => Promise.resolve(0)),
 }));
 
 // sync-lock lives in scanner/, not db/queries. Tests call syncCycle directly

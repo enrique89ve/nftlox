@@ -1,6 +1,6 @@
 import type { BulkDistributeItem } from "nftlox-sdk";
-import { MAX_PACK_OPEN_BATCH } from "./constants.ts";
-import { resolveDropTable } from "./rng.ts";
+import { MAX_PACK_OPEN_BATCH } from "./constants";
+import { resolveDropTable } from "./rng";
 import type {
 	PackDefinition,
 	PackOpenContext,
@@ -8,8 +8,8 @@ import type {
 	PackSelection,
 	ReservationConsumption,
 	SeedSupplySnapshot,
-} from "./types.ts";
-import { assertValidPackDefinition } from "./pack-definition.ts";
+} from "./types";
+import { assertValidPackDefinition } from "./pack-definition";
 
 function getSeedSnapshotMap(seedSnapshots: ReadonlyArray<SeedSupplySnapshot>): ReadonlyMap<string, SeedSupplySnapshot> {
 	return new Map(seedSnapshots.map(seed => [seed.seedId, seed]));

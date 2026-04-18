@@ -1,8 +1,8 @@
-# @nftlox/packs-engine
+# nftlox-packs-engine
 
 > External library for pack definition and distribution planning. Produces a `bulk_distribute` delivery plan consumed by the NFTLox indexer.
 
-Packs are **not** part of the native NFTLox protocol. This package lives outside the protocol surface to keep the core minimal — anyone building a pack-opening flow uses this engine (or rolls their own) on top of `@nftlox/sdk`.
+Packs are **not** part of the native NFTLox protocol. This package lives outside the protocol surface to keep the core minimal — anyone building a pack-opening flow uses this engine (or rolls their own) on top of `nftlox-sdk`.
 
 ## What it does
 
@@ -18,8 +18,14 @@ Pack balances, payments, inventory, idempotency persistence, database state, and
 ## Install
 
 ```bash
-bun add @nftlox/packs-engine
+bun add nftlox-packs-engine
+# or
+npm install nftlox-packs-engine
+# or
+pnpm add nftlox-packs-engine
 ```
+
+External npm consumers also need `nftlox-sdk` available, because the packs engine emits SDK-compatible `bulk_distribute` items.
 
 ## Quick start
 
@@ -28,12 +34,15 @@ import {
 	createPackDefinition,
 	buildPackOpenPlan,
 	computeReservedSupply,
-} from "@nftlox/packs-engine";
+} from "nftlox-packs-engine";
+import { buildBulkDistribute } from "nftlox-sdk";
 
 // Define a pack with a drop table
-const pack = createPackDefinition({
+const pack = await createPackDefinition({
 	collectionId: "col_abc123",
+	name: "Starter Pack",
 	itemsPerPack: 5,
+	maxSupply: 100,
 	dropTable: [
 		{ seedId: "seed_common", weight: 70 },
 		{ seedId: "seed_rare", weight: 25 },
@@ -42,21 +51,36 @@ const pack = createPackDefinition({
 });
 
 // Check how much seed supply needs reserving
-const demand = computeReservedSupply(pack, { totalPacks: 100 });
+const demand = computeReservedSupply(pack);
 
 // Open a pack — deterministic selection from a blockchain-derived seed
 const plan = buildPackOpenPlan({
-	packDefinition: pack,
-	opener: "alice",
-	txId: "abc123...",
-	supplySnapshot: [
-		{ seedId: "seed_common", available: 500 },
-		{ seedId: "seed_rare", available: 200 },
-		{ seedId: "seed_legendary", available: 50 },
+	definition: pack,
+	seedSnapshots: [
+		{ seedId: "seed_common", seedTxId: "a".repeat(40), maxSupply: 500, distributed: 20, reserved: 100 },
+		{ seedId: "seed_rare", seedTxId: "b".repeat(40), maxSupply: 200, distributed: 5, reserved: 40 },
+		{ seedId: "seed_legendary", seedTxId: "c".repeat(40), maxSupply: 50, distributed: 0, reserved: 10 },
 	],
+	context: {
+		txId: "d".repeat(40),
+		operationId: "pack-open-1",
+		blockNum: 90000000,
+		owner: "alice",
+		quantity: 1,
+	},
+	reservationAvailabilityBySeed: demand,
 });
-// plan.selections contains the seed IDs to distribute
-// plan.consumptions tracks supply decrements
+
+const distribution = await buildBulkDistribute({
+	signer: "game-pack-vault",
+	to: "alice",
+	items: plan.items,
+	mutableData: { source: "starter_pack" },
+});
+
+// plan.selections explains every pack opening.
+// plan.items is the exact bulk_distribute item list.
+// plan.reservationConsumption is what your backend persists after broadcast.
 ```
 
 ## Main exports
@@ -85,11 +109,11 @@ const plan = buildPackOpenPlan({
 
 ## Compatibility
 
-Runs on **Node.js** and **Bun** — same constraint as `@nftlox/sdk`.
+The package supports **Node.js and Bun**. Node.js uses the compiled ESM entry at `dist/index.js`; Bun uses the `bun` export condition and can execute `src/index.ts` directly.
 
 ## Documentation
 
-Pack distribution guide at [`packages/playground/docs/pack-distribution-guide.md`](../playground/docs/pack-distribution-guide.md) (will be moved here in Phase 2 per the audit).
+Start with the playground guide: [`packages/playground/docs/guides/game-bot-testing.md`](../playground/docs/guides/game-bot-testing.md).
 
 ## Scripts
 

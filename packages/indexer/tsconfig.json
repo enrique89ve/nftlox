@@ -9,7 +9,8 @@
 		"ignoreDeprecations": "5.0",
 		"baseUrl": ".",
 		"paths": {
-			"@/*": ["src/*"]
+			"@/*": ["src/*"],
+			"@nftlox/protocol": ["../protocol/src/index.ts"]
 		},
 		"allowImportingTsExtensions": true,
 		"verbatimModuleSyntax": true,

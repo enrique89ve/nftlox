@@ -19,7 +19,7 @@ import {
 	HASH_DOMAIN_INSTANCE,
 	HASH_DOMAIN_IMG,
 	HASH_DOMAIN_LISTING,
-} from "./constants.ts";
+} from "./constants";
 
 // Hash
 

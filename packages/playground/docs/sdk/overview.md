@@ -18,13 +18,21 @@ The playground API (`/api/build/*`) is a thin wrapper over the NFTLox SDK. If yo
 
 ## Install
 
+Inside this monorepo, run `bun install` at the repository root and import the workspace package directly:
+
+```typescript
+import { buildCollection } from "nftlox-sdk";
+```
+
+For an external game project, install the package once it has been published:
+
 ```bash
 npm install nftlox-sdk
 # or
 bun add nftlox-sdk
 ```
 
-The SDK is a pure TypeScript library with zero runtime dependencies (only Zod for validation). Works in Bun, Node.js, and browsers.
+The SDK is a TypeScript library built on the NFTLox protocol package and Zod validation. Works in Bun, Node.js, and browsers.
 
 ---
 
@@ -49,48 +57,83 @@ For most use cases, use the **builders** -- they validate input and generate det
 ## Create a Collection
 
 ```typescript
-import { buildCollection } from "@nftlox/sdk";
+import { buildCollection } from "nftlox-sdk";
 
-const result = buildCollection({
-	name: "Ragnarok Cards",
-	symbol: "RGNRK",
-	creator: "ragnarok-admin",
-	totalPotential: 2134,
-	metadata: {
-		description: "Norse Mythos Card Game",
-		image: "https://example.com/collection.webp",
+const INDEXER_URL = "https://api-nftlox.hivecreators.co";
+
+const result = await buildCollection(
+	{
+		name: "Ragnarok Cards",
+		symbol: "RGNRK",
+		creator: "ragnarok-admin",
+		totalPotential: 2134,
+		metadata: {
+			description: "Norse Mythos Card Game",
+			image: "https://example.com/collection.webp",
+		},
+		rules: {
+			transferable: true,
+			burnable: true,
+			royaltyPct: 0,
+		},
+		schema: {
+			immutable: [
+				{ name: "card_id", type: "uint32" },
+				{ name: "name", type: "string" },
+				{ name: "rarity", type: "string" },
+				{ name: "attack", type: "uint16" },
+				{ name: "health", type: "uint16" },
+				{ name: "mana_cost", type: "uint8" },
+			],
+			mutable: [
+				{ name: "level", type: "uint8" },
+				{ name: "xp", type: "uint32" },
+				{ name: "foil", type: "string" },
+			],
+		},
 	},
-	rules: {
-		transferable: true,
-		burnable: true,
-		royaltyPct: 0,
+	{
+		indexerBaseUrl: INDEXER_URL,
+		feeCurrency: "HBD",
+		feeAmount: "0.100",
 	},
-	schema: {
-		immutable: [
-			{ name: "card_id", type: "uint32" },
-			{ name: "name", type: "string" },
-			{ name: "rarity", type: "string" },
-			{ name: "attack", type: "uint16" },
-			{ name: "health", type: "uint16" },
-			{ name: "mana_cost", type: "uint8" },
-		],
-		mutable: [
-			{ name: "level", type: "uint8" },
-			{ name: "xp", type: "uint32" },
-			{ name: "foil", type: "string" },
-		],
-	},
-});
+);
 
 if (!result.success) {
 	console.error("Validation failed:", result.errors);
 	process.exit(1);
 }
 
-// result.generatedId  -- deterministic collection ID
-// result.payload      -- protocol payload
-// result.operation    -- ready-to-sign Hive operation
-console.log("Collection ID:", result.generatedId);
+// result.generatedIds.collectionId -- deterministic collection ID
+// result.payload                   -- protocol payload
+// result.operations                -- transfer + custom_json operations
+// result.coSigners                 -- node account and key type required for co-signing
+console.log("Collection ID:", result.generatedIds?.collectionId);
+```
+
+`buildCollection()` can also accept `{ nodeAccount: "..." }`, but test bots should prefer `indexerBaseUrl`. The SDK fetches `/api/status`, validates `nodeAccount`, and requires the node's multisig signer to be ready by default.
+
+---
+
+## Resolve the Node Account for Multisig
+
+The node account that co-signs `create_collection` and `buy` comes from the indexer status response. Do not hardcode it in a bot.
+
+```typescript
+import {
+	createIndexerClient,
+	fetchMultisigNodeAccount,
+} from "nftlox-sdk";
+
+const INDEXER_URL = "https://api-nftlox.hivecreators.co";
+
+const indexer = createIndexerClient(INDEXER_URL);
+
+const nodeAccount = await indexer.getMultisigNodeAccount();
+// same result, without constructing a client:
+const sameNodeAccount = await fetchMultisigNodeAccount(INDEXER_URL);
+
+console.log({ nodeAccount, sameNodeAccount });
 ```
 
 ---
@@ -100,9 +143,9 @@ console.log("Collection ID:", result.generatedId);
 ### Single seed
 
 ```typescript
-import { buildSeed } from "@nftlox/sdk";
+import { buildSeed } from "nftlox-sdk";
 
-const result = buildSeed({
+const result = await buildSeed({
 	artId: "odin-001",
 	collectionId: "col_abc123",
 	signer: "ragnarok-admin",   // collection creator (signs the operation)
@@ -113,14 +156,18 @@ const result = buildSeed({
 	maxSupply: 250,
 });
 
-// result.generatedId -- deterministic seed ID (same artId + collectionId = same ID)
-// result.operation   -- ready-to-sign Hive operation (signed by signer, not owner)
+if (!result.success) {
+	throw new Error(`Seed build failed: ${JSON.stringify(result.errors)}`);
+}
+
+// result.generatedIds.seedId -- deterministic seed ID (same artId + collectionId = same ID)
+// result.operations[0]       -- ready-to-sign Hive operation (signed by signer, not owner)
 ```
 
 ### With immutableData (typed schema)
 
 ```typescript
-import { createDeterministicMintPayload } from "@nftlox/sdk";
+import { createDeterministicMintPayload } from "nftlox-sdk";
 
 const payload = createDeterministicMintPayload({
 	artId: "odin-001",
@@ -147,9 +194,9 @@ const payload = createDeterministicMintPayload({
 ### Batch seeds
 
 ```typescript
-import { buildSeedBatch } from "@nftlox/sdk";
+import { buildSeedBatch } from "nftlox-sdk";
 
-const result = buildSeedBatch({
+const result = await buildSeedBatch({
 	collectionId: "col_abc123",
 	signer: "ragnarok-admin",   // collection creator
 	seeds: [
@@ -168,14 +215,18 @@ if (result.success) {
 		{ artId: "loki-001", name: "Trickster's Gambit", imageUrl: "https://...", maxSupply: 1000 },
 	];
 
-	const operations = seeds.map((seed, i) => {
-		const seedResult = buildSeed({
+	const seedResults = await Promise.all(
+		seeds.map((seed, i) => buildSeed({
 			...seed,
 			collectionId: "col_abc123",
 			signer: "ragnarok-admin",
 			edition: i + 1,
-		});
-		return seedResult.operation;
+		})),
+	);
+
+	const operations = seedResults.flatMap((seedResult) => {
+		if (!seedResult.success) throw new Error(JSON.stringify(seedResult.errors));
+		return seedResult.operations;
 	});
 
 	// Hive limits to 5 operations per transaction
@@ -192,7 +243,7 @@ if (result.success) {
 ## Bulk Distribute (Create Instances)
 
 ```typescript
-import { buildBulkDistribute } from "@nftlox/sdk";
+import { buildBulkDistribute } from "nftlox-sdk";
 
 const result = buildBulkDistribute({
 	signer: "ragnarok-admin",
@@ -209,7 +260,7 @@ const result = buildBulkDistribute({
 	},
 });
 
-// result.operation -- ready-to-sign Hive operation
+// result.operations[0] -- ready-to-sign Hive operation
 ```
 
 ---
@@ -219,12 +270,12 @@ const result = buildBulkDistribute({
 ### As collection creator
 
 ```typescript
-import { buildSetData } from "@nftlox/sdk";
+import { buildSetData } from "nftlox-sdk";
 
 const result = buildSetData({
 	nftId: "nft_abc123_1_xyz",
 	instanceDna: "A3F7B2C119D0E4",
-	issuer: "ragnarok-admin",
+	owner: "ragnarok-admin",
 	mutableData: {
 		level: 5,
 		xp: 12500,
@@ -238,7 +289,7 @@ const result = buildSetData({
 If your game server is a different account than the collection creator:
 
 ```typescript
-import { buildDataOperatorApprove, buildSetDataFrom } from "@nftlox/sdk";
+import { buildDataOperatorApprove, buildSetDataFrom } from "nftlox-sdk";
 
 // 1. Creator approves game server as operator (one-time)
 const approveResult = buildDataOperatorApprove({
@@ -265,10 +316,10 @@ const updateResult = buildSetDataFrom({
 ## Transfer, Burn, List
 
 ```typescript
-import { buildTransfer, buildBurn, buildList, buildUnlist } from "@nftlox/sdk";
+import { buildTransfer, buildBurn, buildList, buildUnlist } from "nftlox-sdk";
 
 // Transfer
-const transfer = buildTransfer({
+const transfer = await buildTransfer({
 	nftId: "nft_abc123_1_xyz",
 	from: "alice",
 	to: "bob",
@@ -281,14 +332,14 @@ const burn = buildBurn({
 });
 
 // List on marketplace
-const list = buildList({
+const list = await buildList({
 	nftId: "nft_abc123_1_xyz",
 	owner: "alice",
 	price: { amount: "10.000", currency: "HIVE" },
 });
 
 // Unlist
-const unlist = buildUnlist({
+const unlist = await buildUnlist({
 	nftId: "nft_abc123_1_xyz",
 	owner: "alice",
 });
@@ -299,7 +350,7 @@ const unlist = buildUnlist({
 ## Lending
 
 ```typescript
-import { buildNftLend, buildNftReturn } from "@nftlox/sdk";
+import { buildNftLend, buildNftReturn } from "nftlox-sdk";
 
 // Lend to a player
 const lend = buildNftLend({
@@ -311,7 +362,7 @@ const lend = buildNftLend({
 // Return (either lender or borrower can call)
 const returnNft = buildNftReturn({
 	instanceId: "nft_abc123_1_xyz",
-	signer: "player123",
+	owner: "player123",
 });
 ```
 
@@ -324,7 +375,7 @@ import {
 	buildNftApprove,
 	buildNftApproveAll,
 	buildNftTransferFrom,
-} from "@nftlox/sdk";
+} from "nftlox-sdk";
 
 // Approve a spender for one NFT
 const approve = buildNftApprove({
@@ -347,7 +398,7 @@ const transferFrom = buildNftTransferFrom({
 	instanceId: "nft_abc123_1_xyz",
 	from: "alice",
 	to: "bob",
-	spender: "game-server",
+	operator: "game-server",
 });
 ```
 
@@ -364,7 +415,7 @@ import {
 	validateArtId,
 	isSeedId,
 	isInstanceId,
-} from "@nftlox/sdk";
+} from "nftlox-sdk";
 
 // Deterministic IDs (same input = same output, always)
 const collectionId = generateDeterministicCollectionId("ragnarok-admin", "Ragnarok Cards", "RGNRK");
@@ -389,12 +440,12 @@ The SDK builds payloads and operations. It does **not** sign or broadcast. Use a
 - [@hiveio/dhive](broadcasting.md#2-hiveiodhive-popular-well-documented)
 - [@hiveio/wax](broadcasting.md#3-hiveiowax-official-hive-library-newest)
 
-Every builder returns an `operation` field that is a ready-to-sign Hive operation:
+Every successful builder returns an `operations` array ready to sign and broadcast:
 
 ```typescript
-const result = buildSeed({ ... });
+const result = await buildSeed({ ... });
 if (result.success) {
-	const hiveOperation = result.operation;
+	const hiveOperations = result.operations;
 	// Pass to hive-tx, dhive, or wax to sign and broadcast
 }
 ```

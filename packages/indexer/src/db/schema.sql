@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS sync_state (
 	id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
 	last_block BIGINT NOT NULL DEFAULT 0,
 	genesis_block BIGINT NOT NULL DEFAULT 0,
+	-- Last HEAD block observed from the Hive node. Updated by the scanner each
+	-- tick alongside last_block. Consumers (e.g. /api/multisig) diff
+	-- hive_head_block - last_block to gate signing when the indexer is lagged.
+	hive_head_block BIGINT NOT NULL DEFAULT 0,
 	-- schema_hash pins this row to a known schema.sql content. On mismatch the
 	-- bootstrap truncates all data and re-syncs from genesis (testnet policy).
 	schema_hash TEXT,
@@ -120,6 +124,12 @@ CREATE TABLE IF NOT EXISTS nfts (
 	listing_currency TEXT,
 	listing_expires_at TIMESTAMPTZ,
 	listing_marketplace TEXT,
+	-- Unlist cooldown: set by handleUnlist to op.block_num. The NFT stays
+	-- status='listed' for UNLIST_DELAY_BLOCKS more blocks so in-flight buys
+	-- (multisig-signed against the prior state) can still settle. The scanner
+	-- materializes the final transition to 'active' at block close. Only
+	-- meaningful while status='listed'; cleared when status leaves 'listed'.
+	pending_unlist_block BIGINT,
 	created_operation_id TEXT NOT NULL,
 	created_block_num BIGINT NOT NULL,
 	created_tx_id TEXT NOT NULL,
@@ -131,6 +141,14 @@ CREATE TABLE IF NOT EXISTS nfts (
 			AND listing_currency IS NOT NULL
 			AND listing_id IS NOT NULL
 			AND listing_tx_id IS NOT NULL)
+	),
+	-- DB-level backstop: pending_unlist_block is only meaningful for listed NFTs.
+	-- Any path that flips status away from 'listed' MUST clear it, otherwise a
+	-- future re-list would be silently materialized back to 'active' on the next
+	-- batch (and the new owner would be unable to manually unlist either, since
+	-- markPendingUnlist requires pending_unlist_block IS NULL).
+	CONSTRAINT chk_nfts_pending_unlist_only_when_listed CHECK (
+		pending_unlist_block IS NULL OR status = 'listed'
 	),
 	CONSTRAINT chk_nfts_supply_bounded CHECK (
 		max_supply = 0 OR (distributed + reserved_supply) <= max_supply
@@ -345,12 +363,25 @@ CREATE INDEX IF NOT EXISTS idx_l2_node_heartbeats_account_block ON l2_node_heart
 
 -- ============ MULTISIG LOCKS ============
 
+-- Durable per-NFT lock held by the signing node between /api/multisig accept
+-- and the on-chain buy landing. While a row exists (expires_at > op.timestamp)
+-- the indexer REJECTS transfer/transfer_from/burn/lend/unlist on the same NFT
+-- and only the matching buy (same buyer + listing_id + list_tx_id) consumes it.
+-- The action CHECK keeps the schema honest today while leaving the column free
+-- to extend to other signed actions without a migration. snapshot_block is the
+-- indexer's last_block at sign time — kept for audit + future divergence probes.
 CREATE TABLE IF NOT EXISTS multisig_locks (
 	nft_id TEXT PRIMARY KEY,
+	action TEXT NOT NULL DEFAULT 'buy' CHECK (action = 'buy'),
 	buyer TEXT NOT NULL,
+	listing_id TEXT NOT NULL,
+	list_tx_id TEXT NOT NULL,
+	snapshot_block BIGINT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	expires_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_multisig_locks_expires ON multisig_locks(expires_at);
+CREATE INDEX IF NOT EXISTS idx_multisig_locks_listing ON multisig_locks(listing_id);
 
 -- Scoped by (creator, symbol): two concurrent create_collection signings for the
 -- same (creator, symbol) would both broadcast a tx; only one wins on-chain and
@@ -390,6 +421,9 @@ CREATE INDEX IF NOT EXISTS idx_nfts_listed ON nfts(listing_price, listing_curren
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_recent ON nfts(created_at DESC) WHERE status = 'listed';
 CREATE INDEX IF NOT EXISTS idx_nfts_listing_id ON nfts(listing_id) WHERE listing_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_listing_expires ON nfts(listing_expires_at) WHERE status = 'listed' AND listing_expires_at IS NOT NULL;
+-- Pending-unlist cooldown: partial index keeps the end-of-block materialization
+-- UPDATE index-only (rows without a cooldown never touch this index).
+CREATE INDEX IF NOT EXISTS idx_nfts_pending_unlist ON nfts(pending_unlist_block) WHERE pending_unlist_block IS NOT NULL;
 -- DB-level backstop against non-canonical seeds: two seeds in the same collection
 -- cannot share an art_id. Paired with the application-level canonical check in
 -- handleMint, this defends against a handler bug ever bypassing the recomputation.
@@ -420,6 +454,19 @@ CREATE INDEX IF NOT EXISTS idx_sales_nft ON sales(nft_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_collection ON sales(collection_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_seller ON sales(seller, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
+
+-- ============================================================================
+-- SELF-HEALING COLUMNS — idempotent ALTERs for pre-existing DBs
+-- ============================================================================
+--
+-- schema.sql is re-executed on every boot. `CREATE TABLE IF NOT EXISTS` skips
+-- existing tables entirely, so columns added to a table that already exists
+-- will never appear without an explicit ALTER. The ADD COLUMN IF NOT EXISTS
+-- form (PG 9.6+) is idempotent and cheap: zero cost once the column is
+-- present. Keep entries here permanently — removing an ALTER after rollout
+-- would leave freshly-initialized and upgraded DBs on different schemas.
+ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_block BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE nfts ADD COLUMN IF NOT EXISTS pending_unlist_block BIGINT;
 
 -- ============================================================================
 -- TRIGGERS — defense-in-depth against projection corruption

@@ -674,7 +674,7 @@ import {
 	createDeterministicCollectionPayload,
 	createDeterministicMintOperation,
 	toHiveOperation,
-} from "@nftlox/sdk";
+} from "nftlox-sdk";
 
 config.node = "https://api.hive.blog";
 

@@ -1,4 +1,4 @@
-import type { ProtocolAction, SupportedCurrency } from "./constants.ts";
+import type { ProtocolAction, SupportedCurrency } from "./constants";
 
 // Validation
 
@@ -119,6 +119,7 @@ export type MultisigErrorCode =
 	| "POW_REPLAYED"
 	| "SIGNING_QUEUE_FULL"
 	| "SIGNING_TIMEOUT"
+	| "INDEXER_LAGGED"
 	| "INTERNAL_ERROR";
 
 export type MultisigResponse =
