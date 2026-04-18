@@ -12,6 +12,16 @@ NFTLox is an NFT protocol on Hive L1. Every action is a Hive `custom_json` opera
 
 ## Install
 
+**Testnet phase** — packages not yet on npm. Clone the monorepo and use workspace references:
+
+```bash
+git clone https://github.com/enrique89ve/nftlox.git
+cd nftlox && bun install
+# Add your package under packages/ with "nftlox-sdk": "workspace:*"
+```
+
+Post-publish (future):
+
 ```bash
 npm install nftlox-sdk hive-tx
 # or: bun add nftlox-sdk hive-tx

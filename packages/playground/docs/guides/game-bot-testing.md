@@ -11,17 +11,18 @@ import { buildCollectionWithSeeds } from "nftlox-sdk";
 import { buildPackOpenPlan } from "nftlox-packs-engine";
 ```
 
-For an external game repository, install the packages after they have been published:
+For an external game repository, the packages are **not yet published to npm** (testnet phase). Use local path references after cloning the repo:
 
-```bash
-bun add nftlox-sdk nftlox-packs-engine
-# or
-npm install nftlox-sdk nftlox-packs-engine
-# or
-pnpm add nftlox-sdk nftlox-packs-engine
+```json
+{
+  "dependencies": {
+    "nftlox-sdk": "file:../nftlox/packages/sdk",
+    "nftlox-packs-engine": "file:../nftlox/packages/packs-engine"
+  }
+}
 ```
 
-The package names come from `packages/sdk/package.json` and `packages/packs-engine/package.json`. Do not use the old scoped package names. Published packages expose compiled ESM for Node.js and TypeScript source for Bun through the `bun` export condition.
+The package names come from `packages/sdk/package.json` and `packages/packs-engine/package.json`. Once published, the install will be `bun add nftlox-sdk nftlox-packs-engine`.
 
 ## Test the SDK Today
 

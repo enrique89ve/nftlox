@@ -14,6 +14,18 @@ Your private keys **never leave your machine**. The SDK emits unsigned operation
 
 ## Install
 
+> **Testnet phase** — `nftlox-sdk` is not yet published to npm. Clone the monorepo and work inside it as a workspace package.
+
+```bash
+git clone https://github.com/enrique89ve/nftlox.git
+cd nftlox
+bun install
+```
+
+Then add your project as a workspace package under `packages/` with `"nftlox-sdk": "workspace:*"` in its `package.json`. See [Game Bot Testing](guides/game-bot-testing.md) for a step-by-step setup.
+
+Once published to npm, the install will be:
+
 ```bash
 npm install nftlox-sdk hive-tx
 # or

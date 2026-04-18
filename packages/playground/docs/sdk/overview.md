@@ -4,6 +4,10 @@
 
 ## Install
 
+> **Testnet phase** — `nftlox-sdk` is not yet published to npm. Clone the monorepo and reference it as a workspace package. See [Game Bot Testing](../guides/game-bot-testing.md) for the full setup.
+
+Once published, the install will be:
+
 ```bash
 npm install nftlox-sdk hive-tx
 # or
