@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createCollectionInputSchema, archiveCollectionInputSchema, usernameSchema, type CreateCollectionInput } from "../schemas";
+import { createCollectionInputSchema, archiveCollectionInputSchema, extendSchemaInputSchema, usernameSchema, type CreateCollectionInput } from "../schemas";
 import { formatZodError } from "./helpers";
 import type { KeychainResult } from "./types";
 import {
@@ -17,6 +17,7 @@ import {
 	validateHiveUsername,
 	type CollectionData,
 	type ArchiveCollectionData,
+	type ExtendSchemaData,
 	type HiveOperation,
 	type HiveTransferOperation,
 	type SupportedCurrency,
@@ -165,6 +166,38 @@ export function buildArchiveCollection(
 		success: true,
 		operations: [operation],
 		keyType: getKeyType("archive_collection"),
+		signer: data.creator,
+		payload,
+	};
+}
+
+export const extendSchemaBuilderSchema = extendSchemaInputSchema.extend({
+	creator: usernameSchema,
+});
+export type ExtendSchemaBuilderInput = z.infer<typeof extendSchemaBuilderSchema>;
+
+export function buildExtendSchema(
+	input: ExtendSchemaBuilderInput,
+): KeychainResult<ExtendSchemaData> {
+	const parsed = extendSchemaBuilderSchema.safeParse(input);
+	if (!parsed.success) {
+		return { success: false, errors: formatZodError(parsed.error) };
+	}
+
+	const data = parsed.data;
+	const extendData: ExtendSchemaData = {
+		collectionId: data.collectionId,
+		...(data.newImmutableFields && { newImmutableFields: data.newImmutableFields }),
+		...(data.newMutableFields && { newMutableFields: data.newMutableFields }),
+	};
+
+	const payload = createPayload("extend_schema", extendData);
+	const operation = createHiveOperation(payload, data.creator);
+
+	return {
+		success: true,
+		operations: [operation],
+		keyType: getKeyType("extend_schema"),
 		signer: data.creator,
 		payload,
 	};
