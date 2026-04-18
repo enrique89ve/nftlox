@@ -1,6 +1,7 @@
 export * from "./collection";
 export * from "./seed";
 export * from "./bulk";
+export * from "./bulk-creator";
 export * from "./market";
 export * from "./transfer";
 export * from "./misc";

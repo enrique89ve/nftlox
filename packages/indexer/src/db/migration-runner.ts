@@ -17,7 +17,7 @@ async function getSchemaPath(): Promise<string> {
 async function getMigrationsPath(): Promise<string> {
 	let path = import.meta.dir + "/migrations";
 	if (!await Bun.file(path).exists()) {
-		path = "/app/packages/indexer/db/migrations";
+		path = "/app/src/db/migrations";
 	}
 	if (!await Bun.file(path).exists()) {
 		throw new Error("migrations directory not found");
