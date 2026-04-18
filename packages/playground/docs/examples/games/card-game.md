@@ -1,407 +1,241 @@
-# Example: Card Game (TCG)
+# Example — Card Game (TCG)
 
-Complete end-to-end example for a trading card game using `buildCollectionWithSeeds`, pack opening, trading, and seasonal updates.
+A full TCG flow built on NFTLox: launch the hero catalogue, distribute cards from packs, let players trade on the marketplace, and patch card stats between seasons. Every snippet uses the real SDK and `hive-tx`.
 
----
+The moving parts we cover:
 
-## Setup: 50 Hero Cards
+1. **Launch.** `buildCollectionWithSeeds` ships the collection + every hero seed in one orchestrated call.
+2. **Pack distribution.** `buildBulkDistribute` hands out instances to players.
+3. **Trading.** `buildList` / `buildBuy` for player-to-player transfers.
+4. **Seasonal rebalancing.** `buildSetDataFrom` lets the game server patch `mutableData` without asking players for keys.
+5. **Lending.** `buildNftLend` / `buildNftReturn` for card rentals during tournaments.
 
-Create 50 unique hero cards at launch with one SDK call:
-
-```typescript
-import { buildCollectionWithSeeds } from "nftlox-sdk";
-
-const INDEXER_URL = "https://api-nftlox.hivecreators.co";
-
-const collectionPlan = await buildCollectionWithSeeds(
-	{
-		creator: "card-game-admin",
-		name: "Mythic Heroes",
-		symbol: "HERO",
-		totalPotential: 50,
-		metadata: {
-			description: "Collectible hero cards for Mythic TCG",
-			image: "https://example.com/heroes-banner.png",
-			externalUrl: "https://mythic-tcg.example.com",
-		},
-		rules: {
-			transferable: true,
-			burnable: false,
-			royaltyPct: 5,
-			royaltyRecipient: "card-game-treasury",
-		},
-		schema: {
-			immutable: [
-				{ name: "card_number", type: "uint16" }, // 1-50
-				{ name: "rarity", type: "string" }, // common, rare, epic, legendary
-				{ name: "hero_type", type: "string" }, // warrior, mage, rogue, etc
-				{ name: "attack_power", type: "uint16" },
-				{ name: "defense_power", type: "uint16" },
-			],
-			mutable: [
-				{ name: "wins", type: "uint32" },
-				{ name: "losses", type: "uint32" },
-				{ name: "deck_season", type: "uint8" }, // current season
-				{ name: "rank", type: "uint8" }, // player rank using card
-			],
-		},
-		seeds: [
-			{
-				artId: "hero-001-warrior",
-				name: "Kael the Fearless",
-				imageUrl: "https://example.com/cards/kael.png",
-				maxSupply: 5000,
-				brief: "Legendary warrior hero",
-				immutableData: {
-					card_number: 1,
-					rarity: "legendary",
-					hero_type: "warrior",
-					attack_power: 9,
-					defense_power: 7,
-				},
-			},
-			{
-				artId: "hero-002-mage",
-				name: "Lyra the Arcane",
-				imageUrl: "https://example.com/cards/lyra.png",
-				maxSupply: 5000,
-				brief: "Legendary mage hero",
-				immutableData: {
-					card_number: 2,
-					rarity: "legendary",
-					hero_type: "mage",
-					attack_power: 8,
-					defense_power: 4,
-				},
-			},
-			// ... 48 more cards defined here
-		],
-		owner: "card-game-treasury",
-	},
-	{
-		indexerBaseUrl: INDEXER_URL,
-		feeCurrency: "HBD",
-		feeAmount: "0.100",
-	},
-);
-
-if (!collectionPlan.success) {
-	throw new Error(`Collection plan failed: ${JSON.stringify(collectionPlan.errors)}`);
-}
-
-console.log(
-	`Created ${collectionPlan.totalSeedCount} hero seeds in ${collectionPlan.seedBatches.length} batches`,
-);
-```
-
----
-
-## Pack Opening: Distribute Cards to Players
-
-When a player opens a booster pack, use the packs engine to select cards deterministically from the player's claim transaction, then distribute the selected seed instances:
+## Shared scaffolding
 
 ```typescript
-import { buildBulkDistribute } from "nftlox-sdk";
-import {
-	buildPackOpenPlan,
-	computeReservedSupply,
-	createPackDefinition,
-} from "nftlox-packs-engine";
-
-type PackClaim = Readonly<{
-	txId: string;
-	operationId: string;
-	blockNum: number;
-	owner: string;
-	quantity: number;
-}>;
-
-// Fill this map when seed batches are broadcast:
-// seedTxIdBySeedId.set(seed.seedId, broadcastResult.txId)
-const seedTxIdBySeedId = new Map<string, string>();
-
-const requireSeedTxId = (seedId: string): string => {
-	const txId = seedTxIdBySeedId.get(seedId);
-	if (!txId) throw new Error(`Missing seed tx id for ${seedId}`);
-	return txId;
-};
-
-const requireSeedId = (artId: string): string => {
-	const seedId = collectionPlan.generatedIds[artId];
-	if (!seedId) throw new Error(`Missing seed id for ${artId}`);
-	return seedId;
-};
-
-const boosterPack = await createPackDefinition({
-	collectionId: collectionPlan.collectionId,
-	name: "Mythic Booster",
-	itemsPerPack: 5,
-	maxSupply: 1000,
-	dropTable: [
-		{ seedId: requireSeedId("hero-001-warrior"), weight: 5 },
-		{ seedId: requireSeedId("hero-002-mage"), weight: 5 },
-		// ... remaining hero seeds with their rarity weights
-	],
-});
-
-const reservedSupply = computeReservedSupply(boosterPack);
-
-async function openBoosterPack(claim: PackClaim) {
-	const seedSnapshots = boosterPack.dropTable.map(({ seedId }) => ({
-		seedId,
-		seedTxId: requireSeedTxId(seedId),
-		maxSupply: 5000,
-		distributed: 0,
-		reserved: reservedSupply[seedId] ?? 0,
-	}));
-
-	const openPlan = buildPackOpenPlan({
-		definition: boosterPack,
-		seedSnapshots,
-		context: {
-			txId: claim.txId,
-			operationId: claim.operationId,
-			blockNum: claim.blockNum,
-			owner: claim.owner,
-			quantity: claim.quantity,
-		},
-		reservationAvailabilityBySeed: reservedSupply,
-	});
-
-	const distribution = await buildBulkDistribute({
-		signer: "card-game-treasury",
-		to: claim.owner,
-		items: openPlan.items,
-		mutableData: {
-			wins: 0,
-			losses: 0,
-			deck_season: 1,
-			rank: 0,
-		},
-	});
-
-	if (!distribution.success) {
-		throw new Error(`Distribution failed: ${JSON.stringify(distribution.errors)}`);
-	}
-
-	console.log(`✓ Opened ${openPlan.deliveredPacks} booster pack(s) for ${claim.owner}`);
-	return distribution;
-}
-```
-
----
-
-## Trading: List & Buy
-
-Player lists a card; another buys it with royalty enforcement:
-
-```typescript
-import { buildList, buildBuy, createIndexerClient } from "nftlox-sdk";
-
-const indexer = createIndexerClient("https://api-nftlox.hivecreators.co");
-
-// Alice lists her Kael for 25 HIVE
-const listing = await buildList({
-	signer: "alice",
-	nftId: "nft_hero_001_abc123", // instance she received from pack opening
-	price: { amount: "25", currency: "HIVE" },
-	memo: "Legendary warrior - undefeated deck hero",
-});
-
-console.log(`✓ Listed Kael for 25 HIVE`);
-
-// Bob queries payment split
-const payment = await indexer.getPaymentInfo("nft_hero_001_abc123");
-console.log(`Seller: ${payment.seller}, Royalty: ${payment.royalty}`);
-// Output: Seller: 23.75 HIVE, Royalty: 1.25 HIVE (5% royalty)
-
-// Bob buys
-const buy = await buildBuy({
-	buyer: "bob",
-	nftId: "nft_hero_001_abc123",
-	indexerBaseUrl: "https://api-nftlox.hivecreators.co",
-});
-
-console.log(`✓ Buy transaction ready for multisig signing`);
-```
-
----
-
-## Seasonal Updates: Reset Stats
-
-Each season, update card stats and reset win/loss counts:
-
-```typescript
-import { buildDataOperatorApprove, buildSetDataFrom } from "nftlox-sdk";
-
-// One-time: Approve game server as data operator
-const approval = await buildDataOperatorApprove({
-	creator: "card-game-admin",
-	collectionId: collectionPlan.collectionId,
-	operator: "card-game-season-service",
-	approved: true,
-});
-
-// Season 2 starts: game server resets all cards
-async function resetCardStatsForNewSeason(nftIds, newSeasonNumber) {
-	const updates = await Promise.all(
-		nftIds.map((nftId) =>
-			buildSetDataFrom({
-				operator: "card-game-season-service",
-				nftId,
-				instanceDna: "abc123def456", // from ownership proof
-				mutableData: {
-					wins: 0,
-					losses: 0,
-					deck_season: newSeasonNumber,
-					rank: 0, // reset to bronze
-				},
-			}),
-		),
-	);
-
-	console.log(`✓ Reset ${updates.length} cards for Season ${newSeasonNumber}`);
-	return updates;
-}
-```
-
----
-
-## Tournament: Lending & Prizes
-
-Players lend cards to tournament winners temporarily:
-
-```typescript
-import { buildNftLend, buildNftReturn } from "nftlox-sdk";
-
-// Tournament organizer lends promo card to winner for 1 month
-const prizeCard = await buildNftLend({
-	signer: "tournament-org",
-	nftId: "nft_promo_legendary_card",
-	borrower: "tournament-winner",
-	durationDays: 30,
-});
-
-console.log(`✓ Lent promo card to ${tournament-winner} for 30 days`);
-
-// After 30 days, winner returns it
-const returnCard = await buildNftReturn({
-	signer: "tournament-winner",
-	nftId: "nft_promo_legendary_card",
-});
-
-console.log(`✓ Returned promo card to tournament-org`);
-```
-
----
-
-## Full Backend Flow with hive-tx
-
-```typescript
-import * as HiveTx from "@hiveio/wax";
 import {
 	buildCollectionWithSeeds,
 	buildBulkDistribute,
+	buildList,
+	buildBuy,
+	buildSetDataFrom,
+	buildDataOperatorApprove,
+	buildNftLend,
+	buildNftReturn,
+	createSchemaBuilder,
 	createIndexerClient,
 	requestCreateCollectionMultisig,
+	MultisigError,
 } from "nftlox-sdk";
+import hive from "hive-tx";
 
-const INDEXER_URL = "https://api-nftlox.hivecreators.co";
-const indexer = createIndexerClient(INDEXER_URL);
-const nodeAccount = await indexer.getMultisigNodeAccount();
-console.log(`Node co-signer: ${nodeAccount}`);
+const INDEXER = "https://api-nftlox.hivecreators.co";
+hive.config.set("node", "https://api.hive.blog");
 
-const client = HiveTx.createClient("https://api.hive.blog");
-const creatorKey = process.env.CREATOR_ACTIVE_KEY;
-const posterKey = process.env.GAME_POSTING_KEY;
+const client = createIndexerClient(INDEXER);
+const CREATOR = "ragnarok-studio";
+const SERVER = "ragnarok-server";
+const ACTIVE = hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!);
+const POSTING = hive.PrivateKey.from(process.env.HIVE_POSTING_KEY!);
+const SERVER_POSTING = hive.PrivateKey.from(process.env.SERVER_POSTING_KEY!);
 
-// 1. Create collection + 50 seeds
-const plan = await buildCollectionWithSeeds(
-	{
-		creator: "card-game-admin",
-		name: "Mythic Heroes",
-		// ... schema and seeds defined above
-		seeds: heroSeeds,
-	},
-	{ indexerBaseUrl: INDEXER_URL, feeCurrency: "HBD", feeAmount: "0.100" },
-);
-
-if (!plan.success) {
-	throw new Error(`Collection plan failed: ${JSON.stringify(plan.errors)}`);
+async function broadcast(ops: readonly unknown[], key: hive.PrivateKey) {
+	const tx = new hive.Transaction();
+	await tx.create(ops as [string, object][]);
+	tx.sign(key);
+	const res = await tx.broadcast();
+	if (res?.error) throw new Error(JSON.stringify(res.error));
+	return res.result.tx_id as string;
 }
+```
 
-// 2. Sign & broadcast collection (active key + multisig)
-const collectionTx = HiveTx.createHiveChain()
-	.addOperation(...plan.collectionStep.operations)
-	.addTaPoS()
-	.addExpiration(30);
+## 1. Launch the catalogue
 
-const signedTx = collectionTx
-	.sign(HiveTx.createPrivateKeyManager([creatorKey]))
-	.finalize();
+```typescript
+const HEROES = [
+	{ artId: "warrior", name: "Warrior", imageUrl: "https://…/warrior.png", maxSupply: 1000,
+		immutableData: { rarity: "common",    base_power: 50 } },
+	{ artId: "mage",    name: "Mage",    imageUrl: "https://…/mage.png",    maxSupply:  500,
+		immutableData: { rarity: "rare",      base_power: 80 } },
+	{ artId: "dragon",  name: "Dragon",  imageUrl: "https://…/dragon.png",  maxSupply:   50,
+		immutableData: { rarity: "legendary", base_power: 250 } },
+];
 
-const multisig = await requestCreateCollectionMultisig(INDEXER_URL, {
-	transaction: signedTx,
-});
-if (!multisig.ok) {
-	throw new Error(`Node multisig failed: ${multisig.message}`);
-}
+const plan = await buildCollectionWithSeeds({
+	name: "Heroes of Ragnarok",
+	symbol: "HERO",
+	creator: CREATOR,
+	totalPotential: HEROES.reduce((n, h) => n + h.maxSupply, 0),
+	metadata: { description: "Playable hero cards", image: "https://…/cover.png" },
+	rules: { transferable: true, burnable: true, royaltyPct: 5 },
+	schema: createSchemaBuilder()
+		.immutable("rarity", "string")
+		.immutable("base_power", "uint16")
+		.mutable("xp", "uint32")
+		.mutable("level", "uint8")
+		.mutable("wins", "uint32")
+		.build(),
+	seeds: HEROES,
+}, { indexerBaseUrl: INDEXER, requireMultisigReady: true });
 
-const finalCollectionTx = HiveTx.updateSignature(signedTx, multisig.signature);
-await client.broadcast.sendChainTransaction(finalCollectionTx);
+if (!plan.success) { console.error(plan.errors); process.exit(1); }
 
-console.log(`✓ Collection created: ${plan.collectionId}`);
+// Collection step (dual-signer: creator active + node multisig)
+const colTx = new hive.Transaction();
+await colTx.create(plan.collectionStep.operations as [string, object][]);
+const sig = await requestCreateCollectionMultisig(INDEXER, { transaction: colTx.transaction });
+if (!sig.ok) throw new MultisigError({ message: sig.message, code: sig.code, url: INDEXER });
+colTx.transaction.signatures.push(sig.signature);
+colTx.sign(ACTIVE);
+const colTxId = (await colTx.broadcast()).result.tx_id;
 
-// 3. Broadcast seed batches (posting key)
+// Seed batches (posting-only)
 for (const batch of plan.seedBatches) {
-	const tx = HiveTx.createHiveChain()
-		.addOperation(...batch.operations)
-		.addTaPoS()
-		.addExpiration(30)
-		.sign(HiveTx.createPrivateKeyManager([posterKey]))
-		.finalize();
-
-	await client.broadcast.sendChainTransaction(tx);
-	await new Promise((r) => setTimeout(r, 3000));
+	await broadcast(batch.operations, POSTING);
+	await new Promise(r => setTimeout(r, 4000));
 }
 
-console.log("✓ All 50 hero seeds created and ready for distribution!");
+// Grant the game server permission to update mutable stats
+const grant = buildDataOperatorApprove({
+	creator: CREATOR, collectionId: plan.collectionId,
+	operator: SERVER, approved: true,
+});
+if (grant.success) await broadcast(grant.operations, POSTING);
 ```
 
----
+## 2. Open a booster pack
 
-## Database State
+A "pack" in NFTLox-speak is just a server-side random roll followed by a single `bulk_distribute`. Rarity odds live in your server; the chain records the resulting instances.
 
-After this flow, your game database might track:
+```typescript
+function rollPack(): { seedId: string; quantity: number }[] {
+	const roll = Math.random();
+	const rare    = plan.generatedIds["mage"]!;
+	const common  = plan.generatedIds["warrior"]!;
+	const legend  = plan.generatedIds["dragon"]!;
+	if (roll < 0.01) return [{ seedId: legend, quantity: 1 }, { seedId: common, quantity: 4 }];
+	if (roll < 0.15) return [{ seedId: rare,   quantity: 1 }, { seedId: common, quantity: 4 }];
+	return [{ seedId: common, quantity: 5 }];
+}
 
-```sql
--- Players
-| username | joined_date | rank | season_wins |
-|----------|-------------|------|-------------|
-| alice    | 2024-01-15  | 8    | 42          |
-| bob      | 2024-02-01  | 5    | 18          |
-
--- Player NFT Inventory (synced from indexer)
-| player   | nft_id                    | card_number | deck_season | wins | losses |
-|----------|---------------------------|-------------|-------------|------|--------|
-| alice    | nft_hero_001_abc123       | 1           | 2           | 23   | 5      |
-| alice    | nft_hero_015_def456       | 15          | 2           | 15   | 12     |
-| bob      | nft_hero_032_ghi789       | 32          | 2           | 7    | 14     |
-
--- Marketplace Listings (cached from indexer)
-| nft_id              | seller | price | listed_at |
-|---------------------|--------|-------|-----------|
-| nft_hero_001_abc123 | alice  | 25    | 2024-03-10|
+async function openPack(player: string) {
+	const items = rollPack().map(i => ({ ...i, seedTxId: colTxId }));
+	const result = buildBulkDistribute({ signer: CREATOR, to: player, items });
+	if (!result.success) throw new Error(JSON.stringify(result.errors));
+	return broadcast(result.operations, POSTING);
+}
 ```
 
----
+Packs are cheap (one broadcast per pack) and the indexer emits per-instance events so your UI can render the reveal animation off a websocket or a poll of `getOperationStatus`.
 
-## Key Takeaways
+## 3. Player lists a card for sale
 
-- **buildCollectionWithSeeds:** One call creates 50 cards + automatic batching.
-- **Deterministic IDs:** Card IDs are pre-computed; you can reference them in game logic before broadcasting.
-- **Mutable data:** Player stats (wins, rank, season) live on-chain; game server updates via `set_data_from`.
-- **Marketplace:** Built-in royalty enforcement; Alice's sales always give treasury 5%.
-- **No smart contracts:** Just `custom_json` on Hive L1. Indexer validates; your game queries it.
-- **Zero gas fees:** Hive resource credits are free for end users; you pay for operations.
-- **Trustless:** Players can verify card ownership via SPV without trusting your backend.
+```typescript
+async function listCard(owner: string, nftId: string, priceHive: string) {
+	const result = await buildList({
+		owner,
+		nftId,
+		price: { amount: priceHive, currency: "HIVE" },
+		expiresAt: Date.now() + 7 * 24 * 3600 * 1000,   // 7 days
+		marketplace: "ragnarok",
+	});
+	if (!result.success) throw new Error(JSON.stringify(result.errors));
+	// Player signs with their own posting key (handled by Keychain in a real UI)
+	return broadcast(result.operations, POSTING);
+}
+```
+
+The `marketplace` tag ("ragnarok") scopes the listing. UIs filtering by that tag will see only Ragnarok listings; the protocol-wide marketplace aggregates everything.
+
+## 4. Another player buys the card
+
+```typescript
+async function buyCard(buyer: string, nftId: string) {
+	const payment = await client.getPaymentInfo(nftId);
+	const result = buildBuy({
+		buyer,
+		seller: payment.seller,
+		nftId: payment.nftId,
+		listingId: payment.listingId,
+		listTxId: payment.listTxId,
+		txId: payment.txId,
+		paymentSplit: {
+			sellerAmount: payment.sellerAmount,
+			royaltyAmount: payment.royaltyAmount,
+			royaltyRecipient: payment.royaltyRecipient,
+			feeAmount: payment.feeAmount,
+			feeAccount: payment.feeAccount,
+			totalPrice: payment.totalPrice,
+			currency: payment.currency as "HIVE" | "HBD",
+		},
+	});
+	if (!result.success) throw new Error(JSON.stringify(result.errors));
+
+	const tx = new hive.Transaction();
+	await tx.create(result.operations as [string, object][]);
+	const resp = await client.multisig({
+		buyer, nftId, listingId: payment.listingId, listTxId: payment.listTxId,
+		transaction: tx.transaction,
+	});
+	if (!resp.ok) throw new MultisigError({ message: resp.message, code: resp.code, url: INDEXER });
+	tx.transaction.signatures.push(resp.signature);
+	tx.sign(ACTIVE);           // in a browser, Keychain supplies this signature
+	await tx.broadcast();
+}
+```
+
+`getPaymentInfo` returns the exact split (seller net, royalty, protocol fee); never compute these numbers yourself — the node will reject any mismatch with `INVALID_PAYMENT_SPLIT`.
+
+## 5. Server-side stat updates after a match
+
+```typescript
+async function recordWin(nftId: string, xpEarned: number) {
+	const nft = await client.getNft(nftId);
+	const wins = (nft.mutable_data?.wins as number ?? 0) + 1;
+	const xp   = (nft.mutable_data?.xp as number ?? 0) + xpEarned;
+	const level = Math.min(100, Math.floor(xp / 1000) + 1);
+
+	const result = buildSetDataFrom({
+		operator: SERVER,
+		nftId,
+		instanceDna: nft.instance_dna!,
+		mutableData: { xp, level, wins },
+	});
+	if (!result.success) throw new Error(JSON.stringify(result.errors));
+	return broadcast(result.operations, SERVER_POSTING);
+}
+```
+
+Because the server signs with its own posting key under an approval, the player never leaks a key to the game. Revoking the approval (`approved: false`) immediately halts server-side updates.
+
+## 6. Tournament rentals — lending
+
+Let a player lend a legendary card to a teammate for a tournament weekend. While lent, the card cannot be listed, transferred, or re-lent.
+
+```typescript
+async function lend(owner: string, instanceId: string, borrower: string) {
+	const result = buildNftLend({ owner, instanceId, borrower });
+	if (!result.success) throw new Error(JSON.stringify(result.errors));
+	return broadcast(result.operations, POSTING);
+}
+
+async function returnCard(borrower: string, instanceId: string) {
+	const result = buildNftReturn({ owner: borrower, instanceId });
+	if (!result.success) throw new Error(JSON.stringify(result.errors));
+	return broadcast(result.operations, POSTING);
+}
+```
+
+Only the current borrower can call `nft_return`. The owner's rights are restored immediately on return — no cooldown.
+
+## What we didn't broadcast
+
+Everything in `data` that isn't declared in the schema is ignored by the indexer. Keep per-match telemetry, deck compositions, matchmaking rating, etc. off-chain and only write to the NFT when the state is worth the cost of a broadcast (level-ups, titles, permanent stat bumps). Use a content hash in `mutableData` if you want to commit to a blob without paying to publish it.
+
+## See also
+
+- [Seed Ceremony](../seed-ceremony.md) — the collection launch step in isolation.
+- [Mutable Data](../mutable-data.md) — deeper dive into `set_data` / `set_data_from`.
+- [Marketplace Trading](../../guides/marketplace.md) — listing lifecycle and fee mechanics.
+- [Allowances & Operators](../../guides/allowances.md) — full permission model.
+- [NFT Lending](../../guides/lending.md) — lender/borrower state transitions.

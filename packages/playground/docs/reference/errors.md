@@ -87,23 +87,27 @@ Errors encountered during normal protocol operations (handler validation, Build 
 | `listingId mismatch` / `listTxId mismatch` | The listing reference in the multisig request does not match the current listing (stale data). | Re-fetch payment info and rebuild the buy transaction with fresh listing data. |
 | `Invalid Hive amount format` | The HIVE transfer amount in the multisig request is malformed or does not have exactly 3 decimal places. | Use the exact amount format from `GET /api/payment-info/:nftId` (e.g., `"10.000 HIVE"`). |
 
-### Build API Errors
+### Builder validation errors
 
-Build API endpoints return errors in a structured format when `success: false`:
+Every SDK builder returns a `KeychainResult<T>`. On failure the shape is:
 
-```json
+```typescript
 {
-	"success": false,
-	"errors": [
-		{ "field": "name", "message": "Name is required", "code": "invalid_type" }
+	success: false,
+	errors: [
+		{ field: "name", message: "Name is required", code: "invalid_type" },
+		// …
 	]
 }
 ```
 
-Each error object contains:
-- `field` -- The input field that failed validation.
-- `message` -- Human-readable description of the issue.
-- `code` -- Zod error code (e.g., `invalid_type`, `too_small`, `invalid_string`).
+Each entry has:
+
+- `field` — the input field that failed validation (dotted path for nested objects).
+- `message` — human-readable description.
+- `code` — Zod error code (`invalid_type`, `too_small`, `invalid_string`, `custom`, …) or a protocol-level code such as `CANNOT_BUY_OWN`, `LEND_TO_SELF`, `INTERNAL_ERROR`.
+
+Never broadcast when `success: false` — `operations` is not present on the failure branch, and TypeScript will narrow it away for you if you branch on `result.success`.
 
 ### HTTP Status Codes
 

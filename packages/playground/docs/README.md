@@ -1,104 +1,94 @@
 # NFTLox Protocol
 
-**Polymorphic ownership infrastructure on Hive L1.** Build games with on-chain NFTs that have functional DNA -- no smart contracts, no gas fees, no oracles.
-
----
+**Polymorphic ownership infrastructure on Hive L1.** Build games, marketplaces, and digital-asset products with on-chain NFTs that have functional DNA — no smart contracts, no gas fees, no oracles.
 
 ## Why NFTLox
 
-Traditional NFT protocols force you into rigid smart contract environments. NFTLox takes a different approach: encode operations as deterministic `custom_json` on Hive L1, then reconstruct state through indexing. The result is a protocol that is fast, free to transact, and fully verifiable.
+Traditional NFT protocols force you into rigid smart-contract environments. NFTLox takes a different approach: every action is a deterministic `custom_json` operation on Hive L1, and the protocol's state is reconstructed by a public indexer. No execution fees, no gas, 3-second finality, and the full audit trail lives on Hive itself.
 
-**If you are building a game** with collectible cards, items, or characters, NFTLox gives you typed schemas, seed/instance distribution, and mutable data fields your game server can update in real time -- all anchored to an L1 blockchain with 3-second finality.
+If you are building a **game** with collectible cards, items, or characters, NFTLox gives you typed schemas, seed/instance distribution, mutable data fields a game server can update in real time, non-custodial lending, and a protected marketplace — all anchored to L1.
 
-## Features at a Glance
+## Features
 
-- **No smart contracts** -- Operations are `custom_json` payloads on Hive L1; the protocol is enforced by deterministic indexing
-- **Typed schemas** -- Define immutable, mutable, and owner-editable fields per collection with strict validation
-- **Deterministic DNA** -- Every NFT has a reproducible cryptographic identity derived from blockchain data
-- **Seed/Instance model** -- Mint a seed template, distribute instances from it; each instance gets unique DNA
-- **Zero transaction fees** -- Hive L1 uses resource credits, not gas; end users pay nothing
-- **3-second finality** -- Operations are confirmed in the next Hive block
-- **Composable operators** -- Lending, allowances, and data operators let game servers act on behalf of users
-- **Built-in marketplace** -- List, buy, and unlist with multisig buyer protection
+- **No smart contracts.** Operations are `custom_json` payloads on Hive L1. Protocol rules are enforced by the deterministic indexer.
+- **Typed schemas.** Declare immutable and mutable fields per collection with strict validation (24 scalar + array types).
+- **Seed / instance model.** One seed is a reusable template; `bulk_distribute` hands out instances with unique deterministic DNA.
+- **Deterministic IDs.** `collectionId`, `seedId`, `instanceId`, `listingId`, `accessKey` — all SHA-256 with domain separators, precomputable client-side.
+- **Zero transaction fees.** Hive uses Resource Credits; end users pay nothing.
+- **3-second finality.** One block to confirm.
+- **Non-custodial lending.** The lender never loses ownership; the borrower gets a scoped right of use.
+- **Approval system.** Instance approvals, collection-wide approvals, and data operators — all posting-key, never active.
+- **Protected marketplace.** `buy` is a node-multisig transaction so the buyer's HIVE can never leave their account without the NFT ownership changing atomically.
+- **Client-side SPV.** A wallet or UI can verify ownership, listing price, and any NFTLox operation directly against Hive L1.
 
 ## Architecture
 
 ```
-Your App                              Hive L1
---------                              -------
-
-  SDK / fetch()                       custom_json operation
-       |                                    |
-       v                                    v
-  Build API  ────── builds payload ──>  Broadcast to
-  (unsigned)                            Hive RPC node
-                                            |
-                                            v
-                                       NFTLox Indexer
-                                       (reads L1, validates,
-                                        builds state)
-                                            |
-                                            v
-  Query API  <────── reads state ────  PostgreSQL
-  (public, no auth)
+Your App ────▶ nftlox-sdk builders ────▶ Hive L1 (custom_json)
+                      │                         │
+                      │                         ▼
+                      │                   NFTLox Indexer
+                      ▼                  (reads L1, validates,
+              Hive Keychain / hive-tx     builds state)
+              signs posting or active            │
+              Keychain-only signing              ▼
+                                           PostgreSQL
+                                                │
+              Query / SPV ◀──────────────────────┘
 ```
 
-**Write path:** Build an unsigned payload via the SDK or Build API. Sign it client-side with a Hive key. Broadcast to any Hive RPC node. The indexer detects the operation and updates state.
+- **Write:** build an unsigned transaction locally with `nftlox-sdk`, sign it (hive-tx / @hiveio/dhive / @hiveio/wax / Hive Keychain), broadcast to any Hive RPC. Two actions (`buy`, `create_collection`) require a node co-signature via `POST /api/multisig(/collection)`.
+- **Read:** query the indexer's HTTP API or call `createIndexerClient(baseUrl)` from the SDK. No authentication required.
+- **Verify:** run the SPV verifiers (`verifyNftOwnership`, `verifyListingPrice`, …) to double-check the indexer against Hive L1 before irreversible actions.
 
-**Read path:** Query the indexer API for collections, NFTs, users, marketplace listings, and operators. No authentication required.
-
-## Quick Start
-
-Check that the indexer is running:
+## Quick check
 
 ```bash
 curl https://api-nftlox.hivecreators.co/api/status
 ```
 
-Then follow the [Getting Started guide](getting-started.md) to make your first API call and mint an NFT in under 5 minutes.
+Then follow [Getting Started](getting-started.md) to make your first transaction.
 
-## Documentation
+## Documentation map
 
 | Section | What you will find |
 |---|---|
 | **Getting Started** | |
-| [Quick Start](getting-started.md) | First API call, reading data, building transactions |
-| [Signing and Broadcasting](broadcasting.md) | How to sign payloads and broadcast to Hive |
-| [Data Formats](data-formats.md) | Field constraints, validation rules, accepted values |
-| **Core Features** | |
-| [Collection Lifecycle](collection-lifecycle.md) | Create, extend schema, archive collections |
-| [Ownership Model](ownership-model.md) | Creator, seed owner, instance origin, and provenance rules |
-| [Marketplace Trading](marketplace-trading.md) | List, buy, unlist with multisig buyer protection |
-| [Allowances & Operators](allowances-operators.md) | ERC-721-style approvals, data operators, delegated access |
-| [NFT Lending](lending-system.md) | Peer-to-peer lending with ownership retention |
-| [SPV Verification](spv-verification.md) | Trustless client-side verification against Hive L1 |
-| **Game Integration** | |
-| [Architecture & Flow](game-integration.md) | Complete game developer integration walkthrough |
-| **Security** | |
-| [Key Security](key-security.md) | Permission model, key types, and account architecture |
+| [Quick Start](getting-started.md) | First install, indexer client, first NFT |
+| [Signing & Broadcasting](broadcasting.md) | Posting, active, and active+multisig flows across hive-tx, @hiveio/dhive, @hiveio/wax, and Hive Keychain |
+| [Data Formats](data-formats.md) | Every action's payload shape, schema types, deterministic ID derivation |
+| **Core Concepts** | |
+| [Collections](concepts/collections.md) | Create, extend schema, archive |
+| [Ownership Model](concepts/ownership.md) | Creator vs seed owner vs instance owner; provenance fields |
+| [Key Security](concepts/security.md) | Active vs posting; account architectures for games |
+| **Guides** | |
+| [Marketplace Trading](guides/marketplace.md) | Listings, payment splits, the multisig buy flow |
+| [Allowances & Operators](guides/allowances.md) | `nft_approve`, `nft_approve_all`, `data_operator_approve` |
+| [NFT Lending](guides/lending.md) | Non-custodial rentals for instances |
+| [SPV Verification](guides/spv.md) | Trustless client-side checks against Hive L1 |
+| [Game Bot Testing](guides/game-bot-testing.md) | End-to-end bot flow with the packs engine |
+| **SDK** | |
+| [Using the SDK](sdk/overview.md) | Mental model, three signer flavors, indexer client |
+| [SDK Reference](sdk/reference.md) | Every builder, helper, and type |
 | **Reference** | |
-| [API Endpoints](api-endpoints.md) | All read and write endpoints in one reference |
-| [SDK Functions](sdk-functions.md) | SDK exports, builders, payload creators, utilities |
-| [Error Codes](error-codes.md) | Handler errors, multisig errors, troubleshooting |
-| [SDK Direct Usage](using-sdk.md) | Use the TypeScript SDK without the HTTP layer |
+| [API Endpoints](reference/api.md) | Indexer HTTP surface (query + multisig only — no build API) |
+| [Error Codes](reference/errors.md) | Multisig codes, handler validation, retry guidance |
+| **Examples** | |
+| [Seed Ceremony](examples/seed-ceremony.md) | Launch a collection end-to-end |
+| [Mutable Data](examples/mutable-data.md) | `set_data` for owners, `set_data_from` for game servers |
+| [Card Game (TCG)](examples/games/card-game.md) | Full TCG loop: launch, packs, trading, lending |
 
-## Examples
-
-Working code for common workflows:
-
-- [Seed Ceremony](examples/seed-ceremony.md) -- Create a collection and mint seeds with typed schemas
-- [Mutable Data](examples/mutable-data.md) -- Update game-state fields on NFTs
-
-## Protocol Info
+## Protocol snapshot
 
 | Property | Value |
-|----------|-------|
+|---|---|
 | Protocol ID | `nftlox_testnet` |
-| Version | `0.6.0` |
-| Min Version | `0.6.0` |
+| Protocol version | `0.6.0` |
 | Blockchain | Hive L1 |
 | Finality | ~3 seconds |
-| Auth | Posting key (17 actions) / Active key (`create_collection`, `buy`) |
+| Active-key actions | `create_collection`, `buy` |
+| Posting-key actions | All other protocol actions |
+| Multisig endpoints | `POST /api/multisig` (buy), `POST /api/multisig/collection` (create) |
 
 | Environment | URL |
 |---|---|
@@ -109,5 +99,5 @@ Working code for common workflows:
 <div class="nftlox-footer">
 	<span class="version-badge">v0.6.0</span>
 	<br>
-	NFTLox Protocol -- Built on Hive L1
+	NFTLox Protocol — Built on Hive L1
 </div>

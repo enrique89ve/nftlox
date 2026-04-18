@@ -203,17 +203,21 @@ if (loot.success) {
 
 ## 4. Mutable Data & Game State
 
-Update in-game stats on-chain via `set_data` (creator) or `set_data_from` (if game server is an approved operator).
+Update in-game stats via `set_data` (NFT owner) or `set_data_from` (approved data operator).
 
-### As Collection Creator
+### As NFT owner
 
 ```typescript
-import { buildSetData } from "nftlox-sdk";
+import { buildSetData, createIndexerClient } from "nftlox-sdk";
 
-// Update player level and experience
-const update = await buildSetData({
+const client = createIndexerClient("https://api-nftlox.hivecreators.co");
+const nft = await client.getNft("nft_hero_001");
+
+// instanceDna is required — it binds the write to the current NFT state
+const update = buildSetData({
+	owner: "game-admin",
 	nftId: "nft_hero_001",
-	creator: "game-admin",
+	instanceDna: nft.instance_dna!,
 	mutableData: {
 		current_level: 5,
 		experience: 2500,
@@ -221,26 +225,31 @@ const update = await buildSetData({
 });
 ```
 
-### As Data Operator (Game Server)
+### As data operator (game server)
 
-For scalability, approve your game server as a **data operator** once, then it can update all NFTs without requiring the creator's key.
+Approve the game server once, then it can update any NFT in the collection with its own posting key — no player keys needed.
 
 ```typescript
-import { buildDataOperatorApprove, buildSetDataFrom } from "nftlox-sdk";
+import { buildDataOperatorApprove, buildSetDataFrom, createIndexerClient } from "nftlox-sdk";
 
 // Step 1: Creator approves game server (one-time, per collection)
-const approval = await buildDataOperatorApprove({
+// Signed by collection creator's posting key
+const approval = buildDataOperatorApprove({
 	creator: "game-admin",
 	collectionId: "col_heroes_001",
 	operator: "game-server-account",
 	approved: true,
 });
 
-// Step 2: Game server updates mutable data (repeatable, low-cost)
-const serverUpdate = await buildSetDataFrom({
+// Step 2: Game server updates mutable data (repeatable)
+// Signed by game-server-account's posting key
+const client = createIndexerClient("https://api-nftlox.hivecreators.co");
+const nft = await client.getNft("nft_hero_001");
+
+const serverUpdate = buildSetDataFrom({
 	operator: "game-server-account",
 	nftId: "nft_hero_001",
-	instanceDna: "A3F7B2C1...", // from the NFT's proof
+	instanceDna: nft.instance_dna!,
 	mutableData: {
 		current_level: 6,
 		experience: 3500,
@@ -248,65 +257,96 @@ const serverUpdate = await buildSetDataFrom({
 });
 ```
 
-**Shallow merge behavior:** Mutable data is shallow-merged; omitted fields retain their old values. So you can update one field without re-sending everything.
+**Shallow merge:** mutableData is merged key-by-key. Omitted fields keep their current values — you only send what changed.
 
 ---
 
 ## 5. Lending & Tournaments
 
-Enable guild banks, rental systems, or tournament loot shares via peer-to-peer lending.
+Non-custodial lending — the lender keeps ownership, borrower gets a scoped right of use. Duration enforcement is off-chain (no protocol time-lock). Signed by the owner to lend, signed by the borrower to return.
 
 ```typescript
 import { buildNftLend, buildNftReturn } from "nftlox-sdk";
 
-// Player lends hero to friend for 7 days
-const lend = await buildNftLend({
-	signer: "player-alice",
-	nftId: "nft_hero_001",
+// Owner lends instance to player-bob (signed with owner's posting key)
+const lend = buildNftLend({
+	owner: "player-alice",
+	instanceId: "nft_hero_001",  // note: instanceId, not nftId
 	borrower: "player-bob",
-	durationDays: 7,
 });
+if (!lend.success) throw new Error(JSON.stringify(lend.errors));
 
-// 7 days later, player-bob returns it
-const lendReturn = await buildNftReturn({
-	signer: "player-bob",
-	nftId: "nft_hero_001",
+// player-bob returns it (signed with bob's posting key)
+const lendReturn = buildNftReturn({
+	owner: "player-bob",         // the borrower; "owner" is the signer here
+	instanceId: "nft_hero_001",
 });
+if (!lendReturn.success) throw new Error(JSON.stringify(lendReturn.errors));
 ```
 
+While lent: transfers, listings, and new approvals are blocked. `set_data` still works (XP keeps accumulating on the lender's NFT). Only the borrower can call `buildNftReturn`.
+
 **Use cases:**
-- Guild banks: Members lend gear to new recruits.
-- Tournament prize splits: Winners lend items to co-winners temporarily.
-- Try-before-you-buy: Marketplace lends high-value items for a fee.
+- Guild banks: lend gear to new recruits with social trust.
+- Paid rentals: borrow pays off-chain; your backend calls `buildNftReturn` at expiry.
+- Tournament whitelist: lend a legendary card for the weekend; XP earned accrues to the owner.
 
 ---
 
 ## 6. Marketplace Integration
 
-List items for sale with royalty enforcement on every transaction.
+Listings are posting-only. Buys require active key + node co-signature. Always read the payment split from the indexer — never compute it yourself.
 
 ```typescript
-import { buildList, createIndexerClient, buildBuy } from "nftlox-sdk";
+import { buildList, buildBuy, createIndexerClient, MultisigError } from "nftlox-sdk";
+import hive from "hive-tx";
 
-// Player lists sword for 10 HIVE
+hive.config.set("node", "https://api.hive.blog");
+
+// --- LISTING (posting key, single-signer) ---
 const listing = await buildList({
-	signer: "player-alice",
+	owner: "player-alice",         // note: owner, not signer
 	nftId: "nft_sword_001",
-	price: { amount: "10", currency: "HIVE" },
-	memo: "Legendary sword - great for bosses",
+	price: { amount: "10.000", currency: "HIVE" }, // 3-decimal string
+	marketplace: "my-game",        // optional scope tag
 });
+if (!listing.success) throw new Error(JSON.stringify(listing.errors));
+// listing.generatedIds.listingId  — precomputed, no broadcast yet needed
 
-// Buyer queries payment split first
-const indexer = createIndexerClient("https://api-nftlox.hivecreators.co");
-const paymentInfo = await indexer.getPaymentInfo("nft_sword_001");
-// { seller: "9.75 HIVE", royalty: "0.25 HIVE" }
+// --- BUYING (active key + node multisig) ---
+const client = createIndexerClient("https://api-nftlox.hivecreators.co");
+const info = await client.getPaymentInfo("nft_sword_001");
 
-// Buyer builds buy transaction (multisig with node)
-const buy = await buildBuy({
+const buy = buildBuy({
 	buyer: "player-bob",
-	nftId: "nft_sword_001",
-	indexerBaseUrl: "https://api-nftlox.hivecreators.co",
+	seller: info.seller,
+	nftId: info.nftId,
+	listingId: info.listingId,
+	listTxId: info.listTxId,
+	txId: info.txId,
+	paymentSplit: {
+		sellerAmount: info.sellerAmount,
+		royaltyAmount: info.royaltyAmount,
+		royaltyRecipient: info.royaltyRecipient,
+		feeAmount: info.feeAmount,
+		feeAccount: info.feeAccount,
+		totalPrice: info.totalPrice,
+		currency: info.currency as "HIVE" | "HBD",
+	},
 });
+if (!buy.success) throw new Error(JSON.stringify(buy.errors));
+
+const tx = new hive.Transaction();
+await tx.create(buy.operations as [string, object][]);
+const resp = await client.multisig({
+	buyer: "player-bob", nftId: info.nftId,
+	listingId: info.listingId, listTxId: info.listTxId,
+	transaction: tx.transaction,
+});
+if (!resp.ok) throw new MultisigError({ message: resp.message, code: resp.code, url: "…" });
+tx.transaction.signatures.push(resp.signature);
+tx.sign(hive.PrivateKey.from(process.env.PLAYER_BOB_ACTIVE_KEY!));
+await tx.broadcast();
 ```
 
 ---
@@ -328,7 +368,7 @@ const proof = await verifyNftOwnership({
 
 if (proof.status === "verified") {
 	console.log(`✓ Verified: player-alice owns nft_hero_001`);
-	console.log(`  Verified at block: ${proof.verifiedAtBlock}`);
+	console.log(`  Duration: ${proof.durationMs}ms`);
 } else {
 	console.error(`✗ Verification failed: ${proof.message}`);
 }
@@ -338,112 +378,86 @@ if (proof.status === "verified") {
 
 ## 8. Backend Workflow: Full Example
 
-Here's a complete backend flow using `hive-tx` for signing:
+Full launch flow using `hive-tx`:
 
 ```typescript
-import * as HiveTx from "@hiveio/wax";
 import {
 	buildCollectionWithSeeds,
 	buildBulkDistribute,
 	createIndexerClient,
 	requestCreateCollectionMultisig,
+	MultisigError,
 } from "nftlox-sdk";
+import hive from "hive-tx";
+
+hive.config.set("node", "https://api.hive.blog");
 
 const INDEXER_URL = "https://api-nftlox.hivecreators.co";
-const indexer = createIndexerClient(INDEXER_URL);
-const nodeAccount = await indexer.getMultisigNodeAccount();
-console.log(`Node co-signer: ${nodeAccount}`);
+const ACTIVE_KEY  = hive.PrivateKey.from(process.env.CREATOR_ACTIVE_KEY!);
+const POSTING_KEY = hive.PrivateKey.from(process.env.GAME_POSTING_KEY!);
 
-// 1. Create collection + seeds
+async function broadcast(ops: readonly unknown[], key: typeof ACTIVE_KEY) {
+	const tx = new hive.Transaction();
+	await tx.create(ops as [string, object][]);
+	tx.sign(key);
+	const res = await tx.broadcast();
+	if (res?.error) throw new Error(JSON.stringify(res.error));
+	return res.result.tx_id as string;
+}
+
+// 1. Plan collection + seeds
 const plan = await buildCollectionWithSeeds(
 	{
 		creator: "my-game",
 		name: "Game Assets",
 		symbol: "ASSET",
 		totalPotential: 5000,
-		metadata: { description: "Game items", image: "..." },
+		metadata: { description: "Game items", image: "https://…/cover.png" },
 		rules: { transferable: true, burnable: true, royaltyPct: 2.5 },
 		schema: {
 			immutable: [{ name: "item_type", type: "string" }],
 			mutable: [{ name: "level", type: "uint8" }],
 		},
-		seeds: [
-			{
-				artId: "sword-001",
-				name: "Iron Sword",
-				imageUrl: "...",
-				maxSupply: 1000,
-				brief: "Basic sword",
-				immutableData: { item_type: "sword" },
-			},
-		],
+		seeds: [{
+			artId: "sword-001",
+			name: "Iron Sword",
+			imageUrl: "https://…/sword.png",
+			maxSupply: 1000,
+			brief: "Basic sword",
+			immutableData: { item_type: "sword" },
+		}],
 	},
 	{ indexerBaseUrl: INDEXER_URL, feeCurrency: "HBD", feeAmount: "0.100" },
 );
+if (!plan.success) throw new Error(JSON.stringify(plan.errors));
 
-if (!plan.success) {
-	throw new Error(`Plan build failed: ${JSON.stringify(plan.errors)}`);
-}
+// 2. Collection step (active + node multisig)
+const colTx = new hive.Transaction();
+await colTx.create(plan.collectionStep.operations as [string, object][]);
+const sig = await requestCreateCollectionMultisig(INDEXER_URL, { transaction: colTx.transaction });
+if (!sig.ok) throw new MultisigError({ message: sig.message, code: sig.code, url: INDEXER_URL });
+colTx.transaction.signatures.push(sig.signature);
+colTx.sign(ACTIVE_KEY);
+const colTxId = (await colTx.broadcast()).result.tx_id as string;
+console.log(`Collection: ${plan.collectionId}`);
 
-// 2. Sign & broadcast collection step
-const creatorKey = process.env.CREATOR_ACTIVE_KEY!;
-const collectionTx = HiveTx.createHiveChain()
-	.addOperation(...plan.collectionStep.operations)
-	.addTaPoS()
-	.addExpiration(30);
-
-const signedTx = collectionTx
-	.sign(HiveTx.createPrivateKeyManager([creatorKey]))
-	.finalize();
-
-// Request node co-signature for multisig
-const multisig = await requestCreateCollectionMultisig(INDEXER_URL, {
-	transaction: signedTx,
-});
-if (!multisig.ok) {
-	throw new Error(`Node multisig failed: ${multisig.message}`);
-}
-
-const finalTx = HiveTx.updateSignature(signedTx, multisig.signature);
-
-const client = HiveTx.createClient("https://api.hive.blog");
-await client.broadcast.sendChainTransaction(finalTx);
-
-console.log(`✓ Collection created: ${plan.collectionId}`);
-
-// 3. Broadcast seed batches (posting key)
-const posterKey = process.env.GAME_POSTING_KEY!;
+// 3. Seed batches (posting key)
 for (const batch of plan.seedBatches) {
-	const seedTx = HiveTx.createHiveChain()
-		.addOperation(...batch.operations)
-		.addTaPoS()
-		.addExpiration(30)
-		.sign(HiveTx.createPrivateKeyManager([posterKey]))
-		.finalize();
-
-	await client.broadcast.sendChainTransaction(seedTx);
-	console.log(`✓ Batch ${batch.batchNumber} broadcast (${batch.seeds.length} seeds)`);
-	await new Promise((r) => setTimeout(r, 3000)); // Wait for indexer to catch up
+	await broadcast(batch.operations, POSTING_KEY);
+	console.log(`Batch ${batch.batchNumber}: ${batch.seeds.length} seeds`);
+	await new Promise(r => setTimeout(r, 4000));
 }
 
-// 4. Distribute instance to player
-const distribute = await buildBulkDistribute({
+// 4. Distribute instances to a player
+const dist = buildBulkDistribute({
 	signer: "my-game",
 	to: "player-username",
-	items: [{ seedId: plan.generatedIds["sword-001"], quantity: 1, seedTxId: "..." }],
+	items: [{ seedId: plan.generatedIds["sword-001"]!, quantity: 1, seedTxId: colTxId }],
 	mutableData: { level: 1 },
 });
-
-const distTx = HiveTx.createHiveChain()
-	.addOperation(...distribute.operations)
-	.addTaPoS()
-	.addExpiration(30)
-	.sign(HiveTx.createPrivateKeyManager([posterKey]))
-	.finalize();
-
-await client.broadcast.sendChainTransaction(distTx);
-
-console.log("✓ Game assets ready!");
+if (!dist.success) throw new Error(JSON.stringify(dist.errors));
+await broadcast(dist.operations, POSTING_KEY);
+console.log("Game assets ready!");
 ```
 
 ---
@@ -463,8 +477,8 @@ console.log("✓ Game assets ready!");
 
 ## Next Steps
 
-1. **Start with a schema:** Define your NFT fields in [Collections](../concepts/collections.md).
-2. **Learn the builders:** See [SDK Reference](../sdk/reference.md) for all builders.
-3. **Study examples:** [Card Game](../examples/games/card-game.md) and [Item System](../examples/games/item-system.md) show end-to-end flows.
-4. **Broadcast:** Use `hive-tx`, `@hiveio/dhive`, or `@hiveio/wax` per [Broadcasting](../broadcasting.md).
-5. **Deploy:** Contact the core team for testnet access and production launch planning.
+1. **Start with a schema:** [Collections](../concepts/collections.md) — design immutable/mutable fields.
+2. **Learn the builders:** [SDK Reference](../sdk/reference.md) — full builder table.
+3. **Study examples:** [Card Game](../examples/games/card-game.md) — full TCG flow (launch → packs → trading → lending).
+4. **Broadcast:** [Signing & Broadcasting](../broadcasting.md) — hive-tx / dhive / wax / Keychain.
+5. **Quick LLM reference:** [LLM Context](../llm.md) — all builders, patterns, and error codes in one file.

@@ -1,304 +1,123 @@
 # Allowances & Operators
 
-NFTLox implements an ERC-721-style approval system that lets NFT owners delegate transfer authority to third parties, and a separate data operator system that lets collection creators delegate mutable data writes.
+NFTLox ships two separate delegation systems. Both run entirely on posting auth — you never need to hand out your active key to authorize automated flows.
 
----
+| System | Grantor | Scope | What the delegate can do |
+|---|---|---|---|
+| **Instance approval** (`nft_approve`) | Instance owner | Single instance | Call `nft_transfer_from` on that one instance. |
+| **Collection-wide approval** (`nft_approve_all`) | Instance owner | All instances of a collection they own (including future acquisitions) | Call `nft_transfer_from` on any of them. |
+| **Data operator** (`data_operator_approve`) | Collection creator | Mutable data writes across the whole collection | Call `set_data_from` on any instance in the collection. |
 
-## Permission Types
+Seeds are templates, not tradable assets — `nft_approve` and `nft_approve_all` operate on **instances** only.
 
-| Permission | Scope | Grantor | Use case |
-|------------|-------|---------|----------|
-| NFT Approve | Single NFT instance | Owner | Marketplace escrow, P2P trades |
-| NFT Approve All | All NFTs in a collection | Owner | Marketplace blanket approval |
-| Data Operator | Collection-wide data writes | Creator | Game servers, oracle feeds |
-
-**Key principle:** Approve, transfer-from, and set-data-from operations use `required_posting_auths` (posting key). Do not keep active keys on a server for delegation flows.
-
----
-
-## NFT Approve
-
-Grant or revoke a spender's permission to transfer a single NFT on your behalf.
-
-### Validation rules
-
-- Spender cannot be the signer (no self-approval).
-- NFT must exist, not be burned, lent, or a seed.
-- Signer must be the current owner.
-- Setting `approved: false` deletes the allowance entirely.
-
-### API
-
-`POST /api/build/nft-approve`
-
-```json
-{
-	"owner": "alice",
-	"spender": "marketplace-bot",
-	"instanceId": "nft_a1b2c3d4_1_ef56",
-	"approved": true
-}
-```
-
-**Response:**
-
-```json
-{
-	"success": true,
-	"protocolVersion": "0.6.0",
-	"operation": ["custom_json", { "..." }],
-	"keyType": "Posting"
-}
-```
-
-### SDK
+## Instance approval — `buildNftApprove`
 
 ```typescript
 import { buildNftApprove } from "nftlox-sdk";
 
 const result = buildNftApprove({
 	owner: "alice",
-	spender: "marketplace-bot",
-	instanceId: "nft_a1b2c3d4_1_ef56",
+	instanceId: "nft_abcdef…_7",
+	spender: "marketplace-contract",
 	approved: true,
 });
-
-if (result.success) {
-	// result.operation -- ready to sign and broadcast
-	// result.payload   -- raw protocol payload
-}
 ```
 
----
+Scope: exactly one instance. Revoke with `approved: false`. The approval is consumed by the first `nft_transfer_from` that references it — you can re-approve to allow a second transfer.
 
-## NFT Approve All
-
-Grant or revoke a spender's permission to transfer **all** NFTs you own within a specific collection.
-
-### Validation rules
-
-- Spender cannot be the signer.
-- Collection must exist and not be archived.
-- Setting `approved: false` deletes the collection allowance.
-
-### API
-
-`POST /api/build/nft-approve-all`
-
-```json
-{
-	"owner": "alice",
-	"spender": "marketplace-bot",
-	"collectionId": "col_a1b2c3d4",
-	"approved": true
-}
-```
-
-### SDK
+## Collection-wide approval — `buildNftApproveAll`
 
 ```typescript
 import { buildNftApproveAll } from "nftlox-sdk";
 
 const result = buildNftApproveAll({
 	owner: "alice",
-	spender: "marketplace-bot",
-	collectionId: "col_a1b2c3d4",
+	collectionId: "col_…",
+	spender: "marketplace",
 	approved: true,
 });
 ```
 
----
+Scope: every instance Alice **currently owns or will ever own** in that collection. The approval survives buys, transfers, and lending returns — it only ends when Alice broadcasts `approved: false` or burns each instance.
 
-## NFT Transfer From
+## Operator-initiated transfer — `buildNftTransferFrom`
 
-Transfer an NFT on behalf of its owner, using either an individual NFT approval or a collection-wide approval.
-
-### Validation rules
-
-- `from` must be the current owner of the NFT.
-- `from` and `to` cannot be the same account.
-- NFT must not be burned, lent, listed (expired listings are auto-cleared), or a distributed seed.
-- Collection must be transferable.
-- Signer must have **either** an individual NFT allowance **or** a collection-wide allowance for the NFT's collection.
-- After transfer, the individual NFT allowance is cleared (collection allowance persists).
-
-### API
-
-`POST /api/build/nft-transfer-from`
-
-```json
-{
-	"spender": "marketplace-bot",
-	"from": "alice",
-	"to": "bob",
-	"instanceId": "nft_a1b2c3d4_1_ef56"
-}
-```
-
-Optional provenance fields: `seedId`, `seedTxId`.
-
-> **Note:** The `spender` field in the request body maps to `operator` internally in the builder.
-
-### SDK
+Called by the spender, not the owner. The spender's posting key is the only signature needed.
 
 ```typescript
 import { buildNftTransferFrom } from "nftlox-sdk";
 
 const result = buildNftTransferFrom({
-	operator: "marketplace-bot",
+	operator: "marketplace",
 	from: "alice",
 	to: "bob",
-	instanceId: "nft_a1b2c3d4_1_ef56",
+	instanceId: "nft_abcdef…_7",
 });
 ```
 
----
+Rejection conditions:
+- Operator is not approved for this instance (neither `nft_approve` nor `nft_approve_all` matches).
+- Instance is currently lent (lending locks `nft_transfer_from`).
+- Instance is currently listed (unlist first, or let the listing expire).
 
-## Data Operator Approve
+## Data operators — `buildDataOperatorApprove`
 
-Authorize a Hive account to update mutable data on NFTs within your collection. This is completely separate from NFT transfer allowances -- data operators cannot transfer NFTs.
-
-### Validation rules
-
-- Operator cannot be the signer (no self-approval).
-- Collection must exist and not be archived.
-- **Only the collection creator** can approve data operators.
-- Setting `approved: false` revokes the operator.
-
-### API
-
-`POST /api/build/data-operator-approve`
-
-```json
-{
-	"creator": "ragnarok-game",
-	"collectionId": "col_a1b2c3d4",
-	"operator": "game-server-1",
-	"approved": true
-}
-```
-
-### SDK
+Only the **collection creator** can grant this. The scope is mutable-data writes across the whole collection — useful for game servers that need to update `xp`, `wins`, `level`, etc. without ever holding player keys.
 
 ```typescript
 import { buildDataOperatorApprove } from "nftlox-sdk";
 
 const result = buildDataOperatorApprove({
-	creator: "ragnarok-game",
-	collectionId: "col_a1b2c3d4",
-	operator: "game-server-1",
+	creator: "ragnarok-studio",      // must match the collection's creator
+	collectionId: "col_…",
+	operator: "ragnarok-server",
 	approved: true,
 });
 ```
 
----
-
-## Set Data From
-
-Update mutable data on an NFT as an authorized data operator. Requires a prior `data-operator-approve`.
-
-### Validation rules
-
-- NFT must exist and not be burned.
-- `instanceDna` must match the NFT's current DNA.
-- Signer must be an approved data operator for the NFT's collection.
-- Collection must have a schema.
-- `mutableData` must contain at least one field for schema-based collections.
-- Fields are validated against the collection schema and merged with existing data.
-
-### API
-
-`POST /api/build/set-data-from`
-
-```json
-{
-	"operator": "game-server-1",
-	"nftId": "nft_a1b2c3d4_1_ef56",
-	"instanceDna": "A1B2C3D4E5F6G7",
-	"mutableData": {
-		"level": 5,
-		"xp": 2450
-	}
-}
-```
-
-Optional provenance fields: `seedId`, `seedTxId`.
-
-### SDK
+Once approved, the operator uses `buildSetDataFrom` to update mutable data on any instance in the collection:
 
 ```typescript
-import { createSetDataFromOperation, type SetDataFromInput } from "nftlox-sdk";
+import { buildSetDataFrom } from "nftlox-sdk";
 
-const input: SetDataFromInput = {
-	nftId: "nft_a1b2c3d4_1_ef56",
-	instanceDna: "A1B2C3D4E5F6G7",
-	mutableData: {
-		level: 5,
-		xp: 2450,
-	},
-};
-
-const operation = createSetDataFromOperation(input, "game-server-1");
-// Sign with game-server-1's posting key and broadcast
-```
-
----
-
-## Revoking Permissions
-
-All approval types support revocation by setting `approved: false`.
-
-### Revoke NFT approval
-
-```typescript
-buildNftApprove({
-	owner: "alice",
-	spender: "marketplace-bot",
-	instanceId: "nft_a1b2c3d4_1_ef56",
-	approved: false,
+const result = buildSetDataFrom({
+	operator: "ragnarok-server",
+	nftId: "nft_…",
+	instanceDna: nft.instance_dna,
+	mutableData: { xp: 5000, level: 12 },
 });
 ```
 
-### Revoke collection-wide approval
+Revoke any time with `approved: false`. The revocation is effective from the next block onward; writes already broadcast and pending finalization complete normally.
+
+## Security boundary
+
+What operators **cannot** do:
+
+- Write to `immutableData` (it is frozen at mint time for every NFT).
+- Change ownership via `set_data_from` (`nft_transfer_from` is the only transfer path, which data operators don't have).
+- Override the collection schema (only the creator can `extend_schema`).
+- Self-grant — a data-operator approval must be broadcast by the creator.
+- Bypass lending or listing locks — all normal state guards still apply.
+
+What they **can** do (and why it's fine):
+
+- Rewrite mutable stats to any value the schema allows. This is the whole point of the delegation; trust the operator the way players trust your game server.
+- Continue operating after the creator goes offline, until the creator revokes.
+
+If you are designing a permissionless marketplace contract, prefer `nft_approve_all` so users opt in once. If you are designing a game server, prefer `data_operator_approve` so players opt in via the game (no wallet dance) while still retaining ownership and transfer rights.
+
+## Reading approvals from the indexer
+
+Approvals are materialized as plain indexer rows — no extra endpoint needed. A future version of the SDK/client will expose typed helpers; today you can query the raw ownership + operation logs:
 
 ```typescript
-buildNftApproveAll({
-	owner: "alice",
-	spender: "marketplace-bot",
-	collectionId: "col_a1b2c3d4",
-	approved: false,
-});
+await client.getUserNfts("alice", { status: "active" });    // ownership stays with Alice
+await client.getOperationStatus(approveTxId);                // confirm the approval landed
 ```
 
-### Revoke data operator
+## See also
 
-```typescript
-buildDataOperatorApprove({
-	creator: "ragnarok-game",
-	collectionId: "col_a1b2c3d4",
-	operator: "game-server-1",
-	approved: false,
-});
-```
-
-### Implicit revocations
-
-Some operations clear allowances automatically:
-
-| Event | Effect |
-|-------|--------|
-| NFT Transfer From | Individual NFT allowance is cleared (collection allowance stays) |
-| NFT Transfer (direct) | Individual NFT allowance is cleared |
-| Collection archived | All collection allowances and data operators are removed |
-
----
-
-## Database Tables
-
-For reference, the indexer maintains these tables:
-
-| Table | Key | Description |
-|-------|-----|-------------|
-| `nft_allowances` | `nft_id` (unique) | Single NFT approvals. One spender per NFT. |
-| `collection_allowances` | `(owner, spender, collection_id)` | Collection-wide approvals. |
-| `data_operators` | `(collection_id, operator)` | Authorized data operators. |
+- [Mutable Data](../examples/mutable-data.md) — end-to-end pattern for operator-driven stat updates.
+- [Data Formats — `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `data_operator_approve`, `set_data_from`](../data-formats.md)
+- [SDK Reference — approval builders](../sdk/reference.md#approvals--delegation)

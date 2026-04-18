@@ -1,5 +1,6 @@
 - **Getting Started**
 	- [Introduction](/)
+	- [LLM / AI Reference](llm.md)
 	- [Quick Start](getting-started.md)
 	- [Signing & Broadcasting](broadcasting.md)
 	- [Data Formats](data-formats.md)

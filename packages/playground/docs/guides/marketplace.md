@@ -1,342 +1,104 @@
 # Marketplace Trading
 
-The NFTLox marketplace enables peer-to-peer NFT trading on Hive. It follows a **list / buy / unlist** cycle secured by multisig co-signing -- the indexer node validates every purchase before co-signing the transaction, ensuring funds only move when the sale is legitimate.
+Peer-to-peer NFT trading on Hive. Listings are pure on-chain state; buys settle atomically with HIVE/HBD transfers + an ownership change, co-signed by the indexer node so a buyer can never pay for an NFT that is not actually deliverable.
 
----
-
-## Lifecycle Overview
+## Lifecycle
 
 ```
-Owner lists NFT (posting key)
-  └── NFT status changes to "listed" with price, currency, and listingId
-
-Buyer purchases NFT (multisig flow)
-  ├── 1. Fetch payment info from indexer
-  ├── 2. Build buy transaction with payment splits
-  ├── 3. Request multisig co-signature from node
-  ├── 4. Append buyer signature + node signature
-  └── 5. Broadcast to Hive
-
-Owner unlists NFT (posting key)
-  └── NFT status reverts to "active", listing cleared
+list   (owner, posting)          → NFT status: listed, listingId/listingNonce recorded
+unlist (owner, posting)          → returns to active after UNLIST_DELAY_BLOCKS (3) blocks
+buy    (buyer, active + node)    → transfers + custom_json in one atomic tx
 ```
 
-**Key facts:**
+- `list`, `unlist` — posting key. Cheap, single-signer.
+- `buy` — **active key** (HIVE/HBD transfers) + **node multisig** (the `custom_json` has `required_auths: [nodeAccount]`).
+- Supported currencies: `HIVE`, `HBD`.
+- Protocol fee: **1%** (`PROTOCOL_FEE_BPS = 100`).
+- Max royalty: **50%** (`MAX_ROYALTY_PCT`), set per-collection at creation.
 
-- `list` requires **posting key**.
-- `buy` requires **active key** because it includes HIVE/HBD transfers and node co-signing.
-- `unlist` requires **posting key** (safe, protective action)
-- Supported currencies: `HIVE`, `HBD`
-- Protocol fee: **1.0%** (goes to the co-signing node)
-- Maximum royalty: **50%**
-
----
-
-## 1. Listing an NFT
-
-### API: POST /api/build/list
-
-Builds an unsigned `custom_json` operation that lists an NFT for sale. The SDK generates a deterministic `listingId` and random `listingNonce` automatically.
-
-**Request body:**
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `owner` | string | yes | Hive account that owns the NFT |
-| `nftId` | string | yes | NFT identifier |
-| `price` | object | yes | `{ amount: "10.000", currency: "HIVE" }` |
-| `expiresAt` | number | no | Unix timestamp (ms) -- must be in the future |
-| `imageUrl` | string | no | Image URL for indexer verification |
-| `marketplace` | string | no | Marketplace identifier (for filtering) |
-
-**Example request:**
-
-```bash
-curl -X POST https://api-nftlox.hivecreators.co/api/build/list \
-	-H "Content-Type: application/json" \
-	-d '{
-		"owner": "alice",
-		"nftId": "nft_a1b2c3d4e5f6",
-		"price": { "amount": "25.000", "currency": "HIVE" }
-	}'
-```
-
-**Example response:**
-
-```json
-{
-	"success": true,
-	"protocolVersion": "0.6.0",
-	"operation": ["custom_json", {
-		"required_auths": [],
-		"required_posting_auths": ["alice"],
-		"id": "nftlox_testnet",
-		"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.4.1\",\"action\":\"list\",\"data\":{\"nftId\":\"nft_a1b2c3d4e5f6\",\"listingId\":\"list_abc123def456...\",\"listingNonce\":\"r4nd0mn0nc3\",\"price\":{\"amount\":\"25.000\",\"currency\":\"HIVE\"}}}"
-	}],
-	"payload": {
-		"protocol": "nftlox_testnet",
-		"version": "0.6.0",
-		"action": "list",
-		"data": {
-			"nftId": "nft_a1b2c3d4e5f6",
-			"listingId": "list_abc123def456...",
-			"listingNonce": "r4nd0mn0nc3",
-			"price": { "amount": "25.000", "currency": "HIVE" }
-		}
-	}
-}
-```
-
-### SDK usage
+## 1. Listing — `buildList`
 
 ```typescript
 import { buildList } from "nftlox-sdk";
+import hive from "hive-tx";
+
+hive.config.set("node", "https://api.hive.blog");
 
 const result = await buildList({
 	owner: "alice",
-	nftId: "nft_a1b2c3d4e5f6",
+	nftId: "nft_abc…_7",
 	price: { amount: "25.000", currency: "HIVE" },
+	expiresAt: Date.now() + 7 * 24 * 3600 * 1000,
+	marketplace: "ragnarok",           // optional scope tag, used by UIs to filter
+	imageUrl: "https://…/nft.png",     // optional; SDK hashes it for indexer verification
 });
+if (!result.success) throw new Error(JSON.stringify(result.errors));
 
-if (!result.success) {
-	console.error(result.errors);
-	return;
-}
+const tx = new hive.Transaction();
+await tx.create(result.operations as [string, object][]);
+tx.sign(hive.PrivateKey.from(process.env.HIVE_POSTING_KEY!));
+await tx.broadcast();
 
-// result.operation -- sign with posting key and broadcast
-// result.payload.data.listingId -- deterministic listing ID
+// result.generatedIds = { listingId, listingNonce }
 ```
 
-### Validation rules (indexer)
+**What the builder computes for you:**
 
-- NFT must exist and not be burned, lent, or a distributed seed
-- Signer must be the NFT owner
-- Collection must be `transferable`
-- NFT must not already be listed (unless the previous listing expired)
-- `listingId` must match the deterministic hash of `(nftId, owner, marketplace, price, expiresAt, nonce)`
+- `listingNonce` — random 16-byte hex, included in the hash so the same NFT can be re-listed without collision.
+- `listingId = sha256(domain | nftId | owner | marketplace | price | expiresAt | nonce)` — deterministic, verifiable off-chain.
+- `imageHash` if you pass `imageUrl` (the indexer compares hashes on first sight).
 
----
+**Indexer validation:**
 
-## 2. Buying an NFT
+- Instance exists, not burned, not lent, not already listed (lazy: an expired listing is cleared on touch).
+- Signer is the current owner.
+- Collection is `transferable`.
+- `listingId` matches the recomputed hash.
 
-Buying is the most complex marketplace operation. It uses a **multisig co-signing flow** where the indexer node validates the transaction and provides its signature before broadcast.
+`marketplace` is a free-form tag (`"ragnarok"`, `"peakd"`, …). Your UI filters `getListings({ marketplace })` to isolate your storefront; the protocol-wide feed sees everything.
 
-### Step-by-step flow
-
-```
-┌─────────┐       ┌───────────┐       ┌──────────────┐
-│  Buyer  │──1──▶│  Indexer  │       │  Hive Chain  │
-│  Client │◀──2──│  Node     │       │              │
-│         │──3──▶│           │       │              │
-│         │◀──4──│           │       │              │
-│         │──5───────────────────────▶│              │
-└─────────┘       └───────────┘       └──────────────┘
-
-1. GET /api/payment-info/{nftId}     → payment split details
-2. Response: seller/royalty/fee amounts + listingId + listTxId
-3. POST /api/multisig                → unsigned tx with transfers
-4. Response: node signature + digest
-5. Broadcast tx with both signatures → ownership transfers
-```
-
-### Step 1: Fetch payment info
-
-```bash
-curl https://api-nftlox.hivecreators.co/api/payment-info/nft_a1b2c3d4e5f6
-```
-
-**Response:**
-
-```json
-{
-	"nftId": "nft_a1b2c3d4e5f6",
-	"listingId": "list_abc123def456...",
-	"listTxId": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-	"seller": "alice",
-	"totalPrice": 25.0,
-	"currency": "HIVE",
-	"sellerAmount": 24.5,
-	"royaltyAmount": 0.25,
-	"royaltyRecipient": "artist",
-	"feeAmount": 0.25,
-	"feeAccount": "nftlox",
-	"nodeAccount": "nftlox",
-	"txId": "f0e1d2c3b4a5f0e1d2c3b4a5f0e1d2c3b4a5f0e1",
-	"seedTxId": null
-}
-```
-
-### Step 2: Build buy transaction
-
-Use the payment info to build the full transaction with all transfer operations.
-
-**API: POST /api/build/buy**
-
-**Request body:**
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `buyer` | string | yes | Hive account buying the NFT |
-| `seller` | string | yes | Current NFT owner |
-| `nftId` | string | yes | NFT identifier |
-| `listingId` | string | yes | Active listing ID (from payment info) |
-| `listTxId` | string | yes | Transaction ID that created the listing |
-| `txId` | string | yes | NFT creation transaction ID |
-| `nodeAccount` | string | yes | Co-signing node account |
-| `paymentSplit` | object | yes | Full split object from payment info |
-
-```bash
-curl -X POST https://api-nftlox.hivecreators.co/api/build/buy \
-	-H "Content-Type: application/json" \
-	-d '{
-		"buyer": "bob",
-		"seller": "alice",
-		"nftId": "nft_a1b2c3d4e5f6",
-		"listingId": "list_abc123def456...",
-		"listTxId": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-		"txId": "f0e1d2c3b4a5f0e1d2c3b4a5f0e1d2c3b4a5f0e1",
-		"nodeAccount": "nftlox",
-		"paymentSplit": {
-			"sellerAmount": 24.5,
-			"royaltyAmount": 0.25,
-			"royaltyRecipient": "artist",
-			"feeAmount": 0.25,
-			"feeAccount": "nftlox",
-			"totalPrice": 25.0,
-			"currency": "HIVE"
-		}
-	}'
-```
-
-**Response:**
-
-```json
-{
-	"success": true,
-	"protocolVersion": "0.6.0",
-	"keyType": "Active",
-	"hiveOperations": [
-		["transfer", {
-			"from": "bob",
-			"to": "alice",
-			"amount": "24.500 HIVE",
-			"memo": "NFTLox BUY:nft_a1b2c3d4e5f6"
-		}],
-		["transfer", {
-			"from": "bob",
-			"to": "artist",
-			"amount": "0.250 HIVE",
-			"memo": "NFTLox ROY:nft_a1b2c3d4e5f6"
-		}],
-		["transfer", {
-			"from": "bob",
-			"to": "nftlox",
-			"amount": "0.250 HIVE",
-			"memo": "NFTLox FEE:nft_a1b2c3d4e5f6"
-		}],
-		["custom_json", {
-			"required_auths": ["nftlox"],
-			"required_posting_auths": [],
-			"id": "nftlox_testnet",
-			"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.4.1\",\"action\":\"buy\",\"data\":{\"nftId\":\"nft_a1b2c3d4e5f6\",\"listingId\":\"list_abc123def456...\",\"listTxId\":\"a1b2c3d4...\",\"txId\":\"f0e1d2c3...\"}}"
-		}]
-	],
-	"payload": {
-		"protocol": "nftlox_testnet",
-		"version": "0.6.0",
-		"action": "buy",
-		"data": {
-			"nftId": "nft_a1b2c3d4e5f6",
-			"listingId": "list_abc123def456...",
-			"listTxId": "a1b2c3d4...",
-			"txId": "f0e1d2c3..."
-		}
-	}
-}
-```
-
-Note that `hiveOperations` contains **up to 4 operations**: seller transfer, royalty transfer (if applicable), fee transfer, and the `custom_json`. The `custom_json` has `required_auths: [nodeAccount]` -- this is why multisig co-signing is needed.
-
-### Step 3: Request multisig co-signature
-
-Wrap the operations in a Hive transaction and send it to the node for co-signing.
-
-**POST /api/multisig**
-
-```bash
-curl -X POST https://api-nftlox.hivecreators.co/api/multisig \
-	-H "Content-Type: application/json" \
-	-d '{
-		"buyer": "bob",
-		"nftId": "nft_a1b2c3d4e5f6",
-		"listingId": "list_abc123def456...",
-		"listTxId": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-		"transaction": {
-			"ref_block_num": 12345,
-			"ref_block_prefix": 678901234,
-			"expiration": "2026-03-30T12:05:00",
-			"operations": [
-				["transfer", { "from": "bob", "to": "alice", "amount": "24.500 HIVE", "memo": "NFTLox BUY:nft_a1b2c3d4e5f6" }],
-				["transfer", { "from": "bob", "to": "artist", "amount": "0.250 HIVE", "memo": "NFTLox ROY:nft_a1b2c3d4e5f6" }],
-				["transfer", { "from": "bob", "to": "nftlox", "amount": "0.250 HIVE", "memo": "NFTLox FEE:nft_a1b2c3d4e5f6" }],
-				["custom_json", { "required_auths": ["nftlox"], "required_posting_auths": [], "id": "nftlox_testnet", "json": "..." }]
-			],
-			"extensions": [],
-			"signatures": []
-		}
-	}'
-```
-
-**Success response:**
-
-```json
-{
-	"ok": true,
-	"signature": "1f4a5b6c7d8e9f...",
-	"digest": "abc123def456...",
-	"expiration": "2026-03-30T12:05:00"
-}
-```
-
-**Error response:**
-
-```json
-{
-	"ok": false,
-	"code": "INVALID_PAYMENT_SPLIT",
-	"message": "Seller transfer amount mismatch: expected 24.500, got 24.000"
-}
-```
-
-### Step 4: Sign and broadcast
-
-After receiving the node's signature, append the buyer's signature and broadcast:
+## 2. Unlisting — `buildUnlist`
 
 ```typescript
-import { Transaction, PrivateKey } from "hive-tx";
+import { buildUnlist } from "nftlox-sdk";
 
-// Add node signature from multisig response
-transaction.signatures.push(multisigResponse.signature);
-
-// Sign with buyer's active key
-const tx = new Transaction(transaction);
-tx.sign(PrivateKey.from(buyerActiveKey));
-
-// Broadcast
-const result = await tx.broadcast();
+const result = await buildUnlist({
+	owner: "alice",
+	nftId: "nft_abc…_7",
+});
 ```
 
-### SDK usage (full flow)
+An unlist is effective immediately for UI purposes, but the NFT cannot be re-listed for **`UNLIST_DELAY_BLOCKS = 3`** blocks (~9 s). This tiny cooldown blocks a race where a seller unlists to dodge an in-flight buy and re-lists at a higher price in the same window.
+
+## 3. Buying — `buildBuy`
+
+Buying is a three-step dance: fetch the split, build the tx, get the node to co-sign.
+
+### Step 1 — fetch the payment split
+
+Always read it from the indexer. Any mismatch (seller/royalty/fee amounts, currency, listingId, listTxId) is rejected by the multisig node with `INVALID_PAYMENT_SPLIT`.
 
 ```typescript
-import { createIndexerClient, buildBuy } from "nftlox-sdk";
+import { createIndexerClient } from "nftlox-sdk";
 
 const client = createIndexerClient("https://api-nftlox.hivecreators.co");
+const info = await client.getPaymentInfo("nft_abc…_7");
+// {
+//   nftId, listingId, listTxId, seller,
+//   totalPrice, currency: "HIVE" | "HBD",
+//   sellerAmount, royaltyAmount, royaltyRecipient,
+//   feeAmount, feeAccount, nodeAccount,
+//   txId, seedTxId
+// }
+```
 
-// 1. Fetch payment info
-const info = await client.getPaymentInfo("nft_a1b2c3d4e5f6");
+### Step 2 — build the transaction
 
-// 2. Build buy transaction
+`buildBuy` returns `operations` as a flat array: up to 3 `transfer` ops followed by the `custom_json` with `required_auths: [buyer]`. The buyer signs with **active** (the transfers need it). The node will add its signature to authorize the `custom_json`.
+
+```typescript
+import { buildBuy } from "nftlox-sdk";
+
 const result = buildBuy({
 	buyer: "bob",
 	seller: info.seller,
@@ -344,7 +106,6 @@ const result = buildBuy({
 	listingId: info.listingId,
 	listTxId: info.listTxId,
 	txId: info.txId,
-	nodeAccount: info.nodeAccount,
 	paymentSplit: {
 		sellerAmount: info.sellerAmount,
 		royaltyAmount: info.royaltyAmount,
@@ -352,306 +113,138 @@ const result = buildBuy({
 		feeAmount: info.feeAmount,
 		feeAccount: info.feeAccount,
 		totalPrice: info.totalPrice,
-		currency: info.currency,
+		currency: info.currency as "HIVE" | "HBD",
 	},
 });
+if (!result.success) throw new Error(JSON.stringify(result.errors));
+```
 
-if (!result.success) {
-	console.error(result.errors);
-	return;
-}
+The builder refuses to return operations if `buyer === seller` (error code `CANNOT_BUY_OWN`).
 
-// 3. Build Hive transaction from hiveOperations
-// 4. Request multisig co-signature
-const multisig = await client.multisig({
+### Step 3 — multisig + broadcast
+
+```typescript
+import { MultisigError } from "nftlox-sdk";
+
+const tx = new hive.Transaction();
+await tx.create(result.operations as [string, object][]);
+
+const resp = await client.multisig({
 	buyer: "bob",
 	nftId: info.nftId,
 	listingId: info.listingId,
 	listTxId: info.listTxId,
-	transaction: hiveTransaction, // built from result.hiveOperations
+	transaction: tx.transaction,
 });
+if (!resp.ok) throw new MultisigError({ message: resp.message, code: resp.code, url: INDEXER });
 
-if (!multisig.ok) {
-	console.error(multisig.code, multisig.message);
-	return;
-}
-
-// 5. Append both signatures and broadcast
+tx.transaction.signatures.push(resp.signature);
+tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
+await tx.broadcast();
 ```
 
-### Multisig error codes
+In a browser UI, swap the active-key sign step for Hive Keychain's `requestBroadcast` with `"Active"` authority — the node signature was already appended, so Keychain is only responsible for the user's signature.
 
-| Code | Description |
+### Multisig rejection codes
+
+| Code | Cause |
 |---|---|
-| `RATE_LIMITED` | Too many requests from this IP |
-| `INVALID_TX_STRUCTURE` | Malformed transaction (wrong operation count, expired, missing fields) |
-| `NFT_NOT_FOUND` | NFT does not exist |
-| `NFT_NOT_LISTED` | NFT is not currently listed for sale |
-| `NFT_NOT_TRANSFERABLE` | Collection rules forbid transfers |
-| `NFT_EXPIRED_LISTING` | Listing has expired |
-| `CANNOT_BUY_OWN` | Buyer is the same account as the seller |
-| `SEED_HAS_INSTANCES` | Seed NFTs with distributed instances cannot be sold |
-| `INVALID_PAYMENT_SPLIT` | Transfer amounts do not match expected split |
-| `INVALID_PROTOCOL_PAYLOAD` | Custom JSON payload is malformed or listingId/listTxId mismatch |
+| `RATE_LIMITED` | Too many requests from this IP. Back off. |
+| `INVALID_TX_STRUCTURE` | Wrong op count, bad order, expired window, missing fields. |
+| `NFT_NOT_FOUND` | nftId unknown to the indexer. |
+| `NFT_NOT_LISTED` | Listing was cancelled / expired / bought by someone else. |
+| `NFT_NOT_TRANSFERABLE` | Collection `rules.transferable = false`. |
+| `NFT_EXPIRED_LISTING` | `expiresAt` in the past. Ask the seller to re-list. |
+| `CANNOT_BUY_OWN` | Buyer == seller. |
+| `SEED_HAS_INSTANCES` | Seeds with distributed instances cannot be sold (seed is co-owned in spirit by its instance holders). |
+| `INVALID_PAYMENT_SPLIT` | Any transfer amount off by even 0.001 from the split the node computed. |
+| `INVALID_PROTOCOL_PAYLOAD` | `listingId`/`listTxId` don't match the active listing, memos malformed, or `required_auths` missing the node. |
+| `NFT_LOCKED` | Another in-flight buy holds the DB-backed lock. Retry after ~60 s. |
 
-### Multisig validation rules
+The node's checklist before co-signing:
 
-The node validates the following before co-signing:
+- Transaction has 2–4 ops (≥1 transfer + the custom_json; ≤3 transfers + the custom_json).
+- Expiration is 30–120 s away.
+- `custom_json.required_auths` contains the node account.
+- NFT listed, not burned/lent, collection transferable.
+- Split matches exactly (rounded to 3 decimals, Hive precision).
+- Memos follow the `NFTLox {BUY|ROY|FEE}:{nftId}` format.
+- No competing in-flight buy — the indexer stores a `multisig_locks` row so concurrent API instances behind a load balancer stay coherent.
 
-- Transaction has 2-4 operations (minimum: 1 transfer + 1 custom_json; maximum: 3 transfers + 1 custom_json)
-- Transaction expiration is between 30s and 120s from now
-- `custom_json` `required_auths` contains the node account
-- NFT exists, is listed, not burned, not lent, not a distributed seed
-- Collection is transferable
-- Buyer is not the seller
-- `listingId` and `listTxId` match the active listing in the database
-- Payment transfers match the calculated split exactly (seller + royalty + fee)
-- Memo format is correct on each transfer
-
----
-
-## 3. Unlisting an NFT
-
-### API: POST /api/build/unlist
-
-Builds an unsigned `custom_json` that cancels an active listing. Uses **posting key** -- this is a safe, non-custodial operation.
-
-**Request body:**
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `owner` | string | yes | NFT owner (must match listed NFT) |
-| `nftId` | string | yes | NFT identifier |
-| `imageUrl` | string | no | Image URL for verification |
-
-**Example request:**
-
-```bash
-curl -X POST https://api-nftlox.hivecreators.co/api/build/unlist \
-	-H "Content-Type: application/json" \
-	-d '{
-		"owner": "alice",
-		"nftId": "nft_a1b2c3d4e5f6"
-	}'
-```
-
-**Example response:**
-
-```json
-{
-	"success": true,
-	"protocolVersion": "0.6.0",
-	"operation": ["custom_json", {
-		"required_auths": [],
-		"required_posting_auths": ["alice"],
-		"id": "nftlox_testnet",
-		"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.4.1\",\"action\":\"unlist\",\"data\":{\"nftId\":\"nft_a1b2c3d4e5f6\"}}"
-	}],
-	"payload": {
-		"protocol": "nftlox_testnet",
-		"version": "0.6.0",
-		"action": "unlist",
-		"data": {
-			"nftId": "nft_a1b2c3d4e5f6"
-		}
-	}
-}
-```
-
-### SDK usage
-
-```typescript
-import { buildUnlist } from "nftlox-sdk";
-
-const result = await buildUnlist({
-	owner: "alice",
-	nftId: "nft_a1b2c3d4e5f6",
-});
-
-if (!result.success) {
-	console.error(result.errors);
-	return;
-}
-
-// result.operation -- sign with posting key and broadcast
-```
-
-### Validation rules (indexer)
-
-- NFT must exist and be currently listed
-- Signer must be the NFT owner
-
----
-
-## 4. Payment Split Breakdown
-
-Every purchase splits the total price into up to three transfers:
-
-| Recipient | Percentage | Memo prefix | Description |
-|---|---|---|---|
-| **Seller** | Remainder after royalty + fee | `NFTLox BUY:` | Payment to the NFT owner |
-| **Royalty recipient** | 0-50% (set by collection creator) | `NFTLox ROY:` | Creator royalty |
-| **Fee account** | 1.0% (protocol fee) | `NFTLox FEE:` | Goes to the co-signing node |
-
-### Calculation logic
-
-All amounts are rounded to 3 decimal places (Hive precision).
+## Payment split
 
 ```
-feeAmount     = roundHive(totalPrice * 1.0 / 100)
-royaltyAmount = roundHive(totalPrice * royaltyPct / 100)
+feeAmount     = round3(totalPrice * PROTOCOL_FEE_BPS / 10_000)    // 1%
+royaltyAmount = round3(totalPrice * royaltyPct    / 100)
 sellerAmount  = totalPrice - royaltyAmount - feeAmount
 ```
 
-### Edge cases
+The server-side math is authoritative. `buildBuy` does not recompute it — it trusts whatever `paymentSplit` you pass, and the node rejects anything that drifts.
 
-- **Royalty recipient is the seller:** royalty merges into the seller amount (no separate transfer)
-- **Fee account is the seller:** fee merges into the seller amount (no separate transfer)
-- **Zero royalty:** only 2 transfers (seller + fee)
-- **All merges:** minimum 1 transfer (seller gets full amount)
+### Merging rules
 
-### Example: 25 HIVE sale with 1% royalty
+The builder emits a `transfer` only for amounts `> 0`. So:
 
-```
-Total:   25.000 HIVE
-Fee:      0.250 HIVE  (1.0%)  → nftlox       memo: "NFTLox FEE:nft_a1b2c3d4e5f6"
-Royalty:  0.250 HIVE  (1.0%)  → artist        memo: "NFTLox ROY:nft_a1b2c3d4e5f6"
-Seller:  24.500 HIVE          → alice          memo: "NFTLox BUY:nft_a1b2c3d4e5f6"
-```
+- `royaltyAmount == 0` → 2 transfers (seller + fee).
+- `feeAmount == 0` → (happens only if the node is configured with no fee) — 2 transfers.
+- `royaltyRecipient === seller` → set the royalty transfer off by merging upstream; the node computes a single larger seller transfer. Same for `feeAccount === seller`.
+- Minimum: 1 transfer + custom_json (total 2 ops).
 
----
+### Memo format
 
-## 5. Memo Format Requirements
+Strict. The node and the indexer both verify it.
 
-Each transfer in a buy transaction must include a structured memo. The format is strict -- the indexer verifies memos during both multisig validation and on-chain processing.
-
-| Transfer type | Memo format | Example |
+| Transfer | Memo | Constant |
 |---|---|---|
-| Seller payment | `NFTLox BUY:{nftId}` | `NFTLox BUY:nft_a1b2c3d4e5f6` |
-| Royalty payment | `NFTLox ROY:{nftId}` | `NFTLox ROY:nft_a1b2c3d4e5f6` |
-| Protocol fee | `NFTLox FEE:{nftId}` | `NFTLox FEE:nft_a1b2c3d4e5f6` |
+| Seller payment | `NFTLox BUY:{nftId}` | `MEMO_PREFIX_BUY` |
+| Royalty | `NFTLox ROY:{nftId}` | `MEMO_PREFIX_ROYALTY` |
+| Protocol fee | `NFTLox FEE:{nftId}` | `MEMO_PREFIX_FEE` |
 
-- Prefix and nftId are concatenated directly (no space after the colon)
-- The nftId must match the NFT being purchased exactly
-- Memos are validated by the multisig service before co-signing and by the indexer during on-chain processing
+No space after the colon; `{nftId}` is the exact `nft_…` string from the payload.
 
----
+## Why the multisig exists
 
-## 6. Buyer Protection via Multisig
+Without co-signing, a malicious seller could list an NFT, watch for an in-flight `buy`, transfer it out to an alt in a racing transaction, and still collect the buyer's HIVE. The multisig kills that race:
 
-The multisig flow exists to protect buyers. Here is why it matters and how it works:
+1. Buyer builds transfers + `custom_json(required_auths = [node])` as one atomic tx.
+2. Node checks *at the moment of signing* that the listing is still live, split is correct, and no competing buy holds the lock.
+3. Node appends its signature; buyer appends theirs; broadcast.
+4. Because Hive evaluates the whole transaction atomically, either all three transfers + the ownership change land, or nothing does.
 
-### The problem without multisig
+Transactions expire in 30–120 s. A stolen node signature is useless within a minute, and the `multisig_locks` row prevents two buyers from collecting a signature on the same listing at the same time.
 
-Without co-signing, a malicious seller could:
-
-1. List an NFT for sale
-2. Transfer it to an alt account while a buyer's transaction is in-flight
-3. The buyer's HIVE transfer lands, but the NFT ownership was already moved
-
-### How multisig solves this
-
-The `custom_json` for a `buy` action uses `required_auths: [nodeAccount]` -- the node's active key is required to authorize it. This means:
-
-1. **The buyer builds the transaction** with transfer operations (HIVE payments) and the `custom_json` (ownership change)
-2. **The node validates everything** -- NFT is still listed, listing IDs match, payment amounts are correct, buyer is not the seller
-3. **The node co-signs** only if validation passes -- returning its signature
-4. **The buyer adds their signature** and broadcasts the complete transaction
-
-Because both the HIVE transfers and the `custom_json` are in the **same atomic transaction**, either all operations succeed or none do. The node's signature on the `custom_json` guarantees:
-
-- The NFT was verified as listed at the moment of signing
-- Payment splits are mathematically correct
-- The `listingId` and `listTxId` match the active listing (prevents stale/replayed listings)
-- The transaction expires within 30-120 seconds (prevents signature reuse)
-
-If the node rejects the transaction (returns `ok: false`), the buyer's funds **never leave their account** because the transaction is never broadcast.
-
-### Transaction expiration
-
-Multisig transactions must expire within 30-120 seconds (`MIN_EXPIRATION_MS` / `MAX_EXPIRATION_MS`). This tight window prevents:
-
-- **Signature hoarding** -- a collected signature becomes useless quickly
-- **State drift** -- the NFT state cannot change significantly within the window
-- **Replay attacks** -- expired transactions are rejected by the Hive blockchain
-
-### Persistent DB lock
-
-Beyond transaction expiration, the indexer uses a persistent lock stored in the `multisig_locks` table to prevent concurrent purchases of the same NFT. This lock is DB-backed rather than in-memory, so it works correctly even when multiple API instances run behind a load balancer. The lock is acquired when the node co-signs and released when it expires or the purchase completes.
-
----
-
-## Querying Marketplace Listings
-
-Use the indexer API to browse active listings. Each listed NFT includes `schema_version`, `previous_owner`, and `owner_operation_id` in the response.
-
-```bash
-# All listings, sorted by price ascending
-curl "https://api-nftlox.hivecreators.co/api/marketplace/listings?sort=price_asc&limit=20"
-
-# Filter by currency
-curl "https://api-nftlox.hivecreators.co/api/marketplace/listings?currency=HIVE&limit=20"
-```
-
-### SDK usage
+## Querying the marketplace
 
 ```typescript
-import { createIndexerClient } from "nftlox-sdk";
-
-const client = createIndexerClient("https://api-nftlox.hivecreators.co");
-
 const listings = await client.getListings({
-	sort: "price_asc",
-	currency: "HIVE",
+	sort: "price_asc",              // or "price_desc" | "newest" | "oldest"
+	currency: "HIVE",               // optional filter
 	limit: 20,
 	offset: 0,
 });
 
 for (const nft of listings) {
-	console.log(`${nft.name} — ${nft.listing_price} ${nft.listing_currency}`);
-	// nft.schema_version -- schema version at time of last ownership change
-	// nft.previous_owner -- previous canonical owner, or null if the NFT was created for the current owner
-	// nft.owner_operation_id -- HafAH operation ID that made the current owner the canonical owner
+	console.log(nft.name, nft.listing_price, nft.listing_currency);
 }
+
+// Completed sales (history)
+const sales = await client.getSales({ seller: "alice", limit: 50 });
+// { gross_amount, seller_net, royalty_amount, protocol_fee, currency, tx_id, created_at, … }
+
+// Aggregated volume
+const volume = await client.getSalesVolume({ collectionId: "col_…" });
+// [{ currency, total_sales, volume, total_royalties, total_fees }]
 ```
 
----
+`getListings` delegates to `/api/marketplace/listings`. Listing history (create/cancel events) is **not** stored locally — reconstruct it from HafAH if you need it.
 
-## Sales History and Volume
+## Listing expiration is lazy
 
-Completed sales are recorded in a `sales` table with the full financial split. Listing history is **not** stored locally -- it comes from the blockchain via HafAH when needed.
+The indexer does not sweep expired listings on a timer. An expired listing stays `listed` in the DB until something touches the NFT — another `list`, a `buy` attempt, a transfer — at which point the status flips back to `active` before the touching op is applied. For UIs, compare `expiresAt` against `Date.now()` when rendering.
 
-### GET /api/marketplace/sales
+## See also
 
-Returns completed sales with financial breakdown.
-
-```bash
-curl "https://api-nftlox.hivecreators.co/api/marketplace/sales?limit=20"
-```
-
-**Response fields per sale:**
-
-| Field | Type | Description |
-|---|---|---|
-| `gross_amount` | number | Total sale price |
-| `royalty_amount` | number | Royalty paid to creator |
-| `protocol_fee` | number | Protocol fee (1%) |
-| `seller_net` | number | Net amount received by the seller |
-| `currency` | string | HIVE or HBD |
-| `nft_id` | string | NFT identifier |
-| `seller` | string | Seller account |
-| `buyer` | string | Buyer account |
-
-### GET /api/marketplace/volume
-
-Returns aggregated marketplace volume statistics.
-
-```bash
-curl "https://api-nftlox.hivecreators.co/api/marketplace/volume"
-```
-
----
-
-## Listing Expiration
-
-Listing expiration is **lazy** -- it is not detected by a background timer. Instead, an expired listing is detected when the NFT is touched by any operation: re-list, transfer, or buy attempt. When an expired listing is detected, the NFT status is auto-cleared back to `active` before the new operation proceeds.
+- [Signing & Broadcasting](../broadcasting.md#3-buy--active--multisig) — the multisig merge step line by line.
+- [Data Formats — `list`, `unlist`, `buy`](../data-formats.md#list) — payload shapes + deterministic ID derivation.
+- [SDK Reference — marketplace builders](../sdk/reference.md#marketplace) — full input surface.
+- [Allowances & Operators](allowances.md#operator-initiated-transfer--buildnfttransferfrom) — why `nft_transfer_from` is blocked while an instance is listed.

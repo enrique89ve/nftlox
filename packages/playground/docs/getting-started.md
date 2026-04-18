@@ -1,29 +1,34 @@
-# Getting Started with NFTLox
+# Getting Started
 
-This guide walks you through making your first API calls to the NFTLox protocol on Hive blockchain.
+This guide takes you from zero to a minted NFT on the NFTLox testnet in a single file. Everything runs client-side: the indexer only serves **read** endpoints and the **multisig** co-signing endpoint — it never holds your keys and never builds payloads for you.
 
 ## Prerequisites
 
-- **Hive account** -- You need a Hive blockchain account. Create one at [signup.hive.io](https://signup.hive.io).
-- **Active key** -- Required for node-cosigned `create_collection` and `buy`.
-- **Posting key** -- Required for protocol operations such as `mint`, `bulk_distribute`, `transfer`, `list`, `unlist`, approvals, lending, data updates, and `node_register`.
-- Your private keys never leave your client; the API only builds unsigned payloads.
+- **Hive account** — create one at [signup.hive.io](https://signup.hive.io)
+- **Active key** — required for the two node-cosigned flows: `create_collection` and `buy`
+- **Posting key** — required for every other protocol action (mint, transfer, list, unlist, set_data, approvals, lending, …)
+- **Node.js ≥ 18 or Bun ≥ 1.0** — the SDK uses Web Crypto (`crypto.subtle`), available natively in both
+- A Hive signing library of your choice: [`hive-tx`](https://www.npmjs.com/package/hive-tx), [`@hiveio/dhive`](https://www.npmjs.com/package/@hiveio/dhive), or [`@hiveio/wax`](https://www.npmjs.com/package/@hiveio/wax)
 
-## Your First API Call
+Your private keys **never leave your machine**. The SDK emits unsigned operations; you sign them locally.
 
-The NFTLox API is publicly available at:
+## Install
 
+```bash
+npm install nftlox-sdk hive-tx
+# or
+bun add nftlox-sdk hive-tx
 ```
-https://api-nftlox.hivecreators.co/api/
-```
 
-Check the protocol status to confirm the indexer is running:
+`nftlox-sdk` transitively depends on `@nftlox/protocol` and re-exports everything from it. A single import is enough for every builder, type, constant, and helper.
+
+## The testnet in one request
+
+Verify the indexer is reachable and report the protocol version it is serving:
 
 ```bash
 curl https://api-nftlox.hivecreators.co/api/status
 ```
-
-Response:
 
 ```json
 {
@@ -32,215 +37,167 @@ Response:
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
 	"multisigEnabled": true,
+	"multisigSignerReady": true,
 	"lastBlock": 98765432,
 	"headBlock": 98765435,
 	"blocksBehind": 3,
-	"inSync": true
+	"inSync": true,
+	"protocolFeeBps": 100,
+	"maxRoyaltyBps": 5000,
+	"supportedCurrencies": ["HIVE", "HBD"]
 }
 ```
 
-`nodeAccount` is the Hive account that co-signs node-controlled multisig flows. SDK bots can read it with `createIndexerClient(baseUrl).getMultisigNodeAccount()` or by passing `indexerBaseUrl` to `buildCollection()` / `buildCollectionWithSeeds()`.
+Two fields drive every client:
 
-## Reading Data
+| Field | Why it matters |
+|---|---|
+| `nodeAccount` | The Hive account that co-signs `create_collection` and `buy` via multisig. |
+| `multisigSignerReady` | `false` means the node cannot co-sign right now; retry or use a different indexer. |
 
-All read endpoints are `GET` requests. No authentication is required.
+## The write path — how a transaction is produced
 
-### Get protocol statistics
+Every mutation follows the same three-stage pipeline:
 
-```bash
-curl https://api-nftlox.hivecreators.co/api/stats
+```
+1. build            2. sign                        3. broadcast
+-------             ------                         ------------
+SDK builder     →   hive-tx / wax / dhive      →   Hive RPC
+returns an          produces a serialized          the indexer detects
+unsigned            + signed Hive transaction      the custom_json and
+operation                                          materializes state
 ```
 
-Returns aggregate counts: total collections, NFTs, seeds, instances, listed, burned, and unique owners.
+The SDK owns stage 1 only. It is intentionally **transport-agnostic**: it returns a `KeychainResult<T>` containing raw Hive operations and the signer accounts, and you decide which library produces signatures.
 
-### List all collections
+### The `KeychainResult<T>` contract
 
-```bash
-curl "https://api-nftlox.hivecreators.co/api/collections?limit=20&offset=0"
-```
-
-Supports optional query parameters:
-- `creator` -- filter by Hive username
-- `limit` -- results per page (1-200, default 50)
-- `offset` -- pagination offset (default 0)
-
-### Get a single NFT by ID
-
-```bash
-curl https://api-nftlox.hivecreators.co/api/nfts/YOUR_NFT_ID
-```
-
-Returns full NFT details including metadata, ownership, listing info, DNA, and structured data.
-
-### Get a user's NFTs
-
-```bash
-curl "https://api-nftlox.hivecreators.co/api/users/YOUR_USERNAME/nfts?limit=50&offset=0"
-```
-
-Supports optional filters:
-- `status` -- `active`, `listed`, or `burned`
-- `type` -- `seed` or `instance`
-- `limit` -- results per page (1-200, default 50)
-- `offset` -- pagination offset (default 0)
-
-Returns the NFTs along with aggregate count breakdowns.
-
-### Get a user's collections
-
-```bash
-curl "https://api-nftlox.hivecreators.co/api/users/YOUR_USERNAME/collections?limit=50"
-```
-
-### Get marketplace listings
-
-```bash
-curl "https://api-nftlox.hivecreators.co/api/marketplace/listings?sort=recent&currency=HIVE&limit=20"
-```
-
-## Building Transactions
-
-The build API constructs unsigned Hive `custom_json` operations. It validates your input, generates deterministic IDs, and returns a payload ready to be signed and broadcast. The server never touches your private keys.
-
-### Example: Create a collection
-
-```bash
-curl -X POST https://api-nftlox.hivecreators.co/api/build/collection \
-	-H "Content-Type: application/json" \
-	-d '{
-		"creator": "your-hive-user",
-		"name": "My Collection",
-		"symbol": "MYCOL",
-		"totalPotential": 100,
-		"metadata": {
-			"description": "A sample NFT collection",
-			"image": "https://example.com/cover.png"
-		},
-		"rules": {
-			"transferable": true,
-			"burnable": true,
-			"royaltyPct": 5
-		}
-	}'
-```
-
-Response:
-
-```json
-{
-	"success": true,
-	"protocolVersion": "0.6.0",
-	"hashVersion": "v1",
-	"collectionId": "deterministic-id-here",
-	"generatedIds": { "collectionId": "..." },
-	"operation": ["custom_json", { ... }],
-	"payload": {
-		"protocol": "nftlox_testnet",
-		"version": "0.6.0",
-		"action": "create_collection",
-		"data": { ... }
-	}
-}
-```
-
-The `operation` field is a ready-to-broadcast Hive operation. If validation fails, you get `success: false` with an `errors` array describing each issue.
-
-### Available build endpoints
-
-All build endpoints accept `POST` with a JSON body:
-
-| Endpoint | Description | Key Type |
-|---|---|---|
-| `/api/build/collection-multisig` | Create a new collection with node co-signature | Active |
-| `/api/build/collection` | Build raw collection custom_json | Active |
-| `/api/build/seeds` | Batch-mint seed NFTs | Posting |
-| `/api/build/bulk-distribute` | Distribute instances to users | Posting |
-| `/api/build/transfer` | Transfer an NFT | Posting |
-| `/api/build/list` | List NFT for sale | Posting |
-| `/api/build/unlist` | Remove listing | Posting |
-| `/api/build/burn` | Burn an NFT | Posting |
-| `/api/build/buy` | Buy a listed NFT | Active |
-| `/api/build/set-data` | Update mutable data (creator) | Posting |
-| `/api/build/extend-schema` | Add fields to collection schema | Posting |
-| `/api/build/nft-approve` | Approve NFT operator | Posting |
-| `/api/build/nft-approve-all` | Approve operator for collection | Posting |
-| `/api/build/nft-transfer-from` | Operator transfers NFT | Posting |
-| `/api/build/nft-lend` | Lend an NFT | Posting |
-| `/api/build/nft-return` | Return a lent NFT | Posting |
-| `/api/build/data-operator-approve` | Approve data operator | Posting |
-| `/api/build/set-data-from` | Operator updates data | Posting |
-| `/api/build/preview-ids` | Preview deterministic IDs | -- |
-
-## Signing and Broadcasting
-
-The build API returns an unsigned `operation`. You must sign it with the appropriate Hive key (active or posting, depending on the endpoint -- see the table above) and broadcast it to a Hive RPC node.
-
-Use any Hive signing library. Here is a minimal TypeScript example using `dhive`:
+Every `build*` function returns the same tagged union:
 
 ```typescript
-import { Client, PrivateKey } from "@hiveio/dhive";
-
-const client = new Client("https://api.hive.blog");
-
-async function signAndBroadcast(
-	operation: [string, Record<string, unknown>],
-	signerAccount: string,
-	privateKey: string,
-): Promise<void> {
-	const key = PrivateKey.fromString(privateKey);
-
-	const result = await client.broadcast.sendOperations(
-		[operation],
-		key,
-	);
-
-	console.log("Broadcast OK, tx ID:", result.id);
-}
-
-// Usage with a build API response:
-const buildResponse = await fetch("https://api-nftlox.hivecreators.co/api/build/transfer", {
-	method: "POST",
-	headers: { "Content-Type": "application/json" },
-	body: JSON.stringify({
-		nftId: "my-nft-id",
-		from: "alice",
-		to: "bob",
-	}),
-}).then(r => r.json());
-
-if (buildResponse.success) {
-	await signAndBroadcast(
-		buildResponse.operation,
-		"alice",
-		"5K...your-active-key...",
-	);
-}
+type KeychainResult<T> =
+	| {
+		success: true;
+		operations: ReadonlyArray<HiveOperation | HiveTransferOperation>;
+		keyType: "Active" | "Posting";     // key the primary signer must use
+		signer: string;                     // the primary signer account
+		coSigners?: readonly CoSigner[];    // extra signers (node multisig)
+		payload: ProtocolPayload<T>;        // the custom_json body (for inspection)
+		generatedIds?: Record<string, string>;
+		warnings?: readonly string[];
+	  }
+	| {
+		success: false;
+		errors: readonly ValidationError[];
+	  };
 ```
 
-The transaction is broadcast to `https://api.hive.blog` (or any Hive RPC node). Once included in a block, the NFTLox indexer picks it up and updates state within seconds.
+Check `success` first; every other field is only valid on the happy path. `operations` is already in Hive's `["custom_json", {...}]` or `["transfer", {...}]` tuple format — just hand it to your signer.
 
-## Key Concepts
+## Your first mutation — mint a seed
 
-### Seeds vs Instances
+Minting a seed (the non-distributable template from which playable instances are later produced) only requires your **posting key**, since `mint` is a posting-auth action. The seed belongs to a pre-existing collection; for a brand new collection the creator must run the two-op multisig flow (covered in the next section).
 
-NFTLox uses a two-tier model:
+```typescript
+import { buildSeed, PROTOCOL_ID } from "nftlox-sdk";
+import hive from "hive-tx";
 
-- **Seed** -- The original NFT. Think of it as a master template. A seed has a `maxSupply` that limits how many instances can be distributed from it. **Important:** Once instances are distributed (`distributed > 0`), the seed becomes permanently locked and cannot be transferred or sold to ensure ownership integrity.
-- **Instance** -- A copy distributed from a seed via `bulk_distribute`. Each instance gets a unique `instanceDna` and `instanceNumber`. Instances are full NFTs that can be freely transferred, listed, and burned independently.
+hive.config.set("node", "https://api.hive.blog");
 
-### Deterministic IDs
+const HIVE_ACCOUNT = "alice";
+const POSTING_KEY = process.env.HIVE_POSTING_KEY!;
+const COLLECTION_ID = "col_abcdef0123456789abcd"; // an existing col_ id
 
-All IDs in NFTLox are deterministic -- they are derived from the creator, collection name, symbol, and art IDs using cryptographic hashing. This means:
+const result = await buildSeed({
+	collectionId: COLLECTION_ID,
+	signer: HIVE_ACCOUNT,
+	artId: "founders-card",
+	name: "Founder's Card",
+	imageUrl: "https://example.com/cards/founder.png",
+	maxSupply: 100,
+	edition: 1,
+	immutableData: {
+		rarity: "legendary",
+		card_type: "hero",
+	},
+});
 
-- You can predict an NFT's ID before minting it.
-- Duplicate mints of the same data are impossible (the indexer rejects them).
-- Use `/api/build/preview-ids` to compute IDs without building a full transaction.
+if (!result.success) {
+	for (const err of result.errors) {
+		console.error(`${err.field}: ${err.message} [${err.code}]`);
+	}
+	process.exit(1);
+}
 
-### immutableData vs mutableData
+console.log("Seed ID (pre-broadcast):", result.generatedIds?.seedId);
 
-Collections with a typed schema support structured data on each NFT:
+const tx = new hive.Transaction();
+await tx.create(result.operations as [string, object][]);
+tx.sign(hive.PrivateKey.from(POSTING_KEY));
+const broadcast = await tx.broadcast();
 
-- **immutableData** -- Set at mint time, can never be changed. Use for permanent attributes like rarity, generation, or base stats.
-- **mutableData** -- Can be updated by the collection creator (or an approved data operator) via `set_data` / `set_data_from`. Use for dynamic attributes like level, XP, or equipment.
+if (broadcast?.error) {
+	throw new Error(`Broadcast failed: ${JSON.stringify(broadcast.error)}`);
+}
 
-The schema is defined at collection creation and enforces field names and types. The indexer validates all data mutations against the schema.
+console.log("Broadcast tx_id:", broadcast?.result?.tx_id);
+```
+
+A few non-obvious points:
+
+- **`signer` vs `owner`**: `signer` is the Hive account producing the custom_json; `owner` is where the seed lands. They default to the same account, so omit `owner` unless you are minting on someone else's behalf.
+- **`edition`**: an integer ≥ 1. For a fresh collection, start at 1 and increment per seed.
+- **`generatedIds.seedId`**: deterministic from `(collectionId, artId)`. You can compute it off-line with `generateDeterministicSeedId(collectionId, artId)` and pre-compute the full ID set before you ever broadcast.
+- **`immutableData`**: validated against the collection schema by the indexer. If the collection has no schema, skip it.
+
+## The read path — querying the indexer
+
+Every read is an unauthenticated `GET`. The SDK ships a typed client that covers the whole surface:
+
+```typescript
+import { createIndexerClient } from "nftlox-sdk";
+
+const client = createIndexerClient("https://api-nftlox.hivecreators.co");
+
+const status = await client.getStatus();
+const stats = await client.getStats();
+
+const { nfts, counts } = await client.getUserNfts("alice", {
+	status: "active",
+	type: "seed",
+	limit: 50,
+});
+
+const listings = await client.getListings({ sort: "price_asc", currency: "HIVE" });
+
+// Wait for your freshly broadcast tx to be indexed:
+const confirmation = await client.getOperationStatus(broadcast.result.tx_id);
+console.log(`${confirmation.confirmed}/${confirmation.totalOperations} ops confirmed`);
+```
+
+`createIndexerClient(baseUrl)` uses the global `fetch` and works in browsers, Node, Bun, and Deno. Inject a custom `fetch` via the options object for tests or proxying.
+
+## Next steps
+
+| Topic | File |
+|---|---|
+| How `create_collection` and `buy` are co-signed by the node | [Signing & Broadcasting](broadcasting.md) |
+| Exact shape of every on-chain payload | [Data Formats](data-formats.md) |
+| The 20 builders in one table | [SDK Reference](sdk/reference.md) |
+| Mint a full collection with dozens of seeds, end-to-end | [Seed Ceremony](examples/seed-ceremony.md) |
+| Update `mutableData` on a live NFT | [Mutable Data](examples/mutable-data.md) |
+
+## Protocol info
+
+| Property | Value |
+|---|---|
+| Protocol ID | `nftlox_testnet` |
+| Version | `0.6.0` |
+| Minimum supported | `0.6.0` |
+| Blockchain | Hive L1 |
+| Finality | ~3 s (block time) |
+| Max ops per custom_json tx | 5 |
+| Max bulk distribute items | 50 |
+| Collection creation fee | `0.100 HBD` |
+| Protocol marketplace fee | 1% (100 bps) |
+| Testnet indexer | `https://api-nftlox.hivecreators.co/api/` |

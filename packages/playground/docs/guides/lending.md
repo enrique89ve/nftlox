@@ -1,411 +1,116 @@
-# NFTLox Lending System
+# NFT Lending
 
-Peer-to-peer NFT lending. The lender retains ownership while the borrower gets temporary access. No collateral, no escrow -- the protocol enforces restrictions at the indexer level.
+Non-custodial, escrow-free NFT lending for instances. The lender keeps ownership; the borrower gets a scoped right to use the NFT until they return it. The protocol guarantees the lender can always reclaim — there is no collateral, no time lock, no liquidation.
 
-For general protocol operations, see [SDK Functions](sdk-functions.md). For broadcasting transactions, see [Broadcasting](broadcasting.md).
+Lending applies only to **instances**. Seeds are templates and cannot be lent.
 
----
+## State model
 
-## Table of Contents
+A lent instance has exactly two on-chain properties that differ from a plain owned instance:
 
-1. [Overview](#1-overview)
-2. [Lending an NFT (nft_lend)](#2-lending-an-nft-nft_lend)
-3. [Returning an NFT (nft_return)](#3-returning-an-nft-nft_return)
-4. [Status Restrictions](#4-status-restrictions)
-5. [API Endpoints](#5-api-endpoints)
-6. [SDK Builder Examples](#6-sdk-builder-examples)
-7. [Use Cases](#7-use-cases)
+- `status = "lent"`
+- `loan` row with `{ lender, borrower, loan_tx_id, loan_block_num, … }`
 
----
+While `status = "lent"`:
 
-## 1. Overview
+- **Ownership does not transfer.** `client.getNftOwner(id)` keeps returning the lender.
+- **Transfers are blocked.** `transfer`, `nft_transfer_from`, `buy` → rejected.
+- **Listings are blocked.** `list` → rejected.
+- **Approvals are frozen.** New `nft_approve`/`nft_approve_all` cannot be created; existing ones cannot be acted on.
+- **Mutable data writes remain allowed** (for both owner and approved operators). Games want borrowers to accumulate XP on a rented card.
 
-The lending system introduces two operations:
+Only `nft_return` (called by the current borrower) can exit the `lent` state.
 
-| Action       | Description                        | Who can call      |
-|--------------|------------------------------------|-------------------|
-| `nft_lend`   | Lend an NFT to a borrower          | NFT owner         |
-| `nft_return` | Return a lent NFT back to owner    | Lender or borrower |
-
-When an NFT is lent:
-
-- Its status changes from `active` to `lent`.
-- A loan record is created in the `nft_loans` table (lender, borrower, operation, block, tx).
-- All existing NFT approvals are cleared.
-- The borrower **cannot** transfer, list, burn, or approve the NFT.
-- Ownership does **not** change -- the lender remains the on-chain owner.
-
-When an NFT is returned:
-
-- Its status reverts to `active`.
-- The loan record is deleted.
-
----
-
-## 2. Lending an NFT (nft_lend)
-
-### Preconditions
-
-- NFT must exist and have status `active`.
-- NFT must be an **instance** (seeds cannot be lent).
-- Signer must be the NFT owner.
-- Borrower must differ from the owner.
-- Collection must be `transferable` (non-transferable collections block lending).
-- No existing loan on the NFT.
-
-### Protocol Payload
-
-```json
-{
-	"protocol": "nftlox_testnet",
-	"version": "0.6.0",
-	"action": "nft_lend",
-	"data": {
-		"instanceId": "inst_abc123",
-		"borrower": "bob"
-	}
-}
-```
-
-### What the Indexer Does
-
-1. Validates the NFT exists, is `active`, is an instance, and the signer is the owner.
-2. Checks the collection allows transfers.
-3. Checks no existing loan exists.
-4. Sets NFT status to `lent`.
-5. Inserts a row into `nft_loans` with `lender`, `borrower`, `operation_id`, `block_num`, and `tx_id`.
-6. Deletes any existing NFT allowances (approvals are cleared).
-
----
-
-## 3. Returning an NFT (nft_return)
-
-### Preconditions
-
-- NFT must exist and have status `lent`.
-- An active loan record must exist.
-- Signer must be either the **lender** or the **borrower**.
-
-### Protocol Payload
-
-```json
-{
-	"protocol": "nftlox_testnet",
-	"version": "0.6.0",
-	"action": "nft_return",
-	"data": {
-		"instanceId": "inst_abc123"
-	}
-}
-```
-
-### What the Indexer Does
-
-1. Validates the NFT exists and has status `lent`.
-2. Loads the loan record and verifies the signer is the lender or borrower.
-3. Sets NFT status back to `active`.
-4. Deletes the loan record.
-
-Either party can return the NFT at any time. There is no expiration -- the lender can reclaim their NFT whenever they choose, and the borrower can return it voluntarily.
-
----
-
-## 4. Status Restrictions
-
-While an NFT has status `lent`, the following operations are blocked by the indexer:
-
-| Operation          | Blocked? | Check                  |
-|--------------------|----------|------------------------|
-| `transfer`         | Yes      | `assertTransferable()` |
-| `list`             | Yes      | `assertNotLent()`      |
-| `buy`              | Yes      | `assertNotLent()`      |
-| Burn helper (`transfer` to `null`) | Yes | `assertNotLent()` |
-| `nft_approve`      | Yes      | `assertNotLent()`      |
-| `bulk_distribute`  | Yes      | `assertNotLent()`      |
-| `set_data`         | No       | Creator can still update mutable data |
-| `nft_return`       | No       | This is how you unlock it             |
-
-Additionally, when an NFT is lent, all existing approvals (allowances) are deleted. This prevents a pre-approved spender from transferring a lent NFT.
-
----
-
-## 5. API Endpoints
-
-### GET /api/users/:username/loans
-
-List active loans for a user.
-
-```bash
-curl "https://api-nftlox.hivecreators.co/api/users/alice/loans?role=lender"
-curl "https://api-nftlox.hivecreators.co/api/users/bob/loans?role=borrower"
-```
-
-`role=lender` returns NFTs the user has lent out. `role=borrower` returns NFTs temporarily usable by the user. `role=all` returns both.
-
-### GET /api/nfts/:id/loan
-
-Return active loan custody for one NFT.
-
-```bash
-curl https://api-nftlox.hivecreators.co/api/nfts/inst_abc123/loan
-```
-
-The response includes `loan_operation_id`, which can be resolved through HAFAH. This route does not change or redefine the NFT owner.
-
-### POST /api/build/nft-lend
-
-Build an unsigned `nft_lend` operation.
-
-**Request:**
-
-```bash
-curl -X POST https://api-nftlox.hivecreators.co/api/build/nft-lend \
-	-H "Content-Type: application/json" \
-	-d '{
-		"owner": "alice",
-		"instanceId": "inst_abc123",
-		"borrower": "bob"
-	}'
-```
-
-**Request Body:**
-
-| Field        | Type     | Required | Description                                       |
-|--------------|----------|----------|---------------------------------------------------|
-| `owner`      | `string` | Yes      | Hive username of the NFT owner (lender).          |
-| `instanceId` | `string` | Yes      | NFT instance ID to lend.                          |
-| `borrower`   | `string` | Yes      | Hive username of the borrower. Must differ from owner. |
-| `seedId`     | `string` | No       | Seed provenance ID.                               |
-| `seedTxId`   | `string` | No       | Seed parent's tx_id (for L1 traceability).        |
-
-**Key type:** Posting
-
-**Response (success):**
-
-```json
-{
-	"success": true,
-	"protocolVersion": "0.6.0",
-	"operation": [
-		"custom_json",
-		{
-			"required_auths": [],
-			"required_posting_auths": ["alice"],
-			"id": "nftlox_testnet",
-			"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.4.1\",\"action\":\"nft_lend\",\"data\":{\"instanceId\":\"inst_abc123\",\"borrower\":\"bob\"}}"
-		}
-	],
-	"keyType": "Posting"
-}
-```
-
-**Response (error):**
-
-```json
-{
-	"success": false,
-	"errors": [
-		{ "field": "borrower", "message": "Cannot lend to yourself", "code": "LEND_TO_SELF" }
-	]
-}
-```
-
----
-
-### POST /api/build/nft-return
-
-Build an unsigned `nft_return` operation.
-
-**Request:**
-
-```bash
-curl -X POST https://api-nftlox.hivecreators.co/api/build/nft-return \
-	-H "Content-Type: application/json" \
-	-d '{
-		"signer": "bob",
-		"instanceId": "inst_abc123"
-	}'
-```
-
-**Request Body:**
-
-| Field        | Type     | Required | Description                                       |
-|--------------|----------|----------|---------------------------------------------------|
-| `signer`     | `string` | Yes      | Hive username of the signer (borrower or owner).  |
-| `instanceId` | `string` | Yes      | NFT instance ID to return.                        |
-| `seedId`     | `string` | No       | Seed provenance ID.                               |
-| `seedTxId`   | `string` | No       | Seed parent's tx_id (for L1 traceability).        |
-
-Note: The `signer` field in the request body maps to `owner` internally.
-
-**Key type:** Posting
-
-**Response (success):**
-
-```json
-{
-	"success": true,
-	"protocolVersion": "0.6.0",
-	"operation": [
-		"custom_json",
-		{
-			"required_auths": [],
-			"required_posting_auths": ["bob"],
-			"id": "nftlox_testnet",
-			"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.4.1\",\"action\":\"nft_return\",\"data\":{\"instanceId\":\"inst_abc123\"}}"
-		}
-	],
-	"keyType": "Posting"
-}
-```
-
----
-
-## 6. SDK Builder Examples
-
-### Lend an NFT
+## Lending — `buildNftLend`
 
 ```typescript
 import { buildNftLend } from "nftlox-sdk";
+import hive from "hive-tx";
+
+hive.config.set("node", "https://api.hive.blog");
 
 const result = buildNftLend({
 	owner: "alice",
-	instanceId: "inst_abc123",
-	borrower: "bob",
+	instanceId: "nft_abc…_7",
+	borrower: "bob",                // must differ from owner
 });
+if (!result.success) throw new Error(JSON.stringify(result.errors));
 
-if (!result.success) {
-	console.error(result.errors);
-	// → [{ field: "borrower", message: "Cannot lend to yourself", code: "LEND_TO_SELF" }]
-} else {
-	console.log(result.operation);
-	// → ["custom_json", { required_posting_auths: ["alice"], ... }]
-}
+const tx = new hive.Transaction();
+await tx.create(result.operations as [string, object][]);
+tx.sign(hive.PrivateKey.from(process.env.HIVE_POSTING_KEY!));
+await tx.broadcast();
 ```
 
-### Return a Lent NFT
+`owner === borrower` is rejected by the builder with code `LEND_TO_SELF`. Lending an already-lent NFT is rejected by the indexer (`NFT_LOCKED`).
+
+## Returning — `buildNftReturn`
+
+Signed by the **current borrower**, not the lender. This is the only way the lender regains active control.
 
 ```typescript
 import { buildNftReturn } from "nftlox-sdk";
 
-// Borrower returns
 const result = buildNftReturn({
-	owner: "bob",
-	instanceId: "inst_abc123",
+	owner: "bob",                   // the borrower returning it
+	instanceId: "nft_abc…_7",
 });
-
-if (result.success) {
-	console.log(result.operation);
-	// → ["custom_json", { required_posting_auths: ["bob"], ... }]
-}
+if (!result.success) throw new Error(JSON.stringify(result.errors));
+// sign with Bob's posting key, broadcast
 ```
 
-### Using Payload Creators Directly
+After the return lands, `status` flips back to `active` and all normal actions (transfer, list, approve) resume for the lender.
+
+## Querying loan state
 
 ```typescript
-import { createNftLendPayload, createNftReturnPayload } from "nftlox-sdk";
+const client = createIndexerClient(INDEXER);
 
-// Lend
-const lendPayload = createNftLendPayload({
-	instanceId: "inst_abc123",
-	borrower: "bob",
-});
-// → { protocol: "nftlox_testnet", version: "0.6.0", action: "nft_lend", data: { instanceId: "inst_abc123", borrower: "bob" } }
+// Status of a specific NFT
+const loanStatus = await client.getNftLoan("nft_…");
+// { nft_id, active: true | false, loan: IndexerNftLoan | null }
 
-// Return
-const returnPayload = createNftReturnPayload({
-	instanceId: "inst_abc123",
-});
-// → { protocol: "nftlox_testnet", version: "0.6.0", action: "nft_return", data: { instanceId: "inst_abc123" } }
+// Everything a user is currently lending or borrowing
+const lending = await client.getUserLoans("alice", { role: "lender" });
+const borrowing = await client.getUserLoans("bob", { role: "borrower" });
+const all = await client.getUserLoans("alice", { role: "all" });
 ```
 
-### Using Operation Creators
+`IndexerNftLoan` carries the originating tx_id, block number, and the lender/borrower pair. Use it for UI rendering, dispute timestamps, or off-chain rental-contract bookkeeping.
 
-```typescript
-import { createNftLendOperation, createNftReturnOperation } from "nftlox-sdk";
+## Designing around lending
 
-// Lend operation (owner signs with posting key)
-const lendOp = createNftLendOperation(
-	{ instanceId: "inst_abc123", borrower: "bob" },
-	"alice",
-);
+The protocol gives you a safe primitive. Pricing, duration, and reputation are up to your app.
 
-// Return operation (either party signs)
-const returnOp = createNftReturnOperation(
-	{ instanceId: "inst_abc123" },
-	"bob",
-);
-```
+Typical patterns:
 
----
+- **Free rentals for guilds.** Social trust, no off-chain contract. Lender can reclaim any time; borrower is expected to return on request.
+- **Paid rentals via off-chain contract.** Borrower pays in HIVE/HBD upfront; your backend records the rental period and automatically calls `nft_return` if the borrower forgets. Because the lender can reclaim at any moment regardless of contract, your off-chain terms can include a penalty clause for early reclaim.
+- **Tournament whitelist.** Lend a legendary card to a teammate for the weekend; the card keeps earning XP under the borrower, which all ends up on the owner's NFT after return.
 
-## 7. Use Cases
+What the protocol **doesn't** give you:
 
-### Game Tournaments
+- **Duration enforcement.** The lender can reclaim at any time by simply asking the borrower to return, or by waiting (the borrower cannot transfer or sell). If you need hard-time-lock lending, layer it off-chain with a payment that is refunded on successful return.
+- **Automatic payments.** Charge the borrower off-chain; the chain only tracks the NFT state.
+- **Dispute resolution.** If a borrower refuses to return, the lender's remedy is social (reputation) and legal (off-chain contract), not protocol-level.
 
-A player lends their best card to a friend for a tournament. The card's mutable game data (XP, level) can still be updated by the game server via `set_data`, but the borrower cannot transfer or sell the card.
+## Interactions with approvals
 
-```typescript
-// Before the tournament
-buildNftLend({ owner: "alice", instanceId: "card_001", borrower: "bob" });
+An NFT that is currently lent **cannot** be the subject of a new `nft_approve` or be transferred by an existing `nft_approve_all`. When you return the NFT, your prior approvals are still in place — approvals outlive lending, they just can't be acted on during it.
 
-// After the tournament
-buildNftReturn({ owner: "bob", instanceId: "card_001" });
-```
+## Failure modes
 
-### Try-Before-You-Buy
+| Broadcast rejection | Cause |
+|---|---|
+| `LEND_TO_SELF` | Builder: `owner === borrower`. |
+| `NFT_LOCKED` | Indexer: instance is already lent, or in-flight on another lock (buy, transfer). |
+| `NFT_NOT_INSTANCE` | Trying to lend a seed. |
+| Builder `ValidationError` | Missing `instanceId`, invalid Hive usernames. |
 
-A seller lends an NFT to a potential buyer so they can inspect it in-game. If the buyer likes it, the seller reclaims it and lists it for sale.
+On broadcast failure, poll `getOperationStatus(txId)` — the indexer populates `reason` on `invalid` ops.
 
-```typescript
-// Lend for inspection
-buildNftLend({ owner: "seller", instanceId: "item_xyz", borrower: "buyer" });
+## See also
 
-// Buyer decides to buy -- seller reclaims first
-buildNftReturn({ owner: "seller", instanceId: "item_xyz" });
-
-// Now seller can list it
-buildList({ owner: "seller", nftId: "item_xyz", price: "10.000 HIVE" });
-```
-
-### Guild Lending
-
-A guild leader lends equipment NFTs to guild members. Since only the lender or borrower can return, the guild leader can reclaim items from inactive members at any time.
-
-```typescript
-// Guild leader distributes gear
-buildNftLend({ owner: "guildmaster", instanceId: "sword_01", borrower: "member1" });
-buildNftLend({ owner: "guildmaster", instanceId: "shield_02", borrower: "member2" });
-
-// Reclaim from inactive member
-buildNftReturn({ owner: "guildmaster", instanceId: "sword_01" });
-```
-
----
-
-## Database Schema
-
-The `nft_loans` table tracks active loans:
-
-```sql
-CREATE TABLE IF NOT EXISTS nft_loans (
-	nft_id TEXT PRIMARY KEY REFERENCES nfts(id),
-	lender TEXT NOT NULL,
-	borrower TEXT NOT NULL,
-	operation_id TEXT NOT NULL,
-	block_num BIGINT NOT NULL,
-	tx_id TEXT NOT NULL,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-`operation_id` is the HafAH operation anchor for the active lend operation. `block_num` and `tx_id` remain useful context, but `operation_id` is the precise identifier when one Hive transaction contains multiple NFTLox `custom_json` operations.
-
-Indexes:
-
-```sql
-CREATE INDEX IF NOT EXISTS idx_nft_loans_lender ON nft_loans(lender);
-CREATE INDEX IF NOT EXISTS idx_nft_loans_borrower ON nft_loans(borrower);
-```
-
-An NFT can only have one active loan at a time (enforced by the `PRIMARY KEY` on `nft_id`).
+- [Data Formats — `nft_lend`, `nft_return`](../data-formats.md#nft_lend)
+- [SDK Reference — lending builders](../sdk/reference.md#lending)
+- [Allowances & Operators](allowances.md) — why approvals and lending coexist without conflict.

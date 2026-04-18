@@ -1,750 +1,335 @@
-# Broadcasting NFTLox Operations to the Hive Blockchain
+# Signing & Broadcasting
 
-The NFTLox SDK builds unsigned `custom_json` operations for you. Your job is to **sign them with your Hive private key** and **broadcast the transaction** to any Hive RPC node.
+The SDK builds **unsigned** Hive operations. Signing and broadcasting are your responsibility — because your private keys must never leave your machine. This page documents the three flows you will actually encounter, with runnable code for `hive-tx`, `@hiveio/wax`, `@hiveio/dhive`, and Hive Keychain.
 
-This guide shows complete, working examples for three popular JavaScript/TypeScript libraries.
+## The three flows
 
----
+| Flow | Triggered by | Who signs what | Transport |
+|---|---|---|---|
+| **Single-signer, posting** | 17 of 20 builders (mint, transfer, list, unlist, set_data, approvals, lending…) | You, posting key | Any Hive RPC |
+| **Single-signer, active + multisig** | `buildBuy` | You sign active; node co-signs via `/api/multisig` | POST to indexer, then Hive RPC |
+| **Two-op, dual-signer** | `buildCollection` | You sign op[0] active; node signs op[1] via `/api/multisig/collection` | POST to indexer, then Hive RPC |
 
-## Key Concepts
+`result.keyType` always tells you which key to use. `result.coSigners` is present **only** for the dual-signer flow.
 
-### Operations are unsigned
+## Operation shape
 
-The NFTLox API and SDK return raw Hive operations in this format:
+Every builder returns Hive-native tuples:
 
 ```json
 ["custom_json", {
 	"required_auths": [],
-	"required_posting_auths": ["myaccount"],
+	"required_posting_auths": ["alice"],
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.4.1\",\"action\":\"mint\",\"data\":{...}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.6.0\",\"action\":\"mint\",\"data\":{…}}"
 }]
 ```
 
-You are responsible for wrapping them in a transaction, signing, and broadcasting.
+```json
+["transfer", {
+	"from": "alice",
+	"to": "nftlox",
+	"amount": "0.100 HBD",
+	"memo": "NFTLox collection fee:col_…"
+}]
+```
 
-### Which key to use
+Active-auth `custom_json`s list the signer under `required_auths`; posting-auth operations use `required_posting_auths`. You rarely need to inspect this — `result.keyType` is the source of truth.
 
-The protocol uses active-key `custom_json` for node-cosigned `create_collection` and `buy`. Other SDK protocol `custom_json` operations use posting keys.
+## Limits to remember
 
-| Key required | Actions |
-|---|---|
-| **Active key** | `create_collection`, `buy` |
-| **Posting key** | `mint`, `bulk_distribute`, `transfer`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `list`, `unlist`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `set_data_from`, `nft_lend`, `nft_return`, `data_operator_approve` |
+| Limit | Value | Enforcement |
+|---|---|---|
+| Ops per Hive transaction | 5 (`MAX_OPERATIONS_PER_TX`) | Indexer rejects more. |
+| `custom_json` byte size | ≤8192 (`HIVE_CUSTOM_JSON_MAX_BYTES`) | Hive consensus rejects larger. |
+| Safe payload budget | 7372 B (`SAFE_PAYLOAD_MAX_BYTES`, 90%) | SDK sizing utilities respect this. |
+| Delay between txs | 4000 ms (`TX_DELAY_MS`) | Allows block confirmation. |
+| Multisig expiration | 125 s (`MULTISIG_EXPIRATION_MS`) | Response's `expiration` timestamp. |
 
-Active-key actions use `required_auths` while posting-key actions use `required_posting_auths` in the `custom_json` operation.
+## Hive RPC nodes
 
-### RPC nodes
-
-You can broadcast to any public Hive API node:
+Any public node works. Rotate on failure.
 
 | Node | URL |
 |---|---|
 | hive.blog | `https://api.hive.blog` |
 | deathwing | `https://api.deathwing.me` |
-| hive.ausbit | `https://hive-api.arcange.eu` |
-| aswap | `https://api.openhive.network` |
-
-### Transaction limits
-
-- **Maximum 5 operations per transaction** (`MAX_OPERATIONS_PER_TX = 5`)
-- Wait **3-4 seconds** between transactions to allow block confirmation (`TX_DELAY_MS = 4000`)
-- Each `custom_json` payload must be under **8 KB** (the SDK enforces this automatically)
+| arcange | `https://hive-api.arcange.eu` |
+| openhive | `https://api.openhive.network` |
 
 ---
 
-## 1. hive-tx (lightweight, used by NFTLox internally)
+## Flow 1 — Single-signer, posting auth
 
-`hive-tx` is a minimal, dependency-light library for building and signing Hive transactions. It works in Node.js and the browser.
+This covers nearly every mutation. Build, sign with posting key, broadcast.
 
-### Install
-
-```bash
-npm install hive-tx
-```
-
-### Single operation -- mint one seed
+### With `hive-tx`
 
 ```typescript
-import { Transaction, PrivateKey } from "hive-tx";
+import { buildSeed } from "nftlox-sdk";
+import hive from "hive-tx";
 
-async function broadcastSingleOperation() {
-	// 1. Create transaction
-	const tx = new Transaction();
+hive.config.set("node", "https://api.hive.blog");
 
-	// 2. Add the custom_json operation
-	//    Note: seed IDs MUST start with "seed_" or include nftType: "seed"
-	await tx.addOperation("custom_json", {
-		required_auths: [],
-		required_posting_auths: ["myaccount"],
-		id: "nftlox_testnet",
-		json: JSON.stringify({
-			protocol: "nftlox_testnet",
-			version: "0.6.0",
-			action: "mint",
-			data: {
-				id: "seed_abc123",
-				collectionId: "col_xyz",
-				nftType: "seed",
-				edition: 1,
-				owner: "myaccount",
-				// ... remaining mint fields
-			},
-		}),
-	});
+const result = await buildSeed({
+	collectionId: "col_abcdef0123456789abcd",
+	signer: "alice",
+	artId: "founders-card",
+	name: "Founder's Card",
+	imageUrl: "https://example.com/cards/founder.png",
+	maxSupply: 100,
+	edition: 1,
+});
 
-	// 3. Sign with posting key
-	const key = PrivateKey.from("5K...your_posting_key_wif");
-	tx.sign(key);
-
-	// 4. Broadcast
-	const result = await tx.broadcast();
-	console.log("Transaction ID:", result.result.tx_id);
-
-	return result;
+if (!result.success) {
+	throw new Error(JSON.stringify(result.errors));
 }
 
-broadcastSingleOperation();
+const tx = new hive.Transaction();
+await tx.create(result.operations as [string, object][]);
+tx.sign(hive.PrivateKey.from(process.env.HIVE_POSTING_KEY!));
+const broadcast = await tx.broadcast();
+
+if (broadcast?.error) throw new Error(JSON.stringify(broadcast.error));
+console.log("tx_id:", broadcast?.result?.tx_id);
 ```
 
-### Batch operations -- 5 mints in one transaction
-
-```typescript
-import { Transaction, PrivateKey } from "hive-tx";
-
-const MAX_OPERATIONS_PER_TX = 5;
-const TX_DELAY_MS = 4000;
-
-interface SdkOperation {
-	required_auths: string[];
-	required_posting_auths: string[];
-	id: string;
-	json: string;
-}
-
-function chunkArray<T>(array: T[], size: number): T[][] {
-	const chunks: T[][] = [];
-	for (let i = 0; i < array.length; i += size) {
-		chunks.push(array.slice(i, i + size));
-	}
-	return chunks;
-}
-
-function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function broadcastBatch(operations: SdkOperation[]) {
-	const key = PrivateKey.from("5K...your_posting_key_wif");
-	const batches = chunkArray(operations, MAX_OPERATIONS_PER_TX);
-	const txIds: string[] = [];
-
-	for (let i = 0; i < batches.length; i++) {
-		const tx = new Transaction();
-
-		// Add each operation in the batch
-		for (const op of batches[i]!) {
-			await tx.addOperation("custom_json", op);
-		}
-
-		tx.sign(key);
-		const result = await tx.broadcast();
-
-		const txId = result.result.tx_id;
-		txIds.push(txId);
-		console.log(`Batch ${i + 1}/${batches.length} -- tx: ${txId}`);
-
-		// Wait for block confirmation before next batch
-		if (i < batches.length - 1) {
-			await delay(TX_DELAY_MS);
-		}
-	}
-
-	return txIds;
-}
-```
-
-### Getting the transaction ID
-
-```typescript
-const result = await tx.broadcast();
-const txId = result.result.tx_id;
-```
-
----
-
-## 2. @hiveio/dhive (popular, well-documented)
-
-`dhive` is a widely-used Hive client with built-in support for transaction building, signing, and broadcasting.
-
-### Install
-
-```bash
-npm install @hiveio/dhive
-```
-
-### Single operation -- mint one seed
-
-```typescript
-import { Client, PrivateKey } from "@hiveio/dhive";
-
-const client = new Client([
-	"https://api.hive.blog",
-	"https://api.deathwing.me",
-]);
-
-const operation = ["custom_json", {
-	required_auths: [],
-	required_posting_auths: ["myaccount"],
-	id: "nftlox_testnet",
-	json: JSON.stringify({
-		protocol: "nftlox_testnet",
-		version: "0.6.0",
-		action: "mint",
-		data: {
-			id: "seed_abc123",
-			collectionId: "col_xyz",
-			nftType: "seed",
-			edition: 1,
-			owner: "myaccount",
-		},
-	}),
-}] as const;
-
-async function broadcastSingleOperation() {
-	const POSTING_KEY = PrivateKey.fromString("5K...your_posting_key_wif");
-
-	// dhive handles transaction creation, signing, and broadcasting in one call
-	const result = await client.broadcast.sendOperations(
-		[operation],
-		POSTING_KEY,
-	);
-
-	console.log("Transaction ID:", result.id);
-	console.log("Block number:", result.block_num);
-
-	return result;
-}
-
-broadcastSingleOperation();
-```
-
-### Batch operations -- 5 mints in one transaction
+### With `@hiveio/dhive`
 
 ```typescript
 import { Client, PrivateKey } from "@hiveio/dhive";
 
 const client = new Client(["https://api.hive.blog"]);
-
-const MAX_OPERATIONS_PER_TX = 5;
-const TX_DELAY_MS = 4000;
-
-function chunkArray<T>(array: T[], size: number): T[][] {
-	const chunks: T[][] = [];
-	for (let i = 0; i < array.length; i += size) {
-		chunks.push(array.slice(i, i + size));
-	}
-	return chunks;
-}
-
-function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function broadcastBatch(operations: any[]) {
-	const POSTING_KEY = PrivateKey.fromString("5K...your_posting_key_wif");
-	const batches = chunkArray(operations, MAX_OPERATIONS_PER_TX);
-	const txIds: string[] = [];
-
-	for (let i = 0; i < batches.length; i++) {
-		const batch = batches[i];
-
-		const result = await client.broadcast.sendOperations(batch, POSTING_KEY);
-
-		txIds.push(result.id);
-		console.log(`Batch ${i + 1}/${batches.length} -- tx: ${result.id}`);
-
-		if (i < batches.length - 1) {
-			await delay(TX_DELAY_MS);
-		}
-	}
-
-	return txIds;
-}
-
-// sdkOperations: array of NFTLox operations
-broadcastBatch(sdkOperations);
+const key = PrivateKey.fromString(process.env.HIVE_POSTING_KEY!);
+const { id } = await client.broadcast.sendOperations(result.operations as any, key);
 ```
 
-### Manual transaction building (if you need more control)
-
-```typescript
-import { Client, PrivateKey, Transaction } from "@hiveio/dhive";
-
-const client = new Client(["https://api.hive.blog"]);
-
-async function broadcastManual() {
-	const POSTING_KEY = PrivateKey.fromString("5K...your_posting_key_wif");
-
-	// Get dynamic global properties for ref_block
-	const props = await client.database.getDynamicGlobalProperties();
-
-	const tx: Transaction = {
-		ref_block_num: props.head_block_number & 0xFFFF,
-		ref_block_prefix: Buffer.from(props.head_block_id, "hex").readUInt32LE(4),
-		expiration: new Date(
-			new Date(props.time + "Z").getTime() + 60 * 1000
-		).toISOString().slice(0, -5),
-		operations: [
-			["custom_json", {
-				required_auths: [],
-				required_posting_auths: ["myaccount"],
-				id: "nftlox_testnet",
-				json: JSON.stringify({
-					protocol: "nftlox_testnet",
-					version: "0.6.0",
-					action: "mint",
-					data: { /* ... */ },
-				}),
-			}],
-		],
-		extensions: [],
-	};
-
-	// Sign the transaction
-	const signedTx = client.broadcast.sign(tx, POSTING_KEY);
-
-	// Broadcast
-	const result = await client.broadcast.send(signedTx);
-
-	console.log("Transaction ID:", result.id);
-	return result;
-}
-
-broadcastManual();
-```
-
-### Getting the transaction ID
-
-`sendOperations` and `send` both return a `TransactionConfirmation` object:
-
-```typescript
-const result = await client.broadcast.sendOperations([operation], key);
-const txId = result.id;          // "a1b2c3d4e5f6..."
-const blockNum = result.block_num; // 12345678
-```
-
----
-
-## 3. @hiveio/wax (official Hive library, newest)
-
-`wax` is the official Hive library maintained by the core team. It uses a typed operation format with `_operation` suffixed keys. For key management, it integrates with `@hiveio/beekeeper`.
-
-### Install
-
-```bash
-npm install @hiveio/wax @hiveio/beekeeper
-```
-
-### Single operation -- mint one seed
-
-```typescript
-import { createHiveChain, createWaxFoundation } from "@hiveio/wax";
-import beekeeperFactory from "@hiveio/beekeeper";
-
-async function broadcastSingleOperation() {
-	// Initialize the chain connection
-	const chain = await createHiveChain();
-
-	// Set up Beekeeper for key management
-	const beekeeper = await beekeeperFactory();
-	const session = beekeeper.createSession("session-salt");
-	const { wallet } = await session.createWallet("nftlox-wallet");
-
-	// Import your posting key (WIF format)
-	const POSTING_KEY_WIF = "5K...your_posting_key_wif";
-	const publicKey = await wallet.importKey(POSTING_KEY_WIF);
-
-	// Create a transaction (auto-fetches ref_block from the network)
-	const tx = await chain.createTransaction();
-
-	// Push the NFTLox custom_json operation using the wax typed format
-	tx.pushOperation({
-		custom_json: {
-			required_auths: [],
-			required_posting_auths: ["myaccount"],
-			id: "nftlox_testnet",
-			json: JSON.stringify({
-				protocol: "nftlox_testnet",
-				version: "0.6.0",
-				action: "mint",
-				data: {
-					id: "seed_abc123",
-					collectionId: "col_xyz",
-					nftType: "seed",
-					edition: 1,
-					owner: "myaccount",
-				},
-			}),
-		},
-	});
-
-	// Sign the transaction using the wallet
-	tx.sign(wallet, publicKey);
-
-	// Broadcast
-	await chain.broadcast(tx);
-
-	// Get the transaction in API form (includes the tx hash)
-	const apiForm = tx.toApi();
-	console.log("Transaction broadcast successfully");
-	console.log("API form:", apiForm);
-
-	// Cleanup
-	beekeeper.delete();
-}
-
-broadcastSingleOperation();
-```
-
-### Signing without Beekeeper (manual)
-
-If you don't want to use Beekeeper for key management, you can sign manually using `sigDigest` and `addSignature`:
+### With `@hiveio/wax`
 
 ```typescript
 import { createHiveChain } from "@hiveio/wax";
 
-async function broadcastWithManualSigning() {
-	const chain = await createHiveChain();
-	const tx = await chain.createTransaction();
-
-	tx.pushOperation({
-		custom_json: {
-			required_auths: [],
-			required_posting_auths: ["myaccount"],
-			id: "nftlox_testnet",
-			json: JSON.stringify({
-				protocol: "nftlox_testnet",
-				version: "0.6.0",
-				action: "mint",
-				data: {
-					id: "seed_abc123",
-					collectionId: "col_xyz",
-					nftType: "seed",
-					edition: 1,
-					owner: "myaccount",
-				},
-			}),
-		},
-	});
-
-	// Get the digest to sign
-	const digest = tx.sigDigest;
-
-	// Sign with your own signing method (e.g., secp256k1 library)
-	const signature = yourSigningFunction(digest, privateKey);
-
-	// Attach the signature
-	tx.addSignature(signature);
-
-	// Broadcast
-	await chain.broadcast(tx);
-	console.log("Transaction ID:", tx.id);
+const chain = await createHiveChain();
+const tx = await chain.getTransactionBuilder();
+for (const op of result.operations) {
+	tx.push(op as any);
 }
+const signed = tx.build(chain.getPublicKey(process.env.HIVE_POSTING_KEY!));
+await chain.broadcast(signed);
 ```
 
-This is useful when integrating with external key management systems or hardware wallets.
+### With Hive Keychain (browser)
 
-### Batch operations -- 5 mints in one transaction
-
-```typescript
-import { createHiveChain } from "@hiveio/wax";
-import beekeeperFactory from "@hiveio/beekeeper";
-
-const MAX_OPERATIONS_PER_TX = 5;
-const TX_DELAY_MS = 4000;
-
-function chunkArray<T>(array: T[], size: number): T[][] {
-	const chunks: T[][] = [];
-	for (let i = 0; i < array.length; i += size) {
-		chunks.push(array.slice(i, i + size));
-	}
-	return chunks;
-}
-
-function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Each sdkOperation is the raw NFTLox format:
-// ["custom_json", { required_auths, required_posting_auths, id, json }]
-// We convert them to the wax typed format when pushing.
-
-interface NftloxRawOperation {
-	required_auths: string[];
-	required_posting_auths: string[];
-	id: string;
-	json: string;
-}
-
-async function broadcastBatch(rawOperations: [string, NftloxRawOperation][]) {
-	const chain = await createHiveChain();
-
-	const beekeeper = await beekeeperFactory();
-	const session = beekeeper.createSession("session-salt");
-	const { wallet } = await session.createWallet("nftlox-wallet");
-
-	const POSTING_KEY_WIF = "5K...your_posting_key_wif";
-	const publicKey = await wallet.importKey(POSTING_KEY_WIF);
-
-	const batches = chunkArray(rawOperations, MAX_OPERATIONS_PER_TX);
-
-	for (let i = 0; i < batches.length; i++) {
-		const batch = batches[i];
-		const tx = await chain.createTransaction();
-
-		// Push each operation from the batch
-		for (const [, opBody] of batch) {
-			tx.pushOperation({
-				custom_json: {
-					required_auths: opBody.required_auths,
-					required_posting_auths: opBody.required_posting_auths,
-					id: opBody.id,
-					json: opBody.json,
-				},
-			});
-		}
-
-		// Sign and broadcast
-		tx.sign(wallet, publicKey);
-		await chain.broadcast(tx);
-
-		console.log(`Batch ${i + 1}/${batches.length} broadcast successfully`);
-
-		if (i < batches.length - 1) {
-			await delay(TX_DELAY_MS);
-		}
-	}
-
-	beekeeper.delete();
-}
-
-// Usage
-broadcastBatch(sdkOperations);
+```html
+<script src="https://cdn.jsdelivr.net/npm/hive-keychain/dist/keychain.js"></script>
 ```
 
-### Converting NFTLox SDK format to wax format
-
-The NFTLox SDK returns operations in the standard Hive API format (array tuples). The wax library uses a typed object format. Here is how to convert:
-
 ```typescript
-// NFTLox SDK returns this:
-const sdkOperation = ["custom_json", {
-	required_auths: [],
-	required_posting_auths: ["myaccount"],
-	id: "nftlox_testnet",
-	json: "{ ... }",
-}];
+declare const hive_keychain: any;
 
-// For wax pushOperation, use this:
-const waxOperation = {
-	custom_json: {
-		required_auths: sdkOperation[1].required_auths,
-		required_posting_auths: sdkOperation[1].required_posting_auths,
-		id: sdkOperation[1].id,
-		json: sdkOperation[1].json,
+hive_keychain.requestBroadcast(
+	result.signer,              // "alice"
+	result.operations,          // already in tuple form
+	result.keyType,             // "Posting"
+	(response: any) => {
+		if (!response.success) return console.error(response);
+		console.log("tx_id:", response.result.tx_id);
 	},
-};
-
-tx.pushOperation(waxOperation);
+);
 ```
-
-### Getting the transaction ID
-
-After signing, use `toApi()` to get the full transaction in API form:
-
-```typescript
-tx.sign(wallet, publicKey);
-
-// The API form is a JSON string containing the full transaction
-const apiForm = tx.toApi();
-const parsed = JSON.parse(apiForm);
-// parsed contains: ref_block_num, ref_block_prefix, expiration, operations, signatures
-```
-
-The transaction ID (hash) is computed from the signed transaction. After broadcasting with `chain.broadcast(tx)`, the transaction is on-chain and can be looked up by its signature digest.
 
 ---
 
-## Quick Comparison
+## Flow 2 — Buying (active + node multisig)
 
-| Feature | hive-tx | @hiveio/dhive | @hiveio/wax |
-|---|---|---|---|
-| Bundle size | Small | Medium | Large (includes WASM) |
-| Key handling | Raw WIF string | `PrivateKey` class | Beekeeper wallet |
-| Transaction creation | `new Transaction()` | `sendOperations()` | `chain.createTransaction()` |
-| Operation format | Array tuples | Array tuples | Typed objects |
-| Browser support | Yes | Yes | Yes (needs WASM) |
-| Node.js support | Yes | Yes | Yes |
-| Maintained by | Community | Community | Hive core team |
+The `buy` action writes a `custom_json` that requires the **buyer's active** signature *and* the **node's active** signature. `buildBuy` already assembles the payment transfers in the correct order; you just need to merge two active signatures on the `custom_json`.
 
----
+Canonical sequence:
 
-## Common Patterns
-
-### Waiting for confirmation
-
-After broadcasting a transaction, you may want to verify it was included in a block. The simplest approach is to wait for one block cycle (3 seconds):
+1. `client.getPaymentInfo(nftId)` → exact split (seller + royalty + fee).
+2. `buildBuy({ buyer, seller, …paymentSplit })` → `[...transfers, custom_json]`.
+3. Wrap in a Hive transaction **without signing**.
+4. POST the raw transaction to `/api/multisig` (via `client.multisig` or `requestBuyMultisig`) — the SDK solves the PoW token automatically.
+5. On `{ ok: true }`, append the returned `signature` to `tx.signatures`, add the buyer's own active signature, and broadcast.
 
 ```typescript
-const TX_DELAY_MS = 4000;
+import {
+	buildBuy,
+	createIndexerClient,
+	requestBuyMultisig,
+	MultisigError,
+} from "nftlox-sdk";
+import hive from "hive-tx";
 
-async function broadcastAndConfirm(broadcastFn: () => Promise<string>) {
-	const txId = await broadcastFn();
-	// Wait for block inclusion
-	await new Promise((resolve) => setTimeout(resolve, TX_DELAY_MS));
-	return txId;
-}
+const INDEXER = "https://api-nftlox.hivecreators.co";
+const RPC = "https://api.hive.blog";
+hive.config.set("node", RPC);
+
+const client = createIndexerClient(INDEXER);
+const payment = await client.getPaymentInfo("nft_…");
+
+const result = buildBuy({
+	buyer: "alice",
+	seller: payment.seller,
+	nftId: payment.nftId,
+	listingId: payment.listingId,
+	listTxId: payment.listTxId,
+	txId: payment.txId,
+	paymentSplit: {
+		sellerAmount: payment.sellerAmount,
+		royaltyAmount: payment.royaltyAmount,
+		royaltyRecipient: payment.royaltyRecipient,
+		feeAmount: payment.feeAmount,
+		feeAccount: payment.feeAccount,
+		totalPrice: payment.totalPrice,
+		currency: payment.currency as "HIVE" | "HBD",
+	},
+});
+if (!result.success) throw new Error(JSON.stringify(result.errors));
+
+// 1. Create unsigned tx
+const tx = new hive.Transaction();
+await tx.create(result.operations as [string, object][]);
+
+// 2. Node co-signs
+const resp = await requestBuyMultisig(INDEXER, {
+	buyer: "alice",
+	nftId: payment.nftId,
+	listingId: payment.listingId,
+	listTxId: payment.listTxId,
+	transaction: tx.transaction,
+});
+if (!resp.ok) throw new MultisigError({ message: resp.message, code: resp.code, url: INDEXER });
+
+// 3. Attach node sig + buyer's active sig, broadcast
+tx.transaction.signatures.push(resp.signature);
+tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
+const broadcast = await tx.broadcast();
 ```
 
-### Error handling
+### With Hive Keychain
 
-All three libraries throw errors on broadcast failure. Common failure reasons:
+Keychain has no native "external signature merge" API. The idiomatic pattern is: build, co-sign node-first, then call `requestSignedCall` or `requestBroadcast` with `keyType: "Active"` — Keychain adds the buyer's signature alongside the node's and broadcasts. When the dApp already holds the partially-signed transaction, use `requestSignTx` / `requestSignedTx` (version-dependent) to obtain the buyer's signature and post it to Hive yourself.
 
-- **Missing required authority** -- wrong key type (posting vs active). Remember: `buy` needs active key; other SDK protocol `custom_json` operations use posting key.
-- **Duplicate transaction** -- same operation already in a pending block
-- **Expired transaction** -- transaction was created too long ago (> 60 seconds)
-- **RC (Resource Credits) insufficient** -- account does not have enough RC to broadcast
+### Multisig error handling
 
 ```typescript
 try {
-	await broadcast();
-} catch (error) {
-	if (error.message.includes("missing required posting authority") || error.message.includes("missing required active authority")) {
-		console.error("Wrong key -- check if this action requires posting or active key");
-	} else if (error.message.includes("rc_plugin")) {
-		console.error("Insufficient Resource Credits -- claim or delegate RC first");
-	} else if (error.message.includes("expired")) {
-		console.error("Transaction expired -- recreate and try again");
-	} else {
-		console.error("Broadcast error:", error.message);
+	const resp = await requestBuyMultisig(INDEXER, request);
+} catch (err) {
+	if (err instanceof MultisigError) {
+		switch (err.code) {
+			case "NFT_LOCKED":        // another buy is in flight
+			case "RATE_LIMITED":      // back off err.retryAfterMs
+			case "INDEXER_LAGGED":    // node's DB is behind Hive head
+			case "POW_REQUIRED":      // bump difficulty with { powBits: 20 }
+				break;
+		}
 	}
 }
 ```
 
-### Using active key for active-key operations
+The node will refuse to co-sign if:
 
-The `buy` operation requires active key. Active-key operations use `required_auths` instead of `required_posting_auths`:
+- the listing is no longer `active` (unlisted, expired, or already sold),
+- the payment split in the transaction does not match its own computation,
+- the indexer is more than `MULTISIG_LAG_MAX_BLOCKS` (3 blocks, ~9s) behind Hive head,
+- the transaction expiration is farther out than `MULTISIG_EXPIRATION_MS` (125 s).
 
-```typescript
-// The operation format for active-key actions
-const activeKeyOperation = ["custom_json", {
-	required_auths: ["myaccount"],        // active key
-	required_posting_auths: [],           // empty
-	id: "nftlox_testnet",
-	json: JSON.stringify({ /* ... */ }),
-}];
+## Flow 3 — Creating a collection (dual-signer)
 
-// hive-tx example
-const ACTIVE_KEY = "5K...your_active_key_wif";
-const tx = new Transaction();
-await tx.create([activeKeyOperation]);
-tx.sign(ACTIVE_KEY);
-await tx.broadcast();
+`buildCollection` returns **two operations**: a `transfer` signed by the creator (active), and a `custom_json` whose `required_auths` is the node account. Both must be in the **same Hive transaction** — the indexer pairs the fee to the payload by `tx_id`.
 
-// dhive example
-const ACTIVE_KEY = PrivateKey.fromString("5K...your_active_key_wif");
-await client.broadcast.sendOperations([activeKeyOperation], ACTIVE_KEY);
-
-// wax example
-const activePublicKey = await wallet.importKey("5K...your_active_key_wif");
-tx.sign(wallet, activePublicKey);
-await chain.broadcast(tx);
+```
+operations[0] = ["transfer",    { from: "alice", to: "nftlox", amount: "0.100 HBD", memo: "NFTLox collection fee:col_…" }]
+operations[1] = ["custom_json", { required_auths: ["nftlox"], ...create_collection payload }]
 ```
 
----
-
-## Full End-to-End Example: Mint a Collection + 5 Seeds
-
-This example uses `hive-tx` and the NFTLox SDK to create a collection and then mint 5 seeds in a single batch:
-
 ```typescript
-import { Transaction, config } from "hive-tx";
 import {
-	createDeterministicCollectionPayload,
-	createDeterministicMintOperation,
-	toHiveOperation,
+	buildCollection,
+	createSchemaBuilder,
+	requestCreateCollectionMultisig,
+	MultisigError,
 } from "nftlox-sdk";
+import hive from "hive-tx";
 
-config.node = "https://api.hive.blog";
+const INDEXER = "https://api-nftlox.hivecreators.co";
+hive.config.set("node", "https://api.hive.blog");
 
-const POSTING_KEY = "5K...your_posting_key_wif";
-const MAX_OPERATIONS_PER_TX = 5;
-const TX_DELAY_MS = 4000;
+const result = await buildCollection({
+	name: "Heroes",
+	symbol: "HERO",
+	creator: "alice",
+	totalPotential: 1000,
+	metadata: { description: "Hero cards", image: "https://…" },
+	rules: { transferable: true, burnable: true, royaltyPct: 5 },
+	schema: createSchemaBuilder()
+		.immutable("rarity", "string")
+		.mutable("xp", "uint32")
+		.build(),
+}, { indexerBaseUrl: INDEXER, requireMultisigReady: true });
 
-async function mintCollectionAndSeeds() {
-	// Step 1: Broadcast the collection creation
-	const collectionPayload = await createDeterministicCollectionPayload({
-		creator: "myaccount",
-		name: "My Game Cards",
-		symbol: "CARDS",
-		totalPotential: 1000,
-		metadata: {
-			description: "A trading card game collection",
-			image: "https://example.com/collection.png",
-		},
-		rules: {
-			transferable: true,
-			burnable: true,
-			royaltyPct: 5,
-			royaltyRecipient: "myaccount",
-		},
-	});
-	const collectionOp = toHiveOperation(collectionPayload, "myaccount");
+if (!result.success) throw new Error(JSON.stringify(result.errors));
 
-	const collectionTx = new Transaction();
-	await collectionTx.create([collectionOp]);
-	collectionTx.sign(POSTING_KEY);
-	const collectionResult = await collectionTx.broadcast();
-	console.log("Collection created:", collectionResult.result.id);
+// Both ops MUST live in the same Hive transaction
+const tx = new hive.Transaction();
+await tx.create(result.operations as [string, object][]);
 
-	// Wait for the collection to be confirmed
-	await new Promise((resolve) => setTimeout(resolve, TX_DELAY_MS));
+// Node co-signs op[1]
+const resp = await requestCreateCollectionMultisig(INDEXER, {
+	transaction: tx.transaction,
+});
+if (!resp.ok) throw new MultisigError({ message: resp.message, code: resp.code, url: INDEXER });
 
-	// Step 2: Mint 5 seeds in a single transaction (within the 5-op limit)
-	// Use createDeterministicMintOperation to get seed_* IDs and nftType: "seed"
-	const mintOps = [];
-	for (let edition = 1; edition <= 5; edition++) {
-		const mintOp = createDeterministicMintOperation({
-			artId: `card${String(edition).padStart(3, "0")}`,
-			collectionId: "col_xyz",
-			collectionOriginDna: "abcdef1234567890",
-			edition,
-			owner: "myaccount",
-			nftType: "seed",
-			name: `Card #${edition}`,
-			description: `Game card edition ${edition}`,
-			imageUrl: `https://example.com/cards/${edition}.png`,
-			maxSupply: 100,
-		});
-		mintOps.push(mintOp);
-	}
+tx.transaction.signatures.push(resp.signature);
 
-	const mintTx = new Transaction();
-	await mintTx.create(mintOps);
-	mintTx.sign(POSTING_KEY);
-	const mintResult = await mintTx.broadcast();
-	console.log("5 seeds minted:", mintResult.result.id);
-}
+// Creator signs op[0] and the transaction as a whole
+tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
 
-mintCollectionAndSeeds();
+const broadcast = await tx.broadcast();
+console.log("collectionId:", result.generatedIds?.collectionId);
+console.log("tx_id:", broadcast?.result?.tx_id);
 ```
 
----
+## Confirming indexation
 
-## Security Notes
+Broadcasting only confirms Hive consensus accepted the transaction. The NFTLox indexer needs 1–2 blocks (~3–6 s) to materialize the state change.
 
-- **Never expose private keys in client-side code.** Use environment variables or a secure key management system.
-- For browser-based applications, consider using [Hive Keychain](https://hive-keychain.com/) which handles signing without exposing keys.
-- The examples above use raw WIF keys for clarity. In production, use `.env` files or secret managers.
-- The `@hiveio/wax` Beekeeper integration provides an additional layer of key isolation.
+```typescript
+const poll = async (txId: string) => {
+	for (let attempt = 0; attempt < 10; attempt++) {
+		const status = await client.getOperationStatus(txId);
+		if (status.indexed) return status;
+		await new Promise(r => setTimeout(r, 2000));
+	}
+	throw new Error("Timed out waiting for indexer");
+};
+
+const status = await poll(broadcast.result.tx_id);
+console.log(`${status.confirmed}/${status.totalOperations} ops confirmed`);
+for (const op of status.operations) {
+	if (op.status !== "confirmed") {
+		console.warn(`${op.action} → ${op.status}: ${op.reason}`);
+	}
+}
+```
+
+`indexed: false` means the tx has not yet been observed — retry. `invalid: N` means the indexer reached it but rejected it (schema mismatch, state conflict, invalid signer); `op.reason` explains why.
+
+## Common rejection reasons
+
+| Symptom | Cause |
+|---|---|
+| `broadcast.error` with `missing_authority` | Wrong key type for the action. Check `result.keyType`. |
+| `broadcast.error` with `tx_missing_active_auth` on `buy` | You signed posting instead of active, or omitted the node signature. |
+| Indexer returns `invalid` with `SCHEMA_MISMATCH` | `immutableData`/`mutableData` has extra keys or wrong types. Validate against `client.getCollection(id).schema`. |
+| Indexer `invalid` with `NFT_NOT_FOUND` | Using a seed before it is indexed — poll `getOperationStatus` first. |
+| Multisig returns `INVALID_PAYMENT_SPLIT` | You computed the split instead of using `getPaymentInfo`. |
+| Multisig returns `INDEXER_LAGGED` | Indexer is >3 blocks behind Hive head. Retry or switch indexer. |
+
+## See also
+
+- [SDK Reference](sdk/reference.md) — full list of builders and return types.
+- [Data Formats](data-formats.md) — on-chain payload shape for every action.
+- [Error Codes](reference/errors.md) — every `ValidationError` code and multisig `MultisigErrorCode`.

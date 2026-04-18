@@ -1,352 +1,424 @@
-# Data Formats and Validation
+# Data Formats
 
-Reference for all field formats, constraints, and accepted values in NFTLox payloads.
+Every mutation in NFTLox is a Hive operation whose payload is a `ProtocolPayload<T>` — a small envelope with a typed `data` field. This page is the authoritative map of what goes on-chain for each action.
 
----
+## The wire envelope
 
-## artId (Seed Identifier)
-
-The `artId` uniquely identifies a seed template within a collection. It is used to generate deterministic seed IDs.
-
-| Rule | Constraint |
-|------|-----------|
-| Required | Yes |
-| Max length | **32 characters** |
-| Allowed characters | Lowercase letters (a-z), numbers (0-9), hyphens (-) |
-| No uppercase | Only lowercase is accepted |
-| No repeated hyphens | `--` is not allowed |
-| No leading/trailing hyphens | `-foo` and `foo-` are invalid |
-
-**Valid examples:**
-
-```
-odin-allfather         (14 chars)
-card-001               (8 chars)
-20001                  (5 chars, numeric only)
-fire-drg-001           (12 chars)
-a1b2c3                 (6 chars)
-legendary-fire-drake   (20 chars)
+```typescript
+type ProtocolPayload<T> = {
+	readonly protocol: string;         // "nftlox_testnet"
+	readonly version: string;          // "0.6.0"
+	readonly action: ProtocolAction;
+	readonly data: T;                  // shape depends on action
+};
 ```
 
-**Invalid examples:**
+Emitted as a Hive `custom_json`:
 
-```
-CARD-001              (uppercase not allowed)
-Fire-Dragon           (uppercase not allowed)
---double              (repeated hyphens)
--leading              (starts with hyphen)
-trailing-             (ends with hyphen)
-special!char          (invalid character)
-this-artid-is-way-too-long-exceeding  (exceeds 32 chars)
-```
-
-**Tip:** For card games with many cards, use short numeric IDs (`20001`, `00437`) or abbreviated names (`fire-drg-001`).
-
----
-
-## Image URL
-
-The `imageUrl` field stores a link to the NFT's visual representation.
-
-| Rule | Constraint |
-|------|-----------|
-| Required | Yes (for mint) |
-| Max length | **500 characters** |
-| Format | Valid HTTPS URL |
-| Protocol | `https://` required (`http://` rejected by Zod `.url()`) |
-
-### Recommended Image Hosts
-
-| Host | URL Pattern | Notes |
-|------|-------------|-------|
-| PeakD | `https://files.peakd.com/file/peakd-hive/username/hash.png` | Hive-native, permanent |
-| IPFS | `https://ipfs.io/ipfs/Qm...` | Decentralized, use a pinning service |
-| GitHub Pages | `https://user.github.io/repo/art/001.webp` | Free, good for static assets |
-| Cloudflare R2 | `https://pub-xxx.r2.dev/image.png` | Fast CDN, free egress |
-| Imgur | `https://i.imgur.com/hash.png` | Simple, may remove inactive images |
-
-### Recommended Image Formats
-
-| Format | Extension | Best For |
-|--------|-----------|----------|
-| **WebP** | `.webp` | Best compression/quality ratio, recommended default |
-| **PNG** | `.png` | Pixel art, transparency, lossless |
-| **JPEG** | `.jpg` | Photos, gradients |
-| **SVG** | `.svg` | Vector graphics, icons |
-| **GIF** | `.gif` | Animated NFTs (small file size) |
-
-### imageHash (Optional)
-
-If you provide `imageHash`, it is stored as-is for integrity verification. If omitted, the SDK auto-generates one via `generateImageHash(imageUrl)`. The hash is NOT a content hash of the image file -- it's a protocol-level identifier.
-
----
-
-## Collection Fields
-
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| `name` | string | Yes | 1-100 characters |
-| `symbol` | string | Yes | 3-8 characters, uppercase A-Z and 0-9 only (`/^[A-Z0-9]{3,8}$/`) |
-| `creator` | string | Yes | Valid Hive username |
-| `totalPotential` | number | Yes | Non-negative integer (0 = unlimited) |
-| `metadata.description` | string | Yes | 1-250 characters |
-| `metadata.image` | string | Yes | Valid URL, max 500 chars |
-| `metadata.externalUrl` | string | No | Valid URL |
-| `rules.transferable` | boolean | Yes | Whether NFTs can be transferred |
-| `rules.burnable` | boolean | Yes | Whether NFTs can be burned |
-| `rules.royaltyPct` | number | Yes | 0-50 |
-| `rules.royaltyRecipient` | string | No | Valid Hive username |
-| `schemaVersion` | number | Read-only | Current schema version (0 = no schema, incremented by `extend_schema`) |
-
-### Symbol Examples
-
-```
-Valid:   RGNRK, DMTCG, NFT1, AB3, ABCDEFGH
-Invalid: rgnrk (lowercase), AB (too short), ABCDEFGHI (too long), NFT-1 (hyphen)
+```json
+["custom_json", {
+	"required_auths": ["alice"],             // active-auth actions
+	"required_posting_auths": [],            // or the inverse for posting-auth actions
+	"id": "nftlox_testnet",
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.6.0\",\"action\":\"mint\",\"data\":{…}}"
+}]
 ```
 
----
+The `id` on the Hive op equals `PROTOCOL_ID`. The indexer filters custom_jsons by this id before parsing.
 
-## Schema Definition
+## Action → auth level
 
-Collections can define a typed schema with immutable and mutable fields. If a schema is defined, `set_data` and `set_data_from` validate data against it.
+`create_collection` and `buy` sit in `required_auths` (active key). Everything else sits in `required_posting_auths` (posting key). The mapping is enforced by `ACTION_AUTH_LEVEL` in `packages/protocol/src/auth.ts` — there is no ambiguity and no override.
 
-### Schema Versioning
-
-| Concept | Detail |
-|---------|--------|
-| `schema_version=0` | Collection has no typed schema |
-| First `extend_schema` | Sets `schema_version=1` |
-| Subsequent extensions | Increment `schema_version` by 1 |
-| NFT `schema_version` | Set once at creation (mint or distribution), immutable after |
-| Instance distribution | Gets the collection's **current** `schema_version`, not the seed's |
-| `set_data` validation | Validates against the collection's **current** schema, not the NFT's birth schema |
-
-Each schema version is recorded in the `schema_versions` table with a hash chain (`prev_hash` points to the previous version's `schema_hash`).
-
-### Supported Field Types
-
-**Scalar types:**
-
-| Type | Range / Description |
-|------|---------------------|
-| `string` | Any text |
-| `bool` | true / false |
-| `uint8` | 0 to 255 |
-| `uint16` | 0 to 65,535 |
-| `uint32` | 0 to 4,294,967,295 |
-| `uint64` | 0 to Number.MAX_SAFE_INTEGER |
-| `int8` | -128 to 127 |
-| `int16` | -32,768 to 32,767 |
-| `int32` | -2,147,483,648 to 2,147,483,647 |
-| `int64` | Number.MIN_SAFE_INTEGER to Number.MAX_SAFE_INTEGER |
-| `float` | IEEE 754 float |
-| `double` | IEEE 754 double |
-
-**Array types:** Append `[]` to any scalar type: `string[]`, `uint8[]`, `bool[]`, etc.
-
-### Schema Limits
+## Size limits
 
 | Limit | Value |
-|-------|-------|
-| Max fields (total) | 64 |
-| Max field name length | 64 characters |
-| Mutable fields required | At least 1 if schema is defined |
+|---|---|
+| Hive `custom_json` hard cap | 8192 B |
+| Safe budget (SDK enforced) | 7372 B (`SAFE_PAYLOAD_MAX_BYTES`, 90%) |
+| Max ops per Hive tx | 5 |
+| Max seeds per `bulk_distribute` | 50 |
+| Max NFT ids per bulk `transfer` / burn | 50 |
 
-### Schema Example (Card Game)
+Exceeding `SAFE_PAYLOAD_MAX_BYTES` throws `PayloadTooLargeError` with a suggested batch size.
 
-```json
-{
-	"schema": {
-		"immutable": [
-			{ "name": "card_id", "type": "uint32" },
-			{ "name": "name", "type": "string" },
-			{ "name": "rarity", "type": "string" },
-			{ "name": "attack", "type": "uint16" },
-			{ "name": "health", "type": "uint16" },
-			{ "name": "mana_cost", "type": "uint8" },
-			{ "name": "keywords", "type": "string[]" }
-		],
-		"mutable": [
-			{ "name": "level", "type": "uint8" },
-			{ "name": "xp", "type": "uint32" },
-			{ "name": "foil", "type": "string" }
-		]
-	}
-}
+---
+
+## Action catalogue
+
+Below is every action, the payload shape, and who is authorized to emit it. Type names match `@nftlox/protocol`.
+
+### `create_collection` — dual-signer, fee-gated
+
+**Auth:** Active (creator signs the transfer; node signs the custom_json via multisig).
+**Wire shape:** 2 Hive operations in one transaction.
+
+```typescript
+type CollectionData = {
+	readonly id: string;                     // "col_<20 hex>" deterministic from (creator, name, symbol)
+	readonly name: string;                   // ≤100 chars
+	readonly symbol: string;                 // 3–10 chars, uppercase
+	readonly totalPotential: number;         // integer ≥ 0 (0 = unlimited)
+	readonly originDna: string;              // "o<15 upper-hex>", deterministic
+	readonly metadata: {
+		readonly description: string;          // ≤250
+		readonly image: string;                // https URL
+		readonly externalUrl?: string;         // optional https URL
+	};
+	readonly rules: {
+		readonly transferable: boolean;
+		readonly burnable: boolean;
+		readonly royaltyPct: number;           // 0–50 (whole percent)
+		readonly royaltyRecipient?: string;
+	};
+	readonly schema?: CollectionSchema;      // optional; no schema ⇒ any data accepted
+};
 ```
 
-**Immutable fields** are set at mint time and inherited by all instances. They can never be changed.
+The `creator` is **not** in the payload — the indexer derives it from the fee transfer's `from` field. The two operations in a `create_collection` transaction:
 
-**Mutable fields** can be updated via `set_data` (creator) or `set_data_from` (approved operator).
-
----
-
-## Seed JSON Format
-
-### Minimal Seed (No Schema)
-
-```json
-{
-	"artId": "my-nft-001",
-	"name": "My First NFT",
-	"brief": "Description of this NFT seed",
-	"imageUrl": "https://example.com/image.png",
-	"maxSupply": 100
-}
+```
+op[0] = ["transfer", { from: "<creator>", to: "<nodeAccount>",
+                       amount: "0.100 HBD",
+                       memo: "NFTLox collection fee:<collectionId>" }]
+op[1] = ["custom_json", { required_auths: ["<nodeAccount>"],
+                          id: "nftlox_testnet",
+                          json: "<ProtocolPayload<CollectionData>>" }]
 ```
 
-### Seed with Typed Data (Schema Required)
+### `archive_collection`
 
-```json
-{
-	"artId": "fire-drg-001",
-	"name": "Inferno Drake",
-	"brief": "Legendary fire dragon with devastating flame attacks",
-	"imageUrl": "https://files.peakd.com/file/peakd-hive/user/hash.png",
-	"maxSupply": 50,
-	"immutableData": {
-		"card_id": 1001,
-		"rarity": "legendary",
-		"attack": 3200,
-		"health": 2800,
-		"mana_cost": 8,
-		"keywords": ["battlecry", "taunt"]
-	}
-}
+**Auth:** Posting (creator).
+
+```typescript
+type ArchiveCollectionData = { readonly collectionId: string };
 ```
 
-### Batch Seed File (Array)
+Freezes the collection — new mints and `bulk_distribute` calls are rejected. Existing NFTs keep trading.
 
-For minting multiple seeds at once, provide an array:
+### `extend_schema`
 
-```json
-[
-	{
-		"artId": "card-001",
-		"name": "Fire Dragon",
-		"brief": "A powerful dragon",
-		"imageUrl": "https://cdn.example.com/001.webp",
-		"maxSupply": 250,
-		"immutableData": { "card_id": 1, "rarity": "mythic", "attack": 7, "health": 7 }
-	},
-	{
-		"artId": "card-002",
-		"name": "Ice Golem",
-		"brief": "A frozen sentinel",
-		"imageUrl": "https://cdn.example.com/002.webp",
-		"maxSupply": 500,
-		"immutableData": { "card_id": 2, "rarity": "epic", "attack": 4, "health": 8 }
-	}
-]
+**Auth:** Posting (creator).
+
+```typescript
+type ExtendSchemaData = {
+	readonly collectionId: string;
+	readonly newImmutableFields?: readonly SchemaField[];
+	readonly newMutableFields?: readonly SchemaField[];
+};
+
+type SchemaField = { readonly name: string; readonly type: SchemaFieldType };
 ```
 
-### Field Reference
+Append-only: existing fields are immutable. `name` must be a lowercase identifier; `type` is one of the 24 valid `SchemaFieldType` values (see below).
 
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| `artId` | string | Yes | 1-32 chars, lowercase a-z, 0-9, hyphens (see rules above) |
-| `name` | string | Yes | 1-100 characters |
-| `brief` | string | No | Max 250 characters |
-| `imageUrl` | string | Yes | Valid HTTPS URL, max 500 chars |
-| `maxSupply` | number | Yes | Positive integer (how many instances can be distributed) |
-| `immutableData` | object | No | Must match collection schema if schema is defined |
+### `mint` (seed)
 
----
+**Auth:** Posting.
 
-## Hive Username
-
-| Rule | Constraint |
-|------|-----------|
-| Length | 3-16 characters total |
-| Segments | Dot-separated, each segment >= 3 chars |
-| Characters | Lowercase letters, digits, hyphens |
-| Start | Each segment starts with lowercase letter |
-| End | Each segment ends with lowercase letter or digit |
-
-**Valid:** `enrique89`, `ragnarok-admin`, `my.account`
-
-**Invalid:** `ab` (too short), `My_Account` (uppercase, underscore), `123user` (starts with digit)
-
----
-
-## Ownership Provenance
-
-The ownership projection tracks the current ownership edge. PostgreSQL stores the fast owner fields, while `owner_operation_id` is the anchor that clients can resolve through HAFAH/Hive L1. The owner endpoints also derive a `claim_hash` for the compact claim response.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `owner_operation_id` | string | HafAH operation ID that gave the current owner their ownership |
-| `owner_action` | string | Ownership-producing action: `mint`, `bulk_distribute`, `transfer`, `nft_transfer_from`, or `buy` |
-| `owner_block_num` | number | Hive block context for the current ownership edge; not unique proof by itself |
-| `previous_owner` | string \| null | Previous canonical owner, or `null` if the NFT was created directly for the current owner |
-| `claim_hash` | string | Deterministic hash returned by `/api/nfts/:id/owner` and `/api/nfts/:id/ownership` over the compact owner claim fields |
-
-**Behavior:**
-
-- Set to the current operation ID on creation actions such as `mint` and `bulk_distribute`.
-- Updated on every `transfer`, `buy`, and `nft_transfer_from`.
-- Anyone can resolve `owner_operation_id` through HAFAH to inspect the exact on-chain `custom_json` operation. For buys, the same Hive transaction also contains the associated HIVE/HBD transfers.
-
----
-
-## Sales Record
-
-Each `buy` operation creates an append-only record in the `sales` table.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `nftId` | string | NFT that was sold |
-| `collectionId` | string | Collection the NFT belongs to |
-| `listingId` | string | Listing that was fulfilled |
-| `seller` | string | Previous owner |
-| `buyer` | string | New owner |
-| `grossAmount` | string | Total sale price (Hive decimal format) |
-| `currency` | string | `"HIVE"` or `"HBD"` |
-| `royaltyAmount` | string | Royalty paid to royalty recipient |
-| `protocolFee` | string | Fee paid to co-signing node |
-| `sellerNet` | string | Net amount received by seller |
-
----
-
-## Price Format
-
-Used for marketplace listings.
-
-```json
-{
-	"amount": "10.000",
-	"currency": "HIVE"
-}
+```typescript
+type NFTData = {
+	readonly id: string;                     // seed_<20 hex>, deterministic from (collectionId, artId)
+	readonly collectionId: string;
+	readonly artId?: string;                 // required for seed mints; indexer recomputes the id and rejects mismatches
+	readonly edition: number;                // integer ≥ 1
+	readonly owner: string;
+	readonly nftType?: "seed" | "instance";  // "seed" for mint; instances come from bulk_distribute
+	readonly originDna: string;              // inherited from the collection
+	readonly instanceDna: string;            // "i<19 upper-hex>", deterministic
+	readonly uniqueAccessKey?: string;       // reserved for future use
+	readonly mintedBy: string;
+	readonly collectionBlock?: number;
+	readonly metadata: {
+		readonly name: string;                 // ≤100
+		readonly description?: string;         // ≤250
+		readonly imageUrl: string;             // ≤500
+		readonly imageHash: string;            // "img_<16 hex>"
+	};
+	readonly maxSupply: number;
+	readonly immutableData?: Record<string, unknown>;   // validated against the collection schema
+	readonly mutableData?: Record<string, unknown>;
+	readonly data?: Record<string, unknown>;            // free-form (ignored if schema present)
+};
 ```
 
-| Field | Type | Constraints |
-|-------|------|-------------|
-| `amount` | string | Hive decimal format: `X.YYY` (exactly 3 decimal places) |
-| `currency` | string | `"HIVE"` or `"HBD"` only |
+### `bulk_distribute`
 
-**Minimum amount:** `0.001`
+**Auth:** Posting (seed owner, or an approved operator).
 
-**Valid:** `"10.000"`, `"0.001"`, `"999.999"`
+```typescript
+type BulkDistributeData = {
+	readonly to?: string;                    // defaults to signer
+	readonly items: readonly BulkDistributeItem[];
+	readonly imageOverrides?: Record<string, { imageUrl?: string; imageHash?: string }>;
+	readonly data?: Record<string, unknown>;
+	readonly mutableData?: Record<string, unknown>;
+};
 
-**Invalid:** `"10"` (no decimals), `"10.0"` (not 3 decimals), `"0.0001"` (too many decimals)
+type BulkDistributeItem = {
+	readonly seedId: string;
+	readonly quantity: number;
+	readonly seedTxId: string;               // the seed's originating tx_id; guards against stale references
+};
+```
+
+Cap: 50 distinct seeds per call. Duplicate `seedId`s are rejected.
+
+Instance IDs are computed server-side as `generateDeterministicInstanceId(seedId, instanceNumber)` = `nft_<seedSuffix>_<n>`; instance DNAs follow `generateDeterministicInstanceDna(seedId, n, txId, blockNum)`.
+
+### `transfer` / burn
+
+**Auth:** Posting (owner or approved operator).
+
+```typescript
+type TransferData = {
+	readonly nftId?: string;                 // single
+	readonly nftIds?: readonly string[];     // bulk (≤50)
+	readonly from: string;
+	readonly to: string;                     // "null" = burn
+	readonly imageUrl?: string;
+	readonly imageHash?: string;
+	readonly seedId?: string;                // optional provenance reference
+	readonly seedTxId?: string;
+};
+```
+
+Either `nftId` or `nftIds` must be present. Burning is a transfer with `to = "null"`.
+
+### `set_data`
+
+**Auth:** Posting (NFT owner).
+
+```typescript
+type SetDataData = {
+	readonly nftId: string;
+	readonly instanceDna: string;            // owner-bound guard; prevents cross-NFT replays
+	readonly data?: Record<string, unknown>;
+	readonly mutableData?: Record<string, unknown>;
+	readonly seedId?: string;
+	readonly seedTxId?: string;
+};
+```
+
+If the collection has a schema, payload fields are validated against the `mutable` section. Immutable fields cannot be touched.
+
+### `set_data_from`
+
+**Auth:** Posting (approved operator).
+
+```typescript
+type SetDataFromData = {
+	readonly nftId: string;
+	readonly instanceDna: string;
+	readonly data?: Record<string, unknown>;
+	readonly mutableData?: Record<string, unknown>;
+	readonly seedId?: string;
+	readonly seedTxId?: string;
+};
+```
+
+Requires a prior `data_operator_approve(collectionId, operator, true)` from the collection creator.
+
+### `data_operator_approve`
+
+**Auth:** Posting (collection creator).
+
+```typescript
+type DataOperatorApproveData = {
+	readonly collectionId: string;
+	readonly operator: string;
+	readonly approved: boolean;
+};
+```
+
+### `list`
+
+**Auth:** Posting (owner).
+
+```typescript
+type ListingData = {
+	readonly nftId: string;
+	readonly listingId: string;              // "list_<32 hex>", deterministic over (nftId, owner, marketplace, price, expiresAt, nonce)
+	readonly listingNonce: string;           // 12 random chars — de-duplicates identical relistings
+	readonly price: { readonly amount: string; readonly currency: "HIVE" | "HBD" };
+	readonly expiresAt?: number;             // unix millis
+	readonly imageUrl?: string;
+	readonly imageHash?: string;
+	readonly marketplace?: string;           // empty ⇒ global listing
+	readonly seedId?: string;
+	readonly seedTxId?: string;
+};
+```
+
+Prices are 3-decimal strings, minimum `0.001`. Currency is `"HIVE"` or `"HBD"`.
+
+### `unlist`
+
+**Auth:** Posting (owner).
+
+```typescript
+type UnlistData = {
+	readonly nftId: string;
+	readonly imageUrl?: string;
+	readonly imageHash?: string;
+	readonly seedId?: string;
+	readonly seedTxId?: string;
+};
+```
+
+The NFT stays `status = "listed"` for `UNLIST_DELAY_BLOCKS` (3 blocks, ~9s) so in-flight `buy` multisigs can still settle. After the window it flips to `active`.
+
+### `buy` — single-signer, node-cosigned
+
+**Auth:** Active (buyer) + Active (node, via `/api/multisig`).
+
+```typescript
+type BuyData = {
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;               // tx_id of the originating `list`
+	readonly txId: string;                   // tx_id of this `buy` itself (precomputed client-side)
+	readonly seedId?: string;
+	readonly seedTxId?: string;
+};
+```
+
+Wire shape (in order):
+
+```
+op[0..N-1] = ["transfer", …]     // seller, royalty recipient, protocol fee — memos use MEMO_PREFIX_BUY / ROYALTY / FEE
+op[N]      = ["custom_json", …]   // BuyData, active-auth, buyer in required_auths
+```
+
+The indexer reconciles each transfer against the listing using the `listingId` embedded in the memo.
+
+### `nft_approve`
+
+**Auth:** Posting (owner).
+
+```typescript
+type NftApproveData = {
+	readonly spender: string;
+	readonly instanceId: string;
+	readonly approved: boolean;
+};
+```
+
+### `nft_approve_all`
+
+**Auth:** Posting (owner).
+
+```typescript
+type NftApproveAllData = {
+	readonly spender: string;
+	readonly collectionId: string;
+	readonly approved: boolean;
+};
+```
+
+Scope: every instance in `collectionId` owned by the signer, including future acquisitions. Seeds are not covered.
+
+### `nft_transfer_from`
+
+**Auth:** Posting (operator previously approved via `nft_approve` or `nft_approve_all`).
+
+```typescript
+type NftTransferFromData = {
+	readonly from: string;
+	readonly to: string;
+	readonly instanceId: string;
+	readonly seedId?: string;
+	readonly seedTxId?: string;
+};
+```
+
+### `nft_lend`
+
+**Auth:** Posting (owner).
+
+```typescript
+type NftLendData = {
+	readonly instanceId: string;
+	readonly borrower: string;               // must differ from owner
+	readonly seedId?: string;
+	readonly seedTxId?: string;
+};
+```
+
+Lending is instance-only. While lent, `transfer`/`list`/`nft_approve` are rejected for that instance.
+
+### `nft_return`
+
+**Auth:** Posting (current borrower).
+
+```typescript
+type NftReturnData = {
+	readonly instanceId: string;
+	readonly seedId?: string;
+	readonly seedTxId?: string;
+};
+```
+
+### `node_register`
+
+**Auth:** Posting. Requires ≥100 HP (self or delegated) at validation time.
+
+```typescript
+type NodeRegisterData = {
+	readonly endpoint: string;               // https URL
+	readonly publicKey: string;              // Hive public key string
+};
+```
+
+### `node_heartbeat`
+
+**Auth:** Posting (registered node account).
+
+```typescript
+type NodeHeartbeatData = {
+	readonly blockNum: number;               // last block this node indexed
+	readonly stateRoot: string;              // "sha256:<64 lowercase hex>"
+	readonly indexerVersion: string;         // ≤32 chars
+};
+```
+
+Cadence: ≤5000 blocks (~4h10m) apart. Missing it marks the node stale in `/api/l2_nodes` but does not kick it.
 
 ---
 
-## Protocol Limits Summary
+## Schema types
 
-| Limit | Value |
-|-------|-------|
-| Max JSON payload | 7,372 bytes (90% of 8KB) |
-| Max operations per Hive tx | 5 |
-| Max name length | 100 chars |
-| Max description length | 250 chars |
-| Max image URL length | 500 chars |
-| Max schema fields | 64 |
-| Max field name length | 64 chars |
-| Max artId length | 32 chars |
-| Symbol length | 3-8 chars |
-| Max royalty | 50% |
-| Protocol fee | 1.0% (paid to co-signing node on every sale) |
-| Max bulk distribute items | 50 |
-| Min price | 0.001 HIVE/HBD |
+`SchemaFieldType` is one of 24 primitives, defined in `@nftlox/protocol`:
+
+| Scalars | Arrays |
+|---|---|
+| `string`, `bool` | `string[]`, `bool[]` |
+| `uint8`, `uint16`, `uint32`, `uint64` | `uint8[]`, `uint16[]`, `uint32[]`, `uint64[]` |
+| `int8`, `int16`, `int32`, `int64` | `int8[]`, `int16[]`, `int32[]`, `int64[]` |
+| `float`, `double` | `float[]`, `double[]` |
+
+Rules:
+- Field names match `/^[a-z][a-z0-9_]*$/` and are ≤64 chars.
+- Max 64 fields per collection (`MAX_SCHEMA_FIELDS`).
+- Immutable fields can only be written at mint time; mutable fields can be updated via `set_data` / `set_data_from`.
+- Collections created without a `schema` accept **any** JSON in `data` / `immutableData` / `mutableData` — the indexer does no typing beyond size caps.
+
+## Deterministic IDs at a glance
+
+| ID | Format | Derived from |
+|---|---|---|
+| `col_<20 hex>` | collection | `sha256("nftlox:col:" + creator + ":" + name + ":" + symbol)` |
+| `o<15 upper-hex>` | collection origin DNA | `sha256("nftlox:origin:" + collectionId)` |
+| `seed_<20 hex>` | seed | `sha256("nftlox:seed:" + collectionId + ":" + artId.lower())` |
+| `nft_<20 hex>_<n>` | instance | `seed_<suffix>_<instanceNumber>` |
+| `i<19 upper-hex>` | instance DNA | `sha256("nftlox:instance:" + nftId + ":" + originDna + ":" + edition + ":" + imageHash)` (seeds) / `sha256("nftlox:dna:" + seedId + ":" + n + ":" + txId + ":" + blockNum)` (bulk-distributed instances) |
+| `img_<16 hex>` | image hash | `sha256("nftlox:img:" + imageUrl)` |
+| `list_<32 hex>` | listing | `sha256("nftlox:listing:v1:" + nftId + ":" + owner + ":" + marketplace + ":" + priceAmount + ":" + priceCurrency + ":" + expiresAt + ":" + nonce)` |
+
+Domain separators (`nftlox:col:`, `nftlox:seed:`, …) are immutable — changing them would fork every historical ID.
+
+## See also
+
+- [SDK Reference](sdk/reference.md) — builder inputs that produce these payloads.
+- [Signing & Broadcasting](broadcasting.md) — how the operations are wrapped and signed.
+- [API Endpoints](reference/api.md) — the indexer routes that expose indexed versions of these shapes.

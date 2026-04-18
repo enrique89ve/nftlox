@@ -1,137 +1,19 @@
 # SPV Verification
 
-Client-side verification of NFTLox operations against Hive L1. The browser can verify ownership, deterministic derivation, listing prices, and generic on-chain operations without trusting an indexer response.
+NFTLox ships a client-side verification layer so a wallet, game client, or marketplace UI can confirm facts about an NFT **without trusting the indexer's word for it**. Every claim is re-derived from Hive L1 (via public Hive RPC + HafAH).
 
-**Source implementation:** `packages/sdk/src/spv/`.
+Source: `packages/sdk/src/spv/`.
 
----
+## What you can verify
 
-## What SPV Verifies
-
-### NFT Ownership
-
-1. The indexer returns a compact current-owner claim from `/api/nfts/{nftId}/proof`.
-2. The claim is anchored by `owner_operation_id`.
-3. The SDK resolves that operation through HAFAH/Hive L1.
-4. The SDK derives the owner and previous owner from the L1 operation.
-5. The result is verified only if L1, the indexer claim, and the expected owner agree.
-
-### Deterministic Derivation
-
-1. `instanceId` = `SHA-256(seedId, instanceNumber)`.
-2. `instanceDna` = `SHA-256(seedId, instanceNumber, txId, blockNum)`.
-3. `accessKey` = `SHA-256(instanceDna, signer, txId)`.
-
-### Listing Prices
-
-The SDK can fetch a list transaction from Hive L1 and compare the on-chain seller, NFT ID, amount, and currency against the price shown by a node or marketplace.
-
-### Generic On-Chain Operations
-
-The SDK can fetch a transaction and verify that it contains an NFTLox `custom_json` with the expected action and signer.
-
----
-
-## Verify NFT Ownership
-
-```typescript
-import {
-	createDefaultL1Config,
-	verifyNftOwnership,
-	type OwnershipVerificationResult,
-} from "nftlox-sdk";
-
-const result: OwnershipVerificationResult = await verifyNftOwnership({
-	nftId: "nft_abc123",
-	expectedOwner: "player-alice",
-	indexerBaseUrl: "https://api-nftlox.hivecreators.co",
-	l1Config: createDefaultL1Config(),
-});
-
-if (result.status !== "verified") {
-	throw new Error(result.message);
-}
-```
-
-### OwnershipVerificationResult Shape
-
-```typescript
-interface OwnershipVerificationResult {
-	status: "verified" | "mismatch" | "error" | "not_found";
-	nftId: string;
-	reportedOwner: string;
-	expectedOwner: string;
-	proofsChecked: number;
-	checks: OwnershipCheckResult[];
-	verifiedAt: number;
-	durationMs: number;
-	message: string;
-}
-```
-
----
-
-## Verify Deterministic Derivation
-
-```typescript
-import { verifyDeterministicDerivation } from "nftlox-sdk";
-
-const derived = await verifyDeterministicDerivation({
-	seedId: "seed_abc123",
-	instanceNumber: 42,
-	txId: "abc123def456789012345678901234567890abcd",
-	blockNum: 92345678,
-	signer: "player-alice",
-});
-
-console.log(derived.instanceId);
-console.log(derived.instanceDna);
-console.log(derived.accessKey);
-```
-
----
-
-## Verify Listing Price
-
-```typescript
-import { createDefaultL1Config, verifyListingPrice } from "nftlox-sdk";
-
-const result = await verifyListingPrice({
-	listTxId: "abc123def456789012345678901234567890abcd",
-	expectedPrice: { amount: 10, currency: "HIVE" },
-	expectedSeller: "alice",
-	expectedNftId: "nft_abc123",
-	l1Config: createDefaultL1Config(),
-});
-
-if (result.status !== "verified") {
-	throw new Error(result.message);
-}
-```
-
----
-
-## Verify Operation On-Chain
-
-```typescript
-import {
-	createDefaultL1Config,
-	verifyOperationOnChain,
-} from "nftlox-sdk";
-
-const result = await verifyOperationOnChain({
-	txId: "abc123def456789012345678901234567890abcd",
-	blockNum: 92345678,
-	expectedAction: "transfer",
-	expectedSigner: "player-alice",
-	l1Config: createDefaultL1Config(),
-});
-
-console.log(result.status);
-console.log(result.message);
-```
-
----
+| Verifier | Proves |
+|---|---|
+| `verifyNftOwnership` | The indexer's current-owner claim matches an on-chain operation signed by the transferring party. |
+| `verifyListingPrice` | An active listing's seller/amount/currency/nftId match the `list` tx on Hive L1. |
+| `verifyOperationOnChain` | A given tx_id + block contains an NFTLox `custom_json` with the expected `action` and `signer`. |
+| `verifyDeterministicDerivation` | Recomputes `instanceId` / `instanceDna` / `accessKey` from their domain-separated inputs. Pure; no network. |
+| `resolveOperationById` | Looks up a specific operation by `operationId` (for UI deep-links from indexer rows to L1 proofs). |
+| `resolveMutableData` | Resolves an operation whose `custom_json` committed a content-hash, checks the hash matches. |
 
 ## Configuration
 
@@ -139,11 +21,14 @@ console.log(result.message);
 import { createDefaultL1Config } from "nftlox-sdk";
 
 const l1Config = createDefaultL1Config();
+// { endpoints: [...], timeoutMs: 8000 }
+
+// Override for your environment:
 l1Config.endpoints = ["https://api.hive.blog"];
-l1Config.timeoutMs = 8000;
+l1Config.timeoutMs = 5000;
 ```
 
-Default endpoints:
+Default endpoints (round-robin on failure):
 
 ```
 https://api.hive.blog
@@ -151,3 +36,151 @@ https://api.syncad.com
 https://rpc.mahdiyari.info
 https://anyx.io
 ```
+
+Use your own Hive RPC if you depend on a specific node for rate limits or latency.
+
+## Verify ownership
+
+The canonical "is this NFT really owned by Alice?" check.
+
+```typescript
+import { createDefaultL1Config, verifyNftOwnership } from "nftlox-sdk";
+
+const result = await verifyNftOwnership({
+	nftId: "nft_abc…_7",
+	expectedOwner: "alice",
+	indexerBaseUrl: "https://api-nftlox.hivecreators.co",
+	l1Config: createDefaultL1Config(),
+});
+
+if (result.status !== "verified") {
+	// result.status = "mismatch" | "error" | "not_found"
+	throw new Error(`${result.status}: ${result.message}`);
+}
+```
+
+**What runs under the hood:**
+
+1. `GET /api/nfts/{nftId}/proof` — indexer returns `{ reportedOwner, owner_operation_id, previous_owner, event_type }` plus a short chain of prior ownership events.
+2. For each check, the SDK resolves `owner_operation_id` on HafAH and parses the `custom_json`.
+3. The derived owner from L1 is compared to both `reportedOwner` (indexer) and `expectedOwner` (your call).
+4. `status = "verified"` only if all three agree for every check.
+
+**Result shape:**
+
+```typescript
+interface OwnershipVerificationResult {
+	status: "verified" | "mismatch" | "error" | "not_found";
+	nftId: string;
+	reportedOwner: string;          // what the indexer claimed
+	expectedOwner: string;          // what you claimed
+	proofsChecked: number;
+	checks: OwnershipCheckResult[]; // per-event breakdown
+	verifiedAt: number;             // epoch ms
+	durationMs: number;
+	message: string;
+}
+
+interface OwnershipCheckResult {
+	txId: string;
+	blockNum: number;
+	eventType: string;              // "mint", "transfer", "buy", "return", …
+	expectedSigner: string;
+	l1Status: "verified" | "mismatch" | "error" | "not_found";
+	message: string;
+	operationId?: string;
+	previousOwner?: string | null;
+	derivedOwner?: string | null;
+}
+```
+
+Render `checks` in a UI if you want to show the full chain of custody.
+
+## Verify listing price
+
+Prevents a hostile indexer from claiming a discounted price.
+
+```typescript
+import { verifyListingPrice, createDefaultL1Config } from "nftlox-sdk";
+
+const result = await verifyListingPrice({
+	listTxId: "abc…1234",                          // from client.getPaymentInfo().listTxId
+	expectedPrice: { amount: 25, currency: "HIVE" },
+	expectedSeller: "alice",
+	expectedNftId: "nft_abc…_7",
+	l1Config: createDefaultL1Config(),
+});
+// result = { status, listTxId, blockNum, onChainPrice, onChainSeller, onChainNftId, message }
+```
+
+If `status === "verified"`, the listing on chain matches the four expected fields byte-for-byte. A mismatch means either the indexer lied, the listing was replaced, or the UI read a stale cache.
+
+## Verify an arbitrary NFTLox operation
+
+```typescript
+import { verifyOperationOnChain, createDefaultL1Config } from "nftlox-sdk";
+
+const result = await verifyOperationOnChain({
+	txId: "abc…1234",
+	blockNum: 92_345_678,
+	expectedAction: "transfer",                  // ProtocolAction from @nftlox/protocol
+	expectedSigner: "alice",
+	l1Config: createDefaultL1Config(),
+});
+// result.status, result.actionMatch, result.signerMatch, result.rawPayload
+```
+
+Use this anywhere you surface a tx_id from an indexer response and want a one-click "verify on chain" button.
+
+## Deterministic derivation (offline)
+
+Pure math — no RPC calls. Useful for unit tests and to prove the SDK's ID generator matches the protocol's on-chain expectation.
+
+```typescript
+import { verifyDeterministicDerivation } from "nftlox-sdk";
+
+const derived = await verifyDeterministicDerivation({
+	seedId: "seed_…",
+	instanceNumber: 42,
+	txId: "abc…1234",
+	blockNum: 92_345_678,
+	signer: "alice",
+});
+// { instanceId, instanceDna, accessKey }
+```
+
+These three IDs are the same ones the indexer writes to its tables when it processes the original `bulk_distribute`. Computing them locally lets a client anchor a deep-link (e.g. `/nft/{instanceId}`) before the indexer has even returned.
+
+## Resolving operations by ID
+
+Indexer rows reference operations by `operation_id` (the HafAH global op id). To jump from a row to a verified L1 proof:
+
+```typescript
+import { resolveOperationById, createDefaultL1Config } from "nftlox-sdk";
+
+const op = await resolveOperationById({
+	l1Config: createDefaultL1Config(),
+	operationId: "12345678900000001",
+	expectedActions: ["buy", "transfer"],         // optional allow-list
+});
+// op = { operationId, txId, blockNum, timestamp, protocolId, version, action, signer, data }
+```
+
+For mutable-data commitments (large off-chain blobs with an on-chain content hash), `resolveMutableData` performs the same lookup and checks the committed hash.
+
+## When SPV is worth the round-trip
+
+SPV isn't free — each verifier costs 1–3 RPC calls. Use it where the decision is high-value:
+
+- A marketplace UI rendering a sale above a threshold ("verify before buying").
+- A wallet showing a new incoming NFT ("verify sender is who the indexer says").
+- A game client admitting an NFT into a competitive mode ("verify ownership + mint provenance").
+- Any flow where the next step would be irreversible (HIVE transfer, on-chain sign).
+
+For cheap reads (gallery listings, search results), trust the indexer and verify lazily on interaction.
+
+## See also
+
+- [SDK Reference — SPV verifiers](../sdk/reference.md#spv-verifiers)
+- [Data Formats — deterministic ID derivation](../data-formats.md#deterministic-id-derivation)
+- [Multi-node design](../multinode.md) — why client-side verification is the long-term trust anchor.
