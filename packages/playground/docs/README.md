@@ -73,10 +73,10 @@ Then follow [Getting Started](getting-started.md) to make your first transaction
 | **Reference** | |
 | [API Endpoints](reference/api.md) | Indexer HTTP surface (query + multisig only — no build API) |
 | [Error Codes](reference/errors.md) | Multisig codes, handler validation, retry guidance |
-| **Examples** | |
-| [Seed Ceremony](examples/seed-ceremony.md) | Launch a collection end-to-end |
-| [Mutable Data](examples/mutable-data.md) | `set_data` for owners, `set_data_from` for game servers |
-| [Card Game (TCG)](examples/games/card-game.md) | Full TCG loop: launch, packs, trading, lending |
+| **Use Cases & Examples** | |
+| [Game Development](use-cases/games.md) | Full TCG loop: launch, packs, trading, lending |
+| [Seed Ceremony](use-cases/seed-ceremony.md) | Launch a collection end-to-end |
+| [Mutable Data](use-cases/mutable-data.md) | `set_data` for owners, `set_data_from` for game servers |
 
 ## Protocol snapshot
 

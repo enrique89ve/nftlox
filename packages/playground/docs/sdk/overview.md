@@ -236,7 +236,7 @@ if (!plan.success) return console.error(plan.errors);
 // 2. Broadcast seedBatches[0..N] (creator signs posting each time)
 ```
 
-See [the Seed Ceremony example](../examples/seed-ceremony.md) for a complete script.
+See [the Seed Ceremony](../use-cases/seed-ceremony.md) for a complete script.
 
 ### Transaction sizing primitives
 
@@ -287,4 +287,4 @@ The indexer **never** has the user's keys. It exposes read endpoints and two nar
 - [Signing & Broadcasting](../broadcasting.md) — how to merge signatures for the multisig flows.
 - [Data Formats](../data-formats.md) — the on-chain shape of every payload.
 - [SDK Reference](reference.md) — full inventory of exports.
-- [Seed Ceremony example](../examples/seed-ceremony.md) — runnable end-to-end flow.
+- [Seed Ceremony](../use-cases/seed-ceremony.md) — runnable end-to-end flow.

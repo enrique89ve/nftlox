@@ -314,5 +314,5 @@ Pure functions — no network. Handy for building deep-links or DB fixtures ahea
 
 - [Data Formats — `create_collection`, `extend_schema`, `archive_collection`](../data-formats.md#create_collection)
 - [SDK Reference — collection builders](../sdk/reference.md#collections)
-- [Example — Seed Ceremony](../examples/seed-ceremony.md) for the full launch script.
+- [Seed Ceremony](../use-cases/seed-ceremony.md) for the full launch script.
 - [Ownership Model](ownership.md) for the creator/owner distinction and provenance fields.

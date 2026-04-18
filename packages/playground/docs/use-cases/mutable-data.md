@@ -1,4 +1,4 @@
-# Example — Mutable Data
+# Mutable Data
 
 How to update the `mutableData` of a live NFT instance: level-ups, XP gain, win counts, in-game state. Works for both the owner (`set_data`) and an approved game server (`set_data_from`).
 

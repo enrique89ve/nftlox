@@ -17,8 +17,10 @@
 	- [SPV Verification](guides/spv.md)
 	- [Game Bot Testing](guides/game-bot-testing.md)
 
-- **Use Cases**
+- **Use Cases & Examples**
 	- [Game Development](use-cases/games.md)
+	- [Seed Ceremony](use-cases/seed-ceremony.md)
+	- [Mutable Data](use-cases/mutable-data.md)
 
 - **SDK**
 	- [Using the SDK](sdk/overview.md)
@@ -27,8 +29,3 @@
 - **Reference**
 	- [API Endpoints](reference/api.md)
 	- [Error Codes](reference/errors.md)
-
-- **Examples**
-	- [Seed Ceremony](examples/seed-ceremony.md)
-	- [Mutable Data](examples/mutable-data.md)
-	- [Card Game (TCG)](examples/games/card-game.md)

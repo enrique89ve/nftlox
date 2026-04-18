@@ -118,6 +118,6 @@ await client.getOperationStatus(approveTxId);                // confirm the appr
 
 ## See also
 
-- [Mutable Data](../examples/mutable-data.md) — end-to-end pattern for operator-driven stat updates.
+- [Mutable Data](../use-cases/mutable-data.md) — end-to-end pattern for operator-driven stat updates.
 - [Data Formats — `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `data_operator_approve`, `set_data_from`](../data-formats.md)
 - [SDK Reference — approval builders](../sdk/reference.md#approvals--delegation)

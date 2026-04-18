@@ -1,4 +1,4 @@
-# Example — Seed Ceremony
+# Seed Ceremony
 
 End-to-end script: launch a brand-new collection with a schema, then mint every seed in the catalogue. Uses the real SDK and `hive-tx`. Run it with `bun run` or `node --loader tsx`.
 
@@ -56,9 +56,9 @@ const HIVE_RPC = "https://api.hive.blog";
 hive.config.set("node", HIVE_RPC);
 
 const CREATOR = process.env.HIVE_ACCOUNT!;
-const ACTIVE = hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!);
+const ACTIVE  = hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!);
 const POSTING = hive.PrivateKey.from(process.env.HIVE_POSTING_KEY!);
-const client = createIndexerClient(INDEXER);
+const client  = createIndexerClient(INDEXER);
 
 async function broadcast(ops: readonly unknown[], key: hive.PrivateKey) {
 	const tx = new hive.Transaction();
@@ -135,8 +135,7 @@ async function ceremony() {
 		const txId = await broadcast(batch.operations, POSTING);
 		console.log(`Batch ${batch.batchNumber}: ${batch.seeds.length} seeds → ${txId}`);
 		await waitForIndex(txId);
-		// Light rate-limit between batches; respects TX_DELAY_MS
-		await new Promise(r => setTimeout(r, 4000));
+		await new Promise(r => setTimeout(r, 4000));   // respects TX_DELAY_MS
 	}
 
 	console.log("Ceremony complete. Seed IDs:", plan.generatedIds);
@@ -161,18 +160,16 @@ Once the seeds are indexed, `bulk_distribute` mints instances from any seed (up 
 ```typescript
 import { buildBulkDistribute } from "nftlox-sdk";
 
-const { result: { tx_id: distributeTxId } } = await (async () => {
-	const r = buildBulkDistribute({
-		signer: CREATOR,
-		to: "playerOne",
-		items: [
-			{ seedId: plan.generatedIds["warrior"]!, quantity: 3, seedTxId: colTxId },
-			{ seedId: plan.generatedIds["mage"]!,     quantity: 1, seedTxId: colTxId },
-		],
-	});
-	if (!r.success) throw new Error(JSON.stringify(r.errors));
-	return await broadcast(r.operations, POSTING).then(tx_id => ({ result: { tx_id } }));
-})();
+const r = buildBulkDistribute({
+	signer: CREATOR,
+	to: "playerOne",
+	items: [
+		{ seedId: plan.generatedIds["warrior"]!, quantity: 3, seedTxId: colTxId },
+		{ seedId: plan.generatedIds["mage"]!,     quantity: 1, seedTxId: colTxId },
+	],
+});
+if (!r.success) throw new Error(JSON.stringify(r.errors));
+const distributeTxId = await broadcast(r.operations, POSTING);
 console.log("Distributed:", distributeTxId);
 ```
 
@@ -184,12 +181,12 @@ Seed IDs are deterministic. Re-running the script with the same `(collectionId, 
 
 ```typescript
 const { nfts } = await client.getUserNfts(CREATOR, { type: "seed" });
-const existing = new Set(nfts.map(n => n.id));
+const existing  = new Set(nfts.map(n => n.id));
 const remaining = plan.seedBatches.filter(b => b.seeds.some(s => !existing.has(s.seedId)));
 ```
 
 ## See also
 
-- [Mutable Data example](mutable-data.md) — updating `mutableData` after instances are minted.
+- [Mutable Data](mutable-data.md) — updating `mutableData` after instances are minted.
 - [SDK Reference — `buildCollectionWithSeeds`](../sdk/reference.md#collections) — full option surface.
 - [Signing & Broadcasting](../broadcasting.md) — the multisig merge step explained line by line.

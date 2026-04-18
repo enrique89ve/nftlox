@@ -184,8 +184,8 @@ console.log(`${confirmation.confirmed}/${confirmation.totalOperations} ops confi
 | How `create_collection` and `buy` are co-signed by the node | [Signing & Broadcasting](broadcasting.md) |
 | Exact shape of every on-chain payload | [Data Formats](data-formats.md) |
 | The 20 builders in one table | [SDK Reference](sdk/reference.md) |
-| Mint a full collection with dozens of seeds, end-to-end | [Seed Ceremony](examples/seed-ceremony.md) |
-| Update `mutableData` on a live NFT | [Mutable Data](examples/mutable-data.md) |
+| Mint a full collection with dozens of seeds, end-to-end | [Seed Ceremony](use-cases/seed-ceremony.md) |
+| Update `mutableData` on a live NFT | [Mutable Data](use-cases/mutable-data.md) |
 
 ## Protocol info
 
