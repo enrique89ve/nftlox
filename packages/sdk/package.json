@@ -1,6 +1,6 @@
 {
 	"name": "nftlox-sdk",
-	"version": "0.2.1",
+	"version": "0.3.0",
 	"description": "NFTLox Protocol SDK — Polymorphic Ownership on Hive blockchain",
 	"type": "module",
 	"sideEffects": false,
@@ -30,15 +30,18 @@
 		"typecheck": "bunx tsc --noEmit"
 	},
 	"devDependencies": {
-		"@types/bun": "latest"
+		"@types/bun": "latest",
+		"zod": "4.3.6"
 	},
 	"engines": {
 		"bun": ">=1.0.0",
 		"node": ">=18.0.0"
 	},
+	"peerDependencies": {
+		"zod": "^4.0.0"
+	},
 	"dependencies": {
-		"@nftlox/protocol": "^0.1.0",
-		"zod": "^4.3.6"
+		"@nftlox/protocol": "^0.1.0"
 	},
 	"publishConfig": {
 		"access": "public"
