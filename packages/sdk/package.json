@@ -36,9 +36,6 @@
 		"bun": ">=1.0.0",
 		"node": ">=18.0.0"
 	},
-	"peerDependencies": {
-		"typescript": "^5"
-	},
 	"dependencies": {
 		"@nftlox/protocol": "^0.1.0",
 		"zod": "^4.3.6"

@@ -16,8 +16,10 @@ import type {
 } from "@nftlox/protocol";
 import { validateHiveUsername } from "@nftlox/protocol";
 import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow";
+import { IndexerError, MultisigError } from "./errors";
+import { type HttpOptions, handleFetchError, headersToRecord, mergeHeaders, resolveFetch } from "./http";
 
-export type RequestMultisigOptions = Readonly<{
+export type RequestMultisigOptions = Readonly<HttpOptions & {
 	powBits?: number;
 }>;
 
@@ -36,8 +38,15 @@ function extractErrorMessage(body: unknown): string {
 	return "Unknown error";
 }
 
-function statusUrl(indexerUrl: string): string {
-	return new URL("/api/status", indexerUrl).toString();
+function extractErrorCode(body: unknown): string | null {
+	if (isObject(body) && "code" in body && typeof body.code === "string") {
+		return body.code;
+	}
+	return null;
+}
+
+function buildUrl(baseUrl: string, path: string): string {
+	return new URL(path, baseUrl).toString();
 }
 
 function assertOptionalBoolean(value: unknown, field: string): boolean | undefined {
@@ -88,19 +97,38 @@ export function resolveNodeAccountFromStatus(
 export async function fetchNodeAccount(
 	indexerUrl: string,
 	options: ResolveNodeAccountOptions = {},
+	http?: HttpOptions,
 ): Promise<string> {
-	const res = await fetch(statusUrl(indexerUrl));
+	const url = buildUrl(indexerUrl, "/api/status");
+	const fetchImpl = resolveFetch(http);
+	let res: Response;
+	try {
+		res = await fetchImpl(url, { headers: http?.headers, signal: http?.signal });
+	} catch (error) {
+		throw handleFetchError({ error, url });
+	}
 	if (!res.ok) {
-		const body = await res.json().catch(() => null);
-		throw new Error(`Protocol status failed (${res.status}): ${extractErrorMessage(body)}`);
+		const bodyText = await res.text();
+		const parsed = safeJsonParse(bodyText);
+		throw new IndexerError({
+			message: `Protocol status failed (${res.status}): ${extractErrorMessage(parsed)}`,
+			url,
+			statusCode: res.status,
+			responseHeaders: headersToRecord(res.headers),
+			responseBody: bodyText,
+			data: parsed,
+		});
 	}
 
 	const raw: unknown = await res.json();
 	return resolveNodeAccountFromStatus(raw, options);
 }
 
-export function fetchMultisigNodeAccount(indexerUrl: string): Promise<string> {
-	return fetchNodeAccount(indexerUrl, { requireMultisigReady: true });
+export function fetchMultisigNodeAccount(
+	indexerUrl: string,
+	http?: HttpOptions,
+): Promise<string> {
+	return fetchNodeAccount(indexerUrl, { requireMultisigReady: true }, http);
 }
 
 const PAYMENT_INFO_STRING_FIELDS = [
@@ -172,6 +200,14 @@ function assertMultisigResponse(raw: unknown): asserts raw is MultisigResponse {
 	}
 }
 
+function safeJsonParse(text: string): unknown {
+	try {
+		return JSON.parse(text);
+	} catch {
+		return null;
+	}
+}
+
 /**
  * Fetch payment split info from an indexer node.
  * Used by the client to build the buy transaction with correct
@@ -180,11 +216,27 @@ function assertMultisigResponse(raw: unknown): asserts raw is MultisigResponse {
 export async function fetchPaymentInfo(
 	indexerUrl: string,
 	nftId: string,
+	http?: HttpOptions,
 ): Promise<PaymentInfo> {
-	const res = await fetch(`${indexerUrl}/api/payment-info/${encodeURIComponent(nftId)}`);
+	const url = buildUrl(indexerUrl, `/api/payment-info/${encodeURIComponent(nftId)}`);
+	const fetchImpl = resolveFetch(http);
+	let res: Response;
+	try {
+		res = await fetchImpl(url, { headers: http?.headers, signal: http?.signal });
+	} catch (error) {
+		throw handleFetchError({ error, url });
+	}
 	if (!res.ok) {
-		const body = await res.json().catch(() => null);
-		throw new Error(`Payment info failed (${res.status}): ${extractErrorMessage(body)}`);
+		const bodyText = await res.text();
+		const parsed = safeJsonParse(bodyText);
+		throw new IndexerError({
+			message: `Payment info failed (${res.status}): ${extractErrorMessage(parsed)}`,
+			url,
+			statusCode: res.status,
+			responseHeaders: headersToRecord(res.headers),
+			responseBody: bodyText,
+			data: parsed,
+		});
 	}
 	const raw: unknown = await res.json();
 	assertPaymentInfo(raw);
@@ -201,14 +253,35 @@ async function postMultisig(
 	options: RequestMultisigOptions,
 ): Promise<MultisigResponse> {
 	const powToken = await solveMultisigPow(request, options.powBits);
-	const res = await fetch(url, {
-		method: "POST",
-		headers: { "Content-Type": "application/json", [NFTLOX_POW_HEADER]: powToken },
-		body: JSON.stringify(request),
-	});
+	const fetchImpl = resolveFetch(options);
+	const headers = mergeHeaders(
+		{ "Content-Type": "application/json", [NFTLOX_POW_HEADER]: powToken },
+		options.headers,
+	);
+	let res: Response;
+	try {
+		res = await fetchImpl(url, {
+			method: "POST",
+			headers,
+			body: JSON.stringify(request),
+			signal: options.signal,
+		});
+	} catch (error) {
+		throw handleFetchError({ error, url, requestBodyValues: request });
+	}
 	if (!res.ok) {
-		const body = await res.json().catch(() => null);
-		throw new Error(`Multisig request failed (${res.status}): ${extractErrorMessage(body)}`);
+		const bodyText = await res.text();
+		const parsed = safeJsonParse(bodyText);
+		throw new MultisigError({
+			message: `Multisig request failed (${res.status}): ${extractErrorMessage(parsed)}`,
+			url,
+			requestBodyValues: request,
+			statusCode: res.status,
+			responseHeaders: headersToRecord(res.headers),
+			responseBody: bodyText,
+			data: parsed,
+			code: extractErrorCode(parsed),
+		});
 	}
 	const raw: unknown = await res.json();
 	assertMultisigResponse(raw);
@@ -224,7 +297,7 @@ export async function requestBuyMultisig(
 	request: BuyMultisigRequest,
 	options: RequestMultisigOptions = {},
 ): Promise<MultisigResponse> {
-	return postMultisig(`${indexerUrl}/api/multisig`, request, options);
+	return postMultisig(buildUrl(indexerUrl, "/api/multisig"), request, options);
 }
 
 /**
@@ -239,5 +312,5 @@ export async function requestCreateCollectionMultisig(
 	request: CreateCollectionMultisigRequest,
 	options: RequestMultisigOptions = {},
 ): Promise<MultisigResponse> {
-	return postMultisig(`${indexerUrl}/api/multisig/collection`, request, options);
+	return postMultisig(buildUrl(indexerUrl, "/api/multisig/collection"), request, options);
 }

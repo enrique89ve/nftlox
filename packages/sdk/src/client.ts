@@ -5,20 +5,13 @@ import type { PaymentInfo, MultisigRequest, MultisigResponse } from "@nftlox/pro
 import { resolveNodeAccountFromStatus, type RequestMultisigOptions, type ResolveNodeAccountOptions } from "./multisig";
 import { resolveInstance } from "./inheritance";
 import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow";
+import { IndexerError } from "./errors";
+import { type HttpOptions, handleFetchError, headersToRecord, mergeHeaders, resolveFetch } from "./http";
 
-// ============ ERROR ============
+// ============ ERROR (re-exported for backwards compatibility) ============
 
-export class IndexerError extends Error {
-	status: number;
-	body: string;
-
-	constructor(status: number, body: string) {
-		super(`Indexer error ${status}: ${body}`);
-		this.name = "IndexerError";
-		this.status = status;
-		this.body = body;
-	}
-}
+export { IndexerError };
+export type { HttpOptions, FetchFunction } from "./http";
 
 // ============ RESPONSE TYPES ============
 
@@ -391,7 +384,12 @@ interface CompactInstancesResponse {
 
 type QueryParams = { [key: string]: string | number | boolean | undefined | null };
 
-async function get<T>(baseUrl: string, path: string, params?: QueryParams): Promise<T> {
+async function get<T>(
+	baseUrl: string,
+	path: string,
+	params?: QueryParams,
+	http?: HttpOptions,
+): Promise<T> {
 	const url = new URL(path, baseUrl);
 	if (params) {
 		for (const [key, value] of Object.entries(params)) {
@@ -400,13 +398,33 @@ async function get<T>(baseUrl: string, path: string, params?: QueryParams): Prom
 			}
 		}
 	}
-	const response = await fetch(url.toString());
+	const urlString = url.toString();
+	const fetchImpl = resolveFetch(http);
+	let response: Response;
+	try {
+		response = await fetchImpl(urlString, {
+			headers: http?.headers,
+			signal: http?.signal,
+		});
+	} catch (error) {
+		throw handleFetchError({ error, url: urlString });
+	}
 	if (!response.ok) {
-		throw new IndexerError(response.status, await response.text());
+		throw new IndexerError({
+			message: `Indexer error ${response.status}: ${response.statusText}`,
+			url: urlString,
+			statusCode: response.status,
+			responseHeaders: headersToRecord(response.headers),
+			responseBody: await response.text(),
+		});
 	}
 	const data = await response.json();
 	if (data === null || data === undefined) {
-		throw new IndexerError(502, "Invalid response: null or undefined body");
+		throw new IndexerError({
+			message: "Invalid response: null or undefined body",
+			url: urlString,
+			statusCode: 502,
+		});
 	}
 	return data as T;
 }
@@ -416,19 +434,43 @@ async function post<T>(
 	path: string,
 	body: unknown,
 	headers: Readonly<Record<string, string>> = {},
+	http?: HttpOptions,
 ): Promise<T> {
-	const url = new URL(path, baseUrl);
-	const response = await fetch(url.toString(), {
-		method: "POST",
-		headers: { "Content-Type": "application/json", ...headers },
-		body: JSON.stringify(body),
-	});
+	const urlString = new URL(path, baseUrl).toString();
+	const fetchImpl = resolveFetch(http);
+	const mergedHeaders = mergeHeaders(
+		{ "Content-Type": "application/json", ...headers },
+		http?.headers,
+	);
+	let response: Response;
+	try {
+		response = await fetchImpl(urlString, {
+			method: "POST",
+			headers: mergedHeaders,
+			body: JSON.stringify(body),
+			signal: http?.signal,
+		});
+	} catch (error) {
+		throw handleFetchError({ error, url: urlString, requestBodyValues: body });
+	}
 	if (!response.ok) {
-		throw new IndexerError(response.status, await response.text());
+		throw new IndexerError({
+			message: `Indexer error ${response.status}: ${response.statusText}`,
+			url: urlString,
+			requestBodyValues: body,
+			statusCode: response.status,
+			responseHeaders: headersToRecord(response.headers),
+			responseBody: await response.text(),
+		});
 	}
 	const data = await response.json();
 	if (data === null || data === undefined) {
-		throw new IndexerError(502, "Invalid response: null or undefined body");
+		throw new IndexerError({
+			message: "Invalid response: null or undefined body",
+			url: urlString,
+			requestBodyValues: body,
+			statusCode: 502,
+		});
 	}
 	return data as T;
 }
@@ -488,86 +530,91 @@ export interface IndexerClient {
  * SECURITY: When used server-side (Node.js/Bun), ensure baseUrl points to a trusted
  * indexer to prevent SSRF. Do not pass user-controlled URLs.
  */
-export function createIndexerClient(baseUrl: string): IndexerClient {
-	const getStatus = () => get<SyncStatus>(baseUrl, "/api/status");
+export function createIndexerClient(baseUrl: string, options?: HttpOptions): IndexerClient {
+	const http = options;
+	const getStatus = () => get<SyncStatus>(baseUrl, "/api/status", undefined, http);
 
 	return {
 		// ---- Status ----
 		getStatus,
-		getNodeAccount: async (options) => resolveNodeAccountFromStatus(await getStatus(), options),
+		getNodeAccount: async (resolveOptions) => resolveNodeAccountFromStatus(await getStatus(), resolveOptions),
 		getMultisigNodeAccount: async () => resolveNodeAccountFromStatus(
 			await getStatus(),
 			{ requireMultisigReady: true },
 		),
-		getHealth: () => get<HealthStatus>(baseUrl, "/api/health"),
-		getStats: () => get<ProtocolStats>(baseUrl, "/api/stats"),
+		getHealth: () => get<HealthStatus>(baseUrl, "/api/health", undefined, http),
+		getStats: () => get<ProtocolStats>(baseUrl, "/api/stats", undefined, http),
 
 		// ---- Collections ----
 		getCollections: (params) =>
-			get<IndexerCollectionSummary[]>(baseUrl, "/api/collections", params),
+			get<IndexerCollectionSummary[]>(baseUrl, "/api/collections", params, http),
 		getCollection: (id) =>
-			get<IndexerCollection>(baseUrl, `/api/collections/${encodeURIComponent(id)}`),
+			get<IndexerCollection>(baseUrl, `/api/collections/${encodeURIComponent(id)}`, undefined, http),
 		getCollectionSchemaHistory: (id) =>
-			get<SchemaHistoryEntry[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/schema-history`),
+			get<SchemaHistoryEntry[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/schema-history`, undefined, http),
 		getCollectionNfts: (id, params) =>
-			get<IndexerNftSummary[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/nfts`, params),
+			get<IndexerNftSummary[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/nfts`, params, http),
 		getCollectionStats: (id) =>
-			get<CollectionStats>(baseUrl, `/api/collections/${encodeURIComponent(id)}/stats`),
+			get<CollectionStats>(baseUrl, `/api/collections/${encodeURIComponent(id)}/stats`, undefined, http),
 
 		// ---- NFTs ----
 		getNft: (id) =>
-			get<IndexerNft>(baseUrl, `/api/nfts/${encodeURIComponent(id)}`),
+			get<IndexerNft>(baseUrl, `/api/nfts/${encodeURIComponent(id)}`, undefined, http),
 		getNftOwner: (id) =>
-			get<IndexerNftOwner>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/owner`),
+			get<IndexerNftOwner>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/owner`, undefined, http),
 		getNftOwnership: (id) =>
-			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/ownership`),
+			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/ownership`, undefined, http),
 		getNftProof: (id) =>
-			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/proof`),
+			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/proof`, undefined, http),
 		getNftLoan: (id) =>
-			get<IndexerNftLoanStatus>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/loan`),
+			get<IndexerNftLoanStatus>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/loan`, undefined, http),
 		getNftInstances: async (id, params) => {
 			const path = `/api/nfts/${encodeURIComponent(id)}/instances`;
 			if (params?.compact) {
-				const { seed, instances } = await get<CompactInstancesResponse>(baseUrl, path, { ...params, compact: true });
+				const { seed, instances } = await get<CompactInstancesResponse>(baseUrl, path, { ...params, compact: true }, http);
 				return instances.map((inst) => resolveInstance(inst, seed));
 			}
-			return get<IndexerNftSummary[]>(baseUrl, path, params);
+			return get<IndexerNftSummary[]>(baseUrl, path, params, http);
 		},
 
 		// ---- Users ----
 		getUserAssets: (username, params) =>
-			get<UserAssetsOverview>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets`, params),
+			get<UserAssetsOverview>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets`, params, http),
 		getUserNfts: (username, params) =>
-			get<UserNftsPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts`, params),
+			get<UserNftsPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts`, params, http),
 		getUserNftCounts: (username) =>
-			get<UserNftCounts>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts/count`),
+			get<UserNftCounts>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts/count`, undefined, http),
 		getUserCollections: (username, params) =>
-			get<IndexerCollectionSummary[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/collections`, params),
+			get<IndexerCollectionSummary[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/collections`, params, http),
 		getUserLoans: (username, params) =>
-			get<UserLoansPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/loans`, params),
+			get<UserLoansPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/loans`, params, http),
 
 		// ---- Marketplace ----
 		getListings: (params) =>
-			get<IndexerNftSummary[]>(baseUrl, "/api/marketplace/listings", params),
+			get<IndexerNftSummary[]>(baseUrl, "/api/marketplace/listings", params, http),
 		getSales: (params) =>
-			get<MarketplaceSale[]>(baseUrl, "/api/marketplace/sales", params),
+			get<MarketplaceSale[]>(baseUrl, "/api/marketplace/sales", params, http),
 		getSalesVolume: (params) =>
-			get<MarketplaceVolume[]>(baseUrl, "/api/marketplace/volume", params),
+			get<MarketplaceVolume[]>(baseUrl, "/api/marketplace/volume", params, http),
 		getVolume: (params) =>
-			get<MarketplaceVolume[]>(baseUrl, "/api/marketplace/volume", params),
+			get<MarketplaceVolume[]>(baseUrl, "/api/marketplace/volume", params, http),
 
 		// ---- Operations ----
 		getOperationStatus: (txId, params) =>
-			get<OperationStatusResult>(baseUrl, `/api/operation-status/${encodeURIComponent(txId)}`, params),
+			get<OperationStatusResult>(baseUrl, `/api/operation-status/${encodeURIComponent(txId)}`, params, http),
 
 		// ---- Multisig ----
 		getPaymentInfo: (nftId) =>
-			get<PaymentInfo>(baseUrl, `/api/payment-info/${encodeURIComponent(nftId)}`),
-		multisig: async (request, options) => {
-			const powToken = await solveMultisigPow(request, options?.powBits);
-			return post<MultisigResponse>(baseUrl, "/api/multisig", request, {
-				[NFTLOX_POW_HEADER]: powToken,
-			});
+			get<PaymentInfo>(baseUrl, `/api/payment-info/${encodeURIComponent(nftId)}`, undefined, http),
+		multisig: async (request, multisigOptions) => {
+			const powToken = await solveMultisigPow(request, multisigOptions?.powBits);
+			return post<MultisigResponse>(
+				baseUrl,
+				"/api/multisig",
+				request,
+				{ [NFTLOX_POW_HEADER]: powToken },
+				http,
+			);
 		},
 	};
 }

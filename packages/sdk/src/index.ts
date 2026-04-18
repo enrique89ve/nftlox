@@ -80,7 +80,9 @@ export const resolveInstance = inheritance.resolveInstance;
 
 // ============ SDK-ONLY: INDEXER CLIENT ============
 export const createIndexerClient = indexerClient.createIndexerClient;
-export const IndexerError = indexerClient.IndexerError;
+export { NftloxError, IndexerError, MultisigError } from "./errors";
+export type { IndexerErrorInit, MultisigErrorInit } from "./errors";
+export type { HttpOptions, FetchFunction } from "./http";
 export type {
 	IndexerClient,
 	SyncStatus,
