@@ -11,18 +11,9 @@ import { buildCollectionWithSeeds } from "nftlox-sdk";
 import { buildPackOpenPlan } from "nftlox-packs-engine";
 ```
 
-For an external game repository, the packages are **not yet published to npm** (testnet phase). Use local path references after cloning the repo:
+The package names come from `packages/sdk/package.json` and `packages/packs-engine/package.json`. Once published, external projects will install with `bun add nftlox-sdk nftlox-packs-engine` (or the npm/pnpm equivalent).
 
-```json
-{
-  "dependencies": {
-    "nftlox-sdk": "file:../nftlox/packages/sdk",
-    "nftlox-packs-engine": "file:../nftlox/packages/packs-engine"
-  }
-}
-```
-
-The package names come from `packages/sdk/package.json` and `packages/packs-engine/package.json`. Once published, the install will be `bun add nftlox-sdk nftlox-packs-engine`.
+> **Testnet phase — one supported install path.** The SDK depends on the workspace package `@nftlox/protocol`, so `bun add file:../nftlox/packages/sdk` from an external repo does not resolve. Until the packages are published, the only clean way to test is to **work inside the monorepo** as a workspace package — see the next section.
 
 ## Test the SDK Today
 
@@ -116,7 +107,7 @@ Run it from the repo root:
 bun run --filter game-sdk-smoke start
 ```
 
-An external game repository should wait for npm publication unless it is also wired locally with `nftlox-sdk`, `nftlox-packs-engine`, and `@nftlox/protocol`. Plain `bun add ../nftlox/packages/sdk` is not the clean path by itself because the protocol dependency must resolve too.
+External repositories should wait for npm publication. The `file:` install path is not supported during testnet because `@nftlox/protocol` is a workspace dependency that does not resolve outside the monorepo.
 
 ## Test Ladder
 
