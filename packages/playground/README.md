@@ -22,6 +22,7 @@ Open <http://localhost:3040>. The playground requires the Hive Keychain browser 
 ## What it demonstrates
 
 - Creating collections with metadata, rules, and typed schemas.
+- Automated collection + seeds creation (backend workflow with `buildCollectionWithSeeds`).
 - Minting seeds with deterministic IDs and anti-duplication.
 - Bulk distributing instances from seeds.
 - Transferring, burning, listing, buying NFTs (multisig buy with node co-signature).
@@ -36,9 +37,9 @@ Open <http://localhost:3040>. The playground requires the Hive Keychain browser 
 
 Proxies the indexer REST API — users, NFTs, collections, marketplace listings, stats, status, health.
 
-### Build API (20 endpoints)
+### Build API (22 endpoints)
 
-All `POST /api/build/*` endpoints that validate input and return Hive operations ready for Keychain signing: `collection`, `seeds`, `bulk-distribute`, `transfer`, `list`, `unlist`, `buy`, `burn`, `set-data`, `archive-collection`, `extend-schema`, `nft-approve`, `nft-approve-all`, `nft-transfer-from`, `nft-lend`, `nft-return`, `data-operator-approve`, `set-data-from`, `preview-ids`, `collection-multisig`.
+All `POST /api/build/*` endpoints that validate input and return Hive operations ready for Keychain signing: `collection`, `seeds`, `bulk-distribute`, `transfer`, `list`, `unlist`, `buy`, `burn`, `set-data`, `extend-schema`, `archive-collection`, `node-register`, `node-heartbeat`, `nft-approve`, `nft-approve-all`, `nft-transfer-from`, `nft-lend`, `nft-return`, `data-operator-approve`, `set-data-from`, `preview-ids`, `collection-multisig`.
 
 ### Other APIs
 
