@@ -7,6 +7,7 @@ import {
 	getNftAllowance,
 	hasCollectionAllowance,
 	deleteNftAllowance,
+	cleanupCollectionAllowancesIfEmpty,
 } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertOwnershipChangeable, assertNotSeed } from "@/utils/status-checks.ts";
@@ -64,9 +65,13 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 	};
 	await updateNftOwner(instanceId, to, op.operationId, ctx, txn);
 	await deleteNftAllowance(instanceId, txn);
-	// NOTE: collection_allowances are NOT cleaned here — the owner explicitly
-	// granted collection-wide approval and a spender action should not revoke it.
-	// Cleanup only happens on direct transfer/burn where the owner acts.
+	// Invariant A4': collection_allowances(owner=X, collection=Y) MUST be
+	// revoked the moment owner_count(X, Y) transitions to 0 — regardless of
+	// which action caused it. If `from` emptied their holdings in this
+	// collection via this delegated transfer, keeping the approval would
+	// create a zombie authority that silently re-activates the next time
+	// `from` acquires any NFT in the same collection.
+	await cleanupCollectionAllowancesIfEmpty(from, nft.collection_id, txn);
 
 	return [instanceId];
 }

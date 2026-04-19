@@ -155,6 +155,9 @@ async function processBurn(
     blockNum: op.blockNum,
     createdAt: op.timestamp,
   };
-  await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
   await hardDeleteNft(nftId, op.signer, op.txId, op.operationId, ctx, txn);
+  // Ordering: cleanup queries `nfts` to decide whether the owner's count in
+  // this collection is zero — the burned row must already be gone or the
+  // check short-circuits on its own stale presence and leaks the approval.
+  await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
 }

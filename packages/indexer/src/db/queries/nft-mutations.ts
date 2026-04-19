@@ -190,12 +190,20 @@ export async function updateNftListing(
 		}
 	} else {
 		const expiresIso = expiresAt ? new Date(expiresAt).toISOString() : null;
+		// Re-list over an expired listing must clear any stale pending_unlist_block
+		// from a prior unlist that never finished materializing. Without this,
+		// `materializePendingUnlists` would silently wipe the new listing at
+		// block B+UNLIST_DELAY_BLOCKS because its filter is (status='listed'
+		// AND pending_unlist_block <= threshold) — blind to listing_id changes.
+		// Mirrors the same invariant enforced by updateNftOwner on ownership
+		// change (see nft-mutations.ts:107).
 		await txn`
 			UPDATE nfts
 			SET status = ${NFT_STATUS_LISTED},
 			    listing_id = ${listingId}, listing_tx_id = ${listingTxId},
 			    listing_price = ${price}, listing_currency = ${currency},
-			    listing_expires_at = ${expiresIso}, listing_marketplace = ${marketplace}
+			    listing_expires_at = ${expiresIso}, listing_marketplace = ${marketplace},
+			    pending_unlist_block = NULL
 			WHERE id = ${nftId}
 		`;
 		if (!ctx.wasListed) {

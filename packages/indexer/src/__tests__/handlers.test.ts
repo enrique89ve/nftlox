@@ -2179,27 +2179,123 @@ describe("Handlers (integration)", () => {
 			expect(after).toBeUndefined();
 		});
 
-		test("collection_allowances persist after nft_transfer_from", async () => {
+		// Universal invariant A4': collection_allowances(owner=X, collection=Y) MUST
+		// be deleted whenever owner_count(X, Y) transitions to 0 — regardless of
+		// which action caused the transition (transfer, buy, burn, transfer_from).
+		// Rationale: keeps a zombie approval from re-activating against NFTs the
+		// owner later re-acquires in the same collection.
+		test("collection_allowances persist after nft_transfer_from when owner has remaining NFTs", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
 
-			// Approve gameshop for entire collection
+			// alice still owns the seed after this transfer_from → allowance stays
 			await withTransaction((txn) => handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
 				spender: "gameshop", collectionId: COL_ID, approved: true,
 			}), txn));
 
-			// gameshop transfers alice's instance to bob
 			await withTransaction((txn) => handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
 				from: "alice", to: "bob", instanceId: instId,
 			}, "gameshop"), txn));
 
-			// Collection-level allowance must still exist
 			const [allowance] = await sql`
 				SELECT * FROM collection_allowances
 				WHERE collection_id = ${COL_ID} AND owner = 'alice' AND spender = 'gameshop'
 			`;
 			expect(allowance).toBeDefined();
+		});
+
+		test("collection_allowances cleaned after nft_transfer_from empties owner", async () => {
+			await seedCollection();
+			// Bob owns the seed; alice owns only the distributed instance. This
+			// setup isolates the transfer_from path: there is no seed lingering
+			// under alice's ownership to mask the count→0 transition.
+			const { op: mintOp, id: bobSeedId } = await makeMintOp("bob_seed", { owner: "bob" });
+			await withTransaction((txn) => handleMint(mintOp, txn));
+			const bobSeedTxId = await getSeedTxId(bobSeedId);
+			await withTransaction((txn) => handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+				to: "alice",
+				items: [{ seedId: bobSeedId, quantity: 1, seedTxId: bobSeedTxId }],
+			}, "bob"), txn));
+			const [instRow] = await sql`SELECT id FROM nfts WHERE seed_id = ${bobSeedId} AND owner = 'alice' LIMIT 1`;
+			const instId = instRow!.id as string;
+
+			await withTransaction((txn) => handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
+				spender: "gameshop", collectionId: COL_ID, approved: true,
+			}), txn));
+
+			await withTransaction((txn) => handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
+				from: "alice", to: "charlie", instanceId: instId,
+			}, "gameshop"), txn));
+
+			const [after] = await sql`
+				SELECT * FROM collection_allowances
+				WHERE collection_id = ${COL_ID} AND owner = 'alice' AND spender = 'gameshop'
+			`;
+			expect(after).toBeUndefined();
+		});
+
+		test("collection_allowances cleaned after burn empties owner", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await withTransaction((txn) => handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
+				spender: "gameshop", collectionId: COL_ID, approved: true,
+			}), txn));
+
+			// Burn the seed (alice's only NFT in the collection) → 0 remaining
+			await withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, {
+				nftId: SEED_TEST1, to: "null",
+			}), txn));
+
+			const [after] = await sql`
+				SELECT * FROM collection_allowances
+				WHERE collection_id = ${COL_ID} AND owner = 'alice' AND spender = 'gameshop'
+			`;
+			expect(after).toBeUndefined();
+		});
+
+		test("collection_allowances cleaned after buy empties seller", async () => {
+			await seedCollection();
+			// Bob owns the seed, alice owns only a distributed instance — so the
+			// buy fully empties alice's holdings in COL_ID.
+			const { op: mintOp, id: bobSeedId } = await makeMintOp("bob_seed_buy", { owner: "bob" });
+			await withTransaction((txn) => handleMint(mintOp, txn));
+			const bobSeedTxId = await getSeedTxId(bobSeedId);
+			await withTransaction((txn) => handleBulkDistribute(makeOp(ACTION_BULK_DISTRIBUTE, {
+				to: "alice",
+				items: [{ seedId: bobSeedId, quantity: 1, seedTxId: bobSeedTxId }],
+			}, "bob"), txn));
+			const [instRow] = await sql`SELECT id FROM nfts WHERE seed_id = ${bobSeedId} AND owner = 'alice' LIMIT 1`;
+			const instId = instRow!.id as string;
+
+			await withTransaction((txn) => handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
+				spender: "gameshop", collectionId: COL_ID, approved: true,
+			}), txn));
+
+			const listData = await makeListData({ nftId: instId });
+			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn));
+
+			const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
+			const nodeAccount = config.hiveAccount;
+			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
+			const transfers = [
+				{ from: "charlie", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
+				{ from: "charlie", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${instId}` },
+			];
+			const buyOp = makeOp(ACTION_BUY, {
+				nftId: instId,
+				listingId: nft!.listing_id,
+				listTxId: nft!.listing_tx_id,
+				txId: nft!.tx_id,
+			}, nodeAccount, transfers);
+			await withTransaction((txn) => handleBuy(buyOp, txn));
+
+			const [after] = await sql`
+				SELECT * FROM collection_allowances
+				WHERE collection_id = ${COL_ID} AND owner = 'alice' AND spender = 'gameshop'
+			`;
+			expect(after).toBeUndefined();
 		});
 	});
 

@@ -348,4 +348,64 @@ describe("unlist-delay protocol", () => {
 		expect(caught).toBeInstanceOf(Error);
 		expect((caught as Error).message).toMatch(/chk_nfts_pending_unlist_only_when_listed/);
 	});
+
+	// ─────────────────────────────────────────────────────────────────────
+	// Regression: re-listing over an expired listing while a prior unlist's
+	// pending_unlist_block is still stamped must CLEAR the stamp. Otherwise
+	// the next materialize sweep would silently wipe the fresh listing —
+	// same failure class as the updateNftOwner regression above, different
+	// code path (updateNftListing re-list branch).
+	// ─────────────────────────────────────────────────────────────────────
+	test("re-list over expired+pending clears pending_unlist_block (regression: silent wipe)", async () => {
+		const instId = await seedCollectionAndListedInstance();
+
+		// Owner unlists first → pending_unlist_block stamped at UNLIST_BLOCK,
+		// status stays 'listed'.
+		await withTransaction((txn) => handleUnlist(
+			makeOp(ACTION_UNLIST, { nftId: instId }, UNLIST_BLOCK),
+			txn,
+		));
+
+		// Simulate the original listing expiring inside the pending window
+		// (force-expire the timestamp directly; handlers never materialize
+		// expiry on their own, so a stale 'listed' + expired is realistic).
+		await sql`
+			UPDATE nfts
+			SET listing_expires_at = ${new Date("2000-01-01T00:00:00Z").toISOString()}
+			WHERE id = ${instId}
+		`;
+
+		// Owner re-lists at UNLIST_BLOCK + 1 (still inside the pending window).
+		// list.ts permits this because hadExpiredListing=true.
+		const nonce = generateListingNonce();
+		const newListingId = await generateListingId({
+			nftId: instId, owner: "alice", marketplace: "",
+			priceAmount: "20.000", priceCurrency: "HIVE", expiresAt: 0, nonce,
+		});
+		await withTransaction((txn) => handleList(makeOp(ACTION_LIST, {
+			nftId: instId, listingId: newListingId, listingNonce: nonce,
+			price: { amount: "20.000", currency: "HIVE" },
+		}, UNLIST_BLOCK + 1), txn));
+
+		// Before the fix, pending_unlist_block remained pinned to UNLIST_BLOCK
+		// and the next materialize sweep would wipe the fresh listing.
+		const [stamped] = await sql`SELECT pending_unlist_block FROM nfts WHERE id = ${instId}`;
+		expect(stamped!.pending_unlist_block).toBeNull();
+
+		// Crossing the original unlist's deadline must NOT affect the new
+		// listing now that the stamp is cleared.
+		const count = await withTransaction((txn) =>
+			materializePendingUnlists(UNLIST_BLOCK + UNLIST_DELAY_BLOCKS, UNLIST_DELAY_BLOCKS, txn),
+		);
+		expect(count).toBe(0);
+
+		const [row] = await sql`
+			SELECT status, listing_id, listing_price, pending_unlist_block
+			FROM nfts WHERE id = ${instId}
+		`;
+		expect(row!.status).toBe("listed");
+		expect(row!.listing_id).toBe(newListingId);
+		expect(Number(row!.listing_price)).toBe(20);
+		expect(row!.pending_unlist_block).toBeNull();
+	});
 });
