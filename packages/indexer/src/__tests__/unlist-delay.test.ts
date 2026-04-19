@@ -91,8 +91,15 @@ async function seedCollectionAndListedInstance(): Promise<string> {
 		metadata: { description: "delay fixture", image: "https://example.com/i.png" },
 		rules: { transferable: true, burnable: true, royaltyPct: 0 },
 	}, UNLIST_BLOCK, NODE_ACCOUNT, [
-		{ from: "alice", to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: "" },
+		{ from: "alice", to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: `NFTLox FEE-COL:${COL_ID}` },
 	]);
+	collectionOp.payment = {
+		kind: "fixed",
+		payer: "alice",
+		amount: feeAmount,
+		currency: "HBD",
+		consumedIndices: [0],
+	};
 	await withTransaction((txn) => handleCreateCollection(collectionOp, txn));
 
 	const seedId = await generateDeterministicSeedId(COL_ID, "delay_art");

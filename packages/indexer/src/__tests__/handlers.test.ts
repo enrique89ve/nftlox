@@ -109,10 +109,21 @@ function makeCreateCollectionOp(
 	creator = "alice",
 ): ParsedOperation {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
+	const memo = `NFTLox FEE-COL:${String(data.id)}`;
 	const pairedTransfers = [
-		{ from: creator, to: config.hiveAccount, amount: feeAmount, currency: "HBD", memo: "" },
+		{ from: creator, to: config.hiveAccount, amount: feeAmount, currency: "HBD", memo },
 	];
-	return makeOp(ACTION_CREATE_COLLECTION, data, config.hiveAccount, pairedTransfers);
+	const op = makeOp(ACTION_CREATE_COLLECTION, data, config.hiveAccount, pairedTransfers);
+	// Mirror the router's pre-handler payment dispatch so tests that invoke
+	// the handler directly see the same op.payment contract as production.
+	op.payment = {
+		kind: "fixed",
+		payer: creator,
+		amount: feeAmount,
+		currency: "HBD",
+		consumedIndices: [0],
+	};
+	return op;
 }
 
 async function seedCollection(txn?: Queryable): Promise<void> {

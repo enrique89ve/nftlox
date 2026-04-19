@@ -93,13 +93,20 @@ async function cleanDb() {
 async function seedCollection(): Promise<void> {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 	const pairedTransfers = [
-		{ from: "alice", to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: "" },
+		{ from: "alice", to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: `NFTLox FEE-COL:${COL_ID}` },
 	];
 	const op = makeOp(ACTION_CREATE_COLLECTION, {
 		id: COL_ID, name: "Lock Test", symbol: "LOCK", totalPotential: 100,
 		metadata: { description: "lock fixture", image: "https://example.com/i.png" },
 		rules: { transferable: true, burnable: true, royaltyPct: 0 },
 	}, NODE_ACCOUNT, pairedTransfers);
+	op.payment = {
+		kind: "fixed",
+		payer: "alice",
+		amount: feeAmount,
+		currency: "HBD",
+		consumedIndices: [0],
+	};
 	await withTransaction((txn) => handleCreateCollection(op, txn));
 }
 

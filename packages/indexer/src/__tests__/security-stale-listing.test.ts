@@ -88,7 +88,7 @@ async function cleanDb() {
 async function seedCollection(txn?: Queryable): Promise<void> {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 	const pairedTransfers = [
-		{ from: "alice", to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: "" },
+		{ from: "alice", to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: `NFTLox FEE-COL:${COL_ID}` },
 	];
 	const op = makeOp(
 		ACTION_CREATE_COLLECTION,
@@ -103,6 +103,13 @@ async function seedCollection(txn?: Queryable): Promise<void> {
 		NODE_ACCOUNT,
 		pairedTransfers,
 	);
+	op.payment = {
+		kind: "fixed",
+		payer: "alice",
+		amount: feeAmount,
+		currency: "HBD",
+		consumedIndices: [0],
+	};
 	if (txn) {
 		await handleCreateCollection(op, txn);
 		return;

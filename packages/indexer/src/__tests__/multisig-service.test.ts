@@ -100,7 +100,7 @@ async function seedCollection(
 	const id = await generateDeterministicCollectionId(creator, name, symbol);
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 	const pairedTransfers = [
-		{ from: creator, to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: "" },
+		{ from: creator, to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: `NFTLox FEE-COL:${id}` },
 	];
 	const rules: Record<string, unknown> = { transferable, burnable: true, royaltyPct };
 	if (royaltyPct > 0) rules.royaltyRecipient = creator;
@@ -117,6 +117,13 @@ async function seedCollection(
 		NODE_ACCOUNT,
 		pairedTransfers,
 	);
+	op.payment = {
+		kind: "fixed",
+		payer: creator,
+		amount: feeAmount,
+		currency: "HBD",
+		consumedIndices: [0],
+	};
 	await withTransaction((txn) => handleCreateCollection(op, txn));
 	return id;
 }

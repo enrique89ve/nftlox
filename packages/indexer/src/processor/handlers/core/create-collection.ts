@@ -2,7 +2,6 @@ import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { insertCollection, collectionExists, symbolTakenByCreator, countCollectionsByCreator } from "@/db/queries/collections.ts";
 import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
-import { feeOracle } from "@/utils/fee-oracle.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
 import { config } from "@/config.ts";
 import {
@@ -27,7 +26,6 @@ import {
 	MAX_IMAGE_URL_LENGTH,
 	MAX_URL_LENGTH,
 	MAX_ID_LENGTH,
-	PROTOCOL_COLLECTION_FEE_HBD,
 } from "@/protocol/index.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
@@ -37,9 +35,14 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		);
 	}
 
-	const rawCreator = op.pairedTransfers?.[0]?.from;
-	if (!rawCreator) throw new Error("No fee transfer found for create_collection action");
-	const creator = requireUsername(rawCreator, "creator");
+	// Memo-bound identity: the router validated the fee transfer via
+	// PAYMENT_VALIDATORS.fixed, which memo-matched `NFTLox FEE-COL:{id}`.
+	// `op.payment.payer` is the transfer's `from` — the canonical creator.
+	// No positional `pairedTransfers[0]` read, no piggyback vulnerability.
+	if (!op.payment || op.payment.kind !== "fixed") {
+		throw new Error("create_collection: missing pre-validated fixed-fee payment");
+	}
+	const creator = requireUsername(op.payment.payer, "creator");
 
 	const d = op.data;
 
@@ -47,7 +50,10 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const name = requireBoundedString(d.name, "name", MAX_NAME_LENGTH);
 	const symbol = requireSymbol(d.symbol, "symbol");
 
-	// C4: Recalculate canonical collectionId and reject mismatch
+	// C4: Recalculate canonical collectionId and reject mismatch. This double-
+	// binds the fee: the router already matched memo `NFTLox FEE-COL:${d.id}`,
+	// and here we confirm `d.id === canonicalId(creator, name, symbol)`, so
+	// the fee is anchored to the creator-name-symbol triple.
 	const canonicalId = await generateDeterministicCollectionId(creator, name, symbol);
 	if (payloadId !== canonicalId) {
 		throw new Error(
@@ -56,8 +62,6 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	}
 
 	if (await collectionExists(canonicalId, txn)) return [];
-
-	await feeOracle.requireDynamicFee(op, PROTOCOL_COLLECTION_FEE_HBD, config.hiveAccount, creator);
 
 	const creatorCollectionCount = await countCollectionsByCreator(creator, txn);
 	await assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount);

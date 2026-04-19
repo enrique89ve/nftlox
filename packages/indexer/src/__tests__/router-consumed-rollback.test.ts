@@ -70,6 +70,13 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 					},
 				],
 			};
+			createOp.payment = {
+				kind: "fixed",
+				payer: "alice",
+				amount: feeAmount,
+				currency: "HBD",
+				consumedIndices: [0],
+			};
 			await handleCreateCollection(createOp, txn);
 
 			const mintOp: ParsedOperation = {

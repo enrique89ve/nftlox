@@ -122,13 +122,22 @@ function makeCreateCollectionOp(
 	overrides: { txId?: string; operationId?: string; blockNum?: number } = {},
 ): ParsedOperation {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
-	return makeOp(ACTION_CREATE_COLLECTION, data, {
+	const memo = `NFTLox FEE-COL:${String(data.id)}`;
+	const op = makeOp(ACTION_CREATE_COLLECTION, data, {
 		...overrides,
 		signer: config.hiveAccount,
 		pairedTransfers: [
-			{ from: creator, to: config.hiveAccount, amount: feeAmount, currency: "HBD", memo: "" },
+			{ from: creator, to: config.hiveAccount, amount: feeAmount, currency: "HBD", memo },
 		],
 	});
+	op.payment = {
+		kind: "fixed",
+		payer: creator,
+		amount: feeAmount,
+		currency: "HBD",
+		consumedIndices: [0],
+	};
+	return op;
 }
 
 async function seedCollection(txn?: Queryable): Promise<void> {
