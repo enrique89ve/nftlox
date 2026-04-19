@@ -128,3 +128,15 @@ Never broadcast when `success: false` — `operations` is not present on the fai
 `bulk_distribute` is **idempotent** -- deterministic instance IDs mean duplicate broadcasts are silently skipped. It is safe to retry on network errors without risk of creating duplicate NFTs.
 
 For other operations, retry logic should verify the current state before re-broadcasting (e.g., check if the NFT is still listed before retrying a buy).
+
+---
+
+## Indexer memo-binding errors (create_collection)
+
+Since 0.6.0 the indexer pairs the collection-fee transfer to the payload by memo, not by position. If you build the transaction with the SDK (`buildCollection`) the correct memo is emitted automatically; if you roll your own, these errors flag mistakes.
+
+| Error message | When | Fix |
+|---|---|---|
+| `No fee transfer found matching memo 'NFTLox FEE-COL:...'` | The indexer could not find the expected memo-bound fee transfer. | Ensure the fee transfer uses the canonical memo; do not rely on untagged transfers. |
+| `Ambiguous fee transfers — N memo matches for 'NFTLox FEE-COL:...'` | Two or more transfers carry the same fee memo. | Send exactly one fee transfer per create_collection op. |
+| `Fee amount mismatch — HBD payment must equal 0.100, got X` | The HBD amount deviates from `PROTOCOL_COLLECTION_FEE_HBD`. | Overpaying is no longer tolerated — send exactly the required amount. |

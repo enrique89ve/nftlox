@@ -74,7 +74,7 @@ Every builder validates its input with a Zod schema; the schema is exported alon
 | `buildExtendSchema` | `(input) => KeychainResult<ExtendSchemaData>` | Posting | `[custom_json]` | Append-only: add new `immutable` and/or `mutable` fields. Existing fields are immutable post-create. |
 | `buildCollectionWithSeeds` | `(input, options) => Promise<CollectionCreationPlan>` | mixed | multi-batch | Orchestrator: returns the collection step + N posting-only seed batches sized by `calculateMaxOperationsPerTx`. |
 
-**`buildCollection` options**: either pass `{ nodeAccount: "nftlox" }` directly, or let the SDK resolve it from the indexer with `{ indexerBaseUrl, requireMultisigReady: true }`. Fee defaults to `PROTOCOL_COLLECTION_FEE_HBD` (`0.100 HBD`) but both `feeAmount` and `feeCurrency` (`"HIVE" | "HBD"`) are overridable.
+**`buildCollection` options**: either pass `{ nodeAccount: "nftlox" }` directly, or let the SDK resolve it from the indexer with `{ indexerBaseUrl, requireMultisigReady: true }`. Fee defaults to `PROTOCOL_COLLECTION_FEE_HBD` (`0.100 HBD`) but both `feeAmount` and `feeCurrency` (`"HIVE" | "HBD"`) are overridable. The fee transfer emitted by this builder carries memo `NFTLox FEE-COL:{collectionId}` — transfers without this exact memo are ignored by the indexer.
 
 **`CreateCollectionInput` (Zod)**:
 

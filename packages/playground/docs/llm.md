@@ -512,6 +512,7 @@ import {
   MEMO_PREFIX_BUY,          // "NFTLox BUY:"
   MEMO_PREFIX_ROYALTY,      // "NFTLox ROY:"
   MEMO_PREFIX_FEE,          // "NFTLox FEE:"
+  MEMO_PREFIX_FEE_COL,      // "NFTLox FEE-COL:"
 } from "nftlox-sdk";
 ```
 

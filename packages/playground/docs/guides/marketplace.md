@@ -200,8 +200,9 @@ Strict. The node and the indexer both verify it.
 | Seller payment | `NFTLox BUY:{nftId}` | `MEMO_PREFIX_BUY` |
 | Royalty | `NFTLox ROY:{nftId}` | `MEMO_PREFIX_ROYALTY` |
 | Protocol fee | `NFTLox FEE:{nftId}` | `MEMO_PREFIX_FEE` |
+| Collection creation fee | `NFTLox FEE-COL:{collectionId}` | `MEMO_PREFIX_FEE_COL` |
 
-No space after the colon; `{nftId}` is the exact `nft_…` string from the payload.
+No space after the colon; `{nftId}` is the exact `nft_…` string from the payload. The collection-fee memo uses the canonical `collectionId` (`col_…`).
 
 ## Why the multisig exists
 
