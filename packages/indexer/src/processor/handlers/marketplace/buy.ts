@@ -37,9 +37,20 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	const listTxId = requireString(op.data.listTxId, "listTxId");
 	const txId = requireString(op.data.txId, "txId");
 
-	const rawBuyer = op.pairedTransfers?.[0]?.from;
-	if (!rawBuyer) throw new Error("No payment transfers found for buy action");
-	const buyer = requireUsername(rawBuyer, "buyer");
+	// Memo-bound identity: the seller leg of the split payment carries
+	// `NFTLox BUY:${nftId}`; its `from` is the canonical buyer. Using this
+	// instead of `pairedTransfers[0]?.from` removes the positional read that
+	// made buyer identity dependent on transfer ordering.
+	const transfers = op.pairedTransfers ?? [];
+	const buyLegMemo = `NFTLox BUY:${nftId}`;
+	const buyLegMatches = transfers.filter((t) => t.memo === buyLegMemo);
+	if (buyLegMatches.length === 0) {
+		throw new Error(`No BUY-memo transfer found for nft ${nftId}`);
+	}
+	if (buyLegMatches.length > 1) {
+		throw new Error(`Ambiguous BUY-memo transfers for nft ${nftId}`);
+	}
+	const buyer = requireUsername(buyLegMatches[0]!.from, "buyer");
 
 	const nft = await getNftWithCollectionRulesForUpdate(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
@@ -100,7 +111,6 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 
 	// Protocol fee always goes to the co-signing node.
 	// consumedIndices prevents multi-buy in the same tx from sharing transfers.
-	const transfers = op.pairedTransfers ?? [];
 	const { split } = verifyTransfers({
 		transfers,
 		buyer,
