@@ -8,6 +8,7 @@
 - **Core Concepts**
 	- [Collections](concepts/collections.md)
 	- [Ownership Model](concepts/ownership.md)
+	- [Protocol Invariants](concepts/protocol-invariants.md)
 	- [Key Security](concepts/security.md)
 
 - **Guides**

@@ -5,7 +5,7 @@ NFTLox ships two separate delegation systems. Both run entirely on posting auth 
 | System | Grantor | Scope | What the delegate can do |
 |---|---|---|---|
 | **Instance approval** (`nft_approve`) | Instance owner | Single instance | Call `nft_transfer_from` on that one instance. |
-| **Collection-wide approval** (`nft_approve_all`) | Instance owner | All instances of a collection they own (including future acquisitions) | Call `nft_transfer_from` on any of them. |
+| **Collection-wide approval** (`nft_approve_all`) | Instance owner | All instances of a collection they own while the approval remains active | Call `nft_transfer_from` on any of them. |
 | **Data operator** (`data_operator_approve`) | Collection creator | Mutable data writes across the whole collection | Call `set_data_from` on any instance in the collection. |
 
 Seeds are templates, not tradable assets — `nft_approve` and `nft_approve_all` operate on **instances** only.
@@ -38,7 +38,7 @@ const result = buildNftApproveAll({
 });
 ```
 
-Scope: every instance Alice **currently owns or will ever own** in that collection. The approval survives buys, transfers, and lending returns — it only ends when Alice broadcasts `approved: false` or burns each instance.
+Scope: every instance Alice owns in that collection while the approval remains active. The approval also covers instances Alice receives later, but it is automatically removed if Alice's holdings in that collection drop to zero through `transfer`, `buy`, `burn`, or `nft_transfer_from`. Alice can revoke it at any time by broadcasting `approved: false`. See [Protocol Invariants](../concepts/protocol-invariants.md#collection-approvals) for the approval lifecycle rule.
 
 ## Operator-initiated transfer — `buildNftTransferFrom`
 

@@ -316,7 +316,7 @@ type NftApproveAllData = {
 };
 ```
 
-Scope: every instance in `collectionId` owned by the signer, including future acquisitions. Seeds are not covered.
+Scope: every instance in `collectionId` owned by the signer while the approval remains active. Future acquisitions are covered only if the signer never dropped to zero owned NFTs in that collection; if they do, the approval is automatically removed. Seeds are not covered.
 
 ### `nft_transfer_from`
 

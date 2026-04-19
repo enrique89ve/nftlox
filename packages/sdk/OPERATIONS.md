@@ -113,7 +113,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 ### 3. `transfer`
 
 **SDK constant**: `ACTION_TRANSFER`
-**Description**: Transfers ownership of an NFT to another account. Clears approvals and listings.
+**Description**: Transfers ownership of an NFT to another account. Clears the NFT's instance approval and any expired listing fields.
 **Key authority**: posting -- the owner signs the transfer.
 **Signer role**: Must be the current NFT owner.
 
@@ -130,7 +130,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 - Cannot transfer to yourself (`to !== signer`)
 - Collection must be transferable (`transferable=true` in rules)
 
-**State changes**: Updates `owner`, `previous_owner`, `owner_operation_id`, `owner_action = "transfer"`, and `owner_block_num` in `nfts`, clears listing fields, deletes `nft_allowances` for that NFT.
+**State changes**: Updates `owner`, `previous_owner`, `owner_operation_id`, `owner_action = "transfer"`, and `owner_block_num` in `nfts`, clears listing fields, deletes `nft_allowances` for that NFT, and removes the sender's `collection_allowances` for the collection if the transfer or burn leaves the sender with zero NFTs in that collection.
 **Restrictions**: NFT burned, lent, actively listed, collection not transferable, or signer is not owner -> rejected.
 **Burn note**: SDK burn helpers encode burn as `transfer` with `to: "null"`. There is no separate `burn` protocol action in `ALL_ACTIONS`.
 
@@ -385,7 +385,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 - If `royaltyRecipient === seller`, royalty merges into seller payment
 - If `feeAccount === seller`, fee merges into seller payment
 
-**State changes**: `owner` -> buyer, `previous_owner` -> seller, `owner_operation_id` -> current operation id, `owner_action = "buy"`, `owner_block_num` -> current block, status -> `active`, clears listing and allowances. A sale record is inserted in the `sales` table with `gross_amount`, `royalty_amount`, `protocol_fee`, and `seller_net`.
+**State changes**: `owner` -> buyer, `previous_owner` -> seller, `owner_operation_id` -> current operation id, `owner_action = "buy"`, `owner_block_num` -> current block, status -> `active`, clears listing fields, deletes `nft_allowances` for that NFT, and removes the seller's `collection_allowances` for the collection if the buy leaves the seller with zero NFTs in that collection. A sale record is inserted in the `sales` table with `gross_amount`, `royalty_amount`, `protocol_fee`, and `seller_net`.
 **Restrictions**: NFT not listed, listing expired, collection not transferable, listingId mismatch, listTxId mismatch, incorrect payments, buyer = seller -> rejected.
 
 ---
@@ -420,7 +420,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 ### 14. `nft_approve_all`
 
 **SDK constant**: `ACTION_NFT_APPROVE_ALL`
-**Description**: Approves a spender to transfer ALL of the signer's NFTs in a collection. Analogous to ERC-721 `setApprovalForAll`.
+**Description**: Approves a spender to transfer all of the signer's NFTs in a collection while the approval remains active. Similar to ERC-721 `setApprovalForAll`, but the indexer automatically removes the approval when the signer no longer owns any NFT in that collection.
 **Key authority**: posting -- the owner signs.
 **Signer role**: The signer is the owner granting permission (signed the tx).
 
@@ -434,9 +434,10 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 **Indexer validations**:
 - `spender != op.signer`
 - Collection must exist
+- `approved: true` requires the signer to own at least one NFT in the collection
 
-**State changes**: Upsert in `collection_allowances` with `owner = op.signer`.
-**Restrictions**: Self-approval, nonexistent collection -> rejected.
+**State changes**: Upsert/delete in `collection_allowances` with `owner = op.signer`. Collection approvals are also cleaned up after `transfer`, `buy`, `burn`, or `nft_transfer_from` empties the owner's holdings in that collection.
+**Restrictions**: Self-approval, nonexistent collection, approving without owning any NFT in the collection -> rejected.
 
 ---
 
@@ -457,12 +458,12 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 **Indexer validations**:
 - `from != to`
 - NFT must exist, `nft.owner === from`
-- Status: not `burned`, not `lent`, not `listed`
+- Status: not `burned` or `lent`; if `listed`, the listing must be expired (auto-cleared) otherwise transfer is blocked
 - Collection must be `transferable`
 - Authorization: `getNftAllowance(nftId)` or `hasCollectionAllowance(from, signer, collectionId)`
 
-**State changes**: `owner` -> `to`, `previous_owner` -> `from`, `owner_operation_id` -> current operation id, `owner_action = "nft_transfer_from"`, `owner_block_num` -> current block, clears allowances.
-**Restrictions**: No authorization, NFT not transferable/burned/lent/listed -> rejected.
+**State changes**: `owner` -> `to`, `previous_owner` -> `from`, `owner_operation_id` -> current operation id, `owner_action = "nft_transfer_from"`, `owner_block_num` -> current block, deletes `nft_allowances` for that NFT, and removes `from`'s `collection_allowances` for the collection if the transfer leaves `from` with zero NFTs in that collection.
+**Restrictions**: No authorization, NFT not transferable, burned, lent, or actively listed -> rejected.
 
 ---
 
