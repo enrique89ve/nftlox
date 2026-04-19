@@ -9,6 +9,7 @@ import {
 } from "@/protocol/index.ts";
 import { createLogger } from "@/utils/logger.ts";
 import type { HafAHOperation } from "./hive-client.ts";
+import type { PaymentMatch } from "@/processor/payment.ts";
 
 const log = createLogger("parser");
 
@@ -44,6 +45,13 @@ export interface ParsedOperation {
 	data: Record<string, unknown>;
 	pairedTransfers?: Array<TransferDetail>;
 	transferPool?: TransferPool;
+	/**
+	 * Populated by action-router pre-dispatch when the action's
+	 * PaymentRequirement resolves to `none` / `fixed` / `scaled`. Handlers
+	 * read `op.payment.payer` for memo-bound identity. Absent for `split`
+	 * (validated inside the handler via verifyTransfers).
+	 */
+	payment?: PaymentMatch;
 }
 
 const protocolId = config.protocolId;

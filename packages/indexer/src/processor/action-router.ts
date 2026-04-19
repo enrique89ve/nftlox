@@ -1,7 +1,8 @@
 import type { Queryable } from "@/db/client.ts";
-import { getStateRootBuffer, getTxSavepointHandle } from "@/db/client.ts";
+import { getStateRootBuffer, getTxSavepointHandle, attachScope } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { createLogger } from "@/utils/logger.ts";
+import { config } from "@/config.ts";
 import { insertInvalidOperation, insertOrphanedBuy, insertConfirmedOperation, isOperationConfirmed } from "@/db/queries/sync.ts";
 import {
 	ACTION_BUY,
@@ -24,8 +25,11 @@ import {
 	ACTION_NODE_REGISTER,
 	ACTION_NODE_HEARTBEAT,
 	getAuthMismatchReason,
+	getPaymentRequirement,
+	type PaymentRequirement,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
+import { PAYMENT_VALIDATORS, type PaymentMatch } from "./payment.ts";
 
 // Core
 import { handleCreateCollection } from "./handlers/core/create-collection.ts";
@@ -64,6 +68,35 @@ type Handler = (op: ParsedOperation, txn: Queryable) => Promise<ReadonlyArray<st
 function confirmedOperationNftIds(action: ProtocolAction, nftIds: ReadonlyArray<string>): ReadonlyArray<string> {
 	if (action === ACTION_BULK_DISTRIBUTE) return [];
 	return nftIds;
+}
+
+/**
+ * Derives the expected fee-transfer memo from the operation payload using
+ * the memoKey declared on the PaymentRequirement. Keeps the string format
+ * (`NFTLox ${memoTag}:${naturalKey}`) in lockstep with SDK emitters.
+ */
+function deriveExpectedMemo(
+	op: ParsedOperation,
+	requirement: Extract<PaymentRequirement, { kind: "fixed" | "scaled" }>,
+): string {
+	const key = requirement.memoKey;
+	let naturalKey: string;
+	if (key === "collectionId") {
+		naturalKey = typeof op.data.id === "string" ? op.data.id : "";
+	} else if (key === "nftId") {
+		naturalKey = typeof op.data.nftId === "string" ? op.data.nftId : "";
+	} else if (key === "seedId") {
+		naturalKey = typeof op.data.seedId === "string" ? op.data.seedId : "";
+	} else {
+		// opDigest — reserved fallback; not used by any current action.
+		naturalKey = op.operationId;
+	}
+	if (!naturalKey) {
+		throw new Error(
+			`Cannot derive expected fee memo: payload missing '${key}' for ${op.action}`,
+		);
+	}
+	return `NFTLox ${requirement.memoTag}:${naturalKey}`;
 }
 
 // Typed as Record<ProtocolAction, Handler> (finite union key, not index signature):
@@ -141,23 +174,69 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 
 		try {
 			const buffer = getStateRootBuffer(txn);
-			const snap = buffer.checkpoint();
+			const bufferSnap = buffer.checkpoint();
 			const txHandle = getTxSavepointHandle(txn);
+			// Snapshot the shared TransferPool.consumed BEFORE the handler runs —
+			// if the savepoint rolls back, any indices claimed by the handler
+			// (via verifyTransfers) must be reverted so the next op in the same
+			// Hive tx sees an unchanged pool.
+			const consumedSnap: Set<number> | null = op.transferPool
+				? new Set(op.transferPool.consumed)
+				: null;
+
+			// Pre-handler payment dispatch. `none` / `fixed` / `scaled` run here;
+			// `split` (buy) stays in the handler — it needs a DB-locked NFT row.
+			// The router owns consumed-set mutation so a failed handler can't
+			// leak indices. We if/else on `requirement.kind` so TS narrows each
+			// branch to the correct Validator<K> input — no widening casts.
+			const requirement = getPaymentRequirement(op.action);
+			let preMatch: PaymentMatch | null = null;
+			if (requirement.kind === "fixed") {
+				const expectedMemo = deriveExpectedMemo(op, requirement);
+				preMatch = PAYMENT_VALIDATORS.fixed(op, requirement, {
+					targetAccount: config.hiveAccount,
+					expectedMemo,
+				});
+			} else if (requirement.kind === "scaled") {
+				const expectedMemo = deriveExpectedMemo(op, requirement);
+				preMatch = PAYMENT_VALIDATORS.scaled(op, requirement, {
+					targetAccount: config.hiveAccount,
+					expectedMemo,
+				});
+			} else if (requirement.kind === "none") {
+				preMatch = PAYMENT_VALIDATORS.none(op, requirement, {
+					targetAccount: config.hiveAccount,
+				});
+			}
+			// "split" is deferred to the handler (verifyTransfers in handleBuy).
+			if (preMatch) op.payment = preMatch;
 
 			const nftIds = await txHandle
 				.savepoint((spSql) => {
-					// Attach the buffer and handle to the savepoint-scoped transaction so handlers
-					// can access them via getStateRootBuffer() and getTxSavepointHandle().
-					(spSql as any).__nftlox_buffer = buffer;
-					(spSql as any).__nftlox_handle = txHandle;
-					return handler(op, spSql as unknown as Queryable);
+					const scoped = attachScope(spSql as unknown as Queryable, {
+						buffer,
+						handle: txHandle,
+					});
+					return handler(op, scoped);
 				})
 				.catch((err) => {
 					// postgres.js already executed ROLLBACK TO SAVEPOINT automatically.
-					// Revert the in-memory buffer to match the reverted database state.
-					buffer.rollbackTo(snap);
+					// Revert the in-memory buffer AND the consumed-indices set to
+					// match the reverted database state.
+					buffer.rollbackTo(bufferSnap);
+					if (consumedSnap && op.transferPool) {
+						op.transferPool.consumed.clear();
+						for (const i of consumedSnap) op.transferPool.consumed.add(i);
+					}
 					throw err;
 				});
+
+			// Savepoint committed: mark pre-validated transfers as consumed.
+			// Split handlers mutate `consumed` inside verifyTransfers, so we
+			// only touch it for fixed/scaled matches.
+			if (preMatch && (preMatch.kind === "fixed" || preMatch.kind === "scaled") && op.transferPool) {
+				for (const idx of preMatch.consumedIndices) op.transferPool.consumed.add(idx);
+			}
 
 			await insertConfirmedOperation({
 				operationId: op.operationId,
