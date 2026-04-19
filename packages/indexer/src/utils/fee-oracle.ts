@@ -125,6 +125,94 @@ export function getPriceStatus(): Readonly<{
 	};
 }
 
+// ----------------------------------------------------------------------------
+// validateFixedFee — memo-aware fixed-amount fee validation.
+//
+// Finds the single transfer in `op.pairedTransfers` that:
+//   - is not consumed,
+//   - goes to `targetAccount`,
+//   - has memo === expectedMemo,
+//   - pays exactly `requiredHbd` (HBD, no overpay) or >= equivalent with
+//     tolerance (HIVE, absorbs price-drift).
+//
+// Returns the match. CALLER (action-router) is responsible for adding
+// `match.index` to `op.transferPool.consumed` only AFTER the handler's
+// savepoint closes successfully — centralizing that step keeps a failed
+// handler from leaking consumed indices.
+// ----------------------------------------------------------------------------
+
+export type FixedFeeMatch = {
+	readonly payer: string;
+	readonly amount: number;
+	readonly currency: string;
+	readonly index: number;
+};
+
+const HBD_EQUALITY_EPSILON = 0.0005;
+
+export function validateFixedFee(params: {
+	op: ParsedOperation;
+	requiredHbd: string;
+	targetAccount: string;
+	expectedMemo: string;
+}): FixedFeeMatch {
+	const { op, requiredHbd, targetAccount, expectedMemo } = params;
+	const required = parseFloat(requiredHbd);
+	if (Number.isNaN(required)) throw new Error("Invalid required HBD format");
+
+	const transfers = op.pairedTransfers ?? [];
+	const consumed = op.transferPool?.consumed;
+
+	const candidates: Array<{ idx: number; t: (typeof transfers)[number] }> = [];
+	for (let idx = 0; idx < transfers.length; idx++) {
+		const t = transfers[idx];
+		if (!t) continue;
+		if (consumed?.has(idx)) continue;
+		if (t.to !== targetAccount) continue;
+		if (t.memo !== expectedMemo) continue;
+		candidates.push({ idx, t });
+	}
+
+	if (candidates.length === 0) {
+		throw new Error(
+			`No fee transfer found matching memo '${expectedMemo}' to @${targetAccount}`,
+		);
+	}
+	if (candidates.length > 1) {
+		throw new Error(
+			`Ambiguous fee transfers — ${candidates.length} memo matches for '${expectedMemo}'`,
+		);
+	}
+
+	const match = candidates[0]!;
+	const t = match.t;
+
+	if (t.currency === "HBD") {
+		if (Math.abs(t.amount - required) > HBD_EQUALITY_EPSILON) {
+			throw new Error(
+				`Fee amount mismatch — HBD payment must equal ${requiredHbd}, got ${t.amount}`,
+			);
+		}
+	} else if (t.currency === "HIVE") {
+		const price = getMedianPrice();
+		if (price === null) {
+			throw new Error(
+				`Cannot validate HIVE fee: price feed unavailable. Required: ${requiredHbd} HBD`,
+			);
+		}
+		const hiveRequired = required / price;
+		if (t.amount < hiveRequired * FEE_TOLERANCE_MULTIPLIER) {
+			throw new Error(
+				`Fee amount mismatch — HIVE payment ${t.amount} below required ${hiveRequired.toFixed(3)} (with tolerance)`,
+			);
+		}
+	} else {
+		throw new Error(`Unsupported fee currency: ${t.currency}`);
+	}
+
+	return { payer: t.from, amount: t.amount, currency: t.currency, index: match.idx };
+}
+
 export const feeOracle = {
 	async validateFee(requiredHbd: string, paidAmount: number, paidCurrency: string): Promise<boolean> {
 		const target = parseFloat(requiredHbd);
