@@ -9,6 +9,7 @@ import {
 	createHiveOperation,
 	getKeyType,
 	MAX_NAME_LENGTH,
+	MEMO_PREFIX_FEE_COL,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
@@ -162,7 +163,7 @@ export async function buildCollection(
 			from: data.creator,
 			to: nodeAccount,
 			amount: `${parsedFee.toFixed(3)} ${feeCurrency}`,
-			memo: `NFTLox FEE-COL:${collectionId}`,
+			memo: `${MEMO_PREFIX_FEE_COL}${collectionId}`,
 		},
 	];
 

@@ -212,13 +212,21 @@ export type TypedProtocolPayload<A extends ProtocolAction = ProtocolAction> = {
 }[A];
 
 /**
- * Runtime narrowing. Returns the payload typed as
- * `TypedProtocolPayload<A>` when `payload.action === action`, else `null`.
- * Handlers can opt into the stronger typing without changing their body —
- * the function only closes the `data: unknown` gap in the type system,
- * runtime field validation still required.
+ * ASSERTION, not validation. Verifies only the `action` discriminator and
+ * casts `data` to `PayloadDataByAction[A]` WITHOUT inspecting its fields.
+ *
+ * Callers MUST perform explicit runtime validation of `data` (Zod, manual
+ * guards, or the DB-schema crosscheck a handler already does) before trusting
+ * any field. The cast exists so handlers can chain type-narrowed lookups
+ * after they have independently proven the payload is well-formed.
+ *
+ * Returns `null` when the action doesn't match (short-circuit for callers
+ * that route multiple payload shapes through a single helper).
+ *
+ * Named `assumePayload` — not `narrowPayload` — to make the trust boundary
+ * obvious at the call site: the function assumes; it does not verify.
  */
-export function narrowPayload<A extends ProtocolAction>(
+export function assumePayload<A extends ProtocolAction>(
 	payload: ProtocolPayload<Record<string, unknown>>,
 	action: A,
 ): TypedProtocolPayload<A> | null {

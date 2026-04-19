@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { narrowPayload } from "../src/types";
+import { assumePayload } from "../src/types";
 import { ACTION_BUY, ACTION_MINT } from "../src/constants";
 
-describe("narrowPayload", () => {
+describe("assumePayload", () => {
 	test("returns the payload when action matches", () => {
 		const p = {
 			protocol: "nftlox_testnet",
@@ -15,7 +15,7 @@ describe("narrowPayload", () => {
 				txId: "u",
 			},
 		} as const;
-		const narrowed = narrowPayload(p, ACTION_BUY);
+		const narrowed = assumePayload(p, ACTION_BUY);
 		expect(narrowed).not.toBeNull();
 		expect(narrowed?.data.nftId).toBe("inst_x");
 	});
@@ -27,6 +27,6 @@ describe("narrowPayload", () => {
 			action: ACTION_MINT,
 			data: {},
 		} as const;
-		expect(narrowPayload(p, ACTION_BUY)).toBeNull();
+		expect(assumePayload(p, ACTION_BUY)).toBeNull();
 	});
 });

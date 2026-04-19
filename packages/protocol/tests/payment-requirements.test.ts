@@ -43,10 +43,11 @@ describe("ACTION_PAYMENT registry", () => {
 		expect(ACTION_PAYMENT[ACTION_MINT]).toEqual({ kind: "none" });
 	});
 
-	test("getPaymentRequirement throws for unknown action", () => {
-		expect(() => getPaymentRequirement("bogus" as never)).toThrow(
-			/Unsupported protocol action/,
-		);
+	test("getPaymentRequirement is total over ProtocolAction — boundary validation is the parser's job", () => {
+		// Passing a bogus string requires an explicit `as never` cast; this
+		// documents that lookup is total for well-typed callers and any
+		// non-ProtocolAction input is undefined-behavior at the type boundary.
+		expect(getPaymentRequirement("bogus" as never)).toBeUndefined();
 	});
 
 	test("PaymentRequirement union covers 4 kinds", () => {

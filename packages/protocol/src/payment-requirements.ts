@@ -23,9 +23,12 @@ import {
 	ACTION_SET_DATA_FROM,
 	ACTION_TRANSFER,
 	ACTION_UNLIST,
+	MEMO_TAG_BUY,
+	MEMO_TAG_FEE,
+	MEMO_TAG_FEE_COL,
+	MEMO_TAG_ROYALTY,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	PROTOCOL_FEE_BPS,
-	isProtocolAction,
 	type ProtocolAction,
 } from "./constants";
 
@@ -35,19 +38,26 @@ export type PayerSource = "signer" | "transfer:from" | "payload:buyer";
 /** Which natural key from the payload forms the memo suffix. */
 export type MemoKey = "collectionId" | "nftId" | "seedId" | "opDigest";
 
+/** Where the protocol fee is sent. Expanding this requires touching every
+ * validator — keep the union small and explicit. */
+export type PaymentRecipient = "treasury";
+
+/** How the amount is computed at validation time. */
+export type PriceSource = "nft.listing";
+
 export type PaymentRequirement =
 	| { readonly kind: "none" }
 	| {
 		readonly kind: "fixed";
 		readonly amountHbd: string;
 		readonly payer: PayerSource;
-		readonly recipient: "treasury";
+		readonly recipient: PaymentRecipient;
 		readonly memoKey: MemoKey;
 		readonly memoTag: string;
 	}
 	| {
 		readonly kind: "split";
-		readonly priceSource: "nft.listing";
+		readonly priceSource: PriceSource;
 		readonly protocolFeeBps: number;
 		readonly payer: "payload:buyer";
 		readonly memoKey: "nftId";
@@ -66,10 +76,19 @@ export type PaymentRequirement =
 		readonly unitDenominator: number;
 		readonly countFrom: "payload:maxInstances";
 		readonly payer: PayerSource;
-		readonly recipient: "treasury";
+		readonly recipient: PaymentRecipient;
 		readonly memoKey: MemoKey;
 		readonly memoTag: string;
 	};
+
+/**
+ * Exhaustive-pattern-matching sentinel. Use in the `default:` branch of a
+ * switch over `PaymentRequirement["kind"]` to get a compile error the moment
+ * a new variant is added upstream.
+ */
+export function assertNeverPaymentKind(x: never): never {
+	throw new Error(`Unhandled PaymentRequirement.kind: ${JSON.stringify(x)}`);
+}
 
 const ACTION_PAYMENT_MAP = {
 	[ACTION_CREATE_COLLECTION]: {
@@ -78,7 +97,7 @@ const ACTION_PAYMENT_MAP = {
 		payer: "transfer:from",
 		recipient: "treasury",
 		memoKey: "collectionId",
-		memoTag: "FEE-COL",
+		memoTag: MEMO_TAG_FEE_COL,
 	},
 	[ACTION_BUY]: {
 		kind: "split",
@@ -86,7 +105,7 @@ const ACTION_PAYMENT_MAP = {
 		protocolFeeBps: PROTOCOL_FEE_BPS,
 		payer: "payload:buyer",
 		memoKey: "nftId",
-		memoTags: { seller: "BUY", royalty: "ROY", fee: "FEE" },
+		memoTags: { seller: MEMO_TAG_BUY, royalty: MEMO_TAG_ROYALTY, fee: MEMO_TAG_FEE },
 	},
 	[ACTION_MINT]: { kind: "none" },
 	[ACTION_TRANSFER]: { kind: "none" },
@@ -109,11 +128,13 @@ const ACTION_PAYMENT_MAP = {
 
 export const ACTION_PAYMENT = Object.freeze(ACTION_PAYMENT_MAP);
 
+/**
+ * Total lookup over a compile-time-validated key. Callers holding a
+ * `ProtocolAction` are guaranteed a result — no runtime guard needed.
+ * Boundary validation (raw JSON → `ProtocolAction`) lives in the parser.
+ */
 export function getPaymentRequirement(
 	action: ProtocolAction,
 ): PaymentRequirement {
-	if (!isProtocolAction(action)) {
-		throw new Error(`Unsupported protocol action: ${String(action)}`);
-	}
 	return ACTION_PAYMENT[action];
 }

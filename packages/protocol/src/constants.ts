@@ -119,10 +119,19 @@ export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
 
-// Memo prefixes (marketplace transfers)
-export const MEMO_PREFIX_BUY = "NFTLox BUY:";
-export const MEMO_PREFIX_ROYALTY = "NFTLox ROY:";
-export const MEMO_PREFIX_FEE = "NFTLox FEE:";
+// Memo tags — the colon-free token that follows "NFTLox " in a transfer memo.
+// Source of truth shared by SDK emitters and the indexer's memo parser.
+export const MEMO_TAG_BUY = "BUY";
+export const MEMO_TAG_ROYALTY = "ROY";
+export const MEMO_TAG_FEE = "FEE";
+export const MEMO_TAG_FEE_COL = "FEE-COL";
+
+// Memo prefixes (marketplace + collection-creation transfers). Always built as
+// `NFTLox ${MEMO_TAG_*}:` so a typo in one place breaks the build everywhere.
+export const MEMO_PREFIX_BUY = `NFTLox ${MEMO_TAG_BUY}:` as const;
+export const MEMO_PREFIX_ROYALTY = `NFTLox ${MEMO_TAG_ROYALTY}:` as const;
+export const MEMO_PREFIX_FEE = `NFTLox ${MEMO_TAG_FEE}:` as const;
+export const MEMO_PREFIX_FEE_COL = `NFTLox ${MEMO_TAG_FEE_COL}:` as const;
 
 // Listings
 export const LISTING_ID_PREFIX = "list_";

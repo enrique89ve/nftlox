@@ -24,8 +24,10 @@ import {
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
 	ACTION_NODE_HEARTBEAT,
+	assertNeverPaymentKind,
 	getAuthMismatchReason,
 	getPaymentRequirement,
+	type MemoKey,
 	type PaymentRequirement,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
@@ -71,6 +73,19 @@ function confirmedOperationNftIds(action: ProtocolAction, nftIds: ReadonlyArray<
 }
 
 /**
+ * Extractors are keyed by MemoKey — the mapped-record form is the only way
+ * to stay compile-time-exhaustive over the union. Adding a new MemoKey to
+ * the protocol breaks this object unless a matching extractor is added.
+ */
+const NATURAL_KEY_EXTRACTORS: Readonly<Record<MemoKey, (op: ParsedOperation) => string>> = {
+	collectionId: (op) => (typeof op.data.id === "string" ? op.data.id : ""),
+	nftId: (op) => (typeof op.data.nftId === "string" ? op.data.nftId : ""),
+	seedId: (op) => (typeof op.data.seedId === "string" ? op.data.seedId : ""),
+	// opDigest — reserved fallback; not used by any current action.
+	opDigest: (op) => op.operationId,
+};
+
+/**
  * Derives the expected fee-transfer memo from the operation payload using
  * the memoKey declared on the PaymentRequirement. Keeps the string format
  * (`NFTLox ${memoTag}:${naturalKey}`) in lockstep with SDK emitters.
@@ -79,24 +94,44 @@ function deriveExpectedMemo(
 	op: ParsedOperation,
 	requirement: Extract<PaymentRequirement, { kind: "fixed" | "scaled" }>,
 ): string {
-	const key = requirement.memoKey;
-	let naturalKey: string;
-	if (key === "collectionId") {
-		naturalKey = typeof op.data.id === "string" ? op.data.id : "";
-	} else if (key === "nftId") {
-		naturalKey = typeof op.data.nftId === "string" ? op.data.nftId : "";
-	} else if (key === "seedId") {
-		naturalKey = typeof op.data.seedId === "string" ? op.data.seedId : "";
-	} else {
-		// opDigest — reserved fallback; not used by any current action.
-		naturalKey = op.operationId;
-	}
+	const naturalKey = NATURAL_KEY_EXTRACTORS[requirement.memoKey](op);
 	if (!naturalKey) {
 		throw new Error(
-			`Cannot derive expected fee memo: payload missing '${key}' for ${op.action}`,
+			`Cannot derive expected fee memo: payload missing '${requirement.memoKey}' for ${op.action}`,
 		);
 	}
 	return `NFTLox ${requirement.memoTag}:${naturalKey}`;
+}
+
+/**
+ * Pre-handler payment validation. Exhaustive switch over `requirement.kind` so
+ * adding a new PaymentRequirement variant fails the build here instead of
+ * silently bypassing validation. Returns `null` for `split`, which is deferred
+ * to the handler (needs a DB-locked NFT row for price lookup).
+ */
+function runPreHandlerPaymentValidation(
+	op: ParsedOperation,
+	requirement: PaymentRequirement,
+	targetAccount: string,
+): PaymentMatch | null {
+	switch (requirement.kind) {
+		case "none":
+			return PAYMENT_VALIDATORS.none(op, requirement, { targetAccount });
+		case "fixed":
+			return PAYMENT_VALIDATORS.fixed(op, requirement, {
+				targetAccount,
+				expectedMemo: deriveExpectedMemo(op, requirement),
+			});
+		case "scaled":
+			return PAYMENT_VALIDATORS.scaled(op, requirement, {
+				targetAccount,
+				expectedMemo: deriveExpectedMemo(op, requirement),
+			});
+		case "split":
+			return null;
+		default:
+			return assertNeverPaymentKind(requirement);
+	}
 }
 
 // Typed as Record<ProtocolAction, Handler> (finite union key, not index signature):
@@ -185,30 +220,12 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 				: null;
 
 			// Pre-handler payment dispatch. `none` / `fixed` / `scaled` run here;
-			// `split` (buy) stays in the handler — it needs a DB-locked NFT row.
-			// The router owns consumed-set mutation so a failed handler can't
-			// leak indices. We if/else on `requirement.kind` so TS narrows each
-			// branch to the correct Validator<K> input — no widening casts.
+			// `split` (buy) is deferred to the handler — it needs a DB-locked
+			// NFT row. The router owns consumed-set mutation so a failed handler
+			// can't leak indices. Exhaustive switch inside the helper gives a
+			// compile error if a new PaymentRequirement variant is introduced.
 			const requirement = getPaymentRequirement(op.action);
-			let preMatch: PaymentMatch | null = null;
-			if (requirement.kind === "fixed") {
-				const expectedMemo = deriveExpectedMemo(op, requirement);
-				preMatch = PAYMENT_VALIDATORS.fixed(op, requirement, {
-					targetAccount: config.hiveAccount,
-					expectedMemo,
-				});
-			} else if (requirement.kind === "scaled") {
-				const expectedMemo = deriveExpectedMemo(op, requirement);
-				preMatch = PAYMENT_VALIDATORS.scaled(op, requirement, {
-					targetAccount: config.hiveAccount,
-					expectedMemo,
-				});
-			} else if (requirement.kind === "none") {
-				preMatch = PAYMENT_VALIDATORS.none(op, requirement, {
-					targetAccount: config.hiveAccount,
-				});
-			}
-			// "split" is deferred to the handler (verifyTransfers in handleBuy).
+			const preMatch = runPreHandlerPaymentValidation(op, requirement, config.hiveAccount);
 			if (preMatch) op.payment = preMatch;
 
 			const nftIds = await txHandle
