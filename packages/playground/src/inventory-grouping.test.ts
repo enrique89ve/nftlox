@@ -27,9 +27,9 @@ describe("groupInstancesBySeed", () => {
 		const groups = groupInstancesBySeed([a1, a2, a3]);
 
 		expect(groups).toHaveLength(1);
-		expect(groups[0].seedId).toBe("seed-A");
-		expect(groups[0].count).toBe(3);
-		expect(groups[0].instances.map((n) => n.id)).toEqual(["a-1", "a-2", "a-3"]);
+		expect(groups[0]!.seedId).toBe("seed-A");
+		expect(groups[0]!.count).toBe(3);
+		expect(groups[0]!.instances.map((n) => n.id)).toEqual(["a-1", "a-2", "a-3"]);
 	});
 
 	it("produces one group per distinct seedId", () => {
@@ -61,8 +61,8 @@ describe("groupInstancesBySeed", () => {
 		const groups = groupInstancesBySeed([x1, x2]);
 
 		expect(groups).toHaveLength(1);
-		expect(groups[0].seedId).toBe("col-X::5");
-		expect(groups[0].count).toBe(2);
+		expect(groups[0]!.seedId).toBe("col-X::5");
+		expect(groups[0]!.count).toBe(2);
 	});
 
 	it("orders groups by count desc, then name asc", () => {
@@ -89,6 +89,6 @@ describe("groupInstancesBySeed", () => {
 		const only = make({ id: "x", seedId: "seed-X", name: "Solo" });
 		const groups = groupInstancesBySeed([only]);
 		expect(groups).toHaveLength(1);
-		expect(groups[0].count).toBe(1);
+		expect(groups[0]!.count).toBe(1);
 	});
 });
