@@ -1306,6 +1306,174 @@ function renderSeedGroupTable(owned: NftCardData[]) {
 
 (window as any).loadSeedGroup = loadSeedGroup;
 
+function seedGroupOpen(nftId: string) {
+  loadNftDetail(nftId);
+}
+
+async function seedGroupTransferPrompt(nftId: string) {
+  if (!connectedUser) {
+    log("Connect wallet first", "error");
+    return;
+  }
+  const to = window
+    .prompt(`Transfer ${nftId} to which Hive account?`)
+    ?.trim()
+    .toLowerCase();
+  if (!to) return;
+
+  log(`Validating transfer of ${nftId}…`);
+  const validation = await validateTransfer(nftId, connectedUser);
+  if (!validation.valid) {
+    log(`Cannot transfer: ${validation.error}`, "error");
+    return;
+  }
+  const nft = validation.nft!;
+  const buildResult = await buildTransfer({
+    nftId: nft.id,
+    from: connectedUser,
+    to,
+    imageUrl: nft.imageUrl ?? undefined,
+    imageHash: nft.imageHash ?? undefined,
+  });
+  if (!buildResult.success) {
+    log(`Build transfer failed: ${buildResult.errors.join(", ")}`, "error");
+    return;
+  }
+
+  log(`Transferring ${nftId} to @${to}…`);
+  (window as any).hive_keychain.requestBroadcast(
+    connectedUser,
+    [buildResult.operations[0]],
+    "Posting",
+    (res: any) => {
+      if (res.success) {
+        log(`Transfer successful!`, "success");
+        scheduleSeedGroupReload();
+      } else {
+        const err =
+          typeof res.error === "object" ? JSON.stringify(res.error) : res.error;
+        log(`Transfer failed: ${err}`, "error");
+      }
+    },
+  );
+}
+
+async function seedGroupListPrompt(nftId: string) {
+  if (!connectedUser) {
+    log("Connect wallet first", "error");
+    return;
+  }
+  const rawPrice = window.prompt(`List ${nftId} for what price?`)?.trim();
+  if (!rawPrice) return;
+  const parsed = parseFloat(rawPrice);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    log("Invalid price", "error");
+    return;
+  }
+  const currency = (
+    window.prompt("Currency? Type HIVE or HBD", "HIVE") ?? "HIVE"
+  )
+    .trim()
+    .toUpperCase();
+  if (currency !== "HIVE" && currency !== "HBD") {
+    log("Currency must be HIVE or HBD", "error");
+    return;
+  }
+  const price = parsed.toFixed(3);
+
+  try {
+    const response = await fetch("/api/build/list", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nftId,
+        owner: connectedUser,
+        price: { amount: price, currency },
+      }),
+    });
+    const result = await response.json();
+    if (!result.success) {
+      log(`Error: ${result.errors?.[0]?.message || result.error}`, "error");
+      return;
+    }
+
+    log(`Listing ${nftId} for ${price} ${currency}…`);
+    (window as any).hive_keychain.requestBroadcast(
+      connectedUser,
+      [result.operation],
+      "Posting",
+      (res: any) => {
+        if (res.success) {
+          log(`Listed for ${price} ${currency}!`, "success");
+          scheduleSeedGroupReload();
+        } else {
+          const err =
+            typeof res.error === "object"
+              ? JSON.stringify(res.error)
+              : res.error;
+          log(`Listing failed: ${err}`, "error");
+        }
+      },
+    );
+  } catch (e) {
+    log(`Error: ${(e as Error).message}`, "error");
+  }
+}
+
+async function seedGroupUnlist(nftId: string) {
+  if (!connectedUser) {
+    log("Connect wallet first", "error");
+    return;
+  }
+  if (!window.confirm(`Unlist ${nftId}?`)) return;
+
+  try {
+    const response = await fetch("/api/build/unlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nftId, owner: connectedUser }),
+    });
+    const result = await response.json();
+    if (!result.success) {
+      log(`Error: ${result.errors?.[0]?.message || result.error}`, "error");
+      return;
+    }
+
+    log(`Unlisting ${nftId}…`);
+    (window as any).hive_keychain.requestBroadcast(
+      connectedUser,
+      [result.operation],
+      "Posting",
+      (res: any) => {
+        if (res.success) {
+          log("Unlisted!", "success");
+          scheduleSeedGroupReload();
+        } else {
+          const err =
+            typeof res.error === "object"
+              ? JSON.stringify(res.error)
+              : res.error;
+          log(`Unlist failed: ${err}`, "error");
+        }
+      },
+    );
+  } catch (e) {
+    log(`Error: ${(e as Error).message}`, "error");
+  }
+}
+
+function scheduleSeedGroupReload() {
+  setTimeout(() => {
+    if (currentSeedGroupId) loadSeedGroup(currentSeedGroupId);
+    loadInventory();
+  }, 5000);
+}
+
+(window as any).seedGroupOpen = seedGroupOpen;
+(window as any).seedGroupTransferPrompt = seedGroupTransferPrompt;
+(window as any).seedGroupListPrompt = seedGroupListPrompt;
+(window as any).seedGroupUnlist = seedGroupUnlist;
+
 function renderInventorySummary(counts: UserNftCounts, nfts: NftCardData[]) {
   const summary = $("inventory-summary");
   if (!summary) return;
