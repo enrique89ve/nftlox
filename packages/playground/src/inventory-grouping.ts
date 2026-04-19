@@ -23,7 +23,7 @@ export type InstanceGroup = {
 	instances: GroupableNft[];
 };
 
-function groupKey(nft: GroupableNft): string | null {
+export function instanceGroupKey(nft: GroupableNft): string | null {
 	if (nft.seedId) return nft.seedId;
 	if (nft.collectionId != null && nft.edition != null) {
 		return `${nft.collectionId}::${nft.edition}`;
@@ -35,7 +35,7 @@ export function groupInstancesBySeed(nfts: GroupableNft[]): InstanceGroup[] {
 	const buckets = new Map<string, InstanceGroup>();
 
 	for (const nft of nfts) {
-		const key = groupKey(nft);
+		const key = instanceGroupKey(nft);
 		if (!key) continue;
 
 		const existing = buckets.get(key);

@@ -25,6 +25,7 @@ import {
 } from "./shared/dom";
 import {
   groupInstancesBySeed,
+  instanceGroupKey,
   type InstanceGroup,
 } from "./inventory-grouping";
 
@@ -74,6 +75,7 @@ type NftCardData = {
   distributed?: number | null;
   maxSupply?: number | null;
   instanceNumber?: number | null;
+  seedId?: string | null;
   listingPrice?: string | null;
   listingCurrency?: string | null;
   status?: string | null;
@@ -1183,10 +1185,7 @@ async function loadSeedGroup(seedId: string) {
 
     const seed = seedData.nft;
     const owned = ownerData.nfts.filter(
-      (n) =>
-        n.isSeed !== true &&
-        ((n as any).seedId === seedId ||
-          `${n.collectionId}::${n.edition}` === seedId),
+      (n) => n.isSeed !== true && instanceGroupKey(n) === seedId,
     );
 
     if (titleEl) titleEl.textContent = seed.name;
@@ -1257,16 +1256,16 @@ function renderSeedGroupTable(owned: NftCardData[]) {
       const disabled = isLent ? "disabled" : "";
       const lentTip = isLent ? 'title="Lent — cannot modify"' : "";
       const listAction = isListed
-        ? `<button class="btn btn-secondary" ${disabled} ${lentTip} onclick="seedGroupUnlist('${idAttr}')">Unlist</button>`
-        : `<button class="btn btn-secondary" ${disabled} ${lentTip} onclick="seedGroupListPrompt('${idAttr}')">List</button>`;
+        ? `<button class="btn btn-secondary" data-action="unlist" ${disabled} ${lentTip}>Unlist</button>`
+        : `<button class="btn btn-secondary" data-action="list" ${disabled} ${lentTip}>List</button>`;
       return `
-				<tr>
+				<tr data-nft-id="${idAttr}">
 					<td>#${nft.instanceNumber ?? "?"}</td>
 					<td><span class="seed-group-id">${idAttr}</span></td>
 					<td>${statusText}</td>
 					<td class="seed-group-actions">
-						<button class="btn btn-secondary" onclick="seedGroupOpen('${idAttr}')">Open</button>
-						<button class="btn btn-secondary" ${disabled} ${lentTip} onclick="seedGroupTransferPrompt('${idAttr}')">Transfer</button>
+						<button class="btn btn-secondary" data-action="open">Open</button>
+						<button class="btn btn-secondary" data-action="transfer" ${disabled} ${lentTip}>Transfer</button>
 						${listAction}
 					</td>
 				</tr>
@@ -1289,6 +1288,20 @@ function renderSeedGroupTable(owned: NftCardData[]) {
 			</tbody>
 		</table>
 	`;
+
+  tableContainer.querySelectorAll("button[data-action]").forEach((btn) => {
+    (btn as HTMLButtonElement).onclick = () => {
+      if ((btn as HTMLButtonElement).disabled) return;
+      const row = btn.closest("tr") as HTMLElement | null;
+      const id = row?.dataset.nftId;
+      if (!id) return;
+      const action = (btn as HTMLElement).dataset.action;
+      if (action === "open") (window as any).seedGroupOpen?.(id);
+      else if (action === "transfer") (window as any).seedGroupTransferPrompt?.(id);
+      else if (action === "list") (window as any).seedGroupListPrompt?.(id);
+      else if (action === "unlist") (window as any).seedGroupUnlist?.(id);
+    };
+  });
 }
 
 (window as any).loadSeedGroup = loadSeedGroup;
