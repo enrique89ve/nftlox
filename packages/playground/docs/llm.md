@@ -636,7 +636,7 @@ There is **no** `/api/build/*` route. The indexer does not build transactions.
 - [Marketplace](guides/marketplace.md) — listing lifecycle + buy flow
 - [Allowances & Operators](guides/allowances.md) — approve, approve-all, data operators
 - [NFT Lending](guides/lending.md) — non-custodial rentals
-- [SPV Verification](guides/spv.md) — trustless client-side checks
+- [SPV Verification](guides/spv.md) — L1-anchored client-side ownership checks
 - [Seed Ceremony](use-cases/seed-ceremony.md) — launch script end-to-end
 - [Game Development](use-cases/games.md) — full TCG flow
 - [API Endpoints Reference](reference/api.md) — indexer HTTP surface

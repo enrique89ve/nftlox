@@ -15,7 +15,7 @@ If you are building a game with collectible cards, items, or characters, NFTLox 
 - **3-second finality** — operations confirmed in the next Hive block.
 - **Composable operators** — lending, allowances, and data operators let game servers act on behalf of users.
 - **Built-in marketplace** — list, buy, and unlist with multisig buyer protection.
-- **SPV verification** — browser-side trustless verification against Hive L1.
+- **L1-anchored verification** — browser-side checks that re-derive ownership edges from Hive L1 operation anchors.
 
 ## Packages
 

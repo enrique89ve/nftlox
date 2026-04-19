@@ -1,6 +1,6 @@
 # SPV Verification
 
-NFTLox ships a client-side verification layer so a wallet, game client, or marketplace UI can confirm facts about an NFT **without trusting the indexer's word for it**. Every claim is re-derived from Hive L1 (via public Hive RPC + HafAH).
+NFTLox ships a client-side verification layer so a wallet, game client, or marketplace UI can re-derive NFT ownership edges from Hive L1 operation anchors (via public Hive RPC + HafAH). The current verifier checks the operation the indexer points at; for full trust minimization, compare the same NFT across independent indexers or state-root snapshots before accepting the current pointer.
 
 Source: `packages/sdk/src/spv/`.
 
@@ -8,7 +8,7 @@ Source: `packages/sdk/src/spv/`.
 
 | Verifier | Proves |
 |---|---|
-| `verifyNftOwnership` | The indexer's current-owner claim matches an on-chain operation signed by the transferring party. |
+| `verifyNftOwnership` | The indexer's current-owner claim matches the referenced on-chain ownership operation. |
 | `verifyListingPrice` | An active listing's seller/amount/currency/nftId match the `list` tx on Hive L1. |
 | `verifyOperationOnChain` | A given tx_id + block contains an NFTLox `custom_json` with the expected `action` and `signer`. |
 | `verifyDeterministicDerivation` | Recomputes `instanceId` / `instanceDna` / `accessKey` from their domain-separated inputs. Pure; no network. |
@@ -41,7 +41,7 @@ Use your own Hive RPC if you depend on a specific node for rate limits or latenc
 
 ## Verify ownership
 
-The canonical "is this NFT really owned by Alice?" check.
+The canonical "does the indexer's current owner pointer resolve to Alice on L1?" check.
 
 ```typescript
 import { createDefaultL1Config, verifyNftOwnership } from "nftlox-sdk";
@@ -61,10 +61,10 @@ if (result.status !== "verified") {
 
 **What runs under the hood:**
 
-1. `GET /api/nfts/{nftId}/proof` — indexer returns `{ reportedOwner, owner_operation_id, previous_owner, event_type }` plus a short chain of prior ownership events.
+1. `GET /api/nfts/{nftId}/proof` — indexer returns `{ reportedOwner, owner_operation_id, previous_owner, event_type }`.
 2. For each check, the SDK resolves `owner_operation_id` on HafAH and parses the `custom_json`.
 3. The derived owner from L1 is compared to both `reportedOwner` (indexer) and `expectedOwner` (your call).
-4. `status = "verified"` only if all three agree for every check.
+4. `status = "verified"` only if all three agree for the referenced ownership edge.
 
 **Result shape:**
 

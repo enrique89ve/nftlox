@@ -269,7 +269,7 @@ const nft = await client.getNft("nft_…");
 // }
 ```
 
-Look up `owner_operation_id` on HafAH for the raw L1 proof, or pass it to the SPV verifier ([guides/spv.md](../guides/spv.md)) for a trustless check.
+Look up `owner_operation_id` on HafAH for the raw L1 anchor, or pass it to the SPV verifier ([guides/spv.md](../guides/spv.md)) for a client-side ownership-edge check.
 
 ## 8. Querying collections
 

@@ -27,7 +27,7 @@ Game Server              Hive L1              NFTLox Indexer
 - SDK generates **unsigned** payloads; server signs and broadcasts via Hive RPC.
 - Indexer validates everything on-chain; no backend database needed for truth.
 - Mutable data (stats, level, xp) updated via `set_data` or `set_data_from` (operator pattern).
-- Ownership verified trustlessly via SPV (client-side verification against Hive L1).
+- Ownership edges verified client-side against Hive L1 anchors.
 
 ---
 
@@ -291,7 +291,7 @@ Only the current borrower can call `buildNftReturn`. The lender's rights are res
 
 ## 7. Ownership Verification (SPV)
 
-Let players trustlessly verify item ownership on their client without trusting the indexer.
+Let players verify the referenced ownership edge on their client against Hive L1.
 
 ```typescript
 import { verifyNftOwnership, createDefaultL1Config } from "nftlox-sdk";
@@ -321,7 +321,7 @@ if (proof.status === "verified") {
 | **Lending** | Guild bank, tournament rentals | Posting | `buildNftLend` / `buildNftReturn` |
 | **Marketplace** | Player-to-player trading | Active (`buy`) + Posting | `buildList` / `buildBuy` |
 | **Approval** | Delegate transfer to a contract | Posting | `buildNftApprove` |
-| **SPV** | Trustless client-side proof | None (client-side) | `verifyNftOwnership` |
+| **SPV** | L1-anchored client-side check | None (client-side) | `verifyNftOwnership` |
 
 ---
 
