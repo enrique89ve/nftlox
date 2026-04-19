@@ -139,7 +139,7 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
-	test("buildBuy — active key, signer is the buyer (all ops in one keychain envelope)", () => {
+	test("buildBuy — active key, buyer signs transfers and node signs custom_json", () => {
 		const r = buildBuy({
 			nftId: "nft_1",
 			listingId: "list_1",
@@ -158,9 +158,16 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			},
 		});
 		if (!r.success) throw new Error("build failed");
-		// buildBuy emits [transfers..., custom_json], all signed by buyer with active key.
+		// buildBuy emits [transfers..., custom_json]; buyer signs transfers, node signs custom_json.
 		const customJsonOp = r.operations.find((op): op is HiveOperation => op[0] === "custom_json");
-		assertAuthCoherent(customJsonOp, "alice");
+		assertAuthCoherent(customJsonOp, "fee-account");
+		expect(r.signer).toBe("alice");
+		expect(r.coSigners).toEqual([{
+			op: 2,
+			account: "fee-account",
+			keyType: "Active",
+			via: "multisig",
+		}]);
 	});
 
 	test("buildBulkDistribute", () => {

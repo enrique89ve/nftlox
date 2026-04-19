@@ -287,7 +287,7 @@ Wire shape (in order):
 
 ```
 op[0..N-1] = ["transfer", …]     // seller, royalty recipient, protocol fee — memos use MEMO_PREFIX_BUY / ROYALTY / FEE
-op[N]      = ["custom_json", …]   // BuyData, active-auth, buyer in required_auths
+op[N]      = ["custom_json", …]   // BuyData, active-auth, nodeAccount in required_auths
 ```
 
 The indexer reconciles each transfer against the listing using the `listingId` embedded in the memo.

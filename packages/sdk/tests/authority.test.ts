@@ -104,13 +104,13 @@ describe("Active key operations use required_auths", () => {
 	});
 
 	test("buy", () => {
-		const op = buildOp(ACTION_BUY, "buyer-alice", {
+		const op = buildOp(ACTION_BUY, "node-account", {
 			nftId: "nft_1",
 			listingId: "list_1",
 			listTxId: "a".repeat(40),
 			txId: "b".repeat(40),
 		});
-		expect(op[1].required_auths).toEqual(["buyer-alice"]);
+		expect(op[1].required_auths).toEqual(["node-account"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 });

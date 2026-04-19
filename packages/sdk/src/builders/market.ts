@@ -126,7 +126,7 @@ export const paymentSplitSchema = z.object({
 	royaltyAmount: z.number().nonnegative(),
 	royaltyRecipient: z.string().nullable(),
 	feeAmount: z.number().nonnegative(),
-	feeAccount: z.string(),
+	feeAccount: usernameSchema,
 	totalPrice: z.number().positive(),
 	currency: z.enum(["HIVE", "HBD"]),
 });
@@ -135,6 +135,7 @@ export const buyBuilderSchema = buyInputSchema.extend({
 	buyer: usernameSchema,
 	seller: usernameSchema,
 	paymentSplit: paymentSplitSchema,
+	nodeAccount: usernameSchema.optional(),
 });
 export type BuyBuilderInput = z.infer<typeof buyBuilderSchema>;
 
@@ -160,7 +161,8 @@ export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 	};
 
 	const payload = createPayload("buy", buyData);
-	const buyCustomJson = createHiveOperation(payload, data.buyer);
+	const nodeAccount = data.nodeAccount ?? data.paymentSplit.feeAccount;
+	const buyCustomJson = createHiveOperation(payload, nodeAccount);
 
 	const paymentSplit = data.paymentSplit;
 	const currencyExt = paymentSplit.currency;
@@ -207,6 +209,12 @@ export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 		operations: [...transfers, buyCustomJson],
 		keyType: getKeyType("buy"),
 		signer: data.buyer,
+		coSigners: [{
+			op: transfers.length,
+			account: nodeAccount,
+			keyType: getKeyType("buy"),
+			via: "multisig",
+		}],
 		payload,
 	};
 }

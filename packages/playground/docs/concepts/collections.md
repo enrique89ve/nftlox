@@ -14,10 +14,10 @@ A `create_collection` operation registers the collection on-chain. The collectio
 
 ### Signing model
 
-`create_collection` is the only **dual-signer** action in the protocol. The transaction contains:
+`create_collection` is one of the protocol's **dual-signer** actions. The transaction contains:
 
 - A `transfer` op (the creation fee, default `0.100 HBD`) signed by the creator's **active** key.
-- A `custom_json` op with `required_auths: [creator, nodeAccount]`, signed by both the creator's active key **and** the node's multisig key.
+- A `custom_json` op with `required_auths: [nodeAccount]`, signed by the node's multisig key.
 
 The node's signature is requested via `requestCreateCollectionMultisig(indexerBaseUrl, { transaction })`. See [Signing & Broadcasting](../broadcasting.md#2-create_collection--active--node-multisig) for the full flow.
 

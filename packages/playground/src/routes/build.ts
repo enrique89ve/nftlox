@@ -336,6 +336,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			hiveOperations: result.operations,
 			payload: result.payload,
 			keyType: "Active",
+			coSigners: result.coSigners,
 		});
 	}),
 

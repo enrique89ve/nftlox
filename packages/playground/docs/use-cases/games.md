@@ -200,6 +200,7 @@ async function buyCard(buyer: string, nftId: string) {
 		listingId: payment.listingId,
 		listTxId: payment.listTxId,
 		txId: payment.txId,
+		nodeAccount: payment.nodeAccount,
 		paymentSplit: {
 			sellerAmount: payment.sellerAmount,
 			royaltyAmount: payment.royaltyAmount,

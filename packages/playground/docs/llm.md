@@ -42,7 +42,7 @@ type KeychainResult<T> =
       operations: ReadonlyArray<HiveOperation | HiveTransferOperation>; // ready to sign
       keyType: "Active" | "Posting";     // which key the signer must use
       signer: string;                    // primary signer account
-      coSigners?: readonly CoSigner[];   // present only for create_collection
+      coSigners?: readonly CoSigner[];   // present for create_collection and buy
       payload: ProtocolPayload<T>;       // the parsed custom_json body
       generatedIds?: Record<string, string>; // e.g. { collectionId, seedId, listingId }
       warnings?: readonly string[];
@@ -94,6 +94,7 @@ const result = buildBuy({
   listingId: info.listingId,
   listTxId: info.listTxId,
   txId: info.txId,
+  nodeAccount: info.nodeAccount,
   paymentSplit: {
     sellerAmount: info.sellerAmount,
     royaltyAmount: info.royaltyAmount,
@@ -160,7 +161,7 @@ await tx.broadcast();
 | `buildBurn` | Posting | NFT owner | Burns an instance. |
 | `buildList` | Posting | NFT owner | Lists an instance for sale. Generates `listingId` + `listingNonce`. |
 | `buildUnlist` | Posting | NFT owner | Cancels a listing. |
-| `buildBuy` | Active | buyer | Builds buy tx (transfers + custom_json). Requires node multisig. |
+| `buildBuy` | Active | buyer + node | Builds buy tx (buyer transfers + node-signed custom_json). Requires node multisig. |
 | `buildSetData` | Posting | NFT owner | Updates mutable fields on an instance. Requires `instanceDna`. |
 | `buildSetDataFrom` | Posting | approved data operator | Updates mutable fields on behalf of owner. Requires `instanceDna`. |
 | `buildExtendSchema` | Posting | collection creator | Appends new fields to schema. Append-only. |
@@ -229,6 +230,7 @@ buildBuy({
   listingId: "list_…",   // from client.getPaymentInfo()
   listTxId: "tx_…",
   txId: "tx_…",          // NFT creation tx
+  nodeAccount: "nftlox",
   paymentSplit: {
     sellerAmount: 24.5,   royaltyAmount: 0.25, royaltyRecipient: "artist",
     feeAmount: 0.25,      feeAccount: "nftlox", totalPrice: 25.0, currency: "HIVE",

@@ -274,7 +274,7 @@ describe("buildBuy transfer generation", () => {
 		}
 	});
 
-	test("buy custom_json is signed by buyer with active auth", () => {
+	test("buy custom_json is node-signed with active auth", () => {
 		const result = buildBuy(baseInput);
 		expect(result.success).toBe(true);
 		if (!result.success) return;
@@ -283,7 +283,14 @@ describe("buildBuy transfer generation", () => {
 			(op): op is HiveOperation => op[0] === "custom_json",
 		);
 		expect(customJson).toBeDefined();
-		expect(customJson![1].required_auths).toEqual([BUYER]);
+		expect(customJson![1].required_auths).toEqual([FEE_ACCOUNT]);
 		expect(customJson![1].required_posting_auths).toEqual([]);
+		expect(result.signer).toBe(BUYER);
+		expect(result.coSigners).toEqual([{
+			op: 2,
+			account: FEE_ACCOUNT,
+			keyType: "Active",
+			via: "multisig",
+		}]);
 	});
 });

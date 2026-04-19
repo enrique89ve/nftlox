@@ -142,12 +142,12 @@ hive_keychain.requestBroadcast(
 
 ## Flow 2 — Buying (active + node multisig)
 
-The `buy` action writes a `custom_json` that requires the **buyer's active** signature *and* the **node's active** signature. `buildBuy` already assembles the payment transfers in the correct order; you just need to merge two active signatures on the `custom_json`.
+The `buy` transaction has two active authorities: the buyer signs the payment transfers, and the node signs the `custom_json`. `buildBuy` already assembles the operations in the correct order and marks the custom_json op in `coSigners`.
 
 Canonical sequence:
 
 1. `client.getPaymentInfo(nftId)` → exact split (seller + royalty + fee).
-2. `buildBuy({ buyer, seller, …paymentSplit })` → `[...transfers, custom_json]`.
+2. `buildBuy({ buyer, seller, nodeAccount, …paymentSplit })` → `[...transfers, custom_json]`.
 3. Wrap in a Hive transaction **without signing**.
 4. POST the raw transaction to `/api/multisig` (via `client.multisig` or `requestBuyMultisig`) — the SDK solves the PoW token automatically.
 5. On `{ ok: true }`, append the returned `signature` to `tx.signatures`, add the buyer's own active signature, and broadcast.
@@ -175,6 +175,7 @@ const result = buildBuy({
 	listingId: payment.listingId,
 	listTxId: payment.listTxId,
 	txId: payment.txId,
+	nodeAccount: payment.nodeAccount,
 	paymentSplit: {
 		sellerAmount: payment.sellerAmount,
 		royaltyAmount: payment.royaltyAmount,

@@ -806,7 +806,7 @@ Submit a `create_collection` transaction for node co-signing. This is the dual-s
 		"expiration": "2026-03-29T12:00:00",
 		"operations": [
 			["transfer", { "from": "alice", "to": "nftlox", "amount": "0.100 HBD", "memo": "NFTLox CREATE_COLLECTION:…" }],
-			["custom_json", { "required_auths": ["alice", "nftlox"], "required_posting_auths": [], "id": "nftlox_testnet", "json": "…" }]
+			["custom_json", { "required_auths": ["nftlox"], "required_posting_auths": [], "id": "nftlox_testnet", "json": "…" }]
 		],
 		"signatures": []
 	}
@@ -890,4 +890,3 @@ Full reference:
 - [SDK Reference — all builders](../sdk/reference.md)
 - [Signing & Broadcasting](../broadcasting.md) — three signer flows with runnable examples per library.
 - [Data Formats](../data-formats.md) — the exact JSON each builder produces.
-

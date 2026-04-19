@@ -57,7 +57,7 @@ type ValidationError = {
 - `success` is a compile-time discriminator — narrow on it before touching any other field.
 - `operations` is already in Hive's `["custom_json", {...}]` / `["transfer", {...}]` tuple form. Pass directly to `hive-tx`, `@hiveio/wax`, or `dhive`.
 - `keyType` tells the caller which private key to sign with (`Active` for `create_collection` and `buy`, `Posting` for everything else).
-- `coSigners` is present on multi-signer flows (currently only `buildCollection`). Hand the listed operation to the node's multisig endpoint — see [Signing & Broadcasting](../broadcasting.md).
+- `coSigners` is present on multi-signer flows (`buildCollection` and `buildBuy`). Hand the listed operation to the node's multisig endpoint — see [Signing & Broadcasting](../broadcasting.md).
 - `generatedIds` surfaces deterministic IDs computed by the builder (`collectionId`, `seedId`, `listingId`, `listingNonce`, `originDna`) before the transaction is even broadcast. This is the hook for pre-computing links, caching, or optimistic UI.
 - `warnings` are non-fatal ergonomic hints (long names, unusually high royalty, missing `imageUrl` on a list/transfer).
 
@@ -69,7 +69,7 @@ Every builder validates its input with a Zod schema; the schema is exported alon
 
 | Builder | Signature | Auth | Ops | Notes |
 |---|---|---|---|---|
-| `buildCollection` | `(input, options) => Promise<KeychainResult<CollectionData>>` | Active + Posting co-sign via multisig | `[transfer, custom_json]` | Two-op flow: fee transfer (creator → nodeAccount) + protocol payload signed by node. |
+| `buildCollection` | `(input, options) => Promise<KeychainResult<CollectionData>>` | Active + node multisig | `[transfer, custom_json]` | Two-op flow: fee transfer (creator → nodeAccount) + protocol payload signed by node. |
 | `buildArchiveCollection` | `(input) => KeychainResult<ArchiveCollectionData>` | Posting | `[custom_json]` | Freezes a collection. Prevents further mints; existing NFTs keep trading. |
 | `buildExtendSchema` | `(input) => KeychainResult<ExtendSchemaData>` | Posting | `[custom_json]` | Append-only: add new `immutable` and/or `mutable` fields. Existing fields are immutable post-create. |
 | `buildCollectionWithSeeds` | `(input, options) => Promise<CollectionCreationPlan>` | mixed | multi-batch | Orchestrator: returns the collection step + N posting-only seed batches sized by `calculateMaxOperationsPerTx`. |

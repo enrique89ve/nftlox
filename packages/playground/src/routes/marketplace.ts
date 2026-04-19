@@ -1,18 +1,11 @@
 import { z } from "zod";
 import { Transaction } from "hive-tx";
 import {
-	PROTOCOL_ID,
-	PROTOCOL_VERSION,
-	ACTION_BUY,
-	MEMO_PREFIX_BUY,
-	MEMO_PREFIX_ROYALTY,
-	MEMO_PREFIX_FEE,
+	buildBuy,
 	fetchPaymentInfo,
 	requestBuyMultisig,
 	usernameSchema,
 	type HiveTransactionObject,
-	type PaymentInfo,
-	type MultisigResponse,
 } from "nftlox-sdk";
 import { INDEXER_URL } from "../shared/indexer";
 
@@ -39,64 +32,49 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 				if (!parse.success) {
 					return json({ success: false, error: parse.error.issues }, 400);
 				}
-				const body = parse.data;
+				const { buyer, nftId } = parse.data;
 
-				const info = await fetchPaymentInfo(INDEXER_URL, body.nftId);
+				const info = await fetchPaymentInfo(INDEXER_URL, nftId);
+
+				const built = buildBuy({
+					buyer,
+					seller: info.seller,
+					nftId,
+					listingId: info.listingId,
+					listTxId: info.listTxId,
+					txId: info.txId,
+					nodeAccount: info.nodeAccount,
+					...(info.seedTxId && { seedTxId: info.seedTxId }),
+					paymentSplit: {
+						sellerAmount: info.sellerAmount,
+						royaltyAmount: info.royaltyAmount,
+						royaltyRecipient: info.royaltyRecipient,
+						feeAmount: info.feeAmount,
+						feeAccount: info.feeAccount,
+						totalPrice: info.totalPrice,
+						currency: info.currency as "HIVE" | "HBD",
+					},
+				});
+
+				if (!built.success) {
+					return json({ success: false, error: built.errors }, 400);
+				}
 
 				const tx = new Transaction({ expiration: TX_EXPIRATION_MS });
-
-				if (info.sellerAmount > 0) {
-					await tx.addOperation("transfer", {
-						from: body.buyer,
-						to: info.seller,
-						amount: `${info.sellerAmount.toFixed(3)} ${info.currency}`,
-						memo: `${MEMO_PREFIX_BUY}${body.nftId}`,
-					});
+				for (const [opName, opBody] of built.operations) {
+					await tx.addOperation(
+						opName as Parameters<Transaction["addOperation"]>[0],
+						opBody as unknown as Parameters<Transaction["addOperation"]>[1],
+					);
 				}
-
-				if (info.royaltyAmount > 0 && info.royaltyRecipient) {
-					await tx.addOperation("transfer", {
-						from: body.buyer,
-						to: info.royaltyRecipient,
-						amount: `${info.royaltyAmount.toFixed(3)} ${info.currency}`,
-						memo: `${MEMO_PREFIX_ROYALTY}${body.nftId}`,
-					});
-				}
-
-				if (info.feeAmount > 0) {
-					await tx.addOperation("transfer", {
-						from: body.buyer,
-						to: info.feeAccount,
-						amount: `${info.feeAmount.toFixed(3)} ${info.currency}`,
-						memo: `${MEMO_PREFIX_FEE}${body.nftId}`,
-					});
-				}
-
-				await tx.addOperation("custom_json", {
-					required_auths: [info.nodeAccount],
-					required_posting_auths: [],
-					id: PROTOCOL_ID,
-					json: JSON.stringify({
-						protocol: PROTOCOL_ID,
-						version: PROTOCOL_VERSION,
-						action: ACTION_BUY,
-						data: {
-							nftId: body.nftId,
-							listingId: info.listingId,
-							listTxId: info.listTxId,
-							txId: info.txId,
-							...(info.seedTxId && { seedTxId: info.seedTxId }),
-						},
-					}),
-				});
 
 				if (!tx.transaction) {
 					return json({ success: false, error: "Transaction building failed" }, 500);
 				}
 
 				const multisigRequest = {
-					buyer: body.buyer,
-					nftId: body.nftId,
+					buyer,
+					nftId,
 					listingId: info.listingId,
 					listTxId: info.listTxId,
 					transaction: tx.transaction as unknown as HiveTransactionObject,
@@ -113,6 +91,7 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 					nodeSignature: multisigResult.signature,
 					digest: multisigResult.digest,
 					paymentInfo: info,
+					coSigners: built.coSigners,
 				});
 			} catch (err) {
 				return json({ success: false, error: String(err instanceof Error ? err.message : err) }, 500);

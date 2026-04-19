@@ -94,7 +94,7 @@ const info = await client.getPaymentInfo("nft_abc…_7");
 
 ### Step 2 — build the transaction
 
-`buildBuy` returns `operations` as a flat array: up to 3 `transfer` ops followed by the `custom_json` with `required_auths: [buyer]`. The buyer signs with **active** (the transfers need it). The node will add its signature to authorize the `custom_json`.
+`buildBuy` returns `operations` as a flat array: up to 3 `transfer` ops followed by the `custom_json` with `required_auths: [nodeAccount]`. The buyer signs the transfers with **active**. The node adds its signature to authorize the `custom_json`.
 
 ```typescript
 import { buildBuy } from "nftlox-sdk";
@@ -106,6 +106,7 @@ const result = buildBuy({
 	listingId: info.listingId,
 	listTxId: info.listTxId,
 	txId: info.txId,
+	nodeAccount: info.nodeAccount,
 	paymentSplit: {
 		sellerAmount: info.sellerAmount,
 		royaltyAmount: info.royaltyAmount,
