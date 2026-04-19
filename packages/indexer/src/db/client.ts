@@ -46,18 +46,44 @@ const txBuffers = new WeakMap<object, StateRootBuffer>();
 const txSavepointHandles = new WeakMap<object, TxWithSavepoint>();
 
 /**
+ * Queryable widened with the handler-facing context attached by
+ * `attachScope`. Attachment is structural — no string-keyed `as any`
+ * lookups are needed by readers or writers.
+ */
+export type ScopedQueryable = Queryable & {
+	readonly __nftlox_buffer?: StateRootBuffer | undefined;
+	readonly __nftlox_handle?: TxWithSavepoint | undefined;
+};
+
+/**
+ * Attaches the state-root buffer and savepoint handle onto the queryable
+ * tag so downstream `getStateRootBuffer`/`getTxSavepointHandle` can read
+ * them without a WeakMap hit. Used by action-router when creating a
+ * per-handler savepoint.
+ */
+export function attachScope(
+	sql: Queryable,
+	ctx: { buffer: StateRootBuffer; handle: TxWithSavepoint },
+): ScopedQueryable {
+	const tagged: ScopedQueryable = Object.assign(sql, {
+		__nftlox_buffer: ctx.buffer,
+		__nftlox_handle: ctx.handle,
+	});
+	return tagged;
+}
+
+/**
  * Returns the StateRootBuffer attached to the given transaction handle.
  * Throws if called outside withTransaction — all SPV-affecting mutations
  * MUST run inside a transaction so a crash mid-batch rolls back cleanly.
  *
- * For savepoint-scoped transactions, checks for __nftlox_buffer property first
- * (attached by action-router when creating a savepoint), then falls back to WeakMap.
+ * For savepoint-scoped transactions, reads the structural `__nftlox_buffer`
+ * field first (attached by action-router when creating a savepoint), then
+ * falls back to the WeakMap entry attached by `withTransaction`.
  */
 export function getStateRootBuffer(txn: Queryable): StateRootBuffer {
-	const anyTxn = txn as any;
-	if (anyTxn.__nftlox_buffer) {
-		return anyTxn.__nftlox_buffer;
-	}
+	const scoped = txn as ScopedQueryable;
+	if (scoped.__nftlox_buffer) return scoped.__nftlox_buffer;
 	const buf = txBuffers.get(txn as unknown as object);
 	if (!buf) {
 		throw new Error(
@@ -73,14 +99,13 @@ export function getStateRootBuffer(txn: Queryable): StateRootBuffer {
  * use this to wrap their mutations in a savepoint, enabling per-handler
  * rollback on failure without aborting the entire batch transaction.
  *
- * For savepoint-scoped transactions, checks for __nftlox_handle property first
- * (attached by action-router when creating a savepoint), then falls back to WeakMap.
+ * For savepoint-scoped transactions, reads `__nftlox_handle` first
+ * (attached by action-router when creating a savepoint), then falls back
+ * to the WeakMap entry from `withTransaction`.
  */
 export function getTxSavepointHandle(txn: Queryable): TxWithSavepoint {
-	const anyTxn = txn as any;
-	if (anyTxn.__nftlox_handle) {
-		return anyTxn.__nftlox_handle;
-	}
+	const scoped = txn as ScopedQueryable;
+	if (scoped.__nftlox_handle) return scoped.__nftlox_handle;
 	const handle = txSavepointHandles.get(txn as unknown as object);
 	if (!handle) {
 		throw new Error(
