@@ -145,7 +145,7 @@ describe("buildCollection consistency", () => {
 		expect(transferOp[1]?.from).toBe(validInput.creator);
 		expect(transferOp[1]?.to).toBe(nodeAccount);
 		expect(transferOp[1]?.amount).toMatch(/^\d+\.\d{3} (HBD|HIVE)$/);
-		expect(transferOp[1]?.memo).toBe(`NFTLox collection fee:${result.generatedIds?.collectionId}`);
+		expect(transferOp[1]?.memo).toBe(`NFTLox FEE-COL:${result.generatedIds?.collectionId}`);
 	});
 
 	test("custom_json required_auths is [nodeAccount] (node co-signs)", async () => {

@@ -162,7 +162,7 @@ export async function buildCollection(
 			from: data.creator,
 			to: nodeAccount,
 			amount: `${parsedFee.toFixed(3)} ${feeCurrency}`,
-			memo: `NFTLox collection fee:${collectionId}`,
+			memo: `NFTLox FEE-COL:${collectionId}`,
 		},
 	];
 

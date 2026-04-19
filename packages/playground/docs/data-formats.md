@@ -81,7 +81,7 @@ The `creator` is **not** in the payload — the indexer derives it from the fee 
 ```
 op[0] = ["transfer", { from: "<creator>", to: "<nodeAccount>",
                        amount: "0.100 HBD",
-                       memo: "NFTLox collection fee:<collectionId>" }]
+                       memo: "NFTLox FEE-COL:<collectionId>" }]
 op[1] = ["custom_json", { required_auths: ["<nodeAccount>"],
                           id: "nftlox_testnet",
                           json: "<ProtocolPayload<CollectionData>>" }]

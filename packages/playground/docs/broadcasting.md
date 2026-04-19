@@ -30,7 +30,7 @@ Every builder returns Hive-native tuples:
 	"from": "alice",
 	"to": "nftlox",
 	"amount": "0.100 HBD",
-	"memo": "NFTLox collection fee:col_…"
+	"memo": "NFTLox FEE-COL:col_…"
 }]
 ```
 
@@ -242,7 +242,7 @@ The node will refuse to co-sign if:
 `buildCollection` returns **two operations**: a `transfer` signed by the creator (active), and a `custom_json` whose `required_auths` is the node account. Both must be in the **same Hive transaction** — the indexer pairs the fee to the payload by `tx_id`.
 
 ```
-operations[0] = ["transfer",    { from: "alice", to: "nftlox", amount: "0.100 HBD", memo: "NFTLox collection fee:col_…" }]
+operations[0] = ["transfer",    { from: "alice", to: "nftlox", amount: "0.100 HBD", memo: "NFTLox FEE-COL:col_…" }]
 operations[1] = ["custom_json", { required_auths: ["nftlox"], ...create_collection payload }]
 ```
 
