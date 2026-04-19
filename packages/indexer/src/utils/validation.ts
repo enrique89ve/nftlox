@@ -70,7 +70,18 @@ export interface VerifyTransfersParams {
  * otherwise a partial match on a failed verification would leave the pool dirty for
  * the next operation in the same Hive tx.
  */
-export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
+export interface VerifyTransfersResult {
+	readonly split: PaymentSplit;
+	/**
+	 * The `from` of the seller-leg transfer — the canonical buyer identity
+	 * derived from the memo-bound transfer, replacing positional
+	 * `pairedTransfers[0]?.from` access in the buy handler.
+	 */
+	readonly buyerFromTransfer: string;
+	readonly consumedIndices: readonly number[];
+}
+
+export function verifyTransfers(params: VerifyTransfersParams): VerifyTransfersResult {
 	const { transfers, buyer, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, nftId, consumedIndices } = params;
 
 	if (transfers.length === 0) {
@@ -82,7 +93,7 @@ export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 	const AMOUNT_TOLERANCE = 0.0005;
 
 	// Stage matches here first. The shared `consumedIndices` is only mutated below,
-	// after all three expected transfers are successfully matched.
+	// after all expected transfers are successfully matched.
 	const staged: number[] = [];
 
 	function expectTransfer(to: string, expectedAmount: number, label: string, expectedMemo: string): void {
@@ -115,12 +126,21 @@ export function verifyTransfers(params: VerifyTransfersParams): PaymentSplit {
 		expectTransfer(split.feeAccount, split.feeAmount, "protocol fee", `${MEMO_PREFIX_FEE}${nftId}`);
 	}
 
-	// Atomic commit: all three matches succeeded, now publish to the shared pool.
+	// The first staged match is always the seller leg when sellerAmount > 0
+	// (listing prices are > 0 in every valid buy). Its `from` is the canonical
+	// buyer identity, replacing positional `pairedTransfers[0]` reads.
+	const sellerLegIdx = staged[0];
+	if (sellerLegIdx === undefined) {
+		throw new Error("verifyTransfers: no seller-leg match (unexpected — totalPrice must be > 0)");
+	}
+	const buyerFromTransfer = transfers[sellerLegIdx]!.from;
+
+	// Atomic commit: all expected matches succeeded, now publish to the shared pool.
 	if (consumedIndices) {
 		for (const idx of staged) consumedIndices.add(idx);
 	}
 
-	return split;
+	return { split, buyerFromTransfer, consumedIndices: [...staged] };
 }
 
 export function requireString(value: unknown, fieldName: string): string {

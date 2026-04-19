@@ -291,7 +291,7 @@ function validatePaymentSplit(
 	}
 
 	try {
-		const split = verifyTransfers({
+		const { split } = verifyTransfers({
 			transfers,
 			buyer: transfers[0]?.from ?? "",
 			seller: nft.owner,

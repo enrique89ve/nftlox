@@ -101,7 +101,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	// Protocol fee always goes to the co-signing node.
 	// consumedIndices prevents multi-buy in the same tx from sharing transfers.
 	const transfers = op.pairedTransfers ?? [];
-	const split = verifyTransfers({
+	const { split } = verifyTransfers({
 		transfers,
 		buyer,
 		seller: nft.owner,
