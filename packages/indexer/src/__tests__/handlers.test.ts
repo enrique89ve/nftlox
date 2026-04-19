@@ -27,6 +27,7 @@ import {
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_MINT,
 	ACTION_BULK_DISTRIBUTE,
+	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
 	ACTION_TRANSFER,
 	ACTION_LIST,
 	ACTION_UNLIST,
@@ -998,6 +999,22 @@ describe("Handlers (integration)", () => {
 
 			const instances = await sql`SELECT * FROM nfts WHERE seed_id = ${replayMultiId}`;
 			expect(instances.length).toBe(6);
+		});
+
+		test("rejects when total quantity across items exceeds MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp(ACTION_BULK_DISTRIBUTE, {
+				to: "bob",
+				items: [await makeBulkItem(SEED_TEST1, MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY + 1)],
+			});
+			await expect(withTransaction((txn) => handleBulkDistribute(op, txn))).rejects.toThrow(
+				`Too many instances: ${MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY + 1} exceeds max ${MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY}`,
+			);
+
+			const [seed] = await sql`SELECT distributed FROM nfts WHERE id = ${SEED_TEST1}`;
+			expect(seed!.distributed).toBe(0);
 		});
 
 	});
