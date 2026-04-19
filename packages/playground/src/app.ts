@@ -1462,8 +1462,11 @@ async function seedGroupUnlist(nftId: string) {
   }
 }
 
+let seedGroupReloadTimer: ReturnType<typeof setTimeout> | null = null;
 function scheduleSeedGroupReload() {
-  setTimeout(() => {
+  if (seedGroupReloadTimer) clearTimeout(seedGroupReloadTimer);
+  seedGroupReloadTimer = setTimeout(() => {
+    seedGroupReloadTimer = null;
     if (currentSeedGroupId) loadSeedGroup(currentSeedGroupId);
     loadInventory();
   }, 5000);
