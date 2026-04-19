@@ -12,6 +12,7 @@ import {
 	SYMBOL_REGEX,
 	TX_ID_REGEX,
 	validateHiveUsername,
+	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
 } from "@nftlox/protocol";
 
 export { validateHiveUsername };
@@ -189,6 +190,10 @@ export const bulkDistributeInputSchema = z.object({
 				return unique.size === items.length;
 			},
 			{ message: "Duplicate seedId: aggregate quantities instead" }
+		)
+		.refine(
+			(items) => items.reduce((total, item) => total + item.quantity, 0) <= MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
+			{ message: `Total quantity cannot exceed ${MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY} instances per operation` }
 		),
 	imageOverrides: z.record(z.string(), z.object({ imageUrl: z.string().optional(), imageHash: z.string().optional() })).refine(
 		(obj) => Object.keys(obj).length <= 50,

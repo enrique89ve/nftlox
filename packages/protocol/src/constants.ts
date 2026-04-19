@@ -134,6 +134,7 @@ export const LISTING_HASH_LENGTH = 32;
 // ============================================================================
 
 export const MAX_BULK_DISTRIBUTE_ITEMS = 50;
+export const MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY = 250;
 export const MAX_TRANSFER_BATCH_SIZE = 50;
 
 // ============================================================================

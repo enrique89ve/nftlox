@@ -25,6 +25,7 @@ import {
 	generateDeterministicInstanceDna,
 	ACTION_BULK_DISTRIBUTE,
 	MAX_BULK_DISTRIBUTE_ITEMS,
+	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
 	validateHiveUsername,
 	computeDataHash,
 	validateMutableUpdate,
@@ -49,15 +50,23 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 	const parsedItems: Array<{ seedId: string; quantity: number; seedTxId: string }> = [];
 	const seenSeeds = new Set<string>();
+	let totalQuantity = 0;
 
 	for (const item of items) {
 		const raw = requireObject(item, "items[]");
 		const seedId = requireString(raw.seedId, "seedId");
 		const quantity = requirePositiveInt(raw.quantity, "quantity");
 		const seedTxId = requireString(raw.seedTxId, "seedTxId");
+		totalQuantity += quantity;
 		if (seenSeeds.has(seedId)) throw new Error(`Duplicate seedId in items: ${seedId}`);
 		seenSeeds.add(seedId);
 		parsedItems.push({ seedId, quantity, seedTxId });
+	}
+
+	if (totalQuantity > MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY) {
+		throw new Error(
+			`Too many instances: ${totalQuantity} exceeds max ${MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY}`,
+		);
 	}
 
 	// Track validated schemas to avoid re-validating mutableData per collection

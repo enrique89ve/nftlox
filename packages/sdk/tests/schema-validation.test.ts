@@ -1,5 +1,13 @@
 import { test, expect, describe } from "bun:test";
-import { priceSchema, txIdSchema, listInputSchema, mintInputSchema, bulkDistributeItemSchema } from "../src/schemas";
+import {
+	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
+	priceSchema,
+	txIdSchema,
+	listInputSchema,
+	mintInputSchema,
+	bulkDistributeItemSchema,
+	bulkDistributeInputSchema,
+} from "../src";
 
 // ============ priceSchema ============
 
@@ -272,6 +280,24 @@ describe("bulkDistributeItemSchema seedTxId", () => {
 	test("rejects missing seedTxId", () => {
 		const { seedTxId, ...withoutTx } = validItem;
 		const result = bulkDistributeItemSchema.safeParse(withoutTx);
+		expect(result.success).toBe(false);
+	});
+});
+
+describe("bulkDistributeInputSchema total quantity", () => {
+	const seedTxId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+	test("accepts total quantity at the protocol cap", () => {
+		const result = bulkDistributeInputSchema.safeParse({
+			items: [{ seedId: "seed_abc", quantity: MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY, seedTxId }],
+		});
+		expect(result.success).toBe(true);
+	});
+
+	test("rejects total quantity above the protocol cap", () => {
+		const result = bulkDistributeInputSchema.safeParse({
+			items: [{ seedId: "seed_abc", quantity: MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY + 1, seedTxId }],
+		});
 		expect(result.success).toBe(false);
 	});
 });

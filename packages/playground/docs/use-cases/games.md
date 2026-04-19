@@ -168,7 +168,7 @@ async function openPack(player: string) {
 }
 ```
 
-Each instance gets a unique `instanceDna` and `instanceNumber`. The player owns distinct NFTs that can be transferred, listed, or lent independently. Cap per call: `MAX_BULK_DISTRIBUTE_ITEMS = 50` seeds.
+Each instance gets a unique `instanceDna` and `instanceNumber`. The player owns distinct NFTs that can be transferred, listed, or lent independently. Cap per call: `MAX_BULK_DISTRIBUTE_ITEMS = 50` seeds and `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY = 250` instances.
 
 ---
 

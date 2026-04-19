@@ -9,6 +9,7 @@ import {
 	PROTOCOL_FEE_BPS,
 	MAX_ROYALTY_PCT,
 	MAX_BULK_DISTRIBUTE_ITEMS,
+	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
 	MAX_TRANSFER_BATCH_SIZE,
 	ORIGIN_DNA_LENGTH,
 	INSTANCE_DNA_LENGTH,
@@ -69,6 +70,7 @@ describe("protocol contract integrity", () => {
 
 	test("batch limits are positive", () => {
 		expect(MAX_BULK_DISTRIBUTE_ITEMS).toBeGreaterThan(0);
+		expect(MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY).toBeGreaterThanOrEqual(MAX_BULK_DISTRIBUTE_ITEMS);
 		expect(MAX_TRANSFER_BATCH_SIZE).toBeGreaterThan(0);
 	});
 

@@ -147,7 +147,7 @@ A **seed** is the non-distributable template. It carries the visual asset, max s
 }
 ```
 
-Cap: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds per call. Duplicate `seedId`s are rejected — aggregate the quantity instead.
+Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY = 250` instances per call. Duplicate `seedId`s are rejected — aggregate the quantity instead.
 
 ### Transfers & Burn
 
@@ -393,6 +393,7 @@ Re-exported from `@nftlox/protocol`:
 | `PROTOCOL_VERSION` | `"0.6.0"` | The `version` field in every payload. |
 | `MAX_OPERATIONS_PER_TX` | `5` | Hard cap per Hive transaction. |
 | `MAX_BULK_DISTRIBUTE_ITEMS` | `50` | Max distinct seeds per `bulk_distribute`. |
+| `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY` | `250` | Max created instances per `bulk_distribute`. |
 | `MAX_TRANSFER_BATCH_SIZE` | `50` | Max `nftIds` per bulk transfer/burn. |
 | `SAFE_PAYLOAD_MAX_BYTES` | `7372` | 90% of Hive's 8 KiB custom_json ceiling. |
 | `PROTOCOL_COLLECTION_FEE_HBD` | `"0.100"` | Default fee for `create_collection`. |

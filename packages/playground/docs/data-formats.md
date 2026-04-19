@@ -38,6 +38,7 @@ The `id` on the Hive op equals `PROTOCOL_ID`. The indexer filters custom_jsons b
 | Safe budget (SDK enforced) | 7372 B (`SAFE_PAYLOAD_MAX_BYTES`, 90%) |
 | Max ops per Hive tx | 5 |
 | Max seeds per `bulk_distribute` | 50 |
+| Max instances per `bulk_distribute` | 250 |
 | Max NFT ids per bulk `transfer` / burn | 50 |
 
 Exceeding `SAFE_PAYLOAD_MAX_BYTES` throws `PayloadTooLargeError` with a suggested batch size.
