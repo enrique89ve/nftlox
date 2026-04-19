@@ -1,0 +1,24 @@
+        <div class="page" id="page-seed-group">
+          <div class="breadcrumb">
+            <a href="javascript:void(0)" onclick="loadInventory(); navigateTo('inventory')">← Back to inventory</a>
+          </div>
+          <div class="page-header">
+            <h1 class="page-title" id="seed-group-title">Seed group</h1>
+            <p class="page-desc" id="seed-group-subtitle"></p>
+          </div>
+
+          <div class="seed-group-summary" id="seed-group-summary" style="display: none;">
+            <img id="seed-group-image" class="seed-group-image" src="" alt="">
+            <div class="seed-group-meta">
+              <div><span class="stat-label">Collection:</span> <span id="seed-group-collection">-</span></div>
+              <div><span class="stat-label">Edition:</span> <span id="seed-group-edition">-</span></div>
+              <div><span class="stat-label">You own:</span> <span id="seed-group-owned">-</span> / <span id="seed-group-total">-</span></div>
+            </div>
+          </div>
+
+          <div id="seed-group-table-container">
+            <div class="empty-state">
+              <p class="empty-state-text">Loading…</p>
+            </div>
+          </div>
+        </div>

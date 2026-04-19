@@ -1680,3 +1680,81 @@
           grid-column: 1 / -1;
         }
       }
+
+      .seed-group-summary {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 20px;
+        align-items: center;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+      }
+
+      .seed-group-image {
+        width: 120px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 6px;
+        background: var(--surface-2);
+      }
+
+      .seed-group-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+      }
+
+      .seed-group-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .seed-group-table th,
+      .seed-group-table td {
+        padding: 10px 12px;
+        text-align: left;
+        font-size: 12px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .seed-group-table th {
+        background: var(--surface-2);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+      }
+
+      .seed-group-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .seed-group-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .seed-group-actions button {
+        font-size: 11px;
+        padding: 4px 10px;
+      }
+
+      .seed-group-actions button[disabled] {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .seed-group-id {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-muted);
+      }

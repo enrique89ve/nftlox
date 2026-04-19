@@ -336,6 +336,7 @@ function goBack() {
 
 (window as any).showPage = showPage;
 (window as any).goBack = goBack;
+(window as any).navigateTo = navigateTo;
 
 document.querySelectorAll(".nav-item").forEach((item) => {
   item.addEventListener("click", () => {
@@ -1137,6 +1138,160 @@ async function loadInventory() {
 }
 
 (window as any).loadInventory = loadInventory;
+
+async function loadSeedGroup(seedId: string) {
+  if (!connectedUser) {
+    log("Connect wallet to view your inventory", "error");
+    return;
+  }
+  currentSeedGroupId = seedId;
+  navigationStack.push("seed-group");
+  navigateTo("seed-group");
+
+  const titleEl = $("seed-group-title");
+  const subtitleEl = $("seed-group-subtitle");
+  const summaryEl = $("seed-group-summary");
+  const tableContainer = $("seed-group-table-container");
+
+  if (titleEl) titleEl.textContent = "Loading seed…";
+  if (subtitleEl) subtitleEl.textContent = "";
+  if (summaryEl) summaryEl.style.display = "none";
+  if (tableContainer) {
+    tableContainer.innerHTML =
+      '<div class="empty-state"><p class="empty-state-text">Loading…</p></div>';
+  }
+
+  try {
+    const [seedData, ownerData] = await Promise.all([
+      fetchJsonOrThrow<NftDetailResponse>(
+        `/api/nft/${encodeURIComponent(seedId)}/details`,
+      ),
+      getNFTsByOwner(connectedUser, 200),
+    ]);
+
+    if (seedData.error || !seedData.nft) {
+      if (titleEl) titleEl.textContent = "Seed not found";
+      if (tableContainer) {
+        tableContainer.innerHTML = `
+					<div class="empty-state">
+						<p class="empty-state-text">Could not load seed: ${escapeHtml(seedData.error ?? "unknown error")}</p>
+					</div>
+				`;
+      }
+      return;
+    }
+
+    const seed = seedData.nft;
+    const owned = ownerData.nfts.filter(
+      (n) =>
+        n.isSeed !== true &&
+        ((n as any).seedId === seedId ||
+          `${n.collectionId}::${n.edition}` === seedId),
+    );
+
+    if (titleEl) titleEl.textContent = seed.name;
+    if (subtitleEl) {
+      subtitleEl.textContent = `Your owned instances of this seed`;
+    }
+    if (summaryEl) {
+      summaryEl.style.display = "grid";
+      const image = $("seed-group-image") as HTMLImageElement | null;
+      if (image) {
+        image.src = seed.imageUrl ?? PLACEHOLDER_SM;
+        image.onerror = () => {
+          image.src = PLACEHOLDER_SM;
+        };
+      }
+      const collectionEl = $("seed-group-collection");
+      const editionEl = $("seed-group-edition");
+      const ownedEl = $("seed-group-owned");
+      const totalEl = $("seed-group-total");
+      if (collectionEl) collectionEl.textContent = seed.collectionId;
+      if (editionEl) editionEl.textContent = String(seed.edition ?? "-");
+      if (ownedEl) ownedEl.textContent = String(owned.length);
+      if (totalEl) totalEl.textContent = String(seed.distributed ?? 0);
+    }
+
+    if (owned.length === 0) {
+      if (tableContainer) {
+        tableContainer.innerHTML = `
+					<div class="empty-state">
+						<p class="empty-state-text">You don't own any instance of this seed.</p>
+					</div>
+				`;
+      }
+      return;
+    }
+
+    renderSeedGroupTable(owned);
+  } catch (e) {
+    log(`Error loading seed group: ${(e as Error).message}`, "error");
+    if (tableContainer) {
+      tableContainer.innerHTML = `
+				<div class="empty-state">
+					<p class="empty-state-text">Failed to load.</p>
+				</div>
+			`;
+    }
+  }
+}
+
+function renderSeedGroupTable(owned: NftCardData[]) {
+  const tableContainer = $("seed-group-table-container");
+  if (!tableContainer) return;
+
+  const sorted = [...owned].sort(
+    (a, b) => (a.instanceNumber ?? 0) - (b.instanceNumber ?? 0),
+  );
+
+  const rows = sorted
+    .map((nft) => {
+      const isLent = (nft.status ?? "").toLowerCase() === "lent";
+      const isListed = Boolean(nft.listingPrice);
+      const statusText = isLent
+        ? "Lent"
+        : isListed
+          ? `Listed @ ${escapeHtml(nft.listingPrice ?? "")} ${escapeHtml(nft.listingCurrency ?? "")}`
+          : "Owned";
+      const idAttr = escapeHtml(nft.id);
+      const disabled = isLent ? "disabled" : "";
+      const lentTip = isLent ? 'title="Lent — cannot modify"' : "";
+      const listAction = isListed
+        ? `<button class="btn btn-secondary" ${disabled} ${lentTip} onclick="seedGroupUnlist('${idAttr}')">Unlist</button>`
+        : `<button class="btn btn-secondary" ${disabled} ${lentTip} onclick="seedGroupListPrompt('${idAttr}')">List</button>`;
+      return `
+				<tr>
+					<td>#${nft.instanceNumber ?? "?"}</td>
+					<td><span class="seed-group-id">${idAttr}</span></td>
+					<td>${statusText}</td>
+					<td class="seed-group-actions">
+						<button class="btn btn-secondary" onclick="seedGroupOpen('${idAttr}')">Open</button>
+						<button class="btn btn-secondary" ${disabled} ${lentTip} onclick="seedGroupTransferPrompt('${idAttr}')">Transfer</button>
+						${listAction}
+					</td>
+				</tr>
+			`;
+    })
+    .join("");
+
+  tableContainer.innerHTML = `
+		<table class="seed-group-table">
+			<thead>
+				<tr>
+					<th>#</th>
+					<th>ID</th>
+					<th>Status</th>
+					<th>Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				${rows}
+			</tbody>
+		</table>
+	`;
+}
+
+(window as any).loadSeedGroup = loadSeedGroup;
 
 function renderInventorySummary(counts: UserNftCounts, nfts: NftCardData[]) {
   const summary = $("inventory-summary");

@@ -28,6 +28,7 @@ const PAGE_IDS = [
 	"inventory",
 	"collection-detail",
 	"nft-detail",
+	"seed-group",
 	"advanced",
 	"marketplace",
 ] as const;
