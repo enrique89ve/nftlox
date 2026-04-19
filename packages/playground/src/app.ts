@@ -23,6 +23,10 @@ import {
   PLACEHOLDER_SM,
   PLACEHOLDER_LG,
 } from "./shared/dom";
+import {
+  groupInstancesBySeed,
+  type InstanceGroup,
+} from "./inventory-grouping";
 
 let connectedUser: string | null = null;
 let _currentStep = 1;
@@ -298,6 +302,7 @@ async function validateTransfer(nftId: string, currentUser: string) {
 let navigationStack: string[] = ["collections"];
 let currentCollectionId: string | null = null;
 let currentNftId: string | null = null;
+let currentSeedGroupId: string | null = null;
 
 function navigateTo(pageId: string) {
   document
@@ -1116,8 +1121,10 @@ async function loadInventory() {
       container.innerHTML = html;
 
       if (seeds.length > 0) renderNfts(seeds, "inventory-seeds", true);
-      if (instances.length > 0)
-        renderNfts(instances, "inventory-instances", true);
+      if (instances.length > 0) {
+        const groups = groupInstancesBySeed(instances);
+        renderInstanceGroups(groups, "inventory-instances");
+      }
     }
 
     log(
@@ -1237,6 +1244,55 @@ function renderNfts(
       };
     });
   }
+}
+
+function renderInstanceGroups(
+  groups: InstanceGroup[],
+  containerId: string,
+) {
+  const container = $(containerId);
+  if (!container) return;
+
+  if (groups.length === 0) {
+    container.innerHTML = `
+				<div class="empty-state">
+					<p class="empty-state-text">No NFTs found</p>
+				</div>
+			`;
+    return;
+  }
+
+  container.innerHTML = groups
+    .map((g) => {
+      const showCount = g.count >= 2;
+      const listedChip =
+        g.listedCount > 0
+          ? `<span class="seed-group-status-chip">${g.listedCount} listed</span>`
+          : "";
+      return `
+				<div class="nft-card" data-seed="${escapeHtml(g.seedId)}">
+					${showCount ? `<span class="nft-card-group-badge">x${g.count}</span>` : ""}
+					<img class="nft-image" src="${escapeHtml(g.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
+					<div class="nft-card-body">
+						<div class="nft-name">${escapeHtml(g.name)}</div>
+						<div class="nft-owner">@${escapeHtml(connectedUser ?? "")}</div>
+						<div class="nft-meta">
+							<span class="nft-meta-supply">${g.count} owned</span>
+							<span class="nft-type-badge instance">INSTANCE</span>
+						</div>
+						${listedChip ? `<div class="nft-meta">${listedChip}</div>` : ""}
+					</div>
+				</div>
+			`;
+    })
+    .join("");
+
+  container.querySelectorAll(".nft-card").forEach((card) => {
+    (card as HTMLElement).onclick = () => {
+      const seedId = (card as HTMLElement).dataset.seed;
+      if (seedId) loadSeedGroup(seedId);
+    };
+  });
 }
 
 // ============ TRANSFER ============
