@@ -26,6 +26,7 @@ import {
 	MAX_IMAGE_URL_LENGTH,
 	MAX_URL_LENGTH,
 	MAX_ID_LENGTH,
+	INSTANCE_FEE_PER_N,
 } from "@/protocol/index.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
@@ -36,11 +37,12 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	}
 
 	// Memo-bound identity: the router validated the fee transfer via
-	// PAYMENT_VALIDATORS.fixed, which memo-matched `NFTLox FEE-COL:{id}`.
-	// `op.payment.payer` is the transfer's `from` — the canonical creator.
-	// No positional `pairedTransfers[0]` read, no piggyback vulnerability.
-	if (!op.payment || op.payment.kind !== "fixed") {
-		throw new Error("create_collection: missing pre-validated fixed-fee payment");
+	// PAYMENT_VALIDATORS.fixed (or .scaled when INSTANCE_FEE_ENABLED), which
+	// memo-matched `NFTLox FEE-COL:{id}`. `op.payment.payer` is the transfer's
+	// `from` — the canonical creator. No positional `pairedTransfers[0]` read,
+	// no piggyback vulnerability.
+	if (!op.payment || (op.payment.kind !== "fixed" && op.payment.kind !== "scaled")) {
+		throw new Error("create_collection: missing pre-validated collection-fee payment");
 	}
 	const creator = requireUsername(op.payment.payer, "creator");
 
@@ -99,6 +101,22 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		throw new Error(`totalPotential must be a non-negative integer, got ${totalPotential}`);
 	}
 
+	// `maxInstances` caps the total instances that can be distributed across
+	// every seed in this collection. 0 means "unlimited" (creator opted out of
+	// the per-collection cap). Any positive value MUST be a multiple of
+	// INSTANCE_FEE_PER_N so the scaled fee is always paid in whole units when
+	// INSTANCE_FEE_ENABLED flips on. Field is immutable post-creation (DB
+	// trigger `prevent_collection_immutable_update`).
+	const maxInstances = requireNumber(d.maxInstances, "maxInstances");
+	if (maxInstances < 0 || !Number.isInteger(maxInstances)) {
+		throw new Error(`maxInstances must be a non-negative integer, got ${maxInstances}`);
+	}
+	if (maxInstances > 0 && maxInstances % INSTANCE_FEE_PER_N !== 0) {
+		throw new Error(
+			`maxInstances must be 0 (unlimited) or a positive multiple of ${INSTANCE_FEE_PER_N}, got ${maxInstances}`,
+		);
+	}
+
 	// Validate schema if provided
 	const rawSchema = optionalCollectionSchema(d.schema);
 	if (rawSchema) {
@@ -116,6 +134,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		symbol,
 		creator,
 		totalPotential,
+		maxInstances,
 		description,
 		imageUrl,
 		externalUrl: optionalBoundedString(metadata.externalUrl, "metadata.externalUrl", MAX_URL_LENGTH),

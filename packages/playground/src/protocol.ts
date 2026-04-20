@@ -49,6 +49,9 @@ function buildCollectionInput(
 		symbol,
 		creator,
 		totalPotential,
+		// Default to 0 (unlimited) — playground UI sets a real value when the
+		// user opts into a per-collection cap.
+		maxInstances: 0,
 		metadata: {
 			description: options?.description || `${name} - NFTLox Protocol Collection`,
 			image: options?.image || "https://placehold.co/400x400?text=NFT",

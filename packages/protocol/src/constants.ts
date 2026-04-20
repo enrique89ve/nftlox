@@ -19,8 +19,8 @@
 // ============================================================================
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.6.0";
-export const MIN_PROTOCOL_VERSION = "0.6.0";
+export const PROTOCOL_VERSION = "0.6.1";
+export const MIN_PROTOCOL_VERSION = "0.6.1";
 export const HASH_VERSION = "v1";
 
 // ============================================================================
@@ -113,11 +113,28 @@ export const COLLECTION_ID_HASH_LENGTH = 20;  // was 14 (56 bits) — now 80 bit
 
 export const SUPPORTED_CURRENCIES = ["HIVE", "HBD"] as const;
 export const MAX_ROYALTY_PCT = 50;
-export const MIN_PRICE_AMOUNT = "0.001";
+export const MIN_PRICE_AMOUNT = "0.100";
 export const BASIS_POINTS_DENOMINATOR = 10_000;
 export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
+
+// Per-instance fee for create_collection. When enabled, the total fee becomes
+//   PROTOCOL_COLLECTION_FEE_HBD + INSTANCE_FEE_UNIT_HBD * ceil(maxInstances / INSTANCE_FEE_PER_N)
+// `maxInstances` is declared by the creator in the create_collection payload.
+//
+// Toggle is `as const false` so TS narrows the conditional in
+// payment-requirements.ts to the "fixed" branch at compile time. Flip to
+// `true` (and re-typecheck) to activate the scaled adapter that's already
+// wired through router → multisig → handler.
+export const INSTANCE_FEE_ENABLED = false as const;
+export const INSTANCE_FEE_UNIT_HBD = "0.001";
+// Granularity / minimum increment of the per-instance fee. Creators must
+// declare `maxInstances` in multiples of this number (or 0 for "unlimited"
+// modulo the per-creator cap). 1000 keeps fee math at a meaningful chunk
+// size — the unit fee is 0.001 HBD, and per-instance billing below 1000 is
+// fee-economically irrelevant.
+export const INSTANCE_FEE_PER_N = 1000;
 
 // Memo tags — the colon-free token that follows "NFTLox " in a transfer memo.
 // Source of truth shared by SDK emitters and the indexer's memo parser.

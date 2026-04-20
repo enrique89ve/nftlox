@@ -11,6 +11,7 @@ export interface InsertCollectionParams {
 	symbol: string;
 	creator: string;
 	totalPotential: number;
+	maxInstances: number;
 	description: string | null;
 	imageUrl: string | null;
 	externalUrl: string | null;
@@ -28,14 +29,14 @@ export interface InsertCollectionParams {
 export async function insertCollection(params: InsertCollectionParams, txn: Queryable = sql): Promise<boolean> {
 	const result = await txn`
 		INSERT INTO collections (
-			id, name, symbol, creator, total_potential,
+			id, name, symbol, creator, total_potential, max_instances,
 			description, image_url, external_url,
 			transferable, burnable, royalty_pct, royalty_recipient,
 			schema, schema_version,
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.name}, ${params.symbol},
-			${params.creator}, ${params.totalPotential},
+			${params.creator}, ${params.totalPotential}, ${params.maxInstances},
 			${params.description}, ${params.imageUrl}, ${params.externalUrl},
 			${params.transferable}, ${params.burnable}, ${params.royaltyPct},
 			${params.royaltyRecipient},
@@ -152,6 +153,45 @@ export async function symbolTakenByCreator(creator: string, symbol: string, txn:
 
 export async function countCollectionsByCreator(creator: string, txn: Queryable = sql): Promise<number> {
 	const [row] = await txn`SELECT COUNT(*)::int AS count FROM collections WHERE creator = ${creator}`;
+	return row?.count ?? 0;
+}
+
+// Per-creator aggregates over collection_stats. Bounded by collectionsPerCreator
+// (currently 50), so the JOIN scans at most that many rows per call. The
+// (creator, symbol) unique index on collections makes the lookup index-only.
+export async function countSeedsByCreator(creator: string, txn: Queryable = sql): Promise<number> {
+	const [row] = await txn`
+		SELECT COALESCE(SUM(cs.seeds), 0)::int AS count
+		FROM collections c
+		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
+		WHERE c.creator = ${creator}
+	`;
+	return row?.count ?? 0;
+}
+
+export async function countInstancesByCreator(creator: string, txn: Queryable = sql): Promise<number> {
+	const [row] = await txn`
+		SELECT COALESCE(SUM(cs.instances), 0)::int AS count
+		FROM collections c
+		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
+		WHERE c.creator = ${creator}
+	`;
+	return row?.count ?? 0;
+}
+
+// Current materialized instance count for a single collection. Used by the
+// per-collection cap check inside bulk_distribute. `collection_stats` is
+// maintained explicitly (see nft-counters.ts), so this returns the same value
+// the next mint would observe.
+export async function countInstancesByCollection(
+	collectionId: string,
+	txn: Queryable = sql,
+): Promise<number> {
+	const [row] = await txn`
+		SELECT COALESCE(instances, 0)::int AS count
+		FROM collection_stats
+		WHERE collection_id = ${collectionId}
+	`;
 	return row?.count ?? 0;
 }
 

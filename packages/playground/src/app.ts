@@ -2381,6 +2381,8 @@ async function createCollection() {
         creator,
         totalPotential:
           previewData?.summary?.totalPotentialInstances || 1000000,
+        // 0 = no per-collection cap (default for the playground harness).
+        maxInstances: 0,
         metadata: {
           description,
           image: colImage,

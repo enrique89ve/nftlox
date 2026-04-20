@@ -48,6 +48,7 @@ describe("SDK input schemas", () => {
 			symbol: "TEST",
 			creator: "user",
 			totalPotential: 100,
+			maxInstances: 0,
 			metadata: {
 				description: "Test desc",
 				image: "https://example.com/img.png",

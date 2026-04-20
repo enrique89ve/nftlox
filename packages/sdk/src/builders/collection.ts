@@ -15,6 +15,9 @@ import {
 	PROTOCOL_VERSION,
 	ACTION_CREATE_COLLECTION,
 	SUPPORTED_CURRENCIES,
+	INSTANCE_FEE_ENABLED,
+	INSTANCE_FEE_UNIT_HBD,
+	INSTANCE_FEE_PER_N,
 	validateHiveUsername,
 	type CollectionData,
 	type ArchiveCollectionData,
@@ -78,6 +81,25 @@ function isValidationError(value: string | ValidationError): value is Validation
 }
 
 /**
+ * Compute the create_collection fee in HBD as a 3-decimal string.
+ * Mirrors the protocol's payment-requirements logic so the SDK builder and
+ * the indexer's payment validator agree byte-for-byte on the expected amount.
+ *
+ * - INSTANCE_FEE_ENABLED=false: returns the flat PROTOCOL_COLLECTION_FEE_HBD.
+ * - INSTANCE_FEE_ENABLED=true:  base + unit * ceil(maxInstances / per_n).
+ *   maxInstances=0 still pays the base — same as today.
+ */
+function computeCollectionFeeHbd(maxInstances: number): string {
+	const base = Number.parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
+	if (!INSTANCE_FEE_ENABLED || maxInstances <= 0) {
+		return base.toFixed(3);
+	}
+	const unit = Number.parseFloat(INSTANCE_FEE_UNIT_HBD);
+	const chunks = Math.ceil(maxInstances / INSTANCE_FEE_PER_N);
+	return (base + unit * chunks).toFixed(3);
+}
+
+/**
  * Build the 2-operation transaction required by the NFTLox `create_collection`
  * flow: op[0] is a fee transfer from the creator to the node account; op[1] is
  * the protocol payload whose active-auth signer is the node account (co-signed
@@ -115,7 +137,8 @@ export async function buildCollection(
 		};
 	}
 
-	const feeAmount = options.feeAmount ?? PROTOCOL_COLLECTION_FEE_HBD;
+	const data = parsed.data;
+	const feeAmount = options.feeAmount ?? computeCollectionFeeHbd(data.maxInstances);
 	const parsedFee = Number.parseFloat(feeAmount);
 	if (!Number.isFinite(parsedFee) || parsedFee <= 0) {
 		return {
@@ -123,8 +146,6 @@ export async function buildCollection(
 			errors: [{ field: "feeAmount", message: `Fee amount must be a positive number, got '${feeAmount}'`, code: "invalid_amount" }],
 		};
 	}
-
-	const data = parsed.data;
 	const warnings: string[] = [];
 
 	if (data.name.length > MAX_NAME_LENGTH * 0.9) {
@@ -146,6 +167,7 @@ export async function buildCollection(
 		name: data.name,
 		symbol: data.symbol.toUpperCase(),
 		totalPotential: data.totalPotential,
+		maxInstances: data.maxInstances,
 		originDna,
 		metadata: data.metadata,
 		rules: data.rules,

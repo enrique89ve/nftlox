@@ -6,6 +6,46 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { PaymentRequirement, PaymentSplit } from "@/protocol/index.ts";
 import { validateFixedFee } from "@/utils/fee-oracle.ts";
 
+// Compute the prepaid scaled fee in HBD for a given declared `count` against a
+// `scaled` requirement. Mirrors the SDK `computeCollectionFeeHbd` helper so the
+// indexer accepts exactly what the SDK builder asks the user to pay. `count`
+// MUST already be validated as a non-negative integer that is either 0 or a
+// multiple of `unitDenominator` (the handler/multisig path enforces this).
+function computeScaledRequiredHbd(
+	requirement: Extract<PaymentRequirement, { kind: "scaled" }>,
+	count: number,
+): string {
+	const base = Number.parseFloat(requirement.baseHbd);
+	if (count <= 0) return base.toFixed(3);
+	const unit = Number.parseFloat(requirement.unitHbd);
+	const chunks = Math.ceil(count / requirement.unitDenominator);
+	return (base + unit * chunks).toFixed(3);
+}
+
+// Pull the scaling source out of the parsed payload using `requirement.countFrom`.
+// Adding a new countFrom variant becomes a compile error here — the switch is
+// exhaustive over the union literal type.
+function readScalingCount(
+	op: ParsedOperation,
+	countFrom: Extract<PaymentRequirement, { kind: "scaled" }>["countFrom"],
+): number {
+	switch (countFrom) {
+		case "payload:maxInstances": {
+			const raw = op.data.maxInstances;
+			if (typeof raw !== "number" || !Number.isFinite(raw) || !Number.isInteger(raw) || raw < 0) {
+				throw new Error(
+					`validateScaled: payload.maxInstances must be a non-negative integer, got ${String(raw)}`,
+				);
+			}
+			return raw;
+		}
+		default: {
+			const _exhaustive: never = countFrom;
+			throw new Error(`validateScaled: unhandled countFrom: ${String(_exhaustive)}`);
+		}
+	}
+}
+
 export type PaymentMatch =
 	| { readonly kind: "none"; readonly consumedIndices: readonly [] }
 	| {
@@ -66,10 +106,25 @@ const validateFixed: Validator<"fixed"> = (op, req, ctx) => {
 	};
 };
 
-const validateScaled: Validator<"scaled"> = () => {
-	throw new Error(
-		"validateScaled: not implemented — Spec 2 will wire the maxInstances-based scaler",
-	);
+const validateScaled: Validator<"scaled"> = (op, req, ctx) => {
+	if (!ctx.expectedMemo) {
+		throw new Error("validateScaled: expectedMemo required");
+	}
+	const count = readScalingCount(op, req.countFrom);
+	const requiredHbd = computeScaledRequiredHbd(req, count);
+	const match = validateFixedFee({
+		op,
+		requiredHbd,
+		targetAccount: ctx.targetAccount,
+		expectedMemo: ctx.expectedMemo,
+	});
+	return {
+		kind: "scaled",
+		payer: match.payer,
+		amount: match.amount,
+		currency: match.currency,
+		consumedIndices: [match.index],
+	};
 };
 
 const validateSplit: Validator<"split"> = () => {

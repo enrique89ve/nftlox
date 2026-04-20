@@ -113,7 +113,10 @@ function makeCreateCollectionOp(
 	const pairedTransfers = [
 		{ from: creator, to: config.hiveAccount, amount: feeAmount, currency: "HBD", memo },
 	];
-	const op = makeOp(ACTION_CREATE_COLLECTION, data, config.hiveAccount, pairedTransfers);
+	// Default `maxInstances: 0` (unlimited / no cap) so existing tests don't
+	// need to spell it out. Tests targeting the cap pass an explicit value.
+	const dataWithDefaults = { maxInstances: 0, ...data };
+	const op = makeOp(ACTION_CREATE_COLLECTION, dataWithDefaults, config.hiveAccount, pairedTransfers);
 	// Mirror the router's pre-handler payment dispatch so tests that invoke
 	// the handler directly see the same op.payment contract as production.
 	op.payment = {

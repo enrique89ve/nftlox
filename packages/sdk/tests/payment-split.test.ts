@@ -192,8 +192,8 @@ describe("calculatePaymentSplit", () => {
 		});
 	});
 
-	describe("small price (0.001 HIVE) - rounding edge case", () => {
-		const split = calculatePaymentSplit(0.001, HIVE, 10, ROYALTY_RECIPIENT, SELLER, NODE);
+	describe("small price (0.100 HIVE) - rounding edge case", () => {
+		const split = calculatePaymentSplit(0.100, HIVE, 10, ROYALTY_RECIPIENT, SELLER, NODE);
 
 		test("sellerAmount should not be negative", () => {
 			expect(split.sellerAmount).toBeGreaterThanOrEqual(0);

@@ -13,8 +13,8 @@ import {
 
 describe("priceSchema", () => {
 	describe("valid amounts", () => {
-		test("minimum amount 0.001 HIVE", () => {
-			const result = priceSchema.safeParse({ amount: "0.001", currency: "HIVE" });
+		test("minimum amount 0.100 HIVE", () => {
+			const result = priceSchema.safeParse({ amount: "0.100", currency: "HIVE" });
 			expect(result.success).toBe(true);
 		});
 
@@ -70,10 +70,10 @@ describe("priceSchema", () => {
 			if (result.success) expect(result.data.amount).toBe("1000.000");
 		});
 
-		test("normalizes missing integer part: .001 → 0.001", () => {
-			const result = priceSchema.safeParse({ amount: ".001", currency: "HIVE" });
+		test("normalizes missing integer part: .1 → 0.100", () => {
+			const result = priceSchema.safeParse({ amount: ".1", currency: "HIVE" });
 			expect(result.success).toBe(true);
-			if (result.success) expect(result.data.amount).toBe("0.001");
+			if (result.success) expect(result.data.amount).toBe("0.100");
 		});
 	});
 

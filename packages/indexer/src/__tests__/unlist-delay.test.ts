@@ -87,7 +87,7 @@ async function cleanDb() {
 async function seedCollectionAndListedInstance(): Promise<string> {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 	const collectionOp = makeOp(ACTION_CREATE_COLLECTION, {
-		id: COL_ID, name: "Delay Test", symbol: "DELAY", totalPotential: 100,
+		id: COL_ID, name: "Delay Test", symbol: "DELAY", totalPotential: 100, maxInstances: 0,
 		metadata: { description: "delay fixture", image: "https://example.com/i.png" },
 		rules: { transferable: true, burnable: true, royaltyPct: 0 },
 	}, UNLIST_BLOCK, NODE_ACCOUNT, [

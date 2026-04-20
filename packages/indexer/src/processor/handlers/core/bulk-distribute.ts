@@ -7,6 +7,8 @@ import {
 	getSeedWithSchemaForUpdate,
 	incrementDistributedBy,
 } from "@/db/queries/nfts.ts";
+import { countInstancesByCollection, countInstancesByCreator } from "@/db/queries/collections.ts";
+import { assertWithinLimit } from "@/utils/action-limits.ts";
 import { assertActionable } from "@/utils/status-checks.ts";
 import {
 	requireString,
@@ -72,6 +74,20 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 	// Track validated schemas to avoid re-validating mutableData per collection
 	const validatedSchemas = new Set<string>();
 
+	// Per-creator instance budget. Lazily fetched on first sight; planned
+	// quantity is accumulated across items so the limit is enforced against the
+	// aggregate even when one bulk_distribute spans multiple seeds (or multiple
+	// collections from different creators if the signer owns transferred seeds).
+	const creatorInstanceBudget = new Map<string, { baseline: number; planned: number }>();
+
+	// Per-collection instance budget. When `collections.max_instances > 0` the
+	// declared cap is enforced; 0 means unlimited (creator opted out at
+	// creation time). Baseline is the materialized `collection_stats.instances`
+	// — `planned` accumulates across items in this op so a single
+	// bulk_distribute targeting multiple seeds in the same collection cannot
+	// breach the cap by splitting the request.
+	const collectionInstanceBudget = new Map<string, { baseline: number; planned: number; cap: number }>();
+
 	for (const { seedId, quantity, seedTxId } of parsedItems) {
 		const seed = await getSeedWithSchemaForUpdate(seedId, txn);
 		if (!seed) throw new Error(`Seed not found: ${seedId}`);
@@ -84,6 +100,37 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 		if (seed.owner !== op.signer) {
 			throw new Error(`Signer ${op.signer} is not the owner of seed ${seedId}`);
+		}
+
+		let budget = creatorInstanceBudget.get(seed.creator);
+		if (!budget) {
+			budget = { baseline: await countInstancesByCreator(seed.creator, txn), planned: 0 };
+			creatorInstanceBudget.set(seed.creator, budget);
+		}
+		budget.planned += quantity;
+		await assertWithinLimit("instancesPerCreator", seed.creator, budget.baseline, budget.planned);
+
+		// Per-collection cap: enforce only when the creator declared one
+		// (max_instances > 0). The seed row already carries the cap, so no
+		// extra collections-table read is needed here.
+		if (seed.max_instances > 0) {
+			let collectionBudget = collectionInstanceBudget.get(seed.collection_id);
+			if (!collectionBudget) {
+				collectionBudget = {
+					baseline: await countInstancesByCollection(seed.collection_id, txn),
+					planned: 0,
+					cap: seed.max_instances,
+				};
+				collectionInstanceBudget.set(seed.collection_id, collectionBudget);
+			}
+			collectionBudget.planned += quantity;
+			if (collectionBudget.baseline + collectionBudget.planned > collectionBudget.cap) {
+				throw new Error(
+					`bulk_distribute exceeds collection cap: collection ${seed.collection_id} ` +
+						`would reach ${collectionBudget.baseline + collectionBudget.planned} ` +
+						`instances, max_instances=${collectionBudget.cap}`,
+				);
+			}
 		}
 
 		if (!validatedSchemas.has(seed.collection_id)) {

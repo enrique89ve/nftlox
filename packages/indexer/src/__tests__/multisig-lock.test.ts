@@ -96,7 +96,7 @@ async function seedCollection(): Promise<void> {
 		{ from: "alice", to: NODE_ACCOUNT, amount: feeAmount, currency: "HBD", memo: `NFTLox FEE-COL:${COL_ID}` },
 	];
 	const op = makeOp(ACTION_CREATE_COLLECTION, {
-		id: COL_ID, name: "Lock Test", symbol: "LOCK", totalPotential: 100,
+		id: COL_ID, name: "Lock Test", symbol: "LOCK", totalPotential: 100, maxInstances: 0,
 		metadata: { description: "lock fixture", image: "https://example.com/i.png" },
 		rules: { transferable: true, burnable: true, royaltyPct: 0 },
 	}, NODE_ACCOUNT, pairedTransfers);

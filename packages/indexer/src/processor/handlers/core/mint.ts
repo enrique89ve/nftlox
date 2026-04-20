@@ -1,7 +1,8 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getCollectionRules } from "@/db/queries/collections.ts";
+import { getCollectionRules, countSeedsByCreator } from "@/db/queries/collections.ts";
 import { insertNft, nftExists, isBurnedId } from "@/db/queries/nfts.ts";
+import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	requireBoundedString,
 	requireUsername,
@@ -72,6 +73,12 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	}
 
 	validateSeedCap(collectionId, collection.seed_count, collection.total_potential);
+
+	// Per-creator seed cap (aggregate across all of the signer's collections).
+	// Signer is the creator here — handleMint above already enforces
+	// `collection.creator !== op.signer` rejection.
+	const seedsByCreator = await countSeedsByCreator(op.signer, txn);
+	await assertWithinLimit("seedsPerCreator", op.signer, seedsByCreator);
 
 	const schema = optionalCollectionSchema(collection.schema);
 	const immutableData = optionalObject(d.immutableData) as Record<string, unknown> | null;

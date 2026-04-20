@@ -1,7 +1,8 @@
 /** Dimension sobre la que se mide el limite. */
 export type LimitDimension =
 	| "collectionsPerCreator"
-	| "seedsPerCollection";
+	| "seedsPerCreator"
+	| "instancesPerCreator";
 
 /** Proveedor de limites — reemplazable por strategy (e.g., creditos, DB, plan). */
 export type ActionLimitsProvider = {
@@ -9,8 +10,9 @@ export type ActionLimitsProvider = {
 };
 
 const DEFAULT_LIMITS: Record<LimitDimension, number> = {
-	collectionsPerCreator: 100,
-	seedsPerCollection: 0, // 0 = delegado a totalPotential (per-collection)
+	collectionsPerCreator: 50,
+	seedsPerCreator: 3_000,
+	instancesPerCreator: 3_000_000,
 };
 
 const constantLimitsProvider: ActionLimitsProvider = {
@@ -24,16 +26,23 @@ export function setLimitsProvider(provider: ActionLimitsProvider): void {
 }
 
 /**
- * Asserts that the current count is within the configured limit for a dimension.
- * Throws if the limit is reached. A limit of 0 means unlimited.
+ * Asserts that adding `increment` items would not exceed the configured limit
+ * for a dimension. Throws if it would. A limit of 0 means unlimited.
+ *
+ * `increment` defaults to 1 for single-item operations (mint). Batch operations
+ * (bulk_distribute) pass the planned quantity so the check is applied once
+ * against the aggregate, not per-item.
  */
 export async function assertWithinLimit(
 	dimension: LimitDimension,
 	scopeKey: string,
 	currentCount: number,
+	increment = 1,
 ): Promise<void> {
 	const max = await activeProvider.getLimit(dimension, scopeKey);
-	if (max > 0 && currentCount >= max) {
-		throw new Error(`Limit reached for ${dimension} (${scopeKey}): ${currentCount}/${max}`);
+	if (max > 0 && currentCount + increment > max) {
+		throw new Error(
+			`Limit reached for ${dimension} (${scopeKey}): ${currentCount + increment}/${max}`,
+		);
 	}
 }

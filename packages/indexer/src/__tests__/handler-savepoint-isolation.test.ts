@@ -64,7 +64,8 @@ function makeCreateCollectionOp(
 ): ParsedOperation {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 	const memo = `NFTLox FEE-COL:${String(data.id)}`;
-	const op = makeOp(ACTION_CREATE_COLLECTION, data, {
+	const dataWithDefaults = { maxInstances: 0, ...data };
+	const op = makeOp(ACTION_CREATE_COLLECTION, dataWithDefaults, {
 		...overrides,
 		signer: config.hiveAccount,
 		pairedTransfers: [

@@ -27,7 +27,7 @@ async function withMockFetch<T>(mockFetch: MockFetch, run: () => Promise<T>): Pr
 }
 
 const readyStatus = {
-	protocolVersion: "0.6.0",
+	protocolVersion: "0.6.1",
 	protocolId: "nftlox_testnet",
 	nodeAccount: "nftlox-node",
 	nodeUrl: "https://indexer.test",
@@ -72,6 +72,7 @@ describe("buildCollection consistency", () => {
 		symbol: "BTC01",
 		creator: "testcreator",
 		totalPotential: 1000,
+		maxInstances: 0,
 		metadata: {
 			description: "A collection for builder consistency tests",
 			image: "https://example.com/collection.png",

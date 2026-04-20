@@ -16,6 +16,7 @@ import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { feeOracle } from "@/utils/fee-oracle.ts";
 import { optionalCollectionSchema } from "@/utils/validation.ts";
 import {
+	INSTANCE_FEE_PER_N,
 	MAX_DESCRIPTION_LENGTH,
 	MAX_ID_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
@@ -197,6 +198,7 @@ async function validateCollectionPayloadData(
 	validateCollectionMetadata(data.metadata);
 	validateCollectionRules(data.rules);
 	validateTotalPotential(data.totalPotential);
+	validateMaxInstances(data.maxInstances);
 	validateCollectionSchema(data.schema);
 }
 
@@ -246,6 +248,21 @@ function validateTotalPotential(value: unknown): void {
 		throw createMultisigError(
 			"INVALID_PROTOCOL_PAYLOAD",
 			"Payload data.totalPotential must be a non-negative integer",
+		);
+	}
+}
+
+function validateMaxInstances(value: unknown): void {
+	if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			"Payload data.maxInstances must be a non-negative integer",
+		);
+	}
+	if (value > 0 && value % INSTANCE_FEE_PER_N !== 0) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.maxInstances must be 0 (unlimited) or a positive multiple of ${INSTANCE_FEE_PER_N}`,
 		);
 	}
 }

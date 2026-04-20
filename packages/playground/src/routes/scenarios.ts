@@ -165,6 +165,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					description: "Dragon Masters Trading Card Game — fully on-chain card game",
 					imageUrl: "https://example.com/dragon-masters-logo.png",
 					totalPotential: 100000,
+					maxInstances: 0,
 					transferable: true,
 					burnable: true,
 					royaltyPct: 5,

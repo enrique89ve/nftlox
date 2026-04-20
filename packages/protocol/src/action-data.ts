@@ -36,6 +36,11 @@ export type CollectionData = {
 	readonly name: string;
 	readonly symbol: string;
 	readonly totalPotential: number;
+	// Hard cap on total instances mintable across the collection's seeds.
+	// 0 = unlimited (subject only to the per-creator cap). When > 0, must be
+	// a multiple of INSTANCE_FEE_PER_N. Stored immutably; drives the scaled
+	// fee math when INSTANCE_FEE_ENABLED.
+	readonly maxInstances: number;
 	readonly originDna: string;
 	readonly metadata: CollectionMetadata;
 	readonly rules: CollectionRules;

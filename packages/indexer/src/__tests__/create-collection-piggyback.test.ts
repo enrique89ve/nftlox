@@ -39,6 +39,7 @@ function buildCreateCollectionOp(args: {
 			name: args.name,
 			symbol: args.symbol,
 			totalPotential: 5,
+			maxInstances: 0,
 			metadata: { description: "piggy test", image: "https://example.com/x.png" },
 			rules: { transferable: true, burnable: false, royaltyPct: 0 },
 		},

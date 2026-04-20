@@ -291,7 +291,7 @@ export async function getSeedWithSchemaForUpdate(id: string, txn: Queryable): Pr
 		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_supply, n.distributed,
 			n.reserved_supply,
 			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.created_tx_id,
-			c.schema, c.schema_version
+			c.schema, c.schema_version, c.creator, c.max_instances
 		FROM nfts n
 		JOIN collections c ON c.id = n.collection_id
 		WHERE n.id = ${id}

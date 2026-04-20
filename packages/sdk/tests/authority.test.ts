@@ -95,6 +95,7 @@ describe("Active key operations use required_auths", () => {
 			symbol: "TEST",
 			creator: "indexer-node",
 			totalPotential: 100,
+			maxInstances: 0,
 			originDna: "a".repeat(32),
 			metadata: { description: "Test", image: "https://example.com/image.png" },
 			rules: { transferable: true, burnable: true, royaltyPct: 5 },

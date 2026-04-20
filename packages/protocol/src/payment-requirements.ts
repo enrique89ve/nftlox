@@ -23,6 +23,9 @@ import {
 	ACTION_SET_DATA_FROM,
 	ACTION_TRANSFER,
 	ACTION_UNLIST,
+	INSTANCE_FEE_ENABLED,
+	INSTANCE_FEE_PER_N,
+	INSTANCE_FEE_UNIT_HBD,
 	MEMO_TAG_BUY,
 	MEMO_TAG_FEE,
 	MEMO_TAG_FEE_COL,
@@ -90,15 +93,34 @@ export function assertNeverPaymentKind(x: never): never {
 	throw new Error(`Unhandled PaymentRequirement.kind: ${JSON.stringify(x)}`);
 }
 
-const ACTION_PAYMENT_MAP = {
-	[ACTION_CREATE_COLLECTION]: {
-		kind: "fixed",
-		amountHbd: PROTOCOL_COLLECTION_FEE_HBD,
-		payer: "transfer:from",
-		recipient: "treasury",
-		memoKey: "collectionId",
+// create_collection payment shape toggles with INSTANCE_FEE_ENABLED.
+// - false (default): `fixed` 0.100 HBD, unchanged from pre-scaling era.
+// - true: `scaled` — 0.100 HBD base + 0.001 HBD per INSTANCE_FEE_PER_N (1000)
+//   slots declared in `payload.maxInstances`. The router + validator dispatch
+//   chain already supports both branches; flipping the flag is all it takes.
+const COLLECTION_PAYMENT_REQUIREMENT = (INSTANCE_FEE_ENABLED
+	? {
+		kind: "scaled" as const,
+		baseHbd: PROTOCOL_COLLECTION_FEE_HBD,
+		unitHbd: INSTANCE_FEE_UNIT_HBD,
+		unitDenominator: INSTANCE_FEE_PER_N,
+		countFrom: "payload:maxInstances" as const,
+		payer: "transfer:from" as const,
+		recipient: "treasury" as const,
+		memoKey: "collectionId" as const,
 		memoTag: MEMO_TAG_FEE_COL,
-	},
+	}
+	: {
+		kind: "fixed" as const,
+		amountHbd: PROTOCOL_COLLECTION_FEE_HBD,
+		payer: "transfer:from" as const,
+		recipient: "treasury" as const,
+		memoKey: "collectionId" as const,
+		memoTag: MEMO_TAG_FEE_COL,
+	}) satisfies PaymentRequirement;
+
+const ACTION_PAYMENT_MAP = {
+	[ACTION_CREATE_COLLECTION]: COLLECTION_PAYMENT_REQUIREMENT,
 	[ACTION_BUY]: {
 		kind: "split",
 		priceSource: "nft.listing",

@@ -17,7 +17,7 @@ function opWith(transfers: Array<{
 		signer: "alice",
 		authLevel: "posting",
 		action: "create_collection",
-		version: "0.6.0",
+		version: "0.6.1",
 		data: {},
 		pairedTransfers: transfers,
 		transferPool: { consumed: new Set<number>() },

@@ -21,7 +21,7 @@ function opFor(
 		signer: "alice",
 		authLevel: "posting",
 		action,
-		version: "0.6.0",
+		version: "0.6.1",
 		data,
 		pairedTransfers: transfers,
 		transferPool: { consumed: new Set<number>() },
@@ -66,10 +66,46 @@ describe("PAYMENT_VALIDATORS", () => {
 		).toThrow(/handler/i);
 	});
 
-	test("'scaled' throws until Spec 2 wires a caller", () => {
+	test("'scaled' validates fee = base + unit * ceil(maxInstances/N) against memo-bound transfer", () => {
+		// 0.100 base + 0.001 per 10 declared = 5 chunks for maxInstances=50.
+		// Required transfer: 0.105 HBD.
+		const op = opFor(
+			ACTION_CREATE_COLLECTION,
+			[{ from: "alice", to: "nftlox", amount: 0.105, currency: "HBD", memo: "NFTLox FEE-COL:col_scaled" }],
+			{ id: "col_scaled", maxInstances: 50 },
+		);
+
+		const match = PAYMENT_VALIDATORS.scaled(
+			op,
+			{
+				kind: "scaled",
+				baseHbd: "0.100",
+				unitHbd: "0.001",
+				unitDenominator: 10,
+				countFrom: "payload:maxInstances",
+				payer: "transfer:from",
+				recipient: "treasury",
+				memoKey: "collectionId",
+				memoTag: "FEE-COL",
+			},
+			{ targetAccount: "nftlox", expectedMemo: "NFTLox FEE-COL:col_scaled" },
+		);
+
+		expect(match.kind).toBe("scaled");
+		if (match.kind !== "scaled") throw new Error("impossible");
+		expect(match.payer).toBe("alice");
+		expect(match.consumedIndices).toEqual([0]);
+	});
+
+	test("'scaled' rejects payload missing a non-negative-integer maxInstances", () => {
+		const op = opFor(
+			ACTION_CREATE_COLLECTION,
+			[{ from: "alice", to: "nftlox", amount: 0.1, currency: "HBD", memo: "NFTLox FEE-COL:col_bad" }],
+			{ id: "col_bad", maxInstances: -1 },
+		);
 		expect(() =>
 			PAYMENT_VALIDATORS.scaled(
-				opFor(ACTION_MINT),
+				op,
 				{
 					kind: "scaled",
 					baseHbd: "0.100",
@@ -81,9 +117,9 @@ describe("PAYMENT_VALIDATORS", () => {
 					memoKey: "collectionId",
 					memoTag: "FEE-COL",
 				},
-				{ targetAccount: "nftlox" },
+				{ targetAccount: "nftlox", expectedMemo: "NFTLox FEE-COL:col_bad" },
 			),
-		).toThrow(/not implemented|spec 2/i);
+		).toThrow(/maxInstances/);
 	});
 
 	test("PaymentMatch union discriminates all 4 kinds", () => {

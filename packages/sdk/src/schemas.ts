@@ -13,6 +13,7 @@ import {
 	TX_ID_REGEX,
 	validateHiveUsername,
 	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
+	INSTANCE_FEE_PER_N,
 } from "@nftlox/protocol";
 
 export { validateHiveUsername };
@@ -101,6 +102,17 @@ export const createCollectionInputSchema = z.object({
 	symbol: symbolSchema,
 	creator: usernameSchema,
 	totalPotential: z.number().int("Total potential must be an integer").nonnegative("Total potential must be non-negative"),
+	// Hard cap on instances mintable across the collection. 0 = unlimited
+	// (subject only to the per-creator cap). When > 0, must be a multiple of
+	// INSTANCE_FEE_PER_N (1000) — granularity required by the per-instance fee
+	// adapter so it activates without payload migration.
+	maxInstances: z.number()
+		.int("maxInstances must be an integer")
+		.nonnegative("maxInstances must be non-negative")
+		.refine(
+			(v) => v === 0 || (v >= INSTANCE_FEE_PER_N && v % INSTANCE_FEE_PER_N === 0),
+			`maxInstances must be 0 (unlimited) or a positive multiple of ${INSTANCE_FEE_PER_N}`,
+		),
 	metadata: z.object({
 		description: z.string().min(1, "Description is required").max(MAX_DESCRIPTION_LENGTH, `Description must be at most ${MAX_DESCRIPTION_LENGTH} characters`),
 		image: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH, `Image URL must be at most ${MAX_IMAGE_URL_LENGTH} characters`),

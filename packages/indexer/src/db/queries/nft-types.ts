@@ -149,6 +149,8 @@ export type SeedWithDnaRow = {
 export type SeedWithSchemaRow = SeedWithDnaRow & {
 	readonly schema: unknown | null;
 	readonly schema_version: number;
+	readonly creator: string;
+	readonly max_instances: number;
 };
 
 export type UserNftCounts = {

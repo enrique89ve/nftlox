@@ -65,6 +65,11 @@ CREATE TABLE IF NOT EXISTS collections (
 	symbol VARCHAR(10) NOT NULL CHECK (symbol ~ '^[A-Z][A-Z0-9]{2,9}$'),
 	creator TEXT NOT NULL,
 	total_potential INTEGER NOT NULL DEFAULT 0 CHECK (total_potential >= 0),
+	-- Hard cap on instances mintable across the collection. 0 = unlimited
+	-- (subject to per-creator caps). When > 0, must be a multiple of 1000
+	-- (INSTANCE_FEE_PER_N) — enforced at the protocol/SDK layer; the CHECK
+	-- here is only the >= 0 invariant the DB needs to know about.
+	max_instances INTEGER NOT NULL DEFAULT 0 CHECK (max_instances >= 0),
 	description TEXT,
 	image_url TEXT,
 	external_url TEXT,
@@ -585,6 +590,9 @@ BEGIN
 	END IF;
 	IF NEW.total_potential IS DISTINCT FROM OLD.total_potential THEN
 		RAISE EXCEPTION 'collections.total_potential is immutable for %', OLD.id;
+	END IF;
+	IF NEW.max_instances IS DISTINCT FROM OLD.max_instances THEN
+		RAISE EXCEPTION 'collections.max_instances is immutable for %', OLD.id;
 	END IF;
 	IF NEW.block_num IS DISTINCT FROM OLD.block_num THEN
 		RAISE EXCEPTION 'collections.block_num is immutable for %', OLD.id;

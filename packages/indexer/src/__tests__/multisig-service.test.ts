@@ -111,6 +111,7 @@ async function seedCollection(
 			name,
 			symbol,
 			totalPotential: 1000,
+			maxInstances: 0,
 			metadata: { description: `Test collection ${name}`, image: "https://example.com/img.png" },
 			rules,
 		},

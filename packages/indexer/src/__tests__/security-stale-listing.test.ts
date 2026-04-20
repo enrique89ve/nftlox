@@ -97,6 +97,7 @@ async function seedCollection(txn?: Queryable): Promise<void> {
 			name: "Security Test Collection",
 			symbol: "SEC",
 			totalPotential: 1000,
+			maxInstances: 0,
 			metadata: { description: "Security test", image: "https://example.com/img.png" },
 			rules: { transferable: true, burnable: true, royaltyPct: 5, royaltyRecipient: "alice" },
 		},
