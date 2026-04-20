@@ -393,7 +393,7 @@ Re-exported from `@nftlox/protocol`:
 | Constant | Value | Meaning |
 |---|---|---|
 | `PROTOCOL_ID` | `"nftlox_testnet"` | The `id` field on every `custom_json`. |
-| `PROTOCOL_VERSION` | `"0.6.0"` | The `version` field in every payload. |
+| `PROTOCOL_VERSION` | `"0.6.2"` | The `version` field in every payload. |
 | `MAX_OPERATIONS_PER_TX` | `5` | Hard cap per Hive transaction. |
 | `MAX_BULK_DISTRIBUTE_ITEMS` | `50` | Max distinct seeds per `bulk_distribute`. |
 | `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY` | `250` | Max created instances per `bulk_distribute`. |

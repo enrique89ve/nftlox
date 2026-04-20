@@ -19,7 +19,10 @@ A `create_collection` operation registers the collection on-chain. The collectio
 - A `transfer` op (the creation fee, default `0.100 HBD`) signed by the creator's **active** key.
 - A `custom_json` op with `required_auths: [nodeAccount]`, signed by the node's multisig key.
 
-The fee transfer MUST carry memo `NFTLox FEE-COL:{collectionId}`. Transfers to the treasury without this memo are ignored by the indexer (since 0.6.0); any such transfer is treated as a voluntary gift, not a fee.
+The fee transfer MUST:
+
+- Carry memo `NFTLox FEE-COL:{collectionId}` — transfers to the treasury without this memo are ignored by the indexer (since 0.6.0) and treated as voluntary gifts.
+- Be denominated in **HBD** — since **0.6.2** the consensus validator refuses any other currency (HIVE included) even if the memo and recipient match. HBD is pegged, which keeps fee validation a deterministic function of L1 state; allowing HIVE would require a live price feed that can diverge between nodes syncing the same block at different wall-clock times.
 
 The node's signature is requested via `requestCreateCollectionMultisig(indexerBaseUrl, { transaction })`. See [Signing & Broadcasting](../broadcasting.md#2-create_collection--active--node-multisig) for the full flow.
 

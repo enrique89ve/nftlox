@@ -501,7 +501,7 @@ Validation errors never throw — they live in `result.errors[]`.
 ```typescript
 import {
   PROTOCOL_ID,              // "nftlox_testnet"
-  PROTOCOL_VERSION,         // "0.6.0"
+  PROTOCOL_VERSION,         // "0.6.2"
   PROTOCOL_FEE_BPS,         // 100 (1%)
   MAX_ROYALTY_PCT,          // 50
   UNLIST_DELAY_BLOCKS,      // 3

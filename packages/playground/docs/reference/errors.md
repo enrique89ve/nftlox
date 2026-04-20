@@ -139,4 +139,14 @@ Since 0.6.0 the indexer pairs the collection-fee transfer to the payload by memo
 |---|---|---|
 | `No fee transfer found matching memo 'NFTLox FEE-COL:...'` | The indexer could not find the expected memo-bound fee transfer. | Ensure the fee transfer uses the canonical memo; do not rely on untagged transfers. |
 | `Ambiguous fee transfers — N memo matches for 'NFTLox FEE-COL:...'` | Two or more transfers carry the same fee memo. | Send exactly one fee transfer per create_collection op. |
+| `Protocol fees must be paid in HBD, got HIVE. Required: 0.100 HBD` | Since **0.6.2** the fee currency is consensus-enforced to HBD. HIVE transfers (or any other currency) are rejected even if the amount and memo match. | Use `buildCollection` or emit the transfer with `currency: "HBD"`. |
 | `Fee amount mismatch — HBD payment must equal 0.100, got X` | The HBD amount deviates from `PROTOCOL_COLLECTION_FEE_HBD`. | Overpaying is no longer tolerated — send exactly the required amount. |
+
+## Listing expiration errors
+
+Since **0.6.2** the indexer enforces a minimum listing TTL (`MIN_LISTING_TTL_MS = 180_000`) so a buy transaction in flight always has a settlement window wider than its own L1 expiration. See [Marketplace — Why listings need a minimum TTL](../guides/marketplace.md#why-listings-need-a-minimum-ttl) for the full rationale.
+
+| Error message | When | Fix |
+|---|---|---|
+| `Listing expiresAt is too soon for safe settlement: must be more than 180s after the listing block timestamp` | `handleList` rejected a `list` op whose `expiresAt` falls inside the settlement window. | Pick `expiresAt > Date.now() + MIN_LISTING_TTL_MS` before signing. |
+| `Listing expires too soon for safe settlement: listing must expire more than 60s after transaction expiration` (`NFT_EXPIRED_LISTING`) | Multisig `buy` refused to co-sign because the listing would expire before the transaction's settlement buffer. | Ask the seller to relist with a longer `expiresAt`, or set transaction `expiration` further in the future (bounded by `MULTISIG_TX_MAX_EXPIRATION_MS`). |

@@ -15,6 +15,7 @@ buy    (buyer, active + node)    → transfers + custom_json in one atomic tx
 - Supported currencies: `HIVE`, `HBD`.
 - Protocol fee: **1%** (`PROTOCOL_FEE_BPS = 100`).
 - Max royalty: **50%** (`MAX_ROYALTY_PCT`), set per-collection at creation.
+- Minimum listing TTL: **`MIN_LISTING_TTL_MS = 180_000`** (3 min). A listing whose `expiresAt` falls inside the `MULTISIG_TX_MAX_EXPIRATION_MS + MARKETPLACE_SETTLEMENT_BUFFER_MS` window is rejected both by the SDK and by the indexer consensus check — see [Why listings need a minimum TTL](#why-listings-need-a-minimum-ttl).
 
 ## 1. Listing — `buildList`
 
@@ -243,6 +244,21 @@ const volume = await client.getSalesVolume({ collectionId: "col_…" });
 ## Listing expiration is lazy
 
 The indexer does not sweep expired listings on a timer. An expired listing stays `listed` in the DB until something touches the NFT — another `list`, a `buy` attempt, a transfer — at which point the status flips back to `active` before the touching op is applied. For UIs, compare `expiresAt` against `Date.now()` when rendering.
+
+## Why listings need a minimum TTL
+
+A buy is a multisig Hive transaction whose L1 `expiration` is bounded by `MULTISIG_TX_MAX_EXPIRATION_MS` (120 s). Settlement can still land on-chain just before that deadline, so the indexer requires the listing itself to outlive the buy transaction by at least `MARKETPLACE_SETTLEMENT_BUFFER_MS` (60 s). That gives us a protocol-wide floor:
+
+- `MIN_LISTING_TTL_MS = MULTISIG_TX_MAX_EXPIRATION_MS + MARKETPLACE_SETTLEMENT_BUFFER_MS` = **180 000 ms** (3 min).
+
+Two layers enforce it:
+
+| Layer | Check |
+|---|---|
+| SDK | `listInputSchema` rejects `expiresAt <= Date.now() + MIN_LISTING_TTL_MS`. |
+| Indexer consensus | `handleList` rejects `expiresAt <= blockTimestamp + MIN_LISTING_TTL_MS`. Multisig `buy` additionally rejects co-sign when `listing.expiresAt - tx.expiration <= MARKETPLACE_SETTLEMENT_BUFFER_MS`. |
+
+Without this floor a seller could list with a 5 s expiry, collect a signed buy, and have the indexer reject the ownership change because the listing "expired" mid-settlement — a trivial way to sink a buyer's funds.
 
 ## See also
 

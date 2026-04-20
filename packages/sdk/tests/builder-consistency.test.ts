@@ -27,7 +27,7 @@ async function withMockFetch<T>(mockFetch: MockFetch, run: () => Promise<T>): Pr
 }
 
 const readyStatus = {
-	protocolVersion: "0.6.1",
+	protocolVersion: "0.6.2",
 	protocolId: "nftlox_testnet",
 	nodeAccount: "nftlox-node",
 	nodeUrl: "https://indexer.test",
