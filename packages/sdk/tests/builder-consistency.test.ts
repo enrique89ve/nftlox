@@ -31,6 +31,14 @@ const readyStatus = {
 	protocolId: "nftlox_testnet",
 	nodeAccount: "nftlox-node",
 	nodeUrl: "https://indexer.test",
+	nodeRegistered: true,
+	nodeStatus: "active",
+	nodeRegistrationBlock: 90,
+	nodeLastHeartbeatBlock: 99,
+	nodeActivityBlock: 99,
+	nodeActivityAgeBlocks: 1,
+	nodeActivityFresh: true,
+	nodeActivityStaleAfterBlocks: 10000,
 	multisigEnabled: true,
 	multisigSignerReady: true,
 	multisigClockDriftOk: true,
@@ -50,6 +58,13 @@ describe("node account resolution", () => {
 			...readyStatus,
 			multisigSignerReady: false,
 		}, { requireMultisigReady: true })).toThrow("multisig signer is not ready");
+	});
+
+	test("requires fresh node activity when requested", () => {
+		expect(() => resolveNodeAccountFromStatus({
+			...readyStatus,
+			nodeActivityFresh: false,
+		}, { requireNodeActivity: true })).toThrow("has no fresh settlement heartbeat");
 	});
 
 	test("indexer client exposes explicit node account helpers", async () => {

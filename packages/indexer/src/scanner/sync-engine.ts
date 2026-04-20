@@ -70,8 +70,8 @@ async function fetchBatch(
   const { ops, rejected } = parseHafAHOperations(hafOps);
 
   // Enrich operations whose validation depends on transfers from the same Hive tx.
-  // node_register is intentionally absent: it is fee-less (Hive Power gated at
-  // handler time), so the same-tx transfer lookup would be dead I/O.
+  // node_register is intentionally absent: it is fee-less, so the same-tx
+  // transfer lookup would be dead I/O.
   const transferBackedOps = ops.filter(
     (op) => op.action === ACTION_BUY || op.action === ACTION_CREATE_COLLECTION,
   );

@@ -56,6 +56,7 @@ function mapBuyErrorToStatus(code: string): number {
 		case "NFT_LOCKED":
 			return 409;
 		case "INDEXER_LAGGED":
+		case "NODE_NOT_ACTIVE":
 			return 503;
 		case "SIGNING_QUEUE_FULL":
 		case "SIGNING_TIMEOUT":

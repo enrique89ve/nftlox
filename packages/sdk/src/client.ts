@@ -21,6 +21,14 @@ export interface SyncStatus {
 	genesisBlock?: number;
 	nodeAccount: string;
 	nodeUrl: string | null;
+	nodeRegistered?: boolean;
+	nodeStatus?: string | null;
+	nodeRegistrationBlock?: number | null;
+	nodeLastHeartbeatBlock?: number | null;
+	nodeActivityBlock?: number | null;
+	nodeActivityAgeBlocks?: number | null;
+	nodeActivityFresh?: boolean;
+	nodeActivityStaleAfterBlocks?: number;
 	multisigEnabled: boolean;
 	multisigSignerReady?: boolean;
 	multisigClockDriftOk?: boolean;
@@ -538,7 +546,7 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 		getNodeAccount: async (resolveOptions) => resolveNodeAccountFromStatus(await getStatus(), resolveOptions),
 		getMultisigNodeAccount: async () => resolveNodeAccountFromStatus(
 			await getStatus(),
-			{ requireMultisigReady: true },
+			{ requireMultisigReady: true, requireNodeActivity: true },
 		),
 		getHealth: () => get<HealthStatus>(baseUrl, "/api/health", undefined, http),
 		getStats: () => get<ProtocolStats>(baseUrl, "/api/stats", undefined, http),

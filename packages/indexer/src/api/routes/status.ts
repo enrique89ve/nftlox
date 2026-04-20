@@ -3,6 +3,7 @@ import { getPriceStatus } from "@/utils/fee-oracle.ts";
 import { getLastBlock, getSyncStatus, getOperationStatus } from "@/db/queries/sync.ts";
 import { getBlockchainHead } from "@/scanner/hive-client.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
+import { getSettlementNodeSnapshot } from "@/db/queries/nodes.ts";
 import { getStartupTime } from "@/scanner/sync-state.ts";
 import { SYNC_TOLERANCE_BLOCKS } from "@/scanner/sync-engine.ts";
 import { config } from "@/config.ts";
@@ -19,6 +20,7 @@ import {
 	SUPPORTED_CURRENCIES,
 	ALL_ACTIONS,
 	PROTOCOL_GENESIS_BLOCK,
+	MAX_NODE_HEARTBEAT_STALENESS_BLOCKS,
 	percentageToBasisPoints,
 } from "@/protocol/index.ts";
 
@@ -110,6 +112,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			getBlockchainHead().catch(() => ({ headBlock: 0, irreversibleBlock: 0 })),
 		]);
 		const multisig = getMultisigHealth();
+		const settlementNode = await getSettlementNodeSnapshot(config.hiveAccount, lastBlock);
 		const blocksBehind = Math.max(0, chain.irreversibleBlock - lastBlock);
 		const inSync = chain.irreversibleBlock > 0 && blocksBehind <= SYNC_TOLERANCE_BLOCKS;
 		return {
@@ -118,6 +121,14 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			genesisBlock: PROTOCOL_GENESIS_BLOCK,
 			nodeAccount: config.hiveAccount,
 			nodeUrl: config.nodeUrl || null,
+			nodeRegistered: settlementNode !== null,
+			nodeStatus: settlementNode?.status ?? null,
+			nodeRegistrationBlock: settlementNode?.registeredBlock ?? null,
+			nodeLastHeartbeatBlock: settlementNode?.lastHeartbeatBlock ?? null,
+			nodeActivityBlock: settlementNode?.activityBlock ?? null,
+			nodeActivityAgeBlocks: settlementNode?.activityAgeBlocks ?? null,
+			nodeActivityFresh: settlementNode?.activeForSettlement ?? false,
+			nodeActivityStaleAfterBlocks: MAX_NODE_HEARTBEAT_STALENESS_BLOCKS,
 			multisigEnabled: multisig.multisigEnabled,
 			multisigSignerReady: multisig.multisigSignerReady,
 			multisigClockDriftOk: multisig.multisigClockDriftOk,

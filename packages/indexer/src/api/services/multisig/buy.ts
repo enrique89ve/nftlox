@@ -1,4 +1,5 @@
 import { getNftWithCollectionRules, NFT_KIND_INSTANCE, type NftProcessingRow } from "@/db/queries/nfts.ts";
+import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
 import { createMultisigError } from "@/api/services/multisig/errors.ts";
 import {
 	extractTransfers,
@@ -57,6 +58,15 @@ export async function processBuyRequest(
 			"INDEXER_LAGGED",
 			`Indexer is ${lag} blocks behind Hive HEAD (max ${ctx.lagMaxBlocks}); retry in ~${retryAfterMs}ms`,
 			{ retryAfterMs },
+		);
+	}
+	try {
+		await assertActiveSettlementNode(ctx.nodeAccount, syncState.lastBlock, ctx.db);
+	} catch (cause) {
+		throw createMultisigError(
+			"NODE_NOT_ACTIVE",
+			cause instanceof Error ? cause.message : "Settlement node is not active",
+			{ cause },
 		);
 	}
 

@@ -68,8 +68,8 @@ export const config = {
 	// Node public info
 	nodeUrl: process.env.NODE_URL ?? "",
 	// Public-directory opt-in. When true, the startup routine imports POSTING_KEY
-	// into beekeeper, the node emits `node_register` once its HP is ≥ threshold,
-	// and a background job emits `node_heartbeat` every MIN_HEARTBEAT_INTERVAL_BLOCKS.
+	// into beekeeper, the node emits `node_register`, and a background job emits
+	// `node_heartbeat` every MIN_HEARTBEAT_INTERVAL_BLOCKS.
 	// When false, the node indexes + serves privately and never touches the
 	// public `l2_nodes` directory — a valid, first-class configuration.
 	nodeRegister: toBool(process.env.NODE_REGISTER, false),

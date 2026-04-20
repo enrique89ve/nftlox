@@ -25,6 +25,7 @@ export type RequestMultisigOptions = Readonly<HttpOptions & {
 
 export type ResolveNodeAccountOptions = Readonly<{
 	readonly requireMultisigReady?: boolean;
+	readonly requireNodeActivity?: boolean;
 }>;
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -90,6 +91,17 @@ export function resolveNodeAccountFromStatus(
 			throw new Error(`Indexer node '${nodeAccount}' multisig clock drift check failed`);
 		}
 	}
+	if (options.requireNodeActivity) {
+		const nodeRegistered = assertOptionalBoolean(raw.nodeRegistered, "nodeRegistered");
+		const nodeActivityFresh = assertOptionalBoolean(raw.nodeActivityFresh, "nodeActivityFresh");
+
+		if (nodeRegistered !== true) {
+			throw new Error(`Indexer node '${nodeAccount}' is not registered in l2_nodes`);
+		}
+		if (nodeActivityFresh !== true) {
+			throw new Error(`Indexer node '${nodeAccount}' has no fresh settlement heartbeat`);
+		}
+	}
 
 	return nodeAccount;
 }
@@ -128,7 +140,7 @@ export function fetchMultisigNodeAccount(
 	indexerUrl: string,
 	http?: HttpOptions,
 ): Promise<string> {
-	return fetchNodeAccount(indexerUrl, { requireMultisigReady: true }, http);
+	return fetchNodeAccount(indexerUrl, { requireMultisigReady: true, requireNodeActivity: true }, http);
 }
 
 const PAYMENT_INFO_STRING_FIELDS = [

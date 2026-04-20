@@ -36,13 +36,6 @@ export const HASH_VERSION = "v1";
 // unlist race deterministically across all indexers.
 export const UNLIST_DELAY_BLOCKS = 3;
 
-// Floor for opt-in listing in the PUBLIC node directory (l2_nodes). Running a
-// node is permissionless and does not require registration — a game or dapp
-// operator can index + serve privately without ever emitting `node_register`.
-// The HP gate only protects the discoverable directory against cheap sybil
-// listings. Skin-in-the-game is HP (self-staked OR delegated-in), not a fee.
-export const MIN_NODE_REGISTER_HIVE_POWER = 100;
-
 // ============================================================================
 // Node API policy
 // Per-node behavior. A node operator MAY tune these without breaking consensus
@@ -63,9 +56,15 @@ export const MULTISIG_LAG_MAX_BLOCKS = 3;
 // Cadence for on-chain heartbeat (custom_json with current state-root hash).
 // Block time on Hive is 3s, so 5000 blocks ≈ 4h10m. Nodes that register must
 // publish a heartbeat at least every N blocks or listings are treated as stale
-// by consumers of `l2_nodes`. Missing the window does NOT kick the node; it
-// only affects trust signals in the discovery directory.
+// by consumers of `l2_nodes`. Missing the interval does not remove the node
+// from the directory, but buy settlement requires activity within
+// MAX_NODE_HEARTBEAT_STALENESS_BLOCKS below.
 export const MIN_HEARTBEAT_INTERVAL_BLOCKS = 5000;
+// Maximum age for a settlement node to be considered active for buy
+// co-signing. Uses block numbers, not wall-clock time, so every indexer makes
+// the same accept/reject decision. A node gets one missed-heartbeat grace
+// window before its signatures stop settling globally.
+export const MAX_NODE_HEARTBEAT_STALENESS_BLOCKS = MIN_HEARTBEAT_INTERVAL_BLOCKS * 2;
 
 // ============================================================================
 // Payload / transaction limits

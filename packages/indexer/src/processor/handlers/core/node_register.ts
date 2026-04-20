@@ -1,8 +1,7 @@
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { Queryable } from "@/db/client.ts";
-import { MAX_URL_LENGTH, MIN_NODE_REGISTER_HIVE_POWER } from "@/protocol/index.ts";
+import { MAX_URL_LENGTH } from "@/protocol/index.ts";
 import { requireBoundedString } from "@/utils/validation.ts";
-import { getEffectiveHivePower } from "@/scanner/hive-client.ts";
 
 const MAX_NODE_PUBLIC_KEY_LENGTH = 256;
 
@@ -33,36 +32,21 @@ function requireNodePublicKey(value: unknown): string {
 }
 
 /**
- * Anti-sybil gate for the PUBLIC node directory. Running a node is
- * permissionless and does not require any registration — a game or dapp
- * operator can index the chain and serve their own app without ever
- * emitting `node_register`. This op is only for nodes that *opt in* to be
- * listed in `l2_nodes` and discovered by clients, and that is what the HP
- * floor protects against (cheap sybil listings).
- *
- * Skin-in-the-game is HP itself (self-staked + received delegations −
- * out-delegations), which is reversible but subject to the 13-week Hive
- * power-down schedule. No fee is charged.
+ * Node registration is consensus-critical because `buy` settlement accepts
+ * only active registered signers. Keep this handler purely deterministic:
+ * validate only fields present in the L1 operation and avoid live RPC checks
+ * such as current Hive Power, which would make historical replays diverge.
+ * Sybil scoring belongs in read-side reputation/discovery, not in this write
+ * projection.
  */
-async function requireSufficientHivePower(account: string): Promise<void> {
-	const hp = await getEffectiveHivePower(account);
-	if (hp === null) {
-		throw new Error(`Unable to verify Hive Power for account '${account}' (public node directory)`);
-	}
-	if (hp < MIN_NODE_REGISTER_HIVE_POWER) {
-		throw new Error(
-			`Account '${account}' has ${hp.toFixed(3)} HP, public node directory requires at least ${MIN_NODE_REGISTER_HIVE_POWER} HP (private nodes do not need to register)`,
-		);
-	}
-}
-
 export async function handleNodeRegister(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const endpoint = requireNodeEndpoint(op.data.endpoint);
 	const publicKey = requireNodePublicKey(op.data.publicKey);
 
-	await requireSufficientHivePower(op.signer);
-
-	// Insert into l2_nodes DB table
+	// Insert into l2_nodes DB table. On re-register we refresh the endpoint,
+	// pubkey, and registration block, but preserve the existing `status` —
+	// otherwise any future ban could be trivially reset by emitting another
+	// node_register. The default 'active' only applies to brand-new rows.
 	await txn`
 		INSERT INTO l2_nodes (
 			account,
@@ -82,7 +66,6 @@ export async function handleNodeRegister(op: ParsedOperation, txn: Queryable): P
 		ON CONFLICT (account) DO UPDATE SET
 			endpoint = EXCLUDED.endpoint,
 			public_key = EXCLUDED.public_key,
-			status = 'active',
 			block_num = EXCLUDED.block_num,
 			tx_id = EXCLUDED.tx_id,
 			updated_at = NOW()

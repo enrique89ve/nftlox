@@ -567,7 +567,7 @@ describe("syncCycle", () => {
 		expect(trackedLastBlock).toBe(6000);
 	});
 
-	test("does NOT enrich node_register with same-tx transfers (fee-less, HP-gated)", async () => {
+	test("does NOT enrich node_register with same-tx transfers (fee-less)", async () => {
 		trackedLastBlock = 1000;
 		setupChainHead(1001);
 		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);

@@ -1,6 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftWithCollectionRules, getNftWithCollectionRulesForUpdate, updateNftOwner, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
 import type { OwnerChangeCtx } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { insertSale } from "@/db/queries/marketplace-history.ts";
@@ -9,7 +10,6 @@ import { validateTransferCount } from "@/utils/nft-rules.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
 import { consumeMultisigLockIfMatches } from "@/utils/multisig-locks.ts";
 import { createLogger } from "@/utils/logger.ts";
-import { config } from "@/config.ts";
 import { ACTION_BUY, UNLIST_DELAY_BLOCKS } from "@/protocol/index.ts";
 
 const log = createLogger("handler:buy");
@@ -26,11 +26,7 @@ const log = createLogger("handler:buy");
  * Validates listingId + listTxId to prevent stale listing replays.
  */
 export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
-	if (op.signer !== config.hiveAccount) {
-		throw new Error(
-			`Buy must be signed by node account '${config.hiveAccount}', got '${op.signer}'`,
-		);
-	}
+	await assertActiveSettlementNode(op.signer, op.blockNum, txn);
 
 	const nftId = requireString(op.data.nftId, "nftId");
 	const listingId = requireString(op.data.listingId, "listingId");
@@ -108,7 +104,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 		currency,
 		royaltyPct,
 		royaltyRecipient,
-		feeAccount: config.hiveAccount,
+		feeAccount: op.signer,
 		nftId,
 		consumedIndices: op.transferPool?.consumed,
 	});
