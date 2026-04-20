@@ -1,6 +1,7 @@
 import { test, expect, describe } from "bun:test";
 import {
 	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
+	MIN_LISTING_TTL_MS,
 	priceSchema,
 	txIdSchema,
 	listInputSchema,
@@ -173,13 +174,22 @@ describe("listInputSchema expiresAt", () => {
 		price: { amount: "1.000", currency: "HIVE" as const },
 	};
 
-	test("accepts a timestamp in the future", () => {
-		const futureTimestamp = Date.now() + 60_000;
+	test("accepts a timestamp beyond the safe settlement window", () => {
+		const futureTimestamp = Date.now() + MIN_LISTING_TTL_MS + 1_000;
 		const result = listInputSchema.safeParse({
 			...validBaseInput,
 			expiresAt: futureTimestamp,
 		});
 		expect(result.success).toBe(true);
+	});
+
+	test("rejects a near-future timestamp inside the settlement window", () => {
+		const nearFutureTimestamp = Date.now() + MIN_LISTING_TTL_MS;
+		const result = listInputSchema.safeParse({
+			...validBaseInput,
+			expiresAt: nearFutureTimestamp,
+		});
+		expect(result.success).toBe(false);
 	});
 
 	test("rejects a timestamp in the past", () => {
@@ -193,7 +203,7 @@ describe("listInputSchema expiresAt", () => {
 
 	test("expiresAt is evaluated at parse time, not at module load time", async () => {
 		// First parse: a timestamp slightly in the future should pass
-		const nearFuture = Date.now() + 2_000;
+		const nearFuture = Date.now() + MIN_LISTING_TTL_MS + 2_000;
 		const result1 = listInputSchema.safeParse({
 			...validBaseInput,
 			expiresAt: nearFuture,

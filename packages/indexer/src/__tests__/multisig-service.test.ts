@@ -38,6 +38,7 @@ import {
 	generateListingId,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
+	MARKETPLACE_SETTLEMENT_BUFFER_MS,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	PROTOCOL_VERSION,
 	type MultisigResponse,
@@ -88,6 +89,36 @@ async function cleanDb() {
 	await sql`DELETE FROM collection_stats`;
 	await sql`DELETE FROM archived_collections`;
 	await sql`DELETE FROM collections`;
+}
+
+async function seedActiveSettlementNode(): Promise<void> {
+	await sql`
+		INSERT INTO l2_nodes (
+			account,
+			endpoint,
+			public_key,
+			status,
+			block_num,
+			last_heartbeat_block,
+			tx_id
+		) VALUES (
+			${NODE_ACCOUNT},
+			'https://node.example.com',
+			'STM_mock_public_key',
+			'active',
+			0,
+			0,
+			'tx_node_active'
+		)
+		ON CONFLICT (account) DO UPDATE SET
+			endpoint = EXCLUDED.endpoint,
+			public_key = EXCLUDED.public_key,
+			status = 'active',
+			block_num = EXCLUDED.block_num,
+			last_heartbeat_block = EXCLUDED.last_heartbeat_block,
+			tx_id = EXCLUDED.tx_id,
+			updated_at = NOW()
+	`;
 }
 
 async function seedCollection(
@@ -356,6 +387,7 @@ describe("Multisig service (regression)", () => {
 
 	beforeEach(async () => {
 		await cleanDb();
+		await seedActiveSettlementNode();
 	});
 
 	// ─── non-transferable rejection ────────────────────
@@ -485,6 +517,45 @@ describe("Multisig service (regression)", () => {
 
 			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
 			assertRejected(result, "NFT_EXPIRED_LISTING");
+		});
+
+		test("rejects co-sign when listing expires before transaction settlement buffer", async () => {
+			const colId = await seedCollection();
+			const seedId = await seedMint("test1", colId);
+			const nftId = await seedInstance(seedId);
+			const [nftRow] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${nftId}`;
+			const nftTxId = nftRow!.tx_id as string;
+			const transactionOffsetMs = 60_000;
+			const body = makeMultisigBody({
+				buyer: "bob",
+				nftId,
+				listingId: "list_unsafe_expiry",
+				listTxId: "tx_unsafe_expiry",
+				nftTxId,
+				seller: "alice",
+				expirationOffsetMs: transactionOffsetMs,
+			});
+			const transactionExpiration = getTransactionExpiration(body);
+			const unsafeListingExpiry = new Date(
+				new Date(`${transactionExpiration}Z`).getTime() + MARKETPLACE_SETTLEMENT_BUFFER_MS,
+			).toISOString();
+
+			await sql`
+				UPDATE nfts
+				SET status = 'listed',
+					listing_id = 'list_unsafe_expiry',
+					listing_tx_id = 'tx_unsafe_expiry',
+					listing_price = 10,
+					listing_currency = 'HIVE',
+					listing_expires_at = ${unsafeListingExpiry}
+				WHERE id = ${nftId}
+			`;
+
+			const result = await processMultisigRequest(body, sql, NODE_ACCOUNT, PROTOCOL_ID);
+			assertRejected(result, "NFT_EXPIRED_LISTING");
+			if (!result.ok) {
+				expect(result.message).toContain("safe settlement");
+			}
 		});
 
 		test("rejects co-sign for legacy listed seed", async () => {

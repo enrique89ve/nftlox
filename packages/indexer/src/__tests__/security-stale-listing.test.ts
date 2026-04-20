@@ -40,6 +40,7 @@ import {
 	PROTOCOL_COLLECTION_FEE_HBD,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
+	MIN_LISTING_TTL_MS,
 	UNLIST_DELAY_BLOCKS,
 } from "@/protocol/index.ts";
 
@@ -83,6 +84,36 @@ async function cleanDb() {
 	await sql`DELETE FROM collection_stats`;
 	await sql`DELETE FROM archived_collections`;
 	await sql`DELETE FROM collections`;
+}
+
+async function seedActiveSettlementNode(account = NODE_ACCOUNT): Promise<void> {
+	await sql`
+		INSERT INTO l2_nodes (
+			account,
+			endpoint,
+			public_key,
+			status,
+			block_num,
+			last_heartbeat_block,
+			tx_id
+		) VALUES (
+			${account},
+			${`https://${account}.example.com`},
+			'STM_mock_public_key',
+			'active',
+			90000000,
+			90000100,
+			${`tx_node_${account}`}
+		)
+		ON CONFLICT (account) DO UPDATE SET
+			endpoint = EXCLUDED.endpoint,
+			public_key = EXCLUDED.public_key,
+			status = 'active',
+			block_num = EXCLUDED.block_num,
+			last_heartbeat_block = EXCLUDED.last_heartbeat_block,
+			tx_id = EXCLUDED.tx_id,
+			updated_at = NOW()
+	`;
 }
 
 async function seedCollection(txn?: Queryable): Promise<void> {
@@ -238,6 +269,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 
 	beforeEach(async () => {
 		await cleanDb();
+		await seedActiveSettlementNode();
 	});
 
 	// ─── Scenario 1: OpenSea Classic ─────────────────────────────
@@ -501,6 +533,20 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 	// If a listing expired, transfer should auto-clear it
 
 	describe("expired listing auto-clear", () => {
+		test("listing with explicit expiry inside settlement window is rejected", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+
+			const listingBlockMs = new Date("2024-01-01T00:00:00").getTime();
+			const unsafeExpiresAt = listingBlockMs + MIN_LISTING_TTL_MS;
+			const listData = await makeListData({ nftId: instId, expiresAt: unsafeExpiresAt });
+
+			await expect(
+				withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn)),
+			).rejects.toThrow("safe settlement");
+		});
+
 		test("transfer auto-clears expired listing without manual unlist", async () => {
 			await seedCollection();
 			await seedMint();
@@ -574,7 +620,7 @@ describe("Security: Stale Listing Exploit Prevention", () => {
 				nftId: instId, listingId, listTxId, txId,
 			}, "eve", transfers);
 
-			await expect(withTransaction((txn) => handleBuy(attackOp, txn))).rejects.toThrow("node account");
+			await expect(withTransaction((txn) => handleBuy(attackOp, txn))).rejects.toThrow("not registered in l2_nodes");
 		});
 	});
 });

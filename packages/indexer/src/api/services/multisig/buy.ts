@@ -12,8 +12,9 @@ import {
 	validateTransferOperations,
 	validatePayloadDataString,
 	validateNonEmptyString,
+	parseTransactionExpirationMs,
 } from "@/api/services/multisig/transaction.ts";
-import { validateHiveUsername, UNLIST_DELAY_BLOCKS } from "@/protocol/index.ts";
+import { MARKETPLACE_SETTLEMENT_BUFFER_MS, validateHiveUsername, UNLIST_DELAY_BLOCKS } from "@/protocol/index.ts";
 import { verifyTransfers, requireSupportedCurrency, type TransferRecord } from "@/utils/validation.ts";
 import type { Queryable } from "@/db/client.ts";
 import type {
@@ -70,7 +71,12 @@ export async function processBuyRequest(
 		);
 	}
 
-	const { nft, rules, nftTxId } = await validateNftState(request.nftId, request.buyer, ctx);
+	const { nft, rules, nftTxId } = await validateNftState(
+		request.nftId,
+		request.buyer,
+		request.transaction.expiration,
+		ctx,
+	);
 	if (nft.listing_id !== request.listingId) {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "listingId does not match current listing");
 	}
@@ -232,6 +238,7 @@ function validateBuyPayloadData(
 async function validateNftState(
 	nftId: string,
 	buyer: string,
+	transactionExpiration: string,
 	ctx: MultisigBaseContext,
 ): Promise<NftStateResult> {
 	// Plain read — no FOR UPDATE. Concurrency between buyer requests is
@@ -247,12 +254,7 @@ async function validateNftState(
 		throw createMultisigError("NFT_NOT_LISTED", "NFT is not currently listed for sale");
 	}
 
-	if (nftWithRules.listing_expires_at) {
-		const expiresAt = new Date(nftWithRules.listing_expires_at).getTime();
-		if (Date.now() >= expiresAt) {
-			throw createMultisigError("NFT_EXPIRED_LISTING", "Listing has expired");
-		}
-	}
+	validateListingSurvivesTransaction(nftWithRules.listing_expires_at, transactionExpiration);
 
 	if (nftWithRules.nft_type !== NFT_KIND_INSTANCE) {
 		throw createMultisigError("NFT_NOT_INSTANCE", "Only instances can be bought through marketplace");
@@ -277,6 +279,30 @@ async function validateNftState(
 	} satisfies MultisigRules;
 
 	return { nft, rules, nftTxId: nftWithRules.created_tx_id };
+}
+
+function validateListingSurvivesTransaction(
+	listingExpiresAt: string | null,
+	transactionExpiration: string,
+): void {
+	if (!listingExpiresAt) return;
+
+	const listingExpiresMs = new Date(listingExpiresAt).getTime();
+	if (Number.isNaN(listingExpiresMs)) {
+		throw createMultisigError("INTERNAL_ERROR", "NFT listing expiration is invalid");
+	}
+	if (Date.now() >= listingExpiresMs) {
+		throw createMultisigError("NFT_EXPIRED_LISTING", "Listing has expired");
+	}
+
+	const transactionExpiresMs = parseTransactionExpirationMs(transactionExpiration);
+	const minimumSafeListingExpiresMs = transactionExpiresMs + MARKETPLACE_SETTLEMENT_BUFFER_MS;
+	if (listingExpiresMs <= minimumSafeListingExpiresMs) {
+		throw createMultisigError(
+			"NFT_EXPIRED_LISTING",
+			`Listing expires too soon for safe settlement: listing must expire more than ${MARKETPLACE_SETTLEMENT_BUFFER_MS / 1000}s after transaction expiration`,
+		);
+	}
 }
 
 function validatePaymentSplit(

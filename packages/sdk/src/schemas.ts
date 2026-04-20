@@ -14,6 +14,7 @@ import {
 	validateHiveUsername,
 	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
 	INSTANCE_FEE_PER_N,
+	MIN_LISTING_TTL_MS,
 } from "@nftlox/protocol";
 
 export { validateHiveUsername };
@@ -158,7 +159,12 @@ export type MintInput = z.infer<typeof mintInputSchema>;
 export const listInputSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1, "NFT ID is required"),
 	price: priceSchema,
-	expiresAt: z.number().refine((v) => v > Date.now(), { message: "Expiration date must be in the future" }).optional(),
+	expiresAt: z.number()
+		.refine(
+			(v) => v > Date.now() + MIN_LISTING_TTL_MS,
+			{ message: `Expiration date must be more than ${MIN_LISTING_TTL_MS / 1000}s in the future` },
+		)
+		.optional(),
 	imageUrl: httpUrlSchema.optional(),
 	imageHash: z.string().optional(),
 	marketplace: z.string().optional(),

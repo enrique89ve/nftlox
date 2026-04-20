@@ -5,7 +5,26 @@ import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireHiveAmount, optionalNumber, optionalString } from "@/utils/validation.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
-import { generateListingId, LISTING_ID_PREFIX, MIN_PRICE_AMOUNT } from "@/protocol/index.ts";
+import { generateListingId, LISTING_ID_PREFIX, MIN_LISTING_TTL_MS, MIN_PRICE_AMOUNT } from "@/protocol/index.ts";
+
+function validateExpiresAt(expiresAt: number | null, blockTimestamp: string, nftId: string): void {
+	if (expiresAt === null || expiresAt === 0) return;
+
+	const blockTimestampMs = new Date(blockTimestamp).getTime();
+	if (Number.isNaN(blockTimestampMs)) {
+		throw new Error(`Invalid block timestamp for listing: ${blockTimestamp}`);
+	}
+	if (expiresAt <= blockTimestampMs) {
+		throw new Error(`Listing expiresAt must be in the future for NFT: ${nftId}`);
+	}
+
+	const minimumExpiresAt = blockTimestampMs + MIN_LISTING_TTL_MS;
+	if (expiresAt <= minimumExpiresAt) {
+		throw new Error(
+			`Listing expiresAt is too soon for safe settlement: must be more than ${MIN_LISTING_TTL_MS / 1000}s after the listing block timestamp`,
+		);
+	}
+}
 
 export async function handleList(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const nftId = requireString(op.data.nftId, "nftId");
@@ -25,9 +44,7 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 	assertActionable(nft, nftId);
 	assertMarketplaceInstance(nft, nftId);
 
-	if (expiresAt !== null && expiresAt !== 0 && expiresAt <= new Date(op.timestamp).getTime()) {
-		throw new Error(`Listing expiresAt must be in the future for NFT: ${nftId}`);
-	}
+	validateExpiresAt(expiresAt, op.timestamp, nftId);
 
 	const rules = await getCollectionRules(nft.collection_id, txn);
 	if (rules && !rules.transferable) {

@@ -6,6 +6,8 @@ import {
 	ACTION_CREATE_COLLECTION,
 	HIVE_CUSTOM_JSON_MAX_BYTES,
 	MAX_MULTISIG_OPERATIONS,
+	MULTISIG_TX_MAX_EXPIRATION_MS,
+	MULTISIG_TX_MIN_EXPIRATION_MS,
 	MIN_PROTOCOL_VERSION,
 	isProtocolAction,
 	type MultisigErrorCode,
@@ -25,8 +27,6 @@ import type {
 	ValidatedTransferOp,
 } from "./types.ts";
 
-const MIN_EXPIRATION_MS = 30_000;
-const MAX_EXPIRATION_MS = 120_000;
 const MIN_OPERATIONS = 2;
 
 type TransactionHeader = Readonly<{
@@ -367,27 +367,31 @@ function validateExpiration(expiration: unknown): string {
 		throw createMultisigError("INVALID_TX_STRUCTURE", "Transaction 'expiration' must be a string");
 	}
 
-	const expiresAt = new Date(`${expiration}Z`).getTime();
-	if (Number.isNaN(expiresAt)) {
-		throw createMultisigError("INVALID_TX_STRUCTURE", "Transaction 'expiration' is not a valid date");
-	}
-
+	const expiresAt = parseTransactionExpirationMs(expiration);
 	const diffMs = expiresAt - Date.now();
-	if (diffMs < MIN_EXPIRATION_MS) {
+	if (diffMs < MULTISIG_TX_MIN_EXPIRATION_MS) {
 		throw createMultisigError(
 			"INVALID_TX_STRUCTURE",
-			`Transaction expires too soon (${Math.round(diffMs / 1000)}s). Minimum: ${MIN_EXPIRATION_MS / 1000}s`,
+			`Transaction expires too soon (${Math.round(diffMs / 1000)}s). Minimum: ${MULTISIG_TX_MIN_EXPIRATION_MS / 1000}s`,
 		);
 	}
 
-	if (diffMs > MAX_EXPIRATION_MS) {
+	if (diffMs > MULTISIG_TX_MAX_EXPIRATION_MS) {
 		throw createMultisigError(
 			"INVALID_TX_STRUCTURE",
-			`Transaction expiration too far in the future (${Math.round(diffMs / 1000)}s). Maximum: ${MAX_EXPIRATION_MS / 1000}s`,
+			`Transaction expiration too far in the future (${Math.round(diffMs / 1000)}s). Maximum: ${MULTISIG_TX_MAX_EXPIRATION_MS / 1000}s`,
 		);
 	}
 
 	return expiration;
+}
+
+export function parseTransactionExpirationMs(expiration: string): number {
+	const expiresAt = new Date(`${expiration}Z`).getTime();
+	if (Number.isNaN(expiresAt)) {
+		throw createMultisigError("INVALID_TX_STRUCTURE", "Transaction 'expiration' is not a valid date");
+	}
+	return expiresAt;
 }
 
 function validateSignaturesEmpty(signatures: unknown): readonly [] {

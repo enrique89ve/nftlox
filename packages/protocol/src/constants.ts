@@ -45,6 +45,8 @@ export const UNLIST_DELAY_BLOCKS = 3;
 
 export const MULTISIG_EXPIRATION_MS = 125_000;
 export const MAX_MULTISIG_OPERATIONS = 5;
+export const MULTISIG_TX_MIN_EXPIRATION_MS = 30_000;
+export const MULTISIG_TX_MAX_EXPIRATION_MS = 120_000;
 
 // Max block gap between the Hive HEAD and the indexer's last-processed block
 // that still allows /api/multisig to sign. Exceeding this means the API would
@@ -117,6 +119,12 @@ export const BASIS_POINTS_DENOMINATOR = 10_000;
 export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
+// Listing expirations must outlive the longest buy transaction this node will
+// co-sign plus a settlement buffer. Otherwise a seller can list with a short
+// expiry, receive buyer funds in a signed Hive transaction, and have the indexer
+// reject the NFT ownership change because the listing expired before inclusion.
+export const MARKETPLACE_SETTLEMENT_BUFFER_MS = 60_000;
+export const MIN_LISTING_TTL_MS = MULTISIG_TX_MAX_EXPIRATION_MS + MARKETPLACE_SETTLEMENT_BUFFER_MS;
 
 // Per-instance fee for create_collection. When enabled, the total fee becomes
 //   PROTOCOL_COLLECTION_FEE_HBD + INSTANCE_FEE_UNIT_HBD * ceil(maxInstances / INSTANCE_FEE_PER_N)
