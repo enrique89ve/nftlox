@@ -1,0 +1,9 @@
+{
+	"name": "@nftlox/indexer-snapshot",
+	"version": "0.0.0",
+	"description": "Design-only placeholder — standalone service that polls NFTLox indexer nodes, scores their quality, extracts verified database snapshots, and distributes them via IPFS or PostgreSQL basebackup so new nodes can bootstrap without replaying genesis..head.",
+	"private": true,
+	"license": "MIT",
+	"author": "NFTLox",
+	"type": "module"
+}
