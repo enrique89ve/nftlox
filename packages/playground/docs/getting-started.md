@@ -44,7 +44,7 @@ curl https://api-nftlox.hivecreators.co/api/status
 
 ```json
 {
-	"protocolVersion": "0.6.0",
+	"protocolVersion": "0.6.1",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",

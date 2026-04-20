@@ -76,6 +76,8 @@ Every builder validates its input with a Zod schema; the schema is exported alon
 
 **`buildCollection` options**: either pass `{ nodeAccount: "nftlox" }` directly, or let the SDK resolve it from the indexer with `{ indexerBaseUrl, requireMultisigReady: true }`. Fee defaults to `PROTOCOL_COLLECTION_FEE_HBD` (`0.100 HBD`) but both `feeAmount` and `feeCurrency` (`"HIVE" | "HBD"`) are overridable. The fee transfer emitted by this builder carries memo `NFTLox FEE-COL:{collectionId}` — transfers without this exact memo are ignored by the indexer.
 
+**Scaled fee (gated).** When `INSTANCE_FEE_ENABLED` is `true`, the builder computes the fee as `PROTOCOL_COLLECTION_FEE_HBD + INSTANCE_FEE_UNIT_HBD * ceil(maxInstances / INSTANCE_FEE_PER_N)` (see `computeCollectionFeeHbd` in `packages/sdk/src/builders/collection.ts`). The flag is currently `false`, so the fee is a flat `0.100 HBD`, but the `maxInstances` granularity rule (`0` or multiple of `1000`) is enforced today regardless — so payloads are forward-compatible. Passing `feeAmount` always overrides the computed amount.
+
 **`CreateCollectionInput` (Zod)**:
 
 ```typescript
@@ -84,6 +86,7 @@ Every builder validates its input with a Zod schema; the schema is exported alon
 	symbol: string;                  // 3–10 chars, /^[A-Z][A-Z0-9]{2,9}$/
 	creator: string;                 // Hive username
 	totalPotential: number;          // non-negative integer, 0 = unlimited
+	maxInstances: number;            // 0 (unlimited) OR a positive multiple of INSTANCE_FEE_PER_N (1000)
 	metadata: {
 		description: string;           // 1–250 chars
 		image: string;                 // https URL, ≤500 chars

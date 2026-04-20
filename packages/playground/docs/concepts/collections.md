@@ -28,9 +28,10 @@ The node's signature is requested via `requestCreateCollectionMultisig(indexerBa
 | Field | Type | Constraints |
 |---|---|---|
 | `name` | string | 1–100 characters |
-| `symbol` | string | 3–8 uppercase alphanumeric (`A-Z`, `0-9`) |
+| `symbol` | string | 3–10 uppercase alphanumeric, must start with a letter (`/^[A-Z][A-Z0-9]{2,9}$/`) |
 | `creator` | string | Valid Hive username (signer) |
 | `totalPotential` | number | Non-negative integer (0 = unlimited seeds) |
+| `maxInstances` | number | `0` (unlimited) **or** a positive multiple of `INSTANCE_FEE_PER_N` (`1000`). Caps total instances mintable across all seeds. Stored immutably; drives the scaled-fee math when `INSTANCE_FEE_ENABLED` is on. |
 | `metadata.description` | string | 1–250 characters |
 | `metadata.image` | string | HTTP/HTTPS URL, ≤ 500 chars |
 | `rules` | object | See [Collection rules](#2-collection-rules) |
@@ -62,6 +63,7 @@ const result = await buildCollection(
 		symbol: "HERO",
 		creator: "ragnarok-studio",
 		totalPotential: 1000,
+		maxInstances: 0,              // 0 = unlimited; otherwise a multiple of 1000
 		metadata: {
 			description: "Playable hero cards",
 			image: "https://…/cover.webp",
@@ -93,6 +95,17 @@ if (!result.success) throw new Error(JSON.stringify(result.errors));
 ```
 
 For collections with seeds in the same ceremony, use [`buildCollectionWithSeeds`](../sdk/reference.md#buildcollectionwithseeds) — it plans the collection step and batches every seed `mint` op into right-sized transactions.
+
+### Fee scaling (dormant)
+
+The creation fee defaults to `PROTOCOL_COLLECTION_FEE_HBD` (`0.100 HBD`). A scaled adapter exists but is gated behind `INSTANCE_FEE_ENABLED` (currently `false`):
+
+```
+fee = PROTOCOL_COLLECTION_FEE_HBD + INSTANCE_FEE_UNIT_HBD * ceil(maxInstances / INSTANCE_FEE_PER_N)
+    = 0.100 HBD         + 0.001 HBD          *           ceil(maxInstances / 1000)
+```
+
+While the flag is off, the fee is flat `0.100 HBD`. The **granularity rule on `maxInstances` (0 or multiple of 1000) is already enforced today**, so the payload is forward-compatible the moment the flag flips — no migration required. `feeAmount` in `buildCollection` options remains a manual override regardless.
 
 ### Indexer behaviour
 

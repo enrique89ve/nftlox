@@ -60,6 +60,7 @@ type CollectionData = {
 	readonly name: string;                   // ≤100 chars
 	readonly symbol: string;                 // 3–10 chars, uppercase
 	readonly totalPotential: number;         // integer ≥ 0 (0 = unlimited)
+	readonly maxInstances: number;           // 0 (unlimited) OR a positive multiple of INSTANCE_FEE_PER_N (1000)
 	readonly originDna: string;              // "o<15 upper-hex>", deterministic
 	readonly metadata: {
 		readonly description: string;          // ≤250
