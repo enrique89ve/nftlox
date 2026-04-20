@@ -28,7 +28,6 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 		expect(() =>
 			verifyTransfers({
 				transfers,
-				buyer: "buyer",
 				seller: "seller",
 				totalPrice: 10,
 				currency: "HIVE",
@@ -56,7 +55,6 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 
 		verifyTransfers({
 			transfers,
-			buyer: "buyer",
 			seller: "seller",
 			totalPrice: 10,
 			currency: "HIVE",
@@ -86,7 +84,6 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 
 		const base = {
 			transfers,
-			buyer: "buyer",
 			seller: "seller",
 			totalPrice: 10,
 			currency: "HIVE" as const,
@@ -113,7 +110,6 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 		expect(() =>
 			verifyTransfers({
 				transfers: incomplete,
-				buyer: "buyer",
 				seller: "seller",
 				totalPrice: 10,
 				currency: "HIVE",
@@ -132,7 +128,6 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 		];
 		verifyTransfers({
 			transfers: complete,
-			buyer: "buyer",
 			seller: "seller",
 			totalPrice: 10,
 			currency: "HIVE",

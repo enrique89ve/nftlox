@@ -37,20 +37,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	const listTxId = requireString(op.data.listTxId, "listTxId");
 	const txId = requireString(op.data.txId, "txId");
 
-	// Memo-bound identity: the seller leg of the split payment carries
-	// `NFTLox BUY:${nftId}`; its `from` is the canonical buyer. Using this
-	// instead of `pairedTransfers[0]?.from` removes the positional read that
-	// made buyer identity dependent on transfer ordering.
 	const transfers = op.pairedTransfers ?? [];
-	const buyLegMemo = `NFTLox BUY:${nftId}`;
-	const buyLegMatches = transfers.filter((t) => t.memo === buyLegMemo);
-	if (buyLegMatches.length === 0) {
-		throw new Error(`No BUY-memo transfer found for nft ${nftId}`);
-	}
-	if (buyLegMatches.length > 1) {
-		throw new Error(`Ambiguous BUY-memo transfers for nft ${nftId}`);
-	}
-	const buyer = requireUsername(buyLegMatches[0]!.from, "buyer");
 
 	const nft = await getNftWithCollectionRulesForUpdate(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
@@ -76,7 +63,6 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 			);
 		}
 	}
-	if (nft.owner === buyer) throw new Error(`Cannot buy own NFT: ${nftId}`);
 
 	if (!nft.transferable) {
 		throw new Error(`Collection ${nft.collection_id} is not transferable — buy blocked`);
@@ -109,11 +95,14 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	}
 	const royaltyRecipient = nft.royalty_recipient ?? null;
 
-	// Protocol fee always goes to the co-signing node.
+	// Canonical buyer identity: verifyTransfers finds the unique seller-leg
+	// transfer (to=seller, amount=sellerAmount, currency, memo=`BUY:nftId`)
+	// and returns its `from`. This replaces the previous positional read and
+	// same-memo pre-filter — an extra (different amount/to) transfer sharing
+	// the BUY memo no longer triggers a false-ambiguous rejection.
 	// consumedIndices prevents multi-buy in the same tx from sharing transfers.
-	const { split } = verifyTransfers({
+	const { split, buyerFromTransfer } = verifyTransfers({
 		transfers,
-		buyer,
 		seller: nft.owner,
 		totalPrice,
 		currency,
@@ -123,6 +112,8 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 		nftId,
 		consumedIndices: op.transferPool?.consumed,
 	});
+	const buyer = requireUsername(buyerFromTransfer, "buyer");
+	if (nft.owner === buyer) throw new Error(`Cannot buy own NFT: ${nftId}`);
 
 	validateTransferCount(transfers, split, op.transferPool?.consumed);
 

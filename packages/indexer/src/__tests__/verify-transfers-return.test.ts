@@ -10,7 +10,6 @@ describe("verifyTransfers return shape", () => {
 		];
 		const result = verifyTransfers({
 			transfers,
-			buyer: "buyer",
 			seller: "seller",
 			totalPrice: 1.0,
 			currency: "HIVE",

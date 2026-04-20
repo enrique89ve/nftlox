@@ -48,7 +48,6 @@ export function requireSupportedCurrency(
 
 export interface VerifyTransfersParams {
 	transfers: TransferRecord[];
-	buyer: string;
 	seller: string;
 	totalPrice: number;
 	currency: SupportedCurrency;
@@ -82,7 +81,7 @@ export interface VerifyTransfersResult {
 }
 
 export function verifyTransfers(params: VerifyTransfersParams): VerifyTransfersResult {
-	const { transfers, buyer, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, nftId, consumedIndices } = params;
+	const { transfers, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, nftId, consumedIndices } = params;
 
 	if (transfers.length === 0) {
 		throw new Error("No transfers found. Payment split is required.");
@@ -91,16 +90,53 @@ export function verifyTransfers(params: VerifyTransfersParams): VerifyTransfersR
 	const split = calculatePaymentSplit(totalPrice, currency, royaltyPct, royaltyRecipient, seller, feeAccount);
 
 	const AMOUNT_TOLERANCE = 0.0005;
+	const sellerMemo = `${MEMO_PREFIX_BUY}${nftId}`;
+
+	// Seller leg uniquely identifies the buyer. Match by (to, amount, currency,
+	// memo) WITHOUT a `from` filter — the `from` is exactly what we're trying
+	// to discover. Ambiguity only applies when MORE THAN ONE transfer satisfies
+	// the full predicate; a same-memo transfer that fails on amount/to/currency
+	// no longer causes a false rejection.
+	if (split.sellerAmount <= 0) {
+		throw new Error(
+			`verifyTransfers: non-positive seller payment (${split.sellerAmount}) — invalid listing`,
+		);
+	}
+
+	const sellerCandidates: number[] = [];
+	for (let idx = 0; idx < transfers.length; idx++) {
+		const t = transfers[idx]!;
+		if (consumedIndices?.has(idx)) continue;
+		if (t.to !== seller) continue;
+		if (t.currency !== currency) continue;
+		if (t.memo !== sellerMemo) continue;
+		if (Math.abs(t.amount - split.sellerAmount) >= AMOUNT_TOLERANCE) continue;
+		sellerCandidates.push(idx);
+	}
+
+	if (sellerCandidates.length === 0) {
+		throw new Error(
+			`Missing seller payment: expected ${split.sellerAmount} ${currency} to @${seller} with memo '${sellerMemo}'`,
+		);
+	}
+	if (sellerCandidates.length > 1) {
+		throw new Error(
+			`Ambiguous seller payment: ${sellerCandidates.length} transfers match (to @${seller}, ${split.sellerAmount} ${currency}, memo '${sellerMemo}')`,
+		);
+	}
+
+	const sellerLegIdx = sellerCandidates[0]!;
+	const buyerFromTransfer = transfers[sellerLegIdx]!.from;
 
 	// Stage matches here first. The shared `consumedIndices` is only mutated below,
 	// after all expected transfers are successfully matched.
-	const staged: number[] = [];
+	const staged: number[] = [sellerLegIdx];
 
-	function expectTransfer(to: string, expectedAmount: number, label: string, expectedMemo: string): void {
+	function expectBuyerTransfer(to: string, expectedAmount: number, label: string, expectedMemo: string): void {
 		const matchIndex = transfers.findIndex((t, idx) =>
 			(!consumedIndices || !consumedIndices.has(idx)) &&
 			!staged.includes(idx) &&
-			t.from === buyer &&
+			t.from === buyerFromTransfer &&
 			t.to === to &&
 			t.currency === currency &&
 			Math.abs(t.amount - expectedAmount) < AMOUNT_TOLERANCE &&
@@ -108,32 +144,19 @@ export function verifyTransfers(params: VerifyTransfersParams): VerifyTransfersR
 		);
 		if (matchIndex === -1) {
 			throw new Error(
-				`Missing ${label}: expected ${expectedAmount} ${currency} from @${buyer} to @${to} with memo '${expectedMemo}'`
+				`Missing ${label}: expected ${expectedAmount} ${currency} from @${buyerFromTransfer} to @${to} with memo '${expectedMemo}'`
 			);
 		}
 		staged.push(matchIndex);
 	}
 
-	if (split.sellerAmount > 0) {
-		expectTransfer(seller, split.sellerAmount, "seller payment", `${MEMO_PREFIX_BUY}${nftId}`);
-	}
-
 	if (split.royaltyAmount > 0 && split.royaltyRecipient) {
-		expectTransfer(split.royaltyRecipient, split.royaltyAmount, "royalty payment", `${MEMO_PREFIX_ROYALTY}${nftId}`);
+		expectBuyerTransfer(split.royaltyRecipient, split.royaltyAmount, "royalty payment", `${MEMO_PREFIX_ROYALTY}${nftId}`);
 	}
 
 	if (split.feeAmount > 0) {
-		expectTransfer(split.feeAccount, split.feeAmount, "protocol fee", `${MEMO_PREFIX_FEE}${nftId}`);
+		expectBuyerTransfer(split.feeAccount, split.feeAmount, "protocol fee", `${MEMO_PREFIX_FEE}${nftId}`);
 	}
-
-	// The first staged match is always the seller leg when sellerAmount > 0
-	// (listing prices are > 0 in every valid buy). Its `from` is the canonical
-	// buyer identity, replacing positional `pairedTransfers[0]` reads.
-	const sellerLegIdx = staged[0];
-	if (sellerLegIdx === undefined) {
-		throw new Error("verifyTransfers: no seller-leg match (unexpected — totalPrice must be > 0)");
-	}
-	const buyerFromTransfer = transfers[sellerLegIdx]!.from;
 
 	// Atomic commit: all expected matches succeeded, now publish to the shared pool.
 	if (consumedIndices) {

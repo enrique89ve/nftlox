@@ -291,9 +291,13 @@ function validatePaymentSplit(
 	}
 
 	try {
+		// buyer is derived by verifyTransfers from the unique seller-leg
+		// transfer (memo-bound + amount-bound), so no positional read is
+		// needed here. The multisig path consumes `buyerFromTransfer` below
+		// only for the count check; downstream authorization of the buy is
+		// enforced by required_posting_auths in validateMultisigBuyRequest.
 		const { split } = verifyTransfers({
 			transfers,
-			buyer: transfers[0]?.from ?? "",
 			seller: nft.owner,
 			totalPrice,
 			currency: requireSupportedCurrency(nft.listing_currency, "listing_currency"),

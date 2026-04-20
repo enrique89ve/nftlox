@@ -1,7 +1,6 @@
 import { createLogger } from "./logger.ts";
 import { config } from "@/config.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { DEFAULT_FEE_ACCOUNT } from "@/protocol/index.ts";
 
 const log = createLogger("fee-oracle");
 
@@ -213,13 +212,22 @@ export function validateFixedFee(params: {
 	return { payer: t.from, amount: t.amount, currency: t.currency, index: match.idx };
 }
 
+// Amount-only fee validation for contexts where memo-binding is enforced
+// elsewhere (multisig pre-signing validates (from, to, memo) before calling
+// this). HBD branch uses strict equality within HBD_EQUALITY_EPSILON — the
+// same tolerance validateFixedFee enforces — so an overpay never passes as
+// valid. HIVE branch retains FEE_TOLERANCE_MULTIPLIER to absorb price drift.
+//
+// requireDynamicFee was removed: it scanned transfers by (from, to) only,
+// mutated the consumed set eagerly before the handler's savepoint closed,
+// and had zero callers. Keeping it risked re-introducing issues #1/#3.
 export const feeOracle = {
 	async validateFee(requiredHbd: string, paidAmount: number, paidCurrency: string): Promise<boolean> {
 		const target = parseFloat(requiredHbd);
 		if (Number.isNaN(target)) throw new Error("Invalid required HBD format");
 
 		if (paidCurrency === "HBD") {
-			return paidAmount >= target;
+			return Math.abs(paidAmount - target) <= HBD_EQUALITY_EPSILON;
 		}
 
 		if (paidCurrency === "HIVE") {
@@ -231,45 +239,4 @@ export const feeOracle = {
 
 		return false;
 	},
-
-	async requireDynamicFee(
-		op: ParsedOperation,
-		requiredHbd: string,
-		targetAccount: string = DEFAULT_FEE_ACCOUNT,
-		payerAccount: string = op.signer,
-	): Promise<{ amount: number; currency: string }> {
-		const transfers = op.pairedTransfers ?? [];
-		if (transfers.length === 0) {
-			throw new Error(`Operation requires a fee of ${requiredHbd} HBD`);
-		}
-
-		const consumed = op.transferPool?.consumed;
-		let sawCandidate = false;
-		for (let index = 0; index < transfers.length; index++) {
-			if (consumed?.has(index)) continue;
-			const transfer = transfers[index];
-			if (!transfer || transfer.from !== payerAccount || transfer.to !== targetAccount) continue;
-
-			sawCandidate = true;
-			const isValid = await this.validateFee(
-				requiredHbd,
-				transfer.amount,
-				transfer.currency,
-			);
-			if (!isValid) continue;
-
-			consumed?.add(index);
-			return { amount: transfer.amount, currency: transfer.currency };
-		}
-
-		if (!sawCandidate) {
-			throw new Error(`Fee must be paid by ${payerAccount} to the treasury (${targetAccount})`);
-		}
-
-		if (!isPriceFresh()) {
-			throw new Error(`Cannot validate HIVE fee: price feed unavailable or stale. Required: ${requiredHbd} HBD`);
-		}
-
-		throw new Error(`Insufficient fee paid: no transfer meets the requirement of ${requiredHbd} HBD`);
-	}
 };
