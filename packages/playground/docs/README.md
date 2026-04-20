@@ -57,6 +57,7 @@ Then follow [Getting Started](getting-started.md) to make your first transaction
 | [Quick Start](getting-started.md) | First install, indexer client, first NFT |
 | [Signing & Broadcasting](broadcasting.md) | Posting, active, and active+multisig flows across hive-tx, @hiveio/dhive, @hiveio/wax, and Hive Keychain |
 | [Data Formats](data-formats.md) | Every action's payload shape, schema types, deterministic ID derivation |
+| [Protocol Package](../../protocol/README.md) | Canonical wire protocol actions, constants, authority map, and base operations |
 | **Core Concepts** | |
 | [Collections](concepts/collections.md) | Create, extend schema, archive |
 | [Ownership Model](concepts/ownership.md) | Creator vs seed owner vs instance owner; provenance fields |
@@ -84,7 +85,7 @@ Then follow [Getting Started](getting-started.md) to make your first transaction
 | Property | Value |
 |---|---|
 | Protocol ID | `nftlox_testnet` |
-| Protocol version | `0.6.0` |
+| Protocol version | `0.6.1` |
 | Blockchain | Hive L1 |
 | Finality | ~3 seconds |
 | Active-key actions | `create_collection`, `buy` |
@@ -98,7 +99,7 @@ Then follow [Getting Started](getting-started.md) to make your first transaction
 ---
 
 <div class="nftlox-footer">
-	<span class="version-badge">v0.6.0</span>
+	<span class="version-badge">v0.6.1</span>
 	<br>
 	NFTLox Protocol — Built on Hive L1
 </div>

@@ -21,7 +21,8 @@ If you are building a game with collectible cards, items, or characters, NFTLox 
 
 | Package | Description | Port |
 |---|---|---|
-| [`packages/sdk`](./packages/sdk) | Core protocol library — types, payloads, builders, multisig, SPV | — |
+| [`packages/protocol`](./packages/protocol) | Canonical wire protocol — actions, payload types, auth map, constants, deterministic IDs | — |
+| [`packages/sdk`](./packages/sdk) | Builder and client library — payload builders, multisig, SPV, indexer client | — |
 | [`packages/packs-engine`](./packages/packs-engine) | Optional external library for pack definition and `bulk_distribute` planning | — |
 | [`packages/indexer`](./packages/indexer) | Blockchain scanner + PostgreSQL + REST API + Swagger | 3050 |
 | [`packages/playground`](./packages/playground) | Web UI for testing with Hive Keychain (also serves the public docs site) | 3040 |
@@ -64,12 +65,15 @@ Open the playground at <http://localhost:3040> and the indexer Swagger UI at <ht
 
 ## Documentation
 
-The canonical NFTLox documentation site lives in [`packages/playground/docs/`](./packages/playground/docs/). Suggested reading order:
+The public NFTLox documentation site lives in [`packages/playground/docs/`](./packages/playground/docs/). The wire protocol source of truth lives in [`packages/protocol`](./packages/protocol).
 
+Suggested reading order:
+
+- [Protocol Operations](./packages/protocol/README.md) — base operations, constants, authority map, and source-of-truth files.
 - [Getting Started](./packages/playground/docs/getting-started.md) — first API call, mint an NFT in under 5 minutes.
-- [Game Integration](./packages/playground/docs/game-integration.md) — full game-developer walkthrough.
-- [SDK Functions](./packages/playground/docs/sdk-functions.md) — exports, builders, schemas.
-- [API Endpoints](./packages/playground/docs/api-endpoints.md) — full REST reference.
+- [Data Formats](./packages/playground/docs/data-formats.md) — readable payload examples for integrators.
+- [SDK Reference](./packages/playground/docs/sdk/reference.md) — exports, builders, schemas.
+- [API Endpoints](./packages/playground/docs/reference/api.md) — full REST reference.
 
 For deployment of the indexer (Docker, Compose, Dokploy, Nginx, build-image), see [`packages/playground/docs/contributing/indexer-deployment.md`](./packages/playground/docs/contributing/indexer-deployment.md).
 

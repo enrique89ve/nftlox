@@ -54,7 +54,7 @@ All `POST /api/build/*` endpoints that validate input and return Hive operations
 
 ## Public documentation site
 
-The `docs/` directory inside this package is the canonical NFTLox documentation site (Docsify). It is the single source of truth for all shareable documentation — public, contributor, and protocol spec.
+The `docs/` directory inside this package is the canonical NFTLox documentation site (Docsify). Protocol actions, payload types, authority rules, and constants live in [`@nftlox/protocol`](../protocol/README.md), which is the source of truth for the wire protocol.
 
 ## Configuration
 

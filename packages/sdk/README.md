@@ -1,6 +1,6 @@
 # nftlox-sdk
 
-> Core NFTLox protocol library — typed payloads, builders, Zod schemas, multisig signing, SPV verification.
+> NFTLox builder and client library — payload builders, Zod schemas, multisig signing, SPV verification, and indexer queries. The wire protocol source of truth lives in `@nftlox/protocol`.
 
 ## Install
 
@@ -151,6 +151,7 @@ Collection
 
 ## Documentation
 
+- [Protocol Operations](../protocol/README.md) — canonical action list, constants, authority map, and base operations.
 - [Getting Started](../playground/docs/getting-started.md) — first API call and first mint.
 - [SDK Functions reference](../playground/docs/sdk/reference.md) — full exports table.
 - [Game Integration](./GAME-INTEGRATION.md) — game-developer walkthrough.

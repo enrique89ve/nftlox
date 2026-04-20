@@ -1,13 +1,13 @@
 # Data Formats
 
-Every mutation in NFTLox is a Hive operation whose payload is a `ProtocolPayload<T>` — a small envelope with a typed `data` field. This page is the authoritative map of what goes on-chain for each action.
+Every mutation in NFTLox is a Hive operation whose payload is a `ProtocolPayload<T>` — a small envelope with a typed `data` field. The canonical protocol source is [`@nftlox/protocol`](../../protocol/README.md); this page is a readable companion for integrators.
 
 ## The wire envelope
 
 ```typescript
 type ProtocolPayload<T> = {
 	readonly protocol: string;         // "nftlox_testnet"
-	readonly version: string;          // "0.6.0"
+	readonly version: string;          // "0.6.1"
 	readonly action: ProtocolAction;
 	readonly data: T;                  // shape depends on action
 };
@@ -20,7 +20,7 @@ Emitted as a Hive `custom_json`:
 	"required_auths": ["alice"],             // active-auth actions
 	"required_posting_auths": [],            // or the inverse for posting-auth actions
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.6.0\",\"action\":\"mint\",\"data\":{…}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.6.1\",\"action\":\"mint\",\"data\":{…}}"
 }]
 ```
 
@@ -251,7 +251,7 @@ type ListingData = {
 };
 ```
 
-Prices are 3-decimal strings, minimum `0.001`. Currency is `"HIVE"` or `"HBD"`.
+Prices are 3-decimal strings, minimum `0.100`. Currency is `"HIVE"` or `"HBD"`.
 
 ### `unlist`
 

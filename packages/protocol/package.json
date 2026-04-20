@@ -21,7 +21,8 @@
 	"source": "./src/index.ts",
 	"files": [
 		"dist",
-		"src"
+		"src",
+		"README.md"
 	],
 	"exports": {
 		"./package.json": "./package.json",
