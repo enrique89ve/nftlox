@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { validateFixedFee } from "@/utils/fee-oracle.ts";
+import { validateFixedFee } from "@/utils/fee-validator.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 
 function opWith(transfers: Array<{
@@ -84,5 +84,19 @@ describe("validateFixedFee", () => {
 			{ from: "alice", to: "nftlox", amount: 0.1, currency: "HBD", memo: "NFTLox FEE-COL:col_abc" },
 		]);
 		expect(() => validateFixedFee({ op, ...params })).toThrow(/ambiguous|multiple/i);
+	});
+
+	test("rejects HIVE payment even with memo/recipient match (HBD-only consensus rule)", () => {
+		const op = opWith([
+			{ from: "alice", to: "nftlox", amount: 1.0, currency: "HIVE", memo: "NFTLox FEE-COL:col_abc" },
+		]);
+		expect(() => validateFixedFee({ op, ...params })).toThrow(/must be paid in HBD/i);
+	});
+
+	test("rejects unknown currency", () => {
+		const op = opWith([
+			{ from: "alice", to: "nftlox", amount: 0.1, currency: "USDT", memo: "NFTLox FEE-COL:col_abc" },
+		]);
+		expect(() => validateFixedFee({ op, ...params })).toThrow(/must be paid in HBD/i);
 	});
 });

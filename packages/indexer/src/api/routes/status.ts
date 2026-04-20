@@ -1,5 +1,4 @@
 import { Elysia, t } from "elysia";
-import { getPriceStatus } from "@/utils/fee-oracle.ts";
 import { getLastBlock, getSyncStatus, getOperationStatus } from "@/db/queries/sync.ts";
 import { getBlockchainHead } from "@/scanner/hive-client.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
@@ -136,7 +135,6 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 			protocolFeeBps: PROTOCOL_FEE_BPS,
 			maxRoyaltyBps: percentageToBasisPoints(MAX_ROYALTY_PCT),
 			supportedCurrencies: SUPPORTED_CURRENCIES,
-			priceFeed: getPriceStatus(),
 			lastBlock,
 			headBlock: chain.headBlock,
 			irreversibleBlock: chain.irreversibleBlock,
@@ -146,7 +144,7 @@ export const statusRoutes = new Elysia({ tags: ["Status"] })
 	}, {
 		detail: {
 			summary: "Sync status",
-			description: "Current indexer sync progress and protocol constants. Block fields are Hive block numbers. multisigClockDriftMs is expressed in milliseconds. protocolFeeBps and maxRoyaltyBps use basis points (100 = 1%, 5000 = 50%). priceFeed.hbdPerHive and priceFeed.toleranceBps let bots compute hiveAmount = hbdTarget / hbdPerHive and pad by toleranceBps/10000 before signing.",
+			description: "Current indexer sync progress and protocol constants. Block fields are Hive block numbers. multisigClockDriftMs is expressed in milliseconds. protocolFeeBps and maxRoyaltyBps use basis points (100 = 1%, 5000 = 50%). Protocol fees are HBD-only; the indexer performs no HIVE↔HBD conversion.",
 		},
 	})
 	.get("/api/health", async ({ set }) => {

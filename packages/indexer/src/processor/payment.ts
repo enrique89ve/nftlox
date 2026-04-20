@@ -4,7 +4,7 @@
 
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { PaymentRequirement, PaymentSplit } from "@/protocol/index.ts";
-import { validateFixedFee } from "@/utils/fee-oracle.ts";
+import { validateFixedFee } from "@/utils/fee-validator.ts";
 
 // Compute the prepaid scaled fee in HBD for a given declared `count` against a
 // `scaled` requirement. Mirrors the SDK `computeCollectionFeeHbd` helper so the

@@ -13,7 +13,7 @@ import {
 	validateTransferBody,
 } from "@/api/services/multisig/transaction.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
-import { feeOracle } from "@/utils/fee-oracle.ts";
+import { feeValidator } from "@/utils/fee-validator.ts";
 import { optionalCollectionSchema } from "@/utils/validation.ts";
 import {
 	INSTANCE_FEE_PER_N,
@@ -158,7 +158,17 @@ async function validateCollectionFeeTransfer(
 	}
 
 	const parsedAmount = parseHiveAmount(amount);
-	const feeValid = await feeOracle.validateFee(
+	// Early currency gate so the multisig returns a clearer error than the
+	// generic "insufficient fee" one when someone builds a HIVE payment. The
+	// consensus-path `validateFixedFee` would reject the same op post-broadcast
+	// anyway, but refusing to sign up-front saves the user a wasted broadcast.
+	if (parsedAmount.currency !== "HBD") {
+		throw createMultisigError(
+			"INVALID_PAYMENT_SPLIT",
+			`Collection fee must be paid in HBD, got ${parsedAmount.currency}`,
+		);
+	}
+	const feeValid = await feeValidator.validateFee(
 		PROTOCOL_COLLECTION_FEE_HBD,
 		parsedAmount.amount,
 		parsedAmount.currency,
@@ -166,7 +176,7 @@ async function validateCollectionFeeTransfer(
 	if (!feeValid) {
 		throw createMultisigError(
 			"INVALID_PAYMENT_SPLIT",
-			`Insufficient collection fee: expected ${PROTOCOL_COLLECTION_FEE_HBD} HBD or HIVE equivalent`,
+			`Insufficient collection fee: expected exactly ${PROTOCOL_COLLECTION_FEE_HBD} HBD, got ${parsedAmount.amount.toFixed(3)} HBD`,
 		);
 	}
 

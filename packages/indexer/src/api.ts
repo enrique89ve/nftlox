@@ -3,7 +3,6 @@ import { startApiServer, stopPolling } from "./api/server.ts";
 import { connectWithRetry } from "./bootstrap.ts";
 import { initBeekeeperSigner, closeBeekeeperSigner } from "./api/services/beekeeper-signer.ts";
 import { startMultisigHealthMonitor, stopMultisigHealthMonitor } from "./api/services/multisig-health.ts";
-import { startPricePoller, stopPricePoller } from "./utils/fee-oracle.ts";
 import { createLogger } from "./utils/logger.ts";
 import { config } from "./config.ts";
 import { PROTOCOL_VERSION, PROTOCOL_GENESIS_BLOCK } from "./protocol/index.ts";
@@ -29,7 +28,6 @@ async function main(): Promise<void> {
 	}
 
 	await startMultisigHealthMonitor();
-	startPricePoller();
 	startApiServer();
 }
 
@@ -37,7 +35,6 @@ async function shutdown(): Promise<void> {
 	log.info("Shutting down...");
 	stopPolling();
 	stopMultisigHealthMonitor();
-	stopPricePoller();
 	await closeBeekeeperSigner();
 	await closePool();
 	process.exit(0);

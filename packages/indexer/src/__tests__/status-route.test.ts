@@ -49,16 +49,6 @@ mock.module("@/scanner/sync-engine.ts", () => ({
 	SYNC_TOLERANCE_BLOCKS: 5,
 }));
 
-mock.module("@/utils/fee-oracle.ts", () => ({
-	getPriceStatus: () => ({
-		available: true,
-		hbdPerHive: 0.3,
-		fetchedAt: fixedNowMs - 60_000,
-		stale: false,
-		toleranceBps: 200,
-	}),
-}));
-
 mock.module("@/config.ts", () => ({
 	config: {
 		protocolId: "nftlox_testnet",
@@ -109,22 +99,16 @@ describe("status route", () => {
 		expect(json.genesisBlock).toBe(105558142);
 	});
 
-	test("exposes priceFeed so bots can compute HIVE amount without a second request", async () => {
+	test("does not expose any HIVE↔HBD price feed (HBD-only fees: consensus performs no conversion)", async () => {
 		const app = new Elysia().use(statusRoutes);
 		const response = await app.handle(new Request("http://localhost/api/status"));
 		const json = await response.json() as Record<string, unknown>;
 
 		expect(response.status).toBe(200);
-		expect(json.priceFeed).toEqual({
-			available: true,
-			hbdPerHive: 0.3,
-			fetchedAt: fixedNowMs - 60_000,
-			stale: false,
-			toleranceBps: 200,
-		});
+		expect(json).not.toHaveProperty("priceFeed");
 	});
 
-	test("legacy /api/fee-estimate is removed — priceFeed lives in /api/status now", async () => {
+	test("legacy /api/fee-estimate stays removed", async () => {
 		const app = new Elysia().use(statusRoutes);
 		const response = await app.handle(new Request("http://localhost/api/fee-estimate?hbd=0.1"));
 		expect(response.status).toBe(404);
