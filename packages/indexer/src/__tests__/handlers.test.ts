@@ -19,7 +19,6 @@ import { handleDataOperatorApprove } from "@/processor/handlers/allowances/data-
 import { handleSetDataFrom } from "@/processor/handlers/allowances/set-data-from.ts";
 import { getCollectionStats, listCollections } from "@/db/queries/collections.ts";
 import { cleanupInvalidMarketplaceListings, queryNfts } from "@/db/queries/nfts.ts";
-import { materializePendingUnlists } from "@/db/queries/nft-mutations.ts";
 import { getProtocolStats } from "@/db/queries/stats.ts";
 import { multisigRoutes } from "@/api/routes/multisig.ts";
 import {
@@ -48,7 +47,6 @@ import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	PROTOCOL_COLLECTION_FEE_HBD,
-	UNLIST_DELAY_BLOCKS,
 } from "@/protocol/index.ts";
 
 const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
@@ -1221,20 +1219,11 @@ describe("Handlers (integration)", () => {
 			const unlistOp = makeOp(ACTION_UNLIST, { nftId: instId });
 			await withTransaction((txn) => handleUnlist(unlistOp, txn));
 
-			// Unlist is now two-phase: handler sets pending_unlist_block,
-			// materialization flips status='active' after UNLIST_DELAY_BLOCKS.
-			const [pending] = await sql`SELECT status, pending_unlist_block FROM nfts WHERE id = ${instId}`;
-			expect(pending!.status).toBe("listed");
-			expect(Number(pending!.pending_unlist_block)).toBe(unlistOp.blockNum);
-
-			await withTransaction((txn) => materializePendingUnlists(
-				unlistOp.blockNum + UNLIST_DELAY_BLOCKS, UNLIST_DELAY_BLOCKS, txn,
-			));
-
-			const [unlisted] = await sql`SELECT status, listing_price, pending_unlist_block FROM nfts WHERE id = ${instId}`;
+			// Unlist is instantaneous post-0.7.0: status flips straight back
+			// to 'active' and listing_* columns are cleared in the same op.
+			const [unlisted] = await sql`SELECT status, listing_price FROM nfts WHERE id = ${instId}`;
 			expect(unlisted!.status).toBe("active");
 			expect(unlisted!.listing_price).toBeNull();
-			expect(unlisted!.pending_unlist_block).toBeNull();
 		});
 
 		test("rejects list of seed NFTs", async () => {
@@ -1363,20 +1352,25 @@ describe("Handlers (integration)", () => {
 			await withTransaction((txn) => handleMint(noBuyMintOp, txn));
 			const instId = await seedInstanceFrom(noBuyId);
 
-			// Force-list via SQL (bypassing the list handler's transferable check)
-			// to test the buy handler's own guard
+			// Force-pending_sale via SQL (bypassing both list and sale_lock handlers'
+			// transferable checks) to test the buy handler's own guard.
 			const listData = await makeListData({ nftId: instId });
+			const nodeAccount = config.hiveAccount;
 			await sql`
 				UPDATE nfts
-				SET status = 'listed',
+				SET status = 'pending_sale',
 					listing_id = ${listData.listingId as string},
 					listing_tx_id = 'tx_fake_list',
 					listing_price = 10,
-					listing_currency = 'HIVE'
+					listing_currency = 'HIVE',
+					sale_buyer = 'bob',
+					sale_settlement_node = ${nodeAccount},
+					sale_expires_block = 99999999,
+					sale_lock_tx_id = ${"a".repeat(40)},
+					sale_lock_operation_id = 'op_fake_lock'
 				WHERE id = ${instId}
 			`;
 
-			const nodeAccount = config.hiveAccount;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
 				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
@@ -1735,12 +1729,8 @@ describe("Handlers (integration)", () => {
 			const listData2 = await makeListData({ nftId: instId, priceAmount: "50.000" });
 			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData2), txn));
 
-			// Alice quita el listado (two-phase: handler + materialize after delay)
-			const unlistOp = makeOp(ACTION_UNLIST, { nftId: instId });
-			await withTransaction((txn) => handleUnlist(unlistOp, txn));
-			await withTransaction((txn) => materializePendingUnlists(
-				unlistOp.blockNum + UNLIST_DELAY_BLOCKS, UNLIST_DELAY_BLOCKS, txn,
-			));
+			// Alice quita el listado (instantaneous post-0.7.0)
+			await withTransaction((txn) => handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), txn));
 
 			// Ahora gameshop puede mover el NFT
 			await withTransaction((txn) => handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
@@ -1988,6 +1978,22 @@ describe("Handlers (integration)", () => {
 			return { listingId: nft!.listing_id as string, listTxId: nft!.listing_tx_id as string, txId: nft!.tx_id as string };
 		}
 
+		// Forces the NFT into pending_sale via direct SQL, bypassing handleSaleLock.
+		// Lets guard tests exercise handleBuy's own preconditions without depending
+		// on l2_nodes setup or the sale_lock handler's independent guards.
+		async function forcePendingSale(nftId: string, buyer: string): Promise<void> {
+			await sql`
+				UPDATE nfts
+				SET status = 'pending_sale',
+				    sale_buyer = ${buyer},
+				    sale_settlement_node = ${nodeAccount},
+				    sale_expires_block = 99999999,
+				    sale_lock_tx_id = ${"a".repeat(40)},
+				    sale_lock_operation_id = 'op_fake_lock'
+				WHERE id = ${nftId}
+			`;
+		}
+
 		function makeBuyOp(nftId: string, listingId: string, listTxId: string, buyer: string, seller: string, price = 10, txId = "a".repeat(40)) {
 			const split = calculatePaymentSplit(price, "HIVE", 0, null, seller, nodeAccount);
 			const transfers = [
@@ -1997,13 +2003,15 @@ describe("Handlers (integration)", () => {
 			return makeOp(ACTION_BUY, { nftId, listingId, listTxId, txId }, nodeAccount, transfers);
 		}
 
-		test("rejects buy own NFT", async () => {
+		test("rejects buy when buyer matches seller", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
 			const { listingId, listTxId, txId } = await listNft(instId);
+			// Force pending_sale with sale_buyer = alice (same as owner) to bypass
+			// sale_lock's own seller≠buyer guard and exercise handleBuy's guard.
+			await forcePendingSale(instId, "alice");
 
-			// alice owns the NFT, alice tries to buy — paired transfer from alice
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
 				{ from: "alice", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
@@ -2016,13 +2024,13 @@ describe("Handlers (integration)", () => {
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("Cannot buy own");
 		});
 
-		test("rejects buy unlisted NFT", async () => {
+		test("rejects buy on NFT that is not pending_sale", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
 
 			const buyOp = makeBuyOp(instId, "list_fake", "tx_fake", "bob", "alice");
-			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("not listed");
+			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("not pending_sale");
 		});
 
 		test("rejects buy non-existent NFT", async () => {
@@ -2050,22 +2058,26 @@ describe("Handlers (integration)", () => {
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("lent");
 		});
 
-		test("rejects buy with expired listing", async () => {
+		test("rejects buy when sale_lock has expired", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
 
-			// Force-list with past expiry via SQL
+			// Force pending_sale with an already-elapsed sale_expires_block.
 			await sql`
 				UPDATE nfts
-				SET status = 'listed', listing_id = 'list_expired', listing_tx_id = 'tx_exp',
+				SET status = 'pending_sale', listing_id = 'list_expired', listing_tx_id = 'tx_exp',
 					listing_price = 10, listing_currency = 'HIVE',
-					listing_expires_at = ${new Date("2023-01-01").toISOString()}
+					sale_buyer = 'bob',
+					sale_settlement_node = ${nodeAccount},
+					sale_expires_block = 1,
+					sale_lock_tx_id = ${"a".repeat(40)},
+					sale_lock_operation_id = 'op_fake_lock'
 				WHERE id = ${instId}
 			`;
 
 			const buyOp = makeBuyOp(instId, "list_expired", "tx_exp", "bob", "alice");
-			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("expired");
+			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("sale_lock expired");
 		});
 
 		test("rejects buy of listed seed NFTs", async () => {
@@ -2093,6 +2105,7 @@ describe("Handlers (integration)", () => {
 			await seedMint();
 			const instId = await seedInstance();
 			const { listTxId } = await listNft(instId);
+			await forcePendingSale(instId, "bob");
 
 			const buyOp = makeBuyOp(instId, "list_wrong_id", listTxId, "bob", "alice");
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("listingId mismatch");
@@ -2103,6 +2116,7 @@ describe("Handlers (integration)", () => {
 			await seedMint();
 			const instId = await seedInstance();
 			const { listingId } = await listNft(instId);
+			await forcePendingSale(instId, "bob");
 
 			const buyOp = makeBuyOp(instId, listingId, "tx_wrong", "bob", "alice");
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("listTxId mismatch");
@@ -2113,6 +2127,7 @@ describe("Handlers (integration)", () => {
 			await seedMint();
 			const instId = await seedInstance();
 			const { listingId, listTxId, txId } = await listNft(instId);
+			await forcePendingSale(instId, "bob");
 
 			// Send wrong amount (50 instead of 9.9 to seller)
 			const transfers = [
@@ -2172,12 +2187,22 @@ describe("Handlers (integration)", () => {
 				spender: "gameshop", instanceId: instId, approved: true,
 			}), txn));
 
-			// List and buy
+			// List → force pending_sale → buy
 			const listData = await makeListData({ nftId: instId });
 			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn));
+			const nodeAccount = config.hiveAccount;
+			await sql`
+				UPDATE nfts
+				SET status = 'pending_sale',
+				    sale_buyer = 'bob',
+				    sale_settlement_node = ${nodeAccount},
+				    sale_expires_block = 99999999,
+				    sale_lock_tx_id = ${"a".repeat(40)},
+				    sale_lock_operation_id = 'op_fake_lock'
+				WHERE id = ${instId}
+			`;
 
 			const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
-			const nodeAccount = config.hiveAccount;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
 				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
@@ -2309,8 +2334,19 @@ describe("Handlers (integration)", () => {
 			const listData = await makeListData({ nftId: instId });
 			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn));
 
-			const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
 			const nodeAccount = config.hiveAccount;
+			await sql`
+				UPDATE nfts
+				SET status = 'pending_sale',
+				    sale_buyer = 'charlie',
+				    sale_settlement_node = ${nodeAccount},
+				    sale_expires_block = 99999999,
+				    sale_lock_tx_id = ${"a".repeat(40)},
+				    sale_lock_operation_id = 'op_fake_lock'
+				WHERE id = ${instId}
+			`;
+
+			const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
 				{ from: "charlie", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
@@ -2483,21 +2519,14 @@ describe("Handlers (integration)", () => {
 			expect(await ownerCounts("alice")).toMatchObject({ total: 2, seeds: 1, instances: 1 });
 		});
 
-		test("unlist decrements listed counter after materialization", async () => {
+		test("unlist decrements listed counter instantaneously post-0.7.0", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
 			await withTransaction(async (txn) => handleList(makeOp(ACTION_LIST, await makeListData({ nftId: instId })), txn));
-
-			const unlistOp = makeOp(ACTION_UNLIST, { nftId: instId });
-			await withTransaction((txn) => handleUnlist(unlistOp, txn));
-			// listed counter only moves on materialization — during the delay the
-			// NFT is still listed, so stats must not change yet.
 			expect(await collStats(COL_ID)).toMatchObject({ listed: 1 });
 
-			await withTransaction((txn) => materializePendingUnlists(
-				unlistOp.blockNum + UNLIST_DELAY_BLOCKS, UNLIST_DELAY_BLOCKS, txn,
-			));
+			await withTransaction((txn) => handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), txn));
 			expect(await collStats(COL_ID)).toMatchObject({ listed: 0 });
 		});
 
@@ -2524,9 +2553,19 @@ describe("Handlers (integration)", () => {
 			const instId = await seedInstance();
 			const listData = await makeListData({ nftId: instId });
 			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn));
+			const nodeAccount = config.hiveAccount;
+			await sql`
+				UPDATE nfts
+				SET status = 'pending_sale',
+				    sale_buyer = 'bob',
+				    sale_settlement_node = ${nodeAccount},
+				    sale_expires_block = 99999999,
+				    sale_lock_tx_id = ${"a".repeat(40)},
+				    sale_lock_operation_id = 'op_fake_lock'
+				WHERE id = ${instId}
+			`;
 
 			const [nftRow] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
-			const nodeAccount = config.hiveAccount;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
 				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },

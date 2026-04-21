@@ -14,6 +14,7 @@ import {
 	ACTION_NODE_HEARTBEAT,
 	ACTION_LIST,
 	ACTION_UNLIST,
+	ACTION_SALE_LOCK,
 	ACTION_BUY,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
@@ -43,6 +44,11 @@ const ACTION_AUTH_LEVEL_MAP = {
 	[ACTION_NODE_HEARTBEAT]: "posting",
 	[ACTION_LIST]: "posting",
 	[ACTION_UNLIST]: "posting",
+	// sale_lock: broadcast server-side by the settlement node using its posting
+	// key. No funds move in this op — posting is the correct (and safer) level.
+	[ACTION_SALE_LOCK]: "posting",
+	// buy: tx2 still uses node active multisig for the custom_json while the
+	// buyer's active key authorizes the paired transfers in the same tx.
 	[ACTION_BUY]: "active",
 	[ACTION_NFT_APPROVE]: "posting",
 	[ACTION_NFT_APPROVE_ALL]: "posting",

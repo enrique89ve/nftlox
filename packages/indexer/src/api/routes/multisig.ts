@@ -8,7 +8,11 @@ import { getMultisigHealth } from "@/api/services/multisig-health.ts";
 import { resolveClientIp } from "@/api/middleware/client-ip.ts";
 import { NFTLOX_POW_HEADER, validateMultisigPow } from "@/api/middleware/pow-validator.ts";
 import { getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
-import { calculatePaymentSplit, MULTISIG_EXPIRATION_MS } from "@/protocol/index.ts";
+import { calculatePaymentSplit } from "@/protocol/index.ts";
+
+// TTL for collection-signing idempotency entries. Matches tx expiration so
+// cached signatures drop with the underlying tx.
+const COLLECTION_IDEMPOTENCY_TTL_MS = 120_000;
 import { requireSupportedCurrency } from "@/utils/validation.ts";
 import {
 	IDEMPOTENCY_HEADER,
@@ -30,12 +34,9 @@ const ipRateLimiter = createMultisigRateLimiter(
 	config.multisigIpRateLimitWindowMs,
 );
 
-// TTL = MULTISIG_EXPIRATION_MS: cached signatures expire with the underlying
-// transaction. Cap = 10_000 entries matches the PoW replay cache — similar
-// working-set, similar memory budget.
 const COLLECTION_IDEMPOTENCY_MAX_ENTRIES = 10_000;
 const collectionIdempotency = createIdempotencyCache({
-	ttlMs: MULTISIG_EXPIRATION_MS,
+	ttlMs: COLLECTION_IDEMPOTENCY_TTL_MS,
 	maxEntries: COLLECTION_IDEMPOTENCY_MAX_ENTRIES,
 });
 
@@ -47,26 +48,8 @@ const CACHEABLE_STATUSES: ReadonlySet<number> = new Set([200, 400, 422]);
 type RejectionCode =
 	| "MULTISIG_DISABLED"
 	| "RATE_LIMITED"
-	| "NFT_LOCKED"
 	| "INTERNAL_ERROR"
 	| string;
-
-function mapBuyErrorToStatus(code: string): number {
-	switch (code) {
-		case "NFT_LOCKED":
-			return 409;
-		case "INDEXER_LAGGED":
-		case "NODE_NOT_ACTIVE":
-			return 503;
-		case "SIGNING_QUEUE_FULL":
-		case "SIGNING_TIMEOUT":
-			return 503;
-		case "INTERNAL_ERROR":
-			return 500;
-		default:
-			return 400;
-	}
-}
 
 const multisigTransactionSchema = t.Object({
 	ref_block_num: t.Number(),
@@ -76,23 +59,6 @@ const multisigTransactionSchema = t.Object({
 	extensions: t.Optional(t.Array(t.Unknown())),
 	signatures: t.Array(t.String()),
 }, { description: "Unsigned Hive transaction object" });
-
-function logRejection(params: {
-	buyer: string;
-	nftId: string;
-	clientIp: string;
-	code: RejectionCode;
-	retryAfterMs?: number;
-}): void {
-	const { buyer, nftId, clientIp, code, retryAfterMs } = params;
-	log.warn("Multisig request rejected", {
-		buyer,
-		nftId,
-		clientIp,
-		code,
-		retryAfterMs,
-	});
-}
 
 function logCollectionRejection(params: {
 	creator: string | null;
@@ -351,112 +317,3 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			description: "Validates the collection fee transfer and payload, then signs the create_collection custom_json with the node active key. The creator is derived from the transaction's fee transfer sender.",
 		},
 	})
-
-	// POST /api/multisig — validate and multisig-sign a buy transaction
-	.post("/api/multisig", async ({ body, request, server, set }) => {
-		const socketIp = server?.requestIP(request)?.address;
-		const clientIp = resolveClientIp(request, socketIp);
-		const health = getMultisigHealth();
-
-		if (!health.multisigEnabled) {
-			set.status = 503;
-			const message = getDisabledMessage();
-			logRejection({
-				buyer: body.buyer,
-				nftId: body.nftId,
-				clientIp,
-				code: "MULTISIG_DISABLED",
-			});
-			return { ok: false, code: "MULTISIG_DISABLED", message };
-		}
-
-		const powResult = await validateMultisigPow({
-			body,
-			header: request.headers.get(NFTLOX_POW_HEADER),
-			requiredBits: config.multisigPowBits,
-			ttlMs: config.multisigPowTtlMs,
-			maxFutureSkewMs: config.multisigPowMaxFutureSkewMs,
-			replayCacheMax: config.multisigPowReplayCacheMax,
-		});
-		if (!powResult.ok) {
-			logRejection({
-				buyer: body.buyer,
-				nftId: body.nftId,
-				clientIp,
-				code: powResult.code,
-			});
-			set.status = 429;
-			return { ok: false, code: powResult.code, message: powResult.message };
-		}
-
-		// Elysia validates body schema, so buyer and nftId are typed strings.
-		// Always apply rate limiting — no silent skip on empty values.
-		const buyerRateResult = buyerRateLimiter.check(body.buyer);
-		if (!buyerRateResult.allowed) {
-			logRejection({
-				buyer: body.buyer,
-				nftId: body.nftId,
-				clientIp,
-				code: "RATE_LIMITED",
-				retryAfterMs: buyerRateResult.retryAfterMs,
-			});
-			set.status = 429;
-			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${buyerRateResult.retryAfterMs}ms` };
-		}
-
-		const ipRateResult = ipRateLimiter.check(clientIp);
-		if (!ipRateResult.allowed) {
-			logRejection({
-				buyer: body.buyer,
-				nftId: body.nftId,
-				clientIp,
-				code: "RATE_LIMITED",
-				retryAfterMs: ipRateResult.retryAfterMs,
-			});
-			set.status = 429;
-			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${ipRateResult.retryAfterMs}ms` };
-		}
-
-		// Lock acquisition moved into processBuyRequest (post-validation) so an
-		// unvalidated body can no longer pin arbitrary NFTs — that was a DoS
-		// vector on this route. See api/services/multisig/buy.ts for the
-		// acquisition + release flow.
-		try {
-			const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId);
-			if (!result.ok) {
-				logRejection({
-					buyer: body.buyer,
-					nftId: body.nftId,
-					clientIp,
-					code: result.code,
-					retryAfterMs: result.retryAfterMs,
-				});
-				set.status = mapBuyErrorToStatus(result.code);
-				if (result.code === "NFT_LOCKED" && result.retryAfterMs !== undefined) {
-					set.headers["Retry-After"] = String(Math.ceil(result.retryAfterMs / 1000));
-				}
-			}
-			return result;
-		} catch (err) {
-			log.error("Unexpected multisig route error", {
-				buyer: body.buyer,
-				nftId: body.nftId,
-				clientIp,
-				error: err instanceof Error ? err.message : String(err),
-			});
-			set.status = 500;
-			return { ok: false, code: "INTERNAL_ERROR" as const, message: "Unexpected signing error" };
-		}
-	}, {
-		body: t.Object({
-			buyer: t.String({ minLength: 3, maxLength: 16, description: "Hive username of the buyer" }),
-			nftId: t.String({ minLength: 1, maxLength: 128, description: "ID of the NFT being purchased" }),
-			listingId: t.String({ minLength: 1, maxLength: 128, description: "Deterministic listing ID from the list operation" }),
-			listTxId: t.String({ minLength: 1, maxLength: 40, description: "Transaction ID of the list operation on Hive" }),
-			transaction: multisigTransactionSchema,
-		}),
-		detail: {
-			summary: "Multisig-sign a buy transaction",
-			description: "Validates NFT state, payment split, and signs the transaction with the node's active key",
-		},
-	});

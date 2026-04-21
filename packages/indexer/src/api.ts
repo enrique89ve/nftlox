@@ -16,9 +16,10 @@ async function main(): Promise<void> {
 
 	// Read keys from env, init beekeeper, then wipe from process.env.
 	// Keys are never stored in config to avoid lingering in V8 heap as frozen strings.
-	// POSTING_KEY is only imported when NODE_REGISTER=true (config enforces presence).
+	// API roles need ACTIVE_KEY for node multisig and POSTING_KEY for sale_lock.
+	// When both are present we import both into beekeeper.
 	const activeKey = process.env.ACTIVE_KEY ?? "";
-	const postingKey = config.nodeRegister ? (process.env.POSTING_KEY ?? "") : "";
+	const postingKey = process.env.POSTING_KEY ?? "";
 	const bkPassword = process.env.BEEKEEPER_PASSWORD ?? "";
 	if (activeKey) {
 		await initBeekeeperSigner(activeKey, bkPassword, postingKey || null);

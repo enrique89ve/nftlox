@@ -1,7 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { CollectionRulesRow } from "@/db/queries/collections.ts";
 import type { NftProcessingRow } from "@/db/queries/nfts.ts";
-import type { NftLockAcquireInput, NftLockAcquireResult } from "@/api/services/multisig-nft-lock.ts";
 import {
 	ACTION_BUY,
 	ACTION_CREATE_COLLECTION,
@@ -126,16 +125,3 @@ export type MultisigCollectionContext = MultisigBaseContext & Readonly<{
 	readonly collectionLock: CollectionLockHandle;
 }>;
 
-// NftLock handle exposed to the buy service. Acquisition happens AFTER all
-// payload/state validation so an unvalidated body can't plant a lock — that
-// was a DoS vector when acquisition ran at the route boundary.
-export type NftLockHandle = Readonly<{
-	readonly acquire: (input: NftLockAcquireInput) => Promise<NftLockAcquireResult>;
-	readonly release: (nftId: string, buyer: string) => Promise<void>;
-}>;
-
-export type MultisigBuyContext = MultisigBaseContext & Readonly<{
-	readonly nftLock: NftLockHandle;
-	readonly lockExpirationMs: number;
-	readonly lagMaxBlocks: number;
-}>;

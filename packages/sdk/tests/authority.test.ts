@@ -73,10 +73,10 @@ describe("Authority exhaustiveness", () => {
 		}
 	});
 
-	test("counts match: 2 active + 17 posting = 19 total", () => {
+	test("counts match: 2 active + 18 posting = 20 total", () => {
 		expect(ACTIVE_AUTH_ACTIONS.length).toBe(2);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(17);
-		expect(ALL_ACTIONS.length).toBe(19);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(18);
+		expect(ALL_ACTIONS.length).toBe(20);
 	});
 });
 
@@ -104,16 +104,6 @@ describe("Active key operations use required_auths", () => {
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
-	test("buy", () => {
-		const op = buildOp(ACTION_BUY, "node-account", {
-			nftId: "nft_1",
-			listingId: "list_1",
-			listTxId: "a".repeat(40),
-			txId: "b".repeat(40),
-		});
-		expect(op[1].required_auths).toEqual(["node-account"]);
-		expect(op[1].required_posting_auths).toEqual([]);
-	});
 });
 
 // ============ POSTING KEY OPERATIONS ============
@@ -233,5 +223,15 @@ describe("Posting key operations use required_posting_auths", () => {
 		const op = buildOp(ACTION_NFT_RETURN, "alice", { instanceId: "nft_1" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
+	});
+
+	test("buy (node active auth)", () => {
+		const op = buildOp(ACTION_BUY, "node-account", {
+			nftId: "nft_1",
+			listingId: "list_1",
+			listTxId: "a".repeat(40),
+		});
+		expect(op[1].required_auths).toEqual(["node-account"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 });

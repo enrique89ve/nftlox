@@ -34,7 +34,7 @@ describe("resolveMutableDataFromOperation", () => {
 						id: "nftlox_testnet",
 						json: JSON.stringify({
 							protocol: "nftlox_testnet",
-							version: "0.6.3",
+							version: "0.7.0",
 							action: ACTION_SET_DATA,
 							data: {
 								nftId: "nft_1",
@@ -83,7 +83,7 @@ describe("resolveMutableDataFromOperation", () => {
 					id: "nftlox_testnet",
 					json: JSON.stringify({
 						protocol: "nftlox_testnet",
-						version: "0.6.3",
+						version: "0.7.0",
 						action: ACTION_SET_DATA,
 						data: {
 							nftId: "nft_1",

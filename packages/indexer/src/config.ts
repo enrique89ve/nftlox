@@ -98,9 +98,21 @@ if (!config.hiveAccount) {
 	throw new Error("HIVE_ACCOUNT must be a valid non-empty account name");
 }
 
-if (config.nodeRegister && !process.env.POSTING_KEY) {
+// API roles expose both /api/multisig/collection and /api/buy. The former
+// needs ACTIVE_KEY for node multisig; the latter additionally needs POSTING_KEY
+// to broadcast tx1 (`sale_lock`) before tx2 is active-cosigned.
+const servesSigningApi = config.indexerRole === "api" || config.indexerRole === "both";
+if (servesSigningApi && !process.env.ACTIVE_KEY) {
 	throw new Error(
-		"NODE_REGISTER=true requires POSTING_KEY — set POSTING_KEY (the hive account's posting WIF) in your .env, or set NODE_REGISTER=false to run the node privately without public-directory registration",
+		`INDEXER_ROLE=${config.indexerRole} serves signing endpoints and requires ACTIVE_KEY — set ACTIVE_KEY in your .env, or switch INDEXER_ROLE=sync if this node should not serve the API`,
+	);
+}
+if ((config.nodeRegister || servesSigningApi) && !process.env.POSTING_KEY) {
+	const reason = config.nodeRegister && !servesSigningApi
+		? "NODE_REGISTER=true requires POSTING_KEY"
+		: `INDEXER_ROLE=${config.indexerRole} serves /api/buy, which requires POSTING_KEY`;
+	throw new Error(
+		`${reason} — set POSTING_KEY (the hive account's posting WIF) in your .env, or switch INDEXER_ROLE=sync if this node should not serve the API`,
 	);
 }
 

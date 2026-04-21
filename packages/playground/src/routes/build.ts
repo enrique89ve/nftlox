@@ -335,7 +335,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			protocolVersion: PROTOCOL_VERSION,
 			hiveOperations: result.operations,
 			payload: result.payload,
-			keyType: "Active",
+			keyType: result.keyType,
 			coSigners: result.coSigners,
 		});
 	}),

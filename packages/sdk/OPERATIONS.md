@@ -19,14 +19,15 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | 9 | `node_heartbeat` | Core | posting | Periodic proof-of-liveness + ownership state-root hash |
 | 10 | `list` | Marketplace | posting | Lists an NFT for sale |
 | 11 | `unlist` | Marketplace | posting | Removes an NFT from the marketplace |
-| 12 | `buy` | Marketplace | active | Buys a listed NFT (multisig with node) |
-| 13 | `nft_approve` | Approve | posting | Approves a spender for ONE specific NFT |
-| 14 | `nft_approve_all` | Approve | posting | Approves a spender for ALL NFTs in a collection |
-| 15 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
-| 16 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
-| 17 | `nft_return` | Lending | posting | Returns a lent NFT |
-| 18 | `data_operator_approve` | DataOperator | posting | Authorizes an external operator for a collection |
-| 19 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
+| 12 | `sale_lock` | Marketplace | posting | Node-broadcast reservation lock (tx1 of the two-phase buy) |
+| 13 | `buy` | Marketplace | active | Buys a listed NFT (tx2, buyer-signed transfers + node-cosigned custom_json) |
+| 14 | `nft_approve` | Approve | posting | Approves a spender for ONE specific NFT |
+| 15 | `nft_approve_all` | Approve | posting | Approves a spender for ALL NFTs in a collection |
+| 16 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
+| 17 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
+| 18 | `nft_return` | Lending | posting | Returns a lent NFT |
+| 19 | `data_operator_approve` | DataOperator | posting | Authorizes an external operator for a collection |
+| 20 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
 
 ---
 
@@ -356,8 +357,8 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 ### 12. `buy`
 
 **SDK constant**: `ACTION_BUY`
-**Description**: Buys a listed NFT. Special operation: the node co-signs with active key (multisig). The buyer is extracted from paired transfers, not from the signer.
-**Key authority**: active -- signed by the indexer node (multisig).
+**Description**: Settles a prior `sale_lock`. The buyer signs the paired transfers with active, and the node co-signs the trailing `buy` custom_json with active after broadcasting tx1 (`sale_lock`) with posting.
+**Key authority**: active -- the `buy` custom_json is signed by the indexer node with active multisig.
 **Signer role**: The co-signing node. Buyer is identified from `pairedTransfers[0].from`.
 
 **SDK payload**:
@@ -590,7 +591,7 @@ The SDK's `calculatePaymentSplit()` function is reused in the indexer to verify 
 If royaltyRecipient or feeAccount equals the seller, those amounts merge into the seller payment. Marketplace fees are handled off-chain by the marketplace frontend.
 
 ### Multisig
-The `create_collection` and `buy` operations are node-cosigned. The client submits the required transfer operations, and the node validates and co-signs the `custom_json`. If the node rejects, the funds never leave the client account. Buy requests use a DB-backed multisig lock (table `multisig_locks`) with a configurable expiration, preventing concurrent purchases of the same NFT even across multiple API instances. A transaction bundle includes up to 5 operations (`MAX_MULTISIG_OPERATIONS`).
+The `create_collection` and `buy` operations are node-cosigned. The client submits the required transfer operations, and the node validates and co-signs the `custom_json`. If the node rejects, the funds never leave the client account. Buys are serialized by an on-chain `sale_lock` tx1 broadcast with posting before tx2 is co-signed and broadcast.
 
 ### Data System
 The current SDK-owned operation set manages two data layers per NFT:

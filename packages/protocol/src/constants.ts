@@ -19,8 +19,8 @@
 // ============================================================================
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.6.3";
-export const MIN_PROTOCOL_VERSION = "0.6.3";
+export const PROTOCOL_VERSION = "0.7.0";
+export const MIN_PROTOCOL_VERSION = "0.7.0";
 export const HASH_VERSION = "v1";
 
 // ============================================================================
@@ -29,31 +29,37 @@ export const HASH_VERSION = "v1";
 // these is a protocol upgrade and requires coordinated network-wide rollout.
 // ============================================================================
 
-// Cooldown blocks an unlist stays pending before materializing to 'active'.
-// During the window the NFT keeps status='listed' so a multisig-signed buy
-// already in flight can still settle. 3 blocks pairs with
-// MULTISIG_LAG_MAX_BLOCKS so every signed buy outlives its originating
-// unlist race deterministically across all indexers.
-export const UNLIST_DELAY_BLOCKS = 3;
+// Blocks a sale_lock stays valid after a settlement node broadcasts it.
+// The NFT holds status='pending_sale' for this window; if the buy custom_json
+// does not land inside it, the indexer sweep reverts the NFT to 'listed'.
+// 60 blocks ≈ 180s on Hive — comfortably above BUY_TX_TTL_MS (120s) so a
+// buyer-built tx2 cannot expire while its sale_lock is still alive.
+export const SALE_LOCK_DURATION_BLOCKS = 60;
 
 // ============================================================================
 // Node API policy
 // Per-node behavior. A node operator MAY tune these without breaking consensus
-// — they only affect that node's HTTP surface (multisig signing, discovery).
+// — they only affect that node's HTTP surface (buy settlement, discovery).
 // Clients negotiate via /api/status.
 // ============================================================================
 
-export const MULTISIG_EXPIRATION_MS = 125_000;
-export const MAX_MULTISIG_OPERATIONS = 5;
-export const MULTISIG_TX_MIN_EXPIRATION_MS = 30_000;
-export const MULTISIG_TX_MAX_EXPIRATION_MS = 120_000;
+// Upper bound on expiration of the buyer-presigned tx2 (transfers + buy).
+// Must be shorter than SALE_LOCK_DURATION_BLOCKS × 3s so any sale_lock still
+// alive can outlive a co-signed tx2 waiting for inclusion.
+export const BUY_TX_TTL_MS = 120_000;
+
+// Maximum number of concurrently active sale_locks a single buyer may hold
+// across this node. API-level defense against spam and fund-draining scenarios
+// where a buyer opens many parallel locks to block other buyers.
+// NOT part of consensus — other nodes may apply different caps.
+export const MAX_ACTIVE_SALE_LOCKS_PER_BUYER = 5;
 
 // Max block gap between the Hive HEAD and the indexer's last-processed block
-// that still allows /api/multisig to sign. Exceeding this means the API would
-// read a stale NFT snapshot and could co-sign against state that has since
-// been invalidated (unlist/transfer/burn in an un-indexed block). Hive block
-// time is 3s, so 3 blocks ≈ 9s.
-export const MULTISIG_LAG_MAX_BLOCKS = 3;
+// that still allows /api/buy to serve requests. Exceeding this means the API
+// would read a stale NFT snapshot and could issue a sale_lock against state
+// that has since been invalidated (unlist/transfer/burn in an un-indexed
+// block). Hive block time is 3s, so 3 blocks ≈ 9s.
+export const BUY_API_LAG_MAX_BLOCKS = 3;
 
 // Cadence for on-chain heartbeat (custom_json with current state-root hash).
 // Block time on Hive is 3s, so 5000 blocks ≈ 4h10m. Nodes that register must
@@ -119,12 +125,12 @@ export const BASIS_POINTS_DENOMINATOR = 10_000;
 export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
-// Listing expirations must outlive the longest buy transaction this node will
-// co-sign plus a settlement buffer. Otherwise a seller can list with a short
-// expiry, receive buyer funds in a signed Hive transaction, and have the indexer
-// reject the NFT ownership change because the listing expired before inclusion.
-export const MARKETPLACE_SETTLEMENT_BUFFER_MS = 60_000;
-export const MIN_LISTING_TTL_MS = MULTISIG_TX_MAX_EXPIRATION_MS + MARKETPLACE_SETTLEMENT_BUFFER_MS;
+// Listing expirations must outlive the full sale_lock window plus a buffer for
+// indexer inclusion delay. Otherwise a seller could list with a short expiry
+// and, mid-sale_lock, see the listing lapse — leaving the NFT stuck in
+// pending_sale until sweep. Derived from SALE_LOCK_DURATION_BLOCKS so the two
+// bounds stay coherent when the consensus constant changes.
+export const MIN_LISTING_TTL_MS = SALE_LOCK_DURATION_BLOCKS * 3_000 + 60_000;
 
 // Per-instance fee for create_collection. When enabled, the total fee becomes
 //   PROTOCOL_COLLECTION_FEE_HBD + INSTANCE_FEE_UNIT_HBD * ceil(maxInstances / INSTANCE_FEE_PER_N)
@@ -198,6 +204,7 @@ export const ACTION_NODE_HEARTBEAT = "node_heartbeat";
 // Marketplace
 export const ACTION_LIST = "list";
 export const ACTION_UNLIST = "unlist";
+export const ACTION_SALE_LOCK = "sale_lock" as const;
 export const ACTION_BUY = "buy" as const;
 
 // Approve & TransferFrom
@@ -229,6 +236,7 @@ export const CORE_ACTIONS = [
 export const MARKETPLACE_ACTIONS = [
 	ACTION_LIST,
 	ACTION_UNLIST,
+	ACTION_SALE_LOCK,
 	ACTION_BUY,
 ] as const;
 

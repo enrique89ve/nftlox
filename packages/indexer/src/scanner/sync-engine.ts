@@ -7,7 +7,7 @@ import {
   cleanupExpiredOperations,
   insertInvalidOperation,
 } from "@/db/queries/sync.ts";
-import { materializePendingUnlists } from "@/db/queries/nft-mutations.ts";
+import { sweepExpiredSaleLocks } from "@/db/queries/nft-mutations.ts";
 import {
   acquireSyncLock,
   releaseSyncLock,
@@ -23,7 +23,6 @@ import {
 import {
   ACTION_BUY,
   ACTION_CREATE_COLLECTION,
-  UNLIST_DELAY_BLOCKS,
 } from "@/protocol/index.ts";
 import {
   parseHafAHOperations,
@@ -393,11 +392,13 @@ export async function syncCycle(): Promise<void> {
       throw new Error(LOCK_LOST_MARKER);
     }
 
-    // Single transaction per batch. materializePendingUnlists runs even when the
-    // range has no ops — a deferred unlist from an earlier block can become due
-    // in a quiet window, and the cursor must not advance past the deadline
-    // without materializing. The partial index keeps the UPDATE at ~zero cost
-    // when no rows are due.
+    // Single transaction per batch. sweepExpiredSaleLocks runs BEFORE each
+    // distinct block's ops so that a `buy` landing at block B observes only
+    // locks whose sale_expires_block >= B. It also runs once more at the
+    // batch boundary so a quiet window (no ops inside a range that contains
+    // an expiration) still returns the NFT to `listed` before the cursor
+    // advances. The partial index `idx_nfts_sale_expires` keeps the UPDATE
+    // at ~zero cost when no rows are due.
     await withTransaction(async (txn) => {
       if (isMassive && hasOps) {
         await txn`SET LOCAL synchronous_commit = OFF`;
@@ -405,6 +406,7 @@ export async function syncCycle(): Promise<void> {
 
       if (hasOps) {
         let consecutiveFailures = 0;
+        let sweptThrough: number | null = null;
         for (const batch of batches) {
           for (const rej of batch.rejected) {
             await insertInvalidOperation(
@@ -421,6 +423,10 @@ export async function syncCycle(): Promise<void> {
             );
           }
           for (const op of batch.ops) {
+            if (sweptThrough !== op.blockNum) {
+              await sweepExpiredSaleLocks(op.blockNum, txn);
+              sweptThrough = op.blockNum;
+            }
             const success = await routeOperation(op, txn);
             if (success) {
               consecutiveFailures = 0;
@@ -436,7 +442,11 @@ export async function syncCycle(): Promise<void> {
         }
       }
 
-      await materializePendingUnlists(lastBatch.to, UNLIST_DELAY_BLOCKS, txn);
+      // Boundary sweep: ensures the cursor never moves past a block at which a
+      // sale_lock expired without updating the row, even when no op landed in
+      // that block. Keyed on lastBatch.to + 1 so `sale_expires_block < X` fires
+      // for any lock whose expiry was <= lastBatch.to.
+      await sweepExpiredSaleLocks(lastBatch.to + 1, txn);
       await updateLastBlock(lastBatch.to, txn);
     });
 

@@ -1,82 +1,70 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftWithCollectionRules, getNftWithCollectionRulesForUpdate, updateNftOwner, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
-import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
+import {
+	getNftWithCollectionRulesForUpdate,
+	updateNftOwner,
+	NFT_STATUS_PENDING_SALE,
+} from "@/db/queries/nfts.ts";
 import type { OwnerChangeCtx } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { insertSale } from "@/db/queries/marketplace-history.ts";
 import { requireString, requireUsername, verifyTransfers, requireSupportedCurrency } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
-import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
-import { consumeMultisigLockIfMatches } from "@/utils/multisig-locks.ts";
-import { createLogger } from "@/utils/logger.ts";
-import { ACTION_BUY, UNLIST_DELAY_BLOCKS } from "@/protocol/index.ts";
-
-const log = createLogger("handler:buy");
+import { assertActionable, assertMarketplaceInstance } from "@/utils/status-checks.ts";
+import { ACTION_BUY } from "@/protocol/index.ts";
 
 /**
- * Processes a `buy` action AFTER it appears on-chain (post-multisig broadcast).
+ * Processes a `buy` action that settles a pending sale_lock.
  *
- * The custom_json's required_auths is [nodeAccount], so op.signer is the NODE,
- * not the buyer. The buyer is extracted from the first paired transfer's `from`.
+ * The custom_json is inside the buyer-initiated tx2 signed with the buyer's
+ * active key. `op.signer` is the settlement node's posting key (the lock
+ * owner) — the active-key paired transfers prove buyer intent.
  *
- * Security: the router enforces active key auth; this handler enforces the signer
- * is the configured node account — matching multisig-service.ts validation.
+ * Preconditions enforced here (C3 hardfork):
+ *   1. NFT.status === 'pending_sale' — only locked rows are buyable.
+ *   2. NFT.sale_settlement_node === op.signer — the node that issued the
+ *      lock is the only node allowed to broadcast the buy.
+ *   3. op.blockNum <= NFT.sale_expires_block — the lock has not expired.
+ *   4. NFT.listing_id === payload.listingId AND listing_tx_id === listTxId.
+ *   5. verifyTransfers-extracted buyer === NFT.sale_buyer (no impersonation).
  *
- * Validates listingId + listTxId to prevent stale listing replays.
+ * On success `updateNftOwner` atomically clears sale_* and listing_* columns
+ * while flipping status to 'active' — there is no residual pending-sale
+ * state after a buy commits.
  */
 export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
-	await assertActiveSettlementNode(op.signer, op.blockNum, txn);
-
 	const nftId = requireString(op.data.nftId, "nftId");
 	const listingId = requireString(op.data.listingId, "listingId");
 	const listTxId = requireString(op.data.listTxId, "listTxId");
-	const txId = requireString(op.data.txId, "txId");
 
 	const transfers = op.pairedTransfers ?? [];
 
 	const nft = await getNftWithCollectionRulesForUpdate(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
-	// assertActionable rejects burned + lent; status check below rejects anything not listed.
-	// Combined: only NFTs with status=listed pass through.
 	assertActionable(nft, nftId);
 	assertMarketplaceInstance(nft, nftId);
-	if (nft.status !== NFT_STATUS_LISTED) throw new Error(`NFT not listed: ${nftId}`);
-	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
-		throw new Error(`Listing has expired for NFT: ${nftId}`);
-	}
-	// Reject buys that land past the unlist-delay window. An unlist at block X
-	// keeps the NFT comprable through block X + UNLIST_DELAY_BLOCKS inclusive;
-	// beyond that the sync engine will materialize the unlist at block close
-	// anyway, so a late buy here would either race the materialization or
-	// settle against a logically-unlisted NFT.
-	if (nft.pending_unlist_block !== null) {
-		const deadline = nft.pending_unlist_block + UNLIST_DELAY_BLOCKS;
-		if (op.blockNum > deadline) {
-			throw new Error(
-				`unlist_effective: NFT ${nftId} was unlisted at block ${nft.pending_unlist_block}, ` +
-					`deadline ${deadline}, buy arrived at block ${op.blockNum}`,
-			);
-		}
-	}
 
-	if (!nft.transferable) {
-		throw new Error(`Collection ${nft.collection_id} is not transferable — buy blocked`);
+	if (nft.status !== NFT_STATUS_PENDING_SALE) {
+		throw new Error(`NFT ${nftId} is not pending_sale (status=${nft.status}) — buy rejected`);
 	}
-
-	// Validate listingId matches the active listing
+	if (nft.sale_settlement_node !== op.signer) {
+		throw new Error(
+			`sale_settlement_node mismatch: expected '${nft.sale_settlement_node}', got '${op.signer}'`,
+		);
+	}
+	if (nft.sale_expires_block === null || op.blockNum > nft.sale_expires_block) {
+		throw new Error(
+			`sale_lock expired: current block ${op.blockNum} exceeds sale_expires_block ${nft.sale_expires_block}`,
+		);
+	}
 	if (nft.listing_id !== listingId) {
 		throw new Error(`listingId mismatch: expected '${nft.listing_id}', got '${listingId}'`);
 	}
-
-	// Validate listTxId matches the listing transaction
 	if (nft.listing_tx_id !== listTxId) {
 		throw new Error(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
 	}
-
-	// Validate txId matches the NFT's creation transaction
-	if (nft.created_tx_id !== txId) {
-		throw new Error(`txId mismatch: expected '${nft.created_tx_id}', got '${txId}'`);
+	if (!nft.transferable) {
+		throw new Error(`Collection ${nft.collection_id} is not transferable — buy blocked`);
 	}
 
 	const totalPrice = Number(nft.listing_price);
@@ -91,12 +79,6 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	}
 	const royaltyRecipient = nft.royalty_recipient ?? null;
 
-	// Canonical buyer identity: verifyTransfers finds the unique seller-leg
-	// transfer (to=seller, amount=sellerAmount, currency, memo=`BUY:nftId`)
-	// and returns its `from`. This replaces the previous positional read and
-	// same-memo pre-filter — an extra (different amount/to) transfer sharing
-	// the BUY memo no longer triggers a false-ambiguous rejection.
-	// consumedIndices prevents multi-buy in the same tx from sharing transfers.
 	const { split, buyerFromTransfer } = verifyTransfers({
 		transfers,
 		seller: nft.owner,
@@ -110,33 +92,12 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	});
 	const buyer = requireUsername(buyerFromTransfer, "buyer");
 	if (nft.owner === buyer) throw new Error(`Cannot buy own NFT: ${nftId}`);
-
-	validateTransferCount(transfers, split, op.transferPool?.consumed);
-
-	// Consume the multisig lock iff the buy matches (nftId + buyer + listing_id
-	// + list_tx_id). A non-matching active lock means another node co-signed a
-	// different buyer — accept THIS buy (another node's signed tx won the
-	// race) but leave the foreign lock intact so it still protects its own
-	// in-flight tx. A missing lock is normal on multi-node setups where the
-	// signing node's lock lives in a different DB.
-	const lockOutcome = await consumeMultisigLockIfMatches({
-		nftId,
-		buyer,
-		listingId,
-		listTxId,
-		blockTimestamp: op.timestamp,
-		txn,
-	});
-	if (lockOutcome.outcome === "foreign_lock") {
-		log.warn("buy accepted despite foreign multisig lock — another node co-signed a different buyer", {
-			nftId,
-			block: op.blockNum,
-			foreignBuyer: lockOutcome.lock.buyer,
-			foreignListing: lockOutcome.lock.listing_id,
-			acceptedBuyer: buyer,
-			acceptedListing: listingId,
-		});
+	if (nft.sale_buyer !== buyer) {
+		throw new Error(
+			`sale_buyer mismatch: sale_lock reserved '${nft.sale_buyer}', transfers came from '${buyer}'`,
+		);
 	}
+	validateTransferCount(transfers, split, op.transferPool?.consumed);
 
 	await insertSale({
 		nftId,
@@ -161,7 +122,9 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 		collectionId: nft.collection_id,
 		ownerAction: ACTION_BUY,
 		ownerBlockNum: op.blockNum,
-		wasListed: true, // buy always transitions from status='listed'
+		// pending_sale still counts toward collection_stats.listed (plan §10.5),
+		// so a completed buy must decrement listed exactly once.
+		wasListed: true,
 	};
 	await updateNftOwner(nftId, buyer, op.operationId, ctx, txn);
 	await deleteNftAllowance(nftId, txn);

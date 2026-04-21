@@ -155,9 +155,6 @@ export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 		nftId: data.nftId,
 		listingId: data.listingId,
 		listTxId: data.listTxId,
-		txId: data.txId,
-		...(data.seedId && { seedId: data.seedId }),
-		...(data.seedTxId && { seedTxId: data.seedTxId }),
 	};
 
 	const payload = createPayload("buy", buyData);

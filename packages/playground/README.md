@@ -50,7 +50,7 @@ All `POST /api/build/*` endpoints that validate input and return Hive operations
 | `POST /api/validate/pre-mint` | Pre-mint validation |
 | `GET /api/protocol/version` | Protocol version info |
 | `POST /api/debug/server-transfer` | Server-only signing test (no Keychain) |
-| `POST /api/debug/multisig-buy` | End-to-end multisig buy flow |
+| `POST /api/debug/multisig-buy` | Server-side buy smoke test against `/api/buy` |
 
 ## Public documentation site
 

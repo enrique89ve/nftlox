@@ -42,9 +42,16 @@ describe("createHiveOperation", () => {
 	});
 
 	test("active action uses required_auths", () => {
-		const payload = createPayload("buy", { nftId: "n", listingId: "l", listTxId: "t", txId: "x" });
-		const op = createHiveOperation(payload, "node-account");
-		expect(op[1].required_auths).toEqual(["node-account"]);
+		const payload = createPayload("create_collection", {
+			collectionId: "col_1",
+			name: "n",
+			description: "d",
+			schema: { immutable: [], mutable: [] },
+			royaltyAccount: "alice",
+			royaltyPct: 0,
+		});
+		const op = createHiveOperation(payload, "alice");
+		expect(op[1].required_auths).toEqual(["alice"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 

@@ -286,6 +286,7 @@ describe("buildBuy transfer generation", () => {
 		expect(customJson).toBeDefined();
 		expect(customJson![1].required_auths).toEqual([FEE_ACCOUNT]);
 		expect(customJson![1].required_posting_auths).toEqual([]);
+		expect(result.keyType).toBe("Active");
 		expect(result.signer).toBe(BUYER);
 		expect(result.coSigners).toEqual([{
 			op: 2,

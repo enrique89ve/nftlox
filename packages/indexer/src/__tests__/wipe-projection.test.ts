@@ -63,7 +63,7 @@ describe("buildProjectionTruncateStmt", () => {
 			"orphaned_buys", "invalid_operations", "confirmed_operations",
 			"owner_nft_counts", "collection_stats",
 			"sales", "burned_nfts", "archived_collections",
-			"multisig_locks", "multisig_collection_locks",
+			"multisig_collection_locks",
 			"l2_node_heartbeats", "l2_nodes",
 		]);
 		// Must include every non-singleton and exclude both singletons.

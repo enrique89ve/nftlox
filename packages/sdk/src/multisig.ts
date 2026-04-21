@@ -1,16 +1,18 @@
-// NFTLox SDK -- Multisig Client Functions
-// Pure async functions for interacting with an indexer node's multisig endpoints.
+// NFTLox SDK -- Indexer API Client (buy + multisig collection)
 //
-// Endpoints exposed (all via shared postMultisig core):
-//   - POST /api/multisig             → requestBuyMultisig            (digital ownership transfer, critical path)
-//   - POST /api/multisig/collection  → requestCreateCollectionMultisig
+// Endpoints exposed:
+//   - POST /api/buy                  → submitBuy                       (two-phase buy, indexer brokers sale_lock + cosign)
+//   - POST /api/multisig/collection  → requestCreateCollectionMultisig (active-auth cosign)
+//   - GET  /api/payment-info/:nftId  → fetchPaymentInfo
+//   - GET  /api/status               → fetchNodeAccount
 //
-// Response shape is identical across endpoints (MultisigResponse discriminated union).
-// Future endpoints (e.g. /api/multisig/node) should add a typed wrapper around postMultisig.
+// The /api/multisig endpoint is retained for create_collection only post-0.7.0;
+// buy has moved to /api/buy with a buyer-signed, indexer-cosigned tx2.
 
 import type {
 	PaymentInfo,
-	BuyMultisigRequest,
+	BuyApiRequest,
+	BuyApiResponse,
 	CreateCollectionMultisigRequest,
 	MultisigResponse,
 } from "@nftlox/protocol";
@@ -301,15 +303,61 @@ async function postMultisig(
 }
 
 /**
- * Request multisig signing for a BUY transaction (digital ownership transfer).
- * Critical path: validates payment split and co-signs with node active key.
+ * Submit a buy request to the indexer's /api/buy endpoint.
+ *
+ * Unlike the legacy multisig flow, this is a single server-brokered call:
+ * the buyer ships a serialized, active-signed tx2 and the indexer takes over
+ * (broadcasts sale_lock, waits for inclusion, cosigns tx2 with its active
+ * key, broadcasts tx2). No POW header — the route enforces per-buyer and
+ * per-IP rate limits instead, since every call broadcasts a real L1 tx.
  */
-export async function requestBuyMultisig(
+export async function submitBuy(
 	indexerUrl: string,
-	request: BuyMultisigRequest,
-	options: RequestMultisigOptions = {},
-): Promise<MultisigResponse> {
-	return postMultisig(buildUrl(indexerUrl, "/api/multisig"), request, options);
+	request: BuyApiRequest,
+	options: HttpOptions = {},
+): Promise<BuyApiResponse> {
+	const url = buildUrl(indexerUrl, "/api/buy");
+	const fetchImpl = resolveFetch(options);
+	const headers = mergeHeaders({ "Content-Type": "application/json" }, options.headers);
+	let res: Response;
+	try {
+		res = await fetchImpl(url, {
+			method: "POST",
+			headers,
+			body: JSON.stringify(request),
+			signal: options.signal,
+		});
+	} catch (error) {
+		throw handleFetchError({ error, url, requestBodyValues: request });
+	}
+	const bodyText = await res.text();
+	const parsed = safeJsonParse(bodyText);
+	if (!res.ok && !isBuyApiResponse(parsed)) {
+		throw new IndexerError({
+			message: `Buy request failed (${res.status}): ${extractErrorMessage(parsed)}`,
+			url,
+			statusCode: res.status,
+			responseHeaders: headersToRecord(res.headers),
+			responseBody: bodyText,
+			data: parsed,
+		});
+	}
+	assertBuyApiResponse(parsed);
+	return parsed;
+}
+
+function isBuyApiResponse(raw: unknown): raw is BuyApiResponse {
+	if (!isObject(raw) || typeof raw.ok !== "boolean") return false;
+	if (raw.ok === true) {
+		return raw.status === "confirmed" && typeof raw.tx1Id === "string" && typeof raw.tx2Id === "string";
+	}
+	return typeof raw.code === "string" && typeof raw.message === "string";
+}
+
+function assertBuyApiResponse(raw: unknown): asserts raw is BuyApiResponse {
+	if (!isBuyApiResponse(raw)) {
+		throw new Error("Buy response malformed: missing ok/code/message fields");
+	}
 }
 
 /**

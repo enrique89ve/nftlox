@@ -51,12 +51,6 @@ mock.module("@/db/queries/sync.ts", () => ({
 	insertOrphanedBuy: mock(() => Promise.resolve()),
 }));
 
-// sync-engine imports materializePendingUnlists from nft-mutations; stub it to
-// avoid pulling in the real module (which chains to getStateRootBuffer).
-mock.module("@/db/queries/nft-mutations.ts", () => ({
-	materializePendingUnlists: mock(() => Promise.resolve(0)),
-}));
-
 // sync-lock lives in scanner/, not db/queries. Tests call syncCycle directly
 // without starting syncLoop, so the real dedicated-connection path would fail.
 // verifyLockHeld is mocked true so the per-batch fence treats the lock as held.
@@ -271,8 +265,6 @@ describe("syncCycle", () => {
 
 		// Should still advance the cursor
 		expect(mockUpdateLastBlock).toHaveBeenCalled();
-		// Per-cycle transaction now wraps the cursor update AND the
-		// materializePendingUnlists sweep, even on empty batches.
 		expect(mockWithTransaction).toHaveBeenCalled();
 		expect(mockRouteOperation).not.toHaveBeenCalled();
 	});

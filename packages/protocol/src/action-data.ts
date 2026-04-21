@@ -164,13 +164,27 @@ export type UnlistData = {
 	readonly seedTxId?: string | undefined;
 };
 
+// Issued by a settlement node's posting key to reserve a listed NFT for a
+// specific buyer. Handlers transition the NFT from 'listed' to 'pending_sale'
+// and snapshot `buyer`, `settlement_node`, and `expires_block` on the row.
+// The subsequent `buy` custom_json (inside the buyer-initiated tx2) settles
+// against this lock; no other buyer can buy while it is alive.
+export type SaleLockData = {
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
+	readonly buyer: string;
+};
+
+// Embedded in tx2 alongside the buyer-signed transfers. The indexer validates
+// that (a) an open sale_lock exists for the target nft, (b) its buyer matches
+// the signer of the transfers, (c) its settlement_node matches the active
+// signer of this custom_json. All other provenance (seedId, txId, etc.) is
+// already snapshotted in `nfts.sale_*` from the sale_lock — no need to echo.
 export type BuyData = {
 	readonly nftId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
-	readonly txId: string;
-	readonly seedId?: string | undefined;
-	readonly seedTxId?: string | undefined;
 };
 
 // Approve & transfer_from
@@ -224,15 +238,7 @@ export type NodeHeartbeatData = {
 	readonly indexerVersion: string;
 };
 
-// Multisig envelopes
-
-export type BuyMultisigRequest = {
-	readonly buyer: string;
-	readonly nftId: string;
-	readonly listingId: string;
-	readonly listTxId: string;
-	readonly transaction: HiveTransactionObject;
-};
+// Multisig envelopes (post-0.7.0: buy is no longer multisig — see BuyApiRequest)
 
 // `creator` is intentionally absent. The multisig endpoint derives the creator
 // from the embedded `transaction.operations[0][1].from` (the fee transfer's
@@ -242,7 +248,40 @@ export type CreateCollectionMultisigRequest = {
 	readonly transaction: HiveTransactionObject;
 };
 
-export type MultisigRequest = BuyMultisigRequest | CreateCollectionMultisigRequest;
+export type MultisigRequest = CreateCollectionMultisigRequest;
+
+// POST /api/buy body. Buyer signs tx2 with their active key and ships the full
+// serialized hive-tx TransactionType (operations + signatures) as a JSON string.
+// The indexer validates, broadcasts sale_lock (tx1) with its posting key,
+// waits for inclusion, then cosigns tx2 with its active key and broadcasts.
+export type BuyApiRequest = {
+	readonly buyer: string;
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
+	/**
+	 * JSON-stringified hive-tx TransactionType:
+	 *   { ref_block_num, ref_block_prefix, expiration, operations, extensions,
+	 *     signatures: [buyerActiveSig] }
+	 * Operations: [transfer(seller), transfer(royalty)?, transfer(fee), custom_json(buy)].
+	 * The trailing custom_json has required_auths=[nodeAccount] and required_posting_auths=[].
+	 */
+	readonly presignedTx2: string;
+};
+
+export type BuyApiResponse =
+	| Readonly<{
+		readonly ok: true;
+		readonly status: "confirmed";
+		readonly tx1Id: string;
+		readonly tx2Id: string;
+	}>
+	| Readonly<{
+		readonly ok: false;
+		readonly code: string;
+		readonly message: string;
+		readonly retryAfterMs?: number;
+	}>;
 
 export type PaymentInfo = {
 	readonly nftId: string;

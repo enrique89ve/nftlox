@@ -117,9 +117,9 @@ async function main(): Promise<void> {
 	await connectWithRetry();
 
 	// Read keys from env, init beekeeper, then wipe from JS memory.
-	// POSTING_KEY is only imported when NODE_REGISTER=true (config enforces presence).
+	// API roles need ACTIVE_KEY for node multisig and POSTING_KEY for sale_lock.
 	const activeKey = process.env.ACTIVE_KEY ?? "";
-	const postingKey = config.nodeRegister ? (process.env.POSTING_KEY ?? "") : "";
+	const postingKey = process.env.POSTING_KEY ?? "";
 	const bkPassword = process.env.BEEKEEPER_PASSWORD ?? "";
 	if (activeKey) {
 		await initBeekeeperSigner(activeKey, bkPassword, postingKey || null);

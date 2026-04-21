@@ -5,14 +5,19 @@ import {
 	ACTION_BUY,
 	ACTION_CREATE_COLLECTION,
 	HIVE_CUSTOM_JSON_MAX_BYTES,
-	MAX_MULTISIG_OPERATIONS,
-	MULTISIG_TX_MAX_EXPIRATION_MS,
-	MULTISIG_TX_MIN_EXPIRATION_MS,
 	MIN_PROTOCOL_VERSION,
 	isProtocolAction,
 	type MultisigErrorCode,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
+
+// These used to live in @nftlox/protocol but moved to the indexer after the
+// 0.7.0 sale_lock migration — they only govern the create_collection multisig
+// flow now (buy no longer uses multisig). Values unchanged from the protocol
+// era to keep collection-creation UX identical.
+const MAX_MULTISIG_OPERATIONS = 10;
+const MULTISIG_TX_MIN_EXPIRATION_MS = 30_000;
+const MULTISIG_TX_MAX_EXPIRATION_MS = 120_000;
 import type {
 	BuyRequestShape,
 	ParsedAmount,

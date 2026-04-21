@@ -15,6 +15,7 @@ import {
 	ACTION_NFT_TRANSFER_FROM,
 	ACTION_NODE_HEARTBEAT,
 	ACTION_NODE_REGISTER,
+	ACTION_SALE_LOCK,
 	ACTION_SET_DATA,
 	ACTION_SET_DATA_FROM,
 	ACTION_TRANSFER,
@@ -36,6 +37,7 @@ import type {
 	NftTransferFromData,
 	NodeHeartbeatData,
 	NodeRegisterData,
+	SaleLockData,
 	SetDataData,
 	SetDataFromData,
 	TransferData,
@@ -193,6 +195,7 @@ export type PayloadDataByAction = {
 	readonly [ACTION_NODE_HEARTBEAT]: NodeHeartbeatData;
 	readonly [ACTION_LIST]: ListingData;
 	readonly [ACTION_UNLIST]: UnlistData;
+	readonly [ACTION_SALE_LOCK]: SaleLockData;
 	readonly [ACTION_BUY]: BuyData;
 	readonly [ACTION_NFT_APPROVE]: NftApproveData;
 	readonly [ACTION_NFT_APPROVE_ALL]: NftApproveAllData;

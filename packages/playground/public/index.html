@@ -3996,7 +3996,7 @@
 
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Buy NFT (Multisig)</span>
+                <span class="card-title">Buy NFT (Smoke Test)</span>
               </div>
               <p
                 style="
@@ -4006,9 +4006,9 @@
                   line-height: 1.6;
                 "
               >
-                Full multisig buy flow: playground builds the unsigned tx with
-                payment splits, indexer validates and signs (node key), Keychain
-                adds buyer signature, then broadcast.
+                Server-side buy smoke test: the playground signs tx2 with the
+                server active key, the indexer broadcasts sale_lock with
+                posting, active-cosigns tx2, then broadcasts settlement.
               </p>
               <div style="margin-bottom: 12px">
                 <label class="form-label" for="multisig-nft-id">NFT ID</label>

@@ -104,12 +104,12 @@ The SDK re-exports the wire protocol from `@nftlox/protocol` and adds builders, 
 | Category | Key exports |
 |---|---|
 | **Protocol constants** | `PROTOCOL_ID`, `PROTOCOL_VERSION`, `ALL_ACTIONS`, `CORE_ACTIONS`, `MARKETPLACE_ACTIONS`, `SUPPORTED_CURRENCIES`, `PROTOCOL_FEE_BPS` |
-| **Action constants** | `ACTION_MINT`, `ACTION_TRANSFER`, `ACTION_LIST`, `ACTION_BUY`, `ACTION_BULK_DISTRIBUTE`, … (19 total) |
+| **Action constants** | `ACTION_MINT`, `ACTION_TRANSFER`, `ACTION_LIST`, `ACTION_SALE_LOCK`, `ACTION_BUY`, `ACTION_BULK_DISTRIBUTE`, … (20 total) |
 | **Auth helpers** | `isProtocolAction()`, `getAuthLevel()`, `getKeyType()`, `ACTION_AUTH_LEVEL` |
 | **Payment** | `calculatePaymentSplit()`, `calculateBasisPointsAmount()` |
 | **Builders** | `buildCollection()`, `buildExtendSchema()`, `buildArchiveCollection()`, `buildSeed()`, `buildSeedBatch()`, `buildCollectionWithSeeds()`, `buildBulkDistribute()`, `buildTransfer()`, `buildList()`, `buildBuy()`, `buildSetData()`, `buildSetDataFrom()`, `buildNftApprove()`, `buildNftApproveAll()`, `buildNftTransferFrom()`, `buildNftLend()`, `buildNftReturn()`, `buildNodeRegister()`, `buildNodeHeartbeat()`, `buildDataOperatorApprove()`, `buildBurn()` |
 | **Zod schemas** | `createCollectionInputSchema`, `mintInputSchema`, `bulkDistributeInputSchema`, `listInputSchema`, … |
-| **Multisig client** | `fetchNodeAccount()`, `fetchMultisigNodeAccount()`, `resolveNodeAccountFromStatus()`, `fetchPaymentInfo()`, `requestBuyMultisig()`, `requestCreateCollectionMultisig()` |
+| **Multisig / buy client** | `fetchNodeAccount()`, `fetchMultisigNodeAccount()`, `resolveNodeAccountFromStatus()`, `fetchPaymentInfo()`, `submitBuy()`, `requestCreateCollectionMultisig()` |
 | **SPV verification** | `verifyNftOwnership()`, `verifyOperationOnChain()`, `fetchTransaction()` |
 | **Indexer client** | `createIndexerClient()` — portable `fetch()`-based client with `getNodeAccount()` and `getMultisigNodeAccount()` helpers |
 | **Protocol state** | `initProtocol()`, `makePayload()`, `getProtocolVersion()`, `isInitialized()` |

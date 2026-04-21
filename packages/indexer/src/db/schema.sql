@@ -8,7 +8,7 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-	CREATE TYPE nft_status AS ENUM ('active', 'listed', 'lent');
+	CREATE TYPE nft_status AS ENUM ('active', 'listed', 'pending_sale', 'lent');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -90,6 +90,11 @@ CREATE TABLE IF NOT EXISTS collections (
 -- CHECK constraints:
 -- - chk_nfts_listed_coherent: status='listed' requires full listing snapshot so
 --   the marketplace never serves a NULL price.
+-- - chk_nfts_pending_sale_coherent: status='pending_sale' requires the full
+--   sale_* snapshot, and any other status forbids sale_* population. Keeps the
+--   on-chain sale-lock projection self-consistent with its state discriminator.
+-- - chk_nfts_pending_sale_has_listing: a sale_lock always reserves a live
+--   listing, so listing_* must remain populated while status='pending_sale'.
 -- - chk_nfts_supply_bounded: distributed + reserved_supply <= max_supply when
 --   bounded (max_supply > 0). Hard backstop against a buggy handler writing over
 --   the cap; `supply_exhausted` (generated) only reports the state.
@@ -129,12 +134,18 @@ CREATE TABLE IF NOT EXISTS nfts (
 	listing_currency TEXT,
 	listing_expires_at TIMESTAMPTZ,
 	listing_marketplace TEXT,
-	-- Unlist cooldown: set by handleUnlist to op.block_num. The NFT stays
-	-- status='listed' for UNLIST_DELAY_BLOCKS more blocks so in-flight buys
-	-- (multisig-signed against the prior state) can still settle. The scanner
-	-- materializes the final transition to 'active' at block close. Only
-	-- meaningful while status='listed'; cleared when status leaves 'listed'.
-	pending_unlist_block BIGINT,
+	-- Sale-lock reservation set by handleSaleLock. When `status='pending_sale'`
+	-- the five sale_* columns are all populated (snapshot of buyer, settling
+	-- node, expiry block, and the on-chain tx/op that emitted the lock). The
+	-- matching `buy` consumes them atomically (sets status='active', nulls
+	-- sale_* + listing_* in the same UPDATE). If no buy lands by the deadline,
+	-- the sync engine's lazy sweep rolls the row back to 'listed' — fully
+	-- deterministic because the decision key is `currentBlock`, not wall-clock.
+	sale_buyer TEXT,
+	sale_settlement_node TEXT,
+	sale_expires_block BIGINT,
+	sale_lock_tx_id CHAR(40),
+	sale_lock_operation_id TEXT,
 	created_operation_id TEXT NOT NULL,
 	created_block_num BIGINT NOT NULL,
 	created_tx_id TEXT NOT NULL,
@@ -147,13 +158,36 @@ CREATE TABLE IF NOT EXISTS nfts (
 			AND listing_id IS NOT NULL
 			AND listing_tx_id IS NOT NULL)
 	),
-	-- DB-level backstop: pending_unlist_block is only meaningful for listed NFTs.
-	-- Any path that flips status away from 'listed' MUST clear it, otherwise a
-	-- future re-list would be silently materialized back to 'active' on the next
-	-- batch (and the new owner would be unable to manually unlist either, since
-	-- markPendingUnlist requires pending_unlist_block IS NULL).
-	CONSTRAINT chk_nfts_pending_unlist_only_when_listed CHECK (
-		pending_unlist_block IS NULL OR status = 'listed'
+	-- DB-level coherence backstop for the on-chain sale_lock state machine:
+	-- `status='pending_sale'` requires the full five-tuple sale_* snapshot, and
+	-- every other status forbids any sale_* column from being populated. Any
+	-- handler that writes an inconsistent transition hits this constraint
+	-- instead of silently projecting a broken state-root.
+	CONSTRAINT chk_nfts_pending_sale_coherent CHECK (
+		(status = 'pending_sale'
+			AND sale_buyer IS NOT NULL
+			AND sale_settlement_node IS NOT NULL
+			AND sale_expires_block IS NOT NULL
+			AND sale_lock_tx_id IS NOT NULL
+			AND sale_lock_operation_id IS NOT NULL)
+		OR
+		(status <> 'pending_sale'
+			AND sale_buyer IS NULL
+			AND sale_settlement_node IS NULL
+			AND sale_expires_block IS NULL
+			AND sale_lock_tx_id IS NULL
+			AND sale_lock_operation_id IS NULL)
+	),
+	-- `pending_sale` is a reservation on an already-listed NFT; the listing
+	-- row must stay populated so `buy` can resolve price/currency against it.
+	-- Clearing listing_* while keeping status='pending_sale' would leave the
+	-- buy handler without a price to validate transfers against.
+	CONSTRAINT chk_nfts_pending_sale_has_listing CHECK (
+		status <> 'pending_sale'
+		OR (listing_id IS NOT NULL
+			AND listing_tx_id IS NOT NULL
+			AND listing_price IS NOT NULL
+			AND listing_currency IS NOT NULL)
 	),
 	CONSTRAINT chk_nfts_supply_bounded CHECK (
 		max_supply = 0 OR (distributed + reserved_supply) <= max_supply
@@ -367,26 +401,14 @@ CREATE TABLE IF NOT EXISTS l2_node_heartbeats (
 CREATE INDEX IF NOT EXISTS idx_l2_node_heartbeats_account_block ON l2_node_heartbeats(account, block_num DESC);
 
 -- ============ MULTISIG LOCKS ============
-
--- Durable per-NFT lock held by the signing node between /api/multisig accept
--- and the on-chain buy landing. While a row exists (expires_at > op.timestamp)
--- the indexer REJECTS transfer/transfer_from/burn/lend/unlist on the same NFT
--- and only the matching buy (same buyer + listing_id + list_tx_id) consumes it.
--- The action CHECK keeps the schema honest today while leaving the column free
--- to extend to other signed actions without a migration. snapshot_block is the
--- indexer's last_block at sign time — kept for audit + future divergence probes.
-CREATE TABLE IF NOT EXISTS multisig_locks (
-	nft_id TEXT PRIMARY KEY,
-	action TEXT NOT NULL DEFAULT 'buy' CHECK (action = 'buy'),
-	buyer TEXT NOT NULL,
-	listing_id TEXT NOT NULL,
-	list_tx_id TEXT NOT NULL,
-	snapshot_block BIGINT NOT NULL,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	expires_at TIMESTAMPTZ NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_multisig_locks_expires ON multisig_locks(expires_at);
-CREATE INDEX IF NOT EXISTS idx_multisig_locks_listing ON multisig_locks(listing_id);
+--
+-- The node-local `multisig_locks` table that previously coupled API-side buy
+-- signing to consensus was removed when `sale_lock` moved on-chain (protocol
+-- 0.7.0 hardfork). The sale reservation now lives in `nfts.sale_*` and is
+-- projected from `ACTION_SALE_LOCK` custom_json — fully deterministic across
+-- indexers. Only the collection-signing lock below remains (still node-local,
+-- still out of consensus, only serializes multisig `/api/multisig/collection`
+-- requests inside a single API process).
 
 -- Scoped by (creator, symbol): two concurrent create_collection signings for the
 -- same (creator, symbol) would both broadcast a tx; only one wins on-chain and
@@ -426,9 +448,15 @@ CREATE INDEX IF NOT EXISTS idx_nfts_listed ON nfts(listing_price, listing_curren
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_recent ON nfts(created_at DESC) WHERE status = 'listed';
 CREATE INDEX IF NOT EXISTS idx_nfts_listing_id ON nfts(listing_id) WHERE listing_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_listing_expires ON nfts(listing_expires_at) WHERE status = 'listed' AND listing_expires_at IS NOT NULL;
--- Pending-unlist cooldown: partial index keeps the end-of-block materialization
--- UPDATE index-only (rows without a cooldown never touch this index).
-CREATE INDEX IF NOT EXISTS idx_nfts_pending_unlist ON nfts(pending_unlist_block) WHERE pending_unlist_block IS NOT NULL;
+-- sale_lock lookups (all three partial on status='pending_sale'):
+--   buyer_pending: MAX_ACTIVE_SALE_LOCKS_PER_BUYER enforcement in /api/buy.
+--   sale_expires:  lazy sweep of expired reservations in sync-engine (per-block
+--                  UPDATE ... WHERE sale_expires_block < currentBlock).
+--   settlement_node: per-node metrics / dashboards.
+-- Partial indexes keep each at ~zero cost whenever the NFT is not reserved.
+CREATE INDEX IF NOT EXISTS idx_nfts_sale_buyer_pending ON nfts(sale_buyer) WHERE status = 'pending_sale';
+CREATE INDEX IF NOT EXISTS idx_nfts_sale_expires ON nfts(sale_expires_block) WHERE status = 'pending_sale';
+CREATE INDEX IF NOT EXISTS idx_nfts_sale_settlement_node ON nfts(sale_settlement_node) WHERE status = 'pending_sale';
 -- DB-level backstop against non-canonical seeds: two seeds in the same collection
 -- cannot share an art_id. Paired with the application-level canonical check in
 -- handleMint, this defends against a handler bug ever bypassing the recomputation.
@@ -471,7 +499,6 @@ CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
 -- present. Keep entries here permanently — removing an ALTER after rollout
 -- would leave freshly-initialized and upgraded DBs on different schemas.
 ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_block BIGINT NOT NULL DEFAULT 0;
-ALTER TABLE nfts ADD COLUMN IF NOT EXISTS pending_unlist_block BIGINT;
 
 -- ============================================================================
 -- TRIGGERS — defense-in-depth against projection corruption

@@ -1,5 +1,7 @@
 /**
- * Multisig service — dispatches validated protocol actions to focused handlers.
+ * Multisig service — post-0.7.0 this only dispatches create_collection signing.
+ * Buy moved to /api/buy (posting-key broadcast of sale_lock + active cosign of
+ * the buyer's pre-signed tx2). See api/services/buy/.
  *
  * Beekeeper signing is serialized through a process-local FIFO queue so Hive
  * transactions from the node account are never signed concurrently.
@@ -7,8 +9,6 @@
 
 import { createSigningQueue } from "@/api/services/signing-queue.ts";
 import { createMultisigCollectionLock } from "@/api/services/multisig-collection-lock.ts";
-import { createMultisigNftLock, type MultisigNftLock } from "@/api/services/multisig-nft-lock.ts";
-import { processBuyRequest } from "@/api/services/multisig/buy.ts";
 import { processCollectionRequest } from "@/api/services/multisig/create-collection.ts";
 import { mapErrorToMultisigResponse } from "@/api/services/multisig/errors.ts";
 import {
@@ -20,23 +20,20 @@ import { createLogger } from "@/utils/logger.ts";
 import type { Queryable } from "@/db/client.ts";
 import {
 	ACTION_CREATE_COLLECTION,
-	MULTISIG_EXPIRATION_MS,
-	MULTISIG_LAG_MAX_BLOCKS,
 	type MultisigResponse,
 } from "@/protocol/index.ts";
 import type {
 	CollectionLockHandle,
 	MultisigBaseContext,
-	MultisigBuyContext,
 	MultisigCollectionContext,
-	NftLockHandle,
 	ValidatedTransaction,
 } from "@/api/services/multisig/types.ts";
 
 const log = createLogger("multisig-service");
 const signingQueue = createSigningQueue();
 const collectionLock = createMultisigCollectionLock();
-const nftLock: MultisigNftLock = createMultisigNftLock();
+
+const COLLECTION_LOCK_TTL_MS = 120_000;
 
 export function getSigningQueueMetrics() {
 	return signingQueue.getMetrics();
@@ -52,31 +49,25 @@ export async function processMultisigRequest(
 		const { transaction } = validateBaseRequestShape(rawBody);
 		const action = detectMultisigAction(transaction, protocolId);
 
+		if (action !== ACTION_CREATE_COLLECTION) {
+			return {
+				ok: false,
+				code: "INVALID_TX_STRUCTURE",
+				message: `Action '${action}' is not supported by /api/multisig — only create_collection remains post-0.7.0`,
+			};
+		}
+
 		const baseCtx: MultisigBaseContext = {
 			db,
 			nodeAccount,
 			protocolId,
 			sign: signValidatedTransaction,
 		};
-
-		if (action === ACTION_CREATE_COLLECTION) {
-			// Per-request holder lets two concurrent signings of the same (creator,
-			// symbol) fight for the lock: only the first wins, second gets
-			// COLLECTION_LOCKED with retryAfterMs propagated back.
-			const collectionCtx: MultisigCollectionContext = {
-				...baseCtx,
-				collectionLock: buildCollectionLockHandle(crypto.randomUUID()),
-			};
-			return await processCollectionRequest(rawBody, collectionCtx);
-		}
-
-		const buyCtx: MultisigBuyContext = {
+		const collectionCtx: MultisigCollectionContext = {
 			...baseCtx,
-			nftLock: buildNftLockHandle(),
-			lockExpirationMs: MULTISIG_EXPIRATION_MS,
-			lagMaxBlocks: MULTISIG_LAG_MAX_BLOCKS,
+			collectionLock: buildCollectionLockHandle(crypto.randomUUID()),
 		};
-		return await processBuyRequest(rawBody, buyCtx);
+		return await processCollectionRequest(rawBody, collectionCtx);
 	} catch (err) {
 		return mapErrorToMultisigResponse(err, log);
 	}
@@ -85,15 +76,8 @@ export async function processMultisigRequest(
 function buildCollectionLockHandle(holder: string): CollectionLockHandle {
 	return {
 		acquire: (creator, symbol) =>
-			collectionLock.acquire(creator, symbol, holder, MULTISIG_EXPIRATION_MS),
+			collectionLock.acquire(creator, symbol, holder, COLLECTION_LOCK_TTL_MS),
 		release: (creator, symbol) => collectionLock.release(creator, symbol, holder),
-	};
-}
-
-function buildNftLockHandle(): NftLockHandle {
-	return {
-		acquire: (input) => nftLock.acquire(input),
-		release: (nftId, buyer) => nftLock.release(nftId, buyer),
 	};
 }
 

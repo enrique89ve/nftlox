@@ -8,10 +8,9 @@ import {
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
 	fetchPaymentInfo,
-	requestBuyMultisig,
-	type HiveTransactionObject,
+	submitBuy,
 	type PaymentInfo,
-	type MultisigResponse,
+	type BuyApiResponse,
 } from "nftlox-sdk";
 import { playgroundConfig } from "../config";
 import { INDEXER_URL } from "../shared/indexer";
@@ -72,56 +71,53 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 		},
 	},
 
-	// Multisig buy: build unsigned tx, get node signature from indexer
+	// Server-side buy smoke test: build tx2, sign with the server's active key
+	// (acting as the buyer under test), POST to the indexer's /api/buy endpoint.
+	// The indexer brokers sale_lock (tx1, posting) and cosigns tx2.
 	"/api/debug/multisig-buy": {
 		POST: async (req: Request) => {
 			try {
 				if (!playgroundConfig.debugRoutesEnabled) {
 					return json({ error: "Not Found" }, 404);
 				}
-
-				const body = await req.json() as { buyer: string; nftId: string };
-				if (!body.buyer || !body.nftId) {
-					return json({ success: false, error: "buyer and nftId are required" }, 400);
+				if (!SERVER_ACCOUNT || !ACTIVE_KEY) {
+					return json({ success: false, error: "HIVE_ACCOUNT or ACTIVE_KEY not configured" }, 500);
 				}
 
-				// 1. Fetch payment info from indexer
-				const info = await fetchPaymentInfo(INDEXER_URL, body.nftId);
+				const body = await req.json() as { nftId: string };
+				if (!body.nftId) {
+					return json({ success: false, error: "nftId is required" }, 400);
+				}
+				const buyer = SERVER_ACCOUNT;
 
-				// 2. Build unsigned transaction
+				const info: PaymentInfo = await fetchPaymentInfo(INDEXER_URL, body.nftId);
+
 				const tx = new Transaction({ expiration: TX_EXPIRATION_MS });
-
-				// Transfer to seller
 				if (info.sellerAmount > 0) {
 					await tx.addOperation("transfer", {
-						from: body.buyer,
+						from: buyer,
 						to: info.seller,
 						amount: `${info.sellerAmount.toFixed(3)} ${info.currency}`,
 						memo: `${MEMO_PREFIX_BUY}${body.nftId}`,
 					});
 				}
-
-				// Transfer royalty (if applicable)
 				if (info.royaltyAmount > 0 && info.royaltyRecipient) {
 					await tx.addOperation("transfer", {
-						from: body.buyer,
+						from: buyer,
 						to: info.royaltyRecipient,
 						amount: `${info.royaltyAmount.toFixed(3)} ${info.currency}`,
 						memo: `${MEMO_PREFIX_ROYALTY}${body.nftId}`,
 					});
 				}
-
-				// Protocol fee (always to co-signing node)
 				if (info.feeAmount > 0) {
 					await tx.addOperation("transfer", {
-						from: body.buyer,
+						from: buyer,
 						to: info.feeAccount,
 						amount: `${info.feeAmount.toFixed(3)} ${info.currency}`,
 						memo: `${MEMO_PREFIX_FEE}${body.nftId}`,
 					});
 				}
 
-				// custom_json buy (required_auths: [nodeAccount])
 				await tx.addOperation("custom_json", {
 					required_auths: [info.nodeAccount],
 					required_posting_auths: [],
@@ -134,37 +130,34 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 							nftId: body.nftId,
 							listingId: info.listingId,
 							listTxId: info.listTxId,
-							txId: info.txId,
-							...(info.seedTxId && { seedTxId: info.seedTxId }),
 						},
 					}),
 				});
 
-				// 3. Send to indexer for multisig signing
 				if (!tx.transaction) {
 					return json({ success: false, error: "Transaction building failed" }, 500);
 				}
 
-				const multisigRequest = {
-					buyer: body.buyer,
+				// Sign tx2 with the server's active key (single buyer sig), then
+				// submit the serialized signed tx to /api/buy.
+				tx.sign(PrivateKey.from(ACTIVE_KEY));
+
+				const buyResult: BuyApiResponse = await submitBuy(INDEXER_URL, {
+					buyer,
 					nftId: body.nftId,
 					listingId: info.listingId,
 					listTxId: info.listTxId,
-					transaction: tx.transaction as unknown as HiveTransactionObject,
-				};
-				const multisigResult = await requestBuyMultisig(INDEXER_URL, multisigRequest);
+					presignedTx2: JSON.stringify(tx.transaction),
+				});
 
-				if (!multisigResult.ok) {
-					return json({ success: false, error: multisigResult.message, code: multisigResult.code }, 400);
+				if (!buyResult.ok) {
+					return json({ success: false, error: buyResult.message, code: buyResult.code }, 400);
 				}
 
-				// 4. Return signed transaction to client
-				// Client will sign with Keychain and broadcast
 				return json({
 					success: true,
-					transaction: tx.transaction,
-					nodeSignature: multisigResult.signature,
-					digest: multisigResult.digest,
+					tx1Id: buyResult.tx1Id,
+					tx2Id: buyResult.tx2Id,
 					paymentInfo: info,
 				});
 			} catch (err) {

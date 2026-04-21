@@ -13,6 +13,7 @@ import {
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
+	ACTION_SALE_LOCK,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
 	ACTION_NFT_TRANSFER_FROM,
@@ -48,6 +49,7 @@ import { handleNodeHeartbeat } from "./handlers/core/node_heartbeat.ts";
 // Marketplace
 import { handleList } from "./handlers/marketplace/list.ts";
 import { handleUnlist } from "./handlers/marketplace/unlist.ts";
+import { handleSaleLock } from "./handlers/marketplace/sale-lock.ts";
 
 import { handleBuy } from "./handlers/marketplace/buy.ts";
 
@@ -170,6 +172,7 @@ const handlers: Record<ProtocolAction, Handler> = {
 	// Marketplace
 	[ACTION_LIST]: handleList,
 	[ACTION_UNLIST]: handleUnlist,
+	[ACTION_SALE_LOCK]: handleSaleLock,
 	[ACTION_BUY]: handleBuy,
 
 	// Allowances

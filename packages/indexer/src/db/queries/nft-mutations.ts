@@ -1,6 +1,6 @@
 import { sql, toJsonb, type Queryable } from "@/db/client.ts";
 import type { InsertNftParams, OwnerChangeCtx, BurnCtx, ListingCtx, NftStatus } from "./nft-types.ts";
-import { NFT_KIND_INSTANCE, NFT_STATUS_ACTIVE, NFT_STATUS_LISTED } from "./nft-types.ts";
+import { NFT_KIND_INSTANCE, NFT_STATUS_ACTIVE, NFT_STATUS_LISTED, NFT_STATUS_PENDING_SALE } from "./nft-types.ts";
 import { adjustOwnerNftCount, recordCollectionMint, adjustCollectionListed, recordCollectionBurn } from "./nft-counters.ts";
 import { queueStateRootDelta, parseNftStateRow } from "./state-root.ts";
 import { getStateRootBuffer } from "@/db/client.ts";
@@ -104,7 +104,8 @@ export async function updateNftOwner(
 		    owner_block_num = ${ctx.ownerBlockNum},
 		    listing_id = NULL, listing_tx_id = NULL,
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL,
-		    pending_unlist_block = NULL
+		    sale_buyer = NULL, sale_settlement_node = NULL,
+		    sale_expires_block = NULL, sale_lock_tx_id = NULL, sale_lock_operation_id = NULL
 		WHERE id = ${nftId}
 	`;
 	// Queue the delta BEFORE counter updates. See insertNft for rationale —
@@ -181,8 +182,7 @@ export async function updateNftListing(
 			UPDATE nfts
 			SET status = ${NFT_STATUS_ACTIVE},
 			    listing_id = NULL, listing_tx_id = NULL,
-			    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL,
-			    pending_unlist_block = NULL
+			    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
 			WHERE id = ${nftId}
 		`;
 		if (ctx.wasListed) {
@@ -190,20 +190,12 @@ export async function updateNftListing(
 		}
 	} else {
 		const expiresIso = expiresAt ? new Date(expiresAt).toISOString() : null;
-		// Re-list over an expired listing must clear any stale pending_unlist_block
-		// from a prior unlist that never finished materializing. Without this,
-		// `materializePendingUnlists` would silently wipe the new listing at
-		// block B+UNLIST_DELAY_BLOCKS because its filter is (status='listed'
-		// AND pending_unlist_block <= threshold) — blind to listing_id changes.
-		// Mirrors the same invariant enforced by updateNftOwner on ownership
-		// change (see nft-mutations.ts:107).
 		await txn`
 			UPDATE nfts
 			SET status = ${NFT_STATUS_LISTED},
 			    listing_id = ${listingId}, listing_tx_id = ${listingTxId},
 			    listing_price = ${price}, listing_currency = ${currency},
-			    listing_expires_at = ${expiresIso}, listing_marketplace = ${marketplace},
-			    pending_unlist_block = NULL
+			    listing_expires_at = ${expiresIso}, listing_marketplace = ${marketplace}
 			WHERE id = ${nftId}
 		`;
 		if (!ctx.wasListed) {
@@ -213,77 +205,29 @@ export async function updateNftListing(
 }
 
 /**
- * Flags an NFT as being unlisted. The NFT keeps `status = 'listed'` so any
- * multisig-signed buy already in flight can still settle inside the
- * UNLIST_DELAY_BLOCKS window. The actual clearing of listing fields happens
- * in `materializePendingUnlists`, which the sync engine invokes at block
- * close once the delay has elapsed.
+ * Returns every NFT whose `sale_expires_block < currentBlock` back to
+ * `status='listed'`, clearing the five sale_* snapshot columns. Called by
+ * the sync engine before routing any op at `currentBlock`, so every handler
+ * observes a post-sweep world and can never settle a stale lock.
  *
- * `collection_stats.listed` is intentionally NOT decremented here — the NFT
- * is still considered listed during the pending window. It decrements when
- * materialization clears the row.
+ * `collection_stats.listed` is intentionally NOT touched: per protocol
+ * §10.5 the counter already includes both `listed` and `pending_sale`
+ * rows, so the listed↔pending_sale transition is counter-invariant.
+ *
+ * Runs under the batch transaction — rollback of the batch rolls back the
+ * sweep. The partial index `idx_nfts_sale_expires` keeps this at ~0 cost
+ * when no rows are due.
  */
-export async function markPendingUnlist(
-	nftId: string,
-	blockNum: number,
-	txn: Queryable,
-): Promise<void> {
+export async function sweepExpiredSaleLocks(currentBlock: number, txn: Queryable): Promise<number> {
 	const result = await txn`
 		UPDATE nfts
-		SET pending_unlist_block = ${blockNum}
-		WHERE id = ${nftId}
-		  AND status = ${NFT_STATUS_LISTED}
-		  AND pending_unlist_block IS NULL
+		SET status = ${NFT_STATUS_LISTED},
+		    sale_buyer = NULL, sale_settlement_node = NULL,
+		    sale_expires_block = NULL, sale_lock_tx_id = NULL, sale_lock_operation_id = NULL
+		WHERE status = ${NFT_STATUS_PENDING_SALE}
+		  AND sale_expires_block < ${currentBlock}
 	`;
-	if (result.count === 0) {
-		throw new Error(`markPendingUnlist: nft ${nftId} not listed or already pending`);
-	}
-}
-
-/**
- * Materializes every pending unlist whose delay window has fully elapsed as of
- * `blockNum`. Runs inside the block's outer transaction AFTER all ops in the
- * block have been routed, so it sees the final in-block state.
- *
- * Decrements `collection_stats.listed` per materialized row. Batched so a bulk
- * materialization stays O(rows-to-materialize) rather than O(rows * round-trip).
- */
-export async function materializePendingUnlists(
-	blockNum: number,
-	delayBlocks: number,
-	txn: Queryable,
-): Promise<number> {
-	const threshold = blockNum - delayBlocks;
-	const rows = await txn<Array<{ readonly collection_id: string }>>`
-		UPDATE nfts
-		SET status = ${NFT_STATUS_ACTIVE},
-		    pending_unlist_block = NULL,
-		    listing_id = NULL, listing_tx_id = NULL,
-		    listing_price = NULL, listing_currency = NULL,
-		    listing_expires_at = NULL, listing_marketplace = NULL
-		WHERE pending_unlist_block IS NOT NULL
-		  AND pending_unlist_block <= ${threshold}
-		  AND status = ${NFT_STATUS_LISTED}
-		RETURNING collection_id
-	`;
-
-	if (rows.length === 0) return 0;
-
-	// Aggregate per-collection so stats are decremented once per collection
-	// instead of once per NFT — a collection with 50 simultaneous unlists
-	// materializes in ONE stats update. adjustCollectionListed is 1|-1 typed
-	// (per-NFT invariant); bulk decrements need a direct UPDATE.
-	const perCollection = new Map<string, number>();
-	for (const row of rows) {
-		perCollection.set(row.collection_id, (perCollection.get(row.collection_id) ?? 0) + 1);
-	}
-	for (const [collectionId, count] of perCollection) {
-		await txn`
-			UPDATE collection_stats SET listed = listed - ${count}
-			WHERE collection_id = ${collectionId}
-		`;
-	}
-	return rows.length;
+	return result.count;
 }
 
 export async function incrementDistributedBy(seedId: string, quantity: number, txn: Queryable = sql) {

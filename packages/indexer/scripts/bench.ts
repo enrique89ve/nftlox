@@ -35,12 +35,9 @@ const { parseHafAHOperations } = await import("../src/scanner/operation-parser.t
 const { routeOperation } = await import("../src/processor/action-router.ts");
 const { updateLastBlock, insertInvalidOperation } =
 	await import("../src/db/queries/sync.ts");
-const { materializePendingUnlists } =
-	await import("../src/db/queries/nft-mutations.ts");
 const {
 	ACTION_BUY,
 	ACTION_CREATE_COLLECTION,
-	UNLIST_DELAY_BLOCKS,
 	PROTOCOL_VERSION,
 	PROTOCOL_ID,
 	PROTOCOL_GENESIS_BLOCK,
@@ -343,7 +340,6 @@ async function replayChunk(
 		for (const op of ops) {
 			await routeOperation(op, txn);
 		}
-		await materializePendingUnlists(to, UNLIST_DELAY_BLOCKS, txn);
 		await updateLastBlock(to, txn);
 	});
 	s.routeMs = performance.now() - t3;

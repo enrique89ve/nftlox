@@ -53,13 +53,13 @@ describe("protocol auth map", () => {
 		expect(ACTIVE_AUTH_ACTIONS).not.toContain(ACTION_NODE_REGISTER);
 	});
 
-	test("collection creation and buy use active custom_json auth", () => {
+	test("create_collection and buy are the active-auth actions post-0.7.0", () => {
 		expect(ACTION_AUTH_LEVEL[ACTION_CREATE_COLLECTION]).toBe("active");
 		expect(ACTION_AUTH_LEVEL[ACTION_BUY]).toBe("active");
 		expect(Object.isFrozen(ACTION_AUTH_LEVEL)).toBe(true);
 		expect(ACTIVE_AUTH_ACTIONS).toEqual([ACTION_CREATE_COLLECTION, ACTION_BUY]);
-		expect(POSTING_AUTH_ACTIONS).toHaveLength(17);
-		expect(ALL_ACTIONS).toHaveLength(19);
+		expect(POSTING_AUTH_ACTIONS).toHaveLength(18);
+		expect(ALL_ACTIONS).toHaveLength(20);
 	});
 
 	test("pack actions are not native indexer protocol actions", () => {
@@ -69,6 +69,7 @@ describe("protocol auth map", () => {
 	});
 
 	test("auth mismatch messages are derived from the canonical map", () => {
+		expect(getAuthMismatchReason(ACTION_BUY, "active")).toBeNull();
 		expect(getAuthMismatchReason(ACTION_BUY, "posting")).toBe("Action 'buy' requires active key authority, got posting");
 		expect(getAuthMismatchReason(ACTION_CREATE_COLLECTION, "posting")).toBe("Action 'create_collection' requires active key authority, got posting");
 		expect(getAuthMismatchReason(ACTION_NODE_REGISTER, "active")).toBe("Action 'node_register' requires posting key authority, got active");

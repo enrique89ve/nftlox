@@ -58,7 +58,7 @@ export const fetchNodeAccount = multisigClient.fetchNodeAccount;
 export const fetchMultisigNodeAccount = multisigClient.fetchMultisigNodeAccount;
 export const fetchPaymentInfo = multisigClient.fetchPaymentInfo;
 export const resolveNodeAccountFromStatus = multisigClient.resolveNodeAccountFromStatus;
-export const requestBuyMultisig = multisigClient.requestBuyMultisig;
+export const submitBuy = multisigClient.submitBuy;
 export const requestCreateCollectionMultisig = multisigClient.requestCreateCollectionMultisig;
 export type { ResolveNodeAccountOptions, RequestMultisigOptions } from "./multisig";
 

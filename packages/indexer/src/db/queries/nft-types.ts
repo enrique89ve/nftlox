@@ -32,11 +32,11 @@ export type ListingCtx = {
 // ============ ENUMS & PARSERS ============
 
 export type NftKind = "seed" | "instance";
-export type NftStatus = "active" | "listed" | "lent";
+export type NftStatus = "active" | "listed" | "pending_sale" | "lent";
 export type OwnershipAction = "mint" | "bulk_distribute" | "transfer" | "nft_transfer_from" | "buy";
 
 export const VALID_NFT_KINDS = new Set<NftKind>(["seed", "instance"]);
-export const VALID_NFT_STATUSES = new Set<NftStatus>(["active", "listed", "lent"]);
+export const VALID_NFT_STATUSES = new Set<NftStatus>(["active", "listed", "pending_sale", "lent"]);
 export const VALID_OWNERSHIP_ACTIONS = new Set<OwnershipAction>([
 	"mint",
 	"bulk_distribute",
@@ -56,6 +56,7 @@ export const parseOwnershipAction = (value: string | undefined): OwnershipAction
 
 export const NFT_STATUS_ACTIVE: NftStatus = "active";
 export const NFT_STATUS_LISTED: NftStatus = "listed";
+export const NFT_STATUS_PENDING_SALE: NftStatus = "pending_sale";
 export const NFT_STATUS_LENT: NftStatus = "lent";
 
 export const NFT_KIND_SEED: NftKind = "seed";
@@ -111,10 +112,17 @@ export type NftProcessingRow = {
 	readonly listing_currency: string | null;
 	readonly listing_expires_at: string | null;
 	readonly listing_marketplace: string | null;
-	/** Block at which `unlist` was emitted. NULL unless inside the
-	 *  UNLIST_DELAY_BLOCKS window; cleared when the sync engine materializes
-	 *  the unlist to `status='active'`. */
-	readonly pending_unlist_block: number | null;
+	/** Buyer reserved by the settlement node while status='pending_sale'. */
+	readonly sale_buyer: string | null;
+	/** Settlement node account that issued the sale_lock. */
+	readonly sale_settlement_node: string | null;
+	/** Block height at which the pending_sale reservation expires and
+	 *  the lazy sweep returns the NFT to status='listed'. */
+	readonly sale_expires_block: number | null;
+	/** Hive tx_id of the sale_lock custom_json that created the reservation. */
+	readonly sale_lock_tx_id: string | null;
+	/** Protocol operation id for the sale_lock (audit / SPV). */
+	readonly sale_lock_operation_id: string | null;
 	readonly data_operation_id: string | null;
 };
 

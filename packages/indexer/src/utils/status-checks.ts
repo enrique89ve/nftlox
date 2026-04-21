@@ -2,7 +2,7 @@
 // Inspired by ICRC-7 (consistent validation) and AtomicAssets (re-validate at execution time)
 
 import type { NftStatus, NftKind } from "@/db/queries/nfts.ts";
-import { NFT_KIND_INSTANCE, NFT_STATUS_LENT, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { NFT_KIND_INSTANCE, NFT_STATUS_LENT, NFT_STATUS_LISTED, NFT_STATUS_PENDING_SALE } from "@/db/queries/nfts.ts";
 
 /** Minimal shape needed for status assertions — any row with status qualifies. */
 type HasStatus = { readonly status: NftStatus };
@@ -28,6 +28,19 @@ export function assertNotLent(nft: HasStatus, nftId: string): void {
 export function assertNotListed(nft: HasStatus, nftId: string): void {
 	if (nft.status === NFT_STATUS_LISTED) {
 		throw new Error(`NFT is listed and must be unlisted first: ${nftId}`);
+	}
+}
+
+/**
+ * Rejects NFTs currently reserved by a settlement node's sale_lock. Every
+ * ownership-mutating or transfer-authorizing handler must call this before
+ * touching the row: a successful lock means a buyer-signed tx is in flight
+ * and our txn must not race it. The row returns to `listed` automatically
+ * once `sale_expires_block` elapses (sync-engine sweep).
+ */
+export function assertNotPendingSale(nft: HasStatus, nftId: string): void {
+	if (nft.status === NFT_STATUS_PENDING_SALE) {
+		throw new Error(`NFT ${nftId} is pending_sale — cannot mutate while a sale_lock is active`);
 	}
 }
 

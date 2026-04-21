@@ -29,13 +29,31 @@ interface BuyResponse {
 	success?: boolean;
 	error?: string;
 	code?: string;
-	transaction?: { signatures?: string[]; [key: string]: unknown };
-	nodeSignature?: string;
+	transaction?: { ref_block_num: number; ref_block_prefix: number; expiration: string; operations: unknown[]; extensions: unknown[]; signatures?: string[]; [key: string]: unknown };
 	paymentInfo?: {
+		listingId: string;
+		listTxId: string;
 		totalPrice?: string | number;
 		currency?: string;
 	};
+	indexerUrl?: string;
 }
+
+interface BuyApiConfirmed {
+	ok: true;
+	status: "confirmed";
+	tx1Id: string;
+	tx2Id: string;
+}
+
+interface BuyApiError {
+	ok: false;
+	code: string;
+	message: string;
+	retryAfterMs?: number;
+}
+
+type BuyApiResult = BuyApiConfirmed | BuyApiError;
 
 interface KeychainSignResponse {
 	success: boolean;
@@ -57,11 +75,6 @@ interface MarketplaceWindow extends Window {
 	loadListings?: () => Promise<void>;
 	buyFromMarketplace?: (nftId: string) => Promise<void>;
 	hive_keychain?: HiveKeychain;
-}
-
-interface HiveRpcResponse {
-	error?: { message?: string } | string;
-	result?: { id?: string; tx_id?: string };
 }
 
 let listingsCache: MarketplaceListing[] = [];
@@ -331,7 +344,7 @@ async function buyFromMarketplace(nftId: string) {
 		return;
 	}
 
-	log(`Requesting multisig for ${nftId}...`);
+	log(`Preparing buy tx for ${nftId}...`);
 
 	try {
 		const res = await fetch("/api/marketplace/buy", {
@@ -346,55 +359,63 @@ async function buyFromMarketplace(nftId: string) {
 		const data = await res.json().catch(() => ({ success: false, error: "Invalid server response" })) as BuyResponse;
 
 		if (!data.success) {
-			log(`Buy failed: ${data.error}${data.code ? ` [${data.code}]` : ""}`, "error");
+			log(`Buy prep failed: ${data.error}${data.code ? ` [${data.code}]` : ""}`, "error");
 			return;
 		}
 
 		const transaction = data.transaction;
-		if (!transaction || !data.nodeSignature) {
-			log("Buy failed: incomplete multisig response", "error");
+		if (!transaction || !data.paymentInfo || !data.indexerUrl) {
+			log("Buy failed: incomplete prep response", "error");
 			return;
 		}
-		transaction.signatures = [data.nodeSignature];
 
-		const totalPrice = data.paymentInfo?.totalPrice ?? "?";
-		const currency = data.paymentInfo?.currency ?? "";
+		const totalPrice = data.paymentInfo.totalPrice ?? "?";
+		const currency = data.paymentInfo.currency ?? "";
+		const { listingId, listTxId } = data.paymentInfo;
 		log(`Payment: ${totalPrice} ${currency}`, "info");
 
+		// Keychain signs tx2 with buyer's active key (single signature);
+		// indexer broadcasts sale_lock with posting, then active-cosigns tx2.
 		keychain.requestSignTx(
 			user,
 			transaction,
 			"Active",
-			async (res) => {
-				if (!res.success) {
-					log(`Keychain rejected: ${typeof res.error === "object" ? JSON.stringify(res.error) : res.error}`, "error");
+			async (signRes) => {
+				if (!signRes.success) {
+					log(`Keychain rejected: ${typeof signRes.error === "object" ? JSON.stringify(signRes.error) : signRes.error}`, "error");
 					return;
 				}
 
-				log("Broadcasting...");
+				log("Submitting to indexer /api/buy...");
 				try {
-					const rpcRes = await fetch("https://api.hive.blog", {
+					const buyRes = await fetch(`${data.indexerUrl!.replace(/\/$/, "")}/api/buy`, {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
-							jsonrpc: "2.0",
-							method: "condenser_api.broadcast_transaction_synchronous",
-							params: [res.result],
-							id: 1,
+							buyer: user,
+							nftId,
+							listingId,
+							listTxId,
+							presignedTx2: JSON.stringify(signRes.result),
 						}),
 					});
-					const rpcData = await rpcRes.json() as HiveRpcResponse;
+					const buyData = await buyRes.json().catch(() => ({
+						ok: false,
+						code: "INVALID_RESPONSE",
+						message: "Indexer returned non-JSON body",
+					})) as BuyApiResult;
 
-					if (rpcData.error) {
-						const message = typeof rpcData.error === "string" ? rpcData.error : rpcData.error.message ?? JSON.stringify(rpcData.error);
-						log(`Broadcast failed: ${message}`, "error");
+					if (!buyData.ok) {
+						const retry = "retryAfterMs" in buyData && buyData.retryAfterMs
+							? ` (retry in ${Math.ceil(buyData.retryAfterMs / 1000)}s)` : "";
+						log(`Buy failed [${buyData.code}]: ${buyData.message}${retry}`, "error");
 						return;
 					}
 
-					log(`Bought! TX: ${rpcData.result?.id ?? rpcData.result?.tx_id}`, "success");
+					log(`Bought! tx1=${buyData.tx1Id} tx2=${buyData.tx2Id}`, "success");
 					setTimeout(loadListings, 5000);
 				} catch (err) {
-					log(`Broadcast error: ${(err as Error).message}`, "error");
+					log(`Buy submit error: ${(err as Error).message}`, "error");
 				}
 			},
 		);

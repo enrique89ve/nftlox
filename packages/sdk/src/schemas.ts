@@ -175,9 +175,6 @@ export const buyInputSchema = z.object({
 	nftId: z.string().min(1, "NFT ID is required"),
 	listingId: z.string().min(1, "Listing ID is required"),
 	listTxId: txIdSchema,
-	txId: txIdSchema,
-	seedId: z.string().optional(),
-	seedTxId: txIdSchema.optional(),
 });
 export type BuyInput = z.infer<typeof buyInputSchema>;
 

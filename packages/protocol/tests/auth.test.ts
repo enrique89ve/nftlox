@@ -47,8 +47,8 @@ describe("auth", () => {
 			expect(ACTIVE_AUTH_ACTIONS.length).toBe(2);
 		});
 
-		it("has exactly 17 posting actions", () => {
-			expect(POSTING_AUTH_ACTIONS.length).toBe(17);
+		it("has exactly 18 posting actions", () => {
+			expect(POSTING_AUTH_ACTIONS.length).toBe(18);
 		});
 	});
 
@@ -57,7 +57,7 @@ describe("auth", () => {
 			expect(getAuthLevel(ACTION_CREATE_COLLECTION)).toBe("active");
 		});
 
-		it("returns 'active' for buy", () => {
+		it("returns 'active' for buy (node co-signs tx2's custom_json with active key)", () => {
 			expect(getAuthLevel(ACTION_BUY)).toBe("active");
 		});
 
@@ -73,12 +73,15 @@ describe("auth", () => {
 	describe("getKeyType", () => {
 		it("returns 'Active' (capitalised) for active actions", () => {
 			expect(getKeyType(ACTION_CREATE_COLLECTION)).toBe("Active");
-			expect(getKeyType(ACTION_BUY)).toBe("Active");
 		});
 
 		it("returns 'Posting' (capitalised) for posting actions", () => {
 			expect(getKeyType(ACTION_MINT)).toBe("Posting");
 			expect(getKeyType(ACTION_TRANSFER)).toBe("Posting");
+		});
+
+		it("returns 'Active' for buy", () => {
+			expect(getKeyType(ACTION_BUY)).toBe("Active");
 		});
 
 		it("returns Keychain-compatible strings for all actions", () => {

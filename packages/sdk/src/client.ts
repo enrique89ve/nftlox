@@ -1,8 +1,19 @@
 // NFTLox Indexer API Client
 // Portable client using only fetch() — works in browser, Bun, and Node.
 
-import type { PaymentInfo, MultisigRequest, MultisigResponse } from "@nftlox/protocol";
-import { resolveNodeAccountFromStatus, type RequestMultisigOptions, type ResolveNodeAccountOptions } from "./multisig";
+import type {
+	PaymentInfo,
+	MultisigRequest,
+	MultisigResponse,
+	BuyApiRequest,
+	BuyApiResponse,
+} from "@nftlox/protocol";
+import {
+	resolveNodeAccountFromStatus,
+	submitBuy as submitBuyFn,
+	type RequestMultisigOptions,
+	type ResolveNodeAccountOptions,
+} from "./multisig";
 import { resolveInstance } from "./inheritance";
 import { NFTLOX_POW_HEADER, solveMultisigPow } from "./pow";
 import { IndexerError } from "./errors";
@@ -47,9 +58,9 @@ export interface SyncStatus {
 }
 
 export type IndexerNftType = "seed" | "instance";
-export type IndexerNftStatus = "active" | "listed" | "burned" | "lent";
+export type IndexerNftStatus = "active" | "listed" | "pending_sale" | "burned" | "lent";
 export type IndexerOwnershipAction = "mint" | "bulk_distribute" | "transfer" | "nft_transfer_from" | "buy";
-export type UserNftFilterStatus = "active" | "listed" | "lent";
+export type UserNftFilterStatus = "active" | "listed" | "pending_sale" | "lent";
 export type LoanRole = "lender" | "borrower" | "all";
 export type ListingSort = "price_asc" | "price_desc" | "recent";
 
@@ -523,10 +534,12 @@ export interface IndexerClient {
 	// Operations
 	getOperationStatus(txId: string, params?: OperationStatusQueryParams): Promise<OperationStatusResult>;
 
-	// Multisig
+	// Buy + Multisig
 	/** Fetch payment split info for buying an NFT */
 	getPaymentInfo(nftId: string): Promise<PaymentInfo>;
-	/** Request multisig signing of a buy transaction */
+	/** Submit a buyer-presigned tx2 to /api/buy (indexer brokers sale_lock + cosign) */
+	submitBuy(request: BuyApiRequest, options?: HttpOptions): Promise<BuyApiResponse>;
+	/** Request multisig cosign for a create_collection transaction (active-auth) */
 	multisig(request: MultisigRequest, options?: RequestMultisigOptions): Promise<MultisigResponse>;
 }
 
@@ -607,14 +620,16 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 		getOperationStatus: (txId, params) =>
 			get<OperationStatusResult>(baseUrl, `/api/operation-status/${encodeURIComponent(txId)}`, params, http),
 
-		// ---- Multisig ----
+		// ---- Buy + Multisig ----
 		getPaymentInfo: (nftId) =>
 			get<PaymentInfo>(baseUrl, `/api/payment-info/${encodeURIComponent(nftId)}`, undefined, http),
+		submitBuy: (request, buyOptions) =>
+			submitBuyFn(baseUrl, request, buyOptions ?? http ?? {}),
 		multisig: async (request, multisigOptions) => {
 			const powToken = await solveMultisigPow(request, multisigOptions?.powBits);
 			return post<MultisigResponse>(
 				baseUrl,
-				"/api/multisig",
+				"/api/multisig/collection",
 				request,
 				{ [NFTLOX_POW_HEADER]: powToken },
 				http,

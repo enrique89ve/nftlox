@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, getNftForProcessingForUpdate, updateNftOwner } from "@/db/queries/nfts.ts";
+import { getNftForProcessingForUpdate, updateNftOwner } from "@/db/queries/nfts.ts";
 import type { OwnerChangeCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import {
@@ -10,8 +10,7 @@ import {
 	cleanupCollectionAllowancesIfEmpty,
 } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
-import { assertOwnershipChangeable, assertNotSeed } from "@/utils/status-checks.ts";
-import { assertNoActiveMultisigLock } from "@/utils/multisig-locks.ts";
+import { assertOwnershipChangeable, assertNotPendingSale, assertNotSeed } from "@/utils/status-checks.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { ACTION_NFT_TRANSFER_FROM } from "@/protocol/index.ts";
 
@@ -24,12 +23,12 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 
 	if (from === to) throw new Error("Cannot transfer to yourself");
 
-	// Delegated transfer races a co-signed buy identically to a direct transfer.
-	// Gate first so the savepoint never touches allowance tables on rejection.
-	await assertNoActiveMultisigLock(instanceId, op.timestamp, txn);
-
 	const nft = await getNftForProcessingForUpdate(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
+
+	// Delegated transfer on a `pending_sale` row would race the sale_lock.
+	// Reject before we touch allowance tables so the savepoint rolls back clean.
+	assertNotPendingSale(nft, instanceId);
 
 	const { hadExpiredListing } = assertOwnershipChangeable(nft, instanceId, op.timestamp);
 	if (hadExpiredListing) {

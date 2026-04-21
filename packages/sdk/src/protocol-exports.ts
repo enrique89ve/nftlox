@@ -34,7 +34,6 @@ export const BASIS_POINTS_DENOMINATOR = protocol.BASIS_POINTS_DENOMINATOR;
 export const PROTOCOL_FEE_BPS = protocol.PROTOCOL_FEE_BPS;
 export const DEFAULT_FEE_ACCOUNT = protocol.DEFAULT_FEE_ACCOUNT;
 export const PROTOCOL_COLLECTION_FEE_HBD = protocol.PROTOCOL_COLLECTION_FEE_HBD;
-export const MARKETPLACE_SETTLEMENT_BUFFER_MS = protocol.MARKETPLACE_SETTLEMENT_BUFFER_MS;
 export const MIN_LISTING_TTL_MS = protocol.MIN_LISTING_TTL_MS;
 export const INSTANCE_FEE_ENABLED = protocol.INSTANCE_FEE_ENABLED;
 export const INSTANCE_FEE_UNIT_HBD = protocol.INSTANCE_FEE_UNIT_HBD;
@@ -46,11 +45,6 @@ export const MEMO_PREFIX_FEE_COL = protocol.MEMO_PREFIX_FEE_COL;
 export const LISTING_ID_PREFIX = protocol.LISTING_ID_PREFIX;
 export const LISTING_NONCE_LENGTH = protocol.LISTING_NONCE_LENGTH;
 export const LISTING_HASH_LENGTH = protocol.LISTING_HASH_LENGTH;
-export const MULTISIG_EXPIRATION_MS = protocol.MULTISIG_EXPIRATION_MS;
-export const MAX_MULTISIG_OPERATIONS = protocol.MAX_MULTISIG_OPERATIONS;
-export const MULTISIG_TX_MIN_EXPIRATION_MS = protocol.MULTISIG_TX_MIN_EXPIRATION_MS;
-export const MULTISIG_TX_MAX_EXPIRATION_MS = protocol.MULTISIG_TX_MAX_EXPIRATION_MS;
-
 export const ACTION_CREATE_COLLECTION = protocol.ACTION_CREATE_COLLECTION;
 export const ACTION_MINT = protocol.ACTION_MINT;
 export const ACTION_TRANSFER = protocol.ACTION_TRANSFER;
@@ -169,9 +163,10 @@ export type {
 	NftReturnData,
 	NodeRegisterData,
 	NodeHeartbeatData,
-	BuyMultisigRequest,
 	CreateCollectionMultisigRequest,
 	MultisigRequest,
+	BuyApiRequest,
+	BuyApiResponse,
 	MultisigErrorCode,
 	MultisigResponse,
 	PaymentInfo,
