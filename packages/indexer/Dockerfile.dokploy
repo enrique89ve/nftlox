@@ -17,6 +17,7 @@ COPY packages/indexer/package.json ./packages/indexer/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/packs-engine/package.json ./packages/packs-engine/
 COPY packages/playground/package.json ./packages/playground/
+COPY packages/indexer-snapshot/package.json ./packages/indexer-snapshot/
 
 # Install full workspace deps (dev + prod) — needed for the build step.
 RUN bun install --frozen-lockfile

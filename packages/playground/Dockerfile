@@ -7,6 +7,7 @@ COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/playground/package.json ./packages/playground/
 COPY packages/indexer/package.json ./packages/indexer/
 COPY packages/packs-engine/package.json ./packages/packs-engine/
+COPY packages/indexer-snapshot/package.json ./packages/indexer-snapshot/
 
 RUN bun install --frozen-lockfile --production --filter nftlox-playground
 
