@@ -1,4 +1,4 @@
-import { sql, type Queryable } from "@/db/client.ts";
+import { sql, toJsonb, type Queryable } from "@/db/client.ts";
 
 const PG_TEXT_OID = 25;
 
@@ -69,7 +69,7 @@ export async function insertInvalidOperation(
 			${op.signer},
 			${op.action},
 			${op.reason},
-			${JSON.stringify(op.rawPayload)}
+			${toJsonb(op.rawPayload)}
 		)
 		ON CONFLICT DO NOTHING
 	`;
@@ -350,7 +350,7 @@ export async function insertOrphanedBuy(
 			${op.buyer},
 			${op.nftId},
 			${op.reason},
-			${JSON.stringify(op.transfers)}
+			${toJsonb(op.transfers)}
 		)
 		ON CONFLICT DO NOTHING
 	`;

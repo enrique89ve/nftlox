@@ -351,7 +351,7 @@ Lending is instance-only. While lent, `transfer`/`list`/`nft_approve` are reject
 
 ### `nft_return`
 
-**Auth:** Posting (current borrower).
+**Auth:** Posting (current borrower **or** lender — either party may end the loan).
 
 ```typescript
 type NftReturnData = {

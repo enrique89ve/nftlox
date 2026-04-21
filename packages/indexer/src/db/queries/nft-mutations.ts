@@ -1,4 +1,4 @@
-import { sql, type Queryable } from "@/db/client.ts";
+import { sql, toJsonb, type Queryable } from "@/db/client.ts";
 import type { InsertNftParams, OwnerChangeCtx, BurnCtx, ListingCtx, NftStatus } from "./nft-types.ts";
 import { NFT_KIND_INSTANCE, NFT_STATUS_ACTIVE, NFT_STATUS_LISTED } from "./nft-types.ts";
 import { adjustOwnerNftCount, recordCollectionMint, adjustCollectionListed, recordCollectionBurn } from "./nft-counters.ts";
@@ -44,7 +44,7 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			${params.name}, ${params.imageUrl},
 			${params.maxSupply}, ${params.distributed ?? 0},
 			${params.seedId}, ${params.instanceNumber}, ${params.artId},
-			${params.immutableData ? JSON.stringify(params.immutableData) : null},
+			${toJsonb(params.immutableData)},
 			${params.dataOperationId}, ${params.dataHash},
 			${params.schemaVersion ?? null},
 			${null},

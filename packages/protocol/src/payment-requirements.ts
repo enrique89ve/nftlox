@@ -41,9 +41,12 @@ export type PayerSource = "signer" | "transfer:from" | "payload:buyer";
 /** Which natural key from the payload forms the memo suffix. */
 export type MemoKey = "collectionId" | "nftId" | "seedId" | "opDigest";
 
-/** Where the protocol fee is sent. Expanding this requires touching every
- * validator — keep the union small and explicit. */
-export type PaymentRecipient = "treasury";
+/**
+ * Where the protocol fee is sent. `action:signer` means the recipient is read
+ * from the L1 custom_json signer, not local node config, so replay validation
+ * is identical across indexers.
+ */
+export type PaymentRecipient = "action:signer";
 
 /** How the amount is computed at validation time. */
 export type PriceSource = "nft.listing";
@@ -93,6 +96,32 @@ export function assertNeverPaymentKind(x: never): never {
 	throw new Error(`Unhandled PaymentRequirement.kind: ${JSON.stringify(x)}`);
 }
 
+/**
+ * Translates the declarative `PaymentRecipient` token into a concrete Hive
+ * account for a given operation. Pure function (no I/O) so it can be used
+ * identically by consensus validators, SDK builders, and tests. Exhaustive
+ * switch: adding a new recipient literal without updating this function is a
+ * compile error.
+ *
+ * Determinism note: `action:signer` returns `op.signer` — the account that
+ * signed the L1 `custom_json`. Every indexer observing the same block sees the
+ * same signer, so every indexer resolves the fee target identically, with no
+ * dependency on local node configuration.
+ */
+export function resolvePaymentRecipient(
+	recipient: PaymentRecipient,
+	op: { readonly signer: string },
+): string {
+	switch (recipient) {
+		case "action:signer":
+			return op.signer;
+		default: {
+			const _exhaustive: never = recipient;
+			throw new Error(`Unhandled PaymentRecipient: ${String(_exhaustive)}`);
+		}
+	}
+}
+
 // create_collection payment shape toggles with INSTANCE_FEE_ENABLED.
 // - false (default): `fixed` 0.100 HBD, unchanged from pre-scaling era.
 // - true: `scaled` — 0.100 HBD base + 0.001 HBD per INSTANCE_FEE_PER_N (1000)
@@ -106,7 +135,7 @@ const COLLECTION_PAYMENT_REQUIREMENT = (INSTANCE_FEE_ENABLED
 		unitDenominator: INSTANCE_FEE_PER_N,
 		countFrom: "payload:maxInstances" as const,
 		payer: "transfer:from" as const,
-		recipient: "treasury" as const,
+		recipient: "action:signer" as const,
 		memoKey: "collectionId" as const,
 		memoTag: MEMO_TAG_FEE_COL,
 	}
@@ -114,7 +143,7 @@ const COLLECTION_PAYMENT_REQUIREMENT = (INSTANCE_FEE_ENABLED
 		kind: "fixed" as const,
 		amountHbd: PROTOCOL_COLLECTION_FEE_HBD,
 		payer: "transfer:from" as const,
-		recipient: "treasury" as const,
+		recipient: "action:signer" as const,
 		memoKey: "collectionId" as const,
 		memoTag: MEMO_TAG_FEE_COL,
 	}) satisfies PaymentRequirement;

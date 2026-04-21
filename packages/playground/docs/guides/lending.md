@@ -19,7 +19,7 @@ While `status = "lent"`:
 - **Approvals are frozen.** New `nft_approve`/`nft_approve_all` cannot be created; existing ones cannot be acted on.
 - **Mutable data writes remain allowed** (for both owner and approved operators). Games want borrowers to accumulate XP on a rented card.
 
-Only `nft_return` (called by the current borrower) can exit the `lent` state.
+Only `nft_return` can exit the `lent` state. Either the lender **or** the current borrower may sign it — the lender always retains the ability to reclaim unilaterally, and the borrower can end the loan at any time by returning the NFT.
 
 ## Lending — `buildNftLend`
 
@@ -46,20 +46,30 @@ await tx.broadcast();
 
 ## Returning — `buildNftReturn`
 
-Signed by the **current borrower**, not the lender. This is the only way the lender regains active control.
+Signed by either the **current borrower** (voluntary return) or the **lender** (unilateral reclaim). Both paths go through the same `nft_return` action; the indexer accepts the signature if it matches either the loan's `borrower` or `lender`.
 
 ```typescript
 import { buildNftReturn } from "nftlox-sdk";
 
+// Borrower returns voluntarily:
 const result = buildNftReturn({
 	owner: "bob",                   // the borrower returning it
 	instanceId: "nft_abc…_7",
 });
 if (!result.success) throw new Error(JSON.stringify(result.errors));
 // sign with Bob's posting key, broadcast
+
+// Or the lender reclaims unilaterally (same builder):
+const reclaim = buildNftReturn({
+	owner: "alice",                 // the lender reclaiming
+	instanceId: "nft_abc…_7",
+});
+// sign with Alice's posting key, broadcast
 ```
 
 After the return lands, `status` flips back to `active` and all normal actions (transfer, list, approve) resume for the lender.
+
+Because lender-side reclaim is built into the protocol, any off-chain rental contract built on top of lending should treat duration as a social commitment, not a technical one — see **Designing around lending** below.
 
 ## Querying loan state
 
@@ -90,7 +100,7 @@ Typical patterns:
 
 What the protocol **doesn't** give you:
 
-- **Duration enforcement.** The lender can reclaim at any time by simply asking the borrower to return, or by waiting (the borrower cannot transfer or sell). If you need hard-time-lock lending, layer it off-chain with a payment that is refunded on successful return.
+- **Duration enforcement.** The lender can reclaim at any time by signing `nft_return` directly (no borrower cooperation needed). If you need hard-time-lock lending, layer it off-chain with a payment that is refunded on successful return — the protocol will not block a lender from reclaiming before the agreed date.
 - **Automatic payments.** Charge the borrower off-chain; the chain only tracks the NFT state.
 - **Dispute resolution.** If a borrower refuses to return, the lender's remedy is social (reputation) and legal (off-chain contract), not protocol-level.
 

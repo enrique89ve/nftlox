@@ -1,4 +1,4 @@
-import { sql, type Queryable } from "@/db/client.ts";
+import { sql, toJsonb, type Queryable } from "@/db/client.ts";
 
 export interface InsertSchemaVersionParams {
 	collectionId: string;
@@ -18,7 +18,7 @@ export async function insertSchemaVersion(params: InsertSchemaVersionParams, txn
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.collectionId}, ${params.version},
-			${JSON.stringify(params.schema)}, ${params.schemaHash}, ${params.prevHash},
+			${toJsonb(params.schema)}, ${params.schemaHash}, ${params.prevHash},
 			${params.blockNum}, ${params.txId}, ${params.createdAt}
 		)
 	`;

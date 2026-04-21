@@ -37,6 +37,20 @@ export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): P
 		"newMutableFields",
 	);
 
+	// Immutable namespace freezes permanently at the first seed mint — even
+	// across burn→remint — so downstream consumers (marketplace, lending,
+	// rarity) can rely on the immutable shape being stable for any id that
+	// was ever minted. Mutable fields stay extensible (see schema rules).
+	if (
+		collection.has_minted &&
+		newImmutableFields !== undefined &&
+		newImmutableFields.length > 0
+	) {
+		throw new Error(
+			`Cannot extend immutable schema after first mint (collection ${collectionId}). Immutable namespace is frozen permanently once minting begins — even if the minted seeds are later burned. Only mutable fields can be added.`,
+		);
+	}
+
 	const existingSchema = optionalCollectionSchema(collection.schema);
 	let finalSchema: CollectionSchema;
 

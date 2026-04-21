@@ -6,14 +6,22 @@ import {
 	ACTION_CREATE_COLLECTION,
 	PROTOCOL_VERSION,
 	PROTOCOL_COLLECTION_FEE_HBD,
+	INSTANCE_FEE_PER_N,
+	MAX_INSTANCES_PER_COLLECTION,
 	generateDeterministicCollectionId,
 } from "@/protocol/index.ts";
 import { config } from "@/config.ts";
+import { seedActiveSettlementNode } from "./helpers/settlement-node.ts";
 
 async function cleanDb(): Promise<void> {
 	await sql`DELETE FROM collections`;
 	await sql`DELETE FROM invalid_operations`;
 	await sql`DELETE FROM confirmed_operations`;
+	await sql`DELETE FROM l2_nodes`;
+}
+
+async function seedNodeForTests(): Promise<void> {
+	await seedActiveSettlementNode(config.hiveAccount);
 }
 
 function buildCreateCollectionOp(args: {
@@ -23,6 +31,7 @@ function buildCreateCollectionOp(args: {
 	creator: string;
 	memo: string;
 	operationId: string;
+	maxInstances?: number;
 }): ParsedOperation {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 	return {
@@ -39,7 +48,7 @@ function buildCreateCollectionOp(args: {
 			name: args.name,
 			symbol: args.symbol,
 			totalPotential: 5,
-			maxInstances: 0,
+			maxInstances: args.maxInstances ?? 0,
 			metadata: { description: "piggy test", image: "https://example.com/x.png" },
 			rules: { transferable: true, burnable: false, royaltyPct: 0 },
 		},
@@ -50,7 +59,10 @@ function buildCreateCollectionOp(args: {
 }
 
 describe("create_collection — memo binding prevents piggyback", () => {
-	beforeEach(cleanDb);
+	beforeEach(async () => {
+		await cleanDb();
+		await seedNodeForTests();
+	});
 	afterEach(cleanDb);
 
 	test("transfer without FEE-COL memo is rejected by router", async () => {
@@ -108,5 +120,59 @@ describe("create_collection — memo binding prevents piggyback", () => {
 		});
 		const invalid = await sql`SELECT reason FROM invalid_operations WHERE operation_id = ${"op_piggy_mismatch"}`;
 		expect(invalid).toHaveLength(1);
+	});
+});
+
+describe("create_collection — maxInstances protocol cap", () => {
+	beforeEach(async () => {
+		await cleanDb();
+		await seedNodeForTests();
+	});
+	afterEach(cleanDb);
+
+	test(`maxInstances above ${MAX_INSTANCES_PER_COLLECTION} is rejected`, async () => {
+		// Use a value that stays on the INSTANCE_FEE_PER_N multiple so the cap
+		// check is exercised before the modulo check (assertion target is the
+		// cap, not the granularity rule).
+		const oversized = MAX_INSTANCES_PER_COLLECTION + INSTANCE_FEE_PER_N;
+		const canonicalId = await generateDeterministicCollectionId("alice", "CapOver", "CAPOV");
+		const op = buildCreateCollectionOp({
+			canonicalId,
+			name: "CapOver",
+			symbol: "CAPOV",
+			creator: "alice",
+			memo: `NFTLox FEE-COL:${canonicalId}`,
+			operationId: "op_max_inst_over",
+			maxInstances: oversized,
+		});
+		await withTransaction(async (txn) => {
+			const ok = await routeOperation(op, txn);
+			expect(ok).toBe(false);
+		});
+		const invalid = await sql`SELECT reason FROM invalid_operations WHERE operation_id = ${"op_max_inst_over"}`;
+		expect(invalid).toHaveLength(1);
+		expect(String(invalid[0]?.reason)).toMatch(/maxInstances.*(cap|exceeds)/i);
+		const rows = await sql`SELECT id FROM collections WHERE id = ${canonicalId}`;
+		expect(rows).toHaveLength(0);
+	});
+
+	test(`maxInstances exactly at ${MAX_INSTANCES_PER_COLLECTION} is accepted`, async () => {
+		const canonicalId = await generateDeterministicCollectionId("alice", "CapEdge", "CAPED");
+		const op = buildCreateCollectionOp({
+			canonicalId,
+			name: "CapEdge",
+			symbol: "CAPED",
+			creator: "alice",
+			memo: `NFTLox FEE-COL:${canonicalId}`,
+			operationId: "op_max_inst_edge",
+			maxInstances: MAX_INSTANCES_PER_COLLECTION,
+		});
+		await withTransaction(async (txn) => {
+			const ok = await routeOperation(op, txn);
+			expect(ok).toBe(true);
+		});
+		const rows = await sql`SELECT id, max_instances FROM collections WHERE id = ${canonicalId}`;
+		expect(rows).toHaveLength(1);
+		expect(Number(rows[0]?.max_instances)).toBe(MAX_INSTANCES_PER_COLLECTION);
 	});
 });

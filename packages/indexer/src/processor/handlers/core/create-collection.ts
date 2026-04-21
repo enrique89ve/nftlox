@@ -3,7 +3,6 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { insertCollection, collectionExists, symbolTakenByCreator, countCollectionsByCreator } from "@/db/queries/collections.ts";
 import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
-import { config } from "@/config.ts";
 import {
 	requireBoundedString,
 	requireSymbol,
@@ -27,15 +26,16 @@ import {
 	MAX_URL_LENGTH,
 	MAX_ID_LENGTH,
 	INSTANCE_FEE_PER_N,
+	MAX_INSTANCES_PER_COLLECTION,
 } from "@/protocol/index.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
-	if (op.signer !== config.hiveAccount) {
-		throw new Error(
-			`create_collection must be signed by node account '${config.hiveAccount}', got '${op.signer}'`,
-		);
-	}
-
+	// Signer authorization is enforced by the router: it calls
+	// assertActiveSettlementNode(op.signer, blockNum) whenever the payment
+	// requirement routes fees to op.signer (create_collection does). That
+	// check is replay-deterministic across indexers, unlike the old
+	// config.hiveAccount comparison.
+	//
 	// Memo-bound identity: the router validated the fee transfer via
 	// PAYMENT_VALIDATORS.fixed (or .scaled when INSTANCE_FEE_ENABLED), which
 	// memo-matched `NFTLox FEE-COL:{id}`. `op.payment.payer` is the transfer's
@@ -110,6 +110,13 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const maxInstances = requireNumber(d.maxInstances, "maxInstances");
 	if (maxInstances < 0 || !Number.isInteger(maxInstances)) {
 		throw new Error(`maxInstances must be a non-negative integer, got ${maxInstances}`);
+	}
+	// Defense-in-depth cap. Enforced before the modulo check so the failure
+	// message is unambiguous when a creator declares an absurd ceiling.
+	if (maxInstances > MAX_INSTANCES_PER_COLLECTION) {
+		throw new Error(
+			`maxInstances exceeds protocol cap of ${MAX_INSTANCES_PER_COLLECTION}, got ${maxInstances}`,
+		);
 	}
 	if (maxInstances > 0 && maxInstances % INSTANCE_FEE_PER_N !== 0) {
 		throw new Error(

@@ -217,6 +217,7 @@ Anyone can recompute the hash locally and compare — a tampered historical sche
 - New field names cannot collide with existing ones.
 - Combined field count ≤ 64.
 - At least one new field per call.
+- **Immutable namespace freezes at first mint.** Once any seed has been minted in the collection, `newImmutableFields` is rejected — even if all those seeds are later burned. Before the first mint the creator may iterate freely (design phase); after it the immutable shape is sealed so downstream consumers (marketplace, lending, rarity engines) can trust that on-chain commitments (rarity, type, edition) never change retroactively. Mutable fields (`newMutableFields`) remain extensible forever — they govern evolving state (XP, level, status), not economic identity.
 
 ### NFT birth schemas are immutable
 

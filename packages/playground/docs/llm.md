@@ -543,7 +543,7 @@ An NFT instance can be in one of these states:
 | `lent` | No | No | No | New: No / Existing: No | Yes |
 | `burned` | — | — | — | — | — |
 
-Lending: only the **borrower** can call `buildNftReturn`. Ownership never changes while lent — `getNftOwner` always returns the lender.
+Lending: `buildNftReturn` can be signed by **either** the lender (unilateral reclaim) or the current borrower (voluntary return). Ownership never changes while lent — `getNftOwner` always returns the lender.
 
 Seeds with `distributed > 0` cannot be transferred, listed, lent, or approved.
 
@@ -588,7 +588,7 @@ async function waitForConfirmation(client, txId: string, timeoutMs = 30_000) {
 | Sending seed_id with instances=0 to marketplace | Seeds with `distributed > 0` cannot be sold |
 | Assuming listing stays valid until `expiresAt` | Another buyer might buy it; always re-check before signing |
 | Signing with active key for `set_data` | Posting key is enough for all data mutations |
-| Lender calling `buildNftReturn` | Only the **borrower** can return a lent NFT |
+| Assuming only the borrower can call `buildNftReturn` | Either lender or borrower may sign it; the lender can always reclaim unilaterally |
 
 ---
 

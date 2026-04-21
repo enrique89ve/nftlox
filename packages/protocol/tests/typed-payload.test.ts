@@ -6,7 +6,7 @@ describe("assumePayload", () => {
 	test("returns the payload when action matches", () => {
 		const p = {
 			protocol: "nftlox_testnet",
-			version: "0.6.2",
+			version: "0.6.3",
 			action: ACTION_BUY,
 			data: {
 				nftId: "inst_x",
@@ -23,7 +23,7 @@ describe("assumePayload", () => {
 	test("returns null when action does not match", () => {
 		const p = {
 			protocol: "nftlox_testnet",
-			version: "0.6.2",
+			version: "0.6.3",
 			action: ACTION_MINT,
 			data: {},
 		} as const;

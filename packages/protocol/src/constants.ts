@@ -19,8 +19,8 @@
 // ============================================================================
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.6.2";
-export const MIN_PROTOCOL_VERSION = "0.6.2";
+export const PROTOCOL_VERSION = "0.6.3";
+export const MIN_PROTOCOL_VERSION = "0.6.3";
 export const HASH_VERSION = "v1";
 
 // ============================================================================
@@ -142,6 +142,16 @@ export const INSTANCE_FEE_UNIT_HBD = "0.001";
 // size — the unit fee is 0.001 HBD, and per-instance billing below 1000 is
 // fee-economically irrelevant.
 export const INSTANCE_FEE_PER_N = 1000;
+
+// Hard upper bound on the creator-declared `maxInstances` for a single
+// collection. Defense-in-depth: even though MAX_JSON_SIZE (8000 bytes)
+// already prevents arbitrarily large numeric literals from reaching the
+// handler, an explicit cap keeps the scaled-fee math (baseHbd + unitHbd *
+// maxInstances / INSTANCE_FEE_PER_N) safely below any float-precision or
+// string-formatting cliff and protects the global supply envelope across
+// the network. 1_000_000 is a round multiple of INSTANCE_FEE_PER_N (1000),
+// so every legal `maxInstances` still lands exactly on a fee unit.
+export const MAX_INSTANCES_PER_COLLECTION = 1_000_000;
 
 // Memo tags — the colon-free token that follows "NFTLox " in a transfer memo.
 // Source of truth shared by SDK emitters and the indexer's memo parser.

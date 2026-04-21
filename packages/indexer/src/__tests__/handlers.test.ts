@@ -101,8 +101,10 @@ async function cleanDb() {
 
 /**
  * Builds a create_collection op with the node-account signer and a paired fee transfer
- * from the given creator. All tests must use this helper — `handleCreateCollection`
- * now enforces signer == config.hiveAccount and derives the creator from the fee transfer.
+ * from the given creator. All tests must use this helper — the router enforces that
+ * `op.signer` is a registered+active settlement node (derived from `l2_nodes`, not
+ * from local config) and `handleCreateCollection` derives the creator from the
+ * memo-bound fee transfer's `from` field.
  */
 function makeCreateCollectionOp(
 	data: Record<string, unknown>,

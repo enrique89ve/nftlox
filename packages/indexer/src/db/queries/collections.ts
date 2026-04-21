@@ -1,4 +1,4 @@
-import { sql, type Queryable, clampLimit } from "@/db/client.ts";
+import { sql, toJsonb, type Queryable, clampLimit } from "@/db/client.ts";
 import { NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "./nft-types.ts";
 
 // A collection row's presence in `collections` IS its "active" state. Archived
@@ -40,7 +40,7 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 			${params.description}, ${params.imageUrl}, ${params.externalUrl},
 			${params.transferable}, ${params.burnable}, ${params.royaltyPct},
 			${params.royaltyRecipient},
-			${params.schema ? JSON.stringify(params.schema) : null}, ${params.schemaVersion},
+			${toJsonb(params.schema)}, ${params.schemaVersion},
 			${params.blockNum}, ${params.txId},
 			${params.createdAt}
 		)
@@ -66,6 +66,11 @@ export interface CollectionRulesRow {
 	creator: string;
 	total_potential: number;
 	seed_count: number;
+	// True once any seed has ever been minted in this collection — even if all
+	// seeds were later burned. Backed by: seeds>0 OR EXISTS burned_nfts.
+	// Used by extend_schema to freeze the immutable namespace permanently,
+	// closing the mint→burn→extend→remint bypass.
+	has_minted: boolean;
 	transferable: boolean;
 	burnable: boolean;
 	royalty_pct: string;
@@ -88,7 +93,11 @@ export async function getCollectionRules(
 		SELECT c.id, c.creator, c.total_potential, c.transferable,
 			c.burnable, c.royalty_pct, c.royalty_recipient,
 			c.schema, c.schema_version,
-			COALESCE(cs.seeds, 0)::int AS seed_count
+			COALESCE(cs.seeds, 0)::int AS seed_count,
+			(
+				COALESCE(cs.seeds, 0) > 0
+				OR EXISTS (SELECT 1 FROM burned_nfts bn WHERE bn.collection_id = c.id)
+			) AS has_minted
 		FROM collections c
 		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
 		WHERE c.id = ${id}
@@ -120,7 +129,7 @@ export async function updateCollectionSchema(
 ): Promise<void> {
 	await txn`
 		UPDATE collections
-		SET schema = ${JSON.stringify(schema)}, schema_version = ${schemaVersion}
+		SET schema = ${toJsonb(schema)}, schema_version = ${schemaVersion}
 		WHERE id = ${collectionId}
 	`;
 }

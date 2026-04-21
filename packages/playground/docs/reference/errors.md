@@ -76,6 +76,7 @@ Errors encountered during normal protocol operations (handler validation, Build 
 | Error Message | Cause | Fix |
 |---------------|-------|-----|
 | `Schema validation failed` | The `mutableData` or `immutableData` provided does not match the collection's schema (wrong field names or types). | Check field names and types against the collection schema definition. Use the correct scalar types (e.g., `uint8` range is 0-255). |
+| `Cannot extend immutable schema after first mint` | Attempting to add `newImmutableFields` via `extend_schema` after the collection has had at least one seed minted (including collections whose seeds were later burned). The immutable namespace is sealed permanently at first mint. | Add the field as a `newMutableField` instead, or plan the immutable shape fully before the first mint. |
 
 ### Marketplace Errors
 

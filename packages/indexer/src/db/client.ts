@@ -1,4 +1,5 @@
 import pgClient from "postgres";
+import type { Parameter } from "postgres";
 import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { createStateRootBuffer, type StateRootBuffer } from "@/utils/state-root-buffer.ts";
@@ -147,6 +148,30 @@ export async function withTransaction<T>(fn: (txn: Queryable) => Promise<T>): Pr
 		}
 	});
 	return result as T;
+}
+
+/**
+ * Serializes a domain value for a JSONB column. Every JSONB write in the
+ * indexer MUST flow through this helper — never `JSON.stringify(v)` (which
+ * postgres.js would auto-serialize a second time, yielding a doubly-encoded
+ * string on read) and never a bare `sql.json(v)` on a typed domain value
+ * (postgres.js `JSONValue` requires recursive `JSONValue` on indexed
+ * signatures, which our richer domain types — Record<string, unknown>,
+ * CollectionSchema, etc. — don't satisfy structurally even though they are
+ * JSON-safe at runtime).
+ *
+ * Contract:
+ *  - `null` / `undefined` → SQL NULL (nullish, not falsy: preserves empty
+ *    objects / arrays, which are meaningful JSONB payloads).
+ *  - anything else → `sql.json(v)`, which postgres.js serializes once at
+ *    bind-time through the node-postgres JSONB path.
+ *
+ * The single unchecked cast is contained here — call sites pass their
+ * well-typed domain values without any inline `as` boilerplate.
+ */
+export function toJsonb<T>(value: T | null | undefined): Parameter | null {
+	if (value == null) return null;
+	return sql.json(value as Parameters<typeof sql.json>[0]);
 }
 
 const MAX_QUERY_LIMIT = 1000;

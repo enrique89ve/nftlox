@@ -2,7 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import { getStateRootBuffer, getTxSavepointHandle, attachScope } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { createLogger } from "@/utils/logger.ts";
-import { config } from "@/config.ts";
+import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
 import { insertInvalidOperation, insertOrphanedBuy, insertConfirmedOperation, isOperationConfirmed } from "@/db/queries/sync.ts";
 import {
 	ACTION_BUY,
@@ -27,6 +27,7 @@ import {
 	assertNeverPaymentKind,
 	getAuthMismatchReason,
 	getPaymentRequirement,
+	resolvePaymentRecipient,
 	type MemoKey,
 	type PaymentRequirement,
 	type ProtocolAction,
@@ -104,27 +105,42 @@ function deriveExpectedMemo(
 }
 
 /**
+ * True when the requirement routes the fee to an account derived from the L1
+ * signer. Those operations MUST have `op.signer` registered+active in
+ * `l2_nodes` so replays across indexers cannot diverge on who is allowed to
+ * settle collection-fee transfers.
+ */
+function requirementNeedsActiveNodeSigner(requirement: PaymentRequirement): boolean {
+	return (
+		(requirement.kind === "fixed" || requirement.kind === "scaled") &&
+		requirement.recipient === "action:signer"
+	);
+}
+
+/**
  * Pre-handler payment validation. Exhaustive switch over `requirement.kind` so
  * adding a new PaymentRequirement variant fails the build here instead of
- * silently bypassing validation. Returns `null` for `split`, which is deferred
- * to the handler (needs a DB-locked NFT row for price lookup).
+ * silently bypassing validation. `targetAccount` is derived from the
+ * declarative `recipient` token via `resolvePaymentRecipient` — identical on
+ * every indexer because it reads `op.signer`, not local node config. Returns
+ * `null` for `split`, which is deferred to the handler (needs a DB-locked NFT
+ * row for price lookup).
  */
 function runPreHandlerPaymentValidation(
 	op: ParsedOperation,
 	requirement: PaymentRequirement,
-	targetAccount: string,
 ): PaymentMatch | null {
 	switch (requirement.kind) {
 		case "none":
-			return PAYMENT_VALIDATORS.none(op, requirement, { targetAccount });
+			return PAYMENT_VALIDATORS.none(op, requirement, { targetAccount: "" });
 		case "fixed":
 			return PAYMENT_VALIDATORS.fixed(op, requirement, {
-				targetAccount,
+				targetAccount: resolvePaymentRecipient(requirement.recipient, op),
 				expectedMemo: deriveExpectedMemo(op, requirement),
 			});
 		case "scaled":
 			return PAYMENT_VALIDATORS.scaled(op, requirement, {
-				targetAccount,
+				targetAccount: resolvePaymentRecipient(requirement.recipient, op),
 				expectedMemo: deriveExpectedMemo(op, requirement),
 			});
 		case "split":
@@ -225,7 +241,19 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 			// can't leak indices. Exhaustive switch inside the helper gives a
 			// compile error if a new PaymentRequirement variant is introduced.
 			const requirement = getPaymentRequirement(op.action);
-			const preMatch = runPreHandlerPaymentValidation(op, requirement, config.hiveAccount);
+
+			// Consensus gate: when the fee recipient is derived from op.signer
+			// (any `action:signer` requirement), the signer MUST be a registered
+			// and currently-active settlement node at this block. Without this
+			// check any Hive account could construct a self-transfer and "pay
+			// itself" the protocol fee, bypassing the node-network settlement
+			// contract. Replay-deterministic — it reads only `l2_nodes`, which
+			// is projected from L1 node_register / node_heartbeat operations.
+			if (requirementNeedsActiveNodeSigner(requirement)) {
+				await assertActiveSettlementNode(op.signer, op.blockNum, txn);
+			}
+
+			const preMatch = runPreHandlerPaymentValidation(op, requirement);
 			if (preMatch) op.payment = preMatch;
 
 			const nftIds = await txHandle

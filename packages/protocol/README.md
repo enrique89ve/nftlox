@@ -27,8 +27,8 @@ specification. If prose and code diverge, this package wins.
 | Property | Value |
 |---|---|
 | Protocol id | `nftlox_testnet` |
-| Protocol version | `0.6.2` |
-| Minimum accepted version | `0.6.2` |
+| Protocol version | `0.6.3` |
+| Minimum accepted version | `0.6.3` |
 | Transport | Hive `custom_json` |
 | Max JSON payload | `8000` bytes |
 | Hive hard cap | `8192` bytes |

@@ -881,7 +881,8 @@ The indexer does not expose a transaction-building HTTP surface. Every NFTLox ac
 | `nft_approve`, `nft_approve_all` | `buildNftApprove`, `buildNftApproveAll` | Posting | Owner single-signer |
 | `nft_transfer_from` | `buildNftTransferFrom` | Posting | Approved spender single-signer |
 | `data_operator_approve` | `buildDataOperatorApprove` | Posting | Collection creator single-signer |
-| `nft_lend`, `nft_return` | `buildNftLend`, `buildNftReturn` | Posting | Owner / borrower single-signer |
+| `nft_lend` | `buildNftLend` | Posting | Owner single-signer |
+| `nft_return` | `buildNftReturn` | Posting | Lender **or** borrower single-signer |
 
 Every builder returns a `KeychainResult<T>` — a discriminated union of `{ success: true, operations, keyType, signer, payload, generatedIds?, coSigners?, warnings? }` or `{ success: false, errors }`. Feed `operations` into `hive-tx`, `@hiveio/dhive`, `@hiveio/wax`, or `hive_keychain.requestBroadcast` — whatever your runtime uses.
 

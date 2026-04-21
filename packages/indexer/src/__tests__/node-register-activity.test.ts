@@ -24,7 +24,7 @@ function makeRegisterOp(blockNum: number, overrides: Partial<ParsedOperation> = 
 		signer: TEST_ACCOUNT,
 		authLevel: "posting",
 		action: ACTION_NODE_REGISTER as ParsedOperation["action"],
-		version: "0.6.2",
+		version: "0.6.3",
 		data: { endpoint: NODE_ENDPOINT, publicKey: NODE_PUBLIC_KEY },
 		...overrides,
 	};
