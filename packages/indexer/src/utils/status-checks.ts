@@ -32,15 +32,16 @@ export function assertNotListed(nft: HasStatus, nftId: string): void {
 }
 
 /**
- * Rejects NFTs currently reserved by a settlement node's sale_lock. Every
- * ownership-mutating or transfer-authorizing handler must call this before
- * touching the row: a successful lock means a buyer-signed tx is in flight
- * and our txn must not race it. The row returns to `listed` automatically
- * once `sale_expires_block` elapses (sync-engine sweep).
+ * Rejects NFTs currently reserved by a settlement node's buy_commitment.
+ * Every ownership-mutating or transfer-authorizing handler must call this
+ * before touching the row: a successful commitment means a buyer-signed
+ * buy tx is in flight and our txn must not race it. The row returns to
+ * `listed` automatically once `sale_expires_block` elapses (sync-engine
+ * sweep in `sweepExpiredBuyCommitments`).
  */
 export function assertNotPendingSale(nft: HasStatus, nftId: string): void {
 	if (nft.status === NFT_STATUS_PENDING_SALE) {
-		throw new Error(`NFT ${nftId} is pending_sale — cannot mutate while a sale_lock is active`);
+		throw new Error(`NFT ${nftId} is pending_sale — cannot mutate while a buy_commitment is active`);
 	}
 }
 

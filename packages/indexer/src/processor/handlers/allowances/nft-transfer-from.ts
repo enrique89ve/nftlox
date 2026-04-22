@@ -26,8 +26,9 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 	const nft = await getNftForProcessingForUpdate(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
 
-	// Delegated transfer on a `pending_sale` row would race the sale_lock.
-	// Reject before we touch allowance tables so the savepoint rolls back clean.
+	// Delegated transfer on a `pending_sale` row would race the buy_commitment
+	// of another buyer. Reject before we touch allowance tables so the
+	// savepoint rolls back clean.
 	assertNotPendingSale(nft, instanceId);
 
 	const { hadExpiredListing } = assertOwnershipChangeable(nft, instanceId, op.timestamp);

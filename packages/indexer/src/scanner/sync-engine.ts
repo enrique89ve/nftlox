@@ -443,9 +443,10 @@ export async function syncCycle(): Promise<void> {
       }
 
       // Boundary sweep: ensures the cursor never moves past a block at which a
-      // sale_lock expired without updating the row, even when no op landed in
-      // that block. Keyed on lastBatch.to + 1 so `sale_expires_block < X` fires
-      // for any lock whose expiry was <= lastBatch.to.
+      // buy_commitment expired without updating the row, even when no op
+      // landed in that block. Keyed on lastBatch.to + 1 so
+      // `sale_expires_block < X` fires for any commitment whose expiry was
+      // <= lastBatch.to.
       await sweepExpiredBuyCommitments(lastBatch.to + 1, txn);
       await updateLastBlock(lastBatch.to, txn);
     });

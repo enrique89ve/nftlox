@@ -13,11 +13,10 @@ import {
 
 // These guard the node-signing HTTP surface. They are node policy, not
 // consensus constants, and apply to both buy and create_collection multisig.
-const MAX_MULTISIG_OPERATIONS = 10;
 const MULTISIG_TX_MIN_EXPIRATION_MS = 30_000;
 const MULTISIG_TX_MAX_EXPIRATION_MS = 120_000;
+
 import type {
-	BuyRequestShape,
 	ParsedAmount,
 	SignResult,
 	SupportedMultisigAction,
@@ -29,8 +28,6 @@ import type {
 	ValidatedTransaction,
 	ValidatedTransferOp,
 } from "./types.ts";
-
-const MIN_OPERATIONS = 2;
 
 type TransactionHeader = Readonly<{
 	readonly ref_block_num: number;
@@ -58,22 +55,6 @@ export function validateBaseRequestShape(raw: unknown): Readonly<{ readonly tran
 	}
 
 	return {
-		transaction: validateRecord(raw.transaction, "INVALID_TX_STRUCTURE", "Field 'transaction' must be an object"),
-	};
-}
-
-export function validateBuyRequestShape(raw: unknown): BuyRequestShape {
-	if (!isRecord(raw)) {
-		throw createMultisigError("INVALID_TX_STRUCTURE", "Request body must be a JSON object");
-	}
-
-	const buyer = validateNonEmptyString(raw.buyer, "Field 'buyer' must be a non-empty string");
-
-	return {
-		buyer,
-		nftId: validateNonEmptyString(raw.nftId, "Field 'nftId' must be a non-empty string"),
-		listingId: validateNonEmptyString(raw.listingId, "Field 'listingId' must be a non-empty string"),
-		listTxId: validateNonEmptyString(raw.listTxId, "Field 'listTxId' must be a non-empty string"),
 		transaction: validateRecord(raw.transaction, "INVALID_TX_STRUCTURE", "Field 'transaction' must be an object"),
 	};
 }
@@ -131,15 +112,6 @@ function validateBuyerSignatureArray(signatures: unknown): readonly [string] {
 		);
 	}
 	return [sig.toLowerCase()];
-}
-
-export function validateOperationCount(ops: ReadonlyArray<TransactionOperationInput>): void {
-	if (ops.length < MIN_OPERATIONS || ops.length > MAX_MULTISIG_OPERATIONS) {
-		throw createMultisigError(
-			"INVALID_TX_STRUCTURE",
-			`Expected ${MIN_OPERATIONS}-${MAX_MULTISIG_OPERATIONS} operations, got ${ops.length}`,
-		);
-	}
 }
 
 export function getLastOperation(operations: ReadonlyArray<TransactionOperationInput>): TransactionOperationInput {
@@ -343,10 +315,6 @@ export function signTransaction(tx: ValidatedTransaction): SignResult {
 	return { signature: signWithBeekeeper(sigDigestHex), digest: txId };
 }
 
-export function getTransactionTxId(tx: ValidatedTransaction): string {
-	return buildHiveTransaction(tx).digest().txId;
-}
-
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -354,14 +322,6 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function validateRecord(value: unknown, code: MultisigErrorCode, message: string): Record<string, unknown> {
 	if (!isRecord(value)) {
 		throw createMultisigError(code, message);
-	}
-
-	return value;
-}
-
-export function validateNonEmptyString(value: unknown, message: string): string {
-	if (typeof value !== "string" || value === "") {
-		throw createMultisigError("INVALID_TX_STRUCTURE", message);
 	}
 
 	return value;
@@ -440,7 +400,7 @@ function validateExpiration(expiration: unknown): string {
 	return expiration;
 }
 
-export function parseTransactionExpirationMs(expiration: string): number {
+function parseTransactionExpirationMs(expiration: string): number {
 	const expiresAt = new Date(`${expiration}Z`).getTime();
 	if (Number.isNaN(expiresAt)) {
 		throw createMultisigError("INVALID_TX_STRUCTURE", "Transaction 'expiration' is not a valid date");

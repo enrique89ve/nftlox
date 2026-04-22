@@ -73,8 +73,9 @@ async function processSingleTransfer(
   const nft = await getNftForProcessingForUpdate(nftId, txn);
   if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
-  // A `pending_sale` row is reserved by an active sale_lock for another buyer.
-  // Block the transfer before any state mutation so the savepoint reverts cleanly.
+  // A `pending_sale` row is reserved by an active buy_commitment for another
+  // buyer. Block the transfer before any state mutation so the savepoint
+  // reverts cleanly.
   assertNotPendingSale(nft, nftId);
 
   const { hadExpiredListing } = assertOwnershipChangeable(
@@ -119,7 +120,8 @@ async function processBurn(
   if (!nft) throw new Error(`NFT not found: ${nftId}`);
 
   // Burn destroys the NFT — incompatible with an in-flight buy reserved by a
-  // sale_lock. Reject before any state mutation so the savepoint reverts cleanly.
+  // buy_commitment. Reject before any state mutation so the savepoint reverts
+  // cleanly.
   assertNotPendingSale(nft, nftId);
 
   assertActionable(nft, nftId);

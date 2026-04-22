@@ -45,8 +45,11 @@ const ACTION_AUTH_LEVEL_MAP = {
 	[ACTION_NODE_HEARTBEAT]: "posting",
 	[ACTION_LIST]: "posting",
 	[ACTION_UNLIST]: "posting",
-	// sale_lock is retained as a legacy action shape; if replayed on older
-	// state machines it remains a posting-auth node op.
+	// sale_lock is a pre-0.7.0 legacy action. The router routes it to
+	// `handleDeprecatedSaleLock` (which always throws) so any historical
+	// sale_lock ops on chain surface in `invalid_operations` as an audit trail
+	// without mutating state. The posting auth is preserved so the parser's
+	// auth-level check matches the original envelope if one is replayed.
 	[ACTION_SALE_LOCK]: "posting",
 	// buy_commitment: the node broadcasts this on-chain with its own active key
 	// before co-signing a `buy` tx, reserving the NFT for the committed buyer.

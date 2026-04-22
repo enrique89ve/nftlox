@@ -29,11 +29,12 @@ export const HASH_VERSION = "v1";
 // these is a protocol upgrade and requires coordinated network-wide rollout.
 // ============================================================================
 
-// Legacy reservation window retained for compatibility with older state
-// machines. The current buy path does not require a preceding on-chain
-// `sale_lock`, but existing DB constraints and cleanup code still use the same
-// bound when dealing with historical `pending_sale` rows.
-export const SALE_LOCK_DURATION_BLOCKS = 60;
+// Floor on listing duration, expressed in blocks. Existed historically to
+// match the pre-0.7.0 sale_lock reservation window; post-migration it only
+// anchors the MIN_LISTING_TTL_MS derivation below so listings can never be
+// so short that a buy flow races expiration. Distinct from the new
+// BUY_COMMITMENT_TTL_BLOCKS (commitment validity window, ~10 blocks).
+export const LISTING_MIN_DURATION_BLOCKS = 60;
 
 // ============================================================================
 // Node API policy
@@ -133,7 +134,7 @@ export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
 // Conservative floor for listing TTLs. Even with single-tx buys, listings that
 // expire almost immediately create avoidable races between quoting payment info,
 // node co-signing, buyer signature, and broadcast.
-export const MIN_LISTING_TTL_MS = SALE_LOCK_DURATION_BLOCKS * 3_000 + 60_000;
+export const MIN_LISTING_TTL_MS = LISTING_MIN_DURATION_BLOCKS * 3_000 + 60_000;
 
 // Per-instance fee for create_collection. When enabled, the total fee becomes
 //   PROTOCOL_COLLECTION_FEE_HBD + INSTANCE_FEE_UNIT_HBD * ceil(maxInstances / INSTANCE_FEE_PER_N)

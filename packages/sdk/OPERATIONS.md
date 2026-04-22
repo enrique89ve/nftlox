@@ -355,12 +355,40 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ---
 
-### 12. `buy`
+### 13. `buy_commitment`
+
+**SDK constant**: `ACTION_BUY_COMMITMENT`
+**Description**: Node-broadcast on-chain reservation emitted BEFORE the node co-signs a `buy` transaction. The ordering of commitments inside a Hive block is the network-wide consensus on which node gets to settle the listing, closing the cross-node race that would otherwise leave a losing buyer with irreversibly executed transfers. Emitted automatically by the settlement node during `POST /api/multisig/buy` — no direct SDK call.
+**Key authority**: active -- signed with the node's active key.
+**Signer role**: The settlement node (identified by `op.required_auths[0]`). A single node may hold up to `MAX_ACTIVE_COMMITMENTS_PER_NODE` concurrent reservations.
+
+**On-chain payload**:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `txHash` | string (40 hex) | yes | Digest of the unsigned buy transaction the node has pledged to co-sign; `handleBuy` later matches `op.txId` against this value |
+| `nftId` | string | yes | ID of the NFT being reserved |
+| `listingId` | string | yes | Active listing ID |
+| `listTxId` | string | yes | Transaction ID of the list operation |
+| `buyer` | string | yes | Hive account that will pay and receive ownership |
+
+**Indexer validations** (`handleBuyCommitment`):
+- NFT must exist, not burned, not lent
+- `status='listed'` OR (`status='pending_sale'` AND `sale_expires_block < currentBlock`), else reject `already committed`
+- `listingId` and `listTxId` match the current listing
+- `buyer !== owner`
+- Per-node cap: < `MAX_ACTIVE_COMMITMENTS_PER_NODE` active reservations
+
+**State changes**: `status='pending_sale'`, `sale_buyer=buyer`, `sale_settlement_node=op.required_auths[0]`, `sale_commitment_op_tx_id=op.txId`, `sale_commitment_buy_tx_hash=data.txHash`, `sale_expires_block=op.blockNum + BUY_COMMITMENT_TTL_BLOCKS`.
+**Restrictions**: another node already holds an active reservation for the NFT; listing mismatch; per-node cap exceeded — rejected as `invalid_operation`.
+
+---
+
+### 14. `buy`
 
 **SDK constant**: `ACTION_BUY`
-**Description**: Settles a prior `sale_lock`. The buyer signs the paired transfers with active, and the node co-signs the trailing `buy` custom_json with active after broadcasting tx1 (`sale_lock`) with posting.
-**Key authority**: active -- the `buy` custom_json is signed by the indexer node with active multisig.
-**Signer role**: The co-signing node. Buyer is identified from `pairedTransfers[0].from`.
+**Description**: Settles a prior `buy_commitment`. The buyer signs the paired transfers + trailing `buy` custom_json with their active key; the node appends its own active signature only AFTER verifying its `buy_commitment` won the cross-node ordering race.
+**Key authority**: active -- co-signed by the node and the buyer.
+**Signer role**: The co-signing node is `op.signer`. Buyer is identified from `pairedTransfers[0].from` and must match `nft.sale_buyer`.
 
 **SDK payload**:
 | Field | Type | Required | Description |
@@ -376,19 +404,17 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 **Indexer validations**:
 - `op.signer` must be the configured node account (`config.hiveAccount`)
-- NFT must exist
-- `assertNotBurned`, `assertNotLent`
-- Status must be `listed` and listing must not be expired
-- Collection must be transferable (`transferable=true` in rules)
-- `listingId` must match `nft.listing_id` (prevents stale listing replays)
-- `listTxId` must match `nft.listing_tx_id` (prevents stale listing replays)
-- Buyer != seller
-- `verifyTransfers()` validates exact amounts of each transfer
-- If `royaltyRecipient === seller`, royalty merges into seller payment
-- If `feeAccount === seller`, fee merges into seller payment
+- NFT must exist; `assertNotBurned`, `assertNotLent`
+- Status must be `pending_sale` (a matching `buy_commitment` already projected)
+- `nft.sale_commitment_buy_tx_hash === op.txId` — the broadcasted tx must be the exact one the node committed to
+- `nft.sale_expires_block >= op.blockNum` — commitment not yet swept
+- `nft.sale_buyer === buyerFromTransfer` — buyer matches the committed account
+- Collection must be transferable
+- `listingId` / `listTxId` match current listing; listing not expired
+- `verifyTransfers()` validates exact split amounts
 
-**State changes**: `owner` -> buyer, `previous_owner` -> seller, `owner_operation_id` -> current operation id, `owner_action = "buy"`, `owner_block_num` -> current block, status -> `active`, clears listing fields, deletes `nft_allowances` for that NFT, and removes the seller's `collection_allowances` for the collection if the buy leaves the seller with zero NFTs in that collection. A sale record is inserted in the `sales` table with `gross_amount`, `royalty_amount`, `protocol_fee`, and `seller_net`.
-**Restrictions**: NFT not listed, listing expired, collection not transferable, listingId mismatch, listTxId mismatch, incorrect payments, buyer = seller -> rejected.
+**State changes**: `owner` -> buyer, `previous_owner` -> seller, `owner_operation_id` -> current operation id, `owner_action = "buy"`, `owner_block_num` -> current block, status -> `active`, clears listing_* and sale_* columns atomically, deletes `nft_allowances` for the NFT, removes the seller's `collection_allowances` if the buy empties their holdings in that collection. A sale record is inserted in `sales` with `gross_amount`, `royalty_amount`, `protocol_fee`, `seller_net`.
+**Restrictions**: NFT not reserved (no matching commitment); commitment hash mismatch; commitment expired; listingId/listTxId mismatch; collection not transferable; incorrect payments — rejected.
 
 ---
 
@@ -592,7 +618,7 @@ The SDK's `calculatePaymentSplit()` function is reused in the indexer to verify 
 If royaltyRecipient or feeAccount equals the seller, those amounts merge into the seller payment. Marketplace fees are handled off-chain by the marketplace frontend.
 
 ### Multisig
-The `create_collection` and `buy` operations are node-cosigned. The client submits the required transfer operations, and the node validates and co-signs the `custom_json`. If the node rejects, the funds never leave the client account. Buys are serialized by an on-chain `sale_lock` tx1 broadcast with posting before tx2 is co-signed and broadcast.
+The `create_collection` and `buy` operations are node-cosigned. For collections the client submits the fee transfer + custom_json unsigned; the node validates, signs the custom_json with its active key, and returns the signature so the client can broadcast. For buys the flow is node-last: the buyer pre-signs the full transfer + `buy` custom_json bundle with their active key, the node broadcasts an on-chain `buy_commitment` reserving the NFT, waits for its commitment to win the cross-node ordering race, then appends its own active signature and broadcasts the completed transaction itself. If any step rejects, the buyer's signature is never used and no funds move.
 
 ### Data System
 The current SDK-owned operation set manages two data layers per NFT:

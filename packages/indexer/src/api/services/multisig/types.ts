@@ -65,14 +65,6 @@ export type ValidatedCollectionTransaction = ValidatedTransactionBase & Readonly
 
 export type ValidatedTransaction = ValidatedBuyTransaction | ValidatedCollectionTransaction;
 
-export type BuyRequestShape = Readonly<{
-	readonly buyer: string;
-	readonly nftId: string;
-	readonly listingId: string;
-	readonly listTxId: string;
-	readonly transaction: Record<string, unknown>;
-}>;
-
 export type CollectionRequestShape = Readonly<{
 	readonly transaction: Record<string, unknown>;
 }>;

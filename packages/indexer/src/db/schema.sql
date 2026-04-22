@@ -92,8 +92,8 @@ CREATE TABLE IF NOT EXISTS collections (
 --   the marketplace never serves a NULL price.
 -- - chk_nfts_pending_sale_coherent: status='pending_sale' requires the full
 --   sale_* snapshot, and any other status forbids sale_* population. Keeps the
---   on-chain sale-lock projection self-consistent with its state discriminator.
--- - chk_nfts_pending_sale_has_listing: a sale_lock always reserves a live
+--   buy_commitment projection self-consistent with its state discriminator.
+-- - chk_nfts_pending_sale_has_listing: a buy_commitment always reserves a live
 --   listing, so listing_* must remain populated while status='pending_sale'.
 -- - chk_nfts_supply_bounded: distributed + reserved_supply <= max_supply when
 --   bounded (max_supply > 0). Hard backstop against a buggy handler writing over
