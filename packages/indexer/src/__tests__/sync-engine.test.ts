@@ -5,6 +5,39 @@ import { ACTION_TRANSFER, ACTION_BUY, ACTION_NODE_REGISTER } from "@/protocol/in
 
 // ─── Mocks ──────────────────────────────────────────
 
+// Mock @/config.ts before any other import so transitive module loads never
+// trigger the ACTIVE_KEY/POSTING_KEY validation at config.ts:105–116.
+// The sync engine only needs genesisBlock, syncIntervalMs, and protocolId.
+mock.module("@/config.ts", () => ({
+	config: {
+		genesisBlock: 105530500,
+		syncIntervalMs: 3000,
+		protocolId: "nftlox_testnet",
+		logLevel: "info",
+		hiveAccount: "gametest.ing",
+		indexerRole: "sync",
+		nodeRegister: false,
+		batchSize: 1000,
+		databaseUrl: "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer",
+		nodeEnv: "test",
+		enableSwagger: false,
+		healthPort: 0,
+		nodeUrl: "",
+		postgresPassword: "nftlox_dev",
+		postgresUser: "nftlox",
+		postgresDb: "nftlox_indexer",
+		hiveEndpoints: ["https://api.syncad.com"],
+		multisigRateLimitMax: 10,
+		multisigRateLimitWindowMs: 60_000,
+		multisigIpRateLimitMax: 30,
+		multisigIpRateLimitWindowMs: 60_000,
+		multisigPowBits: 10,
+		multisigPowTtlMs: 300_000,
+		multisigPowMaxFutureSkewMs: 30_000,
+		multisigPowReplayCacheMax: 10_000,
+	},
+}));
+
 // Shared state between getLastBlock/updateLastBlock so the continuity check works
 let trackedLastBlock = 0;
 
@@ -29,9 +62,21 @@ const mockWithTransaction = mock(async (fn: (txn: unknown) => Promise<void>) => 
 	await fn(mockTxn);
 });
 
-// Fake txn object that supports tagged template literals (for SET LOCAL)
+// Returns a postgres.js-like Result: an Array with `.count` and `.command`.
+// Every txn`...` call needs this shape so callers can read .count, destructure
+// index 0, iterate, or spread — just as they would with a real postgres Result.
+function makePgResult(rows: unknown[] = []): unknown[] & { count: number; command: string } {
+	const result = rows.slice() as unknown[] & { count: number; command: string };
+	result.count = rows.length;
+	result.command = "SELECT";
+	return result;
+}
+
+// Fake txn object that supports tagged template literals (for SET LOCAL,
+// sweepExpiredSaleLocks .count reads, updateLastBlock, and any other query
+// that the sync engine runs inside withTransaction).
 const mockTxn = Object.assign(
-	(_strings: TemplateStringsArray, ..._values: unknown[]) => Promise.resolve(),
+	(_strings: TemplateStringsArray, ..._values: unknown[]) => Promise.resolve(makePgResult()),
 	{ __mock: true },
 );
 
@@ -80,16 +125,35 @@ mock.module("@/processor/action-router.ts", () => ({
 	routeOperation: mockRouteOperation,
 }));
 
+// Minimal StateRootBuffer stub — only the fields that nft-mutations.ts and
+// state-root.ts touch at runtime (all through the mock txn, which never
+// reaches real DB code). Keeping it structurally complete avoids TS import
+// errors from transitively-imported query modules.
+const mockBuffer = {
+	deltas: [] as unknown[],
+	blockNum: 0,
+};
+
 mock.module("@/db/client.ts", () => ({
 	withTransaction: mockWithTransaction,
 	sql: Object.assign(
-		(strings: TemplateStringsArray, ..._values: unknown[]) => Promise.resolve([]),
+		(_strings: TemplateStringsArray, ..._values: unknown[]) => Promise.resolve([]),
 		{
-			begin: (fn: (sql: unknown) => Promise<unknown>) => fn((s: TemplateStringsArray, ..._v: unknown[]) => Promise.resolve([])),
+			begin: (fn: (sql: unknown) => Promise<unknown>) => fn((_s: TemplateStringsArray, ..._v: unknown[]) => Promise.resolve([])),
 			end: () => Promise.resolve(),
 			unsafe: (_query: string) => Promise.resolve([]),
+			json: (v: unknown) => v,
 		},
 	),
+	// Used by nft-mutations.ts and action-router.ts for state-root tracking.
+	// The mock txn never triggers real flush paths, so returning the stub is safe.
+	getStateRootBuffer: (_txn: unknown) => mockBuffer,
+	getTxSavepointHandle: (_txn: unknown) => ({
+		savepoint: (fn: (sp: unknown) => Promise<unknown>) => fn(mockTxn),
+	}),
+	attachScope: (queryable: unknown, _ctx: unknown) => queryable,
+	// toJsonb is used by nft-mutations.ts and sync.ts — just pass through the value.
+	toJsonb: (value: unknown) => value,
 	clampLimit: (limit: number, defaultVal = 50) => {
 		if (limit < 1 || !Number.isFinite(limit)) return defaultVal;
 		return Math.min(limit, 1000);
@@ -446,7 +510,7 @@ describe("syncCycle", () => {
 		const trackingTxn = Object.assign(
 			(strings: TemplateStringsArray, ..._values: unknown[]) => {
 				txnCalls.push(strings.join(""));
-				return Promise.resolve();
+				return Promise.resolve(makePgResult());
 			},
 			{ __mock: true },
 		);

@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
+import * as realProtocol from "@/protocol/index.ts";
 
 const fixedNowMs = Date.parse("2026-04-07T12:00:00.000Z");
 const realDateNow = Date.now;
@@ -41,6 +42,12 @@ mock.module("@/db/queries/stats.ts", () => ({
 	getProtocolStats: () => Promise.resolve({ totalCollections: 1 }),
 }));
 
+mock.module("@/db/queries/nodes.ts", () => ({
+	getSettlementNodeSnapshot: () => Promise.resolve(null),
+	assertActiveSettlementNode: () => Promise.reject(new Error("not mocked")),
+	getNodeActivityStatus: () => Promise.resolve(null),
+}));
+
 mock.module("@/scanner/sync-state.ts", () => ({
 	getStartupTime: () => mockStartupTime,
 }));
@@ -70,13 +77,13 @@ mock.module("@/api/services/multisig-health.ts", () => ({
 	}),
 }));
 
+// Process-wide mock: spread the real module so transitive importers
+// (pow-validator, idempotency-cache, state-root-hash → canonicalJson) keep
+// working. Only override the values that the /api/status assertions pin.
 mock.module("@/protocol/index.ts", () => ({
-	PROTOCOL_VERSION: "0.2.1",
+	...realProtocol,
 	PROTOCOL_FEE_BPS: 250,
 	MAX_ROYALTY_PCT: 50,
-	percentageToBasisPoints: (percentage: number) => Math.round(percentage * 100),
-	SUPPORTED_CURRENCIES: ["HIVE", "HBD"],
-	ALL_ACTIONS: ["buy", "list"],
 	PROTOCOL_GENESIS_BLOCK: 105558142,
 }));
 

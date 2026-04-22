@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import * as realStateRoot from "@/db/queries/state-root.ts";
 
 // GET /api/state-root contract
 // ----------------------------
@@ -17,9 +18,11 @@ let mockMeta = {
 	updated_at: fixedUpdatedAt,
 };
 
-// Bun's `mock.module` is process-wide, so the stub must keep every export
-// that other test files may touch via `nft-mutations.ts` → `state-root.ts`.
+// Bun's `mock.module` is process-wide. Spread the real module so pure helpers
+// (parseNftStateRow, flushStateRootBuffer, queueStateRootDelta, …) stay live
+// for other test files that transitively load state-root.ts.
 mock.module("@/db/queries/state-root.ts", () => ({
+	...realStateRoot,
 	getFormattedStateRoot: () => Promise.resolve(mockMeta),
 	getStateMeta: () => Promise.resolve({
 		state_root: new Uint8Array(32),

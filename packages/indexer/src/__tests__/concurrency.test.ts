@@ -25,8 +25,16 @@ const mockGetTransfersInTransaction = mock((_txId: string) => Promise.resolve([]
 const mockParseHafAHOperations = mock((_ops: HafAHOperation[]): ParseResult => ({ ops: [], rejected: [] }));
 const mockRouteOperation = mock((_op: ParsedOperation, _txn: unknown) => Promise.resolve());
 
+function makePostgresResult(rows: unknown[] = []): unknown[] & { count: number; command: string } {
+	const result = [...rows] as unknown[] & { count: number; command: string };
+	result.count = rows.length;
+	result.command = "SELECT";
+	return result;
+}
+
 const mockTxn = Object.assign(
-	(_strings: TemplateStringsArray, ..._values: unknown[]) => Promise.resolve(),
+	(_strings: TemplateStringsArray, ..._values: unknown[]) =>
+		Promise.resolve(makePostgresResult()),
 	{ __mock: true },
 );
 
@@ -79,6 +87,45 @@ mock.module("@/processor/action-router.ts", () => ({
 	routeOperation: mockRouteOperation,
 }));
 
+// config.ts throws at module-load time when INDEXER_ROLE=both and ACTIVE_KEY is
+// absent (the default when running bun test from the monorepo root). Mock it so
+// the file is safely importable regardless of the environment.
+mock.module("@/config.ts", () => ({
+	config: {
+		protocolId: "nftlox_testnet",
+		genesisBlock: 105558142,
+		hiveAccount: "gametest.ing",
+		nodeUrl: "",
+		indexerRole: "sync",
+		syncIntervalMs: 3000,
+		batchSize: 1000,
+		logLevel: "info",
+		hiveEndpoints: ["https://api.syncad.com"],
+		nodeEnv: "test",
+		enableSwagger: false,
+		healthPort: 0,
+		nodeRegister: false,
+		multisigRateLimitMax: 10,
+		multisigRateLimitWindowMs: 60_000,
+		multisigIpRateLimitMax: 30,
+		multisigIpRateLimitWindowMs: 60_000,
+		multisigPowBits: 10,
+		multisigPowTtlMs: 300_000,
+		multisigPowMaxFutureSkewMs: 30_000,
+		multisigPowReplayCacheMax: 10_000,
+	},
+}));
+
+const mockStateRootBuffer = Object.freeze({
+	queue: () => {},
+	size: () => 0,
+	isEmpty: () => true,
+	iter: function* () {},
+	maxBlockNum: () => 0,
+	checkpoint: () => new Map(),
+	rollbackTo: (_snap: unknown) => {},
+});
+
 mock.module("@/db/client.ts", () => ({
 	withTransaction: mockWithTransaction,
 	sql: Object.assign(
@@ -95,6 +142,8 @@ mock.module("@/db/client.ts", () => ({
 	},
 	testConnection: () => Promise.resolve(),
 	closePool: () => Promise.resolve(),
+	getStateRootBuffer: (_txn: unknown) => mockStateRootBuffer,
+	toJsonb: (value: unknown) => value,
 }));
 
 const { syncCycle, setRunning, resetHeadTracker } = await import("@/scanner/sync-engine.ts");

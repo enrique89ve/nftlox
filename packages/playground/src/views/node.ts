@@ -124,6 +124,35 @@ type HafAHResponse = Readonly<{
 	next_operation_begin?: string | null;
 }>;
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+	return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function isHafAHOperation(v: unknown): v is HafAHOperation {
+	if (!isRecord(v)) return false;
+	if (typeof v.block !== "number") return false;
+	const op = v.op;
+	if (!isRecord(op)) return false;
+	const value = op.value;
+	if (!isRecord(value)) return false;
+	return typeof value.id === "string" && typeof value.json === "string";
+}
+
+function isHafAHResponse(v: unknown): v is HafAHResponse {
+	if (!isRecord(v)) return false;
+	if (v.ops !== undefined && !Array.isArray(v.ops)) return false;
+	const next = v.next_operation_begin;
+	if (next !== undefined && next !== null && typeof next !== "string") return false;
+	return true;
+}
+
+function parsePositiveInt(raw: string | null | undefined, fallback: number): number {
+	if (!raw) return fallback;
+	const parsed = Number.parseInt(raw, 10);
+	if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+	return parsed;
+}
+
 type BuildNodeRegisterResponse = Readonly<{
 	success?: boolean;
 	error?: string;
@@ -385,12 +414,13 @@ async function loadIndexedOperations(): Promise<void> {
 function sortHiveOperationsDescending(a: HiveNodeOperation, b: HiveNodeOperation): number {
 	if (a.blockNum !== b.blockNum) return b.blockNum - a.blockNum;
 	if (a.timestamp !== b.timestamp) return b.timestamp.localeCompare(a.timestamp);
-	return String(b.operationId).localeCompare(String(a.operationId), undefined, { numeric: true });
+	return b.operationId.localeCompare(a.operationId, undefined, { numeric: true });
 }
 
-function matchHafAHOperation(raw: HafAHOperation, account: string): HiveNodeOperation | null {
-	const value = raw.op?.value;
-	if (!value || value.id !== PROTOCOL_ID || typeof value.json !== "string") return null;
+function matchHafAHOperation(raw: unknown, account: string): HiveNodeOperation | null {
+	if (!isHafAHOperation(raw)) return null;
+	const value = raw.op.value;
+	if (value.id !== PROTOCOL_ID) return null;
 
 	const activeAuths = value.required_auths ?? [];
 	const postingAuths = value.required_posting_auths ?? [];
@@ -442,14 +472,23 @@ async function scanHafAH(
 			throw new Error(`HafAH HTTP ${response.status}: ${response.statusText}`);
 		}
 
-		const data = await response.json() as HafAHResponse;
-		const ops = data.ops ?? [];
-		for (const raw of ops) {
-			const op = matchHafAHOperation(raw, account);
-			if (op) matched.push(op);
+		let raw: unknown;
+		try {
+			raw = await response.json();
+		} catch (jsonError) {
+			const cause = jsonError instanceof Error ? jsonError : new Error(String(jsonError));
+			throw new Error("HafAH returned non-JSON body", { cause });
+		}
+		if (!isHafAHResponse(raw)) {
+			throw new Error("HafAH returned an unexpected response shape");
+		}
+		const ops = raw.ops ?? [];
+		for (const op of ops) {
+			const match = matchHafAHOperation(op, account);
+			if (match) matched.push(match);
 		}
 
-		const next = data.next_operation_begin;
+		const next = raw.next_operation_begin;
 		if (next === null || next === undefined || next === "0" || next === operationBegin) break;
 		operationBegin = next;
 	}
@@ -462,8 +501,8 @@ async function loadHiveOperations(): Promise<void> {
 	if (!container || !currentNodeAccount || !currentStatus) return;
 	container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Loading Hive protocol operations...</p></div>';
 
-	const limit = Math.max(1, parseInt(($("node-hive-limit") as HTMLSelectElement | null)?.value ?? "25", 10));
-	const windowBlocks = Math.max(1, parseInt(($("node-hive-window") as HTMLSelectElement | null)?.value ?? "2000", 10));
+	const limit = parsePositiveInt(($("node-hive-limit") as HTMLSelectElement | null)?.value, 25);
+	const windowBlocks = parsePositiveInt(($("node-hive-window") as HTMLSelectElement | null)?.value, 2000);
 
 	const toBlock = currentStatus.irreversibleBlock && currentStatus.irreversibleBlock > 0
 		? currentStatus.irreversibleBlock
@@ -487,11 +526,12 @@ async function loadHiveOperations(): Promise<void> {
 		};
 		renderHiveOperations(page);
 	} catch (error) {
-		const message = (error as Error).name === "TimeoutError"
+		const cause = error instanceof Error ? error : new Error(String(error));
+		const message = cause.name === "TimeoutError"
 			? "Timed out scanning Hive L1. Try a smaller window."
 			: "Failed to load Hive protocol operations.";
 		container.innerHTML = `<div class="empty-state"><p class="empty-state-text">${escapeHtml(message)}</p></div>`;
-		log(`Node Hive operations failed: ${(error as Error).message}`, "error");
+		log(`Node Hive operations failed: ${cause.message}`, "error");
 	}
 }
 
