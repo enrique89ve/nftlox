@@ -144,33 +144,6 @@ export interface IndexedNodeOperationsPage {
 	operations: ReadonlyArray<IndexedNodeOperation>;
 }
 
-export type HiveNodeOperationStatus = "parsed" | "rejected";
-
-export interface HiveNodeOperation {
-	status: HiveNodeOperationStatus;
-	txId: string;
-	operationId: string;
-	blockNum: number;
-	timestamp: string;
-	signer: string | null;
-	authLevel: "active" | "posting" | null;
-	action: string | null;
-	version: string | null;
-	reason: string | null;
-	data: Record<string, unknown> | null;
-}
-
-export interface HiveNodeOperationsPage {
-	account: string;
-	fromBlock: number;
-	toBlock: number;
-	windowBlocks: number;
-	limit: number;
-	total: number;
-	rejected: number;
-	operations: ReadonlyArray<HiveNodeOperation>;
-}
-
 export interface ProtocolStats {
 	total_collections: number;
 	total_nfts: number;
@@ -475,11 +448,6 @@ export type NodeOperationsQueryParams = QueryParams & Readonly<{
 	offset?: number;
 }>;
 
-export type NodeHiveOperationsQueryParams = QueryParams & Readonly<{
-	limit?: number;
-	windowBlocks?: number;
-}>;
-
 /** Internal: compact response from the instances endpoint (?compact=true). */
 interface CompactInstancesResponse {
 	seed: IndexerNftSummary;
@@ -592,7 +560,6 @@ export interface IndexerClient {
 	getStats(): Promise<ProtocolStats>;
 	getNodeProfile(account: string): Promise<IndexerNodeProfile>;
 	getNodeOperations(account: string, params?: NodeOperationsQueryParams): Promise<IndexedNodeOperationsPage>;
-	getNodeHiveOperations(account: string, params?: NodeHiveOperationsQueryParams): Promise<HiveNodeOperationsPage>;
 
 	// Collections
 	getCollections(params?: CollectionsQueryParams): Promise<IndexerCollectionSummary[]>;
@@ -657,8 +624,6 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 			get<IndexerNodeProfile>(baseUrl, `/api/nodes/${encodeURIComponent(account)}`, undefined, http),
 		getNodeOperations: (account, params) =>
 			get<IndexedNodeOperationsPage>(baseUrl, `/api/nodes/${encodeURIComponent(account)}/operations`, params, http),
-		getNodeHiveOperations: (account, params) =>
-			get<HiveNodeOperationsPage>(baseUrl, `/api/nodes/${encodeURIComponent(account)}/hive-operations`, params, http),
 
 		// ---- Collections ----
 		getCollections: (params) =>

@@ -312,19 +312,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			return json(await indexer.getNodeOperations(account, { limit, offset }));
 		}),
 
-	"/api/node/hive-operations": (req: Request) =>
-		safeHandler(async () => {
-			const url = new URL(req.url);
-			const status = await indexer.getStatus();
-			const account = (url.searchParams.get("account") || status.nodeAccount || "").trim().toLowerCase();
-			if (!account) {
-				return json({ error: "Indexer node account unavailable" }, 502);
-			}
-			const limit = Math.min(parseInt(url.searchParams.get("limit") || "25", 10), 100);
-			const windowBlocks = Math.min(parseInt(url.searchParams.get("windowBlocks") || "2000", 10), 2000);
-			return json(await indexer.getNodeHiveOperations(account, { limit, windowBlocks }));
-		}),
-
 	// Status/Stats
 	"/api/stats": () =>
 		safeHandler(async () => {

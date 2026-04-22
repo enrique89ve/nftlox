@@ -211,7 +211,6 @@ Query API (via Indexer):
   GET  /api/marketplace/listings
   GET  /api/node
   GET  /api/node/operations
-  GET  /api/node/hive-operations
   GET  /api/stats
   GET  /api/status
   GET  /api/health

@@ -1,6 +1,13 @@
+import { PROTOCOL_ID } from "nftlox-sdk";
 import { $, escapeHtml, log } from "../shared/dom";
 import { getConnectedUser } from "../shared/state";
 import { broadcastOperation } from "../shared/keychain";
+
+const HAFAH_URL = "https://api.syncad.com";
+const CUSTOM_JSON_OP_TYPE = 18;
+const HAFAH_PAGE_SIZE = 1000;
+const HAFAH_MAX_PAGES = 25;
+const HAFAH_SCAN_TIMEOUT_MS = 45_000;
 
 type NodeStatusSummary = Readonly<{
 	nodeAccount: string;
@@ -19,6 +26,7 @@ type NodeStatusSummary = Readonly<{
 	lastBlock: number;
 	headBlock: number;
 	irreversibleBlock?: number;
+	genesisBlock?: number;
 	blocksBehind: number;
 	inSync: boolean;
 }>;
@@ -76,17 +84,14 @@ type IndexedNodeOperationsPage = Readonly<{
 }>;
 
 type HiveNodeOperation = Readonly<{
-	status: "parsed" | "rejected";
 	txId: string;
 	operationId: string;
 	blockNum: number;
 	timestamp: string;
-	signer: string | null;
-	authLevel: "active" | "posting" | null;
-	action: string | null;
-	version: string | null;
-	reason: string | null;
-	data: Record<string, unknown> | null;
+	signer: string;
+	authLevel: "active" | "posting";
+	payload: Record<string, unknown> | null;
+	rawJson: string;
 }>;
 
 type HiveNodeOperationsPage = Readonly<{
@@ -96,8 +101,27 @@ type HiveNodeOperationsPage = Readonly<{
 	windowBlocks: number;
 	limit: number;
 	total: number;
-	rejected: number;
 	operations: ReadonlyArray<HiveNodeOperation>;
+}>;
+
+type HafAHCustomJsonValue = Readonly<{
+	id: string;
+	json: string;
+	required_auths?: ReadonlyArray<string>;
+	required_posting_auths?: ReadonlyArray<string>;
+}>;
+
+type HafAHOperation = Readonly<{
+	block: number;
+	trx_id?: string;
+	operation_id?: string | number;
+	timestamp?: string;
+	op: Readonly<{ type: string; value: HafAHCustomJsonValue }>;
+}>;
+
+type HafAHResponse = Readonly<{
+	ops?: ReadonlyArray<HafAHOperation>;
+	next_operation_begin?: string | null;
 }>;
 
 type BuildNodeRegisterResponse = Readonly<{
@@ -296,7 +320,6 @@ function renderHiveMeta(page: HiveNodeOperationsPage): void {
 	container.innerHTML = [
 		chip(`blocks ${page.fromBlock}..${page.toBlock}`),
 		chip(`total ${page.total}`),
-		chip(`rejected ${page.rejected}`, page.rejected > 0 ? "warn" : ""),
 	].join("");
 }
 
@@ -314,24 +337,22 @@ function renderHiveOperations(page: HiveNodeOperationsPage): void {
 		<table class="data-table">
 			<thead>
 				<tr>
-					<th>Status</th>
-					<th>Action</th>
-					<th>Auth</th>
 					<th>Block</th>
 					<th>Tx</th>
-					<th>Details</th>
+					<th>Auth</th>
+					<th>Signer</th>
+					<th>Payload</th>
 				</tr>
 			</thead>
 			<tbody>
 				${page.operations.map((op) => {
-					const details = op.reason ?? (op.data ? JSON.stringify(op.data, null, 2) : "No payload details");
+					const details = op.payload ? JSON.stringify(op.payload, null, 2) : op.rawJson;
 					return `
 						<tr>
-							<td>${chip(op.status, op.status === "parsed" ? "good" : "warn")}</td>
-							<td><span class="node-code">${escapeHtml(op.action ?? "-")}</span></td>
-							<td><span class="node-code">${escapeHtml(op.authLevel ?? "-")}</span></td>
 							<td>${escapeHtml(formatNumber(op.blockNum))}</td>
 							<td><span class="node-code" title="${escapeHtml(op.txId)}">${escapeHtml(shortHash(op.txId))}</span></td>
+							<td>${chip(op.authLevel, op.authLevel === "active" ? "warn" : "good")}</td>
+							<td><span class="node-code">${escapeHtml(op.signer)}</span></td>
 							<td>
 								<details>
 									<summary class="node-detail-toggle">View</summary>
@@ -361,20 +382,115 @@ async function loadIndexedOperations(): Promise<void> {
 	}
 }
 
+function sortHiveOperationsDescending(a: HiveNodeOperation, b: HiveNodeOperation): number {
+	if (a.blockNum !== b.blockNum) return b.blockNum - a.blockNum;
+	if (a.timestamp !== b.timestamp) return b.timestamp.localeCompare(a.timestamp);
+	return String(b.operationId).localeCompare(String(a.operationId), undefined, { numeric: true });
+}
+
+function matchHafAHOperation(raw: HafAHOperation, account: string): HiveNodeOperation | null {
+	const value = raw.op?.value;
+	if (!value || value.id !== PROTOCOL_ID || typeof value.json !== "string") return null;
+
+	const activeAuths = value.required_auths ?? [];
+	const postingAuths = value.required_posting_auths ?? [];
+	const isActive = activeAuths.some((a) => a.toLowerCase() === account);
+	const isPosting = postingAuths.some((a) => a.toLowerCase() === account);
+	if (!isActive && !isPosting) return null;
+
+	let payload: Record<string, unknown> | null = null;
+	try {
+		const parsed: unknown = JSON.parse(value.json);
+		if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+			payload = parsed as Record<string, unknown>;
+		}
+	} catch {
+		payload = null;
+	}
+
+	return {
+		txId: raw.trx_id ?? "",
+		operationId: String(raw.operation_id ?? ""),
+		blockNum: raw.block,
+		timestamp: raw.timestamp ?? "",
+		signer: account,
+		authLevel: isActive ? "active" : "posting",
+		payload,
+		rawJson: value.json,
+	};
+}
+
+async function scanHafAH(
+	fromBlock: number,
+	toBlock: number,
+	account: string,
+	signal: AbortSignal,
+): Promise<HiveNodeOperation[]> {
+	const matched: HiveNodeOperation[] = [];
+	let operationBegin = "-1";
+
+	for (let page = 0; page < HAFAH_MAX_PAGES; page++) {
+		const url = `${HAFAH_URL}/hafah-api/operations`
+			+ `?from-block=${fromBlock}`
+			+ `&to-block=${toBlock}`
+			+ `&operation-types=${CUSTOM_JSON_OP_TYPE}`
+			+ `&page-size=${HAFAH_PAGE_SIZE}`
+			+ `&operation-begin=${operationBegin}`;
+
+		const response = await fetch(url, { signal });
+		if (!response.ok) {
+			throw new Error(`HafAH HTTP ${response.status}: ${response.statusText}`);
+		}
+
+		const data = await response.json() as HafAHResponse;
+		const ops = data.ops ?? [];
+		for (const raw of ops) {
+			const op = matchHafAHOperation(raw, account);
+			if (op) matched.push(op);
+		}
+
+		const next = data.next_operation_begin;
+		if (next === null || next === undefined || next === "0" || next === operationBegin) break;
+		operationBegin = next;
+	}
+
+	return matched;
+}
+
 async function loadHiveOperations(): Promise<void> {
 	const container = $("node-hive-operations");
-	if (!container || !currentNodeAccount) return;
+	if (!container || !currentNodeAccount || !currentStatus) return;
 	container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Loading Hive protocol operations...</p></div>';
 
-	const limit = ($("node-hive-limit") as HTMLSelectElement | null)?.value ?? "25";
-	const windowBlocks = ($("node-hive-window") as HTMLSelectElement | null)?.value ?? "2000";
+	const limit = Math.max(1, parseInt(($("node-hive-limit") as HTMLSelectElement | null)?.value ?? "25", 10));
+	const windowBlocks = Math.max(1, parseInt(($("node-hive-window") as HTMLSelectElement | null)?.value ?? "2000", 10));
+
+	const toBlock = currentStatus.irreversibleBlock && currentStatus.irreversibleBlock > 0
+		? currentStatus.irreversibleBlock
+		: currentStatus.headBlock;
+	const genesisBlock = currentStatus.genesisBlock ?? 0;
+	const fromBlock = Math.max(genesisBlock, toBlock - windowBlocks + 1);
+	const account = currentNodeAccount.toLowerCase();
 
 	try {
-		const response = await fetch(`/api/node/hive-operations?limit=${encodeURIComponent(limit)}&windowBlocks=${encodeURIComponent(windowBlocks)}`);
-		const page = await response.json() as HiveNodeOperationsPage;
+		const signal = AbortSignal.timeout(HAFAH_SCAN_TIMEOUT_MS);
+		const matched = await scanHafAH(fromBlock, toBlock, account, signal);
+		const sorted = matched.slice().sort(sortHiveOperationsDescending);
+		const page: HiveNodeOperationsPage = {
+			account,
+			fromBlock,
+			toBlock,
+			windowBlocks: toBlock - fromBlock + 1,
+			limit,
+			total: matched.length,
+			operations: sorted.slice(0, limit),
+		};
 		renderHiveOperations(page);
 	} catch (error) {
-		container.innerHTML = '<div class="empty-state"><p class="empty-state-text">Failed to load Hive protocol operations.</p></div>';
+		const message = (error as Error).name === "TimeoutError"
+			? "Timed out scanning Hive L1. Try a smaller window."
+			: "Failed to load Hive protocol operations.";
+		container.innerHTML = `<div class="empty-state"><p class="empty-state-text">${escapeHtml(message)}</p></div>`;
 		log(`Node Hive operations failed: ${(error as Error).message}`, "error");
 	}
 }
