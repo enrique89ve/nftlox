@@ -100,7 +100,7 @@ mock.module("@/db/queries/sync.ts", () => ({
 // without starting syncLoop, so the real dedicated-connection path would fail.
 // verifyLockHeld is mocked true so the per-batch fence treats the lock as held.
 mock.module("@/scanner/sync-lock.ts", () => ({
-	acquireSyncLock: mock(() => Promise.resolve(true)),
+	acquireSyncLock: mock(() => Promise.resolve({ status: "acquired" })),
 	releaseSyncLock: mock(() => Promise.resolve()),
 	verifyLockHeld: mock(() => Promise.resolve(true)),
 }));

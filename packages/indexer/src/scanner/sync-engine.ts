@@ -170,11 +170,18 @@ let lastKnownIrreversibleBlock = 0;
  */
 async function waitForLock(): Promise<boolean> {
   while (running) {
-    const acquired = await acquireSyncLock();
-    if (acquired) return true;
-    log.warn("Another instance holds the sync lock — retrying", {
-      retryMs: LOCK_RETRY_INTERVAL_MS,
-    });
+    const result = await acquireSyncLock();
+    if (result.status === "acquired") return true;
+    if (result.status === "busy") {
+      log.warn("Another instance holds the sync lock — retrying", {
+        retryMs: LOCK_RETRY_INTERVAL_MS,
+      });
+    } else {
+      log.warn("Sync lock unavailable — PostgreSQL connection retry scheduled", {
+        error: result.error,
+        retryMs: LOCK_RETRY_INTERVAL_MS,
+      });
+    }
     await sleep(LOCK_RETRY_INTERVAL_MS);
   }
   return false;
