@@ -222,7 +222,6 @@ export type NftReturnData = SeedProvenance & {
 
 export type NodeRegisterData = {
 	readonly endpoint: string;
-	readonly publicKey: string;
 };
 
 // Node heartbeat — periodic proof-of-liveness from registered nodes.

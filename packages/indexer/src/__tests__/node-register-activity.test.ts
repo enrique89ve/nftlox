@@ -10,7 +10,6 @@ import {
 
 const TEST_ACCOUNT = "register-node";
 const NODE_ENDPOINT = "https://register.example.com";
-const NODE_PUBLIC_KEY = "STM6MRyAjQq8ud7hVNYcfnVPJqcVpscN5SoFMugdoJ2M6YB8Wf7b2";
 
 let opCounter = 0;
 
@@ -25,7 +24,7 @@ function makeRegisterOp(blockNum: number, overrides: Partial<ParsedOperation> = 
 		authLevel: "posting",
 		action: ACTION_NODE_REGISTER as ParsedOperation["action"],
 		version: "0.6.3",
-		data: { endpoint: NODE_ENDPOINT, publicKey: NODE_PUBLIC_KEY },
+		data: { endpoint: NODE_ENDPOINT },
 		...overrides,
 	};
 }
@@ -110,27 +109,25 @@ describe("handleNodeRegister — activity and status invariants", () => {
 		expect(snapshot!.reason).toMatch(/node status is 'banned'/);
 	});
 
-	test("re-register still refreshes endpoint, public_key, block_num, tx_id", async () => {
+	test("re-register still refreshes normalized endpoint, block_num, tx_id", async () => {
 		const firstRegisterBlock = 1_000;
 		await handleNodeRegister(makeRegisterOp(firstRegisterBlock), sql);
 
-		const newEndpoint = "https://register-rotated.example.com";
-		const newKey = "STM8ZSyzjPm48GmUuMSRufkVYkwYbZzbxeMysAVp7KFQwbTf98TcG";
+		const newEndpoint = "https://register-rotated.example.com/rpc/";
 		const secondRegisterBlock = firstRegisterBlock + 500;
 		await handleNodeRegister(
 			makeRegisterOp(secondRegisterBlock, {
-				data: { endpoint: newEndpoint, publicKey: newKey },
+				data: { endpoint: newEndpoint },
 				txId: "tx_reg_rotated",
 			}),
 			sql,
 		);
 
 		const [row] = await sql`
-			SELECT endpoint, public_key, block_num, tx_id
+			SELECT endpoint, block_num, tx_id
 			FROM l2_nodes WHERE account = ${TEST_ACCOUNT}
 		`;
-		expect(row!.endpoint).toBe(newEndpoint);
-		expect(row!.public_key).toBe(newKey);
+		expect(row!.endpoint).toBe("register-rotated.example.com/rpc");
 		expect(Number(row!.block_num)).toBe(secondRegisterBlock);
 		expect(row!.tx_id).toBe("tx_reg_rotated");
 	});

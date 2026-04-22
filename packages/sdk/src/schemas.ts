@@ -15,6 +15,8 @@ import {
 	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
 	INSTANCE_FEE_PER_N,
 	MIN_LISTING_TTL_MS,
+	normalizeNodeEndpoint,
+	validateNodeEndpoint,
 } from "@nftlox/protocol";
 
 export { validateHiveUsername };
@@ -24,6 +26,14 @@ const httpUrlSchema = z.string().url().refine(
 	(val) => /^https?:\/\//i.test(val),
 	{ message: "URL must use http or https protocol" },
 );
+
+export const nodeEndpointSchema = z.string()
+	.trim()
+	.refine(
+		(val) => validateNodeEndpoint(val) === null,
+		{ message: "Endpoint must be a valid host or http(s) URL" },
+	)
+	.transform((val) => normalizeNodeEndpoint(val));
 
 // ============ REUSABLE SCHEMAS ============
 
@@ -314,8 +324,7 @@ export const nftReturnInputSchema = seedProvenanceSchema.extend({
 export type NftReturnInput = z.infer<typeof nftReturnInputSchema>;
 
 export const nodeRegisterInputSchema = z.object({
-	endpoint: httpUrlSchema,
-	publicKey: z.string().min(10, "Public key must be at least 10 characters"),
+	endpoint: nodeEndpointSchema,
 });
 export type NodeRegisterInput = z.infer<typeof nodeRegisterInputSchema>;
 

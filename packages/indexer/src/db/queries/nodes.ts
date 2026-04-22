@@ -12,7 +12,6 @@ type NodeRegistryRow = Readonly<{
 
 type NodeProfileRow = NodeRegistryRow & Readonly<{
 	endpoint: string;
-	public_key: string;
 	tx_id: string;
 	created_at: Date | string;
 	updated_at: Date | string;
@@ -60,7 +59,6 @@ export type NodeHeartbeatRecord = Readonly<{
 
 export type NodeProfile = SettlementNodeSnapshot & Readonly<{
 	endpoint: string;
-	publicKey: string;
 	registrationTxId: string;
 	createdAt: string;
 	updatedAt: string;
@@ -186,7 +184,7 @@ export async function getNodeProfile(
 	const normalizedAccount = account.trim().toLowerCase();
 	const [row, snapshot, lastHeartbeatRow, heartbeatCountRow] = await Promise.all([
 		txn<NodeProfileRow[]>`
-			SELECT account, endpoint, public_key, status, block_num, tx_id, created_at, updated_at, last_heartbeat_block
+			SELECT account, endpoint, status, block_num, tx_id, created_at, updated_at, last_heartbeat_block
 			FROM l2_nodes
 			WHERE account = ${normalizedAccount}
 		`,
@@ -221,7 +219,6 @@ export async function getNodeProfile(
 	return {
 		...snapshot,
 		endpoint: base.endpoint,
-		publicKey: base.public_key,
 		registrationTxId: base.tx_id,
 		createdAt: toIsoString(base.created_at),
 		updatedAt: toIsoString(base.updated_at),

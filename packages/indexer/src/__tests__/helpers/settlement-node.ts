@@ -28,15 +28,13 @@ export async function seedActiveSettlementNode(
 		INSERT INTO l2_nodes (
 			account,
 			endpoint,
-			public_key,
 			status,
 			block_num,
 			last_heartbeat_block,
 			tx_id
 		) VALUES (
 			${account},
-			${`https://${account}.example.com`},
-			'STM_mock_public_key',
+			${`${account}.example.com`},
 			'active',
 			${registeredBlock},
 			${registeredBlock},
@@ -44,7 +42,6 @@ export async function seedActiveSettlementNode(
 		)
 		ON CONFLICT (account) DO UPDATE SET
 			endpoint = EXCLUDED.endpoint,
-			public_key = EXCLUDED.public_key,
 			status = 'active',
 			block_num = EXCLUDED.block_num,
 			last_heartbeat_block = EXCLUDED.last_heartbeat_block,

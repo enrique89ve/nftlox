@@ -93,6 +93,10 @@ function isCollectionMultisigResponse(v: unknown): v is CollectionMultisigRespon
 	return typeof v === "object" && v !== null && typeof (v as Record<string, unknown>).ok === "boolean";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
 /** Derive keyType from the SDK operation — single source of truth */
 function keyTypeFromOp(operation: unknown): "Active" | "Posting" {
 	const op = operation as [string, { required_auths?: string[] }];
@@ -342,7 +346,11 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/node-register": buildRoute((body) => {
-		const result = buildNodeRegister(body);
+		if (!isRecord(body)) return json({ success: false, error: "Invalid request body" }, 400);
+		const result = buildNodeRegister({
+			nodeAccount: typeof body.nodeAccount === "string" ? body.nodeAccount : "",
+			endpoint: typeof body.endpoint === "string" ? body.endpoint : "",
+		});
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,

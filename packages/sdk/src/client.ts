@@ -108,7 +108,6 @@ export interface IndexerNodeProfile {
 	account: string;
 	status: NodeRegistryStatus;
 	endpoint: string;
-	publicKey: string;
 	registeredBlock: number;
 	registrationTxId: string;
 	createdAt: string;

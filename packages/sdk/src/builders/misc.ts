@@ -196,7 +196,6 @@ export function buildNodeRegister(input: NodeRegisterBuilderInput): KeychainResu
 
 	const nodeRegisterData: NodeRegisterData = {
 		endpoint: data.endpoint,
-		publicKey: data.publicKey,
 	};
 
 	const payload = createPayload("node_register", nodeRegisterData);

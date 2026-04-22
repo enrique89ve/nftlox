@@ -8,3 +8,4 @@ export * from "./schema";
 export * from "./dna";
 export * from "./payload";
 export * from "./action-data";
+export * from "./node-endpoint";

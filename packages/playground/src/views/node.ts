@@ -35,7 +35,6 @@ type NodeProfile = Readonly<{
 	account: string;
 	status: "active" | "banned";
 	endpoint: string;
-	publicKey: string;
 	registeredBlock: number;
 	registrationTxId: string;
 	createdAt: string;
@@ -198,7 +197,6 @@ function renderProfile(status: NodeStatusSummary | null, profile: NodeProfile | 
 		["Registered", status.nodeRegistered ? "yes" : "no"],
 		["Registration block", formatMaybe(profile?.registeredBlock ?? status.nodeRegistrationBlock)],
 		["Registration tx", shortHash(profile?.registrationTxId)],
-		["Public key", profile?.publicKey ?? "-"],
 		["Last heartbeat block", formatMaybe(profile?.lastHeartbeatBlock ?? status.nodeLastHeartbeatBlock)],
 		["Heartbeat count", formatMaybe(profile?.heartbeatCount)],
 		["Activity block", formatMaybe(profile?.activityBlock ?? status.nodeActivityBlock)],
@@ -224,10 +222,8 @@ function renderProfile(status: NodeStatusSummary | null, profile: NodeProfile | 
 
 function updateRegisterForm(status: NodeStatusSummary, profile: NodeProfile | null): void {
 	const endpointInput = $("node-register-endpoint") as HTMLInputElement | null;
-	const publicKeyInput = $("node-register-public-key") as HTMLInputElement | null;
 	const note = $("node-register-note");
 	if (endpointInput) endpointInput.value = profile?.endpoint ?? status.nodeUrl ?? "";
-	if (publicKeyInput) publicKeyInput.value = profile?.publicKey ?? "";
 
 	const connectedUser = getConnectedUser();
 	const sameUser = Boolean(connectedUser && connectedUser === status.nodeAccount.toLowerCase());
@@ -402,10 +398,9 @@ async function registerNode(): Promise<void> {
 	}
 
 	const endpoint = ($("node-register-endpoint") as HTMLInputElement | null)?.value.trim() ?? "";
-	const publicKey = ($("node-register-public-key") as HTMLInputElement | null)?.value.trim() ?? "";
 
-	if (!endpoint || !publicKey) {
-		log("Endpoint and public key are required", "error");
+	if (!endpoint) {
+		log("Endpoint is required", "error");
 		return;
 	}
 
@@ -416,7 +411,6 @@ async function registerNode(): Promise<void> {
 			body: JSON.stringify({
 				nodeAccount: status.nodeAccount,
 				endpoint,
-				publicKey,
 			}),
 		});
 		const result = await response.json() as BuildNodeRegisterResponse;

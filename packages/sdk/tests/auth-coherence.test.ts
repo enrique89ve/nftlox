@@ -244,12 +244,12 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 
 	test("buildNodeRegister", () => {
 		const r = buildNodeRegister({
-			endpoint: "https://node.example.com",
-			publicKey: "STM6MRyAjQq8ud7hVNYcfnVPJqcVpscN5SoFMugdoJ2M6YB8Wf7b2",
+			endpoint: "https://node.example.com/rpc/",
 			nodeAccount: "indexer-node",
 		});
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "indexer-node");
+		expect(r.payload.data.endpoint).toBe("node.example.com/rpc");
 	});
 
 	test("buildNodeHeartbeat", () => {

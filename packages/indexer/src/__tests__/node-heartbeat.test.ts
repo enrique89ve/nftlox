@@ -10,8 +10,7 @@ import {
 const VALID_STATE_ROOT = `sha256:${"a".repeat(64)}`;
 const TEST_ACCOUNT = "heartbeat-node";
 const UNREGISTERED_ACCOUNT = "stranger-node";
-const NODE_ENDPOINT = "https://heartbeat.example.com";
-const NODE_PUBLIC_KEY = "STM6MRyAjQq8ud7hVNYcfnVPJqcVpscN5SoFMugdoJ2M6YB8Wf7b2";
+const NODE_ENDPOINT = "heartbeat.example.com";
 
 let opCounter = 0;
 
@@ -36,8 +35,8 @@ function makeHeartbeatOp(
 
 async function insertRegisteredNode(account: string, lastHeartbeatBlock: number | null = null): Promise<void> {
 	await sql`
-		INSERT INTO l2_nodes (account, endpoint, public_key, status, last_heartbeat_block, block_num, tx_id)
-		VALUES (${account}, ${NODE_ENDPOINT}, ${NODE_PUBLIC_KEY}, 'active', ${lastHeartbeatBlock}, 99999999, 'tx_register_1')
+		INSERT INTO l2_nodes (account, endpoint, status, last_heartbeat_block, block_num, tx_id)
+		VALUES (${account}, ${NODE_ENDPOINT}, 'active', ${lastHeartbeatBlock}, 99999999, 'tx_register_1')
 		ON CONFLICT (account) DO UPDATE SET
 			last_heartbeat_block = EXCLUDED.last_heartbeat_block
 	`;

@@ -118,7 +118,6 @@ describe("Posting key operations use required_posting_auths", () => {
 	test("node_register", () => {
 		const op = buildOp(ACTION_NODE_REGISTER, "indexer-node", {
 			endpoint: "https://node.example.com",
-			publicKey: "public-key-material",
 		});
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["indexer-node"]);

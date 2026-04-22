@@ -371,7 +371,6 @@ CREATE TABLE IF NOT EXISTS collection_stats (
 CREATE TABLE IF NOT EXISTS l2_nodes (
 	account TEXT PRIMARY KEY,
 	endpoint TEXT NOT NULL,
-	public_key TEXT NOT NULL,
 	status l2_node_status NOT NULL DEFAULT 'active',
 	-- Block number of the most recent accepted `node_heartbeat` from this account.
 	-- NULL until the first heartbeat. Written by `handleNodeHeartbeat`, also used
@@ -499,6 +498,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
 -- present. Keep entries here permanently — removing an ALTER after rollout
 -- would leave freshly-initialized and upgraded DBs on different schemas.
 ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_block BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE l2_nodes DROP COLUMN IF EXISTS public_key;
 
 -- ============================================================================
 -- TRIGGERS — defense-in-depth against projection corruption
