@@ -31,6 +31,7 @@ const PAGE_IDS = [
 	"seed-group",
 	"advanced",
 	"marketplace",
+	"node",
 ] as const;
 
 async function buildIndexHtml(): Promise<string> {
@@ -208,6 +209,9 @@ Query API (via Indexer):
   GET  /api/seed/:seedId/instances
   GET  /api/seed/:id/exists
   GET  /api/marketplace/listings
+  GET  /api/node
+  GET  /api/node/operations
+  GET  /api/node/hive-operations
   GET  /api/stats
   GET  /api/status
   GET  /api/health

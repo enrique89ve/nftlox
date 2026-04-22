@@ -323,6 +323,10 @@ function navigateTo(pageId: string) {
   if (pageId === "marketplace") {
     (window as any).loadListings?.();
   }
+
+  if (pageId === "node") {
+    (window as any).loadNodeView?.();
+  }
 }
 
 function showPage(pageId: string) {
@@ -3285,6 +3289,7 @@ import { initPermissions } from "./views/permissions";
 import { initDebug } from "./views/debug";
 import { initSpv } from "./views/spv";
 import { initCollectionOps } from "./views/collection-ops";
+import { initNode } from "./views/node";
 
 // ============ DASHBOARD STATS ============
 
@@ -3366,4 +3371,5 @@ initPermissions();
 initDebug();
 initSpv();
 initCollectionOps();
+initNode();
 log("Console ready");

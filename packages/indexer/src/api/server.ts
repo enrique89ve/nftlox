@@ -8,6 +8,7 @@ import { nftsRoutes } from "./routes/nfts.ts";
 import { usersRoutes } from "./routes/users.ts";
 import { marketplaceRoutes } from "./routes/marketplace.ts";
 import { statusRoutes } from "./routes/status.ts";
+import { nodesRoutes } from "./routes/nodes.ts";
 import { stateRootRoutes } from "./routes/state-root.ts";
 import { multisigRoutes } from "./routes/multisig.ts";
 import { buyRoutes } from "./routes/buy.ts";
@@ -148,6 +149,7 @@ export function startApiServer(): void {
 					{ name: "NFTs", description: "Individual NFTs (seeds and instances)" },
 					{ name: "Users", description: "User portfolios and activity" },
 					{ name: "Marketplace", description: "Listings and sales" },
+					{ name: "Nodes", description: "Settlement node registry, heartbeat, and protocol activity" },
 				],
 			},
 		}));
@@ -159,6 +161,7 @@ export function startApiServer(): void {
 		.use(usersRoutes)
 		.use(marketplaceRoutes)
 		.use(statusRoutes)
+		.use(nodesRoutes)
 		.use(stateRootRoutes)
 		.use(multisigRoutes)
 		.use(buyRoutes)

@@ -94,6 +94,84 @@ export interface HealthStatus {
 	readiness: HealthCheck;
 }
 
+export type NodeRegistryStatus = "active" | "banned";
+
+export interface IndexerNodeHeartbeat {
+	blockNum: number;
+	stateRoot: string;
+	indexerVersion: string;
+	txId: string;
+	createdAt: string;
+}
+
+export interface IndexerNodeProfile {
+	account: string;
+	status: NodeRegistryStatus;
+	endpoint: string;
+	publicKey: string;
+	registeredBlock: number;
+	registrationTxId: string;
+	createdAt: string;
+	updatedAt: string;
+	lastHeartbeatBlock: number | null;
+	activityBlock: number;
+	activityAgeBlocks: number;
+	activeForSettlement: boolean;
+	staleAfterBlocks: number;
+	reason: string | null;
+	heartbeatCount: number;
+	lastHeartbeat: IndexerNodeHeartbeat | null;
+}
+
+export type IndexedNodeOperationStatus = "confirmed" | "invalid";
+
+export interface IndexedNodeOperation {
+	status: IndexedNodeOperationStatus;
+	txId: string;
+	operationId: string | null;
+	signer: string | null;
+	action: string | null;
+	reason: string | null;
+	blockNum: number;
+	timestamp: string;
+	nftIds: ReadonlyArray<string>;
+}
+
+export interface IndexedNodeOperationsPage {
+	account: string;
+	total: number;
+	offset: number;
+	limit: number;
+	operations: ReadonlyArray<IndexedNodeOperation>;
+}
+
+export type HiveNodeOperationStatus = "parsed" | "rejected";
+
+export interface HiveNodeOperation {
+	status: HiveNodeOperationStatus;
+	txId: string;
+	operationId: string;
+	blockNum: number;
+	timestamp: string;
+	signer: string | null;
+	authLevel: "active" | "posting" | null;
+	action: string | null;
+	version: string | null;
+	reason: string | null;
+	data: Record<string, unknown> | null;
+}
+
+export interface HiveNodeOperationsPage {
+	account: string;
+	fromBlock: number;
+	toBlock: number;
+	windowBlocks: number;
+	limit: number;
+	total: number;
+	rejected: number;
+	operations: ReadonlyArray<HiveNodeOperation>;
+}
+
 export interface ProtocolStats {
 	total_collections: number;
 	total_nfts: number;
@@ -393,6 +471,16 @@ export type OperationStatusQueryParams = QueryParams & Readonly<{
 	action?: string;
 }>;
 
+export type NodeOperationsQueryParams = QueryParams & Readonly<{
+	limit?: number;
+	offset?: number;
+}>;
+
+export type NodeHiveOperationsQueryParams = QueryParams & Readonly<{
+	limit?: number;
+	windowBlocks?: number;
+}>;
+
 /** Internal: compact response from the instances endpoint (?compact=true). */
 interface CompactInstancesResponse {
 	seed: IndexerNftSummary;
@@ -503,6 +591,9 @@ export interface IndexerClient {
 	getMultisigNodeAccount(): Promise<string>;
 	getHealth(): Promise<HealthStatus>;
 	getStats(): Promise<ProtocolStats>;
+	getNodeProfile(account: string): Promise<IndexerNodeProfile>;
+	getNodeOperations(account: string, params?: NodeOperationsQueryParams): Promise<IndexedNodeOperationsPage>;
+	getNodeHiveOperations(account: string, params?: NodeHiveOperationsQueryParams): Promise<HiveNodeOperationsPage>;
 
 	// Collections
 	getCollections(params?: CollectionsQueryParams): Promise<IndexerCollectionSummary[]>;
@@ -563,6 +654,12 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 		),
 		getHealth: () => get<HealthStatus>(baseUrl, "/api/health", undefined, http),
 		getStats: () => get<ProtocolStats>(baseUrl, "/api/stats", undefined, http),
+		getNodeProfile: (account) =>
+			get<IndexerNodeProfile>(baseUrl, `/api/nodes/${encodeURIComponent(account)}`, undefined, http),
+		getNodeOperations: (account, params) =>
+			get<IndexedNodeOperationsPage>(baseUrl, `/api/nodes/${encodeURIComponent(account)}/operations`, params, http),
+		getNodeHiveOperations: (account, params) =>
+			get<HiveNodeOperationsPage>(baseUrl, `/api/nodes/${encodeURIComponent(account)}/hive-operations`, params, http),
 
 		// ---- Collections ----
 		getCollections: (params) =>

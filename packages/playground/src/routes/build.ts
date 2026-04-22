@@ -24,6 +24,7 @@ import {
 	buildUnlist,
 	buildBurn,
 	buildBuy,
+	buildNodeRegister,
 	buildSetData,
 	buildNftApprove,
 	buildNftApproveAll,
@@ -337,6 +338,18 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 			payload: result.payload,
 			keyType: result.keyType,
 			coSigners: result.coSigners,
+		});
+	}),
+
+	"/api/build/node-register": buildRoute((body) => {
+		const result = buildNodeRegister(body);
+		if (!result.success) return json({ success: false, errors: result.errors }, 400);
+		return json({
+			success: true,
+			protocolVersion: PROTOCOL_VERSION,
+			operation: result.operations[0],
+			payload: result.payload,
+			keyType: result.keyType,
 		});
 	}),
 

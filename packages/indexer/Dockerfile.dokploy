@@ -20,7 +20,10 @@ COPY packages/playground/package.json ./packages/playground/
 COPY packages/indexer-snapshot/package.json ./packages/indexer-snapshot/
 
 # Install full workspace deps (dev + prod) — needed for the build step.
-RUN bun install --frozen-lockfile
+# BuildKit cache mount keeps bun's install cache warm across rebuilds; the
+# lockfile remains the source of truth (--frozen-lockfile enforces it).
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+	bun install --frozen-lockfile
 
 # Source code layers
 COPY packages/protocol/ ./packages/protocol/
@@ -49,7 +52,10 @@ RUN bun build src/index.ts \
 	--external postgres
 
 # ───── Stage 2: Runtime ─────
-FROM oven/bun:1.3.11
+# `-slim` drops the full dev toolchain the builder needs (git, build-essential,
+# etc.) — smaller image, same Debian base, so @hiveio/beekeeper (WASM + glibc)
+# still loads. Alpine is NOT a drop-in here: beekeeper breaks on musl.
+FROM oven/bun:1.3.11-slim
 
 ARG BUILD_TIME
 ARG GIT_COMMIT_SHA

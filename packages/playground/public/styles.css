@@ -948,6 +948,12 @@
         border: 1px solid rgba(20, 184, 166, 0.2);
       }
 
+      .nft-badge.posting {
+        background: rgba(59, 130, 246, 0.1);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.2);
+      }
+
       .nft-badge.listed {
         background: rgba(245, 158, 11, 0.1);
         color: var(--warning);
@@ -1422,6 +1428,149 @@
         background: var(--surface-2);
       }
 
+      /* Node page */
+      .node-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .node-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+        gap: 20px;
+        align-items: start;
+      }
+
+      .node-column {
+        min-width: 0;
+      }
+
+      .node-card-copy {
+        color: var(--text-muted);
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+
+      .node-kv-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+      }
+
+      .node-kv {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+      }
+
+      .node-kv-label {
+        color: var(--text-dim);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0;
+        margin-bottom: 6px;
+      }
+
+      .node-kv-value {
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.45;
+        word-break: break-word;
+      }
+
+      .node-ops-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .node-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 600;
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text);
+      }
+
+      .node-chip.good {
+        background: var(--success-dim);
+        color: var(--success);
+        border-color: oklch(from var(--success) l c h / 0.35);
+      }
+
+      .node-chip.warn {
+        background: rgba(245, 158, 11, 0.12);
+        color: var(--warning);
+        border-color: rgba(245, 158, 11, 0.28);
+      }
+
+      .node-chip.bad {
+        background: rgba(239, 68, 68, 0.1);
+        color: var(--error);
+        border-color: rgba(239, 68, 68, 0.24);
+      }
+
+      .node-register-note {
+        color: var(--text-muted);
+        font-size: 12px;
+        margin-bottom: 16px;
+      }
+
+      .node-register-note code,
+      .node-table-wrap code,
+      .node-card-copy code {
+        font-family: var(--mono);
+        font-size: 12px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1px 6px;
+      }
+
+      .node-table-wrap {
+        overflow-x: auto;
+      }
+
+      .node-empty {
+        color: var(--text-dim);
+        font-size: 13px;
+      }
+
+      .node-code {
+        font-family: var(--mono);
+        font-size: 12px;
+        word-break: break-word;
+      }
+
+      .node-detail-toggle {
+        font-size: 12px;
+        color: var(--accent);
+        cursor: pointer;
+      }
+
+      .node-detail-body {
+        margin-top: 8px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-2);
+        font-family: var(--mono);
+        font-size: 11px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
       /* Stat Boxes */
       .stat-box {
         background: var(--surface);
@@ -1757,4 +1906,10 @@
         font-family: var(--mono);
         font-size: 11px;
         color: var(--text-muted);
+      }
+
+      @media (max-width: 1100px) {
+        .node-layout {
+          grid-template-columns: 1fr;
+        }
       }

@@ -1,0 +1,168 @@
+<div class="page" id="page-node">
+  <div class="page-header">
+    <h1 class="page-title">Node</h1>
+    <p class="page-desc">
+      Registry state, settlement readiness, and recent protocol activity for
+      this indexer node.
+    </p>
+  </div>
+
+  <div class="node-summary-grid" id="node-summary">
+    <div class="stat-box">
+      <div class="stat-label">Node</div>
+      <div class="stat-value">-</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Registry</div>
+      <div class="stat-value">-</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Settlement</div>
+      <div class="stat-value">-</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Sync</div>
+      <div class="stat-value">-</div>
+    </div>
+  </div>
+
+  <div class="node-layout">
+    <div class="node-column">
+      <section class="card">
+        <div class="card-header">
+          <span class="card-title">Node Profile</span>
+          <div class="btn-group">
+            <button class="btn btn-secondary btn-sm" id="btn-node-refresh">
+              Refresh
+            </button>
+          </div>
+        </div>
+        <p class="node-card-copy">
+          Reads the projected node record from <code>l2_nodes</code> plus the
+          current sync and multisig status from the indexer.
+        </p>
+        <div class="node-kv-grid" id="node-profile-grid">
+          <div class="node-kv">
+            <div class="node-kv-label">Loading</div>
+            <div class="node-kv-value">Fetching node profile...</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <span class="card-title">Indexed Operations</span>
+          <div class="btn-group">
+            <button
+              class="btn btn-secondary btn-sm"
+              id="btn-node-refresh-operations"
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+        <p class="node-card-copy">
+          Confirmed and invalid protocol operations whose signer is this node in
+          the indexer's own projection.
+        </p>
+        <div class="node-ops-meta" id="node-indexed-meta"></div>
+        <div class="node-table-wrap" id="node-indexed-operations">
+          <div class="empty-state">
+            <p class="empty-state-text">Loading indexed node operations...</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="node-column">
+      <section class="card">
+        <div class="card-header">
+          <span class="card-title">Register Node</span>
+          <span class="nft-badge posting">POSTING KEY</span>
+        </div>
+        <p class="node-card-copy">
+          Emit <code>node_register</code> for the node account. Once the node is
+          registered and <code>NODE_REGISTER=true</code>, the heartbeat daemon
+          can begin publishing <code>node_heartbeat</code>.
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="node-register-endpoint">
+              Endpoint
+            </label>
+            <input
+              class="form-input"
+              id="node-register-endpoint"
+              placeholder="https://your-node.example.com"
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="node-register-public-key">
+              Public Key
+            </label>
+            <input
+              class="form-input"
+              id="node-register-public-key"
+              placeholder="STM..."
+            />
+          </div>
+        </div>
+        <p class="node-register-note" id="node-register-note">
+          Connect the node account in Keychain to broadcast <code>node_register</code>.
+        </p>
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btn-node-register">
+            Register Node via Keychain
+          </button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <span class="card-title">Hive L1 Protocol Ops</span>
+          <div class="btn-group">
+            <button
+              class="btn btn-secondary btn-sm"
+              id="btn-node-refresh-hive"
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+        <p class="node-card-copy">
+          Direct HafAH scan of recent irreversible blocks for protocol
+          <code>custom_json</code> operations signed by this node.
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="node-hive-window">
+              Block Window
+            </label>
+            <select class="form-input" id="node-hive-window">
+              <option value="250">Last 250 blocks</option>
+              <option value="500">Last 500 blocks</option>
+              <option value="1000">Last 1000 blocks</option>
+              <option value="2000" selected>Last 2000 blocks</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="node-hive-limit">
+              Result Limit
+            </label>
+            <select class="form-input" id="node-hive-limit">
+              <option value="10">10 ops</option>
+              <option value="25" selected>25 ops</option>
+              <option value="50">50 ops</option>
+            </select>
+          </div>
+        </div>
+        <div class="node-ops-meta" id="node-hive-meta"></div>
+        <div class="node-table-wrap" id="node-hive-operations">
+          <div class="empty-state">
+            <p class="empty-state-text">Loading Hive protocol operations...</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
