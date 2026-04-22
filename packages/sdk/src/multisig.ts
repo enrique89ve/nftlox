@@ -1,18 +1,15 @@
-// NFTLox SDK -- Indexer API Client (buy + multisig collection)
+// NFTLox SDK -- Indexer API Client (buy + collection multisig)
 //
 // Endpoints exposed:
-//   - POST /api/buy                  → submitBuy                       (two-phase buy, indexer brokers sale_lock + cosign)
+//   - POST /api/multisig/buy         → requestBuyMultisig              (node-last buy: broadcast commitment, wait, co-sign, broadcast)
 //   - POST /api/multisig/collection  → requestCreateCollectionMultisig (active-auth cosign)
 //   - GET  /api/payment-info/:nftId  → fetchPaymentInfo
 //   - GET  /api/status               → fetchNodeAccount
-//
-// The /api/multisig endpoint is retained for create_collection only post-0.7.0;
-// buy has moved to /api/buy with a buyer-signed, indexer-cosigned tx2.
 
 import type {
 	PaymentInfo,
-	BuyApiRequest,
-	BuyApiResponse,
+	BuyMultisigRequest,
+	BuyMultisigResponse,
 	CreateCollectionMultisigRequest,
 	MultisigResponse,
 } from "@nftlox/protocol";
@@ -303,22 +300,40 @@ async function postMultisig(
 }
 
 /**
- * Submit a buy request to the indexer's /api/buy endpoint.
+ * Request a node-last buy settlement.
  *
- * Unlike the legacy multisig flow, this is a single server-brokered call:
- * the buyer ships a serialized, active-signed tx2 and the indexer takes over
- * (broadcasts sale_lock, waits for inclusion, cosigns tx2 with its active
- * key, broadcasts tx2). No POW header — the route enforces per-buyer and
- * per-IP rate limits instead, since every call broadcasts a real L1 tx.
+ * The caller provides a transaction that already carries the buyer's active
+ * signature. The node then:
+ *   1. Validates the buyer's tx against the current listing.
+ *   2. Broadcasts a `buy_commitment` custom_json on-chain reserving the NFT.
+ *   3. Waits for its commitment to land in a Hive block and observes whether
+ *      it won the cross-node ordering race.
+ *   4. Appends its own active signature and broadcasts the completed buy.
+ *   5. Returns `{ txId, commitmentOpTxId }` to the caller.
+ *
+ * On a lost race or any failure the node releases its local lock and returns
+ * a typed error (`CROSS_NODE_RESERVATION`, `COMMITMENT_INCLUSION_TIMEOUT`,
+ * `BUYER_SIGNATURE_MISSING`, etc.) so clients can retry or surface to the user.
  */
-export async function submitBuy(
+export async function requestBuyMultisig(
 	indexerUrl: string,
-	request: BuyApiRequest,
-	options: HttpOptions = {},
-): Promise<BuyApiResponse> {
-	const url = buildUrl(indexerUrl, "/api/buy");
+	request: BuyMultisigRequest,
+	options: RequestMultisigOptions = {},
+): Promise<BuyMultisigResponse> {
+	return postBuyMultisig(buildUrl(indexerUrl, "/api/multisig/buy"), request, options);
+}
+
+async function postBuyMultisig(
+	url: string,
+	request: unknown,
+	options: RequestMultisigOptions,
+): Promise<BuyMultisigResponse> {
+	const powToken = await solveMultisigPow(request, options.powBits);
 	const fetchImpl = resolveFetch(options);
-	const headers = mergeHeaders({ "Content-Type": "application/json" }, options.headers);
+	const headers = mergeHeaders(
+		{ "Content-Type": "application/json", [NFTLOX_POW_HEADER]: powToken },
+		options.headers,
+	);
 	let res: Response;
 	try {
 		res = await fetchImpl(url, {
@@ -330,33 +345,37 @@ export async function submitBuy(
 	} catch (error) {
 		throw handleFetchError({ error, url, requestBodyValues: request });
 	}
-	const bodyText = await res.text();
-	const parsed = safeJsonParse(bodyText);
-	if (!res.ok && !isBuyApiResponse(parsed)) {
-		throw new IndexerError({
-			message: `Buy request failed (${res.status}): ${extractErrorMessage(parsed)}`,
+	if (!res.ok) {
+		const bodyText = await res.text();
+		const parsed = safeJsonParse(bodyText);
+		throw new MultisigError({
+			message: `Buy multisig request failed (${res.status}): ${extractErrorMessage(parsed)}`,
 			url,
+			requestBodyValues: request,
 			statusCode: res.status,
 			responseHeaders: headersToRecord(res.headers),
 			responseBody: bodyText,
 			data: parsed,
+			code: extractErrorCode(parsed),
 		});
 	}
-	assertBuyApiResponse(parsed);
-	return parsed;
+	const raw: unknown = await res.json();
+	assertBuyMultisigResponse(raw);
+	return raw;
 }
 
-function isBuyApiResponse(raw: unknown): raw is BuyApiResponse {
-	if (!isObject(raw) || typeof raw.ok !== "boolean") return false;
-	if (raw.ok === true) {
-		return raw.status === "confirmed" && typeof raw.tx1Id === "string" && typeof raw.tx2Id === "string";
+function assertBuyMultisigResponse(raw: unknown): asserts raw is BuyMultisigResponse {
+	if (!isObject(raw) || typeof raw.ok !== "boolean") {
+		throw new Error("Buy multisig response malformed: missing ok flag");
 	}
-	return typeof raw.code === "string" && typeof raw.message === "string";
-}
-
-function assertBuyApiResponse(raw: unknown): asserts raw is BuyApiResponse {
-	if (!isBuyApiResponse(raw)) {
-		throw new Error("Buy response malformed: missing ok/code/message fields");
+	if (raw.ok === true) {
+		if (typeof raw.txId !== "string" || typeof raw.commitmentOpTxId !== "string") {
+			throw new Error("Buy multisig response malformed: missing txId or commitmentOpTxId");
+		}
+		return;
+	}
+	if (typeof raw.code !== "string" || typeof raw.message !== "string") {
+		throw new Error("Buy multisig response malformed: missing code or message");
 	}
 }
 

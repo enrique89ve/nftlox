@@ -43,8 +43,8 @@ describe("auth", () => {
 			}
 		});
 
-		it("has exactly 2 active actions", () => {
-			expect(ACTIVE_AUTH_ACTIONS.length).toBe(2);
+		it("has exactly 3 active actions", () => {
+			expect(ACTIVE_AUTH_ACTIONS.length).toBe(3);
 		});
 
 		it("has exactly 18 posting actions", () => {

@@ -114,15 +114,18 @@ export type NftProcessingRow = {
 	readonly listing_marketplace: string | null;
 	/** Buyer reserved by the settlement node while status='pending_sale'. */
 	readonly sale_buyer: string | null;
-	/** Settlement node account that issued the sale_lock. */
+	/** Settlement node account that emitted the buy_commitment. */
 	readonly sale_settlement_node: string | null;
 	/** Block height at which the pending_sale reservation expires and
 	 *  the lazy sweep returns the NFT to status='listed'. */
 	readonly sale_expires_block: number | null;
-	/** Hive tx_id of the sale_lock custom_json that created the reservation. */
-	readonly sale_lock_tx_id: string | null;
-	/** Protocol operation id for the sale_lock (audit / SPV). */
-	readonly sale_lock_operation_id: string | null;
+	/** Hive tx_id of the buy_commitment custom_json that created the
+	 *  reservation (audit trail). */
+	readonly sale_commitment_op_tx_id: string | null;
+	/** Digest (tx_id) of the buyer's buy transaction that the settlement
+	 *  node committed to co-sign. handleBuy matches this against the current
+	 *  tx_id of the `buy` op to refuse settling any other transaction. */
+	readonly sale_commitment_buy_tx_hash: string | null;
 	readonly data_operation_id: string | null;
 };
 

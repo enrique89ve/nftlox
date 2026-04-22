@@ -15,6 +15,7 @@ import {
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTION_SALE_LOCK,
+	ACTION_BUY_COMMITMENT,
 	ACTION_BUY,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
@@ -44,11 +45,16 @@ const ACTION_AUTH_LEVEL_MAP = {
 	[ACTION_NODE_HEARTBEAT]: "posting",
 	[ACTION_LIST]: "posting",
 	[ACTION_UNLIST]: "posting",
-	// sale_lock: broadcast server-side by the settlement node using its posting
-	// key. No funds move in this op — posting is the correct (and safer) level.
+	// sale_lock is retained as a legacy action shape; if replayed on older
+	// state machines it remains a posting-auth node op.
 	[ACTION_SALE_LOCK]: "posting",
-	// buy: tx2 still uses node active multisig for the custom_json while the
-	// buyer's active key authorizes the paired transfers in the same tx.
+	// buy_commitment: the node broadcasts this on-chain with its own active key
+	// before co-signing a `buy` tx, reserving the NFT for the committed buyer.
+	// Ordering of commitments in a Hive block is the network-wide consensus on
+	// who gets to settle, closing the cross-node race without off-chain coord.
+	[ACTION_BUY_COMMITMENT]: "active",
+	// buy: the node co-signs the trailing custom_json with active while the
+	// buyer authorizes the paired transfers in the same transaction.
 	[ACTION_BUY]: "active",
 	[ACTION_NFT_APPROVE]: "posting",
 	[ACTION_NFT_APPROVE_ALL]: "posting",

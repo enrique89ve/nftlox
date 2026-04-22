@@ -117,7 +117,8 @@ async function main(): Promise<void> {
 	await connectWithRetry();
 
 	// Read keys from env, init beekeeper, then wipe from JS memory.
-	// API roles need ACTIVE_KEY for node multisig and POSTING_KEY for sale_lock.
+	// API roles need ACTIVE_KEY for node multisig. POSTING_KEY remains optional
+	// and is only used for node_register / node_heartbeat when enabled.
 	const activeKey = process.env.ACTIVE_KEY ?? "";
 	const postingKey = process.env.POSTING_KEY ?? "";
 	const bkPassword = process.env.BEEKEEPER_PASSWORD ?? "";

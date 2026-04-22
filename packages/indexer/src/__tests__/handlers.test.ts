@@ -9,6 +9,7 @@ import { handleTransfer } from "@/processor/handlers/core/transfer.ts";
 import { handleList } from "@/processor/handlers/marketplace/list.ts";
 import { handleUnlist } from "@/processor/handlers/marketplace/unlist.ts";
 import { handleBuy } from "@/processor/handlers/marketplace/buy.ts";
+import { handleBuyCommitment } from "@/processor/handlers/marketplace/buy-commitment.ts";
 import { config } from "@/config.ts";
 import { handleNftApprove } from "@/processor/handlers/allowances/nft-approve.ts";
 import { handleNftApproveAll } from "@/processor/handlers/allowances/nft-approve-all.ts";
@@ -38,6 +39,7 @@ import {
 	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_SET_DATA_FROM,
 	ACTION_BUY,
+	ACTION_BUY_COMMITMENT,
 	calculatePaymentSplit,
 	ACTIVE_AUTH_ACTIONS,
 	generateListingNonce,
@@ -1352,22 +1354,17 @@ describe("Handlers (integration)", () => {
 			await withTransaction((txn) => handleMint(noBuyMintOp, txn));
 			const instId = await seedInstanceFrom(noBuyId);
 
-			// Force-pending_sale via SQL (bypassing both list and sale_lock handlers'
-			// transferable checks) to test the buy handler's own guard.
+			// Force-list a non-transferable instance via SQL (bypassing handleList's
+			// transferable guard) to test the buy handler's own check.
 			const listData = await makeListData({ nftId: instId });
 			const nodeAccount = config.hiveAccount;
 			await sql`
 				UPDATE nfts
-				SET status = 'pending_sale',
+				SET status = 'listed',
 					listing_id = ${listData.listingId as string},
 					listing_tx_id = 'tx_fake_list',
 					listing_price = 10,
-					listing_currency = 'HIVE',
-					sale_buyer = 'bob',
-					sale_settlement_node = ${nodeAccount},
-					sale_expires_block = 99999999,
-					sale_lock_tx_id = ${"a".repeat(40)},
-					sale_lock_operation_id = 'op_fake_lock'
+					listing_currency = 'HIVE'
 				WHERE id = ${instId}
 			`;
 
@@ -1378,12 +1375,31 @@ describe("Handlers (integration)", () => {
 			];
 			const [nftTx] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
 
+			const buyTxHash = "b".repeat(40);
 			const buyOp = makeOp(ACTION_BUY, {
 				nftId: instId,
 				listingId: listData.listingId,
 				listTxId: "tx_fake_list",
 				txId: nftTx!.tx_id,
 			}, nodeAccount, transfers);
+			buyOp.txId = buyTxHash;
+
+			// Simulate the node's buy_commitment projection — without it, handleBuy
+			// would reject for "not reserved" before reaching the transferable check.
+			const commitOp = makeOp(
+				ACTION_BUY_COMMITMENT,
+				{
+					nftId: instId,
+					listingId: listData.listingId as string,
+					listTxId: "tx_fake_list",
+					buyer: "bob",
+					txHash: buyTxHash,
+				},
+				nodeAccount,
+				undefined,
+				"active",
+			);
+			await withTransaction((txn) => handleBuyCommitment(commitOp, txn));
 
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("not transferable");
 		});
@@ -1978,59 +1994,54 @@ describe("Handlers (integration)", () => {
 			return { listingId: nft!.listing_id as string, listTxId: nft!.listing_tx_id as string, txId: nft!.tx_id as string };
 		}
 
-		// Forces the NFT into pending_sale via direct SQL, bypassing handleSaleLock.
-		// Lets guard tests exercise handleBuy's own preconditions without depending
-		// on l2_nodes setup or the sale_lock handler's independent guards.
-		async function forcePendingSale(nftId: string, buyer: string): Promise<void> {
-			await sql`
-				UPDATE nfts
-				SET status = 'pending_sale',
-				    sale_buyer = ${buyer},
-				    sale_settlement_node = ${nodeAccount},
-				    sale_expires_block = 99999999,
-				    sale_lock_tx_id = ${"a".repeat(40)},
-				    sale_lock_operation_id = 'op_fake_lock'
-				WHERE id = ${nftId}
-			`;
-		}
-
 		function makeBuyOp(nftId: string, listingId: string, listTxId: string, buyer: string, seller: string, price = 10, txId = "a".repeat(40)) {
 			const split = calculatePaymentSplit(price, "HIVE", 0, null, seller, nodeAccount);
 			const transfers = [
 				{ from: buyer, to: seller, amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${nftId}` },
 				...(split.feeAmount > 0 ? [{ from: buyer, to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${nftId}` }] : []),
 			];
-			return makeOp(ACTION_BUY, { nftId, listingId, listTxId, txId }, nodeAccount, transfers);
+			const op = makeOp(ACTION_BUY, { nftId, listingId, listTxId, txId }, nodeAccount, transfers);
+			op.txId = txId;
+			return op;
 		}
 
-		test("rejects buy when buyer matches seller", async () => {
+		async function projectBuyCommitment(
+			nftId: string,
+			listingId: string,
+			listTxId: string,
+			buyer: string,
+			buyTxHash: string,
+		) {
+			const op = makeOp(
+				ACTION_BUY_COMMITMENT,
+				{ nftId, listingId, listTxId, buyer, txHash: buyTxHash },
+				nodeAccount,
+				undefined,
+				"active",
+			);
+			await withTransaction((txn) => handleBuyCommitment(op, txn));
+		}
+
+		test("rejects buy when buyer matches seller (blocked at commitment time)", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
-			const { listingId, listTxId, txId } = await listNft(instId);
-			// Force pending_sale with sale_buyer = alice (same as owner) to bypass
-			// sale_lock's own seller≠buyer guard and exercise handleBuy's guard.
-			await forcePendingSale(instId, "alice");
+			const { listingId, listTxId } = await listNft(instId);
 
-			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
-			const transfers = [
-				{ from: "alice", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
-				{ from: "alice", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${instId}` },
-			];
-			const buyOp = makeOp(ACTION_BUY, {
-				nftId: instId, listingId, listTxId, txId,
-			}, nodeAccount, transfers);
-
-			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("Cannot buy own");
+			// buy_commitment projects the reservation — self-buys are rejected here
+			// (owner === buyer), so handleBuy is unreachable with buyer===seller.
+			await expect(
+				projectBuyCommitment(instId, listingId, listTxId, "alice", "a".repeat(40)),
+			).rejects.toThrow("Cannot reserve own");
 		});
 
-		test("rejects buy on NFT that is not pending_sale", async () => {
+		test("rejects buy on NFT that is not reserved", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
 
 			const buyOp = makeBuyOp(instId, "list_fake", "tx_fake", "bob", "alice");
-			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("not pending_sale");
+			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("not reserved");
 		});
 
 		test("rejects buy non-existent NFT", async () => {
@@ -2058,26 +2069,25 @@ describe("Handlers (integration)", () => {
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("lent");
 		});
 
-		test("rejects buy when sale_lock has expired", async () => {
+		test("rejects buy when listing has expired", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
+			const { listingId, listTxId } = await listNft(instId);
 
-			// Force pending_sale with an already-elapsed sale_expires_block.
+			const buyTxHash = "c".repeat(40);
+			const buyOp = makeBuyOp(instId, listingId, listTxId, "bob", "alice", 10, buyTxHash);
+			await projectBuyCommitment(instId, listingId, listTxId, "bob", buyTxHash);
+
+			// Expire the listing AFTER the commitment has projected so the buy
+			// handler can observe both the reservation and the expired listing.
 			await sql`
 				UPDATE nfts
-				SET status = 'pending_sale', listing_id = 'list_expired', listing_tx_id = 'tx_exp',
-					listing_price = 10, listing_currency = 'HIVE',
-					sale_buyer = 'bob',
-					sale_settlement_node = ${nodeAccount},
-					sale_expires_block = 1,
-					sale_lock_tx_id = ${"a".repeat(40)},
-					sale_lock_operation_id = 'op_fake_lock'
+				SET listing_expires_at = ${new Date("2023-01-01").toISOString()}
 				WHERE id = ${instId}
 			`;
 
-			const buyOp = makeBuyOp(instId, "list_expired", "tx_exp", "bob", "alice");
-			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("sale_lock expired");
+			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("Listing has expired");
 		});
 
 		test("rejects buy of listed seed NFTs", async () => {
@@ -2104,10 +2114,14 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
-			const { listTxId } = await listNft(instId);
-			await forcePendingSale(instId, "bob");
+			const { listingId, listTxId } = await listNft(instId);
 
-			const buyOp = makeBuyOp(instId, "list_wrong_id", listTxId, "bob", "alice");
+			// Real commitment against the correct listing IDs; the buy op lies
+			// about listingId. The buy handler's listingId check fires AFTER the
+			// commitment match, so this exercises the listing_id mismatch path.
+			const buyTxHash = "d".repeat(40);
+			await projectBuyCommitment(instId, listingId, listTxId, "bob", buyTxHash);
+			const buyOp = makeBuyOp(instId, "list_wrong_id", listTxId, "bob", "alice", 10, buyTxHash);
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("listingId mismatch");
 		});
 
@@ -2115,10 +2129,11 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
-			const { listingId } = await listNft(instId);
-			await forcePendingSale(instId, "bob");
+			const { listingId, listTxId } = await listNft(instId);
 
-			const buyOp = makeBuyOp(instId, listingId, "tx_wrong", "bob", "alice");
+			const buyTxHash = "e".repeat(40);
+			await projectBuyCommitment(instId, listingId, listTxId, "bob", buyTxHash);
+			const buyOp = makeBuyOp(instId, listingId, "tx_wrong", "bob", "alice", 10, buyTxHash);
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("listTxId mismatch");
 		});
 
@@ -2126,8 +2141,10 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
-			const { listingId, listTxId, txId } = await listNft(instId);
-			await forcePendingSale(instId, "bob");
+			const { listingId, listTxId } = await listNft(instId);
+
+			const buyTxHash = "f".repeat(40);
+			await projectBuyCommitment(instId, listingId, listTxId, "bob", buyTxHash);
 
 			// Send wrong amount (50 instead of 9.9 to seller)
 			const transfers = [
@@ -2135,8 +2152,9 @@ describe("Handlers (integration)", () => {
 				{ from: "bob", to: nodeAccount, amount: 0.1, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${instId}` },
 			];
 			const buyOp = makeOp(ACTION_BUY, {
-				nftId: instId, listingId, listTxId, txId,
+				nftId: instId, listingId, listTxId, txId: buyTxHash,
 			}, nodeAccount, transfers);
+			buyOp.txId = buyTxHash;
 
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("Missing");
 		});
@@ -2187,20 +2205,10 @@ describe("Handlers (integration)", () => {
 				spender: "gameshop", instanceId: instId, approved: true,
 			}), txn));
 
-			// List → force pending_sale → buy
+			// List → buy
 			const listData = await makeListData({ nftId: instId });
 			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn));
 			const nodeAccount = config.hiveAccount;
-			await sql`
-				UPDATE nfts
-				SET status = 'pending_sale',
-				    sale_buyer = 'bob',
-				    sale_settlement_node = ${nodeAccount},
-				    sale_expires_block = 99999999,
-				    sale_lock_tx_id = ${"a".repeat(40)},
-				    sale_lock_operation_id = 'op_fake_lock'
-				WHERE id = ${instId}
-			`;
 
 			const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
@@ -2208,12 +2216,22 @@ describe("Handlers (integration)", () => {
 				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
 				{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${instId}` },
 			];
+			const buyTxHash = "1".repeat(40);
 			const buyOp = makeOp(ACTION_BUY, {
 				nftId: instId,
 				listingId: nft!.listing_id,
 				listTxId: nft!.listing_tx_id,
 				txId: nft!.tx_id,
 			}, nodeAccount, transfers);
+			buyOp.txId = buyTxHash;
+			const commitOp = makeOp(ACTION_BUY_COMMITMENT, {
+				nftId: instId,
+				listingId: nft!.listing_id,
+				listTxId: nft!.listing_tx_id,
+				buyer: "bob",
+				txHash: buyTxHash,
+			}, nodeAccount, undefined, "active");
+			await withTransaction((txn) => handleBuyCommitment(commitOp, txn));
 			await withTransaction((txn) => handleBuy(buyOp, txn));
 
 			const [after] = await sql`SELECT * FROM nft_allowances WHERE nft_id = ${instId}`;
@@ -2335,29 +2353,28 @@ describe("Handlers (integration)", () => {
 			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn));
 
 			const nodeAccount = config.hiveAccount;
-			await sql`
-				UPDATE nfts
-				SET status = 'pending_sale',
-				    sale_buyer = 'charlie',
-				    sale_settlement_node = ${nodeAccount},
-				    sale_expires_block = 99999999,
-				    sale_lock_tx_id = ${"a".repeat(40)},
-				    sale_lock_operation_id = 'op_fake_lock'
-				WHERE id = ${instId}
-			`;
-
 			const [nft] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
 				{ from: "charlie", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
 				{ from: "charlie", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${instId}` },
 			];
+			const buyTxHash = "2".repeat(40);
 			const buyOp = makeOp(ACTION_BUY, {
 				nftId: instId,
 				listingId: nft!.listing_id,
 				listTxId: nft!.listing_tx_id,
 				txId: nft!.tx_id,
 			}, nodeAccount, transfers);
+			buyOp.txId = buyTxHash;
+			const commitOp = makeOp(ACTION_BUY_COMMITMENT, {
+				nftId: instId,
+				listingId: nft!.listing_id,
+				listTxId: nft!.listing_tx_id,
+				buyer: "charlie",
+				txHash: buyTxHash,
+			}, nodeAccount, undefined, "active");
+			await withTransaction((txn) => handleBuyCommitment(commitOp, txn));
 			await withTransaction((txn) => handleBuy(buyOp, txn));
 
 			const [after] = await sql`
@@ -2554,29 +2571,29 @@ describe("Handlers (integration)", () => {
 			const listData = await makeListData({ nftId: instId });
 			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn));
 			const nodeAccount = config.hiveAccount;
-			await sql`
-				UPDATE nfts
-				SET status = 'pending_sale',
-				    sale_buyer = 'bob',
-				    sale_settlement_node = ${nodeAccount},
-				    sale_expires_block = 99999999,
-				    sale_lock_tx_id = ${"a".repeat(40)},
-				    sale_lock_operation_id = 'op_fake_lock'
-				WHERE id = ${instId}
-			`;
-
 			const [nftRow] = await sql`SELECT listing_id, listing_tx_id, created_tx_id AS tx_id FROM nfts WHERE id = ${instId}`;
 			const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", nodeAccount);
 			const transfers = [
 				{ from: "bob", to: "alice", amount: split.sellerAmount, currency: "HIVE", memo: `${MEMO_PREFIX_BUY}${instId}` },
 				...(split.feeAmount > 0 ? [{ from: "bob", to: nodeAccount, amount: split.feeAmount, currency: "HIVE", memo: `${MEMO_PREFIX_FEE}${instId}` }] : []),
 			];
-			await withTransaction((txn) => handleBuy(makeOp(ACTION_BUY, {
+			const buyTxHash = "3".repeat(40);
+			const commitOp = makeOp(ACTION_BUY_COMMITMENT, {
+				nftId: instId,
+				listingId: nftRow!.listing_id,
+				listTxId: nftRow!.listing_tx_id,
+				buyer: "bob",
+				txHash: buyTxHash,
+			}, nodeAccount, undefined, "active");
+			await withTransaction((txn) => handleBuyCommitment(commitOp, txn));
+			const buyOp = makeOp(ACTION_BUY, {
 				nftId: instId,
 				listingId: nftRow!.listing_id,
 				listTxId: nftRow!.listing_tx_id,
 				txId: nftRow!.tx_id,
-			}, nodeAccount, transfers), txn));
+			}, nodeAccount, transfers);
+			buyOp.txId = buyTxHash;
+			await withTransaction((txn) => handleBuy(buyOp, txn));
 
 			expect(await ownerCounts("alice")).toMatchObject({ total: 1, seeds: 1, instances: 0 });
 			expect(await ownerCounts("bob")).toMatchObject({ total: 1, instances: 1 });

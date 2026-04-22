@@ -29,11 +29,10 @@ export const HASH_VERSION = "v1";
 // these is a protocol upgrade and requires coordinated network-wide rollout.
 // ============================================================================
 
-// Blocks a sale_lock stays valid after a settlement node broadcasts it.
-// The NFT holds status='pending_sale' for this window; if the buy custom_json
-// does not land inside it, the indexer sweep reverts the NFT to 'listed'.
-// 60 blocks ≈ 180s on Hive — comfortably above BUY_TX_TTL_MS (120s) so a
-// buyer-built tx2 cannot expire while its sale_lock is still alive.
+// Legacy reservation window retained for compatibility with older state
+// machines. The current buy path does not require a preceding on-chain
+// `sale_lock`, but existing DB constraints and cleanup code still use the same
+// bound when dealing with historical `pending_sale` rows.
 export const SALE_LOCK_DURATION_BLOCKS = 60;
 
 // ============================================================================
@@ -43,22 +42,28 @@ export const SALE_LOCK_DURATION_BLOCKS = 60;
 // Clients negotiate via /api/status.
 // ============================================================================
 
-// Upper bound on expiration of the buyer-presigned tx2 (transfers + buy).
-// Must be shorter than SALE_LOCK_DURATION_BLOCKS × 3s so any sale_lock still
-// alive can outlive a co-signed tx2 waiting for inclusion.
-export const BUY_TX_TTL_MS = 120_000;
+// Upper bound on expiration of the unsigned buy transaction that the node will
+// co-sign. This window must cover: node validation, buy_commitment broadcast,
+// commitment inclusion wait, node signature issuance, and the final Hive
+// broadcast. Aligned with BUY_COMMITMENT_TTL_BLOCKS so tx expiration and
+// commitment validity share the same window.
+export const BUY_TX_TTL_MS = 30_000;
 
-// Maximum number of concurrently active sale_locks a single buyer may hold
-// across this node. API-level defense against spam and fund-draining scenarios
-// where a buyer opens many parallel locks to block other buyers.
-// NOT part of consensus — other nodes may apply different caps.
-export const MAX_ACTIVE_SALE_LOCKS_PER_BUYER = 5;
+// Block-denominated TTL for `buy_commitment` reservations. A node that emits
+// a commitment has this many blocks to get its `buy` transaction included on
+// chain; after that the commitment is swept and the NFT returns to `listed`.
+// 10 blocks × 3s = 30s, aligned with BUY_TX_TTL_MS.
+export const BUY_COMMITMENT_TTL_BLOCKS = 10;
 
-// Max block gap between the Hive HEAD and the indexer's last-processed block
-// that still allows /api/buy to serve requests. Exceeding this means the API
-// would read a stale NFT snapshot and could issue a sale_lock against state
-// that has since been invalidated (unlist/transfer/burn in an un-indexed
-// block). Hive block time is 3s, so 3 blocks ≈ 9s.
+// Per-node cap on concurrently active `buy_commitment` reservations. A single
+// node cannot hold more than this many NFTs in `pending_sale` at any block,
+// limiting the grief a rogue node can cause.
+export const MAX_ACTIVE_COMMITMENTS_PER_NODE = 10;
+
+// Max block gap between Hive HEAD and the indexer's last-processed block that
+// still allows /api/multisig/buy to serve requests. Exceeding this means the
+// API could co-sign against a stale listing snapshot that has already been
+// invalidated in unindexed blocks. Hive block time is 3s, so 3 blocks ≈ 9s.
 export const BUY_API_LAG_MAX_BLOCKS = 3;
 
 // Cadence for on-chain heartbeat (custom_json with current state-root hash).
@@ -125,11 +130,9 @@ export const BASIS_POINTS_DENOMINATOR = 10_000;
 export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
-// Listing expirations must outlive the full sale_lock window plus a buffer for
-// indexer inclusion delay. Otherwise a seller could list with a short expiry
-// and, mid-sale_lock, see the listing lapse — leaving the NFT stuck in
-// pending_sale until sweep. Derived from SALE_LOCK_DURATION_BLOCKS so the two
-// bounds stay coherent when the consensus constant changes.
+// Conservative floor for listing TTLs. Even with single-tx buys, listings that
+// expire almost immediately create avoidable races between quoting payment info,
+// node co-signing, buyer signature, and broadcast.
 export const MIN_LISTING_TTL_MS = SALE_LOCK_DURATION_BLOCKS * 3_000 + 60_000;
 
 // Per-instance fee for create_collection. When enabled, the total fee becomes
@@ -205,6 +208,7 @@ export const ACTION_NODE_HEARTBEAT = "node_heartbeat";
 export const ACTION_LIST = "list";
 export const ACTION_UNLIST = "unlist";
 export const ACTION_SALE_LOCK = "sale_lock" as const;
+export const ACTION_BUY_COMMITMENT = "buy_commitment" as const;
 export const ACTION_BUY = "buy" as const;
 
 // Approve & TransferFrom
@@ -237,6 +241,7 @@ export const MARKETPLACE_ACTIONS = [
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTION_SALE_LOCK,
+	ACTION_BUY_COMMITMENT,
 	ACTION_BUY,
 ] as const;
 

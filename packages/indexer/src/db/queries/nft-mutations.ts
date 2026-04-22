@@ -105,7 +105,7 @@ export async function updateNftOwner(
 		    listing_id = NULL, listing_tx_id = NULL,
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL,
 		    sale_buyer = NULL, sale_settlement_node = NULL,
-		    sale_expires_block = NULL, sale_lock_tx_id = NULL, sale_lock_operation_id = NULL
+		    sale_expires_block = NULL, sale_commitment_op_tx_id = NULL, sale_commitment_buy_tx_hash = NULL
 		WHERE id = ${nftId}
 	`;
 	// Queue the delta BEFORE counter updates. See insertNft for rationale —
@@ -218,12 +218,12 @@ export async function updateNftListing(
  * sweep. The partial index `idx_nfts_sale_expires` keeps this at ~0 cost
  * when no rows are due.
  */
-export async function sweepExpiredSaleLocks(currentBlock: number, txn: Queryable): Promise<number> {
+export async function sweepExpiredBuyCommitments(currentBlock: number, txn: Queryable): Promise<number> {
 	const result = await txn`
 		UPDATE nfts
 		SET status = ${NFT_STATUS_LISTED},
 		    sale_buyer = NULL, sale_settlement_node = NULL,
-		    sale_expires_block = NULL, sale_lock_tx_id = NULL, sale_lock_operation_id = NULL
+		    sale_expires_block = NULL, sale_commitment_op_tx_id = NULL, sale_commitment_buy_tx_hash = NULL
 		WHERE status = ${NFT_STATUS_PENDING_SALE}
 		  AND sale_expires_block < ${currentBlock}
 	`;

@@ -39,21 +39,22 @@ interface BuyResponse {
 	indexerUrl?: string;
 }
 
-interface BuyApiConfirmed {
+interface BuyMultisigSuccess {
 	ok: true;
-	status: "confirmed";
-	tx1Id: string;
-	tx2Id: string;
+	/** tx_id of the fully-broadcast buy transaction. */
+	txId: string;
+	/** tx_id of the buy_commitment op the node used to reserve the NFT. */
+	commitmentOpTxId: string;
 }
 
-interface BuyApiError {
+interface BuyMultisigError {
 	ok: false;
 	code: string;
 	message: string;
 	retryAfterMs?: number;
 }
 
-type BuyApiResult = BuyApiConfirmed | BuyApiError;
+type BuyMultisigResult = BuyMultisigSuccess | BuyMultisigError;
 
 interface KeychainSignResponse {
 	success: boolean;
@@ -78,6 +79,29 @@ interface MarketplaceWindow extends Window {
 }
 
 let listingsCache: MarketplaceListing[] = [];
+
+async function broadcastSignedTransaction(signedTx: unknown): Promise<string> {
+	const response = await fetch("https://api.hive.blog", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			jsonrpc: "2.0",
+			method: "condenser_api.broadcast_transaction_synchronous",
+			params: [signedTx],
+			id: 1,
+		}),
+	});
+	const raw = await response.json() as {
+		error?: string | { message?: string };
+		result?: { id?: string; tx_id?: string };
+	};
+
+	if (raw.error) {
+		throw new Error(typeof raw.error === "string" ? raw.error : raw.error.message ?? "Broadcast failed");
+	}
+
+	return raw.result?.id ?? raw.result?.tx_id ?? "unknown";
+}
 
 export function initMarketplace() {
 	$("btn-load-listings")?.addEventListener("click", loadListings);
@@ -371,54 +395,50 @@ async function buyFromMarketplace(nftId: string) {
 
 		const totalPrice = data.paymentInfo.totalPrice ?? "?";
 		const currency = data.paymentInfo.currency ?? "";
-		const { listingId, listTxId } = data.paymentInfo;
 		log(`Payment: ${totalPrice} ${currency}`, "info");
 
-		// Keychain signs tx2 with buyer's active key (single signature);
-		// indexer broadcasts sale_lock with posting, then active-cosigns tx2.
-		keychain.requestSignTx(
-			user,
-			transaction,
-			"Active",
-			async (signRes) => {
-				if (!signRes.success) {
-					log(`Keychain rejected: ${typeof signRes.error === "object" ? JSON.stringify(signRes.error) : signRes.error}`, "error");
-					return;
+		log("Signing tx with Keychain (active key)...");
+		keychain.requestSignTx(user, transaction, "Active", async (signRes) => {
+			if (!signRes.success) {
+				log(`Keychain rejected: ${typeof signRes.error === "object" ? JSON.stringify(signRes.error) : signRes.error}`, "error");
+				return;
+			}
+
+			const signed = signRes.result as { signatures?: string[] } | undefined;
+			const buyerSig = signed?.signatures?.[0];
+			if (!buyerSig) {
+				log("Keychain response missing buyer signature", "error");
+				return;
+			}
+
+			transaction.signatures = [buyerSig];
+
+			log("Reserving NFT on-chain via buy_commitment...");
+			const multisigRes = await fetch(`${data.indexerUrl!.replace(/\/$/, "")}/api/multisig/buy`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ transaction }),
+			});
+			const multisigData = await multisigRes.json().catch(() => ({
+				ok: false,
+				code: "INVALID_RESPONSE",
+				message: "Indexer returned non-JSON body",
+			})) as BuyMultisigResult;
+
+			if (!multisigData.ok) {
+				const retry = multisigData.retryAfterMs
+					? ` (retry in ${Math.ceil(multisigData.retryAfterMs / 1000)}s)` : "";
+				if (multisigData.code === "CROSS_NODE_RESERVATION") {
+					log(`Another buyer reserved this NFT first${retry}. Try again in a moment.`, "error");
+				} else {
+					log(`Buy failed [${multisigData.code}]: ${multisigData.message}${retry}`, "error");
 				}
+				return;
+			}
 
-				log("Submitting to indexer /api/buy...");
-				try {
-					const buyRes = await fetch(`${data.indexerUrl!.replace(/\/$/, "")}/api/buy`, {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							buyer: user,
-							nftId,
-							listingId,
-							listTxId,
-							presignedTx2: JSON.stringify(signRes.result),
-						}),
-					});
-					const buyData = await buyRes.json().catch(() => ({
-						ok: false,
-						code: "INVALID_RESPONSE",
-						message: "Indexer returned non-JSON body",
-					})) as BuyApiResult;
-
-					if (!buyData.ok) {
-						const retry = "retryAfterMs" in buyData && buyData.retryAfterMs
-							? ` (retry in ${Math.ceil(buyData.retryAfterMs / 1000)}s)` : "";
-						log(`Buy failed [${buyData.code}]: ${buyData.message}${retry}`, "error");
-						return;
-					}
-
-					log(`Bought! tx1=${buyData.tx1Id} tx2=${buyData.tx2Id}`, "success");
-					setTimeout(loadListings, 5000);
-				} catch (err) {
-					log(`Buy submit error: ${(err as Error).message}`, "error");
-				}
-			},
-		);
+			log(`Bought! tx=${multisigData.txId} (commitment=${multisigData.commitmentOpTxId})`, "success");
+			setTimeout(loadListings, 5000);
+		});
 	} catch (err) {
 		log(`Error: ${(err as Error).message}`, "error");
 	}

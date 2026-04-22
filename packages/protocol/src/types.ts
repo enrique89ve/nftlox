@@ -3,6 +3,7 @@ import {
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_BUY,
+	ACTION_BUY_COMMITMENT,
 	ACTION_CREATE_COLLECTION,
 	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_EXTEND_SCHEMA,
@@ -24,6 +25,7 @@ import {
 import type {
 	ArchiveCollectionData,
 	BulkDistributeData,
+	BuyCommitmentData,
 	BuyData,
 	CollectionData,
 	DataOperatorApproveData,
@@ -165,7 +167,13 @@ export type MultisigErrorCode =
 	| "SIGNING_QUEUE_FULL"
 	| "SIGNING_TIMEOUT"
 	| "INDEXER_LAGGED"
-	| "INTERNAL_ERROR";
+	| "INTERNAL_ERROR"
+	// buy_commitment flow — node-last settlement
+	| "CROSS_NODE_RESERVATION"
+	| "COMMITMENT_INCLUSION_TIMEOUT"
+	| "COMMITMENT_BROADCAST_FAILED"
+	| "BUYER_SIGNATURE_MISSING"
+	| "BUY_BROADCAST_FAILED";
 
 export type MultisigResponse =
 	| {
@@ -173,6 +181,28 @@ export type MultisigResponse =
 			readonly signature: string;
 			readonly digest: string;
 			readonly expiration: string;
+	  }
+	| {
+			readonly ok: false;
+			readonly code: MultisigErrorCode;
+			readonly message: string;
+			readonly retryAfterMs?: number | undefined;
+	  };
+
+/**
+ * Response shape for POST /api/multisig/buy under the node-last flow: the node
+ * orchestrates commitment broadcast, waits for cross-node-race resolution via
+ * Hive block ordering, signs the buyer-provided partially-signed transaction,
+ * and broadcasts the completed buy transaction. Callers receive the Hive tx_id
+ * of the settled buy transaction (or a typed error).
+ */
+export type BuyMultisigResponse =
+	| {
+			readonly ok: true;
+			/** tx_id of the broadcasted buy transaction. */
+			readonly txId: string;
+			/** tx_id of the buy_commitment op the node used to reserve the NFT. */
+			readonly commitmentOpTxId: string;
 	  }
 	| {
 			readonly ok: false;
@@ -196,6 +226,7 @@ export type PayloadDataByAction = {
 	readonly [ACTION_LIST]: ListingData;
 	readonly [ACTION_UNLIST]: UnlistData;
 	readonly [ACTION_SALE_LOCK]: SaleLockData;
+	readonly [ACTION_BUY_COMMITMENT]: BuyCommitmentData;
 	readonly [ACTION_BUY]: BuyData;
 	readonly [ACTION_NFT_APPROVE]: NftApproveData;
 	readonly [ACTION_NFT_APPROVE_ALL]: NftApproveAllData;

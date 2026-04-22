@@ -73,11 +73,11 @@ export const config = {
 	// When false, the node indexes + serves privately and never touches the
 	// public `l2_nodes` directory — a valid, first-class configuration.
 	nodeRegister: toBool(process.env.NODE_REGISTER, false),
-	// Multisig (buy transaction signing)
-	// NOTE: ACTIVE_KEY, POSTING_KEY, and BEEKEEPER_PASSWORD are read directly from
-	// process.env at startup (monolith.ts / api.ts), never stored in config —
-	// prevents the WIFs from lingering in V8 heap as frozen strings after beekeeper
-	// import.
+	// Multisig (buy + create_collection transaction signing)
+	// NOTE: ACTIVE_KEY, POSTING_KEY, and BEEKEEPER_PASSWORD are read directly
+	// from process.env at startup (monolith.ts / api.ts), never stored in
+	// config — prevents the WIFs from lingering in V8 heap as frozen strings
+	// after beekeeper import.
 	multisigRateLimitMax: toInt(process.env.MULTISIG_RATE_LIMIT_MAX, 10),
 	multisigRateLimitWindowMs: toInt(process.env.MULTISIG_RATE_LIMIT_WINDOW_MS, 60_000),
 	multisigIpRateLimitMax: toInt(process.env.MULTISIG_IP_RATE_LIMIT_MAX, 30),
@@ -98,21 +98,18 @@ if (!config.hiveAccount) {
 	throw new Error("HIVE_ACCOUNT must be a valid non-empty account name");
 }
 
-// API roles expose both /api/multisig/collection and /api/buy. The former
-// needs ACTIVE_KEY for node multisig; the latter additionally needs POSTING_KEY
-// to broadcast tx1 (`sale_lock`) before tx2 is active-cosigned.
+// API roles expose multisig signing endpoints. They require ACTIVE_KEY for
+// node co-signing. POSTING_KEY is only needed when the node also emits public
+// directory operations (node_register / node_heartbeat).
 const servesSigningApi = config.indexerRole === "api" || config.indexerRole === "both";
 if (servesSigningApi && !process.env.ACTIVE_KEY) {
 	throw new Error(
 		`INDEXER_ROLE=${config.indexerRole} serves signing endpoints and requires ACTIVE_KEY — set ACTIVE_KEY in your .env, or switch INDEXER_ROLE=sync if this node should not serve the API`,
 	);
 }
-if ((config.nodeRegister || servesSigningApi) && !process.env.POSTING_KEY) {
-	const reason = config.nodeRegister && !servesSigningApi
-		? "NODE_REGISTER=true requires POSTING_KEY"
-		: `INDEXER_ROLE=${config.indexerRole} serves /api/buy, which requires POSTING_KEY`;
+if (config.nodeRegister && !process.env.POSTING_KEY) {
 	throw new Error(
-		`${reason} — set POSTING_KEY (the hive account's posting WIF) in your .env, or switch INDEXER_ROLE=sync if this node should not serve the API`,
+		"NODE_REGISTER=true requires POSTING_KEY — set POSTING_KEY (the hive account's posting WIF) in your .env, or switch NODE_REGISTER=false if this node should stay private",
 	);
 }
 

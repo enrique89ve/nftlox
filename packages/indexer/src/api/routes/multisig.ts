@@ -2,17 +2,19 @@ import { Elysia, t } from "elysia";
 import { sql } from "@/db/client.ts";
 import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
-import { processMultisigRequest } from "@/api/services/multisig-service.ts";
+import { processMultisigRequest, signValidatedTransaction } from "@/api/services/multisig-service.ts";
+import { processBuyRequest } from "@/api/services/multisig/buy.ts";
 import { createMultisigRateLimiter } from "@/api/services/multisig-rate-limiter.ts";
+import { createMultisigBuyLock } from "@/api/services/multisig-buy-lock.ts";
 import { getMultisigHealth } from "@/api/services/multisig-health.ts";
 import { resolveClientIp } from "@/api/middleware/client-ip.ts";
 import { NFTLOX_POW_HEADER, validateMultisigPow } from "@/api/middleware/pow-validator.ts";
 import { getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
-import { calculatePaymentSplit } from "@/protocol/index.ts";
-
-// TTL for collection-signing idempotency entries. Matches tx expiration so
-// cached signatures drop with the underlying tx.
-const COLLECTION_IDEMPOTENCY_TTL_MS = 120_000;
+import {
+	BUY_TX_TTL_MS,
+	calculatePaymentSplit,
+	type MultisigErrorCode,
+} from "@/protocol/index.ts";
 import { requireSupportedCurrency } from "@/utils/validation.ts";
 import {
 	IDEMPOTENCY_HEADER,
@@ -22,9 +24,13 @@ import {
 	isValidIdempotencyKey,
 } from "@/api/services/idempotency-cache.ts";
 
+// TTL for collection-signing idempotency entries. Matches tx expiration so
+// cached signatures drop with the underlying tx.
+const COLLECTION_IDEMPOTENCY_TTL_MS = 120_000;
+
 const log = createLogger("multisig-route");
 
-const buyerRateLimiter = createMultisigRateLimiter(
+const collectionRateLimiter = createMultisigRateLimiter(
 	config.multisigRateLimitMax,
 	config.multisigRateLimitWindowMs,
 );
@@ -39,11 +45,58 @@ const collectionIdempotency = createIdempotencyCache({
 	ttlMs: COLLECTION_IDEMPOTENCY_TTL_MS,
 	maxEntries: COLLECTION_IDEMPOTENCY_MAX_ENTRIES,
 });
+const buyLock = createMultisigBuyLock();
+const buyBuyerRateLimiter = createMultisigRateLimiter(5, 60_000);
+const buyIpRateLimiter = createMultisigRateLimiter(15, 60_000);
 
 // Only terminal responses are cached. Transient states (rate limit, lock
 // contention, signer outage) must re-evaluate on retry — caching them would
 // bind the client to a stale failure past its natural resolution window.
 const CACHEABLE_STATUSES: ReadonlySet<number> = new Set([200, 400, 422]);
+
+// Exhaustive HTTP status dispatch for every MultisigErrorCode. TypeScript
+// enforces coverage via `Record<MultisigErrorCode, number>` so any new code
+// added upstream is a compile error here until it gets a mapping.
+const BUY_MULTISIG_STATUS: Record<MultisigErrorCode, number> = {
+	// contention / concurrency
+	NFT_LOCKED: 409,
+	COLLECTION_LOCKED: 409,
+	CROSS_NODE_RESERVATION: 409,
+	// resource state conflicts (buy-time invariants the caller can recover)
+	NFT_NOT_LISTED: 409,
+	NFT_NOT_INSTANCE: 409,
+	NFT_NOT_TRANSFERABLE: 409,
+	NFT_EXPIRED_LISTING: 409,
+	CANNOT_BUY_OWN: 409,
+	SEED_HAS_INSTANCES: 409,
+	// not found
+	NFT_NOT_FOUND: 404,
+	// client-shape errors
+	INVALID_TX_STRUCTURE: 400,
+	INVALID_PROTOCOL_PAYLOAD: 400,
+	INVALID_PAYMENT_SPLIT: 400,
+	NODE_ACCOUNT_MISMATCH: 400,
+	MISSING_BUYER_AUTH: 400,
+	BUYER_SIGNATURE_MISSING: 400,
+	POW_REQUIRED: 400,
+	INVALID_POW: 400,
+	POW_EXPIRED: 400,
+	POW_REPLAYED: 400,
+	// feature flag
+	MULTISIG_DISABLED: 503,
+	// rate limiting
+	RATE_LIMITED: 429,
+	// upstream / temporal unavailability
+	NODE_NOT_ACTIVE: 503,
+	INDEXER_LAGGED: 503,
+	COMMITMENT_INCLUSION_TIMEOUT: 503,
+	COMMITMENT_BROADCAST_FAILED: 503,
+	BUY_BROADCAST_FAILED: 503,
+	SIGNING_QUEUE_FULL: 503,
+	SIGNING_TIMEOUT: 503,
+	// fallback for unexpected internal failure
+	INTERNAL_ERROR: 500,
+};
 
 type RejectionCode =
 	| "MULTISIG_DISABLED"
@@ -101,6 +154,29 @@ function getDisabledMessage(): string {
 	return health.disabledReason === "clock_drift"
 		? "Multisig signing is temporarily disabled due to clock drift"
 		: "Multisig signing is not enabled on this node";
+}
+
+function peekBuyBuyer(body: unknown): string | null {
+	if (body === null || typeof body !== "object") return null;
+	const tx = (body as { transaction?: unknown }).transaction;
+	if (tx === null || typeof tx !== "object") return null;
+	const ops = (tx as { operations?: unknown }).operations;
+	if (!Array.isArray(ops) || ops.length < 2) return null;
+	const first = ops[0];
+	if (!Array.isArray(first) || first.length < 2) return null;
+	if (first[0] !== "transfer") return null;
+	const from = (first[1] as { from?: unknown })?.from;
+	return typeof from === "string" && from.length > 0 ? from : null;
+}
+
+function buildBuyContext() {
+	return {
+		db: sql,
+		nodeAccount: config.hiveAccount,
+		protocolId: config.protocolId,
+		buyLock,
+		buyTxTtlMs: BUY_TX_TTL_MS,
+	} as const;
 }
 
 export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
@@ -252,7 +328,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		// will reject the malformed tx with a 400, and the IP limiter below
 		// still throttles abusive traffic from a single source.
 		if (creator !== null) {
-			const creatorRateResult = buyerRateLimiter.check(creator);
+			const creatorRateResult = collectionRateLimiter.check(creator);
 			if (!creatorRateResult.allowed) {
 				logCollectionRejection({
 					creator,
@@ -315,5 +391,110 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		detail: {
 			summary: "Multisig-sign a collection creation transaction",
 			description: "Validates the collection fee transfer and payload, then signs the create_collection custom_json with the node active key. The creator is derived from the transaction's fee transfer sender.",
+		},
+	})
+
+	.post("/api/multisig/buy", async ({ body, request, server, set }) => {
+		const socketIp = server?.requestIP(request)?.address;
+		const clientIp = resolveClientIp(request, socketIp);
+		const health = getMultisigHealth();
+		const buyer = peekBuyBuyer(body);
+
+		if (!health.multisigEnabled) {
+			set.status = 503;
+			const message = getDisabledMessage();
+			log.warn("Buy multisig request rejected", {
+				buyer,
+				clientIp,
+				code: "MULTISIG_DISABLED",
+			});
+			return { ok: false as const, code: "MULTISIG_DISABLED", message };
+		}
+
+		const powResult = await validateMultisigPow({
+			body,
+			header: request.headers.get(NFTLOX_POW_HEADER),
+			requiredBits: config.multisigPowBits,
+			ttlMs: config.multisigPowTtlMs,
+			maxFutureSkewMs: config.multisigPowMaxFutureSkewMs,
+			replayCacheMax: config.multisigPowReplayCacheMax,
+		});
+		if (!powResult.ok) {
+			set.status = 429;
+			log.warn("Buy multisig request rejected", {
+				buyer,
+				clientIp,
+				code: powResult.code,
+			});
+			return { ok: false as const, code: powResult.code, message: powResult.message };
+		}
+
+		if (buyer !== null) {
+			const buyerRate = buyBuyerRateLimiter.check(buyer);
+			if (!buyerRate.allowed) {
+				set.status = 429;
+				log.warn("Buy multisig request rejected", {
+					buyer,
+					clientIp,
+					code: "RATE_LIMITED",
+					retryAfterMs: buyerRate.retryAfterMs,
+				});
+				return {
+					ok: false as const,
+					code: "RATE_LIMITED",
+					message: `Rate limited. Retry after ${buyerRate.retryAfterMs}ms`,
+					retryAfterMs: buyerRate.retryAfterMs,
+				};
+			}
+		}
+
+		const ipRate = buyIpRateLimiter.check(clientIp);
+		if (!ipRate.allowed) {
+			set.status = 429;
+			log.warn("Buy multisig request rejected", {
+				buyer,
+				clientIp,
+				code: "RATE_LIMITED",
+				retryAfterMs: ipRate.retryAfterMs,
+			});
+			return {
+				ok: false as const,
+				code: "RATE_LIMITED",
+				message: `Rate limited. Retry after ${ipRate.retryAfterMs}ms`,
+				retryAfterMs: ipRate.retryAfterMs,
+			};
+		}
+
+		try {
+			const result = await processBuyRequest(body, buildBuyContext());
+			if (!result.ok) {
+				set.status = BUY_MULTISIG_STATUS[result.code];
+				if (result.retryAfterMs !== undefined) {
+					set.headers["Retry-After"] = String(Math.ceil(result.retryAfterMs / 1000));
+				}
+				log.warn("Buy multisig request rejected", {
+					buyer,
+					clientIp,
+					code: result.code,
+					retryAfterMs: result.retryAfterMs,
+				});
+			}
+			return result;
+		} catch (err) {
+			log.error("Unexpected buy multisig route error", {
+				buyer,
+				clientIp,
+				error: err instanceof Error ? err.message : String(err),
+			});
+			set.status = 500;
+			return { ok: false as const, code: "INTERNAL_ERROR", message: "Unexpected signing error" };
+		}
+	}, {
+		body: t.Object({
+			transaction: multisigTransactionSchema,
+		}),
+		detail: {
+			summary: "Multisig-sign a buy transaction",
+			description: "Validates a single buy transaction (transfers plus trailing buy custom_json), then signs the custom_json with the node active key. The buyer is derived from the transfer sender.",
 		},
 	})

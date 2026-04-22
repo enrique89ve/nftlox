@@ -1,0 +1,112 @@
+import type { Queryable } from "@/db/client.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import {
+	getNftForProcessingForUpdate,
+	NFT_STATUS_LISTED,
+	NFT_STATUS_PENDING_SALE,
+} from "@/db/queries/nfts.ts";
+import { requireString, requireUsername } from "@/utils/validation.ts";
+import { assertActionable } from "@/utils/status-checks.ts";
+import {
+	BUY_COMMITMENT_TTL_BLOCKS,
+	MAX_ACTIVE_COMMITMENTS_PER_NODE,
+	TX_ID_REGEX,
+} from "@/protocol/index.ts";
+
+/**
+ * Projects a settlement node's on-chain reservation of a listed NFT. The node
+ * broadcasts this custom_json BEFORE co-signing the buyer's buy transaction;
+ * the ordering of commitments inside a Hive block is the network-wide consensus
+ * on which node gets to settle, eliminating the cross-node race that would
+ * otherwise leave a losing buyer with irreversibly executed transfers.
+ *
+ * State machine:
+ *   listed                       → pending_sale (commitment wins)
+ *   pending_sale + expired       → pending_sale (new commitment overrides)
+ *   pending_sale + active        → reject (another commitment holds the slot)
+ *   any other status             → reject
+ */
+export async function handleBuyCommitment(
+	op: ParsedOperation,
+	txn: Queryable,
+): Promise<ReadonlyArray<string>> {
+	const nftId = requireString(op.data.nftId, "nftId");
+	const listingId = requireString(op.data.listingId, "listingId");
+	const listTxId = requireString(op.data.listTxId, "listTxId");
+	const buyer = requireUsername(requireString(op.data.buyer, "buyer"), "buyer");
+	const buyTxHash = requireString(op.data.txHash, "txHash").toLowerCase();
+	if (!TX_ID_REGEX.test(buyTxHash)) {
+		throw new Error(`Invalid txHash format: ${buyTxHash}`);
+	}
+
+	// The node that emitted the commitment is the active-auth signer of the
+	// custom_json. Parser already enforces auth level matches protocol map.
+	const settlementNode = requireUsername(op.signer, "settlementNode");
+
+	const nft = await getNftForProcessingForUpdate(nftId, txn);
+	if (!nft) throw new Error(`NFT not found: ${nftId}`);
+	assertActionable(nft, nftId);
+
+	const activeReservation = nft.status === NFT_STATUS_PENDING_SALE
+		&& nft.sale_expires_block !== null
+		&& nft.sale_expires_block >= op.blockNum;
+
+	if (activeReservation) {
+		throw new Error(
+			`NFT ${nftId} already committed by ${nft.sale_settlement_node} (expires block ${nft.sale_expires_block})`,
+		);
+	}
+	if (nft.status !== NFT_STATUS_LISTED && !isExpiredPendingSale(nft, op.blockNum)) {
+		throw new Error(`NFT ${nftId} is not committable (status=${nft.status})`);
+	}
+	if (nft.listing_id !== listingId) {
+		throw new Error(`listingId mismatch: expected '${nft.listing_id}', got '${listingId}'`);
+	}
+	if (nft.listing_tx_id !== listTxId) {
+		throw new Error(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
+	}
+	if (nft.owner === buyer) {
+		throw new Error(`Cannot reserve own NFT: ${nftId}`);
+	}
+
+	const [{ count }] = await txn<[{ count: string }]>`
+		SELECT COUNT(*)::text AS count
+		FROM nfts
+		WHERE status = ${NFT_STATUS_PENDING_SALE}
+		  AND sale_settlement_node = ${settlementNode}
+		  AND sale_expires_block >= ${op.blockNum}
+	`;
+	const activeForNode = Number(count);
+	if (activeForNode >= MAX_ACTIVE_COMMITMENTS_PER_NODE) {
+		throw new Error(
+			`Node ${settlementNode} at commitment cap (${activeForNode}/${MAX_ACTIVE_COMMITMENTS_PER_NODE})`,
+		);
+	}
+
+	const expiresBlock = op.blockNum + BUY_COMMITMENT_TTL_BLOCKS;
+	await txn`
+		UPDATE nfts
+		SET status = ${NFT_STATUS_PENDING_SALE},
+		    sale_buyer = ${buyer},
+		    sale_settlement_node = ${settlementNode},
+		    sale_expires_block = ${expiresBlock},
+		    sale_commitment_op_tx_id = ${op.txId},
+		    sale_commitment_buy_tx_hash = ${buyTxHash}
+		WHERE id = ${nftId}
+	`;
+
+	return [nftId];
+}
+
+function isExpiredPendingSale(
+	nft: { status: string; sale_expires_block: number | null },
+	currentBlock: number,
+): boolean {
+	// A commitment is valid while `sale_expires_block >= currentBlock` — the
+	// inverse is strictly `<`. Keeping the predicate symmetric with
+	// `handleBuy`'s `currentBlock > sale_expires_block` check avoids future
+	// drift between the two call sites.
+	return nft.status === NFT_STATUS_PENDING_SALE
+		&& nft.sale_expires_block !== null
+		&& nft.sale_expires_block < currentBlock;
+}

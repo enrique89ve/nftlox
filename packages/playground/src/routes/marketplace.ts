@@ -23,17 +23,17 @@ const json = (data: unknown, status = 200) =>
 		headers: { "Content-Type": "application/json" },
 	});
 
-// Tx2 must outlive the sale_lock wait (~180s) + cosign + broadcast; indexer
-// enforces ≥ BUY_TX_TTL_MS / 2 remaining at submission time.
+// The unsigned buy transaction must stay valid long enough for node co-sign +
+// buyer sign + broadcast.
 const TX_EXPIRATION_MS = 240_000;
 
 type RouteHandler = (req: Request) => Promise<Response>;
 
-// POST /api/marketplace/buy — server-side prep for the new /api/buy flow.
-// Fetches payment-info, assembles tx2 (transfers + buy custom_json with
-// required_auths=[nodeAccount]), and returns an unsigned hive-tx
-// TransactionType. The browser signs it with Keychain ("Active") and POSTs
-// the serialized signed tx to the indexer's /api/buy endpoint directly.
+// POST /api/marketplace/buy — server-side prep for the single-tx buy flow.
+// Fetches payment-info, assembles the unsigned buy transaction (transfers +
+// trailing buy custom_json with required_auths=[nodeAccount]), and returns it
+// to the browser. The browser first requests node co-signature from
+// /api/multisig/buy, then adds the buyer signature and broadcasts.
 export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 	"/api/marketplace/buy": {
 		POST: async (req: Request) => {

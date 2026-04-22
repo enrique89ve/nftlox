@@ -63,6 +63,7 @@ describe("buildProjectionTruncateStmt", () => {
 			"orphaned_buys", "invalid_operations", "confirmed_operations",
 			"owner_nft_counts", "collection_stats",
 			"sales", "burned_nfts", "archived_collections",
+			"multisig_buy_locks",
 			"multisig_collection_locks",
 			"l2_node_heartbeats", "l2_nodes",
 		]);
@@ -74,6 +75,7 @@ describe("buildProjectionTruncateStmt", () => {
 		expect(stmt).toContain(`"collections"`);
 		expect(stmt).toContain(`"burned_nfts"`);
 		expect(stmt).toContain(`"schema_versions"`);
+		expect(stmt).toContain(`"multisig_buy_locks"`);
 		expect(stmt).toContain(`"multisig_collection_locks"`);
 		expect(stmt?.endsWith(" CASCADE")).toBe(true);
 	});

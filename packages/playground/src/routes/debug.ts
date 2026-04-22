@@ -8,9 +8,10 @@ import {
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
 	fetchPaymentInfo,
-	submitBuy,
+	requestBuyMultisig,
 	type PaymentInfo,
-	type BuyApiResponse,
+	type BuyMultisigRequest,
+	type BuyMultisigResponse,
 } from "nftlox-sdk";
 import { playgroundConfig } from "../config";
 import { INDEXER_URL } from "../shared/indexer";
@@ -71,9 +72,8 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 		},
 	},
 
-	// Server-side buy smoke test: build tx2, sign with the server's active key
-	// (acting as the buyer under test), POST to the indexer's /api/buy endpoint.
-	// The indexer brokers sale_lock (tx1, posting) and cosigns tx2.
+	// Server-side buy smoke test: build the unsigned buy tx, request the node
+	// co-signature, add the buyer signature locally, then broadcast the single tx.
 	"/api/debug/multisig-buy": {
 		POST: async (req: Request) => {
 			try {
@@ -138,26 +138,24 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 					return json({ success: false, error: "Transaction building failed" }, 500);
 				}
 
-				// Sign tx2 with the server's active key (single buyer sig), then
-				// submit the serialized signed tx to /api/buy.
+				// Node-last buy: the buyer (this debug account) signs first with
+				// active key, then the indexer receives the partially-signed tx,
+				// broadcasts a `buy_commitment`, waits for its block to win the
+				// cross-node ordering race, co-signs, and broadcasts.
 				tx.sign(PrivateKey.from(ACTIVE_KEY));
 
-				const buyResult: BuyApiResponse = await submitBuy(INDEXER_URL, {
-					buyer,
-					nftId: body.nftId,
-					listingId: info.listingId,
-					listTxId: info.listTxId,
-					presignedTx2: JSON.stringify(tx.transaction),
+				const multisigResult: BuyMultisigResponse = await requestBuyMultisig(INDEXER_URL, {
+					transaction: tx.transaction as unknown as BuyMultisigRequest["transaction"],
 				});
 
-				if (!buyResult.ok) {
-					return json({ success: false, error: buyResult.message, code: buyResult.code }, 400);
+				if (!multisigResult.ok) {
+					return json({ success: false, error: multisigResult.message, code: multisigResult.code }, 400);
 				}
 
 				return json({
 					success: true,
-					tx1Id: buyResult.tx1Id,
-					tx2Id: buyResult.tx2Id,
+					txId: multisigResult.txId,
+					commitmentOpTxId: multisigResult.commitmentOpTxId,
 					paymentInfo: info,
 				});
 			} catch (err) {

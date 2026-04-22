@@ -6,6 +6,7 @@ import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
 import { insertInvalidOperation, insertOrphanedBuy, insertConfirmedOperation, isOperationConfirmed } from "@/db/queries/sync.ts";
 import {
 	ACTION_BUY,
+	ACTION_BUY_COMMITMENT,
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_BULK_DISTRIBUTE,
@@ -49,7 +50,8 @@ import { handleNodeHeartbeat } from "./handlers/core/node_heartbeat.ts";
 // Marketplace
 import { handleList } from "./handlers/marketplace/list.ts";
 import { handleUnlist } from "./handlers/marketplace/unlist.ts";
-import { handleSaleLock } from "./handlers/marketplace/sale-lock.ts";
+import { handleDeprecatedSaleLock } from "./handlers/marketplace/deprecated-sale-lock.ts";
+import { handleBuyCommitment } from "./handlers/marketplace/buy-commitment.ts";
 
 import { handleBuy } from "./handlers/marketplace/buy.ts";
 
@@ -172,7 +174,8 @@ const handlers: Record<ProtocolAction, Handler> = {
 	// Marketplace
 	[ACTION_LIST]: handleList,
 	[ACTION_UNLIST]: handleUnlist,
-	[ACTION_SALE_LOCK]: handleSaleLock,
+	[ACTION_SALE_LOCK]: handleDeprecatedSaleLock,
+	[ACTION_BUY_COMMITMENT]: handleBuyCommitment,
 	[ACTION_BUY]: handleBuy,
 
 	// Allowances

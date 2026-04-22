@@ -134,18 +134,23 @@ CREATE TABLE IF NOT EXISTS nfts (
 	listing_currency TEXT,
 	listing_expires_at TIMESTAMPTZ,
 	listing_marketplace TEXT,
-	-- Sale-lock reservation set by handleSaleLock. When `status='pending_sale'`
-	-- the five sale_* columns are all populated (snapshot of buyer, settling
-	-- node, expiry block, and the on-chain tx/op that emitted the lock). The
-	-- matching `buy` consumes them atomically (sets status='active', nulls
-	-- sale_* + listing_* in the same UPDATE). If no buy lands by the deadline,
-	-- the sync engine's lazy sweep rolls the row back to 'listed' — fully
-	-- deterministic because the decision key is `currentBlock`, not wall-clock.
+	-- Buy-commitment reservation set by handleBuyCommitment. When
+	-- `status='pending_sale'` the five sale_* columns are all populated: the
+	-- buyer account, the settlement node that emitted the commitment, the
+	-- block when the reservation expires, the tx_id of the buy_commitment op
+	-- (audit trail), and the digest of the buyer's buy-tx that the node
+	-- committed to co-sign. handleBuy matches currentTxId against
+	-- sale_commitment_buy_tx_hash to refuse settling a buy-tx that was not
+	-- the one reserved. The matching `buy` consumes the reservation atomically
+	-- (status→'active', nulls sale_* + listing_* in the same UPDATE). If no
+	-- buy lands by the deadline, the sync engine's lazy sweep rolls the row
+	-- back to 'listed' — fully deterministic because the decision key is
+	-- `currentBlock`, not wall-clock.
 	sale_buyer TEXT,
 	sale_settlement_node TEXT,
 	sale_expires_block BIGINT,
-	sale_lock_tx_id CHAR(40),
-	sale_lock_operation_id TEXT,
+	sale_commitment_op_tx_id CHAR(40),
+	sale_commitment_buy_tx_hash CHAR(40),
 	created_operation_id TEXT NOT NULL,
 	created_block_num BIGINT NOT NULL,
 	created_tx_id TEXT NOT NULL,
@@ -158,25 +163,25 @@ CREATE TABLE IF NOT EXISTS nfts (
 			AND listing_id IS NOT NULL
 			AND listing_tx_id IS NOT NULL)
 	),
-	-- DB-level coherence backstop for the on-chain sale_lock state machine:
-	-- `status='pending_sale'` requires the full five-tuple sale_* snapshot, and
-	-- every other status forbids any sale_* column from being populated. Any
-	-- handler that writes an inconsistent transition hits this constraint
-	-- instead of silently projecting a broken state-root.
+	-- DB-level coherence backstop for the on-chain buy_commitment state
+	-- machine: `status='pending_sale'` requires the full five-tuple sale_*
+	-- snapshot, and every other status forbids any sale_* column from being
+	-- populated. Any handler that writes an inconsistent transition hits this
+	-- constraint instead of silently projecting a broken state-root.
 	CONSTRAINT chk_nfts_pending_sale_coherent CHECK (
 		(status = 'pending_sale'
 			AND sale_buyer IS NOT NULL
 			AND sale_settlement_node IS NOT NULL
 			AND sale_expires_block IS NOT NULL
-			AND sale_lock_tx_id IS NOT NULL
-			AND sale_lock_operation_id IS NOT NULL)
+			AND sale_commitment_op_tx_id IS NOT NULL
+			AND sale_commitment_buy_tx_hash IS NOT NULL)
 		OR
 		(status <> 'pending_sale'
 			AND sale_buyer IS NULL
 			AND sale_settlement_node IS NULL
 			AND sale_expires_block IS NULL
-			AND sale_lock_tx_id IS NULL
-			AND sale_lock_operation_id IS NULL)
+			AND sale_commitment_op_tx_id IS NULL
+			AND sale_commitment_buy_tx_hash IS NULL)
 	),
 	-- `pending_sale` is a reservation on an already-listed NFT; the listing
 	-- row must stay populated so `buy` can resolve price/currency against it.
@@ -401,13 +406,23 @@ CREATE INDEX IF NOT EXISTS idx_l2_node_heartbeats_account_block ON l2_node_heart
 
 -- ============ MULTISIG LOCKS ============
 --
--- The node-local `multisig_locks` table that previously coupled API-side buy
--- signing to consensus was removed when `sale_lock` moved on-chain (protocol
--- 0.7.0 hardfork). The sale reservation now lives in `nfts.sale_*` and is
--- projected from `ACTION_SALE_LOCK` custom_json — fully deterministic across
--- indexers. Only the collection-signing lock below remains (still node-local,
--- still out of consensus, only serializes multisig `/api/multisig/collection`
--- requests inside a single API process).
+-- Multisig signing is serialized per logical resource inside a single API
+-- process. These tables are node-local and intentionally OUT of consensus:
+-- they prevent this node from issuing two competing signatures while the
+-- underlying unsigned tx is still valid, but they do not alter on-chain state.
+
+-- Scoped by NFT listing: a single node must not co-sign two competing buys for
+-- the same NFT while the first unsigned tx is still within its broadcast
+-- window. Holder is a deterministic tx identity so exact retries can refresh
+-- the lock, while a distinct in-flight buyer attempt receives `NFT_LOCKED`.
+CREATE TABLE IF NOT EXISTS multisig_buy_locks (
+	nft_id TEXT PRIMARY KEY,
+	listing_id TEXT NOT NULL,
+	listing_tx_id TEXT NOT NULL,
+	holder TEXT NOT NULL,
+	expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_multisig_buy_locks_expires ON multisig_buy_locks(expires_at);
 
 -- Scoped by (creator, symbol): two concurrent create_collection signings for the
 -- same (creator, symbol) would both broadcast a tx; only one wins on-chain and
@@ -447,11 +462,12 @@ CREATE INDEX IF NOT EXISTS idx_nfts_listed ON nfts(listing_price, listing_curren
 CREATE INDEX IF NOT EXISTS idx_nfts_listed_recent ON nfts(created_at DESC) WHERE status = 'listed';
 CREATE INDEX IF NOT EXISTS idx_nfts_listing_id ON nfts(listing_id) WHERE listing_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_listing_expires ON nfts(listing_expires_at) WHERE status = 'listed' AND listing_expires_at IS NOT NULL;
--- sale_lock lookups (all three partial on status='pending_sale'):
---   buyer_pending: MAX_ACTIVE_SALE_LOCKS_PER_BUYER enforcement in /api/buy.
---   sale_expires:  lazy sweep of expired reservations in sync-engine (per-block
---                  UPDATE ... WHERE sale_expires_block < currentBlock).
---   settlement_node: per-node metrics / dashboards.
+-- buy_commitment lookups (all partial on status='pending_sale'):
+--   buyer_pending:   per-buyer reservation count (audit / UI).
+--   sale_expires:    lazy sweep of expired reservations in sync-engine (per-block
+--                    UPDATE ... WHERE sale_expires_block < currentBlock).
+--   settlement_node: MAX_ACTIVE_COMMITMENTS_PER_NODE enforcement in
+--                    handleBuyCommitment, plus per-node metrics / dashboards.
 -- Partial indexes keep each at ~zero cost whenever the NFT is not reserved.
 CREATE INDEX IF NOT EXISTS idx_nfts_sale_buyer_pending ON nfts(sale_buyer) WHERE status = 'pending_sale';
 CREATE INDEX IF NOT EXISTS idx_nfts_sale_expires ON nfts(sale_expires_block) WHERE status = 'pending_sale';

@@ -164,11 +164,8 @@ export type UnlistData = {
 	readonly seedTxId?: string | undefined;
 };
 
-// Issued by a settlement node's posting key to reserve a listed NFT for a
-// specific buyer. Handlers transition the NFT from 'listed' to 'pending_sale'
-// and snapshot `buyer`, `settlement_node`, and `expires_block` on the row.
-// The subsequent `buy` custom_json (inside the buyer-initiated tx2) settles
-// against this lock; no other buyer can buy while it is alive.
+// Legacy reservation payload retained for backwards compatibility in the type
+// surface. The current buy flow does not rely on a preceding on-chain lock.
 export type SaleLockData = {
 	readonly nftId: string;
 	readonly listingId: string;
@@ -176,11 +173,25 @@ export type SaleLockData = {
 	readonly buyer: string;
 };
 
-// Embedded in tx2 alongside the buyer-signed transfers. The indexer validates
-// that (a) an open sale_lock exists for the target nft, (b) its buyer matches
-// the signer of the transfers, (c) its settlement_node matches the active
-// signer of this custom_json. All other provenance (seedId, txId, etc.) is
-// already snapshotted in `nfts.sale_*` from the sale_lock — no need to echo.
+// Emitted on-chain by a settlement node as its active-key custom_json BEFORE
+// it co-signs the buyer's buy transaction. The network-wide ordering of these
+// commitments in a Hive block is the consensus on "which node gets to settle
+// this listing" — first to land wins, others must abort their co-sign flow.
+// `txHash` is the digest of the (unsigned) buyer transaction the node will
+// co-sign next; `handleBuy` later verifies that the broadcasted transaction's
+// hash matches the committed one.
+export type BuyCommitmentData = {
+	readonly txHash: string;
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
+	readonly buyer: string;
+};
+
+// Embedded in the buyer's active-signed transaction alongside the payment
+// transfers. The trailing custom_json is co-signed by the node's active key
+// AFTER the node has observed its own `buy_commitment` winning the cross-node
+// ordering race. `handleBuy` enforces that the reserving commitment matches.
 export type BuyData = {
 	readonly nftId: string;
 	readonly listingId: string;
@@ -237,7 +248,7 @@ export type NodeHeartbeatData = {
 	readonly indexerVersion: string;
 };
 
-// Multisig envelopes (post-0.7.0: buy is no longer multisig — see BuyApiRequest)
+// Multisig envelopes
 
 // `creator` is intentionally absent. The multisig endpoint derives the creator
 // from the embedded `transaction.operations[0][1].from` (the fee transfer's
@@ -247,40 +258,14 @@ export type CreateCollectionMultisigRequest = {
 	readonly transaction: HiveTransactionObject;
 };
 
-export type MultisigRequest = CreateCollectionMultisigRequest;
-
-// POST /api/buy body. Buyer signs tx2 with their active key and ships the full
-// serialized hive-tx TransactionType (operations + signatures) as a JSON string.
-// The indexer validates, broadcasts sale_lock (tx1) with its posting key,
-// waits for inclusion, then cosigns tx2 with its active key and broadcasts.
-export type BuyApiRequest = {
-	readonly buyer: string;
-	readonly nftId: string;
-	readonly listingId: string;
-	readonly listTxId: string;
-	/**
-	 * JSON-stringified hive-tx TransactionType:
-	 *   { ref_block_num, ref_block_prefix, expiration, operations, extensions,
-	 *     signatures: [buyerActiveSig] }
-	 * Operations: [transfer(seller), transfer(royalty)?, transfer(fee), custom_json(buy)].
-	 * The trailing custom_json has required_auths=[nodeAccount] and required_posting_auths=[].
-	 */
-	readonly presignedTx2: string;
+// `buyer` is intentionally absent. The buy multisig endpoint derives the buyer
+// from the embedded transfer sender(s), which is the canonical source for the
+// active authority that will later broadcast the fully signed transaction.
+export type BuyMultisigRequest = {
+	readonly transaction: HiveTransactionObject;
 };
 
-export type BuyApiResponse =
-	| Readonly<{
-		readonly ok: true;
-		readonly status: "confirmed";
-		readonly tx1Id: string;
-		readonly tx2Id: string;
-	}>
-	| Readonly<{
-		readonly ok: false;
-		readonly code: string;
-		readonly message: string;
-		readonly retryAfterMs?: number;
-	}>;
+export type MultisigRequest = CreateCollectionMultisigRequest | BuyMultisigRequest;
 
 export type PaymentInfo = {
 	readonly nftId: string;

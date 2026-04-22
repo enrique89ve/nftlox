@@ -26,7 +26,6 @@ export type ValidatedBuyPayload = Readonly<{
 	readonly action: typeof ACTION_BUY;
 	readonly data: Readonly<{
 		readonly nftId: string;
-		readonly txId: string;
 		readonly listingId: string;
 		readonly listTxId: string;
 	}>;
@@ -105,23 +104,44 @@ export type CollectionLockAcquisition =
 	| Readonly<{ readonly acquired: true }>
 	| Readonly<{ readonly acquired: false; readonly heldBy: string; readonly retryAfterMs: number }>;
 
+export type BuyLockAcquisition =
+	| Readonly<{ readonly acquired: true }>
+	| Readonly<{ readonly acquired: false; readonly heldBy: string; readonly retryAfterMs: number }>;
+
 export type CollectionLockHandle = Readonly<{
 	readonly acquire: (creator: string, symbol: string) => Promise<CollectionLockAcquisition>;
 	readonly release: (creator: string, symbol: string) => Promise<void>;
 }>;
 
-// Buy path needs only the shared services; create-collection also needs the
-// per-(creator,symbol) lock. Splitting the context type lets TypeScript reject
-// any attempt to read collectionLock from the buy handler and lets the service
-// layer skip UUID allocation for the buy dispatch.
+export type BuyLockHandle = Readonly<{
+	readonly acquire: (
+		nftId: string,
+		listingId: string,
+		listTxId: string,
+		holder: string,
+		expirationMs: number,
+	) => Promise<BuyLockAcquisition>;
+	readonly release: (nftId: string, holder: string) => Promise<void>;
+}>;
+
+// Split the request contexts so each multisig flow only sees the lock handle
+// and signing surface it is allowed to use. The buy flow owns its own signing
+// loop (broadcast commitment → wait → sign → broadcast) and never hands a
+// `MultisigSign` function to the caller — keeping `sign` off this context
+// prevents a future regression from accidentally wiring a return-signature
+// path back into it.
 export type MultisigBaseContext = Readonly<{
 	readonly db: Queryable;
 	readonly nodeAccount: string;
 	readonly protocolId: string;
-	readonly sign: MultisigSign;
 }>;
 
 export type MultisigCollectionContext = MultisigBaseContext & Readonly<{
+	readonly sign: MultisigSign;
 	readonly collectionLock: CollectionLockHandle;
 }>;
 
+export type MultisigBuyContext = MultisigBaseContext & Readonly<{
+	readonly buyLock: BuyLockHandle;
+	readonly buyTxTtlMs: number;
+}>;

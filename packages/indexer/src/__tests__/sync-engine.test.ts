@@ -73,7 +73,7 @@ function makePgResult(rows: unknown[] = []): unknown[] & { count: number; comman
 }
 
 // Fake txn object that supports tagged template literals (for SET LOCAL,
-// sweepExpiredSaleLocks .count reads, updateLastBlock, and any other query
+// sweepExpiredBuyCommitments .count reads, updateLastBlock, and any other query
 // that the sync engine runs inside withTransaction).
 const mockTxn = Object.assign(
 	(_strings: TemplateStringsArray, ..._values: unknown[]) => Promise.resolve(makePgResult()),

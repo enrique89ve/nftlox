@@ -11,7 +11,6 @@ import { statusRoutes } from "./routes/status.ts";
 import { nodesRoutes } from "./routes/nodes.ts";
 import { stateRootRoutes } from "./routes/state-root.ts";
 import { multisigRoutes } from "./routes/multisig.ts";
-import { buyRoutes } from "./routes/buy.ts";
 import { checkRateLimit } from "./middleware/rate-limiter.ts";
 import { getSyncStatus } from "@/db/queries/sync.ts";
 import { isSynced as _isSynced, getSyncProgress } from "@/scanner/sync-state.ts";
@@ -164,7 +163,6 @@ export function startApiServer(): void {
 		.use(nodesRoutes)
 		.use(stateRootRoutes)
 		.use(multisigRoutes)
-		.use(buyRoutes)
 		.listen({ port: config.port, idleTimeout: 30, maxRequestBodySize: 64 * 1024 });
 
 	log.info(`API server listening on port ${config.port}`);

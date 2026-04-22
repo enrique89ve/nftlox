@@ -10,27 +10,27 @@ import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/que
 import { insertSale } from "@/db/queries/marketplace-history.ts";
 import { requireString, requireUsername, verifyTransfers, requireSupportedCurrency } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
-import { assertActionable, assertMarketplaceInstance } from "@/utils/status-checks.ts";
+import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
 import { ACTION_BUY } from "@/protocol/index.ts";
 
 /**
- * Processes a `buy` action that settles a pending sale_lock.
+ * Settles a `buy` action against the on-chain reservation projected by the
+ * preceding `buy_commitment` op. The Hive transaction carries the buyer-funded
+ * transfers plus the trailing `buy` custom_json co-signed by the committed
+ * settlement node; `handleBuy` refuses to close the sale unless:
  *
- * The custom_json is inside the buyer-initiated tx2 signed with the buyer's
- * active key. `op.signer` is the settlement node's posting key (the lock
- * owner) — the active-key paired transfers prove buyer intent.
+ *   nft.status = 'pending_sale'                           (a commitment landed)
+ *   nft.sale_commitment_buy_tx_hash = op.txId             (this buy-tx is the
+ *                                                          one the node reserved)
+ *   nft.sale_buyer = buyer-from-transfers                 (same buyer)
+ *   currentBlock <= nft.sale_expires_block                (commitment not yet
+ *                                                          swept)
  *
- * Preconditions enforced here (C3 hardfork):
- *   1. NFT.status === 'pending_sale' — only locked rows are buyable.
- *   2. NFT.sale_settlement_node === op.signer — the node that issued the
- *      lock is the only node allowed to broadcast the buy.
- *   3. op.blockNum <= NFT.sale_expires_block — the lock has not expired.
- *   4. NFT.listing_id === payload.listingId AND listing_tx_id === listTxId.
- *   5. verifyTransfers-extracted buyer === NFT.sale_buyer (no impersonation).
- *
- * On success `updateNftOwner` atomically clears sale_* and listing_* columns
- * while flipping status to 'active' — there is no residual pending-sale
- * state after a buy commits.
+ * The commitment-tx-hash match is the core guarantee: Hive's tx_id is a digest
+ * of the entire transaction bytes, and the buyer's active signature fixes those
+ * bytes at sign time. A node that attempted to broadcast a different buy-tx
+ * than the one it committed to would have to mint a transaction whose tx_id
+ * collided with the committed hash — computationally infeasible.
  */
 export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const nftId = requireString(op.data.nftId, "nftId");
@@ -45,16 +45,17 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	assertMarketplaceInstance(nft, nftId);
 
 	if (nft.status !== NFT_STATUS_PENDING_SALE) {
-		throw new Error(`NFT ${nftId} is not pending_sale (status=${nft.status}) — buy rejected`);
+		throw new Error(`NFT ${nftId} is not reserved (status=${nft.status}) — buy rejected`);
 	}
-	if (nft.sale_settlement_node !== op.signer) {
+	const expectedBuyTxHash = nft.sale_commitment_buy_tx_hash;
+	if (!expectedBuyTxHash || expectedBuyTxHash.toLowerCase() !== op.txId.toLowerCase()) {
 		throw new Error(
-			`sale_settlement_node mismatch: expected '${nft.sale_settlement_node}', got '${op.signer}'`,
+			`Buy tx_id ${op.txId} does not match committed hash ${expectedBuyTxHash ?? "<none>"} for NFT ${nftId}`,
 		);
 	}
-	if (nft.sale_expires_block === null || op.blockNum > nft.sale_expires_block) {
+	if (nft.sale_expires_block !== null && op.blockNum > nft.sale_expires_block) {
 		throw new Error(
-			`sale_lock expired: current block ${op.blockNum} exceeds sale_expires_block ${nft.sale_expires_block}`,
+			`Commitment for NFT ${nftId} expired at block ${nft.sale_expires_block} (current ${op.blockNum})`,
 		);
 	}
 	if (nft.listing_id !== listingId) {
@@ -62,6 +63,9 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	}
 	if (nft.listing_tx_id !== listTxId) {
 		throw new Error(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
+	}
+	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
+		throw new Error(`Listing has expired for NFT: ${nftId}`);
 	}
 	if (!nft.transferable) {
 		throw new Error(`Collection ${nft.collection_id} is not transferable — buy blocked`);
@@ -94,7 +98,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	if (nft.owner === buyer) throw new Error(`Cannot buy own NFT: ${nftId}`);
 	if (nft.sale_buyer !== buyer) {
 		throw new Error(
-			`sale_buyer mismatch: sale_lock reserved '${nft.sale_buyer}', transfers came from '${buyer}'`,
+			`Buyer ${buyer} does not match committed buyer ${nft.sale_buyer} for NFT ${nftId}`,
 		);
 	}
 	validateTransferCount(transfers, split, op.transferPool?.consumed);
@@ -122,8 +126,6 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 		collectionId: nft.collection_id,
 		ownerAction: ACTION_BUY,
 		ownerBlockNum: op.blockNum,
-		// pending_sale still counts toward collection_stats.listed (plan §10.5),
-		// so a completed buy must decrement listed exactly once.
 		wasListed: true,
 	};
 	await updateNftOwner(nftId, buyer, op.operationId, ctx, txn);

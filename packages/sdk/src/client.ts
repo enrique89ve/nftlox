@@ -3,14 +3,14 @@
 
 import type {
 	PaymentInfo,
+	BuyMultisigRequest,
+	BuyMultisigResponse,
 	MultisigRequest,
 	MultisigResponse,
-	BuyApiRequest,
-	BuyApiResponse,
 } from "@nftlox/protocol";
 import {
 	resolveNodeAccountFromStatus,
-	submitBuy as submitBuyFn,
+	requestBuyMultisig as requestBuyMultisigFn,
 	type RequestMultisigOptions,
 	type ResolveNodeAccountOptions,
 } from "./multisig";
@@ -594,8 +594,8 @@ export interface IndexerClient {
 	// Buy + Multisig
 	/** Fetch payment split info for buying an NFT */
 	getPaymentInfo(nftId: string): Promise<PaymentInfo>;
-	/** Submit a buyer-presigned tx2 to /api/buy (indexer brokers sale_lock + cosign) */
-	submitBuy(request: BuyApiRequest, options?: HttpOptions): Promise<BuyApiResponse>;
+	/** Node-last buy: node broadcasts commitment, waits, co-signs, broadcasts */
+	requestBuyMultisig(request: BuyMultisigRequest, options?: RequestMultisigOptions): Promise<BuyMultisigResponse>;
 	/** Request multisig cosign for a create_collection transaction (active-auth) */
 	multisig(request: MultisigRequest, options?: RequestMultisigOptions): Promise<MultisigResponse>;
 }
@@ -684,8 +684,8 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 		// ---- Buy + Multisig ----
 		getPaymentInfo: (nftId) =>
 			get<PaymentInfo>(baseUrl, `/api/payment-info/${encodeURIComponent(nftId)}`, undefined, http),
-		submitBuy: (request, buyOptions) =>
-			submitBuyFn(baseUrl, request, buyOptions ?? http ?? {}),
+		requestBuyMultisig: (request, multisigOptions) =>
+			requestBuyMultisigFn(baseUrl, request, multisigOptions ?? http ?? {}),
 		multisig: async (request, multisigOptions) => {
 			const powToken = await solveMultisigPow(request, multisigOptions?.powBits);
 			return post<MultisigResponse>(

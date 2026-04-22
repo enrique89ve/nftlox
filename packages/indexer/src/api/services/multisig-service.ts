@@ -1,10 +1,9 @@
 /**
- * Multisig service — post-0.7.0 this only dispatches create_collection signing.
- * Buy moved to /api/buy (posting-key broadcast of sale_lock + active cosign of
- * the buyer's pre-signed tx2). See api/services/buy/.
+ * Collection multisig service.
  *
- * Beekeeper signing is serialized through a process-local FIFO queue so Hive
- * transactions from the node account are never signed concurrently.
+ * Buy signing now lives in api/services/multisig/buy.ts, but both flows share
+ * the same process-local beekeeper queue so Hive transactions from the node
+ * account are never signed concurrently.
  */
 
 import { createSigningQueue } from "@/api/services/signing-queue.ts";
@@ -61,10 +60,10 @@ export async function processMultisigRequest(
 			db,
 			nodeAccount,
 			protocolId,
-			sign: signValidatedTransaction,
 		};
 		const collectionCtx: MultisigCollectionContext = {
 			...baseCtx,
+			sign: signValidatedTransaction,
 			collectionLock: buildCollectionLockHandle(crypto.randomUUID()),
 		};
 		return await processCollectionRequest(rawBody, collectionCtx);
@@ -81,7 +80,7 @@ function buildCollectionLockHandle(holder: string): CollectionLockHandle {
 	};
 }
 
-async function signValidatedTransaction(transaction: ValidatedTransaction): Promise<MultisigResponse> {
+export async function signValidatedTransaction(transaction: ValidatedTransaction): Promise<MultisigResponse> {
 	const signResult = await signingQueue.enqueue(() => signTransaction(transaction));
 	return {
 		ok: true,

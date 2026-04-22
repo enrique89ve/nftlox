@@ -11,10 +11,8 @@ import {
 	type ProtocolAction,
 } from "@/protocol/index.ts";
 
-// These used to live in @nftlox/protocol but moved to the indexer after the
-// 0.7.0 sale_lock migration — they only govern the create_collection multisig
-// flow now (buy no longer uses multisig). Values unchanged from the protocol
-// era to keep collection-creation UX identical.
+// These guard the node-signing HTTP surface. They are node policy, not
+// consensus constants, and apply to both buy and create_collection multisig.
 const MAX_MULTISIG_OPERATIONS = 10;
 const MULTISIG_TX_MIN_EXPIRATION_MS = 30_000;
 const MULTISIG_TX_MAX_EXPIRATION_MS = 120_000;
@@ -89,6 +87,50 @@ export function validateCommonTransactionStructure(tx: Record<string, unknown>):
 		extensions: validateExtensions(tx.extensions),
 		operations: validateOperationsArray(tx.operations),
 	};
+}
+
+/**
+ * Buy-specific header validation that expects the buyer's active signature to
+ * already be present. Hive signatures are lowercase 130-hex-char strings; we
+ * validate only the format here, not authority — Hive will reject the final
+ * broadcast if the signature does not recover to the buyer's active key.
+ */
+export function validateBuyTransactionStructureWithBuyerSig(
+	tx: Record<string, unknown>,
+): Readonly<{
+	readonly ref_block_num: number;
+	readonly ref_block_prefix: number;
+	readonly expiration: string;
+	readonly operations: ReadonlyArray<TransactionOperationInput>;
+	readonly extensions: ReadonlyArray<unknown>;
+	readonly buyerSignature: string;
+}> {
+	const signatures = validateBuyerSignatureArray(tx.signatures);
+	return {
+		ref_block_num: validateUnsignedInteger(tx.ref_block_num, "Transaction 'ref_block_num'"),
+		ref_block_prefix: validateUnsignedInteger(tx.ref_block_prefix, "Transaction 'ref_block_prefix'"),
+		expiration: validateExpiration(tx.expiration),
+		extensions: validateExtensions(tx.extensions),
+		operations: validateOperationsArray(tx.operations),
+		buyerSignature: signatures[0],
+	};
+}
+
+function validateBuyerSignatureArray(signatures: unknown): readonly [string] {
+	if (!Array.isArray(signatures) || signatures.length !== 1) {
+		throw createMultisigError(
+			"BUYER_SIGNATURE_MISSING",
+			"Transaction must contain exactly one signature (the buyer's active signature)",
+		);
+	}
+	const [sig] = signatures;
+	if (typeof sig !== "string" || !/^[0-9a-fA-F]{130}$/.test(sig)) {
+		throw createMultisigError(
+			"BUYER_SIGNATURE_MISSING",
+			"Buyer signature must be a 130-character hex string",
+		);
+	}
+	return [sig.toLowerCase()];
 }
 
 export function validateOperationCount(ops: ReadonlyArray<TransactionOperationInput>): void {
@@ -219,7 +261,6 @@ export function parseBuyPayload(json: string, protocolId: string): ValidatedBuyP
 		action: ACTION_BUY,
 		data: {
 			nftId: validatePayloadDataString(parsed.data.nftId, "nftId"),
-			txId: validatePayloadDataString(parsed.data.txId, "txId"),
 			listingId: validatePayloadDataString(parsed.data.listingId, "listingId"),
 			listTxId: validatePayloadDataString(parsed.data.listTxId, "listTxId"),
 		},
@@ -296,19 +337,14 @@ export function extractTransfers(ops: ReadonlyArray<ValidatedTransferOp>) {
 }
 
 export function signTransaction(tx: ValidatedTransaction): SignResult {
-	const hiveTx = new Transaction();
-	hiveTx.transaction = {
-		ref_block_num: tx.ref_block_num,
-		ref_block_prefix: tx.ref_block_prefix,
-		expiration: tx.expiration,
-		operations: toHiveTxOperations(tx),
-		extensions: toHiveTxExtensions(tx.extensions),
-		signatures: [],
-	};
-
+	const hiveTx = buildHiveTransaction(tx);
 	const { digest, txId } = hiveTx.digest();
 	const sigDigestHex = Buffer.from(digest).toString("hex");
 	return { signature: signWithBeekeeper(sigDigestHex), digest: txId };
+}
+
+export function getTransactionTxId(tx: ValidatedTransaction): string {
+	return buildHiveTransaction(tx).digest().txId;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -337,6 +373,19 @@ function validateUnsignedInteger(value: unknown, fieldName: string): number {
 	}
 
 	return value;
+}
+
+function buildHiveTransaction(tx: ValidatedTransaction): Transaction {
+	const hiveTx = new Transaction();
+	hiveTx.transaction = {
+		ref_block_num: tx.ref_block_num,
+		ref_block_prefix: tx.ref_block_prefix,
+		expiration: tx.expiration,
+		operations: toHiveTxOperations(tx),
+		extensions: toHiveTxExtensions(tx.extensions),
+		signatures: [],
+	};
+	return hiveTx;
 }
 
 function validateOperationsArray(value: unknown): ReadonlyArray<TransactionOperationInput> {

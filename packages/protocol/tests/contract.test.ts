@@ -26,9 +26,9 @@ describe("protocol contract integrity", () => {
 		expect(PROTOCOL_ID).toMatch(/^nftlox(_[a-z]+)?$/);
 	});
 
-	test("20 actions, 2 active + 18 posting, no overlap", () => {
-		expect(ALL_ACTIONS.length).toBe(20);
-		expect(ACTIVE_AUTH_ACTIONS.length).toBe(2);
+	test("21 actions, 3 active + 18 posting, no overlap", () => {
+		expect(ALL_ACTIONS.length).toBe(21);
+		expect(ACTIVE_AUTH_ACTIONS.length).toBe(3);
 		expect(POSTING_AUTH_ACTIONS.length).toBe(18);
 
 		const activeSet = new Set<string>(ACTIVE_AUTH_ACTIONS);

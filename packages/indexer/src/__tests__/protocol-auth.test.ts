@@ -53,13 +53,15 @@ describe("protocol auth map", () => {
 		expect(ACTIVE_AUTH_ACTIONS).not.toContain(ACTION_NODE_REGISTER);
 	});
 
-	test("create_collection and buy are the active-auth actions post-0.7.0", () => {
+	test("create_collection, buy_commitment and buy are the active-auth actions", () => {
 		expect(ACTION_AUTH_LEVEL[ACTION_CREATE_COLLECTION]).toBe("active");
 		expect(ACTION_AUTH_LEVEL[ACTION_BUY]).toBe("active");
 		expect(Object.isFrozen(ACTION_AUTH_LEVEL)).toBe(true);
-		expect(ACTIVE_AUTH_ACTIONS).toEqual([ACTION_CREATE_COLLECTION, ACTION_BUY]);
+		expect(ACTIVE_AUTH_ACTIONS).toHaveLength(3);
+		expect(ACTIVE_AUTH_ACTIONS).toContain(ACTION_CREATE_COLLECTION);
+		expect(ACTIVE_AUTH_ACTIONS).toContain(ACTION_BUY);
 		expect(POSTING_AUTH_ACTIONS).toHaveLength(18);
-		expect(ALL_ACTIONS).toHaveLength(20);
+		expect(ALL_ACTIONS).toHaveLength(21);
 	});
 
 	test("pack actions are not native indexer protocol actions", () => {

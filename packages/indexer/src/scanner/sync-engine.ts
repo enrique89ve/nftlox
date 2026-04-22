@@ -7,7 +7,7 @@ import {
   cleanupExpiredOperations,
   insertInvalidOperation,
 } from "@/db/queries/sync.ts";
-import { sweepExpiredSaleLocks } from "@/db/queries/nft-mutations.ts";
+import { sweepExpiredBuyCommitments } from "@/db/queries/nft-mutations.ts";
 import {
   acquireSyncLock,
   releaseSyncLock,
@@ -392,7 +392,7 @@ export async function syncCycle(): Promise<void> {
       throw new Error(LOCK_LOST_MARKER);
     }
 
-    // Single transaction per batch. sweepExpiredSaleLocks runs BEFORE each
+    // Single transaction per batch. sweepExpiredBuyCommitments runs BEFORE each
     // distinct block's ops so that a `buy` landing at block B observes only
     // locks whose sale_expires_block >= B. It also runs once more at the
     // batch boundary so a quiet window (no ops inside a range that contains
@@ -424,7 +424,7 @@ export async function syncCycle(): Promise<void> {
           }
           for (const op of batch.ops) {
             if (sweptThrough !== op.blockNum) {
-              await sweepExpiredSaleLocks(op.blockNum, txn);
+              await sweepExpiredBuyCommitments(op.blockNum, txn);
               sweptThrough = op.blockNum;
             }
             const success = await routeOperation(op, txn);
@@ -446,7 +446,7 @@ export async function syncCycle(): Promise<void> {
       // sale_lock expired without updating the row, even when no op landed in
       // that block. Keyed on lastBatch.to + 1 so `sale_expires_block < X` fires
       // for any lock whose expiry was <= lastBatch.to.
-      await sweepExpiredSaleLocks(lastBatch.to + 1, txn);
+      await sweepExpiredBuyCommitments(lastBatch.to + 1, txn);
       await updateLastBlock(lastBatch.to, txn);
     });
 
