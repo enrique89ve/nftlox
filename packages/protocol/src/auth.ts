@@ -125,5 +125,25 @@ export const POSTING_AUTH_ACTIONS: readonly PostingAuthAction[] = Object.freeze(
 	),
 );
 
+// Subconjunto de ACTIVE_AUTH_ACTIONS cuyo op.signer DEBE ser un nodo de
+// settlement registrado y activo en l2_nodes al bloque de procesamiento.
+// Regla de rol de firmante, ortogonal a PaymentRequirement: buy_commitment
+// no tiene fees y buy tiene split que no cae en recipient:action:signer, así
+// que ninguna de las dos está cubierta por la gate basada en fees del router.
+// Consumido por el action-router (packages/indexer) junto a
+// requirementNeedsActiveNodeSigner para invocar assertActiveSettlementNode.
+const NODE_SIGNED_ACTIONS_SET: ReadonlySet<ProtocolAction> = new Set<ProtocolAction>([
+	ACTION_BUY_COMMITMENT,
+	ACTION_BUY,
+]);
+
+export function requiresActiveNodeSigner(action: ProtocolAction): boolean {
+	return NODE_SIGNED_ACTIONS_SET.has(action);
+}
+
+export const NODE_SIGNED_ACTIONS: readonly ActiveAuthAction[] = Object.freeze(
+	ACTIVE_AUTH_ACTIONS.filter((action) => NODE_SIGNED_ACTIONS_SET.has(action)),
+);
+
 // Re-export isProtocolAction for convenience (auth consumers often need both)
 export { isProtocolAction };

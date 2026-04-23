@@ -110,7 +110,7 @@ async function buildUnsignedBuyTx(info: PaymentInfo): Promise<Transaction> {
 		id: "nftlox_testnet",
 		json: JSON.stringify({
 			protocol: "nftlox_testnet",
-			version: "0.7.0",
+			version: "0.8.0",
 			action: "buy",
 			data: {
 				nftId: NFT_ID,

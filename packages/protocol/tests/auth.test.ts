@@ -3,6 +3,8 @@ import {
 	ACTION_AUTH_LEVEL,
 	ACTIVE_AUTH_ACTIONS,
 	POSTING_AUTH_ACTIONS,
+	NODE_SIGNED_ACTIONS,
+	requiresActiveNodeSigner,
 	getAuthLevel,
 	getKeyType,
 	getAuthMismatchReason,
@@ -11,6 +13,7 @@ import {
 	ALL_ACTIONS,
 	ACTION_CREATE_COLLECTION,
 	ACTION_BUY,
+	ACTION_BUY_COMMITMENT,
 	ACTION_MINT,
 	ACTION_TRANSFER,
 } from "../src/constants.ts";
@@ -103,6 +106,37 @@ describe("auth", () => {
 			expect(reason).not.toBeNull();
 			expect(reason).toContain("create_collection");
 			expect(reason).toContain("active");
+		});
+	});
+
+	describe("NODE_SIGNED_ACTIONS + requiresActiveNodeSigner", () => {
+		it("contains exactly buy_commitment and buy", () => {
+			expect([...NODE_SIGNED_ACTIONS].sort()).toEqual(
+				[ACTION_BUY_COMMITMENT, ACTION_BUY].sort(),
+			);
+		});
+
+		it("every node-signed action has active auth level (invariant)", () => {
+			for (const action of NODE_SIGNED_ACTIONS) {
+				expect(ACTION_AUTH_LEVEL[action]).toBe("active");
+			}
+		});
+
+		it("requiresActiveNodeSigner agrees with NODE_SIGNED_ACTIONS membership for ALL_ACTIONS", () => {
+			const members = new Set<string>(NODE_SIGNED_ACTIONS);
+			for (const action of ALL_ACTIONS) {
+				expect(requiresActiveNodeSigner(action)).toBe(members.has(action));
+			}
+		});
+
+		it("create_collection is NOT node-signed (its node gate comes from PaymentRequirement)", () => {
+			expect(requiresActiveNodeSigner(ACTION_CREATE_COLLECTION)).toBe(false);
+		});
+
+		it("no posting-auth action is node-signed", () => {
+			for (const action of POSTING_AUTH_ACTIONS) {
+				expect(requiresActiveNodeSigner(action)).toBe(false);
+			}
 		});
 	});
 });

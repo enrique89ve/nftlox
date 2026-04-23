@@ -29,6 +29,7 @@ import {
 	assertNeverPaymentKind,
 	getAuthMismatchReason,
 	getPaymentRequirement,
+	requiresActiveNodeSigner,
 	resolvePaymentRecipient,
 	type MemoKey,
 	type PaymentRequirement,
@@ -248,14 +249,21 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 			// compile error if a new PaymentRequirement variant is introduced.
 			const requirement = getPaymentRequirement(op.action);
 
-			// Consensus gate: when the fee recipient is derived from op.signer
-			// (any `action:signer` requirement), the signer MUST be a registered
-			// and currently-active settlement node at this block. Without this
-			// check any Hive account could construct a self-transfer and "pay
-			// itself" the protocol fee, bypassing the node-network settlement
-			// contract. Replay-deterministic — it reads only `l2_nodes`, which
-			// is projected from L1 node_register / node_heartbeat operations.
-			if (requirementNeedsActiveNodeSigner(requirement)) {
+			// Consensus gate: the signer MUST be a registered and currently-active
+			// settlement node at this block when either
+			//   (a) the fee recipient is derived from op.signer (any
+			//       `action:signer` requirement — e.g. create_collection), or
+			//   (b) the action itself has a node-only role (buy_commitment, buy;
+			//       see NODE_SIGNED_ACTIONS in @nftlox/protocol auth.ts).
+			// Without this check any Hive account could either "pay itself" the
+			// protocol fee or poison a listing's pending_sale slot with a fake
+			// commitment hash, breaking the node-network settlement contract.
+			// Replay-deterministic — reads only `l2_nodes`, projected from L1
+			// node_register / node_heartbeat operations.
+			if (
+				requirementNeedsActiveNodeSigner(requirement) ||
+				requiresActiveNodeSigner(op.action)
+			) {
 				await assertActiveSettlementNode(op.signer, op.blockNum, txn);
 			}
 

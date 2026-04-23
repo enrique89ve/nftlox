@@ -40,7 +40,10 @@ export async function handleBuyCommitment(
 	}
 
 	// The node that emitted the commitment is the active-auth signer of the
-	// custom_json. Parser already enforces auth level matches protocol map.
+	// custom_json. Eligibility as a settlement node (registered + active in
+	// l2_nodes at op.blockNum) is enforced pre-handler by the action-router
+	// gate that consumes NODE_SIGNED_ACTIONS from @nftlox/protocol — by the
+	// time control reaches here, op.signer is guaranteed to be a live node.
 	const settlementNode = requireUsername(op.signer, "settlementNode");
 
 	const nft = await getNftForProcessingForUpdate(nftId, txn);

@@ -19,8 +19,8 @@
 // ============================================================================
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.7.0";
-export const MIN_PROTOCOL_VERSION = "0.7.0";
+export const PROTOCOL_VERSION = "0.8.0";
+export const MIN_PROTOCOL_VERSION = "0.8.0";
 export const HASH_VERSION = "v1";
 
 // ============================================================================

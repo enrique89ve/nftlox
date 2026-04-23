@@ -29,7 +29,7 @@ type HiveCustomJsonBody = {
 type SignedTx = ReturnType<Transaction["sign"]>;
 
 const PROTOCOL_ID = "nftlox_testnet";
-const PROTOCOL_VERSION = "0.7.0";
+const PROTOCOL_VERSION = "0.8.0";
 
 const NODE_ACCOUNT = requireEnv("HIVE_ACCOUNT");
 const NODE_ACTIVE_KEY = requireEnv("ACTIVE_KEY");
