@@ -188,6 +188,23 @@ export function resolveDatabaseConfig(
 const nodeEnv = process.env.NODE_ENV ?? "development";
 const database = resolveDatabaseConfig(process.env);
 
+// Fields whose values are credentials or embed credentials. Any
+// whole-config serialization (JSON.stringify, console.log, logger data
+// payloads) must replace these with a placeholder so an accidental log
+// never exposes production secrets. Added here so a future sensitive
+// field is redacted the moment it is introduced — changing the set is a
+// single-line audit trail.
+const SENSITIVE_CONFIG_FIELDS: ReadonlySet<string> = new Set([
+	"postgresPassword",
+	"databaseUrl",
+]);
+const REDACTED = "[REDACTED]";
+// Cross-runtime access to Node/Bun's custom inspect hook without importing
+// `node:util` (keeps this file runtime-neutral). `Symbol.for` returns the
+// same global symbol both runtimes check when `console.log` or
+// `util.inspect` unwraps a value.
+const INSPECT_CUSTOM = Symbol.for("nodejs.util.inspect.custom");
+
 export const config = {
 	port: toInt(process.env.INDEXER_PORT, 3050),
 	databaseUrl: database.url,
@@ -241,6 +258,50 @@ export const config = {
 	multisigPowMaxFutureSkewMs: toBoundedInt(process.env.MULTISIG_POW_MAX_FUTURE_SKEW_MS, 30_000, 0, 300_000),
 	multisigPowReplayCacheMax: toBoundedInt(process.env.MULTISIG_POW_REPLAY_CACHE_MAX, 10_000, 1, 1_000_000),
 } as const;
+
+// ---------------------------------------------------------------------------
+// Credential redaction on serialization.
+//
+// `config` is a module-global imported by ~20 files. A future log line
+// like `log.info("starting", { config })` would dump `postgresPassword`
+// and the userinfo-embedded password inside `databaseUrl` straight to
+// stdout. Consumers that need the real values read the fields directly
+// (unchanged behavior); any *serialized* view replaces credentials with
+// a placeholder.
+//
+// Two hooks cover the common leak paths:
+//   - `toJSON`              — `JSON.stringify(config)` (logger uses this)
+//   - `util.inspect.custom` — `console.log(config)` / `util.inspect(config)`
+//
+// `toJSON` is intentionally enumerable: Bun's JSON.stringify diverges from
+// the ECMAScript spec and does not invoke a non-enumerable `toJSON`. Making
+// it enumerable is the cost of cross-runtime-safe redaction. `buildRedacted
+// ConfigSnapshot` skips the `toJSON` key so the function itself never shows
+// up in the serialized payload. `util.inspect.custom` is symbol-keyed, so
+// staying non-enumerable is spec-and-Bun-safe there.
+// ---------------------------------------------------------------------------
+function buildRedactedConfigSnapshot(): Record<string, unknown> {
+	const snapshot: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(config)) {
+		if (key === "toJSON") continue;
+		snapshot[key] = SENSITIVE_CONFIG_FIELDS.has(key) ? REDACTED : value;
+	}
+	return snapshot;
+}
+
+Object.defineProperty(config, "toJSON", {
+	value: buildRedactedConfigSnapshot,
+	enumerable: true,
+	configurable: false,
+	writable: false,
+});
+
+Object.defineProperty(config, INSPECT_CUSTOM, {
+	value: buildRedactedConfigSnapshot,
+	enumerable: false,
+	configurable: false,
+	writable: false,
+});
 
 validateGenesisBlockSelection({ genesisBlock: config.genesisBlock });
 

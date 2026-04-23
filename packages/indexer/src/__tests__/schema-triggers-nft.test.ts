@@ -62,6 +62,13 @@ afterAll(async () => {
 describe("nfts triggers — immutable columns", () => {
 	beforeEach(resetFixture);
 
+	it("rejects UPDATE of id (primary key re-anchor would desync state_root)", async () => {
+		await expectQueryError(
+			() => sql`UPDATE nfts SET id = 'nft-tampered' WHERE id = ${NFT_ID}`,
+			/nfts\.id is immutable/,
+		);
+	});
+
 	it("rejects UPDATE of collection_id", async () => {
 		await expectQueryError(
 			() => sql`UPDATE nfts SET collection_id = 'other-coll' WHERE id = ${NFT_ID}`,
@@ -90,6 +97,16 @@ describe("nfts triggers — immutable columns", () => {
 		);
 	});
 
+	it("rejects UPDATE of instance_dna (NULL → value — NULL-safe IS DISTINCT FROM)", async () => {
+		// Fixture leaves instance_dna NULL (seed NFT). A silent write of an
+		// instance DNA would break the seed/instance identity partition that
+		// bulk_distribute relies on.
+		await expectQueryError(
+			() => sql`UPDATE nfts SET instance_dna = 'dna-tampered-instance' WHERE id = ${NFT_ID}`,
+			/instance_dna is immutable/,
+		);
+	});
+
 	it("rejects UPDATE of name", async () => {
 		await expectQueryError(
 			() => sql`UPDATE nfts SET name = 'Renamed' WHERE id = ${NFT_ID}`,
@@ -108,6 +125,22 @@ describe("nfts triggers — immutable columns", () => {
 		await expectQueryError(
 			() => sql`UPDATE nfts SET max_supply = 100 WHERE id = ${NFT_ID}`,
 			/max_supply is immutable/,
+		);
+	});
+
+	it("rejects UPDATE of seed_id (would repoint instance → different seed)", async () => {
+		// BEFORE UPDATE fires before FK validation, so the trigger catches the
+		// immutability violation even when the target seed id does not exist.
+		await expectQueryError(
+			() => sql`UPDATE nfts SET seed_id = 'seed-tampered' WHERE id = ${NFT_ID}`,
+			/seed_id is immutable/,
+		);
+	});
+
+	it("rejects UPDATE of instance_number (ordinal identity of an instance)", async () => {
+		await expectQueryError(
+			() => sql`UPDATE nfts SET instance_number = 7 WHERE id = ${NFT_ID}`,
+			/instance_number is immutable/,
 		);
 	});
 

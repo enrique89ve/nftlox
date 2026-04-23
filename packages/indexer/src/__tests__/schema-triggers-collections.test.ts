@@ -78,6 +78,16 @@ describe("collections triggers — structural immutability", () => {
 		);
 	});
 
+	it("rejects UPDATE of max_instances (seed+instance capacity cap)", async () => {
+		// Fixture omits max_instances, so the column sits at its NOT NULL DEFAULT
+		// of 0. Bumping it post-create would retroactively expand how many
+		// instances a seed can mint, silently rewriting supply accounting.
+		await expectQueryError(
+			() => sql`UPDATE collections SET max_instances = 500 WHERE id = ${COL_ID}`,
+			/collections\.max_instances is immutable/,
+		);
+	});
+
 	it("rejects UPDATE of block_num", async () => {
 		await expectQueryError(
 			() => sql`UPDATE collections SET block_num = 999 WHERE id = ${COL_ID}`,

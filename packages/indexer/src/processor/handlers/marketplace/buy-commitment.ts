@@ -6,7 +6,7 @@ import {
 	NFT_STATUS_PENDING_SALE,
 } from "@/db/queries/nfts.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
-import { assertActionable } from "@/utils/status-checks.ts";
+import { assertActionable, isListingExpired } from "@/utils/status-checks.ts";
 import {
 	BUY_COMMITMENT_TTL_BLOCKS,
 	MAX_ACTIVE_COMMITMENTS_PER_NODE,
@@ -67,6 +67,14 @@ export async function handleBuyCommitment(
 	}
 	if (nft.listing_tx_id !== listTxId) {
 		throw new Error(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
+	}
+	// A commitment on an expired listing is rejected: `handleBuy` would also
+	// reject (listing expired there), but without this gate a byzantine node
+	// could re-commit every ~30s to keep the NFT in `pending_sale`, blocking
+	// the owner from calling `unlist` (which refuses on pending_sale). Uses
+	// the same block timestamp as the router, so every indexer agrees.
+	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
+		throw new Error(`Listing expired for NFT: ${nftId}`);
 	}
 	if (nft.owner === buyer) {
 		throw new Error(`Cannot reserve own NFT: ${nftId}`);

@@ -114,6 +114,49 @@ describe("handleBuyCommitment", () => {
 		await expect(withTransaction((txn) => handleBuyCommitment(op, txn))).rejects.toThrow("Cannot reserve own");
 	});
 
+	// Seller-protection gate: without this, a byzantine registered node could
+	// emit a fresh buy_commitment every BUY_COMMITMENT_TTL_BLOCKS against an
+	// expired listing, keeping the NFT in `pending_sale` and blocking
+	// handleUnlist (which refuses on pending_sale). handleBuy would still
+	// reject at settlement, but the owner loses the ability to clear the
+	// listing. Expiry is evaluated against `op.timestamp` (block timestamp)
+	// so the check is replay-deterministic across indexers.
+	test("rejects a commitment when the listing is already expired", async () => {
+		const nftId = "nft_commit_expired_listing";
+		await insertListedInstance({
+			nftId,
+			collectionId: COLLECTION_ID,
+			seller: SELLER,
+			listingId: "list_expired",
+			listTxId: "tx_expired_list",
+			expiresAtMs: Date.now() - 60_000,
+		});
+
+		const op = commitmentOp({
+			nftId,
+			listingId: "list_expired",
+			listTxId: "tx_expired_list",
+			buyer: BUYER,
+		});
+
+		await expect(withTransaction((txn) => handleBuyCommitment(op, txn))).rejects.toThrow(
+			"Listing expired",
+		);
+
+		// And the NFT must remain in its pre-commitment state (listed, no
+		// sale_* fields populated) so the owner can still call `unlist` once
+		// they notice the listing is stale.
+		const [row] = await sql<
+			{ status: string; sale_buyer: string | null; sale_commitment_buy_tx_hash: string | null }[]
+		>`
+			SELECT status, sale_buyer, sale_commitment_buy_tx_hash
+			FROM nfts WHERE id = ${nftId}
+		`;
+		expect(row?.status).toBe("listed");
+		expect(row?.sale_buyer).toBeNull();
+		expect(row?.sale_commitment_buy_tx_hash).toBeNull();
+	});
+
 	test("rejects a competing commitment while a reservation is active", async () => {
 		const nftId = "nft_commit_race";
 		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_race", listTxId: "tx_race" });

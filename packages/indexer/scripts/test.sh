@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
-# Runs each test file in its own Bun process to bypass the cross-file
-# `mock.module()` contamination (mocks registered in one file leak into
-# the next when run in a shared process).
+# Canonical test runner — use this instead of plain `bun test`.
+#
+# Bun 1.x runs all test files in one shared process when invoked with
+# `bun test`. Two problems arise in a shared process:
+#
+#   1. mock.module() calls are global and bleed into every subsequent file.
+#      sync-engine.test.ts mocks @/db/client.ts at module level; any file
+#      that loads after it receives the mock instead of the real DB pool.
+#
+#   2. beforeAll/beforeEach cleaners in one file race with live queries
+#      from another file, corrupting shared PostgreSQL tables.
+#
+# This script gives each file its own `bun` subprocess — fresh module
+# registry, clean mock state, and an isolated DB connection pool.
 #
 # Usage:
-#   ./scripts/test.sh              # run all test files
-#   ./scripts/test.sh <substring>  # run only paths containing <substring>
+#   bun run test                   # run all test files
+#   bun run test:filter <substring> # run only paths containing <substring>
 set -u
 
 cd "$(dirname "$0")/.."

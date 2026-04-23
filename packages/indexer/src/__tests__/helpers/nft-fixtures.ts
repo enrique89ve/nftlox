@@ -23,10 +23,17 @@ export async function insertListedInstance(params: {
 	readonly listingId: string;
 	readonly listTxId: string;
 	readonly price?: string;
+	/**
+	 * Absolute ms timestamp for `listing_expires_at`. Defaults to now + 1h.
+	 * Pass a past value (e.g. `Date.now() - 1000`) to simulate an expired
+	 * listing that has not yet been cleared by the owner.
+	 */
+	readonly expiresAtMs?: number;
 }): Promise<void> {
 	const price = params.price ?? "10.000";
 	const createdTx = `${params.nftId}_mint_tx`.padEnd(40, "0").slice(0, 40);
 	const opId = `op_${params.nftId}`;
+	const expiresAtIso = new Date(params.expiresAtMs ?? Date.now() + 3600_000).toISOString();
 	await sql`
 		INSERT INTO nfts (
 			id, collection_id, nft_type, status, edition, owner, name,
@@ -40,7 +47,7 @@ export async function insertListedInstance(params: {
 			'https://img.example/i.png', ${"0".repeat(32)}, ${"1".repeat(40)}, 0, 0, 0,
 			NULL, ${opId}, 'mint', 90000001,
 			${params.listingId}, ${params.listTxId}, ${price}, 'HIVE',
-			${new Date(Date.now() + 3600_000).toISOString()}, NULL,
+			${expiresAtIso}, NULL,
 			${opId}, 90000001, ${createdTx}, NOW()
 		)
 	`;
