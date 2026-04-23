@@ -41,7 +41,6 @@ import {
 	ACTION_BUY,
 	ACTION_BUY_COMMITMENT,
 	calculatePaymentSplit,
-	ACTIVE_AUTH_ACTIONS,
 	generateListingNonce,
 	generateListingId,
 	MEMO_PREFIX_BUY,
@@ -50,8 +49,7 @@ import {
 	generateDeterministicSeedId,
 	PROTOCOL_COLLECTION_FEE_HBD,
 } from "@/protocol/index.ts";
-
-const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
+import { makeOp as _makeOp } from "./helpers/make-op.ts";
 
 // Canonical collection ID for alice + "Test Collection" + "TEST"
 let COL_ID: string;
@@ -63,27 +61,14 @@ let COL_ID: string;
 let SEED_TEST1 = "";
 let SEED_TEST2 = "";
 
-let opCounter = 0;
 function makeOp(
 	action: string,
 	data: Record<string, unknown>,
 	signer = "alice",
 	pairedTransfers?: ParsedOperation["pairedTransfers"],
-	authLevel: AuthLevel = ACTIVE_SET.has(action) ? "active" : "posting",
+	authLevel?: AuthLevel,
 ): ParsedOperation {
-	const id = ++opCounter;
-	return {
-		blockNum: 90000100,
-		timestamp: "2024-01-01T00:00:00",
-		txId: `tx_${action}_${Date.now()}`,
-		operationId: `op_${id}`,
-		signer,
-		authLevel,
-		action: action as ParsedOperation["action"],
-		version: "0.2.1",
-		data,
-		pairedTransfers,
-	};
+	return _makeOp({ action, data, signer, pairedTransfers, authLevel });
 }
 
 async function cleanDb() {

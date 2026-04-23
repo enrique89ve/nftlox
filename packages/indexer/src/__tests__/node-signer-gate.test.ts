@@ -1,11 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { sql, withTransaction } from "@/db/client.ts";
-import type { ParsedOperation, AuthLevel } from "@/scanner/operation-parser.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { routeOperation } from "@/processor/action-router.ts";
 import {
 	ACTION_BUY,
 	ACTION_BUY_COMMITMENT,
-	ACTIVE_AUTH_ACTIONS,
 	BUY_COMMITMENT_TTL_BLOCKS,
 	MAX_NODE_HEARTBEAT_STALENESS_BLOCKS,
 	MEMO_PREFIX_BUY,
@@ -13,14 +12,14 @@ import {
 	calculatePaymentSplit,
 } from "@/protocol/index.ts";
 import { seedActiveSettlementNode } from "./helpers/settlement-node.ts";
+import { makeOp as _makeOp } from "./helpers/make-op.ts";
+import { seedCollection, insertListedInstance, cleanCommonTables } from "./helpers/nft-fixtures.ts";
 
 // Tests que validan la gate del action-router para NODE_SIGNED_ACTIONS
 // (buy_commitment, buy): op.signer DEBE estar registrado + activo en l2_nodes
 // al bloque de procesamiento. Pre-fix, cualquier cuenta Hive podía firmar estas
 // acciones — habilitando (a) DOS vía buy_commitment espurio con hash falso, y
 // (b) fee-bypass firmando la propia buy con una cuenta no-nodo como feeAccount.
-
-const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
 
 const REGISTERED_NODE = "gate.node";
 const STRANGER = "random.hiver";
@@ -30,75 +29,6 @@ const COLLECTION_ID = "col_gate_tests";
 const REGISTERED_BLOCK = 100_000;
 const FRESH_BLOCK = REGISTERED_BLOCK + 500; // dentro de la ventana de staleness
 const STALE_BLOCK = REGISTERED_BLOCK + MAX_NODE_HEARTBEAT_STALENESS_BLOCKS + 1;
-
-let opCounter = 0;
-function makeOp(params: {
-	readonly action: string;
-	readonly signer: string;
-	readonly blockNum: number;
-	readonly data: Record<string, unknown>;
-	readonly txId?: string;
-	readonly pairedTransfers?: ParsedOperation["pairedTransfers"];
-}): ParsedOperation {
-	const id = ++opCounter;
-	const authLevel: AuthLevel = ACTIVE_SET.has(params.action) ? "active" : "posting";
-	return {
-		blockNum: params.blockNum,
-		timestamp: new Date().toISOString(),
-		txId: (params.txId ?? `tx_gate_${id}`).padEnd(40, "0").slice(0, 40),
-		operationId: `op_gate_${id}`,
-		signer: params.signer,
-		authLevel,
-		action: params.action as ParsedOperation["action"],
-		version: "0.8.0",
-		data: params.data,
-		pairedTransfers: params.pairedTransfers,
-	};
-}
-
-async function seedCollection(): Promise<void> {
-	await sql`
-		INSERT INTO collections (
-			id, name, symbol, creator, total_potential, max_instances,
-			transferable, burnable, royalty_pct, royalty_recipient,
-			block_num, tx_id, created_at
-		)
-		VALUES (
-			${COLLECTION_ID}, 'Gate Coll', 'GAT', ${SELLER}, 100, 0,
-			true, true, 0, NULL,
-			90000000, ${"col_gate_tx".padEnd(40, "0").slice(0, 40)}, NOW()
-		)
-		ON CONFLICT (id) DO NOTHING
-	`;
-}
-
-async function insertListedInstance(params: {
-	readonly nftId: string;
-	readonly listingId: string;
-	readonly listTxId: string;
-	readonly price?: string;
-}): Promise<void> {
-	const price = params.price ?? "10.000";
-	const createdTx = `${params.nftId}_mint_tx`.padEnd(40, "0").slice(0, 40);
-	const opId = `op_${params.nftId}`;
-	await sql`
-		INSERT INTO nfts (
-			id, collection_id, nft_type, status, edition, owner, name,
-			image_url, origin_dna, instance_dna, max_supply, distributed, reserved_supply,
-			previous_owner, owner_operation_id, owner_action, owner_block_num,
-			listing_id, listing_tx_id, listing_price, listing_currency,
-			listing_expires_at, listing_marketplace,
-			created_operation_id, created_block_num, created_tx_id, created_at
-		) VALUES (
-			${params.nftId}, ${COLLECTION_ID}, 'instance', 'listed', 1, ${SELLER}, 'test',
-			'https://img.example/i.png', ${"0".repeat(32)}, ${"1".repeat(40)}, 0, 0, 0,
-			NULL, ${opId}, 'mint', 90000001,
-			${params.listingId}, ${params.listTxId}, ${price}, 'HIVE',
-			${new Date(Date.now() + 3600_000).toISOString()}, NULL,
-			${opId}, 90000001, ${createdTx}, NOW()
-		)
-	`;
-}
 
 /**
  * Construye una buy op con los transfers válidos dirigidos al feeAccount
@@ -137,7 +67,7 @@ function makeBuyOp(params: {
 			memo: `${MEMO_PREFIX_FEE}${params.nftId}`,
 		});
 	}
-	return makeOp({
+	return _makeOp({
 		action: ACTION_BUY,
 		signer: params.signer,
 		blockNum: params.blockNum,
@@ -152,19 +82,10 @@ function makeBuyOp(params: {
 	});
 }
 
-async function cleanDb(): Promise<void> {
-	await sql`DELETE FROM sales`;
-	await sql`DELETE FROM nfts`;
-	await sql`DELETE FROM invalid_operations`;
-	await sql`DELETE FROM confirmed_operations`;
-	await sql`DELETE FROM orphaned_buys`;
-	await sql`DELETE FROM l2_nodes`;
-	await sql`DELETE FROM collections WHERE id = ${COLLECTION_ID}`;
-}
-
 beforeAll(async () => {
-	await cleanDb();
-	await seedCollection();
+	await cleanCommonTables();
+	await sql`DELETE FROM collections WHERE id = ${COLLECTION_ID}`;
+	await seedCollection(COLLECTION_ID, SELLER);
 });
 
 beforeEach(async () => {
@@ -176,15 +97,16 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-	await cleanDb();
+	await cleanCommonTables();
+	await sql`DELETE FROM collections WHERE id = ${COLLECTION_ID}`;
 });
 
 describe("router node-signer gate — buy_commitment", () => {
 	test("rejects a non-registered signer (DOS prevention)", async () => {
 		const nftId = "nft_gate_a";
-		await insertListedInstance({ nftId, listingId: "list_a", listTxId: "tx_a" });
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_a", listTxId: "tx_a" });
 
-		const op = makeOp({
+		const op = _makeOp({
 			action: ACTION_BUY_COMMITMENT,
 			signer: STRANGER,
 			blockNum: FRESH_BLOCK,
@@ -216,9 +138,9 @@ describe("router node-signer gate — buy_commitment", () => {
 	test("accepts a registered + fresh node signer (happy path)", async () => {
 		await seedActiveSettlementNode(REGISTERED_NODE, { registeredBlock: REGISTERED_BLOCK });
 		const nftId = "nft_gate_b";
-		await insertListedInstance({ nftId, listingId: "list_b", listTxId: "tx_b" });
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_b", listTxId: "tx_b" });
 
-		const op = makeOp({
+		const op = _makeOp({
 			action: ACTION_BUY_COMMITMENT,
 			signer: REGISTERED_NODE,
 			blockNum: FRESH_BLOCK,
@@ -247,9 +169,9 @@ describe("router node-signer gate — buy_commitment", () => {
 	test("rejects a registered node with a stale heartbeat", async () => {
 		await seedActiveSettlementNode(REGISTERED_NODE, { registeredBlock: REGISTERED_BLOCK });
 		const nftId = "nft_gate_c";
-		await insertListedInstance({ nftId, listingId: "list_c", listTxId: "tx_c" });
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_c", listTxId: "tx_c" });
 
-		const op = makeOp({
+		const op = _makeOp({
 			action: ACTION_BUY_COMMITMENT,
 			signer: REGISTERED_NODE,
 			blockNum: STALE_BLOCK,
@@ -287,10 +209,10 @@ describe("router node-signer gate — buy", () => {
 		await seedActiveSettlementNode(REGISTERED_NODE, { registeredBlock: REGISTERED_BLOCK });
 
 		const nftId = "nft_gate_buy";
-		await insertListedInstance({ nftId, listingId: "list_buy", listTxId: "tx_buy" });
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_buy", listTxId: "tx_buy" });
 		const buyTxHash = "e".repeat(40);
 
-		const commitOp = makeOp({
+		const commitOp = _makeOp({
 			action: ACTION_BUY_COMMITMENT,
 			signer: REGISTERED_NODE,
 			blockNum: FRESH_BLOCK,

@@ -1,88 +1,21 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { sql, withTransaction } from "@/db/client.ts";
-import type { ParsedOperation, AuthLevel } from "@/scanner/operation-parser.ts";
+import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { handleBuyCommitment } from "@/processor/handlers/marketplace/buy-commitment.ts";
 import { sweepExpiredBuyCommitments } from "@/db/queries/nft-mutations.ts";
 import {
 	ACTION_BUY_COMMITMENT,
-	ACTIVE_AUTH_ACTIONS,
 	BUY_COMMITMENT_TTL_BLOCKS,
 	MAX_ACTIVE_COMMITMENTS_PER_NODE,
 } from "@/protocol/index.ts";
-
-const ACTIVE_SET = new Set<string>(ACTIVE_AUTH_ACTIONS);
+import { makeOp as _makeOp } from "./helpers/make-op.ts";
+import { seedCollection, insertListedInstance, cleanCommonTables } from "./helpers/nft-fixtures.ts";
 
 const NODE = "node.one";
 const OTHER_NODE = "node.two";
 const SELLER = "seller.one";
 const BUYER = "buyer.one";
 const COLLECTION_ID = "col_commitment_tests";
-
-let opCounter = 0;
-function makeOp(
-	action: string,
-	data: Record<string, unknown>,
-	signer: string,
-	blockNum: number,
-): ParsedOperation {
-	const id = ++opCounter;
-	const authLevel: AuthLevel = ACTIVE_SET.has(action) ? "active" : "posting";
-	return {
-		blockNum,
-		timestamp: new Date().toISOString(),
-		txId: `tx_${action}_${id}`.padEnd(40, "0").slice(0, 40),
-		operationId: `op_${id}`,
-		signer,
-		authLevel,
-		action: action as ParsedOperation["action"],
-		version: "0.8.0",
-		data,
-	};
-}
-
-async function seedCollection(): Promise<void> {
-	await sql`
-		INSERT INTO collections (
-			id, name, symbol, creator, total_potential, max_instances,
-			transferable, burnable, royalty_pct, royalty_recipient,
-			block_num, tx_id, created_at
-		)
-		VALUES (
-			${COLLECTION_ID}, 'Commit Coll', 'CMT', ${SELLER}, 100, 0,
-			true, true, 0, NULL,
-			90000000, ${"col_tx".padEnd(40, "0").slice(0, 40)}, NOW()
-		)
-		ON CONFLICT (id) DO NOTHING
-	`;
-}
-
-async function insertListedInstance(params: {
-	readonly nftId: string;
-	readonly listingId: string;
-	readonly listTxId: string;
-	readonly price?: string;
-}): Promise<void> {
-	const price = params.price ?? "10.000";
-	const createdTx = `${params.nftId}_mint_tx`.padEnd(40, "0").slice(0, 40);
-	const opId = `op_${params.nftId}`;
-	await sql`
-		INSERT INTO nfts (
-			id, collection_id, nft_type, status, edition, owner, name,
-			image_url, origin_dna, instance_dna, max_supply, distributed, reserved_supply,
-			previous_owner, owner_operation_id, owner_action, owner_block_num,
-			listing_id, listing_tx_id, listing_price, listing_currency,
-			listing_expires_at, listing_marketplace,
-			created_operation_id, created_block_num, created_tx_id, created_at
-		) VALUES (
-			${params.nftId}, ${COLLECTION_ID}, 'instance', 'listed', 1, ${SELLER}, 'test',
-			'https://img.example/i.png', ${"0".repeat(32)}, ${"1".repeat(40)}, 0, 0, 0,
-			NULL, ${opId}, 'mint', 90000001,
-			${params.listingId}, ${params.listTxId}, ${price}, 'HIVE',
-			${new Date(Date.now() + 3600_000).toISOString()}, NULL,
-			${opId}, 90000001, ${createdTx}, NOW()
-		)
-	`;
-}
 
 function commitmentOp(params: {
 	nftId: string;
@@ -93,28 +26,24 @@ function commitmentOp(params: {
 	settlementNode?: string;
 	blockNum?: number;
 }): ParsedOperation {
-	return makeOp(
-		ACTION_BUY_COMMITMENT,
-		{
+	return _makeOp({
+		action: ACTION_BUY_COMMITMENT,
+		signer: params.settlementNode ?? NODE,
+		blockNum: params.blockNum ?? 100_000,
+		data: {
 			nftId: params.nftId,
 			listingId: params.listingId,
 			listTxId: params.listTxId,
 			buyer: params.buyer,
 			txHash: params.buyTxHash ?? "a".repeat(40),
 		},
-		params.settlementNode ?? NODE,
-		params.blockNum ?? 100_000,
-	);
-}
-
-async function cleanDb(): Promise<void> {
-	await sql`DELETE FROM nfts`;
-	await sql`DELETE FROM collections WHERE id = ${COLLECTION_ID}`;
+	});
 }
 
 beforeAll(async () => {
-	await cleanDb();
-	await seedCollection();
+	await cleanCommonTables();
+	await sql`DELETE FROM collections WHERE id = ${COLLECTION_ID}`;
+	await seedCollection(COLLECTION_ID, SELLER);
 });
 
 beforeEach(async () => {
@@ -122,13 +51,14 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-	await cleanDb();
+	await cleanCommonTables();
+	await sql`DELETE FROM collections WHERE id = ${COLLECTION_ID}`;
 });
 
 describe("handleBuyCommitment", () => {
 	test("projects pending_sale on a listed NFT", async () => {
 		const nftId = "nft_commit_a";
-		await insertListedInstance({ nftId, listingId: "list_a", listTxId: "tx_a" });
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_a", listTxId: "tx_a" });
 
 		const buyTxHash = "b".repeat(40);
 		const op = commitmentOp({ nftId, listingId: "list_a", listTxId: "tx_a", buyer: BUYER, buyTxHash, blockNum: 100_500 });
@@ -166,7 +96,7 @@ describe("handleBuyCommitment", () => {
 
 	test("rejects listingId mismatch", async () => {
 		const nftId = "nft_commit_mismatch";
-		await insertListedInstance({ nftId, listingId: "list_real", listTxId: "tx_real" });
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_real", listTxId: "tx_real" });
 
 		const op = commitmentOp({
 			nftId,
@@ -179,14 +109,14 @@ describe("handleBuyCommitment", () => {
 
 	test("rejects when buyer is the seller", async () => {
 		const nftId = "nft_commit_self";
-		await insertListedInstance({ nftId, listingId: "list_self", listTxId: "tx_self" });
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_self", listTxId: "tx_self" });
 		const op = commitmentOp({ nftId, listingId: "list_self", listTxId: "tx_self", buyer: SELLER });
 		await expect(withTransaction((txn) => handleBuyCommitment(op, txn))).rejects.toThrow("Cannot reserve own");
 	});
 
 	test("rejects a competing commitment while a reservation is active", async () => {
 		const nftId = "nft_commit_race";
-		await insertListedInstance({ nftId, listingId: "list_race", listTxId: "tx_race" });
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_race", listTxId: "tx_race" });
 
 		const firstBlock = 100_200;
 		await withTransaction((txn) =>
@@ -210,7 +140,7 @@ describe("handleBuyCommitment", () => {
 
 	test("overwrites an expired reservation", async () => {
 		const nftId = "nft_commit_expired";
-		await insertListedInstance({ nftId, listingId: "list_exp", listTxId: "tx_exp" });
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_exp", listTxId: "tx_exp" });
 
 		const firstBlock = 100_000;
 		await withTransaction((txn) =>
@@ -259,7 +189,7 @@ describe("handleBuyCommitment", () => {
 
 	test("sweep clears expired reservations", async () => {
 		const nftId = "nft_commit_sweep";
-		await insertListedInstance({ nftId, listingId: "list_sweep", listTxId: "tx_sweep" });
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_sweep", listTxId: "tx_sweep" });
 
 		const firstBlock = 100_000;
 		await withTransaction((txn) =>
@@ -290,7 +220,7 @@ describe("handleBuyCommitment", () => {
 			const nftId = `nft_cap_${i}`;
 			const listingId = `list_cap_${i}`;
 			const listTxId = `tx_cap_${i}`.padEnd(40, "0").slice(0, 40);
-			await insertListedInstance({ nftId, listingId, listTxId });
+			await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 			const op = commitmentOp({
 				nftId,

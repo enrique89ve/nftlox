@@ -8,12 +8,12 @@ import {
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
-	PROTOCOL_VERSION,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	PROTOCOL_COLLECTION_FEE_HBD,
 } from "@/protocol/index.ts";
 import { config } from "@/config.ts";
+import { makeOp as _makeOp } from "./helpers/make-op.ts";
 
 const COL_NAME = "CrashTest";
 const COL_SYMBOL = "CRASH";
@@ -34,23 +34,18 @@ function makeOp(
 		pairedTransfers?: ParsedOperation["pairedTransfers"];
 	} = {},
 ): ParsedOperation {
-	const signer = overrides.signer ?? "alice";
-	const authLevelMap: Record<string, "posting" | "active"> = {
-		[ACTION_CREATE_COLLECTION]: "active",
-		[ACTION_MINT]: "active",
-	};
-	return {
-		blockNum: overrides.blockNum ?? 1,
-		timestamp: new Date().toISOString(),
-		version: PROTOCOL_VERSION,
-		txId: overrides.txId ?? `tx_crash_${Date.now()}_${Math.random()}`,
-		operationId: overrides.operationId ?? `op_crash_${Date.now()}_${Math.random()}`,
-		signer,
-		authLevel: authLevelMap[action] ?? "posting",
-		action: action as ParsedOperation["action"],
+	const op = _makeOp({
+		action,
 		data,
+		signer: overrides.signer,
+		blockNum: overrides.blockNum,
+		txId: overrides.txId,
 		pairedTransfers: overrides.pairedTransfers,
-	};
+	});
+	if (overrides.operationId) {
+		return { ...op, operationId: overrides.operationId };
+	}
+	return op;
 }
 
 function makeCreateCollectionOp(
