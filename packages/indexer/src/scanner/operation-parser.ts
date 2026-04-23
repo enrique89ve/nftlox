@@ -244,6 +244,23 @@ function isValidPayload(payload: unknown): payload is {
 	return true;
 }
 
+type ForensicCandidatePayload = Readonly<{
+	readonly protocol: string;
+	readonly version: string;
+	readonly action: ProtocolAction;
+}>;
+
+function hasForensicPayloadSignal(payload: unknown): payload is ForensicCandidatePayload {
+	if (!isNonNullObject(payload)) return false;
+	if (payload.protocol !== protocolId) return false;
+	if (typeof payload.version !== "string") return false;
+	if (!parseProtocolVersion(payload.version)) return false;
+	if (compareVersions(payload.version, MIN_PROTOCOL_VERSION) < 0) return false;
+	if (typeof payload.action !== "string") return false;
+	if (!isProtocolAction(payload.action)) return false;
+	return true;
+}
+
 // ─── Rejected Operation ───────────────────────────
 
 export interface RejectedOperation {
@@ -266,9 +283,10 @@ export interface ParseResult {
  * Parse HafAH operations directly — much faster than parsing full blocks.
  * HafAH already filters to custom_json (op_type=18), we just filter by protocol ID.
  *
- * Returns both valid ops and rejected ops (malformed payloads that match our
- * protocol ID but fail validation). Rejected ops should be recorded in
- * invalid_operations for observability — silently discarding them hides failures.
+ * Returns both valid ops and rejected ops. Only protocol-shaped payloads with
+ * real forensic signal are rejected; low-signal garbage (empty envelopes,
+ * malformed JSON, unknown actions, missing versions) is ignored even if it
+ * reuses our custom_json id.
  *
  * NOTE: Paired transfers are enriched separately by the sync engine via
  * getTransfersInBlock() for actions that require payment verification.
@@ -282,14 +300,6 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 		if (!isCustomJsonValue(rawValue)) {
 			const rawId = isNonNullObject(rawValue) ? rawValue.id : null;
 			if (rawId !== protocolId) continue;
-			rejected.push({
-				blockNum: hafOp.block,
-				txId: hafOp.trx_id,
-				operationId: String(hafOp.operation_id),
-				signer: null,
-				reason: "Malformed custom_json operation value",
-				rawPayload: rawValue,
-			});
 			continue;
 		}
 
@@ -329,18 +339,11 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 		try {
 			payload = JSON.parse(value.json, prototypePollutionReviver);
 		} catch {
-			rejected.push({
-				blockNum: hafOp.block,
-				txId: hafOp.trx_id,
-				operationId: hafOp.operation_id,
-				signer,
-				reason: "Malformed JSON payload",
-				rawPayload: value.json,
-			});
 			continue;
 		}
 
 		if (!isValidPayload(payload)) {
+			if (!hasForensicPayloadSignal(payload)) continue;
 			rejected.push({
 				blockNum: hafOp.block,
 				txId: hafOp.trx_id,

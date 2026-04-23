@@ -5,6 +5,15 @@ import { ACTION_TRANSFER, ACTION_BUY, ACTIVE_AUTH_ACTIONS } from "@/protocol/ind
 
 // ─── Mocks ──────────────────────────────────────────
 
+type MockRouteOperationResult =
+	| Readonly<{ readonly kind: "applied" }>
+	| Readonly<{ readonly kind: "rejected"; readonly reason: string }>
+	| Readonly<{ readonly kind: "fatal"; readonly reason: string }>;
+
+function appliedRouteResult(): MockRouteOperationResult {
+	return { kind: "applied" };
+}
+
 let trackedLastBlock = 0;
 
 const mockGetLastBlock = mock(() => Promise.resolve(trackedLastBlock));
@@ -23,7 +32,9 @@ const mockGetTransfersInTransaction = mock((_txId: string) => Promise.resolve([]
 	from: string; to: string; amount: number; currency: string; memo: string;
 }>));
 const mockParseHafAHOperations = mock((_ops: HafAHOperation[]): ParseResult => ({ ops: [], rejected: [] }));
-const mockRouteOperation = mock((_op: ParsedOperation, _txn: unknown) => Promise.resolve());
+const mockRouteOperationDetailed = mock(
+	(_op: ParsedOperation, _txn: unknown) => Promise.resolve(appliedRouteResult()),
+);
 
 function makePostgresResult(rows: unknown[] = []): unknown[] & { count: number; command: string } {
 	const result = [...rows] as unknown[] & { count: number; command: string };
@@ -84,7 +95,8 @@ mock.module("@/scanner/operation-parser.ts", () => ({
 }));
 
 mock.module("@/processor/action-router.ts", () => ({
-	routeOperation: mockRouteOperation,
+	routeOperationDetailed: mockRouteOperationDetailed,
+	routeOperation: mock(() => Promise.resolve(true)),
 }));
 
 // config.ts throws at module-load time when INDEXER_ROLE=both and ACTIVE_KEY is
@@ -208,7 +220,7 @@ function resetAllMocks(): void {
 	mockGetHafAHBlockRange.mockReset();
 	mockGetTransfersInTransaction.mockReset();
 	mockParseHafAHOperations.mockReset();
-	mockRouteOperation.mockReset();
+	mockRouteOperationDetailed.mockReset();
 	mockWithTransaction.mockReset();
 
 	mockGetLastBlock.mockImplementation(() => Promise.resolve(trackedLastBlock));
@@ -220,7 +232,7 @@ function resetAllMocks(): void {
 	mockGetHafAHBlockRange.mockImplementation(() => 2000);
 	mockGetTransfersInTransaction.mockImplementation(() => Promise.resolve([]));
 	mockParseHafAHOperations.mockImplementation(() => ({ ops: [], rejected: [] }));
-	mockRouteOperation.mockImplementation(() => Promise.resolve());
+	mockRouteOperationDetailed.mockImplementation(() => Promise.resolve(appliedRouteResult()));
 	mockWithTransaction.mockImplementation(async (fn: (txn: unknown) => Promise<void>) => {
 		await fn(mockTxn);
 	});
@@ -244,7 +256,10 @@ describe("block processing never stops", () => {
 		mockParseHafAHOperations.mockReturnValue(wrapOps([fakeParsedOp(1001)]));
 
 		let routeCalls = 0;
-		mockRouteOperation.mockImplementation(async () => { routeCalls++; });
+		mockRouteOperationDetailed.mockImplementation(async () => {
+			routeCalls++;
+			return appliedRouteResult();
+		});
 
 		await syncCycle();
 

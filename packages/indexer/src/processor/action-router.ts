@@ -14,7 +14,6 @@ import {
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
-	ACTION_SALE_LOCK,
 	ACTION_NFT_APPROVE,
 	ACTION_NFT_APPROVE_ALL,
 	ACTION_NFT_TRANSFER_FROM,
@@ -51,7 +50,6 @@ import { handleNodeHeartbeat } from "./handlers/core/node_heartbeat.ts";
 // Marketplace
 import { handleList } from "./handlers/marketplace/list.ts";
 import { handleUnlist } from "./handlers/marketplace/unlist.ts";
-import { handleDeprecatedSaleLock } from "./handlers/marketplace/deprecated-sale-lock.ts";
 import { handleBuyCommitment } from "./handlers/marketplace/buy-commitment.ts";
 
 import { handleBuy } from "./handlers/marketplace/buy.ts";
@@ -72,6 +70,11 @@ import { handleNftReturn } from "./handlers/lending/nft-return.ts";
 const log = createLogger("router");
 
 type Handler = (op: ParsedOperation, txn: Queryable) => Promise<ReadonlyArray<string>>;
+
+export type RouteOperationResult =
+	| Readonly<{ readonly kind: "applied" }>
+	| Readonly<{ readonly kind: "rejected"; readonly reason: string }>
+	| Readonly<{ readonly kind: "fatal"; readonly reason: string }>;
 
 function confirmedOperationNftIds(action: ProtocolAction, nftIds: ReadonlyArray<string>): ReadonlyArray<string> {
 	if (action === ACTION_BULK_DISTRIBUTE) return [];
@@ -175,7 +178,6 @@ const handlers: Record<ProtocolAction, Handler> = {
 	// Marketplace
 	[ACTION_LIST]: handleList,
 	[ACTION_UNLIST]: handleUnlist,
-	[ACTION_SALE_LOCK]: handleDeprecatedSaleLock,
 	[ACTION_BUY_COMMITMENT]: handleBuyCommitment,
 	[ACTION_BUY]: handleBuy,
 
@@ -198,17 +200,21 @@ const handlers: Record<ProtocolAction, Handler> = {
  * If a handler fails, the error is recorded in invalid_operations and processing continues.
  * This guarantees that a single bad operation can never stall the sync loop or cause block gaps.
  *
- * Returns true if the handler executed successfully, false otherwise.
- * Used by the sync engine's circuit breaker to detect systematic failures.
+ * Returns a discriminated outcome so the sync engine can distinguish
+ * consensus-invalid operations ("rejected") from infrastructure failures
+ * ("fatal"). Invalid user spam must not trip the sync circuit breaker.
  */
-export async function routeOperation(op: ParsedOperation, txn: Queryable): Promise<boolean> {
+export async function routeOperationDetailed(
+	op: ParsedOperation,
+	txn: Queryable,
+): Promise<RouteOperationResult> {
 	try {
 		// Idempotency gate: skip handler dispatch if this operation_id has already been
 		// confirmed. Protects against crash-replay drift in denormalized counters when
 		// `synchronous_commit=OFF` (used during massive sync) lets a committed tx be lost
 		// and the sync engine re-processes the same range.
 		if (await isOperationConfirmed(op.operationId, txn)) {
-			return true;
+			return { kind: "applied" };
 		}
 
 		// op.action: ProtocolAction — validated by the parser (isProtocolAction guard).
@@ -227,7 +233,7 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 				reason: authMismatchReason,
 				rawPayload: op.data,
 			}, txn);
-			return false;
+			return { kind: "rejected", reason: authMismatchReason };
 		}
 
 		try {
@@ -306,7 +312,7 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 				nftIds: confirmedOperationNftIds(op.action, nftIds),
 				createdAt: op.timestamp,
 			}, txn);
-			return true;
+			return { kind: "applied" };
 		} catch (err) {
 			const reason = err instanceof Error ? err.message : String(err);
 			log.warn(`Handler failed: ${op.action}`, { blockNum: op.blockNum, txId: op.txId, reason });
@@ -343,17 +349,23 @@ export async function routeOperation(op: ParsedOperation, txn: Queryable): Promi
 					transfers,
 				}, txn);
 			}
-			return false;
+			return { kind: "rejected", reason };
 		}
 	} catch (fatal) {
 		// Last-resort catch: even insertInvalidOperation/insertOrphanedBuy failed.
 		// Log and continue — never let a single operation abort the entire batch.
+		const reason = fatal instanceof Error ? fatal.message : String(fatal);
 		log.error("FATAL: routeOperation could not record error — operation skipped silently", {
 			blockNum: op.blockNum,
 			txId: op.txId,
 			action: op.action,
-			error: fatal instanceof Error ? fatal.message : String(fatal),
+			error: reason,
 		});
-		return false;
+		return { kind: "fatal", reason };
 	}
+}
+
+export async function routeOperation(op: ParsedOperation, txn: Queryable): Promise<boolean> {
+	const result = await routeOperationDetailed(op, txn);
+	return result.kind === "applied";
 }

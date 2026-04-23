@@ -29,7 +29,7 @@ import {
   type RejectedOperation,
   type ParsedOperation,
 } from "./operation-parser.ts";
-import { routeOperation } from "@/processor/action-router.ts";
+import { routeOperationDetailed } from "@/processor/action-router.ts";
 import { markSyncActivity, setSynced, updateSyncProgress } from "./sync-state.ts";
 import { ChainAnchorMismatchError, verifyChainAnchors } from "./chain-anchors.ts";
 import { createLogger } from "@/utils/logger.ts";
@@ -43,7 +43,7 @@ const MASSIVE_THRESHOLD = 100;
 // Exported so /api/health and /api/status report the same threshold.
 export const SYNC_TOLERANCE_BLOCKS = 5;
 const MAX_CONTINUITY_FAILURES = 3;
-const MAX_CONSECUTIVE_HANDLER_FAILURES = 10;
+const MAX_CONSECUTIVE_FATAL_ROUTE_FAILURES = 10;
 
 // ============ BATCH FETCH ============
 
@@ -412,7 +412,7 @@ export async function syncCycle(): Promise<void> {
       }
 
       if (hasOps) {
-        let consecutiveFailures = 0;
+        let consecutiveFatalFailures = 0;
         let sweptThrough: number | null = null;
         for (const batch of batches) {
           for (const rej of batch.rejected) {
@@ -434,15 +434,23 @@ export async function syncCycle(): Promise<void> {
               await sweepExpiredBuyCommitments(op.blockNum, txn);
               sweptThrough = op.blockNum;
             }
-            const success = await routeOperation(op, txn);
-            if (success) {
-              consecutiveFailures = 0;
-            } else {
-              consecutiveFailures++;
-              if (consecutiveFailures >= MAX_CONSECUTIVE_HANDLER_FAILURES) {
-                throw new Error(
-                  `Circuit breaker: ${consecutiveFailures} consecutive handler failures in block range ${batch.from}-${batch.to}`,
-                );
+            const routeResult = await routeOperationDetailed(op, txn);
+            switch (routeResult.kind) {
+              case "applied":
+              case "rejected":
+                consecutiveFatalFailures = 0;
+                break;
+              case "fatal":
+                consecutiveFatalFailures++;
+                if (consecutiveFatalFailures >= MAX_CONSECUTIVE_FATAL_ROUTE_FAILURES) {
+                  throw new Error(
+                    `Circuit breaker: ${consecutiveFatalFailures} consecutive fatal route failures in block range ${batch.from}-${batch.to}`,
+                  );
+                }
+                break;
+              default: {
+                const exhaustive: never = routeResult;
+                throw new Error(`Unhandled route result: ${JSON.stringify(exhaustive)}`);
               }
             }
           }

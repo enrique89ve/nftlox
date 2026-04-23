@@ -46,6 +46,29 @@ function makeCustomJsonOperation(
 	};
 }
 
+function makeCustomJsonOperationWithJson(
+	json: string,
+	required_auths: string[] = [],
+	required_posting_auths: string[] = ["alice"],
+): HafAHOperation {
+	return {
+		op: {
+			type: "custom_json",
+			value: {
+				id: PROTOCOL_ID,
+				json,
+				required_auths,
+				required_posting_auths,
+			},
+		},
+		block: POST_GENESIS_BLOCK,
+		trx_id: TX_ID,
+		timestamp: "2026-01-01T00:00:00",
+		operation_id: "1",
+		virtual_op: false,
+	};
+}
+
 describe("protocol auth map", () => {
 	test("node_register uses posting custom_json auth", () => {
 		expect(ACTION_AUTH_LEVEL[ACTION_NODE_REGISTER]).toBe("posting");
@@ -60,8 +83,8 @@ describe("protocol auth map", () => {
 		expect(ACTIVE_AUTH_ACTIONS).toHaveLength(3);
 		expect(ACTIVE_AUTH_ACTIONS).toContain(ACTION_CREATE_COLLECTION);
 		expect(ACTIVE_AUTH_ACTIONS).toContain(ACTION_BUY);
-		expect(POSTING_AUTH_ACTIONS).toHaveLength(18);
-		expect(ALL_ACTIONS).toHaveLength(21);
+		expect(POSTING_AUTH_ACTIONS).toHaveLength(17);
+		expect(ALL_ACTIONS).toHaveLength(20);
 	});
 
 	test("pack actions are not native indexer protocol actions", () => {
@@ -110,13 +133,13 @@ describe("protocol auth parser", () => {
 		expect(result.rejected[0]?.reason).toContain("2 posting signers");
 	});
 
-	test("rejects malformed protocol versions instead of accepting NaN comparisons", () => {
+	test("ignores malformed protocol versions that do not reach the minimum protocol envelope", () => {
 		const result = parseHafAHOperations([
 			makeCustomJsonOperation(ACTION_TRANSFER, [], ["alice"], "not-semver"),
 		]);
 
 		expect(result.ops).toEqual([]);
-		expect(result.rejected[0]?.reason).toBe("Invalid version format: not-semver");
+		expect(result.rejected).toEqual([]);
 	});
 
 	test("rejects well-formed op that predates genesis block", () => {
@@ -126,6 +149,41 @@ describe("protocol auth parser", () => {
 
 		expect(result.ops).toEqual([]);
 		expect(result.rejected[0]?.reason).toContain("predates genesis");
+	});
+
+	test("ignores malformed JSON even when custom_json.id matches the protocol", () => {
+		const result = parseHafAHOperations([
+			makeCustomJsonOperationWithJson("{"),
+		]);
+
+		expect(result.ops).toEqual([]);
+		expect(result.rejected).toEqual([]);
+	});
+
+	test("ignores payloads missing version/action instead of persisting low-signal spam", () => {
+		const result = parseHafAHOperations([
+			makeCustomJsonOperationWithJson(JSON.stringify({
+				protocol: PROTOCOL_ID,
+				data: {},
+			})),
+		]);
+
+		expect(result.ops).toEqual([]);
+		expect(result.rejected).toEqual([]);
+	});
+
+	test("rejects protocol-shaped payloads when only the business payload body is invalid", () => {
+		const result = parseHafAHOperations([
+			makeCustomJsonOperationWithJson(JSON.stringify({
+				protocol: PROTOCOL_ID,
+				version: PROTOCOL_VERSION,
+				action: ACTION_TRANSFER,
+				data: null,
+			})),
+		]);
+
+		expect(result.ops).toEqual([]);
+		expect(result.rejected[0]?.reason).toBe("Missing or invalid data field");
 	});
 
 	test("strips __proto__ and constructor keys from payload data", () => {

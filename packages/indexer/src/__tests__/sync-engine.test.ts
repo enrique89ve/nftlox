@@ -3,6 +3,23 @@ import type { ParsedOperation, ParseResult } from "@/scanner/operation-parser.ts
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
 import { ACTION_TRANSFER, ACTION_BUY, ACTION_NODE_REGISTER } from "@/protocol/index.ts";
 
+type MockRouteOperationResult =
+	| Readonly<{ readonly kind: "applied" }>
+	| Readonly<{ readonly kind: "rejected"; readonly reason: string }>
+	| Readonly<{ readonly kind: "fatal"; readonly reason: string }>;
+
+function appliedRouteResult(): MockRouteOperationResult {
+	return { kind: "applied" };
+}
+
+function rejectedRouteResult(reason: string): MockRouteOperationResult {
+	return { kind: "rejected", reason };
+}
+
+function fatalRouteResult(reason: string): MockRouteOperationResult {
+	return { kind: "fatal", reason };
+}
+
 // ─── Mocks ──────────────────────────────────────────
 
 // Mock @/config.ts before any other import so transitive module loads never
@@ -57,7 +74,10 @@ const mockGetTransfersInTransaction = mock((_txId: string) => Promise.resolve([]
 	from: string; to: string; amount: number; currency: string; memo: string;
 }>));
 const mockParseHafAHOperations = mock((_ops: HafAHOperation[]): ParseResult => ({ ops: [], rejected: [] }));
-const mockRouteOperation = mock((_op: ParsedOperation, _txn: unknown) => Promise.resolve(true));
+const mockRouteOperationDetailed = mock(
+	(_op: ParsedOperation, _txn: unknown) => Promise.resolve(appliedRouteResult()),
+);
+const mockInsertInvalidOperation = mock(() => Promise.resolve());
 const mockWithTransaction = mock(async (fn: (txn: unknown) => Promise<void>) => {
 	await fn(mockTxn);
 });
@@ -85,7 +105,7 @@ mock.module("@/db/queries/sync.ts", () => ({
 	updateLastBlock: mockUpdateLastBlock,
 	updateHiveHeadBlock: mock(() => Promise.resolve()),
 	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
-	insertInvalidOperation: mock(() => Promise.resolve()),
+	insertInvalidOperation: mockInsertInvalidOperation,
 	// Stubs keep the module's export shape complete so bun's process-wide
 	// mock registry doesn't starve sibling test files (e.g. status-route.test.ts).
 	getSyncStatus: mock(() => Promise.resolve({ lastBlock: 0, updatedAt: new Date() })),
@@ -122,7 +142,8 @@ mock.module("@/scanner/operation-parser.ts", () => ({
 }));
 
 mock.module("@/processor/action-router.ts", () => ({
-	routeOperation: mockRouteOperation,
+	routeOperationDetailed: mockRouteOperationDetailed,
+	routeOperation: mock(() => Promise.resolve(true)),
 }));
 
 // Minimal StateRootBuffer stub — only the fields that nft-mutations.ts and
@@ -222,7 +243,8 @@ function resetAllMocks(): void {
 	mockGetHafAHBlockRange.mockReset();
 	mockGetTransfersInTransaction.mockReset();
 	mockParseHafAHOperations.mockReset();
-	mockRouteOperation.mockReset();
+	mockRouteOperationDetailed.mockReset();
+	mockInsertInvalidOperation.mockReset();
 	mockWithTransaction.mockReset();
 
 	// Restore default implementations with shared state
@@ -235,7 +257,8 @@ function resetAllMocks(): void {
 	mockGetHafAHBlockRange.mockImplementation(() => 2000);
 	mockGetTransfersInTransaction.mockImplementation(() => Promise.resolve([]));
 	mockParseHafAHOperations.mockImplementation(() => ({ ops: [], rejected: [] }));
-	mockRouteOperation.mockImplementation(() => Promise.resolve(true));
+	mockRouteOperationDetailed.mockImplementation(() => Promise.resolve(appliedRouteResult()));
+	mockInsertInvalidOperation.mockImplementation(() => Promise.resolve());
 	mockWithTransaction.mockImplementation(async (fn: (txn: unknown) => Promise<void>) => {
 		await fn(mockTxn);
 	});
@@ -313,7 +336,7 @@ describe("syncCycle", () => {
 		// Should parse the hafah ops
 		expect(mockParseHafAHOperations).toHaveBeenCalledWith(hafOps);
 		// Should process each op via routeOperation
-		expect(mockRouteOperation).toHaveBeenCalledTimes(2);
+		expect(mockRouteOperationDetailed).toHaveBeenCalledTimes(2);
 		// Should run inside a transaction
 		expect(mockWithTransaction).toHaveBeenCalled();
 	});
@@ -330,7 +353,46 @@ describe("syncCycle", () => {
 		// Should still advance the cursor
 		expect(mockUpdateLastBlock).toHaveBeenCalled();
 		expect(mockWithTransaction).toHaveBeenCalled();
-		expect(mockRouteOperation).not.toHaveBeenCalled();
+		expect(mockRouteOperationDetailed).not.toHaveBeenCalled();
+		expect(mockInsertInvalidOperation).not.toHaveBeenCalled();
+	});
+
+	test("persists parser-rejected operations into invalid_operations before routing", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(1020);
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
+		mockParseHafAHOperations.mockReturnValue({
+			ops: [fakeParsedOp(1001)],
+			rejected: [{
+				blockNum: 1001,
+				txId: "tx_rejected",
+				operationId: "op_rejected",
+				signer: "alice",
+				reason: "Missing or invalid data field",
+				rawPayload: {
+					protocol: "nftlox_testnet",
+					version: "0.2.1",
+					action: ACTION_TRANSFER,
+					data: null,
+				},
+			}],
+		});
+
+		await syncCycle();
+
+		expect(mockInsertInvalidOperation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				blockNum: 1001,
+				txId: "tx_rejected",
+				operationId: "op_rejected",
+				signer: "alice",
+				action: null,
+				reason: "Missing or invalid data field",
+			}),
+			expect.anything(),
+		);
+		expect(mockRouteOperationDetailed).toHaveBeenCalledTimes(1);
 	});
 
 	test("toggles synced around non-massive catch-up in the same cycle", async () => {
@@ -487,7 +549,7 @@ describe("syncCycle", () => {
 		// No endpointOffset argument (default 0)
 	});
 
-	test("circuit breaker spans across batches in parallel", async () => {
+	test("rejected operations do not trigger the circuit breaker", async () => {
 		trackedLastBlock = 1000;
 		setupChainHead(6000); // massive
 		mockGetHafAHBlockRange.mockReturnValue(2000);
@@ -496,7 +558,23 @@ describe("syncCycle", () => {
 
 		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
 		mockParseHafAHOperations.mockReturnValue(wrapOps(failingOps));
-		mockRouteOperation.mockResolvedValue(false); // all ops fail
+		mockRouteOperationDetailed.mockResolvedValue(rejectedRouteResult("invalid payload"));
+
+		await syncCycle();
+
+		expect(trackedLastBlock).toBe(6000);
+	});
+
+	test("circuit breaker spans across batches for fatal route failures", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(6000); // massive
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+
+		const failingOps = Array.from({ length: 12 }, (_, i) => fakeParsedOp(1001 + i));
+
+		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps(failingOps));
+		mockRouteOperationDetailed.mockResolvedValue(fatalRouteResult("db write failed"));
 
 		await expect(syncCycle()).rejects.toThrow("Circuit breaker");
 	});
@@ -572,7 +650,8 @@ describe("syncCycle", () => {
 		// Cursor advanced to 3000
 		expect(trackedLastBlock).toBe(3000);
 		// No ops processed
-		expect(mockRouteOperation).not.toHaveBeenCalled();
+		expect(mockRouteOperationDetailed).not.toHaveBeenCalled();
+		expect(mockInsertInvalidOperation).not.toHaveBeenCalled();
 		// Per-cycle transaction still opens for the unlist materializer + cursor
 		// update, even when zero protocol ops landed in the range.
 		expect(mockWithTransaction).toHaveBeenCalled();
@@ -593,7 +672,7 @@ describe("syncCycle", () => {
 		await syncCycle();
 
 		// Only 1 op routed (the protocol one), not 3
-		expect(mockRouteOperation).toHaveBeenCalledTimes(1);
+		expect(mockRouteOperationDetailed).toHaveBeenCalledTimes(1);
 		expect(trackedLastBlock).toBe(1020);
 	});
 
@@ -618,7 +697,7 @@ describe("syncCycle", () => {
 		await syncCycle();
 
 		// Ops from batch 2 were processed
-		expect(mockRouteOperation).toHaveBeenCalled();
+		expect(mockRouteOperationDetailed).toHaveBeenCalled();
 		// Cursor advanced past both batches
 		expect(trackedLastBlock).toBe(6000);
 	});
@@ -634,7 +713,7 @@ describe("syncCycle", () => {
 
 		// node_register is NOT in transferBackedOps → no transfer RPC for its txId.
 		expect(mockGetTransfersInTransaction).not.toHaveBeenCalledWith("tx_1001");
-		expect(mockRouteOperation).toHaveBeenCalledWith(
+		expect(mockRouteOperationDetailed).toHaveBeenCalledWith(
 			expect.objectContaining({ action: ACTION_NODE_REGISTER }),
 			expect.anything(),
 		);
@@ -652,7 +731,7 @@ describe("syncCycle", () => {
 		// Cursor advanced fully
 		expect(trackedLastBlock).toBe(51000);
 		// Zero ops processed
-		expect(mockRouteOperation).not.toHaveBeenCalled();
+		expect(mockRouteOperationDetailed).not.toHaveBeenCalled();
 		// A transaction is opened per batch cycle to wrap the cursor update and
 		// the materializer sweep — empty-batch cycles still need it.
 		expect(mockWithTransaction).toHaveBeenCalled();
