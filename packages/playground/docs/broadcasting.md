@@ -7,7 +7,7 @@ The SDK builds **unsigned** Hive operations. Signing and broadcasting are your r
 | Flow | Triggered by | Who signs what | Transport |
 |---|---|---|---|
 | **Single-signer, posting** | 17 of 20 builders (mint, transfer, list, unlist, set_data, approvals, lending…) | You, posting key | Any Hive RPC |
-| **Single-signer, active + multisig** | `buildBuy` | You sign active; node co-signs via `/api/multisig` | POST to indexer, then Hive RPC |
+| **Node-last buy** | `buildBuy` | You sign the full tx (active); node validates, broadcasts a `buy_commitment`, co-signs, and broadcasts the settled tx itself | POST signed tx to `/api/multisig/buy` — you do **not** broadcast |
 | **Two-op, dual-signer** | `buildCollection` | You sign op[0] active; node signs op[1] via `/api/multisig/collection` | POST to indexer, then Hive RPC |
 
 `result.keyType` always tells you which key to use. `result.coSigners` is present **only** for the dual-signer flow.
@@ -44,7 +44,8 @@ Active-auth `custom_json`s list the signer under `required_auths`; posting-auth 
 | `custom_json` byte size | ≤8192 (`HIVE_CUSTOM_JSON_MAX_BYTES`) | Hive consensus rejects larger. |
 | Safe payload budget | 7372 B (`SAFE_PAYLOAD_MAX_BYTES`, 90%) | SDK sizing utilities respect this. |
 | Delay between txs | 4000 ms (`TX_DELAY_MS`) | Allows block confirmation. |
-| Multisig expiration | 125 s (`MULTISIG_EXPIRATION_MS`) | Response's `expiration` timestamp. |
+| Buy tx expiration range | `MULTISIG_TX_MIN_EXPIRATION_MS` (30 s) – `MULTISIG_TX_MAX_EXPIRATION_MS` (120 s) | `/api/multisig/buy` rejects anything outside. |
+| Recommended buy tx expiration | `RECOMMENDED_BUY_TX_EXPIRATION_MS` (60 s) | Leaves headroom for PoW + Keychain + node orchestration (~6 s). |
 
 ## Hive RPC nodes
 
@@ -140,17 +141,18 @@ hive_keychain.requestBroadcast(
 
 ---
 
-## Flow 2 — Buying (active + node multisig)
+## Flow 2 — Buying (node-last)
 
-The `buy` transaction has two active authorities: the buyer signs the payment transfers, and the node signs the `custom_json`. `buildBuy` already assembles the operations in the correct order and marks the custom_json op in `coSigners`.
+`buy` is a single Hive transaction with two required authorities: the buyer signs the transfers with their active key, and the node signs the trailing `custom_json` (`required_auths: [nodeAccount]`). What changed in 0.7.0 is **who drives the settlement**: the node goes last, not the buyer.
 
 Canonical sequence:
 
 1. `client.getPaymentInfo(nftId)` → exact split (seller + royalty + fee).
 2. `buildBuy({ buyer, seller, nodeAccount, …paymentSplit })` → `[...transfers, custom_json]`.
-3. Wrap in a Hive transaction **without signing**.
-4. POST the raw transaction to `/api/multisig` (via `client.multisig` or `requestBuyMultisig`) — the SDK solves the PoW token automatically.
-5. On `{ ok: true }`, append the returned `signature` to `tx.signatures`, add the buyer's own active signature, and broadcast.
+3. Wrap in a Hive transaction and **sign it with the buyer's active key**.
+4. POST the buyer-signed transaction to `/api/multisig/buy` (via `client.requestBuyMultisig` / `requestBuyMultisig`). The SDK solves the PoW token automatically.
+5. The indexer validates, broadcasts a `buy_commitment` on Hive to reserve the NFT, waits for that commitment to win the cross-node ordering race, appends its own active signature, and broadcasts the settled buy transaction itself.
+6. On `{ ok: true }`, the response carries the settled `txId` and the `commitmentOpTxId`. You **do not broadcast** the buy — it is already on chain.
 
 ```typescript
 import {
@@ -158,6 +160,9 @@ import {
 	createIndexerClient,
 	requestBuyMultisig,
 	MultisigError,
+	MULTISIG_TX_MIN_EXPIRATION_MS,
+	MULTISIG_TX_MAX_EXPIRATION_MS,
+	RECOMMENDED_BUY_TX_EXPIRATION_MS,
 } from "nftlox-sdk";
 import hive from "hive-tx";
 
@@ -188,29 +193,32 @@ const result = buildBuy({
 });
 if (!result.success) throw new Error(JSON.stringify(result.errors));
 
-// 1. Create unsigned tx
+// 1. Build the tx and pin its expiration inside [MIN, MAX]; 60s is the
+//    recommended sweet spot (~RECOMMENDED_BUY_TX_EXPIRATION_MS).
 const tx = new hive.Transaction();
 await tx.create(result.operations as [string, object][]);
+tx.transaction.expiration = new Date(
+	Date.now() + RECOMMENDED_BUY_TX_EXPIRATION_MS,
+).toISOString().slice(0, 19);
 
-// 2. Node co-signs
+// 2. Buyer signs the full tx with active key BEFORE POSTing.
+tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
+
+// 3. Hand off to the node. It validates, broadcasts the buy_commitment,
+//    waits for inclusion, co-signs, and broadcasts the settled buy itself.
 const resp = await requestBuyMultisig(INDEXER, {
-	buyer: "alice",
-	nftId: payment.nftId,
-	listingId: payment.listingId,
-	listTxId: payment.listTxId,
 	transaction: tx.transaction,
 });
 if (!resp.ok) throw new MultisigError({ message: resp.message, code: resp.code, url: INDEXER });
 
-// 3. Attach node sig + buyer's active sig, broadcast
-tx.transaction.signatures.push(resp.signature);
-tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
-const broadcast = await tx.broadcast();
+console.log("Buy settled:", resp.txId, "commitment:", resp.commitmentOpTxId);
 ```
+
+> The request body is just `{ transaction }`. The buyer account is derived server-side from the first transfer's `from` field; carrying a separate `buyer` would reintroduce a drift vector.
 
 ### With Hive Keychain
 
-Keychain has no native "external signature merge" API. The idiomatic pattern is: build, co-sign node-first, then call `requestSignedCall` or `requestBroadcast` with `keyType: "Active"` — Keychain adds the buyer's signature alongside the node's and broadcasts. When the dApp already holds the partially-signed transaction, use `requestSignTx` / `requestSignedTx` (version-dependent) to obtain the buyer's signature and post it to Hive yourself.
+Sign the buy transaction with Keychain first (`requestSignTx` / `requestSignedTx`, version-dependent) to obtain the buyer's active signature, then POST the resulting signed transaction to `/api/multisig/buy`. You never call `requestBroadcast` for buys — the indexer broadcasts the settled transaction itself once its commitment wins the race.
 
 ### Multisig error handling
 
@@ -220,22 +228,27 @@ try {
 } catch (err) {
 	if (err instanceof MultisigError) {
 		switch (err.code) {
-			case "NFT_LOCKED":        // another buy is in flight
-			case "RATE_LIMITED":      // back off err.retryAfterMs
-			case "INDEXER_LAGGED":    // node's DB is behind Hive head
-			case "POW_REQUIRED":      // bump difficulty with { powBits: 20 }
+			case "NFT_LOCKED":                    // another buy is in flight on this node
+			case "CROSS_NODE_RESERVATION":        // another settlement node won the commitment race
+			case "COMMITMENT_INCLUSION_TIMEOUT":  // our commitment never made it into a block
+			case "RATE_LIMITED":                  // back off err.retryAfterMs
+			case "INDEXER_LAGGED":                // node's DB is behind Hive head
+			case "NODE_NOT_ACTIVE":               // node missed too many heartbeats
+			case "POW_REQUIRED":                  // bump difficulty with { powBits: 20 }
 				break;
 		}
 	}
 }
 ```
 
-The node will refuse to co-sign if:
+The node will refuse to serve a buy if:
 
-- the listing is no longer `active` (unlisted, expired, or already sold),
+- the listing is no longer `listed` (unlisted, expired, or already sold),
+- the buyer's signature is missing or the transaction is malformed,
 - the payment split in the transaction does not match its own computation,
-- the indexer is more than `MULTISIG_LAG_MAX_BLOCKS` (3 blocks, ~9s) behind Hive head,
-- the transaction expiration is farther out than `MULTISIG_EXPIRATION_MS` (125 s).
+- the indexer is more than `BUY_API_LAG_MAX_BLOCKS` (3 blocks, ~9 s) behind Hive head,
+- the transaction `expiration` falls outside `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]`,
+- it is not currently an active settlement node (missed too many heartbeats).
 
 ## Flow 3 — Creating a collection (dual-signer)
 
@@ -323,11 +336,12 @@ for (const op of status.operations) {
 | Symptom | Cause |
 |---|---|
 | `broadcast.error` with `missing_authority` | Wrong key type for the action. Check `result.keyType`. |
-| `broadcast.error` with `tx_missing_active_auth` on `buy` | You signed posting instead of active, or omitted the node signature. |
+| `/api/multisig/buy` returns `BUYER_SIGNATURE_MISSING` | You POSTed an unsigned transaction. Sign it with the buyer's active key **before** calling `requestBuyMultisig`. |
 | Indexer returns `invalid` with `SCHEMA_MISMATCH` | `immutableData`/`mutableData` has extra keys or wrong types. Validate against `client.getCollection(id).schema`. |
 | Indexer `invalid` with `NFT_NOT_FOUND` | Using a seed before it is indexed — poll `getOperationStatus` first. |
 | Multisig returns `INVALID_PAYMENT_SPLIT` | You computed the split instead of using `getPaymentInfo`. |
-| Multisig returns `INDEXER_LAGGED` | Indexer is >3 blocks behind Hive head. Retry or switch indexer. |
+| Multisig returns `INDEXER_LAGGED` | Indexer is more than `BUY_API_LAG_MAX_BLOCKS` (3 blocks) behind Hive head. Retry or switch indexer. |
+| Multisig returns `CROSS_NODE_RESERVATION` | Another settlement node won the `buy_commitment` ordering race for this NFT. Retry — by then the listing has already been sold (and `NFT_NOT_LISTED` will follow) or the commitment window expired. |
 
 ## See also
 

@@ -16,25 +16,64 @@ The action router (`processor/action-router.ts`) dispatches each operation to it
 
 ## Multisig Errors
 
-The `MultisigErrorCode` type (defined in `packages/sdk/src/types.ts`) represents all error codes returned by the `POST /api/multisig` endpoint. When a multisig request fails, the response has the shape `{ ok: false, code: MultisigErrorCode, message: string }`.
+The `MultisigErrorCode` type (defined in `packages/protocol/src/types.ts`) represents all error codes returned by the `POST /api/multisig/buy` and `POST /api/multisig/collection` endpoints. When a multisig request fails, the response has the shape `{ ok: false, code: MultisigErrorCode, message: string, retryAfterMs?: number }`.
+
+### Contention / concurrency
 
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
-| `MULTISIG_DISABLED` | 503 | The indexer node does not have multisig enabled (no `ACTIVE_KEY` configured). |
-| `RATE_LIMITED` | 429 | Too many multisig requests from this buyer within the rate limit window. |
-| `NFT_LOCKED` | 409 | The NFT is currently being purchased by another buyer (DB-backed lock via `multisig_locks` table with expiration). |
-| `NFT_NOT_FOUND` | 400 | The specified NFT does not exist in the indexer database. |
-| `NFT_NOT_LISTED` | 400 | The NFT is not currently listed for sale on the marketplace. |
-| `NFT_NOT_TRANSFERABLE` | 400 | The NFT belongs to a collection with `transferable: false`. |
-| `NFT_EXPIRED_LISTING` | 400 | The listing has expired (past its `expiresAt` timestamp). |
-| `CANNOT_BUY_OWN` | 400 | The buyer is the same account as the seller. |
-| `SEED_HAS_INSTANCES` | 400 | The NFT is a seed with distributed instances — sale blocked. Seeds with `distributed > 0` cannot change ownership. |
-| `INVALID_PAYMENT_SPLIT` | 400 | The payment amounts or memo format in the transaction do not match the expected split. Memos must follow strict format: `NFTLox BUY:{nftId}`, `NFTLox ROY:{nftId}`, `NFTLox FEE:{nftId}`. |
-| `INVALID_PROTOCOL_PAYLOAD` | 400 | The `custom_json` protocol payload embedded in the transaction is malformed or invalid. |
-| `NODE_ACCOUNT_MISMATCH` | 400 | The transaction does not reference the correct node account for co-signing. |
-| `MISSING_BUYER_AUTH` | 400 | The buyer's authorization (signature placeholder) is missing from the transaction. |
-| `INVALID_TX_STRUCTURE` | 400 | The Hive transaction structure is malformed (wrong operation types, missing fields, etc.). |
-| `INTERNAL_ERROR` | 500 | Unexpected server-side error during multisig processing. |
+| `NFT_LOCKED` | 409 | Another buy for this NFT is already in flight on **this** node (process-local `buyLock`). Retry after `retryAfterMs`. |
+| `COLLECTION_LOCKED` | 409 | A concurrent `create_collection` for the same `{creator, symbol}` is already being signed. Retry. |
+| `CROSS_NODE_RESERVATION` | 409 | A different settlement node's `buy_commitment` landed first for this NFT. The listing is effectively taken — refresh payment info before retrying. |
+
+### Resource state
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `NFT_NOT_FOUND` | 404 | The `nftId` does not exist in the indexer database. |
+| `NFT_NOT_LISTED` | 409 | The NFT is not currently listed for sale. |
+| `NFT_NOT_INSTANCE` | 409 | Only instances can be bought through the marketplace; seeds are not sellable. |
+| `NFT_NOT_TRANSFERABLE` | 409 | The NFT belongs to a collection with `rules.transferable: false`. |
+| `NFT_EXPIRED_LISTING` | 409 | The listing has expired (past its `expiresAt` timestamp). |
+| `CANNOT_BUY_OWN` | 409 | Buyer and seller are the same account. |
+| `SEED_HAS_INSTANCES` | 409 | The NFT is a seed with `distributed > 0`. Seeds lock to their owner once instances exist. |
+
+### Client-shape errors
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `INVALID_TX_STRUCTURE` | 400 | Malformed Hive transaction: wrong op count/order, expiration outside `[MULTISIG_TX_MIN, MULTISIG_TX_MAX]` (30–120 s), missing fields. |
+| `INVALID_PROTOCOL_PAYLOAD` | 400 | `listingId`/`listTxId` don't match the active listing, or the `custom_json` payload is malformed. |
+| `INVALID_PAYMENT_SPLIT` | 400 | A transfer amount (or its memo) drifts from the node's computed split. Re-fetch `GET /api/payment-info/:nftId`. Memos MUST be `NFTLox BUY:{nftId}` / `NFTLox ROY:{nftId}` / `NFTLox FEE:{nftId}`. |
+| `NODE_ACCOUNT_MISMATCH` | 400 | `custom_json.required_auths` does not contain this node's account. |
+| `MISSING_BUYER_AUTH` | 400 | First transfer's `from` is absent, empty, or not a valid Hive username. |
+| `BUYER_SIGNATURE_MISSING` | 400 | The transaction POSTed to `/api/multisig/buy` does not yet carry the buyer's active signature. The buyer must sign **before** submitting. |
+| `POW_REQUIRED` / `INVALID_POW` / `POW_EXPIRED` / `POW_REPLAYED` | 400 | The PoW token header was missing, malformed, stale, or reused. The SDK solves this automatically; check clock skew if it surfaces. |
+
+### Rate limiting / feature flags
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `RATE_LIMITED` | 429 | Too many requests from this buyer or IP within the rate-limit window. Back off `retryAfterMs`. |
+| `MULTISIG_DISABLED` | 503 | The node has no `ACTIVE_KEY` configured, or is in clock-drift safeguard. Use a different indexer. |
+
+### Node-last settlement (buy orchestration)
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `NODE_NOT_ACTIVE` | 503 | Settlement node missed too many heartbeats (`MAX_NODE_HEARTBEAT_STALENESS_BLOCKS`). Other indexers will not accept its settlements. |
+| `INDEXER_LAGGED` | 503 | Indexer is more than `BUY_API_LAG_MAX_BLOCKS` (3 blocks, ~9 s) behind Hive HEAD. Transient — retry. |
+| `COMMITMENT_BROADCAST_FAILED` | 503 | Node could not broadcast its `buy_commitment` op to Hive. Transient — retry. |
+| `COMMITMENT_INCLUSION_TIMEOUT` | 503 | Node's `buy_commitment` never made it into a block within `BUY_COMMITMENT_TTL_BLOCKS` (~30 s). Transient. |
+| `BUY_BROADCAST_FAILED` | 503 | Node's final buy broadcast failed after winning the commitment race. Listing state is unchanged — retry. |
+| `SIGNING_QUEUE_FULL` | 503 | Beekeeper signing queue is saturated. Transient. |
+| `SIGNING_TIMEOUT` | 503 | A signing request exceeded its internal deadline. Transient. |
+
+### Fallback
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `INTERNAL_ERROR` | 500 | Unexpected server-side error. Captured in logs — file an issue with the `tx_id` if persistent. |
 
 Additionally, the `GET /api/payment-info/:nftId` endpoint returns:
 
@@ -115,12 +154,12 @@ Never broadcast when `success: false` — `operations` is not present on the fai
 | Status | Meaning |
 |--------|---------|
 | `200` | Success |
-| `400` | Bad request (validation error, business rule violation) |
+| `400` | Bad request (validation error, malformed tx, missing buyer signature) |
 | `404` | Resource not found |
-| `409` | Conflict (NFT locked by another buyer) |
+| `409` | Conflict (NFT locked on this node, state conflict, or cross-node reservation lost) |
 | `429` | Rate limited |
 | `500` | Internal server error |
-| `503` | Indexer syncing or multisig disabled |
+| `503` | Indexer syncing, multisig disabled, or node-last orchestration transient failure |
 
 ---
 
@@ -145,9 +184,13 @@ Since 0.6.0 the indexer pairs the collection-fee transfer to the payload by memo
 
 ## Listing expiration errors
 
-Since **0.6.2** the indexer enforces a minimum listing TTL (`MIN_LISTING_TTL_MS = 180_000`) so a buy transaction in flight always has a settlement window wider than its own L1 expiration. See [Marketplace — Why listings need a minimum TTL](../guides/marketplace.md#why-listings-need-a-minimum-ttl) for the full rationale.
+The indexer enforces a minimum listing TTL so the full node-last buy orchestration (commitment broadcast + inclusion wait + co-sign + buy broadcast) always fits inside the listing's remaining life. The floor is derived from the block-denominated `LISTING_MIN_DURATION_BLOCKS` plus a 60 s buffer:
+
+- `MIN_LISTING_TTL_MS = LISTING_MIN_DURATION_BLOCKS × 3_000 ms + 60_000 ms` = **240 000 ms** (4 min).
+
+See [Marketplace — Why listings need a minimum TTL](../guides/marketplace.md#why-listings-need-a-minimum-ttl) for the full rationale.
 
 | Error message | When | Fix |
 |---|---|---|
-| `Listing expiresAt is too soon for safe settlement: must be more than 180s after the listing block timestamp` | `handleList` rejected a `list` op whose `expiresAt` falls inside the settlement window. | Pick `expiresAt > Date.now() + MIN_LISTING_TTL_MS` before signing. |
-| `Listing expires too soon for safe settlement: listing must expire more than 60s after transaction expiration` (`NFT_EXPIRED_LISTING`) | Multisig `buy` refused to co-sign because the listing would expire before the transaction's settlement buffer. | Ask the seller to relist with a longer `expiresAt`, or set transaction `expiration` further in the future (bounded by `MULTISIG_TX_MAX_EXPIRATION_MS`). |
+| `Listing expiresAt is too soon for safe settlement: must be more than 240s after the listing block timestamp` | `handleList` rejected a `list` op whose `expiresAt` falls inside the settlement window. | Pick `expiresAt > Date.now() + MIN_LISTING_TTL_MS` before signing. |
+| `Listing has already expired` (`NFT_EXPIRED_LISTING`) | `/api/multisig/buy` refused to process the buy because `listing.expiresAt` is already in the past. | Ask the seller to relist with a longer `expiresAt`, or fetch a fresh `/api/payment-info/:nftId` if the listing was recently refreshed. |

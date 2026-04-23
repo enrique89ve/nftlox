@@ -37,7 +37,7 @@ Your App ────▶ nftlox-sdk builders ────▶ Hive L1 (custom_jso
               Query / SPV ◀──────────────────────┘
 ```
 
-- **Write:** build an unsigned transaction locally with `nftlox-sdk`, sign it (hive-tx / @hiveio/dhive / @hiveio/wax / Hive Keychain), broadcast to any Hive RPC. Two actions (`buy`, `create_collection`) require a node co-signature via `POST /api/multisig(/collection)`.
+- **Write:** build an unsigned transaction locally with `nftlox-sdk`, sign it (hive-tx / @hiveio/dhive / @hiveio/wax / Hive Keychain), broadcast to any Hive RPC. Two actions hit the indexer instead: `create_collection` gets a node co-signature via `POST /api/multisig/collection` before you broadcast; `buy` is node-last — you sign the transaction locally and POST it to `/api/multisig/buy`, and the settlement node broadcasts it for you.
 - **Read:** query the indexer's HTTP API or call `createIndexerClient(baseUrl)` from the SDK. No authentication required.
 - **Verify:** run the SPV verifiers (`verifyNftOwnership`, `verifyListingPrice`, …) to double-check the indexer against Hive L1 before irreversible actions.
 
@@ -90,7 +90,7 @@ Then follow [Getting Started](getting-started.md) to make your first transaction
 | Finality | ~3 seconds |
 | Active-key actions | `create_collection`, `buy` |
 | Posting-key actions | All other protocol actions |
-| Multisig endpoints | `POST /api/multisig` (buy), `POST /api/multisig/collection` (create) |
+| Multisig endpoints | `POST /api/multisig/buy` (node-last buy settlement), `POST /api/multisig/collection` (create co-sign) |
 
 | Environment | URL |
 |---|---|

@@ -270,18 +270,15 @@ type UnlistData = {
 
 The NFT stays `status = "listed"` for `UNLIST_DELAY_BLOCKS` (3 blocks, ~9s) so in-flight `buy` multisigs can still settle. After the window it flips to `active`.
 
-### `buy` — single-signer, node-cosigned
+### `buy` — buyer-signed, node-settled
 
-**Auth:** Active (buyer) + Active (node, via `/api/multisig`).
+**Auth:** Active (buyer, signs the full tx locally) + Active (node, appends its signature and broadcasts via `/api/multisig/buy` — node-last flow).
 
 ```typescript
 type BuyData = {
 	readonly nftId: string;
 	readonly listingId: string;
 	readonly listTxId: string;               // tx_id of the originating `list`
-	readonly txId: string;                   // tx_id of this `buy` itself (precomputed client-side)
-	readonly seedId?: string;
-	readonly seedTxId?: string;
 };
 ```
 
@@ -292,7 +289,25 @@ op[0..N-1] = ["transfer", …]     // seller, royalty recipient, protocol fee �
 op[N]      = ["custom_json", …]   // BuyData, active-auth, nodeAccount in required_auths
 ```
 
-The indexer reconciles each transfer against the listing using the `listingId` embedded in the memo.
+The indexer reconciles each transfer against the listing using the `listingId` embedded in the memo. The `buy` payload MUST be preceded on chain by a matching `buy_commitment` emitted by the same settlement node — `handleBuy` rejects any buy whose reserving commitment is missing or belongs to another node.
+
+### `buy_commitment` — server-side reservation (not client-facing)
+
+**Auth:** Active (settlement node). Emitted by the node on `POST /api/multisig/buy` before it co-signs the buyer's transaction. Clients **never** build this op themselves; it is listed here because it appears on chain and in indexer logs.
+
+```typescript
+type BuyCommitmentData = {
+	readonly txHash: string;                 // hash of the unsigned buyer tx the node will settle
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
+	readonly buyer: string;                  // derived from the buyer tx's first transfer `from`
+};
+```
+
+The network-wide block ordering of `buy_commitment` ops is the consensus on "which node settles this listing". First to land wins; other nodes with a competing commitment for the same `nftId` abort with `CROSS_NODE_RESERVATION`. Reservations expire after `BUY_COMMITMENT_TTL_BLOCKS` (~30 s) if the matching `buy` does not follow.
+
+> The legacy `sale_lock` op (pre-0.7.0) is deprecated. Historical `sale_lock` ops on chain surface as `invalid_operations` for audit; there is no active handler.
 
 ### `nft_approve`
 
@@ -368,9 +383,10 @@ type NftReturnData = {
 ```typescript
 type NodeRegisterData = {
 	readonly endpoint: string;               // https URL
-	readonly publicKey: string;              // Hive public key string
 };
 ```
+
+The node's active public key is fetched from the Hive `accounts[].active.key_auths` when consumers need it; carrying a separate `publicKey` in the payload would reintroduce a drift vector if the on-chain account ever rotated keys.
 
 ### `node_heartbeat`
 

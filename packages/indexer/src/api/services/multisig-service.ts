@@ -34,10 +34,6 @@ const collectionLock = createMultisigCollectionLock();
 
 const COLLECTION_LOCK_TTL_MS = 120_000;
 
-export function getSigningQueueMetrics() {
-	return signingQueue.getMetrics();
-}
-
 export async function processMultisigRequest(
 	rawBody: unknown,
 	db: Queryable,

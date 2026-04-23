@@ -261,13 +261,14 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `endpoint` | string | yes | Public HTTPS endpoint for the node |
-| `publicKey` | string | yes | Public key used by the node |
 
 **Indexer validations**:
-- `endpoint` and `publicKey` must be present and valid strings
+- `endpoint` must be a valid HTTPS URL string
 - Signer must have ≥`MIN_NODE_REGISTER_HIVE_POWER` effective Hive Power (self-staked + received delegations − out-delegations). No fee is charged; the HP itself is the skin-in-the-game.
 
-**State changes**: Upserts `l2_nodes` for the signer with endpoint, public key, active status, block number, and transaction ID.
+> The node's active public key is not carried in the payload. Consumers that need it look it up from the Hive account (`accounts[].active.key_auths`); carrying it on-chain here would drift if the account ever rotated keys.
+
+**State changes**: Upserts `l2_nodes` for the signer with endpoint, active status, block number, and transaction ID.
 **Restrictions**: Insufficient effective HP or unresolvable account -> rejected.
 
 ---

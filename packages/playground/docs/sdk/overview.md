@@ -35,7 +35,7 @@ Every action falls into one of three shapes — recognizing which one changes ho
 | Flow | Triggered by | Signers |
 |---|---|---|
 | **Posting, single-signer** | 18 of 20 builders | You, posting key |
-| **Active + node multisig** | `buildBuy` | You (active) + node via `/api/multisig` |
+| **Node-last buy** | `buildBuy` | You sign the full tx (active); node validates, broadcasts a `buy_commitment`, co-signs, and broadcasts the settled buy via `/api/multisig/buy` |
 | **Active + dual-signer** | `buildCollection` | You (active) + node via `/api/multisig/collection` |
 
 For runnable code for each flow with hive-tx, dhive, wax, and Keychain, see [Signing & Broadcasting](../broadcasting.md).
@@ -144,8 +144,8 @@ All SDK errors extend `NftloxError`. Validation errors never throw — they live
 | Read protocol state (nfts, listings, stats, proofs) | `createIndexerClient` (GET) |
 | Compute a deterministic ID off-line | `generate*` helpers |
 | Build a signable Hive operation | `build*` builders |
-| Co-sign a `buy` | `client.multisig(…)` or `requestBuyMultisig` |
-| Co-sign a `create_collection` | `requestCreateCollectionMultisig` |
+| Settle a `buy` (node-last) | `client.requestBuyMultisig(…)` or `requestBuyMultisig` |
+| Co-sign a `create_collection` | `client.multisig(…)` or `requestCreateCollectionMultisig` |
 | Ship a full collection with seeds | `buildCollectionWithSeeds` |
 
 The indexer never has the user's keys. It exposes read endpoints and two narrow co-signing endpoints. Everything else is client-side.

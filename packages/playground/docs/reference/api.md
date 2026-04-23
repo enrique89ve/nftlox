@@ -753,42 +753,46 @@ curl https://api-nftlox.hivecreators.co/api/payment-info/my-nft-id
 
 ---
 
-### POST /api/multisig
+### POST /api/multisig/buy
 
-Submit a buy transaction for multisig co-signing by the node. The node validates the NFT state, verifies the payment split matches the listing, and adds its signature.
+Submit a buyer-signed `buy` transaction for **node-last** settlement. The node validates it against the current listing, broadcasts a `buy_commitment` custom_json on chain to reserve the NFT, waits for that commitment to win the cross-node ordering race, appends its own active signature, and broadcasts the completed buy transaction. The caller does **not** broadcast.
 
 **Request body:**
 
 ```json
 {
-	"buyer": "bob",
-	"nftId": "abc123",
-	"listingId": "list_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-	"listTxId": "abcdef1234567890abcdef1234567890abcdef12",
 	"transaction": {
 		"ref_block_num": 12345,
 		"ref_block_prefix": 67890,
-		"expiration": "2026-03-29T12:00:00",
-		"operations": [],
-		"signatures": []
+		"expiration": "2026-04-22T12:00:00",
+		"operations": [
+			["transfer",    { "from": "bob", "to": "alice",  "amount": "24.500 HIVE", "memo": "NFTLox BUY:nft_…" }],
+			["transfer",    { "from": "bob", "to": "artist", "amount": "0.250 HIVE",  "memo": "NFTLox ROY:nft_…" }],
+			["transfer",    { "from": "bob", "to": "nftlox", "amount": "0.250 HIVE",  "memo": "NFTLox FEE:nft_…" }],
+			["custom_json", { "required_auths": ["nftlox"], "required_posting_auths": [], "id": "nftlox_testnet", "json": "…" }]
+		],
+		"signatures": ["<buyer active signature>"]
 	}
 }
 ```
 
-> The `listingId` and `listTxId` must match the active listing. The `signatures` array must be empty -- the node adds its signature and returns it.
+> The `transaction.expiration` MUST fall inside `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (30–120 s). The `signatures` array MUST already contain the buyer's active signature over the full transaction. The buyer account is derived from the first transfer's `from` field — no separate `buyer` field is accepted.
 
 **Response (success):**
 
 ```json
 {
 	"ok": true,
-	"signature": "node-signature-hex",
-	"digest": "tx-digest-hex",
-	"expiration": "2026-03-28T12:00:00"
+	"txId": "settled-buy-tx-id-hex",
+	"commitmentOpTxId": "buy-commitment-tx-id-hex"
 }
 ```
 
-**Error codes:** See [errors.md](errors.md) for the full list of `MultisigErrorCode` values.
+`txId` is the Hive `tx_id` of the fully settled buy transaction (already on chain). `commitmentOpTxId` is the `tx_id` of the `buy_commitment` custom_json the node used to reserve the NFT — keep it for auditing cross-node race outcomes.
+
+**Error codes:** See [errors.md](errors.md) for the full `MultisigErrorCode` surface. Notable codes specific to the node-last flow: `BUYER_SIGNATURE_MISSING`, `CROSS_NODE_RESERVATION`, `COMMITMENT_BROADCAST_FAILED`, `COMMITMENT_INCLUSION_TIMEOUT`, `BUY_BROADCAST_FAILED`, `NODE_NOT_ACTIVE`, `INDEXER_LAGGED`.
+
+SDK helper: `requestBuyMultisig(baseUrl, { transaction })` or `client.requestBuyMultisig(...)`. PoW-gated — the SDK solves the token automatically.
 
 ---
 
@@ -824,7 +828,7 @@ Submit a `create_collection` transaction for node co-signing. This is the dual-s
 }
 ```
 
-**Error codes:** Shares the `MultisigErrorCode` surface with `/api/multisig` (plus `INVALID_TX_STRUCTURE` when the transaction isn't a valid `create_collection` envelope).
+**Error codes:** Shares the `MultisigErrorCode` surface with `/api/multisig/buy` (plus `INVALID_TX_STRUCTURE` when the transaction isn't a valid `create_collection` envelope).
 
 SDK helper: `requestCreateCollectionMultisig(baseUrl, { transaction })`. PoW-gated — see [PoW primitives in the SDK reference](../sdk/reference.md#proof-of-work).
 
@@ -877,7 +881,7 @@ The indexer does not expose a transaction-building HTTP surface. Every NFTLox ac
 | `extend_schema` | `buildExtendSchema` | Posting | Creator single-signer |
 | `archive_collection` | `buildArchiveCollection` | Posting | Creator single-signer |
 | `list`, `unlist` | `buildList`, `buildUnlist` | Posting | Owner single-signer |
-| `buy` | `buildBuy` | Active | Buyer + node multisig (`POST /api/multisig`) |
+| `buy` | `buildBuy` | Active | Buyer signs full tx, node settles node-last (`POST /api/multisig/buy`) |
 | `nft_approve`, `nft_approve_all` | `buildNftApprove`, `buildNftApproveAll` | Posting | Owner single-signer |
 | `nft_transfer_from` | `buildNftTransferFrom` | Posting | Approved spender single-signer |
 | `data_operator_approve` | `buildDataOperatorApprove` | Posting | Collection creator single-signer |

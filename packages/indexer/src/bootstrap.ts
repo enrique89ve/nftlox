@@ -170,9 +170,19 @@ export async function connectWithRetry(): Promise<void> {
 	while (true) {
 		try {
 			attempt++;
-			// Only start local Postgres if DATABASE_URL is not configured.
-			// Production (external DB) sets DATABASE_URL; dev mode relies on local container.
-			if (!config.databaseUrl) {
+			if (attempt === 1) {
+				log.info("Database target resolved", {
+					mode: config.databaseMode,
+					source: config.databaseConfigSource,
+					host: config.databaseHost,
+					port: config.databasePort,
+					database: config.databaseName,
+					autoStartLocalPostgres: config.shouldAutoStartLocalPostgres,
+				});
+			}
+			// Host-run development can auto-start the local postgres container when
+			// targeting localhost. Containerized deployments never hit this path.
+			if (config.shouldAutoStartLocalPostgres) {
 				await ensurePostgres();
 			}
 			await testConnection();

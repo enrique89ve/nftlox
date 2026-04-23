@@ -335,20 +335,29 @@ await client.getSalesVolume({ collectionId });
 await client.getOperationStatus(txId);   // { indexed, confirmed, invalid, orphaned, operations[] }
 
 // Multisig
-await client.getPaymentInfo(nftId);      // PaymentInfo with full payment split
-await client.multisig(buyRequest);       // co-sign a buy (PoW-gated; SDK solves automatically)
+await client.getPaymentInfo(nftId);         // PaymentInfo with full payment split
+await client.requestBuyMultisig(buyRequest); // node-last buy settlement (POSTs to /api/multisig/buy)
+await client.multisig(collectionRequest);   // create_collection co-sign (POSTs to /api/multisig/collection)
 ```
 
 ## Multisig client
 
-Two wrappers for the node signing endpoints:
+Two wrappers for the node signing endpoints — they target different endpoints and return different shapes:
 
 ```typescript
-requestBuyMultisig(baseUrl, { buyer, nftId, listingId, listTxId, transaction }, options?)
+// Node-last buy. The buyer MUST have signed `transaction` with their active
+// key before calling this. On success the node has already broadcast the
+// settled buy to Hive — do NOT broadcast again.
+requestBuyMultisig(baseUrl, { transaction }, options?)
+// → { ok: true, txId, commitmentOpTxId } | { ok: false, code, message, retryAfterMs? }
+
+// create_collection co-signature. Returns the node's signature for the
+// creator to merge into the transaction before broadcasting.
 requestCreateCollectionMultisig(baseUrl, { transaction }, options?)
+// → { ok: true, signature, digest, expiration } | { ok: false, code, message, retryAfterMs? }
 ```
 
-Both solve the required Proof-of-Work token automatically (default `DEFAULT_MULTISIG_POW_BITS = 16`). Override difficulty via `options.powBits` (max `MAX_MULTISIG_POW_BITS = 24`). A successful response is `{ ok: true, signature, digest, expiration }`; failure returns a typed `MultisigErrorCode` (`NFT_LOCKED`, `RATE_LIMITED`, `INDEXER_LAGGED`, …).
+Both solve the required Proof-of-Work token automatically (default `DEFAULT_MULTISIG_POW_BITS = 16`). Override difficulty via `options.powBits` (max `MAX_MULTISIG_POW_BITS = 24`). Failure payloads share the typed `MultisigErrorCode` surface (`NFT_LOCKED`, `CROSS_NODE_RESERVATION`, `RATE_LIMITED`, `INDEXER_LAGGED`, `BUYER_SIGNATURE_MISSING`, …). See [Error Codes](../reference/errors.md#multisig-errors) for the full list.
 
 Supporting utilities:
 
@@ -381,7 +390,7 @@ Three classes, all extending `NftloxError` (which carries a `.url` field and a s
 | Class | Thrown by | Extra fields |
 |---|---|---|
 | `IndexerError` | `createIndexerClient` HTTP calls | `statusCode`, `responseHeaders`, `responseBody`, `requestBodyValues` |
-| `MultisigError` | `client.multisig`, `requestBuyMultisig`, `requestCreateCollectionMultisig` | `code: MultisigErrorCode`, `retryAfterMs?` |
+| `MultisigError` | `client.requestBuyMultisig`, `client.multisig`, `requestBuyMultisig`, `requestCreateCollectionMultisig` | `code: MultisigErrorCode`, `retryAfterMs?` |
 | `NftloxError` | Base class | — |
 
 Use `instanceof` to narrow.
@@ -404,7 +413,11 @@ Re-exported from `@nftlox/protocol`:
 | `MAX_ROYALTY_PCT` | `50` | Royalty cap (whole %). |
 | `MIN_PRICE_AMOUNT` | `"0.001"` | Minimum listing price. |
 | `UNLIST_DELAY_BLOCKS` | `3` | Cooldown so in-flight `buy` multisigs outlive their unlist. |
-| `MULTISIG_EXPIRATION_MS` | `125_000` | Expiration window on co-signed transactions. |
+| `MULTISIG_TX_MIN_EXPIRATION_MS` | `30_000` | Lower bound on a buy transaction's L1 `expiration`. |
+| `MULTISIG_TX_MAX_EXPIRATION_MS` | `120_000` | Upper bound on a buy transaction's L1 `expiration`. |
+| `RECOMMENDED_BUY_TX_EXPIRATION_MS` | `60_000` | Default expiration the SDK helpers pick — fits PoW + Keychain + node orchestration with headroom. |
+| `BUY_COMMITMENT_TTL_BLOCKS` | `10` | Blocks (~30 s) a `buy_commitment` stays valid before the NFT is released back to `listed`. |
+| `BUY_API_LAG_MAX_BLOCKS` | `3` | Max indexer-vs-HEAD lag (blocks) that still allows `/api/multisig/buy` to serve requests. |
 
 ## Type re-exports
 

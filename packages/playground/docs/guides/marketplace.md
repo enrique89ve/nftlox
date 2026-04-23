@@ -5,17 +5,19 @@ Peer-to-peer NFT trading on Hive. Listings are pure on-chain state; buys settle 
 ## Lifecycle
 
 ```
-list   (owner, posting)          → NFT status: listed, listingId/listingNonce recorded
-unlist (owner, posting)          → returns to active after UNLIST_DELAY_BLOCKS (3) blocks
-buy    (buyer, active + node)    → transfers + custom_json in one atomic tx
+list           (owner, posting)             → NFT status: listed, listingId/listingNonce recorded
+unlist         (owner, posting)             → returns to active after UNLIST_DELAY_BLOCKS (3) blocks
+buy_commitment (node,  active, server-side) → reserves the NFT in pending_sale, emitted by the settlement node
+buy            (buyer, active  +  node)     → transfers + custom_json, broadcast by the node after its commitment wins
 ```
 
 - `list`, `unlist` — posting key. Cheap, single-signer.
-- `buy` — **active key** (HIVE/HBD transfers) + **node multisig** (the `custom_json` has `required_auths: [nodeAccount]`).
+- `buy` — **active key** (HIVE/HBD transfers, signed locally by the buyer) + **node active** on the trailing `custom_json` (`required_auths: [nodeAccount]`). The buyer POSTs the already-signed transaction to `/api/multisig/buy`; the node drives the remainder of settlement.
+- `buy_commitment` — **node-only**, active-auth. Not a client-facing operation: the settlement node emits it on chain to reserve the NFT before co-signing the `buy`.
 - Supported currencies: `HIVE`, `HBD`.
 - Protocol fee: **1%** (`PROTOCOL_FEE_BPS = 100`).
 - Max royalty: **50%** (`MAX_ROYALTY_PCT`), set per-collection at creation.
-- Minimum listing TTL: **`MIN_LISTING_TTL_MS = 180_000`** (3 min). A listing whose `expiresAt` falls inside the `MULTISIG_TX_MAX_EXPIRATION_MS + MARKETPLACE_SETTLEMENT_BUFFER_MS` window is rejected both by the SDK and by the indexer consensus check — see [Why listings need a minimum TTL](#why-listings-need-a-minimum-ttl).
+- Minimum listing TTL: **`MIN_LISTING_TTL_MS = 240_000`** (4 min). Derived from `LISTING_MIN_DURATION_BLOCKS × 3_000 ms + 60_000 ms` so a listing always outlives the full buy-settlement window (commitment broadcast + inclusion wait + co-sign + buy broadcast). See [Why listings need a minimum TTL](#why-listings-need-a-minimum-ttl).
 
 ## 1. Listing — `buildList`
 
@@ -71,9 +73,9 @@ const result = await buildUnlist({
 
 An unlist is effective immediately for UI purposes, but the NFT cannot be re-listed for **`UNLIST_DELAY_BLOCKS = 3`** blocks (~9 s). This tiny cooldown blocks a race where a seller unlists to dodge an in-flight buy and re-lists at a higher price in the same window.
 
-## 3. Buying — `buildBuy`
+## 3. Buying — `buildBuy` (node-last)
 
-Buying is a three-step dance: fetch the split, build the tx, get the node to co-sign.
+Buying is a three-step dance: fetch the split, build + sign the tx, hand it to the settlement node. The node — not the buyer — broadcasts the completed transaction after winning the cross-node ordering race.
 
 ### Step 1 — fetch the payment split
 
@@ -95,7 +97,7 @@ const info = await client.getPaymentInfo("nft_abc…_7");
 
 ### Step 2 — build the transaction
 
-`buildBuy` returns `operations` as a flat array: up to 3 `transfer` ops followed by the `custom_json` with `required_auths: [nodeAccount]`. The buyer signs the transfers with **active**. The node adds its signature to authorize the `custom_json`.
+`buildBuy` returns `operations` as a flat array: up to 3 `transfer` ops followed by the `custom_json` with `required_auths: [nodeAccount]`. The buyer signs the **full** transaction with their active key before submitting it to the node — the node appends its own active signature only after its `buy_commitment` wins.
 
 ```typescript
 import { buildBuy } from "nftlox-sdk";
@@ -123,55 +125,79 @@ if (!result.success) throw new Error(JSON.stringify(result.errors));
 
 The builder refuses to return operations if `buyer === seller` (error code `CANNOT_BUY_OWN`).
 
-### Step 3 — multisig + broadcast
+### Step 3 — sign locally, then hand off to the node
 
 ```typescript
-import { MultisigError } from "nftlox-sdk";
+import {
+	MultisigError,
+	requestBuyMultisig,
+	RECOMMENDED_BUY_TX_EXPIRATION_MS,
+} from "nftlox-sdk";
 
 const tx = new hive.Transaction();
 await tx.create(result.operations as [string, object][]);
 
-const resp = await client.multisig({
-	buyer: "bob",
-	nftId: info.nftId,
-	listingId: info.listingId,
-	listTxId: info.listTxId,
-	transaction: tx.transaction,
-});
+// Pin expiration inside the accepted window (30–120s). 60s recommended.
+tx.transaction.expiration = new Date(
+	Date.now() + RECOMMENDED_BUY_TX_EXPIRATION_MS,
+).toISOString().slice(0, 19);
+
+// Buyer signs the full transaction BEFORE POSTing.
+tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
+
+// Hand off to the settlement node: it broadcasts buy_commitment, waits for
+// its commitment to win the cross-node race, appends its own signature,
+// and broadcasts the completed buy.
+const resp = await requestBuyMultisig(INDEXER, { transaction: tx.transaction });
 if (!resp.ok) throw new MultisigError({ message: resp.message, code: resp.code, url: INDEXER });
 
-tx.transaction.signatures.push(resp.signature);
-tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
-await tx.broadcast();
+console.log("Settled buy tx:", resp.txId);
+console.log("Commitment op tx:", resp.commitmentOpTxId);
 ```
 
-In a browser UI, swap the active-key sign step for Hive Keychain's `requestBroadcast` with `"Active"` authority — the node signature was already appended, so Keychain is only responsible for the user's signature.
+In a browser UI, swap the local active-key sign step for Hive Keychain's `requestSignTx` / `requestSignedTx` to obtain the buyer's signature, then POST the signed transaction to `/api/multisig/buy`. You never call `requestBroadcast` — the node does the broadcast.
 
-### Multisig rejection codes
+> The request body is just `{ transaction }`. The buyer account is derived server-side from the first transfer's `from` field.
+
+### Multisig rejection codes (buy)
 
 | Code | Cause |
 |---|---|
-| `RATE_LIMITED` | Too many requests from this IP. Back off. |
-| `INVALID_TX_STRUCTURE` | Wrong op count, bad order, expired window, missing fields. |
+| `RATE_LIMITED` | Too many requests from this IP or buyer. Back off `retryAfterMs`. |
+| `INVALID_TX_STRUCTURE` | Wrong op count/order, expiration outside 30–120s, missing fields. |
+| `BUYER_SIGNATURE_MISSING` | Transaction POSTed without the buyer's active signature. |
+| `MISSING_BUYER_AUTH` | First transfer's `from` is missing or malformed. |
+| `NODE_ACCOUNT_MISMATCH` | `custom_json.required_auths` does not contain this node account. |
 | `NFT_NOT_FOUND` | nftId unknown to the indexer. |
-| `NFT_NOT_LISTED` | Listing was cancelled / expired / bought by someone else. |
+| `NFT_NOT_LISTED` | Listing was cancelled / expired / already sold. |
+| `NFT_NOT_INSTANCE` | Only instances are sellable (seeds are not). |
 | `NFT_NOT_TRANSFERABLE` | Collection `rules.transferable = false`. |
 | `NFT_EXPIRED_LISTING` | `expiresAt` in the past. Ask the seller to re-list. |
 | `CANNOT_BUY_OWN` | Buyer == seller. |
-| `SEED_HAS_INSTANCES` | Seeds with distributed instances cannot be sold (seed is co-owned in spirit by its instance holders). |
-| `INVALID_PAYMENT_SPLIT` | Any transfer amount off by even 0.001 from the split the node computed. |
-| `INVALID_PROTOCOL_PAYLOAD` | `listingId`/`listTxId` don't match the active listing, memos malformed, or `required_auths` missing the node. |
-| `NFT_LOCKED` | Another in-flight buy holds the DB-backed lock. Retry after ~60 s. |
+| `SEED_HAS_INSTANCES` | Seeds with distributed instances cannot be sold. |
+| `INVALID_PAYMENT_SPLIT` | Any transfer amount off by even 0.001 from the node's computed split. |
+| `INVALID_PROTOCOL_PAYLOAD` | `listingId`/`listTxId` don't match the active listing, or payload malformed. |
+| `NFT_LOCKED` | Another buy for this NFT is already in flight on **this** node (process-local lock). Retry. |
+| `CROSS_NODE_RESERVATION` | A different settlement node's `buy_commitment` landed first. Listing is now settled or reserved elsewhere. |
+| `COMMITMENT_BROADCAST_FAILED` | Node could not broadcast its `buy_commitment` to Hive. Transient — retry. |
+| `COMMITMENT_INCLUSION_TIMEOUT` | Node's commitment never made it into a block within the TTL window (~30 s). Transient — retry. |
+| `BUY_BROADCAST_FAILED` | Node's final buy broadcast failed. Listing state is unchanged; retry. |
+| `INDEXER_LAGGED` | Indexer is more than `BUY_API_LAG_MAX_BLOCKS` (3 blocks) behind Hive HEAD. Transient. |
+| `NODE_NOT_ACTIVE` | Node missed too many heartbeats and no longer serves settlement. Use a different indexer. |
+| `SIGNING_QUEUE_FULL` / `SIGNING_TIMEOUT` | Beekeeper queue saturated or timed out. Transient. |
+| `MULTISIG_DISABLED` | Node has no `ACTIVE_KEY` configured or is in clock-drift safeguard. Use a different indexer. |
+| `POW_REQUIRED` / `INVALID_POW` / `POW_EXPIRED` / `POW_REPLAYED` | PoW token missing, invalid, stale, or reused. SDK handles this automatically. |
 
-The node's checklist before co-signing:
+The node's checklist before broadcasting its commitment:
 
-- Transaction has 2–4 ops (≥1 transfer + the custom_json; ≤3 transfers + the custom_json).
-- Expiration is 30–120 s away.
+- Transaction has 2–4 ops (1–3 `transfer`s + the trailing `custom_json`).
+- `expiration` ∈ `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (30–120 s).
+- Buyer's active signature already present on the transaction.
 - `custom_json.required_auths` contains the node account.
 - NFT listed, not burned/lent, collection transferable.
 - Split matches exactly (rounded to 3 decimals, Hive precision).
 - Memos follow the `NFTLox {BUY|ROY|FEE}:{nftId}` format.
-- No competing in-flight buy — the indexer stores a `multisig_locks` row so concurrent API instances behind a load balancer stay coherent.
+- No competing in-flight buy on this node (process-local `buyLock`). Cross-node contention is resolved on chain through `buy_commitment` ordering, not a DB table.
 
 ## Payment split
 
@@ -207,14 +233,15 @@ No space after the colon; `{nftId}` is the exact `nft_…` string from the paylo
 
 ## Why the multisig exists
 
-Without co-signing, a malicious seller could list an NFT, watch for an in-flight `buy`, transfer it out to an alt in a racing transaction, and still collect the buyer's HIVE. The multisig kills that race:
+Without co-signing, a malicious seller could list an NFT, watch for an in-flight `buy`, transfer it out to an alt in a racing transaction, and still collect the buyer's HIVE. The multisig kills that race, and the 0.7.0 **node-last** orchestration kills the cross-node race too:
 
-1. Buyer builds transfers + `custom_json(required_auths = [node])` as one atomic tx.
-2. Node checks *at the moment of signing* that the listing is still live, split is correct, and no competing buy holds the lock.
-3. Node appends its signature; buyer appends theirs; broadcast.
-4. Because Hive evaluates the whole transaction atomically, either all three transfers + the ownership change land, or nothing does.
+1. Buyer builds `transfers + custom_json(required_auths = [node])` in one atomic tx and signs it with their active key.
+2. Buyer POSTs the signed tx to `/api/multisig/buy`. No node signature yet, no broadcast yet — the buyer's signature cannot move funds until the node joins it.
+3. Node validates (listing live, split exact, memos right, expiration in-window) and **broadcasts a `buy_commitment`** custom_json on Hive, reserving the NFT in `pending_sale`.
+4. Node waits for its commitment to land in a block. If a different node's commitment for the same NFT lands first, Hive's block ordering awards the win to that node and ours returns `CROSS_NODE_RESERVATION`.
+5. Once our commitment wins, the node appends its active signature to the buyer-signed tx and broadcasts it itself. Hive evaluates the entire transaction atomically, so either all transfers + the ownership change land or nothing does.
 
-Transactions expire in 30–120 s. A stolen node signature is useless within a minute, and the `multisig_locks` row prevents two buyers from collecting a signature on the same listing at the same time.
+Transactions expire in 30–120 s (`MULTISIG_TX_MIN/MAX_EXPIRATION_MS`). `buy_commitment` reservations expire in `BUY_COMMITMENT_TTL_BLOCKS` (~30 s), so a commitment that fails to settle automatically releases the NFT back to `listed`.
 
 ## Querying the marketplace
 
@@ -247,22 +274,22 @@ The indexer does not sweep expired listings on a timer. An expired listing stays
 
 ## Why listings need a minimum TTL
 
-A buy is a multisig Hive transaction whose L1 `expiration` is bounded by `MULTISIG_TX_MAX_EXPIRATION_MS` (120 s). Settlement can still land on-chain just before that deadline, so the indexer requires the listing itself to outlive the buy transaction by at least `MARKETPLACE_SETTLEMENT_BUFFER_MS` (60 s). That gives us a protocol-wide floor:
+Buy settlement is a multi-step orchestration: validate → broadcast `buy_commitment` → wait for inclusion (up to `BUY_COMMITMENT_TTL_BLOCKS` ≈ 30 s) → co-sign → broadcast the buy (expiration ≤ 120 s). The listing must outlive the worst case, or a late-submitted buy can have its commitment land *after* the listing expires. The protocol floor:
 
-- `MIN_LISTING_TTL_MS = MULTISIG_TX_MAX_EXPIRATION_MS + MARKETPLACE_SETTLEMENT_BUFFER_MS` = **180 000 ms** (3 min).
+- `MIN_LISTING_TTL_MS = LISTING_MIN_DURATION_BLOCKS × 3_000 ms + 60_000 ms` = `60 × 3_000 + 60_000` = **240 000 ms** (4 min).
 
 Two layers enforce it:
 
 | Layer | Check |
 |---|---|
 | SDK | `listInputSchema` rejects `expiresAt <= Date.now() + MIN_LISTING_TTL_MS`. |
-| Indexer consensus | `handleList` rejects `expiresAt <= blockTimestamp + MIN_LISTING_TTL_MS`. Multisig `buy` additionally rejects co-sign when `listing.expiresAt - tx.expiration <= MARKETPLACE_SETTLEMENT_BUFFER_MS`. |
+| Indexer consensus | `handleList` rejects `expiresAt <= blockTimestamp + MIN_LISTING_TTL_MS`. `/api/multisig/buy` additionally rejects any buy whose listing is already expired (`NFT_EXPIRED_LISTING`). |
 
-Without this floor a seller could list with a 5 s expiry, collect a signed buy, and have the indexer reject the ownership change because the listing "expired" mid-settlement — a trivial way to sink a buyer's funds.
+Without this floor a seller could list with a 5 s expiry, collect a buyer-signed tx, and have the indexer reject the ownership change because the listing "expired" mid-settlement — a trivial way to sink a buyer's funds.
 
 ## See also
 
-- [Signing & Broadcasting](../broadcasting.md#3-buy--active--multisig) — the multisig merge step line by line.
+- [Signing & Broadcasting](../broadcasting.md#flow-2--buying-node-last) — the node-last buy flow line by line.
 - [Data Formats — `list`, `unlist`, `buy`](../data-formats.md#list) — payload shapes + deterministic ID derivation.
 - [SDK Reference — marketplace builders](../sdk/reference.md#marketplace) — full input surface.
 - [Allowances & Operators](allowances.md#operator-initiated-transfer--buildnfttransferfrom) — why `nft_transfer_from` is blocked while an instance is listed.

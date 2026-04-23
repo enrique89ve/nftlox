@@ -25,13 +25,15 @@ The Swagger UI is at <http://localhost:3050/swagger>.
 
 | Variable | Default | Description |
 |---|---|---|
-| `POSTGRES_PASSWORD` | **required** | PostgreSQL password |
-| `DATABASE_URL` | auto-built | Full connection string (set to use external DB) |
+| `POSTGRES_PASSWORD` | internal DB only | PostgreSQL password for the bundled service |
+| `DATABASE_MODE` | `auto` | `internal`, `external`, or `auto` DB resolution |
+| `DATABASE_URL` | unset | In `auto` mode, setting this alone switches to external PostgreSQL. `DATABASE_MODE=external` is optional but more explicit/strict. |
 | `HIVE_ACCOUNT` | `nftlox` | Node account for multisig co-signing |
 | `ACTIVE_KEY` | (disabled) | Hive active key (enables marketplace buy/sell) |
 | `BEEKEEPER_PASSWORD` | (disabled) | In-memory beekeeper wallet password |
 | `BATCH_SIZE` | `1000` | Blocks per sync request |
 | `INDEXER_PORT` | `3050` | REST API port |
+| `HEALTH_PORT` | `0` (disabled) | Separate internal `/live` + `/ready` probe port. When unset, container health checks fall back to `/api/health` on `INDEXER_PORT`. |
 | `INDEXER_ROLE` | `both` | `sync`, `api`, or `both` |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 
@@ -41,7 +43,7 @@ Full configuration reference in the [deployment guide](../playground/docs/contri
 
 The indexer reads Hive L1 block by block, validates NFTLox `custom_json` operations, and projects state into PostgreSQL. This gives you SQL joins, sorting, filtering, and pagination over millions of NFTs — things impossible when querying raw blockchain JSON.
 
-**Multisig buy** — marketplace purchases use a co-signing flow. The buyer builds a transaction with HIVE transfers (seller + royalty + fee) and a `buy` operation. The indexer validates the payment split and co-signs. Both signatures are required, so funds only move if the NFT transfer also happens.
+**Node-last buy** — marketplace purchases use a node-last orchestration. The buyer builds the transaction (payment transfers + trailing `buy` `custom_json`), signs it locally with their active key, and POSTs it to `POST /api/multisig/buy`. The indexer validates the payment split, broadcasts a `buy_commitment` on chain to reserve the NFT, waits for its commitment to win the cross-node ordering race, appends its own active signature, and broadcasts the completed buy itself. Because Hive evaluates the transaction atomically, funds only move if the NFT transfer also happens.
 
 **Lending** — NFTs can be lent without transferring ownership. The protocol blocks transfers, sales, and burns while lent.
 
@@ -101,7 +103,8 @@ Interactive documentation at `http://localhost:3050/swagger` (disabled in produc
 | Endpoint | Description |
 |---|---|
 | `GET /api/payment-info/:nftId` | Payment split for building a buy transaction |
-| `POST /api/multisig` | Validate and co-sign a buy transaction |
+| `POST /api/multisig/buy` | Node-last buy settlement (buyer-signed tx in, `{ txId, commitmentOpTxId }` out) |
+| `POST /api/multisig/collection` | Co-sign a `create_collection` transaction |
 
 All list endpoints support `?limit=N&offset=N`.
 
@@ -125,23 +128,37 @@ Every NFT-returning endpoint includes fields for trustless ownership verificatio
 - `multisigClockDriftMs` and rate-limit windows are expressed in milliseconds.
 - `lastBlock`, `headBlock`, `irreversibleBlock`, `genesisBlock` are Hive block numbers.
 
-## Protocol actions (19)
+## Protocol actions
 
 | Category | Actions |
 |---|---|
 | **Core (9)** | `create_collection`, `mint`, `bulk_distribute`, `transfer`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `node_heartbeat` |
-| **Marketplace (3)** | `list`, `unlist`, `buy` |
+| **Marketplace (4)** | `list`, `unlist`, `buy_commitment` (server-side, node-only), `buy` |
 | **Allowances (3)** | `nft_approve`, `nft_approve_all`, `nft_transfer_from` |
 | **Lending (2)** | `nft_lend`, `nft_return` |
 | **Data operators (2)** | `data_operator_approve`, `set_data_from` |
+
+> `sale_lock` (pre-0.7.0) is retained in the action vocabulary for audit purposes but its handler always throws — historical `sale_lock` ops surface as `invalid_operations`. Replace with the `buy_commitment` + `buy` node-last flow.
 
 ## Deployment
 
 For Docker, Compose, Dokploy, Nginx, build-image, architecture modes, Docker hardening, full env var reference, and VPS recipes, see the [deployment guide](../playground/docs/contributing/indexer-deployment.md).
 
+For a managed PostgreSQL, use the same production compose command (`dokploy` or `server`) with `DATABASE_URL=postgres://...`. `DATABASE_MODE=external` is optional because the default `auto` mode already detects `DATABASE_URL`, but setting it can make misconfiguration fail faster.
+
+### Dokploy defaults
+
+When deploying with `packages/indexer/Dockerfile.dokploy`, you can omit both of these:
+
+- `INDEXER_PORT`: defaults to `3050`
+- `HEALTH_PORT`: defaults to `0` (disabled)
+
+If `HEALTH_PORT` is left unset, the container health check probes `http://127.0.0.1:3050/api/health`.
+If you want a dedicated internal liveness port in Dokploy, set `HEALTH_PORT=3100` and point the platform probe to `/live`.
+
 ## Documentation
 
-- [API Endpoints reference](../playground/docs/api-endpoints.md)
+- [API Endpoints reference](../playground/docs/reference/api.md)
 - [Database Migration Strategy](../playground/docs/contributing/database-migrations.md)
 - [Development Guide](../playground/docs/contributing/development-guide.md)
 

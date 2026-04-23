@@ -78,13 +78,20 @@ tx.sign(hive.PrivateKey.from(process.env.HIVE_POSTING_KEY!));
 await tx.broadcast();
 ```
 
-### Flow 2 — Active + node multisig (buy)
+### Flow 2 — Node-last buy (buyer signs, node settles)
 
 ```typescript
-import { buildBuy, createIndexerClient, MultisigError } from "nftlox-sdk";
+import {
+  buildBuy,
+  createIndexerClient,
+  requestBuyMultisig,
+  MultisigError,
+  RECOMMENDED_BUY_TX_EXPIRATION_MS,
+} from "nftlox-sdk";
 import hive from "hive-tx";
 
-const client = createIndexerClient("https://api-nftlox.hivecreators.co");
+const INDEXER = "https://api-nftlox.hivecreators.co";
+const client = createIndexerClient(INDEXER);
 const info = await client.getPaymentInfo("nft_…");
 
 const result = buildBuy({
@@ -107,19 +114,22 @@ const result = buildBuy({
 });
 if (!result.success) throw new Error(JSON.stringify(result.errors));
 
+// 1. Build the tx and pin expiration inside [30s, 120s] (60s recommended).
 const tx = new hive.Transaction();
 await tx.create(result.operations as [string, object][]);
+tx.transaction.expiration = new Date(
+  Date.now() + RECOMMENDED_BUY_TX_EXPIRATION_MS,
+).toISOString().slice(0, 19);
 
-const resp = await client.multisig({
-  buyer: "bob", nftId: info.nftId,
-  listingId: info.listingId, listTxId: info.listTxId,
-  transaction: tx.transaction,
-});
-if (!resp.ok) throw new MultisigError({ message: resp.message, code: resp.code, url: "…" });
-
-tx.transaction.signatures.push(resp.signature);
+// 2. Buyer signs the full tx with their active key BEFORE POSTing.
 tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
-await tx.broadcast();
+
+// 3. Hand off: node validates, broadcasts buy_commitment, waits for its
+//    commitment to win the cross-node race, co-signs, broadcasts the buy.
+const resp = await requestBuyMultisig(INDEXER, { transaction: tx.transaction });
+if (!resp.ok) throw new MultisigError({ message: resp.message, code: resp.code, url: INDEXER });
+
+// resp.txId = settled buy, resp.commitmentOpTxId = reservation commitment.
 ```
 
 ### Flow 3 — Active + node multisig (create_collection)
@@ -363,9 +373,10 @@ client.getSalesVolume({ collectionId? })
 client.getOperationStatus(txId)
 // → { indexed, totalOperations, confirmed, invalid, orphaned, operations[] }
 
-// Multisig (buy)
-client.getPaymentInfo(nftId)   // always use this; never compute split yourself
-client.multisig(request, options?)
+// Multisig
+client.getPaymentInfo(nftId)                         // always use this; never compute split yourself
+client.requestBuyMultisig(request, options?)         // node-last buy (POSTs to /api/multisig/buy)
+client.multisig(request, options?)                   // create_collection only (POSTs to /api/multisig/collection)
 
 // Helpers
 client.getMultisigNodeAccount()
@@ -386,10 +397,11 @@ import {
   resolveNodeAccountFromStatus,
 } from "nftlox-sdk";
 
-// For buy (alternative to client.multisig):
-const resp = await requestBuyMultisig(indexerBaseUrl, { buyer, nftId, listingId, listTxId, transaction });
+// Node-last buy (buyer must have already signed the transaction):
+const resp = await requestBuyMultisig(indexerBaseUrl, { transaction });
+// resp.ok ? { txId, commitmentOpTxId } : { code, message, retryAfterMs? }
 
-// For create_collection:
+// create_collection co-sign:
 const sig = await requestCreateCollectionMultisig(indexerBaseUrl, { transaction });
 
 // Get node account without a full client:
@@ -523,8 +535,9 @@ import {
 | Action | Key needed | Co-signer |
 |---|---|---|
 | `create_collection` | Active | Node (via `/api/multisig/collection`) |
-| `buy` | Active | Node (via `/api/multisig`) |
-| All other 18 actions | Posting | None |
+| `buy` | Active | Node (via `/api/multisig/buy`, node-last flow) |
+| `buy_commitment` | — (server-side, active) | Emitted by the settlement node only; clients never build this |
+| All other actions | Posting | None |
 
 - Game servers need posting key only — store it in an env var.
 - Active key goes to a secure vault. Never in the server runtime unless doing a buy.
@@ -619,7 +632,7 @@ GET  /api/users/:username/collections
 GET  /api/marketplace/listings
 GET  /api/marketplace/sales
 GET  /api/marketplace/volume
-POST /api/multisig          (buy co-signing)
+POST /api/multisig/buy         (node-last buy settlement)
 POST /api/multisig/collection  (create_collection co-signing)
 ```
 

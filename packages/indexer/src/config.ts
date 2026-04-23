@@ -41,9 +41,163 @@ const toLogLevel = (val: string | undefined, fallback: LogLevel): LogLevel => {
 	return fallback;
 };
 
+const VALID_DATABASE_MODES = new Set(["auto", "internal", "external"] as const);
+
+export type DatabaseMode = "auto" | "internal" | "external";
+export type ResolvedDatabaseMode = Exclude<DatabaseMode, "auto">;
+export type DatabaseConfigSource = "url" | "parts" | "dev-default";
+
+export interface ResolvedDatabaseConfig {
+	readonly mode: ResolvedDatabaseMode;
+	readonly source: DatabaseConfigSource;
+	readonly url: string;
+	readonly host: string;
+	readonly port: number;
+	readonly database: string;
+	readonly user: string;
+	readonly shouldAutoStartLocalPostgres: boolean;
+}
+
+const DEFAULT_DATABASE_PORT = 5432;
+const DEFAULT_DATABASE_NAME = "nftlox_indexer";
+const DEFAULT_DATABASE_USER = "nftlox";
+const DEFAULT_DEV_DATABASE_PASSWORD = "nftlox_dev";
+
+function toDatabaseMode(val: string | undefined): DatabaseMode {
+	const mode = val?.trim() || "auto";
+	if (!VALID_DATABASE_MODES.has(mode as DatabaseMode)) {
+		throw new Error(
+			`Invalid DATABASE_MODE: "${mode}". Must be auto | internal | external`,
+		);
+	}
+	return mode as DatabaseMode;
+}
+
+function parseDatabaseUrl(urlValue: string): {
+	readonly host: string;
+	readonly port: number;
+	readonly database: string;
+	readonly user: string;
+} {
+	let parsed: URL;
+	try {
+		parsed = new URL(urlValue);
+	} catch {
+		throw new Error("DATABASE_URL must be a valid postgres:// or postgresql:// URL");
+	}
+
+	if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
+		throw new Error("DATABASE_URL must use the postgres:// or postgresql:// protocol");
+	}
+
+	if (!parsed.hostname) {
+		throw new Error("DATABASE_URL must include a hostname");
+	}
+
+	const port = parsed.port === "" ? DEFAULT_DATABASE_PORT : Number(parsed.port);
+	if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+		throw new Error("DATABASE_URL must include a valid port");
+	}
+
+	const database = parsed.pathname.replace(/^\/+/, "");
+	if (!database) {
+		throw new Error("DATABASE_URL must include a database name");
+	}
+
+	return {
+		host: parsed.hostname,
+		port,
+		database,
+		user: decodeURIComponent(parsed.username),
+	};
+}
+
+function buildDatabaseUrl(parts: {
+	readonly host: string;
+	readonly port: number;
+	readonly database: string;
+	readonly user: string;
+	readonly password: string;
+}): string {
+	const url = new URL("postgres://placeholder");
+	url.hostname = parts.host;
+	url.port = String(parts.port);
+	url.pathname = `/${parts.database}`;
+	url.username = parts.user;
+	if (parts.password !== "") {
+		url.password = parts.password;
+	}
+	return url.toString();
+}
+
+export function resolveDatabaseConfig(
+	env: NodeJS.ProcessEnv,
+): ResolvedDatabaseConfig {
+	const nodeEnv = env.NODE_ENV ?? "development";
+	const databaseMode = toDatabaseMode(env.DATABASE_MODE);
+	const rawDatabaseUrl = env.DATABASE_URL?.trim() ?? "";
+
+	if (databaseMode === "external" || (databaseMode === "auto" && rawDatabaseUrl !== "")) {
+		if (rawDatabaseUrl === "") {
+			throw new Error(
+				"DATABASE_MODE=external requires DATABASE_URL to be set",
+			);
+		}
+		const parsed = parseDatabaseUrl(rawDatabaseUrl);
+		return {
+			mode: "external",
+			source: "url",
+			url: rawDatabaseUrl,
+			host: parsed.host,
+			port: parsed.port,
+			database: parsed.database,
+			user: parsed.user,
+			shouldAutoStartLocalPostgres: false,
+		};
+	}
+
+	const host = env.POSTGRES_HOST?.trim() || (nodeEnv === "production" ? "postgres" : "localhost");
+	const port = toBoundedInt(env.POSTGRES_PORT, DEFAULT_DATABASE_PORT, 1, 65_535);
+	const database = env.POSTGRES_DB?.trim() || DEFAULT_DATABASE_NAME;
+	const user = env.POSTGRES_USER?.trim() || DEFAULT_DATABASE_USER;
+	const password = env.POSTGRES_PASSWORD
+		?? (nodeEnv === "production" ? "" : DEFAULT_DEV_DATABASE_PASSWORD);
+	const source: DatabaseConfigSource =
+		env.POSTGRES_HOST || env.POSTGRES_PORT || env.POSTGRES_DB || env.POSTGRES_USER || env.POSTGRES_PASSWORD
+			? "parts"
+			: "dev-default";
+
+	if (nodeEnv === "production" && password === "") {
+		throw new Error(
+			"POSTGRES_PASSWORD must be set when using the internal PostgreSQL configuration in production",
+		);
+	}
+
+	return {
+		mode: "internal",
+		source,
+		url: buildDatabaseUrl({ host, port, database, user, password }),
+		host,
+		port,
+		database,
+		user,
+		shouldAutoStartLocalPostgres: nodeEnv !== "production" && host === "localhost",
+	};
+}
+
+const nodeEnv = process.env.NODE_ENV ?? "development";
+const database = resolveDatabaseConfig(process.env);
+
 export const config = {
 	port: toInt(process.env.INDEXER_PORT, 3050),
-	databaseUrl: process.env.DATABASE_URL ?? (process.env.NODE_ENV === "production" ? "" : "postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer"),
+	databaseUrl: database.url,
+	databaseMode: database.mode,
+	databaseConfigSource: database.source,
+	databaseHost: database.host,
+	databasePort: database.port,
+	databaseName: database.database,
+	databaseUser: database.user,
+	shouldAutoStartLocalPostgres: database.shouldAutoStartLocalPostgres,
 	// Genesis is a protocol invariant. Intentionally NOT read from env: the only
 	// legitimate "override" is editing the constant — protocol-auth.test guards
 	// that from drifting out of sync with the SDK.
@@ -56,12 +210,12 @@ export const config = {
 	// Order: fastest-responding first (api.hive.blog often timeouts in Docker)
 	hiveEndpoints: (process.env.HIVE_ENDPOINTS ?? "https://api.syncad.com,https://rpc.mahdiyari.info,https://api.hive.blog").split(",").map(s => s.trim()).filter(Boolean),
 	// Security
-	nodeEnv: process.env.NODE_ENV ?? "development",
-	enableSwagger: toBool(process.env.ENABLE_SWAGGER, process.env.NODE_ENV !== "production"),
+	nodeEnv,
+	enableSwagger: toBool(process.env.ENABLE_SWAGGER, nodeEnv !== "production"),
 	healthPort: toInt(process.env.HEALTH_PORT, 0),
-	postgresPassword: process.env.POSTGRES_PASSWORD ?? (process.env.NODE_ENV === "production" ? "" : "nftlox_dev"),
-	postgresUser: process.env.POSTGRES_USER ?? (process.env.NODE_ENV === "production" ? "" : "nftlox"),
-	postgresDb: process.env.POSTGRES_DB ?? (process.env.NODE_ENV === "production" ? "" : "nftlox_indexer"),
+	postgresPassword: process.env.POSTGRES_PASSWORD ?? (nodeEnv === "production" ? "" : DEFAULT_DEV_DATABASE_PASSWORD),
+	postgresUser: process.env.POSTGRES_USER ?? database.user,
+	postgresDb: process.env.POSTGRES_DB ?? database.database,
 	// Cuenta del nodo: firma operaciones y recibe el fee del protocolo en ventas.
 	hiveAccount: process.env.HIVE_ACCOUNT ?? DEFAULT_FEE_ACCOUNT,
 	indexerRole: toIndexerRole(process.env.INDEXER_ROLE),
@@ -114,11 +268,11 @@ if (config.nodeRegister && !process.env.POSTING_KEY) {
 }
 
 if (config.nodeEnv === "production") {
-	if (!process.env.DATABASE_URL) {
-		throw new Error("DATABASE_URL must be set in production");
+	if (config.databaseMode === "external" && !process.env.DATABASE_URL) {
+		throw new Error("DATABASE_MODE=external requires DATABASE_URL to be set in production");
 	}
-	if (!process.env.POSTGRES_PASSWORD) {
-		throw new Error("POSTGRES_PASSWORD must be set in production");
+	if (config.databaseMode === "internal" && !process.env.POSTGRES_PASSWORD) {
+		throw new Error("POSTGRES_PASSWORD must be set in production when using the internal PostgreSQL service");
 	}
 }
 

@@ -18,8 +18,9 @@ The indexer needs PostgreSQL 14+. You can let Docker manage it or bring your own
 |                           |       |                           |
 |  .env:                    |       |  .env:                    |
 |  POSTGRES_PASSWORD=secret |       |  DATABASE_URL=postgres:// |
+|  DATABASE_MODE=internal   |       |  DATABASE_MODE=external   |
 |                           |       |    user:pass@host/db      |
-|  That's it.               |       |  POSTGRES_PASSWORD=pass   |
+|  That's it.               |       |  That's it.               |
 +---------------------------+       +---------------------------+
 ```
 
@@ -30,10 +31,18 @@ cd packages/indexer
 cp .env.example .env
 ```
 
-Open `.env` and set **one required variable**:
+Open `.env` and set the variables for your chosen topology:
 
 ```bash
+# Internal PostgreSQL (default)
+DATABASE_MODE=internal
 POSTGRES_PASSWORD=your_secure_password
+```
+
+```bash
+# External PostgreSQL
+DATABASE_MODE=external
+DATABASE_URL=postgres://user:password@your-host:5432/nftlox_indexer
 ```
 
 Everything else has sensible defaults. The genesis block, Hive endpoints, batch size, and all other settings are pre-configured. See `.env.example` for the full list of optional overrides.
@@ -65,7 +74,7 @@ bun run dev:indexer
 
 ### Behind an external proxy (Dokploy, Coolify, Traefik)
 
-Your platform handles TLS and routing. One command:
+Your platform handles TLS and routing. One compose file, one command:
 
 ```bash
 cd packages/indexer
@@ -94,22 +103,43 @@ Only Nginx is published to the host (port 80). PostgreSQL and the indexer stay p
    nginx/ssl/privkey.pem
    ```
 2. Uncomment the HTTPS server block in `nginx/nginx.conf`
-3. Uncomment the SSL port in `docker-compose.nginx.yml`
+3. Uncomment the SSL port in `docker-compose.yml`
 4. `./scripts/compose.sh server up -d`
 </details>
 
+### Cloudflare proxy
+
+If your DNS record is orange-clouded behind Cloudflare, keep the topology as:
+
+```text
+Client -> Cloudflare -> nginx -> indexer
+```
+
+The bundled `nginx` is prepared for Cloudflare's `CF-Connecting-IP` header and
+trusts only Cloudflare's published proxy ranges for real-IP restoration. This
+keeps rate limiting and logs keyed to the original visitor IP instead of the
+Cloudflare edge IP.
+
+Recommended production setup:
+
+1. Use `./scripts/compose.sh server up -d`
+2. In Cloudflare SSL/TLS, use `Full (strict)` instead of `Flexible`
+3. Restrict origin access so only Cloudflare IP ranges can reach ports `80/443`
+4. Keep `packages/indexer/nginx/cloudflare-realip.conf` updated when Cloudflare publishes new ranges
+
 ### External PostgreSQL (RDS, Supabase, managed DB)
 
-Set `DATABASE_URL` in your `.env` and start only the indexer:
+Set `DATABASE_MODE=external` and `DATABASE_URL` in your `.env`, then start the
+same production compose:
 
 ```bash
 # .env
+DATABASE_MODE=external
 DATABASE_URL=postgres://user:password@your-host:5432/nftlox_indexer
-POSTGRES_PASSWORD=your_password
 ```
 
 ```bash
-docker compose -f docker-compose.yml up -d indexer
+./scripts/compose.sh dokploy up -d
 ```
 
 The indexer runs schema migrations automatically on startup (`CREATE TABLE IF NOT EXISTS`). It never drops or alters existing columns.
@@ -190,7 +220,7 @@ Beekeeper (multisig key storage) runs entirely in WASM memory (`inMemory: true`)
 ## Security
 
 - **Rate limiting**: 1000 requests/min per IP (CF-Connecting-IP > X-Real-IP > X-Forwarded-For)
-- **Multisig rate limiting**: Independent per-buyer and per-IP rate limits for `/api/multisig`
+- **Multisig rate limiting**: Independent per-buyer/creator and per-IP rate limits for `/api/multisig/buy` and `/api/multisig/collection`
 - **Clock drift guard**: Multisig signing is disabled automatically if server time drifts too far from Hive
 - **Security headers**: X-Content-Type-Options, Referrer-Policy, Cache-Control
 - **Query hard caps**: Max 1000 rows per query regardless of client input
@@ -227,16 +257,18 @@ PostgreSQL connection pool (postgres.js) with production hardening:
 
 ## Configuration reference
 
-All variables are optional except `POSTGRES_PASSWORD`. The indexer uses protocol constants and sensible defaults when a variable is not set.
+The indexer uses protocol constants and sensible defaults when a variable is not set. Internal DB deployments require `POSTGRES_PASSWORD`; external DB deployments require `DATABASE_MODE=external` plus `DATABASE_URL`.
 
 ### Database
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `POSTGRES_PASSWORD` | **required** | PostgreSQL password |
-| `DATABASE_URL` | auto-built by compose | Full connection string. Set this to use an external database |
+| `POSTGRES_PASSWORD` | internal DB only | PostgreSQL password for the bundled service |
+| `DATABASE_MODE` | `auto` | `internal`, `external`, or `auto` DB resolution |
+| `DATABASE_URL` | unset | Full connection string. Required when `DATABASE_MODE=external` |
 | `POSTGRES_DB` | `nftlox_indexer` | Database name |
 | `POSTGRES_USER` | `nftlox` | Database user |
+| `POSTGRES_HOST` | `postgres` in Docker, `localhost` in host-run dev | Database host for internal mode |
 
 ### Multisig
 
