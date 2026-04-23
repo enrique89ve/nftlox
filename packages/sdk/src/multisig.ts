@@ -314,6 +314,12 @@ async function postMultisig(
  * On a lost race or any failure the node releases its local lock and returns
  * a typed error (`CROSS_NODE_RESERVATION`, `COMMITMENT_INCLUSION_TIMEOUT`,
  * `BUYER_SIGNATURE_MISSING`, etc.) so clients can retry or surface to the user.
+ *
+ * The unsigned transaction's `expiration` field MUST fall inside
+ * `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]`; use
+ * `RECOMMENDED_BUY_TX_EXPIRATION_MS` (60s) so PoW + Keychain + the node's
+ * ~6s orchestration (broadcast commitment → wait inclusion → co-sign →
+ * broadcast) all fit with headroom before Hive drops the tx.
  */
 export async function requestBuyMultisig(
 	indexerUrl: string,

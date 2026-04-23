@@ -13,7 +13,12 @@
  * bootstrap).
  */
 import { Transaction, PrivateKey, config as hiveConfig } from "hive-tx";
-import { solveMultisigPow, NFTLOX_POW_HEADER, fetchPaymentInfo } from "nftlox-sdk";
+import {
+	solveMultisigPow,
+	NFTLOX_POW_HEADER,
+	fetchPaymentInfo,
+	RECOMMENDED_BUY_TX_EXPIRATION_MS,
+} from "nftlox-sdk";
 
 const INDEXER = process.env.INDEXER_URL ?? "http://localhost:3050";
 const BUYER = requireEnv("TEST_BUYER_ACCOUNT");
@@ -75,10 +80,7 @@ async function main(): Promise<void> {
 }
 
 async function buildUnsignedBuyTx(info: PaymentInfo): Promise<Transaction> {
-	// Use 60s window so PoW + local signing + network round-trip leave enough
-	// budget for the node's commitment broadcast + inclusion wait, which can
-	// eat ~5-6s of the window. Max allowed by the indexer is 120s.
-	const tx = new Transaction({ expiration: 60_000 });
+	const tx = new Transaction({ expiration: RECOMMENDED_BUY_TX_EXPIRATION_MS });
 
 	await tx.addOperation("transfer", {
 		from: BUYER,

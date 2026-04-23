@@ -7,6 +7,7 @@ import {
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
+	RECOMMENDED_BUY_TX_EXPIRATION_MS,
 	fetchPaymentInfo,
 	usernameSchema,
 } from "nftlox-sdk";
@@ -23,9 +24,12 @@ const json = (data: unknown, status = 200) =>
 		headers: { "Content-Type": "application/json" },
 	});
 
-// The unsigned buy transaction must stay valid long enough for node co-sign +
-// buyer sign + broadcast.
-const TX_EXPIRATION_MS = 240_000;
+// Default window for the unsigned buy transaction. The indexer validates
+// expiration ∈ [MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]
+// (30s – 120s); the recommended 60s value leaves ≥30s above the minimum so
+// PoW + buyer Keychain sign + the node's own ~6s orchestration all fit
+// comfortably inside the window.
+const TX_EXPIRATION_MS = RECOMMENDED_BUY_TX_EXPIRATION_MS;
 
 type RouteHandler = (req: Request) => Promise<Response>;
 

@@ -6,15 +6,12 @@ import {
 	ACTION_CREATE_COLLECTION,
 	HIVE_CUSTOM_JSON_MAX_BYTES,
 	MIN_PROTOCOL_VERSION,
+	MULTISIG_TX_MAX_EXPIRATION_MS,
+	MULTISIG_TX_MIN_EXPIRATION_MS,
 	isProtocolAction,
 	type MultisigErrorCode,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
-
-// These guard the node-signing HTTP surface. They are node policy, not
-// consensus constants, and apply to both buy and create_collection multisig.
-const MULTISIG_TX_MIN_EXPIRATION_MS = 30_000;
-const MULTISIG_TX_MAX_EXPIRATION_MS = 120_000;
 
 import type {
 	ParsedAmount,

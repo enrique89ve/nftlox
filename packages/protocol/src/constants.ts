@@ -50,6 +50,21 @@ export const LISTING_MIN_DURATION_BLOCKS = 60;
 // commitment validity share the same window.
 export const BUY_TX_TTL_MS = 30_000;
 
+// Accepted range for the `expiration` field of a buy transaction submitted to
+// POST /api/multisig/buy. The indexer rejects anything outside this window
+// with INVALID_TX_STRUCTURE. MIN protects the node's orchestration budget
+// (broadcast commitment → wait inclusion → co-sign → broadcast); MAX prevents
+// a buyer signature from staying replayable on the mempool for too long.
+export const MULTISIG_TX_MIN_EXPIRATION_MS = 30_000;
+export const MULTISIG_TX_MAX_EXPIRATION_MS = 120_000;
+
+// Recommended expiration for an unsigned buy transaction. Gives ≥30s of
+// headroom above MIN so that buyer-side work (PoW, Keychain prompt, network
+// round-trip) plus the node's own orchestration (~6s) comfortably fits
+// before Hive drops the tx from the mempool. SDK helpers that construct
+// buy transactions default to this value.
+export const RECOMMENDED_BUY_TX_EXPIRATION_MS = 60_000;
+
 // Block-denominated TTL for `buy_commitment` reservations. A node that emits
 // a commitment has this many blocks to get its `buy` transaction included on
 // chain; after that the commitment is swept and the NFT returns to `listed`.
