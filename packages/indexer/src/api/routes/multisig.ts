@@ -69,6 +69,10 @@ const BUY_MULTISIG_STATUS: Record<MultisigErrorCode, number> = {
 	NFT_EXPIRED_LISTING: 409,
 	CANNOT_BUY_OWN: 409,
 	SEED_HAS_INSTANCES: 409,
+	// Buyer's liquid balance cannot cover the buy transfers. 409 (not 4xx-cached
+	// 400/422) so a top-up + retry is re-evaluated against fresh state instead
+	// of returning the cached pre-top-up failure.
+	INSUFFICIENT_BALANCE: 409,
 	// not found
 	NFT_NOT_FOUND: 404,
 	// client-shape errors

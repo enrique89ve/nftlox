@@ -17,7 +17,7 @@ export type FixedFeeMatch = {
 	readonly index: number;
 };
 
-// HBD amounts on Hive L1 are always 3-decimal (see hive-client.ts:parseTransferAmount).
+// HBD amounts on Hive L1 are always 3-decimal (see hive-client.ts:parseHiveAsset).
 // Canonicalize both sides with .toFixed(3) and compare strings — exact equality,
 // zero tolerance, no float-compare epsilon.
 function hbdAmountMatches(paid: number, required: number): boolean {

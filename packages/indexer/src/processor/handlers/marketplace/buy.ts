@@ -53,6 +53,18 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 			`Buy tx_id ${op.txId} does not match committed hash ${expectedBuyTxHash ?? "<none>"} for NFT ${nftId}`,
 		);
 	}
+	// Defense-in-depth: under correct digest computation + Hive consensus, the
+	// tx_id match above already pins op.signer to the committed node (the buy
+	// custom_json's required_auths is part of the digested bytes). This explicit
+	// check turns a silent invariant into a loud one — any future regression
+	// in the multisig digest path would surface here instead of allowing an
+	// unrelated active node to settle the commitment.
+	if (nft.sale_settlement_node !== op.signer) {
+		throw new Error(
+			`Settlement node mismatch for NFT ${nftId}: committed by '${nft.sale_settlement_node ?? "<none>"}', `
+			+ `buy signed by '${op.signer}'`,
+		);
+	}
 	if (nft.sale_expires_block !== null && op.blockNum > nft.sale_expires_block) {
 		throw new Error(
 			`Commitment for NFT ${nftId} expired at block ${nft.sale_expires_block} (current ${op.blockNum})`,

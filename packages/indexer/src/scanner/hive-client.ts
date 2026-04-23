@@ -531,8 +531,13 @@ export interface TransferDetail {
 	memo: string;
 }
 
-function parseTransferAmount(raw: unknown): { amount: number; currency: string } | null {
-	// NAI format: { amount: "1000", precision: 3, nai: "@@000000021" }
+/**
+ * Parses a Hive-formatted asset value in either NAI form
+ * (`{ amount, precision, nai }`) or legacy string form (`"1.000 HIVE"`).
+ * Used both for transfer amounts inside operations and for account balance
+ * fields returned by `condenser_api.get_accounts`.
+ */
+function parseHiveAsset(raw: unknown): { amount: number; currency: string } | null {
 	if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
 		const nai = raw as { amount?: string; precision?: number; nai?: string };
 		if (typeof nai.amount === "string" && typeof nai.precision === "number" && typeof nai.nai === "string") {
@@ -541,7 +546,6 @@ function parseTransferAmount(raw: unknown): { amount: number; currency: string }
 			return { amount: parseInt(nai.amount, 10) / Math.pow(10, nai.precision), currency };
 		}
 	}
-	// Legacy string format: "1.000 HIVE"
 	if (typeof raw === "string") {
 		const parts = raw.split(" ");
 		if (parts.length === 2 && parts[0] && parts[1]) {
@@ -573,7 +577,7 @@ export async function getTransfersInTransaction(txId: string): Promise<TransferD
 		const val = op.value as Record<string, unknown>;
 		if (typeof val.from !== "string" || typeof val.to !== "string") continue;
 
-		const parsed = parseTransferAmount(val.amount);
+		const parsed = parseHiveAsset(val.amount);
 		if (!parsed) continue;
 
 		transfers.push({
@@ -586,4 +590,55 @@ export async function getTransfersInTransaction(txId: string): Promise<TransferD
 	}
 
 	return transfers;
+}
+
+// ============ ACCOUNT BALANCE (for solvency pre-check at /api/multisig/buy) ============
+
+export interface AccountLiquidBalance {
+	readonly hive: number;
+	readonly hbd: number;
+}
+
+interface HiveAccountRow {
+	readonly balance: unknown;
+	readonly hbd_balance: unknown;
+}
+
+/**
+ * Returns the account's LIQUID balances for HIVE and HBD. Savings and vesting
+ * are intentionally excluded — only liquid funds can settle a transfer_operation
+ * in the same block, which is the case the buy multisig flow needs to verify.
+ *
+ * Used as an anti-grief gate: the multisig API rejects buy requests whose buyer
+ * cannot cover the transfers BEFORE broadcasting `buy_commitment`, preventing
+ * an attacker with empty accounts from locking listings repeatedly via the
+ * pending_sale slot.
+ *
+ * Failover via `callWithFailover` (multi-endpoint, backoff, retry-after). A
+ * lying endpoint understating balance produces a false negative (legitimate
+ * buyer rejected, retries) — annoying but never unsafe. A lying endpoint
+ * overstating balance regresses to today's behavior (Hive consensus rejects
+ * the transfer at block production), so the worst case is the slot we already
+ * accept hoy.
+ *
+ * Throws if the account is not found OR if Hive returns an asset format that
+ * we cannot parse — the caller maps this to a multisig error.
+ */
+export async function getAccountLiquidBalance(account: string): Promise<AccountLiquidBalance> {
+	const rows = await callWithFailover<ReadonlyArray<HiveAccountRow>>(
+		"condenser_api.get_accounts",
+		[[account]],
+	);
+	const row = rows[0];
+	if (!row) throw new Error(`Hive account not found: ${account}`);
+
+	const hive = parseHiveAsset(row.balance);
+	const hbd = parseHiveAsset(row.hbd_balance);
+	if (!hive || hive.currency !== "HIVE") {
+		throw new Error(`Unparseable HIVE balance for ${account}: ${JSON.stringify(row.balance)}`);
+	}
+	if (!hbd || hbd.currency !== "HBD") {
+		throw new Error(`Unparseable HBD balance for ${account}: ${JSON.stringify(row.hbd_balance)}`);
+	}
+	return { hive: hive.amount, hbd: hbd.amount };
 }

@@ -2137,6 +2137,33 @@ describe("Handlers (integration)", () => {
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("listTxId mismatch");
 		});
 
+		test("rejects buy when op.signer differs from sale_settlement_node", async () => {
+			// Defense-in-depth invariant: the tx_id match already implies the
+			// signer match under correct digest computation, so this case is
+			// unreachable with an honest digest. The check exists to surface a
+			// future serializer regression loudly instead of silently allowing
+			// an unrelated active node to settle the commitment.
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+			const { listingId, listTxId } = await listNft(instId);
+
+			const buyTxHash = "1".repeat(40);
+			await projectBuyCommitment(instId, listingId, listTxId, "bob", buyTxHash);
+
+			const buyOp = makeBuyOp(instId, listingId, listTxId, "bob", "alice", 10, buyTxHash);
+			// Override the signer to a node OTHER than the one that emitted the
+			// commitment. In production this state is unreachable (Hive consensus
+			// would have rejected the tx because required_auths would not be
+			// satisfied), but the unit test simulates the post-regression world
+			// where the digest no longer pins the signer.
+			buyOp.signer = "imposter.node";
+
+			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow(
+				"Settlement node mismatch",
+			);
+		});
+
 		test("rejects buy with wrong payment amount", async () => {
 			await seedCollection();
 			await seedMint();

@@ -24,6 +24,8 @@ import {
 	validateTransferOperations,
 } from "@/api/services/multisig/transaction.ts";
 import { verifyBuyerSignatureOrThrow } from "@/api/services/multisig/signature-verification.ts";
+import { getAccountLiquidBalance } from "@/scanner/hive-client.ts";
+import { assertBuyerSolvent } from "@/api/services/multisig/solvency.ts";
 import type {
 	MultisigBuyContext,
 	TransactionOperationInput,
@@ -85,6 +87,12 @@ async function executeBuyRequest(
 	// 130-hex blob and force us to project `pending_sale` for the NFT — see
 	// VUL-001 in AUDITORIA-CIBERSEGURIDAD-NFTLOX.md.
 	await verifyBuyerSignatureOrThrow({ buyer, buyerSignature, digestBytes });
+
+	// Solvency pre-check: refuse to broadcast a buy_commitment for a buyer who
+	// cannot cover the transfers. The check runs in the API event loop, which
+	// is a separate Bun Worker from the sync engine, so it cannot delay block
+	// processing. See solvency.ts for the full threat model.
+	await assertBuyerSolvent(buyer, validated.transferOperations, getAccountLiquidBalance);
 
 	const acquisition = await ctx.buyLock.acquire(
 		validated.customJsonOperation.payload.data.nftId,
