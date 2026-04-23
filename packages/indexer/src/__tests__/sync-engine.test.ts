@@ -123,6 +123,13 @@ mock.module("@/scanner/sync-lock.ts", () => ({
 	acquireSyncLock: mock(() => Promise.resolve({ status: "acquired" })),
 	releaseSyncLock: mock(() => Promise.resolve()),
 	verifyLockHeld: mock(() => Promise.resolve(true)),
+	// The lock-lost path is not exercised here (verifyLockHeld is always true),
+	// but the module mock must expose every export sync-engine.ts imports.
+	syncLockLostError: mock((message: string) => new Error(message)),
+	isSyncLockLostError: mock(() => false),
+	// withSyncWriteTransaction delegates to the same withTransaction mock so
+	// tests bypass the xact-level fence without duplicating transaction logic.
+	withSyncWriteTransaction: mockWithTransaction,
 }));
 
 mock.module("@/scanner/hive-client.ts", () => ({

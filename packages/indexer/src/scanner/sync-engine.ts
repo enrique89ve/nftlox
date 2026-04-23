@@ -1,5 +1,4 @@
 import { config } from "@/config.ts";
-import { withTransaction } from "@/db/client.ts";
 import {
   getLastBlock,
   updateLastBlock,
@@ -12,6 +11,9 @@ import {
   acquireSyncLock,
   releaseSyncLock,
   verifyLockHeld,
+  syncLockLostError,
+  isSyncLockLostError,
+  withSyncWriteTransaction,
 } from "./sync-lock.ts";
 import {
   getBlockchainHead,
@@ -151,11 +153,6 @@ const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const CLOCK_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const LOCK_RETRY_INTERVAL_MS = 10_000;
 
-// Sentinel thrown by syncCycle when verifyLockHeld() fails before a write.
-// syncLoop catches this specifically and re-acquires the lock before retrying.
-// A plain string match is used to avoid an extra custom-error class.
-const LOCK_LOST_MARKER = "SYNC_LOCK_LOST";
-
 let lastCleanup = 0;
 let lastClockCheck = 0;
 // Monotonic invariant: Hive's last_irreversible_block_num only moves forward.
@@ -208,16 +205,16 @@ async function syncLoop(): Promise<void> {
         await checkClockDrift().catch(() => {});
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      // LOCK_LOST_MARKER: syncCycle aborted because the advisory lock dropped
-      // mid-batch. Re-acquire before the next cycle — do not sleep the normal
-      // backoff. Without this, another indexer could race in and write to the
-      // same cursor while we wait.
-      if (message.includes(LOCK_LOST_MARKER)) {
+      // Advisory lock dropped mid-batch: re-acquire before the next cycle
+      // instead of sleeping the normal backoff. Without the fast re-acquire,
+      // another indexer could race in and write to the same cursor while we
+      // wait. Identified structurally via the Symbol tag, not string matching.
+      if (isSyncLockLostError(err)) {
         log.error("Advisory lock lost mid-cycle — re-acquiring");
         if (!(await waitForLock())) return;
         continue;
       }
+      const message = err instanceof Error ? err.message : String(err);
       log.error("Sync cycle error", { error: message });
       await sleep(config.syncIntervalMs * 2);
     }
@@ -388,25 +385,28 @@ export async function syncCycle(): Promise<void> {
       (b) => b.ops.length > 0 || b.rejected.length > 0,
     );
 
-    // Per-batch lock fence: verify the advisory lock is still held IMMEDIATELY
-    // before any state-mutating write. Replaces the previous 30s timer check,
-    // which left a ~30s window where a second indexer could race in after a
-    // dropped connection and both writers advance the same cursor. Fetching is
-    // idempotent read-only I/O so it's safe to run without the lock — only the
-    // write path below is guarded. If lost, throw LOCK_LOST_MARKER so syncLoop
-    // re-acquires before the next cycle instead of the normal error backoff.
+    // Fast-fail fence: if the session HA lock is obviously gone, bail before
+    // starting a transaction. This is cheap diagnostic gating — the authoritative
+    // race-prevention is the xact-level advisory lock taken inside
+    // withSyncWriteTransaction on the same pool connection as the writes.
+    // Fetching is idempotent read-only I/O so running it without the lock is fine.
     if (!(await verifyLockHeld())) {
-      throw new Error(LOCK_LOST_MARKER);
+      throw syncLockLostError("Advisory lock lost before batch write");
     }
 
-    // Single transaction per batch. sweepExpiredBuyCommitments runs BEFORE each
-    // distinct block's ops so that a `buy` landing at block B observes only
-    // locks whose sale_expires_block >= B. It also runs once more at the
-    // batch boundary so a quiet window (no ops inside a range that contains
-    // an expiration) still returns the NFT to `listed` before the cursor
-    // advances. The partial index `idx_nfts_sale_expires` keeps the UPDATE
-    // at ~zero cost when no rows are due.
-    await withTransaction(async (txn) => {
+    // Single transaction per batch, wrapped with an xact-level advisory lock
+    // (SYNC_WRITE_FENCE_ID) that closes the dual-writer race: the HA session
+    // lock can be silently dropped if its dedicated connection dies, but the
+    // xact fence lives on THIS transaction's pool connection and is released
+    // by COMMIT/ROLLBACK, so two writers cannot overlap inside it.
+    //
+    // sweepExpiredBuyCommitments runs BEFORE each distinct block's ops so that
+    // a `buy` landing at block B observes only locks whose sale_expires_block
+    // >= B. It also runs once more at the batch boundary so a quiet window
+    // (no ops inside a range that contains an expiration) still returns the
+    // NFT to `listed` before the cursor advances. The partial index
+    // `idx_nfts_sale_expires` keeps the UPDATE at ~zero cost when no rows are due.
+    await withSyncWriteTransaction(async (txn) => {
       if (isMassive && hasOps) {
         await txn`SET LOCAL synchronous_commit = OFF`;
       }
