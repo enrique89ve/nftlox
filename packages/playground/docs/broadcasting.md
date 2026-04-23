@@ -21,7 +21,7 @@ Every builder returns Hive-native tuples:
 	"required_auths": [],
 	"required_posting_auths": ["alice"],
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.6.2\",\"action\":\"mint\",\"data\":{…}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.8.0\",\"action\":\"mint\",\"data\":{…}}"
 }]
 ```
 

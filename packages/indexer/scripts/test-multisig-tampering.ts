@@ -11,6 +11,7 @@
  *   TEST_BUYER_ACCOUNT, TEST_BUYER_ACTIVE_KEY
  */
 import { Transaction, PrivateKey, callRPC, config } from "hive-tx";
+import { PROTOCOL_ID, PROTOCOL_VERSION } from "@nftlox/protocol";
 
 type HiveTransferBody = {
 	from: string;
@@ -28,8 +29,6 @@ type HiveCustomJsonBody = {
 
 type SignedTx = ReturnType<Transaction["sign"]>;
 
-const PROTOCOL_ID = "nftlox_testnet";
-const PROTOCOL_VERSION = "0.8.0";
 
 const NODE_ACCOUNT = requireEnv("HIVE_ACCOUNT");
 const NODE_ACTIVE_KEY = requireEnv("ACTIVE_KEY");

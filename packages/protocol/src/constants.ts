@@ -223,7 +223,6 @@ export const ACTION_NODE_HEARTBEAT = "node_heartbeat";
 // Marketplace
 export const ACTION_LIST = "list";
 export const ACTION_UNLIST = "unlist";
-export const ACTION_SALE_LOCK = "sale_lock" as const;
 export const ACTION_BUY_COMMITMENT = "buy_commitment" as const;
 export const ACTION_BUY = "buy" as const;
 
@@ -256,7 +255,6 @@ export const CORE_ACTIONS = [
 export const MARKETPLACE_ACTIONS = [
 	ACTION_LIST,
 	ACTION_UNLIST,
-	ACTION_SALE_LOCK,
 	ACTION_BUY_COMMITMENT,
 	ACTION_BUY,
 ] as const;

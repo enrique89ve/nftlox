@@ -164,15 +164,6 @@ export type UnlistData = {
 	readonly seedTxId?: string | undefined;
 };
 
-// Legacy reservation payload retained for backwards compatibility in the type
-// surface. The current buy flow does not rely on a preceding on-chain lock.
-export type SaleLockData = {
-	readonly nftId: string;
-	readonly listingId: string;
-	readonly listTxId: string;
-	readonly buyer: string;
-};
-
 // Emitted on-chain by a settlement node as its active-key custom_json BEFORE
 // it co-signs the buyer's buy transaction. The network-wide ordering of these
 // commitments in a Hive block is the consensus on "which node gets to settle

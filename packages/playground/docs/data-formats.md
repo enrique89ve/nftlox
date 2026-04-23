@@ -7,7 +7,7 @@ Every mutation in NFTLox is a Hive operation whose payload is a `ProtocolPayload
 ```typescript
 type ProtocolPayload<T> = {
 	readonly protocol: string;         // "nftlox_testnet"
-	readonly version: string;          // "0.6.2"
+	readonly version: string;          // "0.8.0"
 	readonly action: ProtocolAction;
 	readonly data: T;                  // shape depends on action
 };
@@ -20,7 +20,7 @@ Emitted as a Hive `custom_json`:
 	"required_auths": ["alice"],             // active-auth actions
 	"required_posting_auths": [],            // or the inverse for posting-auth actions
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.6.2\",\"action\":\"mint\",\"data\":{…}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.8.0\",\"action\":\"mint\",\"data\":{…}}"
 }]
 ```
 

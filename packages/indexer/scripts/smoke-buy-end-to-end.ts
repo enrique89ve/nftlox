@@ -19,6 +19,7 @@ import {
 	fetchPaymentInfo,
 	RECOMMENDED_BUY_TX_EXPIRATION_MS,
 } from "nftlox-sdk";
+import { PROTOCOL_ID, PROTOCOL_VERSION } from "@nftlox/protocol";
 
 const INDEXER = process.env.INDEXER_URL ?? "http://localhost:3050";
 const BUYER = requireEnv("TEST_BUYER_ACCOUNT");
@@ -107,10 +108,10 @@ async function buildUnsignedBuyTx(info: PaymentInfo): Promise<Transaction> {
 	await tx.addOperation("custom_json", {
 		required_auths: [info.nodeAccount],
 		required_posting_auths: [],
-		id: "nftlox_testnet",
+		id: PROTOCOL_ID,
 		json: JSON.stringify({
-			protocol: "nftlox_testnet",
-			version: "0.8.0",
+			protocol: PROTOCOL_ID,
+			version: PROTOCOL_VERSION,
 			action: "buy",
 			data: {
 				nftId: NFT_ID,

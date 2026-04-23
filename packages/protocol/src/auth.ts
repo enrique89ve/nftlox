@@ -14,7 +14,6 @@ import {
 	ACTION_NODE_HEARTBEAT,
 	ACTION_LIST,
 	ACTION_UNLIST,
-	ACTION_SALE_LOCK,
 	ACTION_BUY_COMMITMENT,
 	ACTION_BUY,
 	ACTION_NFT_APPROVE,
@@ -45,12 +44,6 @@ const ACTION_AUTH_LEVEL_MAP = {
 	[ACTION_NODE_HEARTBEAT]: "posting",
 	[ACTION_LIST]: "posting",
 	[ACTION_UNLIST]: "posting",
-	// sale_lock is a pre-0.7.0 legacy action. The router routes it to
-	// `handleDeprecatedSaleLock` (which always throws) so any historical
-	// sale_lock ops on chain surface in `invalid_operations` as an audit trail
-	// without mutating state. The posting auth is preserved so the parser's
-	// auth-level check matches the original envelope if one is replayed.
-	[ACTION_SALE_LOCK]: "posting",
 	// buy_commitment: the node broadcasts this on-chain with its own active key
 	// before co-signing a `buy` tx, reserving the NFT for the committed buyer.
 	// Ordering of commitments in a Hive block is the network-wide consensus on

@@ -23,6 +23,7 @@ import {
 	validateTransferBody,
 	validateTransferOperations,
 } from "@/api/services/multisig/transaction.ts";
+import { verifyBuyerSignatureOrThrow } from "@/api/services/multisig/signature-verification.ts";
 import type {
 	MultisigBuyContext,
 	TransactionOperationInput,
@@ -77,7 +78,13 @@ async function executeBuyRequest(
 
 	const { transaction } = validateCommonRequestShape(rawBody);
 	const { validated, buyerSignature, buyer } = await parseAndValidateBuyTx(transaction, ctx);
-	const buyTxId = computeUnsignedTxId(validated);
+	const { txId: buyTxId, digestBytes } = computeUnsignedTxDigest(validated);
+
+	// Cryptographic verification of the buyer's signature BEFORE we burn an
+	// on-chain buy_commitment. Without this, any attacker can feed us a random
+	// 130-hex blob and force us to project `pending_sale` for the NFT — see
+	// VUL-001 in AUDITORIA-CIBERSEGURIDAD-NFTLOX.md.
+	await verifyBuyerSignatureOrThrow({ buyer, buyerSignature, digestBytes });
 
 	const acquisition = await ctx.buyLock.acquire(
 		validated.customJsonOperation.payload.data.nftId,
@@ -457,9 +464,15 @@ function sleep(ms: number): Promise<void> {
 
 // ─── Final tx signing and broadcast ─────────────────────
 
-function computeUnsignedTxId(validated: ValidatedBuyTransaction): string {
+type UnsignedTxDigest = Readonly<{
+	readonly txId: string;
+	readonly digestBytes: Uint8Array;
+}>;
+
+function computeUnsignedTxDigest(validated: ValidatedBuyTransaction): UnsignedTxDigest {
 	const hiveTx = buildHiveTransactionForBuy(validated, []);
-	return hiveTx.digest().txId;
+	const { digest, txId } = hiveTx.digest();
+	return { txId, digestBytes: digest };
 }
 
 function addNodeSignatureToBuy(
