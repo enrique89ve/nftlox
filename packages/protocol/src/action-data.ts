@@ -76,9 +76,12 @@ export type NFTData = {
 	readonly artId?: string | undefined;
 	readonly edition: number;
 	readonly owner: string;
-	readonly nftType?: NftKind | undefined;
+	// Intentionally required: every custom_json must declare the NFT kind
+	// explicitly so an auditor reading the operation on-chain can recreate
+	// ownership via the Hive API without relying on the indexer to infer it.
+	readonly nftType: NftKind;
 	readonly originDna: string;
-	readonly instanceDna: string;
+	readonly nftDna: string;
 	readonly uniqueAccessKey?: string | undefined;
 	readonly mintedBy: string;
 	readonly collectionBlock?: number | undefined;
@@ -121,7 +124,7 @@ export type TransferData = SeedProvenance & {
 
 export type SetDataData = {
 	readonly nftId: string;
-	readonly instanceDna: string;
+	readonly nftDna: string;
 	readonly data?: Record<string, unknown> | undefined;
 	readonly mutableData?: Record<string, unknown> | undefined;
 	readonly seedId?: string | undefined;
@@ -138,7 +141,7 @@ export type DataOperatorApproveData = {
 
 export type SetDataFromData = SeedProvenance & {
 	readonly nftId: string;
-	readonly instanceDna: string;
+	readonly nftDna: string;
 	readonly data?: Record<string, unknown> | undefined;
 	readonly mutableData?: Record<string, unknown> | undefined;
 };

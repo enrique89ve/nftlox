@@ -13,9 +13,12 @@ import {
 	HASH_DOMAIN_COL,
 	HASH_DOMAIN_ORIGIN,
 	HASH_DOMAIN_SEED,
-	HASH_DOMAIN_INST,
 	HASH_DOMAIN_DNA,
 	HASH_DOMAIN_KEY,
+	// HASH_DOMAIN_INSTANCE is the salt for generateSeedDna. Despite the name
+	// referring to "instance" (kept for wire compatibility — changing the
+	// literal value would fork every seed hash), this domain strictly salts
+	// the SEED DNA preimage. The instance DNA uses HASH_DOMAIN_DNA below.
 	HASH_DOMAIN_INSTANCE,
 	HASH_DOMAIN_IMG,
 	HASH_DOMAIN_LISTING,
@@ -40,9 +43,11 @@ export async function generateOriginDna(collectionId: string): Promise<string> {
 	return "o" + fullHash.slice(0, ORIGIN_DNA_LENGTH - 1).toUpperCase();
 }
 
-// Instance DNA (NFT-level, deterministic from metadata)
-
-export async function generateInstanceDna(
+// Seed DNA — hashed from (seedId, originDna, edition, imageHash). The only
+// caller is `handleMint` / the SDK's `buildSeed` to produce a seed NFT's
+// identity. Stored in the `nfts.nft_dna` column (one DNA per row, seed or
+// instance). The name clarifies that this preimage is the seed-side formula.
+export async function generateSeedDna(
 	nftId: string,
 	originDna: string,
 	edition: number,
@@ -134,9 +139,12 @@ export function extractInstanceNumber(instanceId: string): number | null {
 	return parseInt(match[1], 10);
 }
 
-// Bulk-distribute deterministic DNA + access keys
-
-export async function generateDeterministicInstanceDna(
+// Instance DNA — hashed from (seedId, instanceNumber, txId, blockNum).
+// Called by `handleBulkDistribute` / the SDK's verifiers to derive an
+// instance's DNA deterministically from its parent seed plus the op
+// context. Preimage uses HASH_DOMAIN_DNA, distinct from seed DNA's
+// HASH_DOMAIN_INSTANCE — prevents cross-kind collisions by construction.
+export async function generateInstanceDna(
 	seedId: string,
 	instanceNumber: number,
 	txId: string,
@@ -148,11 +156,11 @@ export async function generateDeterministicInstanceDna(
 }
 
 export async function generateDeterministicAccessKey(
-	instanceDna: string,
+	nftDna: string,
 	owner: string,
 	txId: string,
 ): Promise<string> {
-	const input = `${HASH_DOMAIN_KEY}${instanceDna}:${owner}:${txId}`;
+	const input = `${HASH_DOMAIN_KEY}${nftDna}:${owner}:${txId}`;
 	const fullHash = await generateHash(input);
 	return fullHash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
 }
