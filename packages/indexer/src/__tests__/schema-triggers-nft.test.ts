@@ -55,6 +55,28 @@ async function expectQueryError(
 	expect(String(caught)).toMatch(pattern);
 }
 
+async function insertInstanceRow(id: string, seedId: string, collectionId: string, instanceNumber: number): Promise<void> {
+	const opId = `op-${id}`;
+	const txId = `tx-${id}`;
+	await sql`
+		INSERT INTO nfts (
+			id, collection_id, nft_type, status, edition, owner,
+			nft_dna, name, image_url, max_supply, distributed,
+			seed_id, instance_number, art_id,
+			immutable_data, data_operation_id, data_hash,
+			schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
+			created_operation_id, created_block_num, created_tx_id, created_at
+		) VALUES (
+			${id}, ${collectionId}, 'instance', 'active', 1, 'bob',
+			${"idna_" + id}, '', NULL, 0, 0,
+			${seedId}, ${instanceNumber}, NULL,
+			NULL, NULL, NULL,
+			0, NULL, ${opId}, 'bulk_distribute', 150,
+			${opId}, 150, ${txId}, NOW()
+		)
+	`;
+}
+
 afterAll(async () => {
 	await sql.end();
 });
@@ -210,6 +232,41 @@ describe("nfts triggers — immutable columns", () => {
 	});
 });
 
+describe("nfts schema — seed and instance uniqueness", () => {
+	beforeEach(resetFixture);
+
+	it("rejects duplicate seed art_id within the same collection", async () => {
+		await expectQueryError(
+			() => sql`
+				INSERT INTO nfts (
+					id, collection_id, nft_type, status, edition, owner,
+					nft_dna, name, image_url,
+					max_supply, distributed, seed_id, instance_number, art_id,
+					immutable_data, data_operation_id, data_hash,
+					schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
+					created_operation_id, created_block_num, created_tx_id, created_at
+				) VALUES (
+					'trigger-test-seed-dup-art', ${COLLECTION_ID}, 'seed', 'active', 1, 'alice',
+					NULL, 'DupArt', 'https://img.example/dup.png',
+					10, 0, NULL, NULL, 'art-trg-1',
+					NULL, 'op-dup-art', NULL,
+					0, NULL, 'op-dup-art', 'mint', 101,
+					'op-dup-art', 101, 'tx-dup-art', NOW()
+				)
+			`,
+			/idx_nfts_collection_art_unique|duplicate key/,
+		);
+	});
+
+	it("rejects duplicate instance_number within the same seed even with a different id", async () => {
+		await insertInstanceRow("trigger-test-inst-ord-1", NFT_ID, COLLECTION_ID, 1);
+		await expectQueryError(
+			() => insertInstanceRow("trigger-test-inst-ord-1-alt-id", NFT_ID, COLLECTION_ID, 1),
+			/idx_nfts_seed_instances|duplicate key/,
+		);
+	});
+});
+
 describe("nfts triggers — instance.collection_id matches parent seed", () => {
 	const OTHER_COLLECTION_ID = "trigger-test-coll-other";
 
@@ -359,28 +416,6 @@ describe("nfts triggers — enforce_max_instances (collection cap backstop)", ()
 		`;
 	}
 
-	async function insertInstance(id: string, seedId: string, collectionId: string, instanceNumber: number): Promise<void> {
-		const opId = `op-${id}`;
-		const txId = `tx-${id}`;
-		await sql`
-			INSERT INTO nfts (
-				id, collection_id, nft_type, status, edition, owner,
-				nft_dna, name, image_url,
-				max_supply, distributed, seed_id, instance_number, art_id,
-				immutable_data, data_operation_id, data_hash,
-				schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
-				created_operation_id, created_block_num, created_tx_id, created_at
-			) VALUES (
-				${id}, ${collectionId}, 'instance', 'active', 1, 'bob',
-				${"idna_" + id}, '', NULL,
-				0, 0, ${seedId}, ${instanceNumber}, NULL,
-				NULL, NULL, NULL,
-				0, NULL, ${opId}, 'bulk_distribute', 150,
-				${opId}, 150, ${txId}, NOW()
-			)
-		`;
-	}
-
 	it("rejects instance INSERT when would exceed collections.max_instances", async () => {
 		await seedCappedFixture(2);
 		// Simulate two instances already materialized — handler would have
@@ -389,7 +424,7 @@ describe("nfts triggers — enforce_max_instances (collection cap backstop)", ()
 		// inserting the fixture seed. Bump instances to simulate prior mints.
 		await sql`UPDATE collection_stats SET instances = 2 WHERE collection_id = ${CAPPED_COL}`;
 		await expectQueryError(
-			() => insertInstance("cap-test-inst-3", CAPPED_SEED, CAPPED_COL, 3),
+			() => insertInstanceRow("cap-test-inst-3", CAPPED_SEED, CAPPED_COL, 3),
 			/instance cap exceeded/,
 		);
 	});
@@ -397,7 +432,7 @@ describe("nfts triggers — enforce_max_instances (collection cap backstop)", ()
 	it("accepts instance INSERT when strictly below max_instances", async () => {
 		await seedCappedFixture(5);
 		await sql`UPDATE collection_stats SET instances = 2 WHERE collection_id = ${CAPPED_COL}`;
-		await insertInstance("cap-test-inst-ok", CAPPED_SEED, CAPPED_COL, 3);
+		await insertInstanceRow("cap-test-inst-ok", CAPPED_SEED, CAPPED_COL, 3);
 		const [row] = await sql`SELECT id FROM nfts WHERE id = 'cap-test-inst-ok'`;
 		expect(row?.id).toBe("cap-test-inst-ok");
 	});
@@ -407,7 +442,7 @@ describe("nfts triggers — enforce_max_instances (collection cap backstop)", ()
 		// Pretend the collection already has 10_000 instances; trigger must skip
 		// the check because cap = 0 means unlimited.
 		await sql`UPDATE collection_stats SET instances = 10000 WHERE collection_id = ${CAPPED_COL}`;
-		await insertInstance("cap-test-inst-unl", CAPPED_SEED, CAPPED_COL, 10001);
+		await insertInstanceRow("cap-test-inst-unl", CAPPED_SEED, CAPPED_COL, 10001);
 		const [row] = await sql`SELECT id FROM nfts WHERE id = 'cap-test-inst-unl'`;
 		expect(row?.id).toBe("cap-test-inst-unl");
 	});

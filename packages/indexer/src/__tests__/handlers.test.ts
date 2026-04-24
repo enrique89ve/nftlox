@@ -296,7 +296,7 @@ describe("Handlers (integration)", () => {
 		await sql.unsafe(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
 		const schemaFile = Bun.file(import.meta.dir + "/../db/schema.sql");
 		await sql.unsafe(await schemaFile.text());
-	});
+	}, 30_000); // 888-line schema reload: ~1s healthy, up to several seconds under contention. 30s margin breaks the cascade-failure pattern caused by bun's 5s default beforeAll timeout.
 
 	afterAll(async () => {
 		await cleanDb();
@@ -1246,6 +1246,91 @@ describe("Handlers (integration)", () => {
 			await expect(
 				withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "null" }), txn)),
 			).rejects.toThrow("listed");
+		});
+	});
+
+	// ─── seed provenance attestation ────────────────
+	//
+	// The optional `seedId` / `seedTxId` payload fields let an L1 reader trust
+	// an op's parent-seed provenance without a round-trip. The cross-cutting
+	// validator `validateSeedProvenance` (utils/seed-provenance.ts) is called
+	// by 8 handlers; tests exercise it via `transfer` as the simplest path.
+	// Branches that require a seed_id=NULL on an instance are defensive code
+	// (FK ON DELETE SET NULL + the seed-not-distributed guard make them
+	// unreachable through legitimate handler flow) and are omitted here.
+
+	describe("seed provenance attestation", () => {
+		test("accepts transfer carrying correct seedId and seedTxId", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+			const seedTxId = await getSeedTxId(SEED_TEST1);
+
+			const op = makeOp(ACTION_TRANSFER, {
+				nftId: instId,
+				to: "bob",
+				seedId: SEED_TEST1,
+				seedTxId,
+			});
+			await withTransaction((txn) => handleTransfer(op, txn));
+
+			const [nft] = await sql`SELECT owner FROM nfts WHERE id = ${instId}`;
+			expect(nft!.owner).toBe("bob");
+		});
+
+		test("rejects malformed seedId (non-string)", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+
+			const op = makeOp(ACTION_TRANSFER, { nftId: instId, to: "bob", seedId: 123 });
+			await expect(withTransaction((txn) => handleTransfer(op, txn))).rejects.toThrow(
+				"seedId must be a string",
+			);
+		});
+
+		test("rejects seed-provenance fields on a seed NFT (seeds have no parent)", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp(ACTION_TRANSFER, {
+				nftId: SEED_TEST1,
+				to: "bob",
+				seedId: SEED_TEST1,
+			});
+			await expect(withTransaction((txn) => handleTransfer(op, txn))).rejects.toThrow(
+				"Seed provenance cannot be declared on a seed NFT",
+			);
+		});
+
+		test("rejects mismatched seedId attestation", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+
+			const op = makeOp(ACTION_TRANSFER, {
+				nftId: instId,
+				to: "bob",
+				seedId: "seed_wrong",
+			});
+			await expect(withTransaction((txn) => handleTransfer(op, txn))).rejects.toThrow(
+				/Declared seedId 'seed_wrong' does not match actual/,
+			);
+		});
+
+		test("rejects mismatched seedTxId attestation", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+
+			const op = makeOp(ACTION_TRANSFER, {
+				nftId: instId,
+				to: "bob",
+				seedTxId: "tx_does_not_exist",
+			});
+			await expect(withTransaction((txn) => handleTransfer(op, txn))).rejects.toThrow(
+				/Declared seedTxId 'tx_does_not_exist' does not match actual/,
+			);
 		});
 	});
 

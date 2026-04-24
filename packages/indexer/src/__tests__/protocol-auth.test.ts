@@ -1,18 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-	ACTION_AUTH_LEVEL,
-	ACTION_BUY,
-	ACTION_CREATE_COLLECTION,
 	ACTION_NODE_REGISTER,
 	ACTION_TRANSFER,
-	ACTIVE_AUTH_ACTIONS,
-	ALL_ACTIONS,
-	POSTING_AUTH_ACTIONS,
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
 	PROTOCOL_GENESIS_BLOCK,
-	getAuthMismatchReason,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
 import { parseHafAHOperations } from "@/scanner/operation-parser.ts";
@@ -69,50 +62,10 @@ function makeCustomJsonOperationWithJson(
 	};
 }
 
-describe("protocol auth map", () => {
-	test("node_register uses posting custom_json auth", () => {
-		expect(ACTION_AUTH_LEVEL[ACTION_NODE_REGISTER]).toBe("posting");
-		expect(POSTING_AUTH_ACTIONS).toContain(ACTION_NODE_REGISTER);
-		expect(ACTIVE_AUTH_ACTIONS).not.toContain(ACTION_NODE_REGISTER);
-	});
-
-	test("create_collection, buy_commitment and buy are the active-auth actions", () => {
-		expect(ACTION_AUTH_LEVEL[ACTION_CREATE_COLLECTION]).toBe("active");
-		expect(ACTION_AUTH_LEVEL[ACTION_BUY]).toBe("active");
-		expect(Object.isFrozen(ACTION_AUTH_LEVEL)).toBe(true);
-		expect(ACTIVE_AUTH_ACTIONS).toHaveLength(3);
-		expect(ACTIVE_AUTH_ACTIONS).toContain(ACTION_CREATE_COLLECTION);
-		expect(ACTIVE_AUTH_ACTIONS).toContain(ACTION_BUY);
-		expect(POSTING_AUTH_ACTIONS).toHaveLength(17);
-		expect(ALL_ACTIONS).toHaveLength(20);
-	});
-
-	test("pack actions are not native indexer protocol actions", () => {
-		for (const action of ALL_ACTIONS) {
-			expect(action).not.toContain("pack");
-		}
-	});
-
-	test("auth mismatch messages are derived from the canonical map", () => {
-		expect(getAuthMismatchReason(ACTION_BUY, "active")).toEqual({ ok: true });
-		expect(getAuthMismatchReason(ACTION_BUY, "posting")).toEqual({
-			ok: false,
-			reason: "auth_mismatch",
-			message: "Action 'buy' requires active key authority, got posting",
-		});
-		expect(getAuthMismatchReason(ACTION_CREATE_COLLECTION, "posting")).toEqual({
-			ok: false,
-			reason: "auth_mismatch",
-			message: "Action 'create_collection' requires active key authority, got posting",
-		});
-		expect(getAuthMismatchReason(ACTION_NODE_REGISTER, "active")).toEqual({
-			ok: false,
-			reason: "auth_mismatch",
-			message: "Action 'node_register' requires posting key authority, got active",
-		});
-		expect(getAuthMismatchReason(ACTION_NODE_REGISTER, "posting")).toEqual({ ok: true });
-	});
-});
+// Protocol auth-map invariants (counts, getAuthLevel, getAuthMismatchReason,
+// pack-action exclusion) are owned by `protocol/tests/auth.test.ts` and
+// `protocol/tests/contract.test.ts`. This file's responsibility is the
+// indexer-side custom_json parser that bridges Hive ops into ParsedOperation.
 
 describe("protocol auth parser", () => {
 	test("accepts node_register with exactly one posting signer", () => {

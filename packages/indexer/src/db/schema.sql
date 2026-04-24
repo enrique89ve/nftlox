@@ -467,7 +467,10 @@ CREATE INDEX IF NOT EXISTS idx_collections_created_at ON collections(created_at 
 
 -- NFTs
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_created ON nfts(owner, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_nfts_seed_instances ON nfts(seed_id, instance_number) WHERE seed_id IS NOT NULL;
+-- Logical instance identity is (seed_id, instance_number). `id` is also
+-- deterministic from that tuple, but the DB must reject duplicate ordinals even
+-- if a future handler bug supplies a different id.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nfts_seed_instances ON nfts(seed_id, instance_number) WHERE seed_id IS NOT NULL;
 -- Serves bulk-distribute idempotency: WHERE seed_id = X AND created_operation_id = Y.
 CREATE INDEX IF NOT EXISTS idx_nfts_seed_created_operation ON nfts(seed_id, created_operation_id) WHERE seed_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_nfts_owner_type_status ON nfts(owner, nft_type, status, created_at DESC);
@@ -533,6 +536,24 @@ CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
 ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_block BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_time TIMESTAMPTZ;
 ALTER TABLE l2_nodes DROP COLUMN IF EXISTS public_key;
+
+-- Upgrade pre-existing DBs where idx_nfts_seed_instances was a non-unique
+-- lookup index. New DBs already created the UNIQUE form above; old DBs drop the
+-- non-unique index once and recreate it as the logical identity backstop.
+DO $$
+BEGIN
+	IF EXISTS (
+		SELECT 1
+		FROM pg_indexes
+		WHERE schemaname = current_schema()
+		  AND indexname = 'idx_nfts_seed_instances'
+		  AND indexdef NOT LIKE 'CREATE UNIQUE INDEX%'
+	) THEN
+		DROP INDEX idx_nfts_seed_instances;
+	END IF;
+END;
+$$;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nfts_seed_instances ON nfts(seed_id, instance_number) WHERE seed_id IS NOT NULL;
 
 -- ============================================================================
 -- TRIGGERS — defense-in-depth against projection corruption

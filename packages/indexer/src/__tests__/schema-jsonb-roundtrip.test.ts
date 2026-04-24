@@ -98,7 +98,7 @@ describe("JSONB round-trip for schema and immutableData", () => {
 		await sql.unsafe(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
 		const schemaFile = Bun.file(import.meta.dir + "/../db/schema.sql");
 		await sql.unsafe(await schemaFile.text());
-	});
+	}, 30_000); // 888-line schema reload: 30s margin breaks the cascade-failure pattern caused by bun's 5s default beforeAll timeout.
 
 	afterAll(async () => {
 		await cleanDb();

@@ -40,6 +40,15 @@ describe("protocol contract integrity", () => {
 		expect(Object.keys(ACTION_AUTH_LEVEL).sort()).toEqual([...ALL_ACTIONS].sort());
 	});
 
+	test("ALL_ACTIONS contains no pack-prefixed actions (packs are owned by packs-engine)", () => {
+		// Pack actions like `pack_buy` / `pack_open` were removed from the
+		// indexer protocol when packs moved into the standalone packs-engine
+		// package. This guard prevents accidental re-introduction.
+		for (const action of ALL_ACTIONS) {
+			expect(action).not.toContain("pack");
+		}
+	});
+
 	test("createPayload + createHiveOperation round-trips", () => {
 		const payload = createPayload("transfer", { nftId: "nft_1", from: "a", to: "b" });
 		const op = createHiveOperation(payload, "alice");
