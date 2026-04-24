@@ -47,6 +47,7 @@ import {
 	MEMO_PREFIX_FEE,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
+	generateOriginDna,
 	PROTOCOL_COLLECTION_FEE_HBD,
 } from "@/protocol/index.ts";
 import { makeOp as _makeOp } from "./helpers/make-op.ts";
@@ -91,10 +92,10 @@ async function cleanDb() {
  * from local config) and `handleCreateCollection` derives the creator from the
  * memo-bound fee transfer's `from` field.
  */
-function makeCreateCollectionOp(
+async function makeCreateCollectionOp(
 	data: Record<string, unknown>,
 	creator = "alice",
-): ParsedOperation {
+): Promise<ParsedOperation> {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 	const memo = `NFTLox FEE-COL:${String(data.id)}`;
 	const pairedTransfers = [
@@ -102,7 +103,10 @@ function makeCreateCollectionOp(
 	];
 	// Default `maxInstances: 0` (unlimited / no cap) so existing tests don't
 	// need to spell it out. Tests targeting the cap pass an explicit value.
-	const dataWithDefaults = { maxInstances: 0, ...data };
+	// Default `originDna` = canonical hash of id; tests targeting the
+	// autodescriptive-payload reject path override it with a bad value.
+	const defaultOriginDna = await generateOriginDna(String(data.id));
+	const dataWithDefaults = { maxInstances: 0, originDna: defaultOriginDna, ...data };
 	const op = makeOp(ACTION_CREATE_COLLECTION, dataWithDefaults, config.hiveAccount, pairedTransfers);
 	// Mirror the router's pre-handler payment dispatch so tests that invoke
 	// the handler directly see the same op.payment contract as production.
@@ -117,7 +121,7 @@ function makeCreateCollectionOp(
 }
 
 async function seedCollection(txn?: Queryable): Promise<void> {
-	const op = makeCreateCollectionOp({
+	const op = await makeCreateCollectionOp({
 		id: COL_ID,
 		name: "Test Collection",
 		symbol: "TEST",
@@ -185,6 +189,7 @@ async function makeMintOp(
 		collectionId,
 		edition: 1,
 		owner: "alice",
+		nftType: "seed",
 		maxSupply: 10,
 		metadata: { name: `Seed ${artId}`, imageUrl: "https://example.com/nft.png", imageHash: `img_${artId}` },
 		...overrides,
@@ -320,7 +325,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects non-canonical collectionId", async () => {
-			const op = makeCreateCollectionOp({
+			const op = await makeCreateCollectionOp({
 				id: "col_fake_id_12345",
 				name: "Test Collection",
 				symbol: "TEST",
@@ -331,8 +336,13 @@ describe("Handlers (integration)", () => {
 			await expect(withTransaction((txn) => handleCreateCollection(op, txn))).rejects.toThrow("Non-canonical collectionId");
 		});
 
-		test("ignores payload-only originDna on collection creation", async () => {
-			const op = makeCreateCollectionOp({
+		test("rejects non-canonical originDna on collection creation", async () => {
+			// Autodescriptive-payload principle: the custom_json must carry the
+			// correct origin_dna so an auditor can validate it offline. The
+			// handler recomputes canonical = generateOriginDna(id) and rejects
+			// any payload whose origin_dna does not match — same discipline as
+			// the id/artId canonical checks.
+			const op = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -341,13 +351,12 @@ describe("Handlers (integration)", () => {
 				metadata: { description: "Test", image: "https://example.com/img.png" },
 				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
-			await withTransaction((txn) => handleCreateCollection(op, txn));
-			const [row] = await sql`SELECT id, name FROM collections WHERE id = ${COL_ID}`;
-			expect(row).toMatchObject({ id: COL_ID, name: "Test Collection" });
+			await expect(withTransaction((txn) => handleCreateCollection(op, txn)))
+				.rejects.toThrow(/Non-canonical originDna/);
 		});
 
 		test("rejects missing metadata", async () => {
-			const op = makeCreateCollectionOp({
+			const op = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -358,7 +367,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects missing metadata.description", async () => {
-			const op = makeCreateCollectionOp({
+			const op = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -370,7 +379,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects missing rules", async () => {
-			const op = makeCreateCollectionOp({
+			const op = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -381,7 +390,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects missing rules.transferable", async () => {
-			const op = makeCreateCollectionOp({
+			const op = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -393,7 +402,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects royaltyPct out of range", async () => {
-			const op = makeCreateCollectionOp({
+			const op = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -405,7 +414,7 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects negative totalPotential", async () => {
-			const op = makeCreateCollectionOp({
+			const op = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
@@ -542,20 +551,26 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			const { op, id: dnaSeedId } = await makeMintOp("dna_test", {
 				originDna: "FAKE_ORIGIN_DNA",
-				instanceDna: "FAKE_INSTANCE_DNA",
+				nftDna: "FAKE_NFT_DNA",
 				uniqueAccessKey: "FAKEKEY1",
 				metadata: { name: "DNA Test", imageHash: "hash_abc" },
 			});
 			await withTransaction((txn) => handleMint(op, txn));
 
-			const [nft] = await sql`SELECT origin_dna, instance_dna FROM nfts WHERE id = ${dnaSeedId}`;
+			const [nft] = await sql`
+				SELECT c.origin_dna, n.nft_dna
+				FROM nfts n
+				JOIN collections c ON c.id = n.collection_id
+				WHERE n.id = ${dnaSeedId}
+			`;
 			expect(nft).toBeDefined();
-			// Must NOT be the fake values
+			// Must NOT be the fake values — origin_dna is derived from collection
+			// id on create_collection; nft_dna is derived on mint.
 			expect(nft!.origin_dna).not.toBe("FAKE_ORIGIN_DNA");
-			expect(nft!.instance_dna).not.toBe("FAKE_INSTANCE_DNA");
+			expect(nft!.nft_dna).not.toBe("FAKE_NFT_DNA");
 			// Must be non-null (computed)
 			expect(nft!.origin_dna).toBeTruthy();
-			expect(nft!.instance_dna).toBeTruthy();
+			expect(nft!.nft_dna).toBeTruthy();
 		});
 
 		test("mint DNA is deterministic across replays", async () => {
@@ -567,7 +582,7 @@ describe("Handlers (integration)", () => {
 			(op1 as any).txId = "tx_fixed_replay";
 			await withTransaction((txn) => handleMint(op1, txn));
 
-			const [nft1] = await sql`SELECT instance_dna FROM nfts WHERE id = ${replayId}`;
+			const [nft1] = await sql`SELECT nft_dna FROM nfts WHERE id = ${replayId}`;
 
 			// Clean and replay with same txId
 			await sql`DELETE FROM nfts WHERE id = ${replayId}`;
@@ -575,15 +590,15 @@ describe("Handlers (integration)", () => {
 			(op2 as any).txId = "tx_fixed_replay";
 			await withTransaction((txn) => handleMint(op2, txn));
 
-			const [nft2] = await sql`SELECT instance_dna FROM nfts WHERE id = ${replayId}`;
-			expect(nft1!.instance_dna).toBe(nft2!.instance_dna);
+			const [nft2] = await sql`SELECT nft_dna FROM nfts WHERE id = ${replayId}`;
+			expect(nft1!.nft_dna).toBe(nft2!.nft_dna);
 		});
 
 		test("rejects non-canonical seedId (e.g. instance-shaped id)", async () => {
 			await seedCollection();
 
 			// Payload supplies a non-canonical id — canonical enforcement fires
-			// before resolveNftType, so this path now rejects on hash mismatch.
+			// before nftType check, so this path rejects on hash mismatch.
 			const instOp = makeOp(ACTION_MINT, {
 				id: "nft_bbb_1_ccc",
 				artId: "canonical_mismatch",
@@ -603,7 +618,23 @@ describe("Handlers (integration)", () => {
 				metadata: { name: "Fake Instance" },
 			});
 			await expect(withTransaction((txn) => handleMint(op, txn))).rejects.toThrow(
-				"Only seeds can be minted directly",
+				/mint requires nftType="seed"/,
+			);
+		});
+
+		test("rejects payload missing nftType (must be self-describing)", async () => {
+			// Payload-autodescription principle: custom_json must declare the kind
+			// explicitly. The handler no longer infers from id prefix — omitting
+			// nftType is now a hard reject so an auditor can recreate ownership
+			// purely from the on-chain payload.
+			await seedCollection();
+
+			const { op } = await makeMintOp("no_type", {
+				nftType: undefined,
+				metadata: { name: "Untyped" },
+			});
+			await expect(withTransaction((txn) => handleMint(op, txn))).rejects.toThrow(
+				/nftType/,
 			);
 		});
 
@@ -643,15 +674,17 @@ describe("Handlers (integration)", () => {
 			await withTransaction((txn) => handleBulkDistribute(op, txn));
 
 			const instances = await sql`
-				SELECT origin_dna, instance_dna
-				FROM nfts WHERE seed_id = ${SEED_TEST1} ORDER BY instance_number
+				SELECT c.origin_dna, n.nft_dna
+				FROM nfts n
+				JOIN collections c ON c.id = n.collection_id
+				WHERE n.seed_id = ${SEED_TEST1} ORDER BY n.instance_number
 			`;
 			for (const inst of instances) {
 				expect(inst.origin_dna).toBeTruthy();
-				expect(inst.instance_dna).toBeTruthy();
+				expect(inst.nft_dna).toBeTruthy();
 			}
 			// Different instances should have different DNA
-			expect(instances[0]!.instance_dna).not.toBe(instances[1]!.instance_dna);
+			expect(instances[0]!.nft_dna).not.toBe(instances[1]!.nft_dna);
 		});
 
 		test("rejects distribute by non-owner", async () => {
@@ -1086,7 +1119,8 @@ describe("Handlers (integration)", () => {
 				"alice", "Locked Collection", "LOCK",
 				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
-			await withTransaction((txn) => handleCreateCollection(makeCreateCollectionOp(colData, "alice"), txn));
+			const createOp = await makeCreateCollectionOp(colData, "alice");
+			await withTransaction((txn) => handleCreateCollection(createOp, txn));
 
 			const { op: mintOp, id: lockedId } = await makeMintOp("locked1", {
 				collectionId: colId,
@@ -1152,7 +1186,8 @@ describe("Handlers (integration)", () => {
 				"alice", "No Burn", "NOBRN",
 				{ rules: { transferable: true, burnable: false, royaltyPct: 0 } },
 			);
-			await withTransaction((txn) => handleCreateCollection(makeCreateCollectionOp(colData, "alice"), txn));
+			const createOp = await makeCreateCollectionOp(colData, "alice");
+			await withTransaction((txn) => handleCreateCollection(createOp, txn));
 			const { op: noBurnOp, id: noBurnId } = await makeMintOp("noburn1", {
 				collectionId: colId, metadata: { name: "No Burn Seed" },
 			});
@@ -1234,7 +1269,7 @@ describe("Handlers (integration)", () => {
 			).rejects.toThrow("must be in the future");
 		});
 
-		test("queries, stats, cleanup, and payment-info only expose active instance listings", async () => {
+		test("queries, stats, cleanup, and payment-info only expose active instance listings without mutating expired rows", async () => {
 			await seedCollection();
 			await seedMint();
 			const activeInstId = await seedInstance();
@@ -1293,14 +1328,29 @@ describe("Handlers (integration)", () => {
 			expect(await paymentResponse.json()).toEqual({ error: "Only instances can be bought" });
 
 			const cleanup = await cleanupInvalidMarketplaceListings(sql);
-			expect(cleanup.clearedListings).toBe(2);
+			expect(cleanup.clearedListings).toBe(1);
+			expect(cleanup.reconciledCollections).toBe(1);
 
-			const [legacyState] = await sql`
-				SELECT COUNT(*)::int AS count FROM nfts
-				WHERE id IN (${SEED_TEST1}, ${expiredInstId})
-					AND status = 'listed'
+			const [legacySeedState] = await sql`
+				SELECT status, listing_id FROM nfts
+				WHERE id = ${SEED_TEST1}
 			`;
-			expect(legacyState!.count).toBe(0);
+			expect(legacySeedState).toMatchObject({ status: "active", listing_id: null });
+
+			const [expiredState] = await sql`
+				SELECT status, listing_id FROM nfts
+				WHERE id = ${expiredInstId}
+			`;
+			expect(expiredState).toMatchObject({
+				status: "listed",
+				listing_id: "expired_instance_listing",
+			});
+
+			const [counterState] = await sql`
+				SELECT listed::int AS listed FROM collection_stats
+				WHERE collection_id = ${COL_ID}
+			`;
+			expect(counterState!.listed).toBe(2);
 			expect(await getCollectionStats(COL_ID)).toMatchObject({ total_listed: 1 });
 		});
 
@@ -1309,7 +1359,8 @@ describe("Handlers (integration)", () => {
 				"alice", "No Transfer Collection", "NOTX",
 				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
-			await withTransaction((txn) => handleCreateCollection(makeCreateCollectionOp(colData, "alice"), txn));
+			const createOp = await makeCreateCollectionOp(colData, "alice");
+			await withTransaction((txn) => handleCreateCollection(createOp, txn));
 
 			const { op: mintOp, id: noTransferId } = await makeMintOp("notransfer1", {
 				collectionId: colId,
@@ -1330,7 +1381,8 @@ describe("Handlers (integration)", () => {
 				"alice", "No Buy Collection", "NOBUY",
 				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
-			await withTransaction((txn) => handleCreateCollection(makeCreateCollectionOp(colData, "alice"), txn));
+			const createOp = await makeCreateCollectionOp(colData, "alice");
+			await withTransaction((txn) => handleCreateCollection(createOp, txn));
 
 			const { op: noBuyMintOp, id: noBuyId } = await makeMintOp("nobuy1", {
 				collectionId: colId,
@@ -1653,7 +1705,8 @@ describe("Handlers (integration)", () => {
 				"alice", "No Lend", "NOLND",
 				{ rules: { transferable: false, burnable: true, royaltyPct: 0 } },
 			);
-			await withTransaction((txn) => handleCreateCollection(makeCreateCollectionOp(colData, "alice"), txn));
+			const createOp = await makeCreateCollectionOp(colData, "alice");
+			await withTransaction((txn) => handleCreateCollection(createOp, txn));
 			const { op: mintOp, id: noLendId } = await makeMintOp("nolend1", {
 				collectionId: colId, maxSupply: 10,
 				metadata: { name: "No Lend Seed" },
@@ -1918,7 +1971,7 @@ describe("Handlers (integration)", () => {
 			// Payload no longer carries `creator` — indexer resolves it purely from
 			// `transfer.from`. Any stray `creator` key on `data` must be ignored (not
 			// validated) because the field has been removed from the protocol type.
-			const op = makeCreateCollectionOp(colData, "alice");
+			const op = await makeCreateCollectionOp(colData, "alice");
 			await withTransaction((txn) => handleCreateCollection(op, txn));
 
 			const [row] = await sql`SELECT creator FROM collections WHERE id = ${colId}`;
@@ -2403,12 +2456,12 @@ describe("Handlers (integration)", () => {
 			await seedMint();
 			const instId = await seedInstance();
 
-			const [nft] = await sql`SELECT instance_dna FROM nfts WHERE id = ${instId}`;
+			const [nft] = await sql`SELECT nft_dna FROM nfts WHERE id = ${instId}`;
 
 			// bob (not an operator) tries set_data_from — must fail
 			const op = makeOp(ACTION_SET_DATA_FROM, {
 				nftId: instId,
-				instanceDna: nft!.instance_dna,
+				nftDna: nft!.nft_dna,
 				mutableData: { level: 99 },
 			}, "bob");
 

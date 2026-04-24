@@ -3,12 +3,14 @@ import { sql } from "@/db/client.ts";
 export async function seedCollection(id: string, seller: string): Promise<void> {
 	await sql`
 		INSERT INTO collections (
-			id, name, symbol, creator, total_potential, max_instances,
+			id, name, symbol, creator, origin_dna,
+			total_potential, max_instances,
 			transferable, burnable, royalty_pct, royalty_recipient,
 			block_num, tx_id, created_at
 		)
 		VALUES (
-			${id}, ${"Coll " + id}, ${"SYM"}, ${seller}, 100, 0,
+			${id}, ${"Coll " + id}, ${"SYM"}, ${seller}, ${"odna_" + id},
+			100, 0,
 			true, true, 0, NULL,
 			90000000, ${("col_tx_" + id).padEnd(40, "0").slice(0, 40)}, NOW()
 		)
@@ -37,14 +39,14 @@ export async function insertListedInstance(params: {
 	await sql`
 		INSERT INTO nfts (
 			id, collection_id, nft_type, status, edition, owner, name,
-			image_url, origin_dna, instance_dna, max_supply, distributed, reserved_supply,
+			image_url, nft_dna, max_supply, distributed, reserved_supply,
 			previous_owner, owner_operation_id, owner_action, owner_block_num,
 			listing_id, listing_tx_id, listing_price, listing_currency,
 			listing_expires_at, listing_marketplace,
 			created_operation_id, created_block_num, created_tx_id, created_at
 		) VALUES (
 			${params.nftId}, ${params.collectionId}, 'instance', 'listed', 1, ${params.seller}, 'test',
-			'https://img.example/i.png', ${"0".repeat(32)}, ${"1".repeat(40)}, 0, 0, 0,
+			'https://img.example/i.png', ${"1".repeat(40)}, 0, 0, 0,
 			NULL, ${opId}, 'mint', 90000001,
 			${params.listingId}, ${params.listTxId}, ${price}, 'HIVE',
 			${expiresAtIso}, NULL,

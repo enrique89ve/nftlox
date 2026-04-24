@@ -15,8 +15,8 @@ async function truncateNftsTx(): Promise<void> {
 async function seedCollection(): Promise<string> {
 	const collectionId = `test-coll-${Date.now()}`;
 	await sql`
-		INSERT INTO collections (id, name, symbol, creator, block_num, tx_id, created_at)
-		VALUES (${collectionId}, 'Test', 'TST0001', 'alice', 100, 'tx-seed-coll', NOW())
+		INSERT INTO collections (id, name, symbol, creator, origin_dna, block_num, tx_id, created_at)
+		VALUES (${collectionId}, 'Test', 'TST0001', 'alice', 'odna_sr', 100, 'tx-seed-coll', NOW())
 	`;
 	return collectionId;
 }
@@ -34,7 +34,7 @@ describe("state-root deferred flush", () => {
 				const id = `nft-${i}`;
 				await insertNft({
 					id, collectionId, nftType: "seed", edition: 1, owner: "alice",
-					originDna: null, instanceDna: null,
+					nftDna: null,
 					name: `N${i}`, imageUrl: null,
 					maxSupply: 1, seedId: null, instanceNumber: null, artId: `art-${i}`,
 					immutableData: null, dataOperationId: null, dataHash: null,
@@ -66,7 +66,7 @@ describe("state-root deferred flush", () => {
 		await withTransaction(async (txn) => {
 			await insertNft({
 				id: "ephemeral", collectionId, nftType: "seed", edition: 1, owner: "alice",
-				originDna: null, instanceDna: null,
+				nftDna: null,
 				name: "ephemeral", imageUrl: null,
 				maxSupply: 1, seedId: null, instanceNumber: null, artId: "eph",
 				immutableData: null, dataOperationId: null, dataHash: null,

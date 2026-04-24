@@ -22,6 +22,7 @@ import {
 	generateDeterministicSeedId,
 	generateListingId,
 	generateListingNonce,
+	generateOriginDna,
 } from "@/protocol/index.ts";
 import { config } from "@/config.ts";
 
@@ -33,10 +34,10 @@ async function cleanDb(): Promise<void> {
 	await sql`DELETE FROM sales`;
 	await sql`DELETE FROM nft_allowances`;
 	await sql`DELETE FROM collection_allowances`;
-	await sql`DELETE FROM nfts`;
-	await sql`DELETE FROM owner_nft_counts`;
-	await sql`DELETE FROM collection_stats`;
-	await sql`DELETE FROM collections`;
+	// TRUNCATE nfts (and counters/collections downstream via CASCADE) skips
+	// per-row triggers — necessary because tests corrupt owner_nft_counts
+	// on purpose and the AFTER DELETE counter trigger would then RAISE.
+	await sql`TRUNCATE nfts, owner_nft_counts, collection_stats, collections RESTART IDENTITY CASCADE`;
 	await sql`DELETE FROM invalid_operations`;
 	await sql`DELETE FROM confirmed_operations`;
 	await sql`DELETE FROM orphaned_buys`;
@@ -70,6 +71,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 					id: COL_ID,
 					name: COL_NAME,
 					symbol: COL_SYMBOL,
+					originDna: await generateOriginDna(COL_ID),
 					totalPotential: 10,
 					maxInstances: 0,
 					metadata: { description: "x", image: "https://example.com/x.png" },
@@ -109,6 +111,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "alice",
+					nftType: "seed",
 					maxSupply: 5,
 				},
 			};
@@ -177,6 +180,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 					id: COL_ID,
 					name: COL_NAME,
 					symbol: COL_SYMBOL,
+					originDna: await generateOriginDna(COL_ID),
 					totalPotential: 10,
 					maxInstances: 0,
 					metadata: { description: "x", image: "https://example.com/x.png" },
@@ -216,6 +220,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "alice",
+					nftType: "seed",
 					maxSupply: 5,
 				},
 			};

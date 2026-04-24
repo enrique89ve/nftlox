@@ -15,10 +15,10 @@ async function resetFixture(): Promise<void> {
 	await sql`TRUNCATE TABLE collections CASCADE`;
 	await sql`
 		INSERT INTO collections (
-			id, name, symbol, creator, total_potential,
+			id, name, symbol, creator, origin_dna, total_potential,
 			block_num, tx_id, created_at
 		) VALUES (
-			${COL_ID}, 'SVTrig', 'SVTRG01', 'alice', 10,
+			${COL_ID}, 'SVTrig', 'SVTRG01', 'alice', 'odna_sv', 10,
 			500, 'tx-sv-coll', NOW()
 		)
 	`;

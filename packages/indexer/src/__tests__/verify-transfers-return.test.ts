@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { verifyTransfers } from "@/utils/validation.ts";
+import { planVerifiedTransfers, verifyTransfers } from "@/utils/validation.ts";
 
 describe("verifyTransfers return shape", () => {
 	test("returns split + buyerFromTransfer + consumedIndices", () => {
@@ -24,5 +24,50 @@ describe("verifyTransfers return shape", () => {
 		expect(result.consumedIndices.length).toBe(2);
 		expect(result.consumedIndices).toContain(0);
 		expect(result.consumedIndices).toContain(1);
+	});
+
+	test("planVerifiedTransfers is pure and does not mutate consumedIndices", () => {
+		const consumed = new Set<number>();
+		const transfers = [
+			{ from: "buyer", to: "seller", amount: 0.99, currency: "HIVE", memo: "NFTLox BUY:inst_x" },
+			{ from: "buyer", to: "nftlox", amount: 0.01, currency: "HIVE", memo: "NFTLox FEE:inst_x" },
+		];
+
+		const result = planVerifiedTransfers({
+			transfers,
+			seller: "seller",
+			totalPrice: 1.0,
+			currency: "HIVE",
+			royaltyPct: 0,
+			royaltyRecipient: null,
+			feeAccount: "nftlox",
+			nftId: "inst_x",
+			consumedIndices: consumed,
+		});
+
+		expect(result.consumedIndices).toEqual([0, 1]);
+		expect(consumed.size).toBe(0);
+	});
+
+	test("rejects ambiguous duplicate fee legs", () => {
+		const transfers = [
+			{ from: "buyer", to: "seller", amount: 0.99, currency: "HIVE", memo: "NFTLox BUY:inst_x" },
+			{ from: "buyer", to: "nftlox", amount: 0.01, currency: "HIVE", memo: "NFTLox FEE:inst_x" },
+			{ from: "buyer", to: "nftlox", amount: 0.01, currency: "HIVE", memo: "NFTLox FEE:inst_x" },
+		];
+
+		expect(() =>
+			planVerifiedTransfers({
+				transfers,
+				seller: "seller",
+				totalPrice: 1.0,
+				currency: "HIVE",
+				royaltyPct: 0,
+				royaltyRecipient: null,
+				feeAccount: "nftlox",
+				nftId: "inst_x",
+				consumedIndices: new Set<number>(),
+			}),
+		).toThrow(/Ambiguous protocol fee/);
 	});
 });

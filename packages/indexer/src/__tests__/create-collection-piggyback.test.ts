@@ -9,6 +9,7 @@ import {
 	INSTANCE_FEE_PER_N,
 	MAX_INSTANCES_PER_COLLECTION,
 	generateDeterministicCollectionId,
+	generateOriginDna,
 } from "@/protocol/index.ts";
 import { config } from "@/config.ts";
 import { seedActiveSettlementNode } from "./helpers/settlement-node.ts";
@@ -24,7 +25,7 @@ async function seedNodeForTests(): Promise<void> {
 	await seedActiveSettlementNode(config.hiveAccount);
 }
 
-function buildCreateCollectionOp(args: {
+async function buildCreateCollectionOp(args: {
 	canonicalId: string;
 	name: string;
 	symbol: string;
@@ -32,8 +33,9 @@ function buildCreateCollectionOp(args: {
 	memo: string;
 	operationId: string;
 	maxInstances?: number;
-}): ParsedOperation {
+}): Promise<ParsedOperation> {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
+	const originDna = await generateOriginDna(args.canonicalId);
 	return {
 		blockNum: 1,
 		timestamp: new Date().toISOString(),
@@ -47,6 +49,7 @@ function buildCreateCollectionOp(args: {
 			id: args.canonicalId,
 			name: args.name,
 			symbol: args.symbol,
+			originDna,
 			totalPotential: 5,
 			maxInstances: args.maxInstances ?? 0,
 			metadata: { description: "piggy test", image: "https://example.com/x.png" },
@@ -67,7 +70,7 @@ describe("create_collection — memo binding prevents piggyback", () => {
 
 	test("transfer without FEE-COL memo is rejected by router", async () => {
 		const canonicalId = await generateDeterministicCollectionId("alice", "PiggyA", "PIGA");
-		const op = buildCreateCollectionOp({
+		const op = await buildCreateCollectionOp({
 			canonicalId,
 			name: "PiggyA",
 			symbol: "PIGA",
@@ -87,7 +90,7 @@ describe("create_collection — memo binding prevents piggyback", () => {
 
 	test("transfer with correct FEE-COL memo is accepted", async () => {
 		const canonicalId = await generateDeterministicCollectionId("alice", "PiggyB", "PIGB");
-		const op = buildCreateCollectionOp({
+		const op = await buildCreateCollectionOp({
 			canonicalId,
 			name: "PiggyB",
 			symbol: "PIGB",
@@ -106,7 +109,7 @@ describe("create_collection — memo binding prevents piggyback", () => {
 
 	test("transfer whose memo targets a different collectionId is rejected", async () => {
 		const canonicalId = await generateDeterministicCollectionId("alice", "PiggyC", "PIGC");
-		const op = buildCreateCollectionOp({
+		const op = await buildCreateCollectionOp({
 			canonicalId,
 			name: "PiggyC",
 			symbol: "PIGC",
@@ -136,7 +139,7 @@ describe("create_collection — maxInstances protocol cap", () => {
 		// cap, not the granularity rule).
 		const oversized = MAX_INSTANCES_PER_COLLECTION + INSTANCE_FEE_PER_N;
 		const canonicalId = await generateDeterministicCollectionId("alice", "CapOver", "CAPOV");
-		const op = buildCreateCollectionOp({
+		const op = await buildCreateCollectionOp({
 			canonicalId,
 			name: "CapOver",
 			symbol: "CAPOV",
@@ -158,7 +161,7 @@ describe("create_collection — maxInstances protocol cap", () => {
 
 	test(`maxInstances exactly at ${MAX_INSTANCES_PER_COLLECTION} is accepted`, async () => {
 		const canonicalId = await generateDeterministicCollectionId("alice", "CapEdge", "CAPED");
-		const op = buildCreateCollectionOp({
+		const op = await buildCreateCollectionOp({
 			canonicalId,
 			name: "CapEdge",
 			symbol: "CAPED",

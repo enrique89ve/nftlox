@@ -15,6 +15,7 @@ import {
 	PROTOCOL_COLLECTION_FEE_HBD,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
+	generateOriginDna,
 } from "@/protocol/index.ts";
 
 // The immutable namespace freezes at the first seed mint. Before any mint the
@@ -62,12 +63,14 @@ async function createCollectionWithSchema(): Promise<void> {
 	const pairedTransfers = [
 		{ from: "alice", to: config.hiveAccount, amount: feeAmount, currency: "HBD", memo },
 	];
+	const originDna = await generateOriginDna(COL_ID);
 	const op = makeOp(
 		ACTION_CREATE_COLLECTION,
 		{
 			id: COL_ID,
 			name: "FrozenTest",
 			symbol: "FROZEN",
+			originDna,
 			totalPotential: 100,
 			maxInstances: 0,
 			metadata: { description: "freeze test", image: "https://example.com/img.png" },
@@ -98,6 +101,7 @@ async function mintSeed(): Promise<string> {
 		artId: "seed1",
 		edition: 1,
 		owner: "alice",
+		nftType: "seed",
 		maxSupply: 10,
 		metadata: { name: "Seed 1", imageUrl: "https://example.com/nft.png", imageHash: "img_seed1" },
 		immutableData: { rarity: 5 },

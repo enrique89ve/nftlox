@@ -10,6 +10,7 @@ import {
 	ACTION_TRANSFER,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
+	generateOriginDna,
 	PROTOCOL_COLLECTION_FEE_HBD,
 } from "@/protocol/index.ts";
 import { config } from "@/config.ts";
@@ -48,14 +49,15 @@ function makeOp(
 	return op;
 }
 
-function makeCreateCollectionOp(
+async function makeCreateCollectionOp(
 	data: Record<string, unknown>,
 	creator = "alice",
 	overrides: { txId?: string; operationId?: string; blockNum?: number } = {},
-): ParsedOperation {
+): Promise<ParsedOperation> {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 	const memo = `NFTLox FEE-COL:${String(data.id)}`;
-	const dataWithDefaults = { maxInstances: 0, ...data };
+	const defaultOriginDna = await generateOriginDna(String(data.id));
+	const dataWithDefaults = { maxInstances: 0, originDna: defaultOriginDna, ...data };
 	const op = makeOp(ACTION_CREATE_COLLECTION, dataWithDefaults, {
 		...overrides,
 		signer: config.hiveAccount,
@@ -100,7 +102,7 @@ describe("crash recovery", () => {
 
 		// Setup: Create collection and mint NFT (direct handlers, not via router)
 		await withTransaction(async (txn) => {
-			const createOp = makeCreateCollectionOp(
+			const createOp = await makeCreateCollectionOp(
 				{
 					id: COL_ID,
 					name: COL_NAME,
@@ -121,6 +123,7 @@ describe("crash recovery", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "alice",
+					nftType: "seed",
 					maxSupply: 5,
 				},
 				{ signer: "alice" },
@@ -185,7 +188,7 @@ describe("crash recovery", () => {
 
 		// Setup
 		await withTransaction(async (txn) => {
-			const createOp = makeCreateCollectionOp(
+			const createOp = await makeCreateCollectionOp(
 				{
 					id: COL_ID,
 					name: COL_NAME,
@@ -211,6 +214,7 @@ describe("crash recovery", () => {
 						collectionId: COL_ID,
 						edition: 1,
 						owner,
+						nftType: "seed",
 						maxSupply: 5,
 					},
 					{ signer: "alice" },

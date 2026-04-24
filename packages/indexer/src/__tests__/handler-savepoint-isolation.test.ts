@@ -12,6 +12,7 @@ import {
 	PROTOCOL_VERSION,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
+	generateOriginDna,
 	PROTOCOL_COLLECTION_FEE_HBD,
 } from "@/protocol/index.ts";
 import { config } from "@/config.ts";
@@ -57,14 +58,15 @@ function makeOp(
 	};
 }
 
-function makeCreateCollectionOp(
+async function makeCreateCollectionOp(
 	data: Record<string, unknown>,
 	creator = "alice",
 	overrides: { txId?: string; operationId?: string; blockNum?: number } = {},
-): ParsedOperation {
+): Promise<ParsedOperation> {
 	const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 	const memo = `NFTLox FEE-COL:${String(data.id)}`;
-	const dataWithDefaults = { maxInstances: 0, ...data };
+	const defaultOriginDna = await generateOriginDna(String(data.id));
+	const dataWithDefaults = { maxInstances: 0, originDna: defaultOriginDna, ...data };
 	const op = makeOp(ACTION_CREATE_COLLECTION, dataWithDefaults, {
 		...overrides,
 		signer: config.hiveAccount,
@@ -83,12 +85,11 @@ function makeCreateCollectionOp(
 }
 
 async function cleanDb() {
-	await sql`DELETE FROM nfts`;
-	await sql`DELETE FROM owner_nft_counts`;
-	await sql`DELETE FROM collection_stats`;
-	await sql`DELETE FROM collections`;
-	await sql`DELETE FROM invalid_operations`;
-	await sql`DELETE FROM confirmed_operations`;
+	// TRUNCATE instead of per-row DELETE: the AFTER DELETE counter trigger
+	// would fire on every row and crash when tests have pre-emptively
+	// invalidated owner_nft_counts to force a handler failure. TRUNCATE
+	// skips per-row triggers and resets every table atomically.
+	await sql`TRUNCATE nfts, owner_nft_counts, collection_stats, collections, invalid_operations, confirmed_operations RESTART IDENTITY CASCADE`;
 }
 
 describe("handler savepoint isolation", () => {
@@ -104,7 +105,7 @@ describe("handler savepoint isolation", () => {
 		const seedIdA = await canonicalSeedId(ART_ID_A, COL_ID);
 
 		await withTransaction(async (txn) => {
-			const createOp = makeCreateCollectionOp({
+			const createOp = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: COL_NAME,
 				symbol: COL_SYMBOL,
@@ -120,6 +121,7 @@ describe("handler savepoint isolation", () => {
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
+				nftType: "seed",
 				maxSupply: 5,
 			});
 			await handleMint(mintOp, txn);
@@ -160,7 +162,7 @@ describe("handler savepoint isolation", () => {
 		const seedIdA = await canonicalSeedId(ART_ID_A, COL_ID);
 
 		await withTransaction(async (txn) => {
-			const createOp = makeCreateCollectionOp({
+			const createOp = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: COL_NAME,
 				symbol: COL_SYMBOL,
@@ -178,6 +180,7 @@ describe("handler savepoint isolation", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "charlie",
+					nftType: "seed",
 					maxSupply: 5,
 				},
 				{ signer: "alice" },
@@ -210,7 +213,7 @@ describe("handler savepoint isolation", () => {
 		const seedIdB = await canonicalSeedId(ART_ID_B, COL_ID);
 
 		await withTransaction(async (txn) => {
-			const createOp = makeCreateCollectionOp({
+			const createOp = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: COL_NAME,
 				symbol: COL_SYMBOL,
@@ -228,6 +231,7 @@ describe("handler savepoint isolation", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "alice",
+					nftType: "seed",
 					maxSupply: 5,
 				},
 				{ signer: "alice" },
@@ -242,6 +246,7 @@ describe("handler savepoint isolation", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "charlie",
+					nftType: "seed",
 					maxSupply: 5,
 				},
 				{ signer: "alice" },

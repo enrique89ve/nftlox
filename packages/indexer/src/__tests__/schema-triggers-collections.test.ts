@@ -12,13 +12,13 @@ async function resetFixture(): Promise<void> {
 	await sql`TRUNCATE TABLE collections CASCADE`;
 	await sql`
 		INSERT INTO collections (
-			id, name, symbol, creator, total_potential,
+			id, name, symbol, creator, origin_dna, total_potential,
 			description, image_url, external_url,
 			transferable, burnable, royalty_pct, royalty_recipient,
 			schema, schema_version,
 			block_num, tx_id, created_at
 		) VALUES (
-			${COL_ID}, 'TrigColl', 'TRCOL01', 'alice', 100,
+			${COL_ID}, 'TrigColl', 'TRCOL01', 'alice', 'odna_trigcoll', 100,
 			'A collection', 'https://img/c.png', 'https://x/c',
 			TRUE, TRUE, 5.00, 'alice',
 			NULL, 0,
@@ -68,6 +68,17 @@ describe("collections triggers — structural immutability", () => {
 		await expectQueryError(
 			() => sql`UPDATE collections SET symbol = 'OTHR01' WHERE id = ${COL_ID}`,
 			/collections\.symbol is immutable/,
+		);
+	});
+
+	it("rejects UPDATE of origin_dna (single source of truth for seed/instance DNA chain)", async () => {
+		// origin_dna used to live on nfts (duplicated per row). It now lives on
+		// collections and is read by seed/instance queries via JOIN. If a rogue
+		// UPDATE changed it, every downstream DNA derivation would silently
+		// mismatch the protocol's pure function of collection.id.
+		await expectQueryError(
+			() => sql`UPDATE collections SET origin_dna = 'odna-tampered' WHERE id = ${COL_ID}`,
+			/collections\.origin_dna is immutable/,
 		);
 	});
 

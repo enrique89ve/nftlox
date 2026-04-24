@@ -60,7 +60,7 @@ function makeOwnershipProof(id: string): Record<string, unknown> {
 		nft_type: "instance",
 		seed_id: "seed_1",
 		instance_number: 1,
-		instance_dna: "0x" + "b".repeat(40),
+		nft_dna: "0x" + "b".repeat(40),
 	};
 }
 

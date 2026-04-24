@@ -38,8 +38,8 @@ describe("collections — total_potential >= 0", () => {
   it("rejects negative total_potential on INSERT", async () => {
     await expectQueryError(
       () => sql`
-				INSERT INTO collections (id, name, symbol, creator, total_potential, block_num, tx_id, created_at)
-				VALUES ('coll-tp-neg', 'X', 'XNEG01', 'alice', -1, 100, 'tx-tp', NOW())
+				INSERT INTO collections (id, name, symbol, creator, origin_dna, total_potential, block_num, tx_id, created_at)
+				VALUES ('coll-tp-neg', 'X', 'XNEG01', 'alice', 'odna_tpneg', -1, 100, 'tx-tp', NOW())
 			`,
       /total_potential/i,
     );
@@ -47,9 +47,9 @@ describe("collections — total_potential >= 0", () => {
 
   it("accepts zero and positive total_potential", async () => {
     await sql`
-			INSERT INTO collections (id, name, symbol, creator, total_potential, block_num, tx_id, created_at)
-			VALUES ('coll-tp-zero', 'X', 'XZER01', 'alice', 0, 100, 'tx-tp', NOW()),
-			       ('coll-tp-pos',  'Y', 'XPOS01', 'alice', 42, 100, 'tx-tp', NOW())
+			INSERT INTO collections (id, name, symbol, creator, origin_dna, total_potential, block_num, tx_id, created_at)
+			VALUES ('coll-tp-zero', 'X', 'XZER01', 'alice', 'odna_tpzero', 0, 100, 'tx-tp', NOW()),
+			       ('coll-tp-pos',  'Y', 'XPOS01', 'alice', 'odna_tppos', 42, 100, 'tx-tp', NOW())
 		`;
     const rows =
       await sql`SELECT id FROM collections WHERE id LIKE 'coll-tp-%'`;
@@ -61,8 +61,8 @@ describe("collections — royalty_pct in [0, 100]", () => {
   it("rejects royalty_pct below 0", async () => {
     await expectQueryError(
       () => sql`
-				INSERT INTO collections (id, name, symbol, creator, royalty_pct, block_num, tx_id, created_at)
-				VALUES ('coll-rp-neg', 'X', 'XRNG01', 'alice', -0.01, 100, 'tx-rp', NOW())
+				INSERT INTO collections (id, name, symbol, creator, origin_dna, royalty_pct, block_num, tx_id, created_at)
+				VALUES ('coll-rp-neg', 'X', 'XRNG01', 'alice', 'odna_rpneg', -0.01, 100, 'tx-rp', NOW())
 			`,
       /royalty_pct/i,
     );
@@ -71,8 +71,8 @@ describe("collections — royalty_pct in [0, 100]", () => {
   it("rejects royalty_pct above 100", async () => {
     await expectQueryError(
       () => sql`
-				INSERT INTO collections (id, name, symbol, creator, royalty_pct, block_num, tx_id, created_at)
-				VALUES ('coll-rp-over', 'X', 'XRNG02', 'alice', 100.01, 100, 'tx-rp', NOW())
+				INSERT INTO collections (id, name, symbol, creator, origin_dna, royalty_pct, block_num, tx_id, created_at)
+				VALUES ('coll-rp-over', 'X', 'XRNG02', 'alice', 'odna_rpover', 100.01, 100, 'tx-rp', NOW())
 			`,
       /royalty_pct/i,
     );
@@ -80,10 +80,10 @@ describe("collections — royalty_pct in [0, 100]", () => {
 
   it("accepts boundary values (0, 100) and typical mid-range", async () => {
     await sql`
-			INSERT INTO collections (id, name, symbol, creator, royalty_pct, block_num, tx_id, created_at)
-			VALUES ('coll-rp-zero', 'X', 'XRNG03', 'alice', 0,    50, 'tx-rp', NOW()),
-			       ('coll-rp-mid',  'Y', 'XRNG04', 'alice', 5.50, 50, 'tx-rp', NOW()),
-			       ('coll-rp-max',  'Z', 'XRNG05', 'alice', 50,   50, 'tx-rp', NOW())
+			INSERT INTO collections (id, name, symbol, creator, origin_dna, royalty_pct, block_num, tx_id, created_at)
+			VALUES ('coll-rp-zero', 'X', 'XRNG03', 'alice', 'odna_rpzero', 0,    50, 'tx-rp', NOW()),
+			       ('coll-rp-mid',  'Y', 'XRNG04', 'alice', 'odna_rpmid',  5.50, 50, 'tx-rp', NOW()),
+			       ('coll-rp-max',  'Z', 'XRNG05', 'alice', 'odna_rpmax',  50,   50, 'tx-rp', NOW())
 		`;
     const rows =
       await sql`SELECT id FROM collections WHERE id LIKE 'coll-rp-%'`;

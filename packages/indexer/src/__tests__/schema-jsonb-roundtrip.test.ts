@@ -14,6 +14,7 @@ import {
 	PROTOCOL_COLLECTION_FEE_HBD,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
+	generateOriginDna,
 } from "@/protocol/index.ts";
 
 // JSONB round-trip regressions. postgres.js auto-serializes objects into
@@ -61,12 +62,14 @@ async function createCollectionWithSchema(): Promise<void> {
 	const pairedTransfers = [
 		{ from: "alice", to: config.hiveAccount, amount: feeAmount, currency: "HBD", memo },
 	];
+	const originDna = await generateOriginDna(COL_ID);
 	const op = makeOp(
 		ACTION_CREATE_COLLECTION,
 		{
 			id: COL_ID,
 			name: "RoundTrip",
 			symbol: "ROUND",
+			originDna,
 			totalPotential: 100,
 			maxInstances: 0,
 			metadata: { description: "round-trip test", image: "https://example.com/img.png" },
@@ -143,6 +146,7 @@ describe("JSONB round-trip for schema and immutableData", () => {
 			artId: "seed1",
 			edition: 1,
 			owner: "alice",
+			nftType: "seed",
 			maxSupply: 10,
 			metadata: { name: "Seed", imageUrl: "https://example.com/nft.png", imageHash: "img_seed" },
 			immutableData: { rarity: 7 },
