@@ -223,6 +223,7 @@ async function hafahWithFailover(fromBlock: number, toBlock: number, operationBe
 export interface BlockchainHead {
 	readonly headBlock: number;
 	readonly irreversibleBlock: number;
+	readonly headTime?: string | null;
 }
 
 export type EndpointHeadSample = Readonly<{
@@ -233,6 +234,10 @@ export type EndpointHeadSample = Readonly<{
 function parseBlockchainHead(result: Record<string, unknown>): BlockchainHead {
 	const headBlock = Number(result.head_block_number);
 	const irreversibleBlock = Number(result.last_irreversible_block_num);
+	const rawHeadTime = typeof result.time === "string" ? result.time : null;
+	const headTime = rawHeadTime
+		? new Date(`${rawHeadTime}Z`).toISOString()
+		: null;
 
 	if (Number.isNaN(headBlock) || Number.isNaN(irreversibleBlock)) {
 		throw new Error("Invalid blockchain head response", {
@@ -240,7 +245,7 @@ function parseBlockchainHead(result: Record<string, unknown>): BlockchainHead {
 		});
 	}
 
-	return { headBlock, irreversibleBlock };
+	return { headBlock, irreversibleBlock, headTime };
 }
 
 /** @internal — exported for unit tests only */

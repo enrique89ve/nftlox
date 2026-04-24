@@ -11,7 +11,7 @@ Source: `packages/sdk/src/spv/`.
 | `verifyNftOwnership` | The indexer's current-owner claim matches the referenced on-chain ownership operation. |
 | `verifyListingPrice` | An active listing's seller/amount/currency/nftId match the `list` tx on Hive L1. |
 | `verifyOperationOnChain` | A given tx_id + block contains an NFTLox `custom_json` with the expected `action` and `signer`. |
-| `verifyDeterministicDerivation` | Recomputes `instanceId` / `instanceDna` / `accessKey` from their domain-separated inputs. Pure; no network. |
+| `verifyDeterministicDerivation` | Recomputes `instanceId` / `nftDna` / `accessKey` from their domain-separated inputs. Pure; no network. |
 | `resolveOperationById` | Looks up a specific operation by `operationId` (for UI deep-links from indexer rows to L1 proofs). |
 | `resolveMutableData` | Resolves an operation whose `custom_json` committed a content-hash, checks the hash matches. |
 
@@ -146,7 +146,7 @@ const derived = await verifyDeterministicDerivation({
 	blockNum: 92_345_678,
 	signer: "alice",
 });
-// { instanceId, instanceDna, accessKey }
+// { instanceId, nftDna, accessKey }
 ```
 
 These three IDs are the same ones the indexer writes to its tables when it processes the original `bulk_distribute`. Computing them locally lets a client anchor a deep-link (e.g. `/nft/{instanceId}`) before the indexer has even returned.

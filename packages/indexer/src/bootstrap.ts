@@ -1,6 +1,5 @@
 import { testConnection, sql, withTransaction } from "./db/client.ts";
 import { runMigrations } from "./db/migration-runner.ts";
-import { cleanupInvalidMarketplaceListings } from "./db/queries/nfts.ts";
 import { bootstrapStateRootFromFullScan, getStateMeta } from "./db/queries/state-root.ts";
 import { emptyStateRoot, rootsEqual } from "./utils/state-root-hash.ts";
 import { createLogger } from "./utils/logger.ts";
@@ -139,13 +138,6 @@ async function checkGenesisReset(): Promise<void> {
 	log.info("Database reset completed — syncing from new genesis block");
 }
 
-async function cleanupMarketplaceListings(): Promise<void> {
-	const result = await withTransaction((txn) => cleanupInvalidMarketplaceListings(txn));
-	if (result.clearedListings === 0 && result.reconciledCollections === 0) return;
-
-	log.info("Marketplace listings reconciled", result);
-}
-
 // Rebuilds state_meta from a full nft scan when the singleton is still zero
 // but rows already exist — the case for indexers upgraded from a version that
 // didn't track the incremental root. Safe to run on every boot: when the
@@ -188,7 +180,8 @@ export async function connectWithRetry(): Promise<void> {
 			await testConnection();
 			await runMigrations();
 			await checkGenesisReset();
-			await cleanupMarketplaceListings();
+			// Do not expire marketplace listings during boot: expiry is evaluated
+			// against chain time in handlers, while read paths hide stale listings.
 			await ensureStateRootBootstrapped();
 			return;
 		} catch (err) {

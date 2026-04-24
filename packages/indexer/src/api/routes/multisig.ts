@@ -10,11 +10,13 @@ import { getMultisigHealth } from "@/api/services/multisig-health.ts";
 import { resolveClientIp } from "@/api/middleware/client-ip.ts";
 import { NFTLOX_POW_HEADER, validateMultisigPow } from "@/api/middleware/pow-validator.ts";
 import { getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { getChainTimeSnapshot } from "@/db/queries/sync.ts";
 import {
 	BUY_TX_TTL_MS,
 	calculatePaymentSplit,
 	type MultisigErrorCode,
 } from "@/protocol/index.ts";
+import { CHAIN_TIME_RETRY_AFTER_MS, resolveChainReferenceTimeMs } from "@/utils/chain-time.ts";
 import { requireSupportedCurrency } from "@/utils/validation.ts";
 import {
 	IDEMPOTENCY_HEADER,
@@ -202,8 +204,15 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			return { error: "Only instances can be bought" };
 		}
 		if (nft.listing_expires_at) {
+			const chainTimeSnapshot = await getChainTimeSnapshot();
+			const chainTime = resolveChainReferenceTimeMs(chainTimeSnapshot);
+			if (!chainTime.ok) {
+				set.status = 503;
+				set.headers["Retry-After"] = String(Math.ceil(CHAIN_TIME_RETRY_AFTER_MS / 1000));
+				return { error: "Indexer chain time unavailable; retry shortly" };
+			}
 			const expiresMs = new Date(nft.listing_expires_at).getTime();
-			if (Date.now() >= expiresMs) {
+			if (chainTime.referenceTimeMs >= expiresMs) {
 				set.status = 410;
 				return { error: "Listing has expired" };
 			}
@@ -358,29 +367,34 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			return { ok: false, code: "RATE_LIMITED", message: `Rate limited. Retry after ${ipRateResult.retryAfterMs}ms` };
 		}
 
-		try {
-			const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId);
-			if (!result.ok) {
-				logCollectionRejection({
-					creator,
-					clientIp,
-					code: result.code,
-					retryAfterMs: result.retryAfterMs,
-				});
-				if (result.code === "COLLECTION_LOCKED") {
-					set.status = 409;
-					if (result.retryAfterMs !== undefined) {
-						// Retry-After is expressed in seconds per RFC 7231; round up so
-						// clients never retry a millisecond before the lock frees.
-						set.headers["Retry-After"] = String(Math.ceil(result.retryAfterMs / 1000));
+			try {
+				const result = await processMultisigRequest(body, sql, config.hiveAccount, config.protocolId);
+				if (!result.ok) {
+					logCollectionRejection({
+						creator,
+						clientIp,
+						code: result.code,
+						retryAfterMs: result.retryAfterMs,
+					});
+					if (result.code === "COLLECTION_LOCKED") {
+						set.status = 409;
+						if (result.retryAfterMs !== undefined) {
+							// Retry-After is expressed in seconds per RFC 7231; round up so
+							// clients never retry a millisecond before the lock frees.
+							set.headers["Retry-After"] = String(Math.ceil(result.retryAfterMs / 1000));
+						}
+					} else if (result.code === "INDEXER_LAGGED") {
+						set.status = 503;
+						if (result.retryAfterMs !== undefined) {
+							set.headers["Retry-After"] = String(Math.ceil(result.retryAfterMs / 1000));
+						}
+					} else {
+						set.status = 400;
 					}
-				} else {
-					set.status = 400;
 				}
-			}
-			storeResponse(typeof set.status === "number" ? set.status : 200, result);
-			return result;
-		} catch (err) {
+				storeResponse(typeof set.status === "number" ? set.status : 200, result);
+				return result;
+			} catch (err) {
 			log.error("Unexpected collection multisig route error", {
 				creator,
 				clientIp,

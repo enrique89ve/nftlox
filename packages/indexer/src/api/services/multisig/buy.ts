@@ -1,5 +1,6 @@
 import { getNftForProcessing, getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED, NFT_STATUS_PENDING_SALE } from "@/db/queries/nfts.ts";
 import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
+import { getChainTimeSnapshot, type ChainTimeSnapshot } from "@/db/queries/sync.ts";
 import {
 	ACTION_BUY_COMMITMENT,
 	BUY_API_LAG_MAX_BLOCKS,
@@ -9,8 +10,10 @@ import {
 	type BuyCommitmentData,
 	type BuyMultisigResponse,
 } from "@/protocol/index.ts";
+import { computeExpectedTransferCount } from "@/utils/nft-rules.ts";
 import { requireSupportedCurrency, verifyTransfers } from "@/utils/validation.ts";
 import { createMultisigError, isMultisigError } from "@/api/services/multisig/errors.ts";
+import { requireMultisigChainReferenceTimeMs } from "@/api/services/multisig/chain-time.ts";
 import { signWithBeekeeper } from "@/api/services/beekeeper-signer.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { Transaction, type CustomJsonOperation, type TransactionType } from "hive-tx";
@@ -75,11 +78,17 @@ async function executeBuyRequest(
 	rawBody: unknown,
 	ctx: MultisigBuyContext,
 ): Promise<BuyMultisigResponse> {
-	await assertSyncHealthy(ctx);
-	await assertNodeActive(ctx);
+	const syncSnapshot = await readSyncState(ctx);
+	assertSyncHealthy(syncSnapshot);
+	const chainReferenceTimeMs = requireMultisigChainReferenceTimeMs(syncSnapshot);
+	await assertNodeActive(ctx, syncSnapshot);
 
 	const { transaction } = validateCommonRequestShape(rawBody);
-	const { validated, buyerSignature, buyer } = await parseAndValidateBuyTx(transaction, ctx);
+	const { validated, buyerSignature, buyer } = await parseAndValidateBuyTx(
+		transaction,
+		ctx,
+		chainReferenceTimeMs,
+	);
 	const { txId: buyTxId, digestBytes } = computeUnsignedTxDigest(validated);
 
 	// Cryptographic verification of the buyer's signature BEFORE we burn an
@@ -170,8 +179,11 @@ type ParsedBuyTx = Readonly<{
 async function parseAndValidateBuyTx(
 	tx: Record<string, unknown>,
 	ctx: MultisigBuyContext,
+	chainReferenceTimeMs: number,
 ): Promise<ParsedBuyTx> {
-	const base = validateBuyTransactionStructureWithBuyerSig(tx);
+	const base = validateBuyTransactionStructureWithBuyerSig(tx, {
+		referenceTimeMs: chainReferenceTimeMs,
+	});
 	const transferInputs = base.operations.slice(0, -1);
 	if (transferInputs.length < BUY_TRANSFER_MIN_COUNT || transferInputs.length > BUY_TRANSFER_MAX_COUNT) {
 		throw createMultisigError(
@@ -189,7 +201,13 @@ async function parseAndValidateBuyTx(
 	const buyer = deriveBuyer(transferInputs);
 	const transferOperations = validateTransferOperations(transferInputs, buyer);
 
-	await validateBuyAgainstState(customJsonOperation.payload, transferOperations, buyer, ctx);
+	await validateBuyAgainstState(
+		customJsonOperation.payload,
+		transferOperations,
+		buyer,
+		ctx,
+		chainReferenceTimeMs,
+	);
 
 	const validated: ValidatedBuyTransaction = {
 		ref_block_num: base.ref_block_num,
@@ -234,6 +252,7 @@ async function validateBuyAgainstState(
 	transferOperations: ReadonlyArray<ValidatedTransferOp>,
 	buyer: string,
 	ctx: MultisigBuyContext,
+	chainReferenceTimeMs: number,
 ): Promise<void> {
 	const nft = await getNftWithCollectionRules(payload.data.nftId, ctx.db);
 	if (!nft) {
@@ -257,17 +276,20 @@ async function validateBuyAgainstState(
 	if (nft.listing_tx_id !== payload.data.listTxId) {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "buy payload listTxId does not match the current listing");
 	}
-	assertListingAlive(nft.listing_expires_at);
+	assertListingAlive(nft.listing_expires_at, chainReferenceTimeMs);
 	assertPaymentSplit(nft, transferOperations, payload.data.nftId, ctx.nodeAccount);
 }
 
-function assertListingAlive(listingExpiresAt: string | null): void {
+function assertListingAlive(
+	listingExpiresAt: string | null,
+	chainReferenceTimeMs: number,
+): void {
 	if (!listingExpiresAt) return;
 	const expiresMs = Date.parse(listingExpiresAt);
 	if (Number.isNaN(expiresMs)) {
 		throw createMultisigError("INTERNAL_ERROR", "NFT listing expiration is invalid");
 	}
-	if (Date.now() >= expiresMs) {
+	if (chainReferenceTimeMs >= expiresMs) {
 		throw createMultisigError("NFT_EXPIRED_LISTING", "Listing has already expired");
 	}
 }
@@ -304,10 +326,7 @@ function assertPaymentSplit(
 			nftId,
 		});
 
-		let expectedTransfers = 0;
-		if (split.sellerAmount > 0) expectedTransfers++;
-		if (split.royaltyAmount > 0 && split.royaltyRecipient) expectedTransfers++;
-		if (split.feeAmount > 0) expectedTransfers++;
+		const expectedTransfers = computeExpectedTransferCount(split);
 		if (transferOperations.length !== expectedTransfers) {
 			throw new Error(`Expected exactly ${expectedTransfers} transfers, got ${transferOperations.length}`);
 		}
@@ -320,8 +339,7 @@ function assertPaymentSplit(
 	}
 }
 
-async function assertSyncHealthy(ctx: MultisigBuyContext): Promise<void> {
-	const snapshot = await readSyncState(ctx);
+function assertSyncHealthy(snapshot: SyncStateSnapshot): void {
 	const lag = snapshot.hiveHeadBlock - snapshot.lastBlock;
 	if (lag > BUY_API_LAG_MAX_BLOCKS) {
 		const deficit = Math.max(1, lag - BUY_API_LAG_MAX_BLOCKS + 1);
@@ -334,8 +352,10 @@ async function assertSyncHealthy(ctx: MultisigBuyContext): Promise<void> {
 	}
 }
 
-async function assertNodeActive(ctx: MultisigBuyContext): Promise<void> {
-	const snapshot = await readSyncState(ctx);
+async function assertNodeActive(
+	ctx: MultisigBuyContext,
+	snapshot: SyncStateSnapshot,
+): Promise<void> {
 	try {
 		await assertActiveSettlementNode(ctx.nodeAccount, snapshot.lastBlock, ctx.db);
 	} catch (cause) {
@@ -347,24 +367,14 @@ async function assertNodeActive(ctx: MultisigBuyContext): Promise<void> {
 	}
 }
 
-type SyncStateSnapshot = Readonly<{
-	readonly lastBlock: number;
-	readonly hiveHeadBlock: number;
-}>;
+type SyncStateSnapshot = ChainTimeSnapshot;
 
 async function readSyncState(ctx: MultisigBuyContext): Promise<SyncStateSnapshot> {
-	const [row] = await ctx.db`SELECT last_block, hive_head_block FROM sync_state WHERE id = 1`;
-	if (!row) {
-		throw createMultisigError("INTERNAL_ERROR", "sync_state row missing — indexer not initialized");
-	}
-
-	const lastBlock = Number(row.last_block);
-	const hiveHeadBlock = Number(row.hive_head_block);
-	if (!Number.isFinite(lastBlock) || !Number.isFinite(hiveHeadBlock)) {
+	const snapshot = await getChainTimeSnapshot(ctx.db);
+	if (!Number.isFinite(snapshot.lastBlock) || !Number.isFinite(snapshot.hiveHeadBlock)) {
 		throw createMultisigError("INTERNAL_ERROR", "sync_state row has invalid block numbers");
 	}
-
-	return { lastBlock, hiveHeadBlock };
+	return snapshot;
 }
 
 // ─── Commitment broadcast ───────────────────────────────

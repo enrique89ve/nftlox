@@ -83,7 +83,7 @@ import { buildSetDataFrom } from "nftlox-sdk";
 const result = buildSetDataFrom({
 	operator: "ragnarok-server",
 	nftId: "nft_…",
-	instanceDna: nft.instance_dna,
+	nftDna: nft.nft_dna,
 	mutableData: { xp: 5000, level: 12 },
 });
 ```

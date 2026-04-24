@@ -329,7 +329,7 @@ Get full details for a single NFT.
 - `id`, `name`, `image_url`
 - `collection_id`, `edition`, `nft_type` (seed/instance)
 - `owner`, `status` (active/listed/lent)
-- `origin_dna`, `instance_dna`, `immutable_data`, `data_hash`
+- `origin_dna`, `nft_dna`, `immutable_data`, `data_hash`
 - `max_supply`, `distributed`, `supply_exhausted`, `seed_id`, `instance_number`
 - `listing_id`, `listing_tx_id`, `listing_price`, `listing_currency`, `listing_expires_at`, `listing_marketplace`, `listing_expired`
 - `schema_version`, `previous_owner`, `owner_operation_id`, `owner_action`, `owner_block_num`
@@ -389,7 +389,7 @@ Canonical ownership proof. Returns the current owner claim plus creation anchors
 	"nft_type": "instance",
 	"seed_id": "seed-id",
 	"instance_number": 42,
-	"instance_dna": "4fc2..."
+	"nft_dna": "4fc2..."
 }
 ```
 

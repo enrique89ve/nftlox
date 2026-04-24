@@ -20,7 +20,7 @@ const schema = createSchemaBuilder()
 
 ## Owner updates their own NFT — `buildSetData`
 
-Uses posting auth. `instanceDna` is required — it binds the update to the exact NFT state and prevents cross-NFT replays. Read it from `client.getNft(nftId).instance_dna`.
+Uses posting auth. `nftDna` is required — it binds the update to the exact NFT state and prevents cross-NFT replays. Read it from `client.getNft(nftId).nft_dna`.
 
 ```typescript
 import { buildSetData, createIndexerClient } from "nftlox-sdk";
@@ -35,7 +35,7 @@ async function levelUp(nftId: string, newXp: number, newLevel: number) {
 	const result = buildSetData({
 		owner: nft.owner,
 		nftId,
-		instanceDna: nft.instance_dna!,
+		nftDna: nft.nft_dna!,
 		mutableData: { xp: newXp, level: newLevel },
 	});
 	if (!result.success) throw new Error(JSON.stringify(result.errors));
@@ -64,7 +64,7 @@ async function recordMatchResult(nftId: string, win: boolean) {
 	const result = buildSetDataFrom({
 		operator: "ragnarok-server",
 		nftId,
-		instanceDna: nft.instance_dna!,
+		nftDna: nft.nft_dna!,
 		mutableData: {
 			xp: (nft.mutable_data?.xp as number ?? 0) + (win ? 100 : 25),
 			wins: (nft.mutable_data?.wins as number ?? 0) + (win ? 1 : 0),
@@ -86,7 +86,7 @@ For the one-time approval setup (`buildDataOperatorApprove`) and the full securi
 Two concurrent updates to the same NFT land in block order. If both read `xp = 100` and both write `xp + 100`, the second commit wins — you lose the first increment. Two options:
 
 1. **Use absolute values from the source of truth.** If the server owns the XP state in its own database, broadcast the new absolute value. On-chain state is the broadcast layer; the server is the authority.
-2. **Guard with `instanceDna`.** `set_data` rejects writes whose `instanceDna` no longer matches the current one. This is not an atomic CAS, but it catches stale reads.
+2. **Guard with `nftDna`.** `set_data` rejects writes whose `nftDna` no longer matches the current one. This is not an atomic CAS, but it catches stale reads.
 
 `mutableData` is for state that must be publicly verifiable and portable across games. For per-session gameplay state (unit positions, cooldowns), keep the data off-chain and only write to NFTs at meaningful checkpoints.
 

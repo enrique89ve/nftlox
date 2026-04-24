@@ -1,5 +1,6 @@
 import { symbolTakenByCreator } from "@/db/queries/collections.ts";
 import { createMultisigError } from "@/api/services/multisig/errors.ts";
+import { readRequiredMultisigChainReferenceTimeMs } from "@/api/services/multisig/chain-time.ts";
 import {
 	getLastOperation,
 	isRecord,
@@ -100,7 +101,10 @@ async function validateCollectionTransactionStructure(
 	tx: Record<string, unknown>,
 	ctx: MultisigCollectionContext,
 ): Promise<ValidatedCollectionTransaction> {
-	const validated = validateCommonTransactionStructure(tx);
+	const chainReferenceTimeMs = await readRequiredMultisigChainReferenceTimeMs(ctx.db);
+	const validated = validateCommonTransactionStructure(tx, {
+		referenceTimeMs: chainReferenceTimeMs,
+	});
 	if (validated.operations.length !== CREATE_COLLECTION_OPERATION_COUNT) {
 		throw createMultisigError(
 			"INVALID_TX_STRUCTURE",

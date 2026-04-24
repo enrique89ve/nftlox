@@ -23,8 +23,7 @@ import {
   checkClockDrift,
 } from "./hive-client.ts";
 import {
-  ACTION_BUY,
-  ACTION_CREATE_COLLECTION,
+  requiresTransferEnrichment,
 } from "@/protocol/index.ts";
 import {
   parseHafAHOperations,
@@ -70,12 +69,10 @@ async function fetchBatch(
   const hafOps = await getCustomJsonInRange(from, to, protocolId, behind);
   const { ops, rejected } = parseHafAHOperations(hafOps);
 
-  // Enrich operations whose validation depends on transfers from the same Hive tx.
-  // node_register is intentionally absent: it is fee-less, so the same-tx
-  // transfer lookup would be dead I/O.
-  const transferBackedOps = ops.filter(
-    (op) => op.action === ACTION_BUY || op.action === ACTION_CREATE_COLLECTION,
-  );
+  // Enrich every action whose payment validation depends on same-tx transfer
+  // legs. Derived from ACTION_PAYMENT so new paid actions cannot silently skip
+  // this pairing step.
+  const transferBackedOps = ops.filter((op) => requiresTransferEnrichment(op.action));
   const transferPools = new Map<
     string,
     {
@@ -266,7 +263,7 @@ export async function syncCycle(): Promise<void> {
   // Persist HEAD independently from last_block so /api/multisig can evaluate
   // (hive_head_block − last_block) for its lag gate even when the indexer is
   // actively catching up a large gap. The UPDATE only moves forward.
-  await updateHiveHeadBlock(headBlock);
+  await updateHiveHeadBlock(headBlock, chain.headTime ?? null);
 
   updateSyncProgress({ lastBlock, headBlock, irreversibleBlock });
 

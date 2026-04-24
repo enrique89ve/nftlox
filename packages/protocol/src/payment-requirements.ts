@@ -191,3 +191,14 @@ export function getPaymentRequirement(
 ): PaymentRequirement {
 	return ACTION_PAYMENT[action];
 }
+
+/**
+ * True when an action's validation depends on same-transaction `transfer`
+ * operations. Derived directly from ACTION_PAYMENT so the sync engine and any
+ * other enrichment layer do not need a hand-maintained action allowlist.
+ */
+export function requiresTransferEnrichment(
+	action: ProtocolAction,
+): boolean {
+	return getPaymentRequirement(action).kind !== "none";
+}

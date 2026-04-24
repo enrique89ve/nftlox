@@ -36,11 +36,10 @@ const { routeOperation } = await import("../src/processor/action-router.ts");
 const { updateLastBlock, insertInvalidOperation } =
 	await import("../src/db/queries/sync.ts");
 const {
-	ACTION_BUY,
-	ACTION_CREATE_COLLECTION,
 	PROTOCOL_VERSION,
 	PROTOCOL_ID,
 	PROTOCOL_GENESIS_BLOCK,
+	requiresTransferEnrichment,
 } = await import("../src/protocol/index.ts");
 const { config } = await import("../src/config.ts");
 
@@ -299,11 +298,9 @@ async function replayChunk(
 	s.parsedOps = ops.length;
 	s.rejectedOps = rejected.length;
 
-	// Phase 3: enrich paired transfers for BUY / CREATE_COLLECTION
+	// Phase 3: enrich paired transfers for every payment-backed action.
 	const t2 = performance.now();
-	const transferBacked = ops.filter(
-		(o) => o.action === ACTION_BUY || o.action === ACTION_CREATE_COLLECTION,
-	);
+	const transferBacked = ops.filter((o) => requiresTransferEnrichment(o.action));
 	if (transferBacked.length > 0) {
 		const uniqueTxIds = [...new Set(transferBacked.map((o) => o.txId))];
 		const pools = new Map<string, {

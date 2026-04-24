@@ -17,11 +17,34 @@ export interface SyncStatus {
 	updatedAt: Date | null;
 }
 
+export interface ChainTimeSnapshot {
+	lastBlock: number;
+	hiveHeadBlock: number;
+	hiveHeadTime: string | null;
+}
+
 export async function getSyncStatus(): Promise<SyncStatus> {
 	const [row] = await sql`SELECT last_block, updated_at FROM sync_state WHERE id = 1`;
 	return {
 		lastBlock: Number(row?.last_block ?? 0),
 		updatedAt: row?.updated_at ? new Date(String(row.updated_at)) : null,
+	};
+}
+
+export async function getChainTimeSnapshot(
+	txn: Queryable = sql,
+): Promise<ChainTimeSnapshot> {
+	const [row] = await txn`
+		SELECT last_block, hive_head_block, hive_head_time
+		FROM sync_state
+		WHERE id = 1
+	`;
+	return {
+		lastBlock: Number(row?.last_block ?? 0),
+		hiveHeadBlock: Number(row?.hive_head_block ?? 0),
+		hiveHeadTime: row?.hive_head_time
+			? new Date(String(row.hive_head_time)).toISOString()
+			: null,
 	};
 }
 
@@ -40,11 +63,20 @@ export async function updateLastBlock(blockNum: number, txn: Queryable = sql): P
  * independently from last_block so the lag signal stays fresh even when the
  * indexer is actively catching up on a large gap.
  */
-export async function updateHiveHeadBlock(blockNum: number, txn: Queryable = sql): Promise<void> {
+export async function updateHiveHeadBlock(
+	blockNum: number,
+	headTime: string | null = null,
+	txn: Queryable = sql,
+): Promise<void> {
 	await txn`
 		UPDATE sync_state
-		SET hive_head_block = ${blockNum}
-		WHERE id = 1 AND hive_head_block < ${blockNum}
+		SET hive_head_block = ${blockNum},
+		    hive_head_time = ${headTime}
+		WHERE id = 1
+		  AND (
+			hive_head_block < ${blockNum}
+			OR (${headTime} IS NOT NULL AND hive_head_time IS NULL)
+		  )
 	`;
 }
 

@@ -1,24 +1,95 @@
 import {
+	ACTION_BUY,
 	MAX_ROYALTY_PCT,
-	PROTOCOL_FEE_BPS,
+	MIN_PRICE_AMOUNT,
 	BASIS_POINTS_DENOMINATOR,
 	type SupportedCurrency,
 } from "./constants";
+import { getPaymentRequirement } from "./payment-requirements";
 import type { PaymentSplit } from "./types";
 
+const HIVE_PRECISION = 1000;
+const HIVE_AMOUNT_EPSILON = 1e-9;
+
+function assertFiniteNumber(value: number, fieldName: string): void {
+	if (!Number.isFinite(value)) {
+		throw new Error(`${fieldName} must be a finite number, got ${value}`);
+	}
+}
+
+function toRoundedHiveUnits(value: number, fieldName: string): number {
+	assertFiniteNumber(value, fieldName);
+	const units = Math.round(value * HIVE_PRECISION);
+	if (!Number.isSafeInteger(units)) {
+		throw new Error(`${fieldName} is outside the safe Hive amount range: ${value}`);
+	}
+	return units;
+}
+
+function toExactHiveUnits(value: number, fieldName: string): number {
+	const units = toRoundedHiveUnits(value, fieldName);
+	const canonical = units / HIVE_PRECISION;
+	if (Math.abs(value - canonical) > HIVE_AMOUNT_EPSILON) {
+		throw new Error(`${fieldName} must use at most 3 decimal places, got ${value}`);
+	}
+	return units;
+}
+
+function fromHiveUnits(units: number): number {
+	if (!Number.isSafeInteger(units)) {
+		throw new Error(`Hive amount units outside safe integer range: ${units}`);
+	}
+	return units / HIVE_PRECISION;
+}
+
+function assertBasisPoints(value: number, fieldName: string): void {
+	assertFiniteNumber(value, fieldName);
+	if (!Number.isInteger(value) || value < 0 || value > BASIS_POINTS_DENOMINATOR) {
+		throw new Error(
+			`${fieldName} must be an integer between 0 and ${BASIS_POINTS_DENOMINATOR}, got ${value}`,
+		);
+	}
+}
+
+function calculateBasisPointsUnits(totalUnits: number, basisPoints: number): number {
+	assertBasisPoints(basisPoints, "basisPoints");
+	const product = totalUnits * basisPoints;
+	if (!Number.isSafeInteger(product)) {
+		throw new Error("Basis-point calculation exceeds safe integer range");
+	}
+	return Math.round(product / BASIS_POINTS_DENOMINATOR);
+}
+
+function getBuyProtocolFeeBps(): number {
+	const requirement = getPaymentRequirement(ACTION_BUY);
+	if (requirement.kind !== "split") {
+		throw new Error("buy payment requirement must be a split payment");
+	}
+	return requirement.protocolFeeBps;
+}
+
+const MIN_PRICE_UNITS = toExactHiveUnits(Number(MIN_PRICE_AMOUNT), "MIN_PRICE_AMOUNT");
+
 export function roundHive(n: number): number {
-	return Math.round(n * 1000) / 1000;
+	return fromHiveUnits(toRoundedHiveUnits(n, "amount"));
 }
 
 export function percentageToBasisPoints(percentage: number): number {
-	return Math.round(percentage * 100);
+	assertFiniteNumber(percentage, "percentage");
+	if (percentage < 0 || percentage > 100) {
+		throw new Error(`percentage must be between 0 and 100, got ${percentage}`);
+	}
+	const basisPoints = Math.round(percentage * 100);
+	assertBasisPoints(basisPoints, "basisPoints");
+	return basisPoints;
 }
 
 export function calculateBasisPointsAmount(
 	totalAmount: number,
 	basisPoints: number,
 ): number {
-	return roundHive((totalAmount * basisPoints) / BASIS_POINTS_DENOMINATOR);
+	const totalUnits = toRoundedHiveUnits(totalAmount, "totalAmount");
+	return fromHiveUnits(calculateBasisPointsUnits(totalUnits, basisPoints));
 }
 
 export function calculatePaymentSplit(
@@ -29,45 +100,47 @@ export function calculatePaymentSplit(
 	seller: string,
 	feeAccount: string,
 ): PaymentSplit {
+	const totalUnits = toExactHiveUnits(totalPrice, "totalPrice");
+	if (totalUnits < MIN_PRICE_UNITS) {
+		throw new Error(`totalPrice must be at least ${MIN_PRICE_AMOUNT}, got ${totalPrice}`);
+	}
+	assertFiniteNumber(royaltyPct, "royaltyPct");
 	if (royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
 		throw new Error(
 			`royaltyPct out of range: ${royaltyPct} (max ${MAX_ROYALTY_PCT})`,
 		);
 	}
 
-	const feeAmount = calculateBasisPointsAmount(totalPrice, PROTOCOL_FEE_BPS);
+	const feeUnits = feeAccount === seller
+		? 0
+		: calculateBasisPointsUnits(totalUnits, getBuyProtocolFeeBps());
 
-	let royaltyAmount = 0;
+	let royaltyUnits = 0;
 	let effectiveRoyaltyRecipient: string | null = null;
 	if (royaltyRecipient && royaltyPct > 0) {
 		if (royaltyRecipient === seller) {
-			royaltyAmount = 0;
 			effectiveRoyaltyRecipient = null;
 		} else {
-			royaltyAmount = calculateBasisPointsAmount(
-				totalPrice,
+			royaltyUnits = calculateBasisPointsUnits(
+				totalUnits,
 				percentageToBasisPoints(royaltyPct),
 			);
 			effectiveRoyaltyRecipient = royaltyRecipient;
 		}
 	}
 
-	let effectiveFee = feeAmount;
-	if (feeAccount === seller) {
-		effectiveFee = 0;
+	const sellerUnits = totalUnits - royaltyUnits - feeUnits;
+	if (sellerUnits < 0) {
+		throw new Error("Payment split produced a negative seller amount");
 	}
 
-	const sellerAmount = roundHive(
-		Math.max(0, totalPrice - royaltyAmount - effectiveFee),
-	);
-
 	return {
-		sellerAmount,
-		royaltyAmount,
+		sellerAmount: fromHiveUnits(sellerUnits),
+		royaltyAmount: fromHiveUnits(royaltyUnits),
 		royaltyRecipient: effectiveRoyaltyRecipient,
-		feeAmount: effectiveFee,
+		feeAmount: fromHiveUnits(feeUnits),
 		feeAccount,
-		totalPrice,
+		totalPrice: fromHiveUnits(totalUnits),
 		currency,
 	};
 }

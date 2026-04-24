@@ -172,8 +172,8 @@ await tx.broadcast();
 | `buildList` | Posting | NFT owner | Lists an instance for sale. Generates `listingId` + `listingNonce`. |
 | `buildUnlist` | Posting | NFT owner | Cancels a listing. |
 | `buildBuy` | Active | buyer + node | Builds buy tx (buyer transfers + node-signed custom_json). Requires node multisig. |
-| `buildSetData` | Posting | NFT owner | Updates mutable fields on an instance. Requires `instanceDna`. |
-| `buildSetDataFrom` | Posting | approved data operator | Updates mutable fields on behalf of owner. Requires `instanceDna`. |
+| `buildSetData` | Posting | NFT owner | Updates mutable fields on an instance. Requires `nftDna`. |
+| `buildSetDataFrom` | Posting | approved data operator | Updates mutable fields on behalf of owner. Requires `nftDna`. |
 | `buildExtendSchema` | Posting | collection creator | Appends new fields to schema. Append-only. |
 | `buildArchiveCollection` | Posting | collection creator | Permanently closes a collection (all NFTs must be burned first). |
 | `buildNftApprove` | Posting | NFT owner | Grants a spender the right to transfer a single instance. |
@@ -255,7 +255,7 @@ buildBuy({
 buildSetData({
   owner: "alice",
   nftId: "nft_…",
-  instanceDna: nft.instance_dna!, // required — binds to current state
+  nftDna: nft.nft_dna!, // required — binds to current state
   mutableData: { xp: 5000, level: 12 },
 })
 
@@ -263,7 +263,7 @@ buildSetData({
 buildSetDataFrom({
   operator: "ragnarok-server",
   nftId: "nft_…",
-  instanceDna: nft.instance_dna!,
+  nftDna: nft.nft_dna!,
   mutableData: { xp: 5000, level: 12 },
 })
 ```
@@ -461,7 +461,7 @@ const op = await verifyOperationOnChain({ txId, blockNum, expectedAction, expect
 
 // Pure — no network — recompute instance IDs:
 const d = await verifyDeterministicDerivation({ seedId, instanceNumber, txId, blockNum, signer });
-// d = { instanceId, instanceDna, accessKey }
+// d = { instanceId, nftDna, accessKey }
 ```
 
 ---
@@ -597,7 +597,7 @@ async function waitForConfirmation(client, txId: string, timeoutMs = 30_000) {
 |---|---|
 | Computing `paymentSplit` yourself | Always call `client.getPaymentInfo(nftId)` |
 | Using `creator:` in `buildBulkDistribute` | Use `signer:` (the seed owner) |
-| Missing `instanceDna` in `buildSetData` | Read it from `client.getNft(nftId).instance_dna` |
+| Missing `nftDna` in `buildSetData` | Read it from `client.getNft(nftId).nft_dna` |
 | Sending seed_id with instances=0 to marketplace | Seeds with `distributed > 0` cannot be sold |
 | Assuming listing stays valid until `expiresAt` | Another buyer might buy it; always re-check before signing |
 | Signing with active key for `set_data` | Posting key is enough for all data mutations |

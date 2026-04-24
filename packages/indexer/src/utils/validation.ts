@@ -47,7 +47,7 @@ export function requireSupportedCurrency(
 }
 
 export interface VerifyTransfersParams {
-	transfers: TransferRecord[];
+	transfers: ReadonlyArray<TransferRecord>;
 	seller: string;
 	totalPrice: number;
 	currency: SupportedCurrency;
@@ -55,7 +55,7 @@ export interface VerifyTransfersParams {
 	royaltyRecipient: string | null;
 	feeAccount: string;
 	nftId: string;
-	consumedIndices?: Set<number>;
+	consumedIndices?: ReadonlySet<number>;
 }
 
 /**
@@ -63,11 +63,11 @@ export interface VerifyTransfersParams {
  * Source-agnostic: works with pairedTransfers, getTransfersInTransaction, or any transfer array.
  * Reusable for multisig pre-signing verification.
  *
- * When `consumedIndices` is provided (from a TransferPool), matched transfers are marked
- * as consumed so other operations in the same tx cannot reuse them. Matches are staged
- * locally and only committed to the shared pool once ALL expected transfers are found —
- * otherwise a partial match on a failed verification would leave the pool dirty for
- * the next operation in the same Hive tx.
+ * `planVerifiedTransfers` is pure: it only returns the matching indices.
+ * `verifyTransfers` wraps it and, when passed a mutable TransferPool `Set`,
+ * commits those indices after ALL expected transfers are found. That prevents
+ * a partial failed verification from dirtying the pool for the next operation
+ * in the same Hive tx.
  */
 export interface VerifyTransfersResult {
 	readonly split: PaymentSplit;
@@ -80,7 +80,44 @@ export interface VerifyTransfersResult {
 	readonly consumedIndices: readonly number[];
 }
 
-export function verifyTransfers(params: VerifyTransfersParams): VerifyTransfersResult {
+function findUniqueTransferIndex(params: {
+	readonly transfers: ReadonlyArray<TransferRecord>;
+	readonly consumedIndices: ReadonlySet<number> | undefined;
+	readonly staged: ReadonlySet<number>;
+	readonly predicate: (transfer: TransferRecord) => boolean;
+	readonly missingMessage: string;
+	readonly ambiguousMessage: (count: number) => string;
+}): number {
+	const {
+		transfers,
+		consumedIndices,
+		staged,
+		predicate,
+		missingMessage,
+		ambiguousMessage,
+	} = params;
+	const candidates: number[] = [];
+
+	for (let idx = 0; idx < transfers.length; idx++) {
+		const transfer = transfers[idx];
+		if (!transfer) continue;
+		if (consumedIndices?.has(idx)) continue;
+		if (staged.has(idx)) continue;
+		if (!predicate(transfer)) continue;
+		candidates.push(idx);
+	}
+
+	if (candidates.length === 0) {
+		throw new Error(missingMessage);
+	}
+	if (candidates.length > 1) {
+		throw new Error(ambiguousMessage(candidates.length));
+	}
+
+	return candidates[0]!;
+}
+
+export function planVerifiedTransfers(params: VerifyTransfersParams): VerifyTransfersResult {
 	const { transfers, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, nftId, consumedIndices } = params;
 
 	if (transfers.length === 0) {
@@ -103,51 +140,44 @@ export function verifyTransfers(params: VerifyTransfersParams): VerifyTransfersR
 		);
 	}
 
-	const sellerCandidates: number[] = [];
-	for (let idx = 0; idx < transfers.length; idx++) {
-		const t = transfers[idx]!;
-		if (consumedIndices?.has(idx)) continue;
-		if (t.to !== seller) continue;
-		if (t.currency !== currency) continue;
-		if (t.memo !== sellerMemo) continue;
-		if (Math.abs(t.amount - split.sellerAmount) >= AMOUNT_TOLERANCE) continue;
-		sellerCandidates.push(idx);
-	}
-
-	if (sellerCandidates.length === 0) {
-		throw new Error(
+	const staged = new Set<number>();
+	const sellerLegIdx = findUniqueTransferIndex({
+		transfers,
+		consumedIndices,
+		staged,
+		predicate: (transfer) =>
+			transfer.to === seller &&
+			transfer.currency === currency &&
+			transfer.memo === sellerMemo &&
+			Math.abs(transfer.amount - split.sellerAmount) < AMOUNT_TOLERANCE,
+		missingMessage:
 			`Missing seller payment: expected ${split.sellerAmount} ${currency} to @${seller} with memo '${sellerMemo}'`,
-		);
-	}
-	if (sellerCandidates.length > 1) {
-		throw new Error(
-			`Ambiguous seller payment: ${sellerCandidates.length} transfers match (to @${seller}, ${split.sellerAmount} ${currency}, memo '${sellerMemo}')`,
-		);
-	}
-
-	const sellerLegIdx = sellerCandidates[0]!;
+		ambiguousMessage: (count) =>
+			`Ambiguous seller payment: ${count} transfers match (to @${seller}, ${split.sellerAmount} ${currency}, memo '${sellerMemo}')`,
+	});
+	staged.add(sellerLegIdx);
 	const buyerFromTransfer = transfers[sellerLegIdx]!.from;
 
-	// Stage matches here first. The shared `consumedIndices` is only mutated below,
-	// after all expected transfers are successfully matched.
-	const staged: number[] = [sellerLegIdx];
+	const stagedIndices = [sellerLegIdx];
 
 	function expectBuyerTransfer(to: string, expectedAmount: number, label: string, expectedMemo: string): void {
-		const matchIndex = transfers.findIndex((t, idx) =>
-			(!consumedIndices || !consumedIndices.has(idx)) &&
-			!staged.includes(idx) &&
-			t.from === buyerFromTransfer &&
-			t.to === to &&
-			t.currency === currency &&
-			Math.abs(t.amount - expectedAmount) < AMOUNT_TOLERANCE &&
-			t.memo === expectedMemo
-		);
-		if (matchIndex === -1) {
-			throw new Error(
-				`Missing ${label}: expected ${expectedAmount} ${currency} from @${buyerFromTransfer} to @${to} with memo '${expectedMemo}'`
-			);
-		}
-		staged.push(matchIndex);
+		const matchIndex = findUniqueTransferIndex({
+			transfers,
+			consumedIndices,
+			staged,
+			predicate: (transfer) =>
+				transfer.from === buyerFromTransfer &&
+				transfer.to === to &&
+				transfer.currency === currency &&
+				Math.abs(transfer.amount - expectedAmount) < AMOUNT_TOLERANCE &&
+				transfer.memo === expectedMemo,
+			missingMessage:
+				`Missing ${label}: expected ${expectedAmount} ${currency} from @${buyerFromTransfer} to @${to} with memo '${expectedMemo}'`,
+			ambiguousMessage: (count) =>
+				`Ambiguous ${label}: ${count} transfers match (from @${buyerFromTransfer}, to @${to}, ${expectedAmount} ${currency}, memo '${expectedMemo}')`,
+		});
+		staged.add(matchIndex);
+		stagedIndices.push(matchIndex);
 	}
 
 	if (split.royaltyAmount > 0 && split.royaltyRecipient) {
@@ -158,12 +188,18 @@ export function verifyTransfers(params: VerifyTransfersParams): VerifyTransfersR
 		expectBuyerTransfer(split.feeAccount, split.feeAmount, "protocol fee", `${MEMO_PREFIX_FEE}${nftId}`);
 	}
 
+	return { split, buyerFromTransfer, consumedIndices: stagedIndices };
+}
+
+export function verifyTransfers(params: VerifyTransfersParams): VerifyTransfersResult {
+	const result = planVerifiedTransfers(params);
+
 	// Atomic commit: all expected matches succeeded, now publish to the shared pool.
-	if (consumedIndices) {
-		for (const idx of staged) consumedIndices.add(idx);
+	if (params.consumedIndices instanceof Set) {
+		for (const idx of result.consumedIndices) params.consumedIndices.add(idx);
 	}
 
-	return { split, buyerFromTransfer, consumedIndices: [...staged] };
+	return result;
 }
 
 export function requireString(value: unknown, fieldName: string): string {

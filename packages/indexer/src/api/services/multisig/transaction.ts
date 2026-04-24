@@ -35,6 +35,10 @@ type TransactionHeader = Readonly<{
 	readonly signatures: readonly [];
 }>;
 
+export type TransactionTimeValidation = Readonly<{
+	readonly referenceTimeMs: number;
+}>;
+
 type ParsedProtocolPayload = Readonly<{
 	readonly protocol: string;
 	readonly version: string;
@@ -56,11 +60,14 @@ export function validateBaseRequestShape(raw: unknown): Readonly<{ readonly tran
 	};
 }
 
-export function validateCommonTransactionStructure(tx: Record<string, unknown>): TransactionHeader {
+export function validateCommonTransactionStructure(
+	tx: Record<string, unknown>,
+	timeValidation?: TransactionTimeValidation,
+): TransactionHeader {
 	return {
 		ref_block_num: validateUnsignedInteger(tx.ref_block_num, "Transaction 'ref_block_num'"),
 		ref_block_prefix: validateUnsignedInteger(tx.ref_block_prefix, "Transaction 'ref_block_prefix'"),
-		expiration: validateExpiration(tx.expiration),
+		expiration: validateExpiration(tx.expiration, timeValidation),
 		signatures: validateSignaturesEmpty(tx.signatures),
 		extensions: validateExtensions(tx.extensions),
 		operations: validateOperationsArray(tx.operations),
@@ -75,6 +82,7 @@ export function validateCommonTransactionStructure(tx: Record<string, unknown>):
  */
 export function validateBuyTransactionStructureWithBuyerSig(
 	tx: Record<string, unknown>,
+	timeValidation?: TransactionTimeValidation,
 ): Readonly<{
 	readonly ref_block_num: number;
 	readonly ref_block_prefix: number;
@@ -87,7 +95,7 @@ export function validateBuyTransactionStructureWithBuyerSig(
 	return {
 		ref_block_num: validateUnsignedInteger(tx.ref_block_num, "Transaction 'ref_block_num'"),
 		ref_block_prefix: validateUnsignedInteger(tx.ref_block_prefix, "Transaction 'ref_block_prefix'"),
-		expiration: validateExpiration(tx.expiration),
+		expiration: validateExpiration(tx.expiration, timeValidation),
 		extensions: validateExtensions(tx.extensions),
 		operations: validateOperationsArray(tx.operations),
 		buyerSignature: signatures[0],
@@ -373,13 +381,17 @@ function validateOperationTuple(value: unknown, index: number): TransactionOpera
 	return { name, body };
 }
 
-function validateExpiration(expiration: unknown): string {
+function validateExpiration(
+	expiration: unknown,
+	timeValidation: TransactionTimeValidation | undefined,
+): string {
 	if (typeof expiration !== "string") {
 		throw createMultisigError("INVALID_TX_STRUCTURE", "Transaction 'expiration' must be a string");
 	}
 
 	const expiresAt = parseTransactionExpirationMs(expiration);
-	const diffMs = expiresAt - Date.now();
+	const referenceTimeMs = timeValidation?.referenceTimeMs ?? Date.now();
+	const diffMs = expiresAt - referenceTimeMs;
 	if (diffMs < MULTISIG_TX_MIN_EXPIRATION_MS) {
 		throw createMultisigError(
 			"INVALID_TX_STRUCTURE",

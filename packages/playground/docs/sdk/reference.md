@@ -248,7 +248,8 @@ generateDeterministicCollectionId(creator, name, symbol)   // "col_<20 hex>"
 generateDeterministicSeedId(collectionId, artId)           // "seed_<20 hex>"
 generateDeterministicInstanceId(seedId, instanceNumber)    // "nft_<20 hex>_<n>"
 generateOriginDna(collectionId)                            // "o<15 upper-hex>"
-generateInstanceDna(nftId, originDna, edition, imageHash)  // "i<19 upper-hex>"
+generateSeedDna(nftId, originDna, edition, imageHash)      // "i<19 upper-hex>" — seed DNA (mint / buildSeed)
+generateInstanceDna(seedId, n, txId, blockNum)             // "i<19 upper-hex>" — instance DNA (bulk_distribute)
 generateImageHash(imageUrl)                                // "img_<16 hex>"
 generateListingNonce()                                     // 12-char random
 generateListingId(params)                                  // "list_<32 hex>"

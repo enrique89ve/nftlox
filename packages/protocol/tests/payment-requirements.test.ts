@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	ACTION_PAYMENT,
 	getPaymentRequirement,
+	requiresTransferEnrichment,
 	type PaymentRequirement,
 } from "../src/payment-requirements";
 import {
@@ -41,6 +42,12 @@ describe("ACTION_PAYMENT registry", () => {
 
 	test("mint is { kind: 'none' }", () => {
 		expect(ACTION_PAYMENT[ACTION_MINT]).toEqual({ kind: "none" });
+	});
+
+	test("transfer enrichment is derived from ACTION_PAYMENT, not a manual allowlist", () => {
+		expect(requiresTransferEnrichment(ACTION_CREATE_COLLECTION)).toBe(true);
+		expect(requiresTransferEnrichment(ACTION_BUY)).toBe(true);
+		expect(requiresTransferEnrichment(ACTION_MINT)).toBe(false);
 	});
 
 	test("getPaymentRequirement is total over ProtocolAction — boundary validation is the parser's job", () => {

@@ -168,7 +168,7 @@ async function openPack(player: string) {
 }
 ```
 
-Each instance gets a unique `instanceDna` and `instanceNumber`. The player owns distinct NFTs that can be transferred, listed, or lent independently. Cap per call: `MAX_BULK_DISTRIBUTE_ITEMS = 50` seeds and `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY = 250` instances.
+Each instance gets a unique `nftDna` and `instanceNumber`. The player owns distinct NFTs that can be transferred, listed, or lent independently. Cap per call: `MAX_BULK_DISTRIBUTE_ITEMS = 50` seeds and `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY = 250` instances.
 
 ---
 
@@ -244,7 +244,7 @@ async function recordWin(nftId: string, xpEarned: number) {
 	const result = buildSetDataFrom({
 		operator: SERVER,
 		nftId,
-		instanceDna: nft.instance_dna!,      // required — binds write to current NFT state
+		nftDna: nft.nft_dna!,      // required — binds write to current NFT state
 		mutableData: { xp, level, wins },
 	});
 	if (!result.success) throw new Error(JSON.stringify(result.errors));

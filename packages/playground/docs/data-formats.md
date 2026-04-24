@@ -127,7 +127,7 @@ type NFTData = {
 	readonly owner: string;
 	readonly nftType?: "seed" | "instance";  // "seed" for mint; instances come from bulk_distribute
 	readonly originDna: string;              // inherited from the collection
-	readonly instanceDna: string;            // "i<19 upper-hex>", deterministic
+	readonly nftDna: string;            // "i<19 upper-hex>", deterministic
 	readonly uniqueAccessKey?: string;       // reserved for future use
 	readonly mintedBy: string;
 	readonly collectionBlock?: number;
@@ -166,7 +166,7 @@ type BulkDistributeItem = {
 
 Cap: 50 distinct seeds per call. Duplicate `seedId`s are rejected.
 
-Instance IDs are computed server-side as `generateDeterministicInstanceId(seedId, instanceNumber)` = `nft_<seedSuffix>_<n>`; instance DNAs follow `generateDeterministicInstanceDna(seedId, n, txId, blockNum)`.
+Instance IDs are computed server-side as `generateDeterministicInstanceId(seedId, instanceNumber)` = `nft_<seedSuffix>_<n>`; instance DNAs follow `generateInstanceDna(seedId, n, txId, blockNum)`.
 
 ### `transfer` / burn
 
@@ -194,7 +194,7 @@ Either `nftId` or `nftIds` must be present. Burning is a transfer with `to = "nu
 ```typescript
 type SetDataData = {
 	readonly nftId: string;
-	readonly instanceDna: string;            // owner-bound guard; prevents cross-NFT replays
+	readonly nftDna: string;            // owner-bound guard; prevents cross-NFT replays
 	readonly data?: Record<string, unknown>;
 	readonly mutableData?: Record<string, unknown>;
 	readonly seedId?: string;
@@ -211,7 +211,7 @@ If the collection has a schema, payload fields are validated against the `mutabl
 ```typescript
 type SetDataFromData = {
 	readonly nftId: string;
-	readonly instanceDna: string;
+	readonly nftDna: string;
 	readonly data?: Record<string, unknown>;
 	readonly mutableData?: Record<string, unknown>;
 	readonly seedId?: string;
