@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS sync_state (
 	-- tick alongside last_block. Consumers (e.g. /api/multisig) diff
 	-- hive_head_block - last_block to gate signing when the indexer is lagged.
 	hive_head_block BIGINT NOT NULL DEFAULT 0,
+	-- Timestamp of the observed Hive HEAD block. Lets the API estimate chain
+	-- time for `last_block` without trusting the local wall clock.
+	hive_head_time TIMESTAMPTZ,
 	-- schema_hash pins this row to a known schema.sql content. On mismatch the
 	-- bootstrap truncates all data and re-syncs from genesis (testnet policy).
 	schema_hash TEXT,
@@ -64,6 +67,12 @@ CREATE TABLE IF NOT EXISTS collections (
 	name TEXT NOT NULL,
 	symbol VARCHAR(10) NOT NULL CHECK (symbol ~ '^[A-Z][A-Z0-9]{2,9}$'),
 	creator TEXT NOT NULL,
+	-- Canonical DNA of this collection. Pure function of `id` (see
+	-- protocol/dna.ts::generateOriginDna). Stored here as the single source of
+	-- truth so seeds and instances can JOIN for it — never duplicated on
+	-- `nfts` rows. Immutable post-insert (enforced by
+	-- prevent_collection_immutable_update).
+	origin_dna TEXT NOT NULL,
 	total_potential INTEGER NOT NULL DEFAULT 0 CHECK (total_potential >= 0),
 	-- Hard cap on instances mintable across the collection. 0 = unlimited
 	-- (subject to per-creator caps). When > 0, must be a multiple of 1000
@@ -105,8 +114,16 @@ CREATE TABLE IF NOT EXISTS nfts (
 	status nft_status NOT NULL DEFAULT 'active',
 	edition INTEGER NOT NULL DEFAULT 1,
 	owner TEXT NOT NULL,
-	origin_dna TEXT,
-	instance_dna TEXT,
+	-- origin_dna lives on `collections` — read via JOIN, never cached here.
+	-- nft_dna: the DNA hash emitted under the generateSeedDna() /
+	-- generateInstanceDna() algorithm live at the moment this row was created.
+	-- Kept as an IMMUTABLE AUDIT TRAIL (not a cache of a pure function) because
+	-- the algorithm can rotate — domain constants or preimage shape may change
+	-- across hardforks — and only the stored value reflects what was actually
+	-- signed on-chain in the original custom_json. Same pattern as
+	-- created_*/owner_* audit columns. Per-row, never shared between rows
+	-- of the same seed (each instance has its own hash keyed by instance_number).
+	nft_dna TEXT,
 	name TEXT NOT NULL,
 	image_url TEXT,
 	max_supply INTEGER NOT NULL DEFAULT 1 CHECK (max_supply >= 0),
@@ -514,6 +531,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
 -- present. Keep entries here permanently — removing an ALTER after rollout
 -- would leave freshly-initialized and upgraded DBs on different schemas.
 ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_block BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_time TIMESTAMPTZ;
 ALTER TABLE l2_nodes DROP COLUMN IF EXISTS public_key;
 
 -- ============================================================================
@@ -544,11 +562,8 @@ BEGIN
 	IF NEW.edition IS DISTINCT FROM OLD.edition THEN
 		RAISE EXCEPTION 'nfts.edition is immutable for %', OLD.id;
 	END IF;
-	IF NEW.origin_dna IS DISTINCT FROM OLD.origin_dna THEN
-		RAISE EXCEPTION 'nfts.origin_dna is immutable for %', OLD.id;
-	END IF;
-	IF NEW.instance_dna IS DISTINCT FROM OLD.instance_dna THEN
-		RAISE EXCEPTION 'nfts.instance_dna is immutable for %', OLD.id;
+	IF NEW.nft_dna IS DISTINCT FROM OLD.nft_dna THEN
+		RAISE EXCEPTION 'nfts.nft_dna is immutable for %', OLD.id;
 	END IF;
 	IF NEW.name IS DISTINCT FROM OLD.name THEN
 		RAISE EXCEPTION 'nfts.name is immutable for %', OLD.id;
@@ -631,6 +646,9 @@ BEGIN
 	IF NEW.symbol IS DISTINCT FROM OLD.symbol THEN
 		RAISE EXCEPTION 'collections.symbol is immutable for %', OLD.id;
 	END IF;
+	IF NEW.origin_dna IS DISTINCT FROM OLD.origin_dna THEN
+		RAISE EXCEPTION 'collections.origin_dna is immutable for %', OLD.id;
+	END IF;
 	IF NEW.total_potential IS DISTINCT FROM OLD.total_potential THEN
 		RAISE EXCEPTION 'collections.total_potential is immutable for %', OLD.id;
 	END IF;
@@ -655,6 +673,188 @@ CREATE TRIGGER trg_prevent_collection_immutable_update
 	BEFORE UPDATE ON collections
 	FOR EACH ROW
 	EXECUTE FUNCTION prevent_collection_immutable_update();
+
+-- Counter maintenance — single source of truth in DB. Before this trigger,
+-- `owner_nft_counts` and `collection_stats` were maintained by app-level
+-- helpers (`adjustOwnerNftCount`, `recordCollectionMint`,
+-- `recordCollectionBurn`) that each handler had to remember to call.
+-- Missing one call silently drifted the counters from the actual `nfts`
+-- rows; no DB-level defense existed. Moving the logic here makes INSERT /
+-- DELETE / UPDATE-of-owner atomic with the counter update inside the same
+-- transaction, independent of any specific handler path.
+--
+-- DELETE and UPDATE-of-owner RAISE EXCEPTION `'Owner NFT count missing
+-- for …'` when the old owner's row is not found — preserves the exact
+-- contract `adjustOwnerNftCount(-1)` had, so tests that force
+-- counter-missing failure paths stay reproducible.
+--
+-- `collection_stats.listed` is NOT touched here — listed/unlisted state
+-- is managed by the marketplace handlers via `adjustCollectionListed`
+-- and is orthogonal to owner/kind counting.
+CREATE OR REPLACE FUNCTION maintain_nft_counters()
+RETURNS TRIGGER AS $$
+DECLARE
+	seed_delta_new   INTEGER;
+	inst_delta_new   INTEGER;
+	seed_delta_old   INTEGER;
+	inst_delta_old   INTEGER;
+BEGIN
+	IF TG_OP = 'INSERT' THEN
+		seed_delta_new := CASE WHEN NEW.nft_type = 'seed'     THEN 1 ELSE 0 END;
+		inst_delta_new := CASE WHEN NEW.nft_type = 'instance' THEN 1 ELSE 0 END;
+
+		INSERT INTO owner_nft_counts (owner, total, seeds, instances)
+		VALUES (NEW.owner, 1, seed_delta_new, inst_delta_new)
+		ON CONFLICT (owner) DO UPDATE SET
+			total     = owner_nft_counts.total     + 1,
+			seeds     = owner_nft_counts.seeds     + seed_delta_new,
+			instances = owner_nft_counts.instances + inst_delta_new;
+
+		INSERT INTO collection_stats (collection_id, total, seeds, instances, listed, burned)
+		VALUES (NEW.collection_id, 1, seed_delta_new, inst_delta_new, 0, 0)
+		ON CONFLICT (collection_id) DO UPDATE SET
+			total     = collection_stats.total     + 1,
+			seeds     = collection_stats.seeds     + seed_delta_new,
+			instances = collection_stats.instances + inst_delta_new;
+
+		RETURN NEW;
+	END IF;
+
+	IF TG_OP = 'DELETE' THEN
+		seed_delta_old := CASE WHEN OLD.nft_type = 'seed'     THEN 1 ELSE 0 END;
+		inst_delta_old := CASE WHEN OLD.nft_type = 'instance' THEN 1 ELSE 0 END;
+
+		UPDATE owner_nft_counts SET
+			total     = total     - 1,
+			seeds     = seeds     - seed_delta_old,
+			instances = instances - inst_delta_old
+			WHERE owner = OLD.owner;
+		IF NOT FOUND THEN
+			RAISE EXCEPTION 'Owner NFT count missing for %', OLD.owner;
+		END IF;
+
+		UPDATE collection_stats SET
+			burned    = burned    + 1,
+			total     = total     - 1,
+			seeds     = seeds     - seed_delta_old,
+			instances = instances - inst_delta_old
+			WHERE collection_id = OLD.collection_id;
+
+		RETURN OLD;
+	END IF;
+
+	IF TG_OP = 'UPDATE' AND OLD.owner IS DISTINCT FROM NEW.owner THEN
+		-- nft_type is immutable (protected by prevent_nft_immutable_update),
+		-- so OLD.nft_type == NEW.nft_type; use NEW uniformly.
+		seed_delta_new := CASE WHEN NEW.nft_type = 'seed'     THEN 1 ELSE 0 END;
+		inst_delta_new := CASE WHEN NEW.nft_type = 'instance' THEN 1 ELSE 0 END;
+
+		UPDATE owner_nft_counts SET
+			total     = total     - 1,
+			seeds     = seeds     - seed_delta_new,
+			instances = instances - inst_delta_new
+			WHERE owner = OLD.owner;
+		IF NOT FOUND THEN
+			RAISE EXCEPTION 'Owner NFT count missing for %', OLD.owner;
+		END IF;
+
+		INSERT INTO owner_nft_counts (owner, total, seeds, instances)
+		VALUES (NEW.owner, 1, seed_delta_new, inst_delta_new)
+		ON CONFLICT (owner) DO UPDATE SET
+			total     = owner_nft_counts.total     + 1,
+			seeds     = owner_nft_counts.seeds     + seed_delta_new,
+			instances = owner_nft_counts.instances + inst_delta_new;
+
+		RETURN NEW;
+	END IF;
+
+	RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_maintain_nft_counters ON nfts;
+CREATE TRIGGER trg_maintain_nft_counters
+	AFTER INSERT OR DELETE OR UPDATE OF owner ON nfts
+	FOR EACH ROW
+	EXECUTE FUNCTION maintain_nft_counters();
+
+-- Per-collection instance cap. `collections.max_instances = 0` means the
+-- creator opted out of a per-collection cap (unlimited, subject only to
+-- per-creator limits). A positive value is the hard ceiling across every
+-- seed in that collection. The handler `bulk_distribute` enforces this
+-- app-side, but a buggy handler, a future code path that bypasses the
+-- usual flow, or ad-hoc SQL could breach the cap silently — the trigger
+-- is the DB backstop. We read the materialized counter from
+-- `collection_stats`; within a single tx the post-insert counter update
+-- is visible to the next BEFORE trigger, so sequential bulk_distribute
+-- inserts each see the running total.
+CREATE OR REPLACE FUNCTION enforce_max_instances()
+RETURNS TRIGGER AS $$
+DECLARE
+	cap INTEGER;
+	current_count INTEGER;
+BEGIN
+	IF NEW.nft_type = 'instance' THEN
+		SELECT max_instances INTO cap
+			FROM collections
+			WHERE id = NEW.collection_id;
+		IF cap IS NOT NULL AND cap > 0 THEN
+			SELECT COALESCE(instances, 0) INTO current_count
+				FROM collection_stats
+				WHERE collection_id = NEW.collection_id;
+			IF COALESCE(current_count, 0) + 1 > cap THEN
+				RAISE EXCEPTION
+					'nfts.instance cap exceeded for collection %: current=% + 1 > max_instances=%',
+					NEW.collection_id, COALESCE(current_count, 0), cap;
+			END IF;
+		END IF;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_enforce_max_instances ON nfts;
+CREATE TRIGGER trg_enforce_max_instances
+	BEFORE INSERT ON nfts
+	FOR EACH ROW
+	EXECUTE FUNCTION enforce_max_instances();
+
+-- `nfts.collection_id` on an instance row is a deliberate desnormalization —
+-- we keep it so ownership/collection queries stay linear without a JOIN to
+-- the parent seed. The price of that cache is that a buggy handler (or a
+-- rogue INSERT) could write an instance whose `collection_id` disagrees
+-- with its parent seed's `collection_id`, silently forking the state_root
+-- projection between replicas. This trigger is the DB-level backstop:
+-- before persisting any instance row, we look up the parent seed and
+-- reject the INSERT if the collection_ids do not match. Seeds are skipped
+-- (seed_id IS NULL). UPDATE is already blocked by the immutability
+-- triggers on collection_id and seed_id, so firing on INSERT is enough.
+CREATE OR REPLACE FUNCTION enforce_instance_collection_matches_seed()
+RETURNS TRIGGER AS $$
+DECLARE
+	seed_collection_id TEXT;
+BEGIN
+	IF NEW.seed_id IS NOT NULL THEN
+		SELECT collection_id INTO seed_collection_id
+			FROM nfts
+			WHERE id = NEW.seed_id;
+		-- If seed not found the FK will raise after; no point double-reporting.
+		IF seed_collection_id IS NOT NULL
+		   AND NEW.collection_id IS DISTINCT FROM seed_collection_id THEN
+			RAISE EXCEPTION
+				'nfts.collection_id mismatch: instance % claims collection %, parent seed % belongs to collection %',
+				NEW.id, NEW.collection_id, NEW.seed_id, seed_collection_id;
+		END IF;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_enforce_instance_collection_matches_seed ON nfts;
+CREATE TRIGGER trg_enforce_instance_collection_matches_seed
+	BEFORE INSERT ON nfts
+	FOR EACH ROW
+	EXECUTE FUNCTION enforce_instance_collection_matches_seed();
 
 -- `schema_versions` is the append-only hash chain recording every set_schema
 -- operation per collection (prev_hash linking each row to its predecessor).
