@@ -11,11 +11,11 @@ import { computeDataHash, validateMutableSnapshot } from "@/protocol/index.ts";
 
 export async function handleSetData(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const nftId = requireString(op.data.nftId, "nftId");
-	const instanceDna = requireString(op.data.instanceDna, "instanceDna");
+	const nftDna = requireString(op.data.nftDna, "nftDna");
 
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
-	if (nft.instance_dna !== instanceDna) throw new Error(`Instance DNA mismatch for ${nftId}`);
+	if (nft.nft_dna !== nftDna) throw new Error(`NFT DNA mismatch for ${nftId}`);
 
 	const collection = await getCollectionRules(nft.collection_id, txn);
 	const schema = optionalCollectionSchema(collection?.schema);

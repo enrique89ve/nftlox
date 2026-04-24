@@ -12,14 +12,13 @@ import {
 	optionalObject,
 	optionalCollectionSchema,
 } from "@/utils/validation.ts";
-import { resolveNftType, validateSeedCap } from "@/utils/nft-rules.ts";
+import { validateSeedCap } from "@/utils/nft-rules.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { createLogger } from "@/utils/logger.ts";
 import {
 	validateMintData,
 	computeDataHash,
-	generateOriginDna,
-	generateInstanceDna,
+	generateSeedDna,
 	generateDeterministicSeedId,
 	ACTION_MINT,
 	MAX_ID_LENGTH,
@@ -67,9 +66,14 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	if (collection.creator !== op.signer) throw new Error(`Only the collection creator can mint in ${collectionId}`);
 
 	const metadata = optionalObject(d.metadata) ?? {};
-	const nftType = resolveNftType(optionalString(d.nftType), canonicalId);
+	// Payload must declare nftType explicitly — we never infer it from id prefix
+	// or action context. This keeps the custom_json self-describing so an
+	// auditor can recreate ownership from the Hive API without the indexer.
+	const nftType = requireBoundedString(d.nftType, "nftType", 16);
 	if (nftType !== "seed") {
-		throw new Error("Only seeds can be minted directly. Instances are created via bulk_distribute");
+		throw new Error(
+			`mint requires nftType="seed" (got "${nftType}"). Instances are created via bulk_distribute.`,
+		);
 	}
 
 	validateSeedCap(collectionId, collection.seed_count, collection.total_potential);
@@ -94,10 +98,11 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	const dataHash = mutableData ? await computeDataHash(mutableData) : null;
 
 	// DNA is always computed by the indexer — never trust user-supplied values.
+	// origin_dna lives on the collection row (single source of truth); we just
+	// read it here to feed into the seed's nft_dna derivation.
 	const edition = optionalNumber(d.edition) ?? 1;
 	const imageHash = optionalString(metadata.imageHash) ?? "";
-	const originDna = await generateOriginDna(collectionId);
-	const instanceDna = await generateInstanceDna(canonicalId, originDna, edition, imageHash);
+	const nftDna = await generateSeedDna(canonicalId, collection.origin_dna, edition, imageHash);
 	const ownerRaw = optionalString(d.owner);
 	const owner = ownerRaw ? requireUsername(ownerRaw, "owner") : op.signer;
 
@@ -110,8 +115,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 		id: canonicalId, collectionId, nftType: "seed",
 		edition,
 		owner,
-		originDna,
-		instanceDna,
+		nftDna,
 		name: optionalBoundedString(metadata.name, "metadata.name", MAX_NAME_LENGTH) ?? optionalBoundedString(d.name, "name", MAX_NAME_LENGTH) ?? "",
 		imageUrl: optionalBoundedString(metadata.imageUrl, "metadata.imageUrl", MAX_IMAGE_URL_LENGTH),
 		maxSupply,

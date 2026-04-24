@@ -20,6 +20,7 @@ import {
 	validateSchemaDefinition,
 	computeDataHash,
 	generateDeterministicCollectionId,
+	generateOriginDna,
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
@@ -124,6 +125,19 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		);
 	}
 
+	// Payload must declare origin_dna explicitly. Canonicalize: recompute
+	// from the canonicalId and reject any mismatch. Same discipline as the
+	// id/artId canonical checks — the custom_json is self-describing so an
+	// auditor can validate ownership via the Hive API without trusting the
+	// indexer to silently substitute missing/incorrect values.
+	const originDna = await generateOriginDna(canonicalId);
+	const payloadOriginDna = requireBoundedString(d.originDna, "originDna", 32);
+	if (payloadOriginDna !== originDna) {
+		throw new Error(
+			`Non-canonical originDna: expected ${originDna} for collection ${canonicalId}, got ${payloadOriginDna}`,
+		);
+	}
+
 	// Validate schema if provided
 	const rawSchema = optionalCollectionSchema(d.schema);
 	if (rawSchema) {
@@ -140,6 +154,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		name,
 		symbol,
 		creator,
+		originDna,
 		totalPotential,
 		maxInstances,
 		description,

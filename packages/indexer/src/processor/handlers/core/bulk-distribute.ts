@@ -23,8 +23,7 @@ import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { computeInstanceBaseline, validateSeedSupplyForDistribution } from "@/utils/nft-rules.ts";
 import {
 	generateDeterministicInstanceId,
-	generateOriginDna,
-	generateDeterministicInstanceDna,
+	generateInstanceDna,
 	ACTION_BULK_DISTRIBUTE,
 	MAX_BULK_DISTRIBUTE_ITEMS,
 	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
@@ -159,8 +158,6 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const reservedSupply = Number(seed.reserved_supply) || 0;
 		validateSeedSupplyForDistribution(seedId, maxSupply, baseDistributed, quantity, reservedSupply);
 
-		const originDna = await generateOriginDna(seed.collection_id);
-
 		let minted = 0;
 
 		for (let i = 0; i < quantity; i++) {
@@ -181,19 +178,19 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				);
 			}
 
-			const instanceDna = await generateDeterministicInstanceDna(
+			const nftDna = await generateInstanceDna(
 				seedId, instanceNumber, op.txId, op.blockNum,
 			);
 
-			// Instance stores only references; name, image are inherited from seed via JOIN at query time.
+			// Instance stores only references; name, image, and origin_dna are
+			// inherited via JOIN at query time (seed→collection chain).
 			await insertNft({
 				id: instanceId,
 				collectionId: seed.collection_id,
 				nftType: "instance",
 				edition: 1,
 				owner: to,
-				originDna,
-				instanceDna,
+				nftDna,
 				name: "",
 				imageUrl: null,
 				maxSupply: 0,
