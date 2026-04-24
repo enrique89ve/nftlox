@@ -12,6 +12,7 @@ import {
 import { formatZodError } from "./helpers";
 import type { KeychainResult } from "./types";
 import {
+	BURN_RECIPIENT,
 	createPayload,
 	createHiveOperation,
 	getKeyType,
@@ -27,7 +28,8 @@ import {
 export const burnBuilderSchema = burnInputSchema;
 export type BurnBuilderInput = z.infer<typeof burnBuilderSchema>;
 
-// Burn = transfer to "null". Supports single nftId or bulk nftIds.
+// Burn = transfer to BURN_RECIPIENT (Hive's native burn account). Supports
+// single nftId or bulk nftIds.
 export function buildBurn(input: BurnBuilderInput): KeychainResult<TransferData> {
 	const parsed = burnBuilderSchema.safeParse(input);
 	if (!parsed.success) {
@@ -36,8 +38,8 @@ export function buildBurn(input: BurnBuilderInput): KeychainResult<TransferData>
 	const data = parsed.data;
 
 	const transferData: TransferData = data.nftIds
-		? { nftIds: data.nftIds, from: data.owner, to: "null" }
-		: { nftId: data.nftId!, from: data.owner, to: "null" };
+		? { nftIds: data.nftIds, from: data.owner, to: BURN_RECIPIENT }
+		: { nftId: data.nftId!, from: data.owner, to: BURN_RECIPIENT };
 
 	const payload = createPayload("transfer", transferData);
 	const operation = createHiveOperation(payload, data.owner);
@@ -66,7 +68,6 @@ export function buildSetData(input: SetDataBuilderInput): KeychainResult<SetData
 	const setDataData: SetDataData = {
 		nftId: data.nftId,
 		nftDna: data.nftDna,
-		...(data.data && { data: data.data }),
 		...(data.mutableData && { mutableData: data.mutableData }),
 		...(data.seedId && { seedId: data.seedId }),
 		...(data.seedTxId && { seedTxId: data.seedTxId }),
@@ -99,7 +100,6 @@ export function buildSetDataFrom(input: SetDataFromBuilderInput): KeychainResult
 	const setDataFromData: SetDataFromData = {
 		nftId: data.nftId,
 		nftDna: data.nftDna,
-		...(data.data && { data: data.data }),
 		...(data.mutableData && { mutableData: data.mutableData }),
 		...(data.seedId && { seedId: data.seedId }),
 		...(data.seedTxId && { seedTxId: data.seedTxId }),

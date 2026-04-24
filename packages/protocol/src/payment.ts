@@ -1,5 +1,8 @@
 import {
 	ACTION_BUY,
+	HIVE_AMOUNT_EPSILON,
+	HIVE_DECIMALS,
+	HIVE_PRECISION,
 	MAX_ROYALTY_PCT,
 	MIN_PRICE_AMOUNT,
 	BASIS_POINTS_DENOMINATOR,
@@ -7,9 +10,6 @@ import {
 } from "./constants";
 import { getPaymentRequirement } from "./payment-requirements";
 import type { PaymentSplit } from "./types";
-
-const HIVE_PRECISION = 1000;
-const HIVE_AMOUNT_EPSILON = 1e-9;
 
 function assertFiniteNumber(value: number, fieldName: string): void {
 	if (!Number.isFinite(value)) {
@@ -30,7 +30,9 @@ function toExactHiveUnits(value: number, fieldName: string): number {
 	const units = toRoundedHiveUnits(value, fieldName);
 	const canonical = units / HIVE_PRECISION;
 	if (Math.abs(value - canonical) > HIVE_AMOUNT_EPSILON) {
-		throw new Error(`${fieldName} must use at most 3 decimal places, got ${value}`);
+		throw new Error(
+			`${fieldName} must use at most ${HIVE_DECIMALS} decimal places, got ${value}`,
+		);
 	}
 	return units;
 }

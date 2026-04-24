@@ -63,25 +63,31 @@ const ACTION_AUTH_LEVEL_MAP = {
 
 export const ACTION_AUTH_LEVEL = Object.freeze(ACTION_AUTH_LEVEL_MAP);
 
-/** Get the auth level for any protocol action. */
-export function getAuthLevel(action: ProtocolAction): AuthLevel {
+// Boundary helpers for SDK/indexer consumers that receive action strings from
+// untyped sources (on-chain custom_json.id, API responses, log lines). They
+// validate once at the boundary and either return a narrowed result or throw
+// loudly with the rejected value. Callers that already hold a ProtocolAction
+// pass through without friction since string is wider.
+
+/** Get the auth level for an action string. Throws if the string is not a known ProtocolAction. */
+export function getAuthLevel(action: string): AuthLevel {
 	if (!isProtocolAction(action)) {
-		throw new Error(`Unsupported protocol action: ${String(action)}`);
+		throw new Error(`Unsupported protocol action: ${action}`);
 	}
 	return ACTION_AUTH_LEVEL[action];
 }
 
-/** Get the Keychain-compatible key type string for an action. */
-export function getKeyType(action: ProtocolAction): KeyType {
+/** Get the Keychain-compatible key type string for an action. Throws if the string is not a known ProtocolAction. */
+export function getKeyType(action: string): KeyType {
 	if (!isProtocolAction(action)) {
-		throw new Error(`Unsupported protocol action: ${String(action)}`);
+		throw new Error(`Unsupported protocol action: ${action}`);
 	}
 	return ACTION_AUTH_LEVEL[action] === "active" ? "Active" : "Posting";
 }
 
-/** Returns null if auth matches; otherwise a human-readable mismatch reason. */
+/** Returns null if auth matches; otherwise a human-readable mismatch reason. Throws if the action string is not a known ProtocolAction. */
 export function getAuthMismatchReason(
-	action: ProtocolAction,
+	action: string,
 	actualAuthLevel: AuthLevel,
 ): string | null {
 	const expectedAuthLevel = getAuthLevel(action);

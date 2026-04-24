@@ -89,7 +89,6 @@ export type NFTData = {
 	readonly maxSupply: number;
 	readonly immutableData?: Record<string, unknown> | undefined;
 	readonly mutableData?: Record<string, unknown> | undefined;
-	readonly data?: Record<string, unknown> | undefined;
 };
 
 // Bulk distribute
@@ -105,7 +104,6 @@ export type BulkDistributeData = {
 	readonly to?: string | undefined;
 	readonly items: readonly BulkDistributeItem[];
 	readonly imageOverrides?: Readonly<Record<string, { readonly imageUrl?: string | undefined; readonly imageHash?: string | undefined }>> | undefined;
-	readonly data?: Record<string, unknown> | undefined;
 	readonly mutableData?: Record<string, unknown> | undefined;
 };
 
@@ -125,7 +123,6 @@ export type TransferData = SeedProvenance & {
 export type SetDataData = {
 	readonly nftId: string;
 	readonly nftDna: string;
-	readonly data?: Record<string, unknown> | undefined;
 	readonly mutableData?: Record<string, unknown> | undefined;
 	readonly seedId?: string | undefined;
 	readonly seedTxId?: string | undefined;
@@ -142,7 +139,6 @@ export type DataOperatorApproveData = {
 export type SetDataFromData = SeedProvenance & {
 	readonly nftId: string;
 	readonly nftDna: string;
-	readonly data?: Record<string, unknown> | undefined;
 	readonly mutableData?: Record<string, unknown> | undefined;
 };
 

@@ -31,7 +31,6 @@ export function buildBulkDistribute(
 			seedTxId: item.seedTxId,
 		})),
 		...(data.imageOverrides !== undefined && { imageOverrides: data.imageOverrides }),
-		...(data.data !== undefined && { data: data.data }),
 		...(data.mutableData !== undefined && { mutableData: data.mutableData }),
 	};
 

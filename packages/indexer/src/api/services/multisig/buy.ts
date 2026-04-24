@@ -5,6 +5,7 @@ import {
 	ACTION_BUY_COMMITMENT,
 	BUY_API_LAG_MAX_BLOCKS,
 	BUY_COMMITMENT_TTL_BLOCKS,
+	HIVE_BLOCK_TIME_MS,
 	MAX_ROYALTY_PCT,
 	createPayload,
 	validateHiveUsername,
@@ -40,10 +41,10 @@ import type {
 
 const BUY_TRANSFER_MIN_COUNT = 1;
 const BUY_TRANSFER_MAX_COUNT = 3;
-const HIVE_BLOCK_TIME_MS = 3000;
 
-// Wait budget for buy_commitment inclusion. Hive blocks are ~3s; 5 blocks
-// covers ~15s which is generous for a single block production + indexer sync.
+// Wait budget for buy_commitment inclusion. Derived from the block-denominated
+// TTL the protocol publishes, so a hardfork on either knob keeps the two
+// windows in sync without a local re-derivation.
 const COMMITMENT_INCLUSION_TIMEOUT_MS = BUY_COMMITMENT_TTL_BLOCKS * HIVE_BLOCK_TIME_MS;
 const COMMITMENT_POLL_INTERVAL_MS = 500;
 

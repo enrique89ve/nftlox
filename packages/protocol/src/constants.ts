@@ -24,6 +24,25 @@ export const MIN_PROTOCOL_VERSION = "0.9.0";
 export const HASH_VERSION = "v1";
 
 // ============================================================================
+// Hive platform constants
+// Block cadence and native-asset precision are properties of the Hive L1
+// itself — every protocol constant derived from them (TTLs, listing floors,
+// amount rounding) must import from here instead of hard-coding the numbers.
+// ============================================================================
+
+/** Hive target block time. All *_BLOCKS windows resolve to wall time via this. */
+export const HIVE_BLOCK_TIME_MS = 3000;
+
+/** Decimals in Hive-native asset amounts (HIVE, HBD). "1.234 HIVE" has 3. */
+export const HIVE_DECIMALS = 3;
+
+/** Multiplier to convert a decimal Hive amount into integer micro-units. */
+export const HIVE_PRECISION = 10 ** HIVE_DECIMALS;
+
+/** Tolerance for float → micro-unit roundtrip comparisons. */
+export const HIVE_AMOUNT_EPSILON = 1e-9;
+
+// ============================================================================
 // On-chain consensus
 // Rules every indexer implementation MUST enforce identically. Changing any of
 // these is a protocol upgrade and requires coordinated network-wide rollout.
@@ -68,8 +87,8 @@ export const RECOMMENDED_BUY_TX_EXPIRATION_MS = 60_000;
 // Block-denominated TTL for `buy_commitment` reservations. A node that emits
 // a commitment has this many blocks to get its `buy` transaction included on
 // chain; after that the commitment is swept and the NFT returns to `listed`.
-// 10 blocks × 3s = 30s, aligned with BUY_TX_TTL_MS.
-export const BUY_COMMITMENT_TTL_BLOCKS = 10;
+// Derived from BUY_TX_TTL_MS so the two windows stay aligned by construction.
+export const BUY_COMMITMENT_TTL_BLOCKS = BUY_TX_TTL_MS / HIVE_BLOCK_TIME_MS;
 
 // Per-node cap on concurrently active `buy_commitment` reservations. A single
 // node cannot hold more than this many NFTs in `pending_sale` at any block,
@@ -119,7 +138,11 @@ export const MAX_ID_LENGTH = 128;
 export const MAX_ART_ID_LENGTH = 64;
 export const MIN_SYMBOL_LENGTH = 3;
 export const MAX_SYMBOL_LENGTH = 10;
-export const SYMBOL_REGEX = /^[A-Z][A-Z0-9]{2,9}$/;
+// Derived so the length bounds stay a single source of truth. First char is
+// [A-Z]; remaining chars are [A-Z0-9] for MIN-1 to MAX-1 occurrences.
+export const SYMBOL_REGEX = new RegExp(
+	`^[A-Z][A-Z0-9]{${MIN_SYMBOL_LENGTH - 1},${MAX_SYMBOL_LENGTH - 1}}$`,
+);
 export const TX_ID_REGEX = /^[0-9a-f]{40}$/;
 
 export const MAX_SCHEMA_FIELDS = 64;
@@ -134,6 +157,31 @@ export const INSTANCE_DNA_LENGTH = 20;
 export const ACCESS_KEY_LENGTH = 8;
 export const INSTANCE_ID_HASH_LENGTH = 20;
 export const COLLECTION_ID_HASH_LENGTH = 20;  // was 14 (56 bits) — now 80 bits to match other IDs
+export const IMAGE_ID_HASH_LENGTH = 16;
+
+// ID and DNA textual prefixes — normative. Each emitter (SDK builders,
+// indexer queries, test fixtures) must derive from these; any raw literal in
+// source is a drift vector. Changing a prefix is a hardfork: every existing
+// id stops matching.
+export const COLLECTION_ID_PREFIX = "col_";
+export const SEED_ID_PREFIX = "seed_";
+export const INSTANCE_ID_PREFIX = "nft_";
+export const IMAGE_ID_PREFIX = "img_";
+export const ORIGIN_DNA_PREFIX = "o";
+// Every NFT DNA (seed or instance) starts with this letter. Seed vs instance
+// are distinguished by the hash-domain salt on the preimage
+// (HASH_DOMAIN_SEED_DNA vs HASH_DOMAIN_DNA), not by the textual prefix —
+// collisions between the two are cryptographically prevented regardless of
+// prefix, so the prefix stays a single shared letter.
+export const NFT_DNA_PREFIX = "i";
+
+// Canonical textual form for SHA-256 digests — shared by data hashes
+// (schema.ts::computeDataHash) and ownership state roots (indexer).
+export const HASH_FORMAT_PREFIX = "sha256:";
+
+// Hive reserves the `null` account for native burns. Transferring an NFT to
+// this account is how the protocol records a burn.
+export const BURN_RECIPIENT = "null";
 
 // ============================================================================
 // Marketplace
@@ -148,8 +196,11 @@ export const DEFAULT_FEE_ACCOUNT = "nftlox";
 export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
 // Conservative floor for listing TTLs. Even with single-tx buys, listings that
 // expire almost immediately create avoidable races between quoting payment info,
-// node co-signing, buyer signature, and broadcast.
-export const MIN_LISTING_TTL_MS = LISTING_MIN_DURATION_BLOCKS * 3_000 + 60_000;
+// node co-signing, buyer signature, and broadcast. 60s safety buffer on top of
+// the minimum block-denominated window.
+export const MIN_LISTING_TTL_BUFFER_MS = 60_000;
+export const MIN_LISTING_TTL_MS =
+	LISTING_MIN_DURATION_BLOCKS * HIVE_BLOCK_TIME_MS + MIN_LISTING_TTL_BUFFER_MS;
 
 // Per-instance fee for create_collection. When enabled, the total fee becomes
 //   PROTOCOL_COLLECTION_FEE_HBD + INSTANCE_FEE_UNIT_HBD * ceil(maxInstances / INSTANCE_FEE_PER_N)
@@ -293,10 +344,9 @@ export const ALL_ACTIONS = [
 export const HASH_DOMAIN_COL = "nftlox:col:";
 export const HASH_DOMAIN_ORIGIN = "nftlox:origin:";
 export const HASH_DOMAIN_SEED = "nftlox:seed:";
-export const HASH_DOMAIN_INST = "nftlox:inst:";
 export const HASH_DOMAIN_DNA = "nftlox:dna:";
 export const HASH_DOMAIN_KEY = "nftlox:key:";
-export const HASH_DOMAIN_INSTANCE = "nftlox:instance:";
+export const HASH_DOMAIN_SEED_DNA = "nftlox:seed-dna:";
 export const HASH_DOMAIN_IMG = "nftlox:img:";
 export const HASH_DOMAIN_LISTING = "nftlox:listing:v1:";
 

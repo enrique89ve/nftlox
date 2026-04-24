@@ -1,5 +1,6 @@
-const HIVE_BLOCK_INTERVAL_MS = 3_000;
-export const CHAIN_TIME_RETRY_AFTER_MS = HIVE_BLOCK_INTERVAL_MS;
+import { HIVE_BLOCK_TIME_MS } from "@/protocol/index.ts";
+
+export const CHAIN_TIME_RETRY_AFTER_MS = HIVE_BLOCK_TIME_MS;
 
 export type ChainTimeSnapshot = Readonly<{
 	readonly lastBlock: number;
@@ -32,7 +33,7 @@ export function resolveChainReferenceTimeMs(
 	const lagBlocks = Math.max(0, snapshot.hiveHeadBlock - snapshot.lastBlock);
 	return {
 		ok: true,
-		referenceTimeMs: headTimeMs - lagBlocks * HIVE_BLOCK_INTERVAL_MS,
+		referenceTimeMs: headTimeMs - lagBlocks * HIVE_BLOCK_TIME_MS,
 	};
 }
 

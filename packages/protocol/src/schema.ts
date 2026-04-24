@@ -1,4 +1,5 @@
 import {
+	HASH_FORMAT_PREFIX,
 	MAX_SCHEMA_FIELDS,
 	MAX_FIELD_NAME_LENGTH,
 } from "./constants";
@@ -35,7 +36,7 @@ export async function computeDataHash(
 ): Promise<string> {
 	const json = canonicalJson(data);
 	const hex = await generateHash(json);
-	return `sha256:${hex}`;
+	return `${HASH_FORMAT_PREFIX}${hex}`;
 }
 
 // Schema Validation

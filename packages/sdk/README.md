@@ -99,24 +99,29 @@ if (!seed.success) {
 
 ## Main exports
 
-The SDK re-exports the wire protocol from `@nftlox/protocol` and adds builders, clients, SPV, and validation.
+The SDK re-exports a curated subset of `@nftlox/protocol` (see `src/protocol-exports.ts` for the exact list) and adds builders, clients, SPV, and validation. The re-export surface is curated on purpose: adding a symbol is an opt-in semver commitment, so protocol-internal helpers (e.g. DNA-prefix constants) stay internal until a concrete integrator need appears.
 
 | Category | Key exports |
 |---|---|
-| **Protocol constants** | `PROTOCOL_ID`, `PROTOCOL_VERSION`, `ALL_ACTIONS`, `CORE_ACTIONS`, `MARKETPLACE_ACTIONS`, `SUPPORTED_CURRENCIES`, `PROTOCOL_FEE_BPS` |
-| **Action constants** | `ACTION_MINT`, `ACTION_TRANSFER`, `ACTION_LIST`, `ACTION_SALE_LOCK`, `ACTION_BUY`, `ACTION_BULK_DISTRIBUTE`, … (20 total) |
-| **Auth helpers** | `isProtocolAction()`, `getAuthLevel()`, `getKeyType()`, `ACTION_AUTH_LEVEL` |
-| **Payment** | `calculatePaymentSplit()`, `calculateBasisPointsAmount()` |
+| **Protocol identity** | `PROTOCOL_ID`, `PROTOCOL_VERSION`, `MIN_PROTOCOL_VERSION`, `HASH_VERSION` |
+| **Hive platform** | `HIVE_BLOCK_TIME_MS`, `HIVE_DECIMALS`, `HIVE_PRECISION`, `HIVE_AMOUNT_EPSILON` |
+| **Action constants (20)** | `ACTION_CREATE_COLLECTION`, `ACTION_MINT`, `ACTION_TRANSFER`, `ACTION_BULK_DISTRIBUTE`, `ACTION_SET_DATA`, `ACTION_EXTEND_SCHEMA`, `ACTION_ARCHIVE_COLLECTION`, `ACTION_NODE_REGISTER`, `ACTION_NODE_HEARTBEAT`, `ACTION_LIST`, `ACTION_UNLIST`, `ACTION_BUY_COMMITMENT`, `ACTION_BUY`, `ACTION_NFT_APPROVE`, `ACTION_NFT_APPROVE_ALL`, `ACTION_NFT_TRANSFER_FROM`, `ACTION_NFT_LEND`, `ACTION_NFT_RETURN`, `ACTION_DATA_OPERATOR_APPROVE`, `ACTION_SET_DATA_FROM` |
+| **Action groups** | `ALL_ACTIONS`, `CORE_ACTIONS`, `MARKETPLACE_ACTIONS`, `APPROVE_ACTIONS`, `LENDING_ACTIONS`, `DATA_OPERATOR_ACTIONS`, `ACTIVE_AUTH_ACTIONS`, `POSTING_AUTH_ACTIONS`, `NODE_SIGNED_ACTIONS` |
+| **Auth helpers** | `isProtocolAction()`, `getAuthLevel()`, `getKeyType()`, `getAuthMismatchReason()`, `requiresActiveNodeSigner()`, `ACTION_AUTH_LEVEL` |
+| **Marketplace & fees** | `SUPPORTED_CURRENCIES`, `MAX_ROYALTY_PCT`, `MIN_PRICE_AMOUNT`, `PROTOCOL_FEE_BPS`, `PROTOCOL_COLLECTION_FEE_HBD`, `MIN_LISTING_TTL_MS`, `MIN_LISTING_TTL_BUFFER_MS`, `MAX_INSTANCES_PER_COLLECTION`, `MULTISIG_TX_MIN_EXPIRATION_MS`, `MULTISIG_TX_MAX_EXPIRATION_MS`, `RECOMMENDED_BUY_TX_EXPIRATION_MS` |
+| **Memo tags & prefixes** | `MEMO_PREFIX_BUY`, `MEMO_PREFIX_ROYALTY`, `MEMO_PREFIX_FEE`, `MEMO_PREFIX_FEE_COL`, `MEMO_TAG_BUY`, `MEMO_TAG_ROYALTY`, `MEMO_TAG_FEE`, `MEMO_TAG_FEE_COL`, `BURN_RECIPIENT` |
+| **Id/hash format** | `COLLECTION_ID_PREFIX`, `SEED_ID_PREFIX`, `INSTANCE_ID_PREFIX`, `IMAGE_ID_PREFIX`, `LISTING_ID_PREFIX`, `COLLECTION_ID_HASH_LENGTH`, `INSTANCE_ID_HASH_LENGTH`, `IMAGE_ID_HASH_LENGTH`, `HASH_FORMAT_PREFIX`, `HASH_DOMAIN_COL`, `HASH_DOMAIN_ORIGIN`, `HASH_DOMAIN_SEED`, `HASH_DOMAIN_DNA`, `HASH_DOMAIN_KEY`, `HASH_DOMAIN_SEED_DNA`, `HASH_DOMAIN_IMG`, `HASH_DOMAIN_LISTING` |
+| **Payment math** | `calculatePaymentSplit()`, `calculateBasisPointsAmount()`, `percentageToBasisPoints()`, `roundHive()` |
 | **Builders** | `buildCollection()`, `buildExtendSchema()`, `buildArchiveCollection()`, `buildSeed()`, `buildSeedBatch()`, `buildCollectionWithSeeds()`, `buildBulkDistribute()`, `buildTransfer()`, `buildList()`, `buildBuy()`, `buildSetData()`, `buildSetDataFrom()`, `buildNftApprove()`, `buildNftApproveAll()`, `buildNftTransferFrom()`, `buildNftLend()`, `buildNftReturn()`, `buildNodeRegister()`, `buildNodeHeartbeat()`, `buildDataOperatorApprove()`, `buildBurn()` |
 | **Zod schemas** | `createCollectionInputSchema`, `mintInputSchema`, `bulkDistributeInputSchema`, `listInputSchema`, … |
 | **Multisig / buy client** | `fetchNodeAccount()`, `fetchMultisigNodeAccount()`, `resolveNodeAccountFromStatus()`, `fetchPaymentInfo()`, `submitBuy()`, `requestCreateCollectionMultisig()` |
 | **SPV verification** | `verifyNftOwnership()`, `verifyOperationOnChain()`, `fetchTransaction()` |
 | **Indexer client** | `createIndexerClient()` — portable `fetch()`-based client with `getNodeAccount()` and `getMultisigNodeAccount()` helpers |
 | **Protocol state** | `initProtocol()`, `makePayload()`, `getProtocolVersion()`, `isInitialized()` |
-| **DNA / ID generation** | `generateOriginDna()`, `generateSeedDna()`, `generateInstanceDna()`, `generateDeterministicCollectionId()`, `generateDeterministicSeedId()`, `isSeedId()`, `isInstanceId()` |
+| **DNA / ID generation** | `generateOriginDna()`, `generateSeedDna()`, `generateInstanceDna()`, `generateImageHash()`, `generateDeterministicCollectionId()`, `generateDeterministicSeedId()`, `generateDeterministicInstanceId()`, `generateDeterministicAccessKey()`, `generateListingId()`, `isSeedId()`, `isInstanceId()`, `extractSeedId()`, `extractInstanceNumber()` |
 | **Art ID** | `sanitizeArtId()`, `generateArtIdFromName()`, `validateArtId()` |
 | **Schema templates** | `GAMING_SCHEMA`, `ART_SCHEMA`, `COLLECTIBLE_SCHEMA`, `createSchemaBuilder()` |
-| **Types** | `ProtocolPayload`, `CollectionData`, `NFTData`, `Price`, `KeychainResult`, `CollectionCreationPlan`, `MultisigResponse`, `IndexerNft`, `UserAssetsOverview`, … |
+| **Types** | `ProtocolPayload`, `CollectionData`, `NFTData`, `Price`, `KeychainResult`, `CollectionCreationPlan`, `MultisigResponse`, `BuyCommitmentData`, `IndexerNft`, `UserAssetsOverview`, … |
 
 Full export list and reference: [`packages/playground/docs/sdk/reference.md`](../playground/docs/sdk/reference.md).
 

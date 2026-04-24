@@ -18,7 +18,7 @@
 //   comes from HafAH, not from this root. The root is a comparison tool,
 //   not a proof of correctness.
 
-import { canonicalJson } from "@/protocol/index.ts";
+import { HASH_FORMAT_PREFIX, canonicalJson } from "@/protocol/index.ts";
 
 // ============ ROW SHAPE ============
 
@@ -125,15 +125,14 @@ export function formatStateRoot(root: Uint8Array): string {
 	assertRootLength(root, "formatStateRoot");
 	let hex = "";
 	for (const byte of root) hex += byte.toString(16).padStart(2, "0");
-	return `sha256:${hex}`;
+	return `${HASH_FORMAT_PREFIX}${hex}`;
 }
 
 export function parseStateRoot(value: string): Uint8Array {
-	const prefix = "sha256:";
-	if (!value.startsWith(prefix)) {
-		throw new Error(`parseStateRoot: expected "${prefix}..." prefix`);
+	if (!value.startsWith(HASH_FORMAT_PREFIX)) {
+		throw new Error(`parseStateRoot: expected "${HASH_FORMAT_PREFIX}..." prefix`);
 	}
-	const hex = value.slice(prefix.length);
+	const hex = value.slice(HASH_FORMAT_PREFIX.length);
 	if (hex.length !== STATE_ROOT_BYTES * 2 || !/^[0-9a-f]+$/.test(hex)) {
 		throw new Error(`parseStateRoot: invalid hex payload`);
 	}

@@ -149,10 +149,6 @@ export const mintInputSchema = z.object({
 	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH),
 	imageHash: z.string().optional(),
 	maxSupply: z.number().int().min(1, "Max supply must be at least 1").optional(),
-	data: z.record(z.string(), z.unknown()).optional().refine(
-		(obj) => !obj || Object.keys(obj).length <= 64,
-		"Data object cannot exceed 64 fields",
-	),
 	immutableData: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",
@@ -223,10 +219,6 @@ export const bulkDistributeInputSchema = z.object({
 		(obj) => Object.keys(obj).length <= 50,
 		"imageOverrides cannot exceed 50 entries",
 	).optional(),
-	data: z.record(z.string(), z.unknown()).optional().refine(
-		(obj) => !obj || Object.keys(obj).length <= 64,
-		"Data object cannot exceed 64 fields",
-	),
 	mutableData: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",
@@ -277,10 +269,6 @@ export type NftTransferFromInput = z.infer<typeof nftTransferFromInputSchema>;
 export const setDataInputSchema = z.object({
 	nftId: z.string().min(1),
 	nftDna: z.string().min(1),
-	data: z.record(z.string(), z.unknown()).optional().refine(
-		(obj) => !obj || Object.keys(obj).length <= 64,
-		"Data object cannot exceed 64 fields",
-	),
 	mutableData: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",
@@ -300,10 +288,6 @@ export type DataOperatorApproveInput = z.infer<typeof dataOperatorApproveInputSc
 export const setDataFromInputSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1),
 	nftDna: z.string().min(1),
-	data: z.record(z.string(), z.unknown()).optional().refine(
-		(obj) => !obj || Object.keys(obj).length <= 64,
-		"Data object cannot exceed 64 fields",
-	),
 	mutableData: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",

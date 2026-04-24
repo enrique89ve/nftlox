@@ -7,6 +7,13 @@ import {
 	ACCESS_KEY_LENGTH,
 	INSTANCE_ID_HASH_LENGTH,
 	COLLECTION_ID_HASH_LENGTH,
+	IMAGE_ID_HASH_LENGTH,
+	COLLECTION_ID_PREFIX,
+	SEED_ID_PREFIX,
+	INSTANCE_ID_PREFIX,
+	IMAGE_ID_PREFIX,
+	ORIGIN_DNA_PREFIX,
+	NFT_DNA_PREFIX,
 	LISTING_ID_PREFIX,
 	LISTING_NONCE_LENGTH,
 	LISTING_HASH_LENGTH,
@@ -15,11 +22,7 @@ import {
 	HASH_DOMAIN_SEED,
 	HASH_DOMAIN_DNA,
 	HASH_DOMAIN_KEY,
-	// HASH_DOMAIN_INSTANCE is the salt for generateSeedDna. Despite the name
-	// referring to "instance" (kept for wire compatibility — changing the
-	// literal value would fork every seed hash), this domain strictly salts
-	// the SEED DNA preimage. The instance DNA uses HASH_DOMAIN_DNA below.
-	HASH_DOMAIN_INSTANCE,
+	HASH_DOMAIN_SEED_DNA,
 	HASH_DOMAIN_IMG,
 	HASH_DOMAIN_LISTING,
 } from "./constants";
@@ -40,22 +43,23 @@ export async function generateHash(input: string): Promise<string> {
 export async function generateOriginDna(collectionId: string): Promise<string> {
 	const input = `${HASH_DOMAIN_ORIGIN}${collectionId}`;
 	const fullHash = await generateHash(input);
-	return "o" + fullHash.slice(0, ORIGIN_DNA_LENGTH - 1).toUpperCase();
+	return ORIGIN_DNA_PREFIX + fullHash.slice(0, ORIGIN_DNA_LENGTH - ORIGIN_DNA_PREFIX.length).toUpperCase();
 }
 
 // Seed DNA — hashed from (seedId, originDna, edition, imageHash). The only
 // caller is `handleMint` / the SDK's `buildSeed` to produce a seed NFT's
 // identity. Stored in the `nfts.nft_dna` column (one DNA per row, seed or
-// instance). The name clarifies that this preimage is the seed-side formula.
+// instance). Uses HASH_DOMAIN_SEED_DNA; instance DNA uses the distinct
+// HASH_DOMAIN_DNA salt below to prevent cross-kind collisions by construction.
 export async function generateSeedDna(
 	nftId: string,
 	originDna: string,
 	edition: number,
 	imageHash: string,
 ): Promise<string> {
-	const input = `${HASH_DOMAIN_INSTANCE}${nftId}:${originDna}:${edition}:${imageHash}`;
+	const input = `${HASH_DOMAIN_SEED_DNA}${nftId}:${originDna}:${edition}:${imageHash}`;
 	const fullHash = await generateHash(input);
-	return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
+	return NFT_DNA_PREFIX + fullHash.slice(0, INSTANCE_DNA_LENGTH - NFT_DNA_PREFIX.length).toUpperCase();
 }
 
 // Image Hash
@@ -63,7 +67,7 @@ export async function generateSeedDna(
 export async function generateImageHash(imageUrl: string): Promise<string> {
 	const input = `${HASH_DOMAIN_IMG}${imageUrl}`;
 	const fullHash = await generateHash(input);
-	return `img_${fullHash.slice(0, 16)}`;
+	return `${IMAGE_ID_PREFIX}${fullHash.slice(0, IMAGE_ID_HASH_LENGTH)}`;
 }
 
 // Deterministic IDs
@@ -75,7 +79,7 @@ export async function generateDeterministicCollectionId(
 ): Promise<string> {
 	const input = `${HASH_DOMAIN_COL}${creator.toLowerCase()}:${name}:${symbol.toUpperCase()}`;
 	const hash = await generateHash(input);
-	return `col_${hash.slice(0, COLLECTION_ID_HASH_LENGTH)}`;
+	return `${COLLECTION_ID_PREFIX}${hash.slice(0, COLLECTION_ID_HASH_LENGTH)}`;
 }
 
 export async function generateDeterministicSeedId(
@@ -84,15 +88,17 @@ export async function generateDeterministicSeedId(
 ): Promise<string> {
 	const input = `${HASH_DOMAIN_SEED}${collectionId}:${artId.toLowerCase()}`;
 	const hash = await generateHash(input);
-	return `seed_${hash.slice(0, 20)}`;
+	// Seed and instance ids share the same hash length so their on-chain
+	// footprints match and the INSTANCE_ID_REGEX machinery below stays stable.
+	return `${SEED_ID_PREFIX}${hash.slice(0, INSTANCE_ID_HASH_LENGTH)}`;
 }
 
 export async function generateDeterministicInstanceId(
 	seedId: string,
 	instanceNumber: number,
 ): Promise<string> {
-	const seedSuffix = seedId.replace("seed_", "");
-	return `nft_${seedSuffix}_${instanceNumber}`;
+	const seedSuffix = seedId.slice(SEED_ID_PREFIX.length);
+	return `${INSTANCE_ID_PREFIX}${seedSuffix}_${instanceNumber}`;
 }
 
 /** Thin wrapper for backwards-compatible import name. */
@@ -105,22 +111,22 @@ export async function generateInstanceId(
 
 // ID guards & extraction
 
-// Regex built from INSTANCE_ID_HASH_LENGTH so the hash-length constant is the
-// single source of truth. A mismatch between this regex and the id emitted by
-// generateDeterministicInstanceId would silently break extractSeedId/
-// extractInstanceNumber at runtime.
+// Regex built from INSTANCE_ID_HASH_LENGTH + INSTANCE_ID_PREFIX so both the
+// prefix and hash-length constants are the single source of truth. A mismatch
+// between this regex and the id emitted by generateDeterministicInstanceId
+// would silently break extractSeedId/extractInstanceNumber at runtime.
 const INSTANCE_ID_REGEX = new RegExp(
-	`^nft_[a-f0-9]{${INSTANCE_ID_HASH_LENGTH}}_\\d+$`,
+	`^${INSTANCE_ID_PREFIX}[a-f0-9]{${INSTANCE_ID_HASH_LENGTH}}_\\d+$`,
 );
 const INSTANCE_ID_SEED_CAPTURE_REGEX = new RegExp(
-	`^nft_([a-f0-9]{${INSTANCE_ID_HASH_LENGTH}})_\\d+$`,
+	`^${INSTANCE_ID_PREFIX}([a-f0-9]{${INSTANCE_ID_HASH_LENGTH}})_\\d+$`,
 );
 const INSTANCE_ID_NUMBER_CAPTURE_REGEX = new RegExp(
-	`^nft_[a-f0-9]{${INSTANCE_ID_HASH_LENGTH}}_(\\d+)$`,
+	`^${INSTANCE_ID_PREFIX}[a-f0-9]{${INSTANCE_ID_HASH_LENGTH}}_(\\d+)$`,
 );
 
 export function isSeedId(id: string): boolean {
-	return id.startsWith("seed_");
+	return id.startsWith(SEED_ID_PREFIX);
 }
 
 export function isInstanceId(id: string): boolean {
@@ -130,7 +136,7 @@ export function isInstanceId(id: string): boolean {
 export function extractSeedId(instanceId: string): string | null {
 	const match = instanceId.match(INSTANCE_ID_SEED_CAPTURE_REGEX);
 	if (!match || !match[1]) return null;
-	return `seed_${match[1]}`;
+	return `${SEED_ID_PREFIX}${match[1]}`;
 }
 
 export function extractInstanceNumber(instanceId: string): number | null {
@@ -142,8 +148,7 @@ export function extractInstanceNumber(instanceId: string): number | null {
 // Instance DNA — hashed from (seedId, instanceNumber, txId, blockNum).
 // Called by `handleBulkDistribute` / the SDK's verifiers to derive an
 // instance's DNA deterministically from its parent seed plus the op
-// context. Preimage uses HASH_DOMAIN_DNA, distinct from seed DNA's
-// HASH_DOMAIN_INSTANCE — prevents cross-kind collisions by construction.
+// context. Preimage uses HASH_DOMAIN_DNA; seed DNA uses HASH_DOMAIN_SEED_DNA.
 export async function generateInstanceDna(
 	seedId: string,
 	instanceNumber: number,
@@ -152,7 +157,7 @@ export async function generateInstanceDna(
 ): Promise<string> {
 	const input = `${HASH_DOMAIN_DNA}${seedId}:${instanceNumber}:${txId}:${blockNum}`;
 	const fullHash = await generateHash(input);
-	return "i" + fullHash.slice(0, INSTANCE_DNA_LENGTH - 1).toUpperCase();
+	return NFT_DNA_PREFIX + fullHash.slice(0, INSTANCE_DNA_LENGTH - NFT_DNA_PREFIX.length).toUpperCase();
 }
 
 export async function generateDeterministicAccessKey(

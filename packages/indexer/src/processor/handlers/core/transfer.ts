@@ -20,9 +20,12 @@ import {
   assertSeedNotDistributed,
 } from "@/utils/status-checks.ts";
 import { createLogger } from "@/utils/logger.ts";
-import { ACTION_TRANSFER, MAX_TRANSFER_BATCH_SIZE } from "@/protocol/index.ts";
+import {
+  ACTION_TRANSFER,
+  BURN_RECIPIENT,
+  MAX_TRANSFER_BATCH_SIZE,
+} from "@/protocol/index.ts";
 
-const HIVE_NULL_ACCOUNT = "null";
 const log = createLogger("handler:transfer");
 
 function resolveNftIds(data: Record<string, unknown>): string[] {
@@ -45,7 +48,7 @@ export async function handleTransfer(
 ): Promise<ReadonlyArray<string>> {
   const toRaw = requireString(op.data.to, "to");
   const nftIds = resolveNftIds(op.data);
-  const isBurn = toRaw === HIVE_NULL_ACCOUNT;
+  const isBurn = toRaw === BURN_RECIPIENT;
 
   if (isBurn) {
     for (const nftId of nftIds) {
