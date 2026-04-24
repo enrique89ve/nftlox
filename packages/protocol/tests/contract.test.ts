@@ -50,7 +50,7 @@ describe("protocol contract integrity", () => {
 	});
 
 	test("createPayload + createHiveOperation round-trips", () => {
-		const payload = createPayload("transfer", { nftId: "nft_1", from: "a", to: "b" });
+		const payload = createPayload("transfer", { nftId: "nft_1", to: "b" });
 		const op = createHiveOperation(payload, "alice");
 		const parsed = JSON.parse(op[1].json) as {
 			readonly action: string;

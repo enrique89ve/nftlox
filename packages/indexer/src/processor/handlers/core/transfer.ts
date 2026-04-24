@@ -43,34 +43,33 @@ function resolveNftIds(data: Record<string, unknown>): string[] {
   return [requireString(data.nftId, "nftId")];
 }
 
-function resolveSignerOwner(data: Record<string, unknown>, signer: string): string {
+function assertNoFromInPayload(data: Record<string, unknown>): void {
   if (Object.prototype.hasOwnProperty.call(data, "from")) {
     throw new Error("Transfer payload must not include from; owner is derived from Hive signer");
   }
-  return signer;
 }
 
 export async function handleTransfer(
   op: ParsedOperation,
   txn: Queryable,
 ): Promise<ReadonlyArray<string>> {
-  const from = resolveSignerOwner(op.data, op.signer);
+  assertNoFromInPayload(op.data);
   const toRaw = requireString(op.data.to, "to");
   const nftIds = resolveNftIds(op.data);
   const isBurn = toRaw === BURN_RECIPIENT;
 
   if (isBurn) {
     for (const nftId of nftIds) {
-      await processBurn(op, nftId, from, txn);
+      await processBurn(op, nftId, txn);
     }
     return nftIds;
   }
 
   const to = requireUsername(toRaw, "to");
-  if (to === from) throw new Error("Cannot transfer NFT to yourself");
+  if (to === op.signer) throw new Error("Cannot transfer NFT to yourself");
 
   for (const nftId of nftIds) {
-    await processSingleTransfer(op, nftId, from, to, txn);
+    await processSingleTransfer(op, nftId, to, txn);
   }
 
   return nftIds;
@@ -79,7 +78,6 @@ export async function handleTransfer(
 async function processSingleTransfer(
   op: ParsedOperation,
   nftId: string,
-  from: string,
   to: string,
   txn: Queryable,
 ): Promise<void> {
@@ -105,7 +103,7 @@ async function processSingleTransfer(
     });
   }
 
-  if (nft.owner !== from)
+  if (nft.owner !== op.signer)
     throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 
   const rules = await getCollectionRules(nft.collection_id, txn);
@@ -123,13 +121,12 @@ async function processSingleTransfer(
   };
   await updateNftOwner(nftId, to, op.operationId, ctx, txn);
   await deleteNftAllowance(nftId, txn);
-  await cleanupCollectionAllowancesIfEmpty(from, nft.collection_id, txn);
+  await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
 }
 
 async function processBurn(
   op: ParsedOperation,
   nftId: string,
-  from: string,
   txn: Queryable,
 ): Promise<void> {
   const nft = await getNftForProcessingForUpdate(nftId, txn);
@@ -157,7 +154,7 @@ async function processBurn(
     }
   }
 
-  if (nft.owner !== from)
+  if (nft.owner !== op.signer)
     throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
 
   const rules = await getCollectionRules(nft.collection_id, txn);
@@ -173,9 +170,9 @@ async function processBurn(
     blockNum: op.blockNum,
     createdAt: op.timestamp,
   };
-  await hardDeleteNft(nftId, from, op.txId, op.operationId, ctx, txn);
+  await hardDeleteNft(nftId, op.signer, op.txId, op.operationId, ctx, txn);
   // Ordering: cleanup queries `nfts` to decide whether the owner's count in
   // this collection is zero — the burned row must already be gone or the
   // check short-circuits on its own stale presence and leaks the approval.
-  await cleanupCollectionAllowancesIfEmpty(from, nft.collection_id, txn);
+  await cleanupCollectionAllowancesIfEmpty(op.signer, nft.collection_id, txn);
 }

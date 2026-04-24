@@ -10,15 +10,15 @@ import {
 
 describe("createPayload", () => {
 	test("wraps data in protocol envelope with defaults", () => {
-		const payload = createPayload("transfer", { nftId: "nft_1", from: "alice", to: "bob" });
+		const payload = createPayload("transfer", { nftId: "nft_1", to: "bob" });
 		expect(payload.protocol).toBe(PROTOCOL_ID);
 		expect(payload.version).toBe(PROTOCOL_VERSION);
 		expect(payload.action).toBe("transfer");
-		expect(payload.data).toEqual({ nftId: "nft_1", from: "alice", to: "bob" });
+		expect(payload.data).toEqual({ nftId: "nft_1", to: "bob" });
 	});
 
 	test("accepts explicit protocol/version override", () => {
-		const payload = createPayload("transfer", { from: "a", to: "b" }, {
+		const payload = createPayload("transfer", { nftId: "nft_1", to: "bob" }, {
 			protocol: "nftlox_mainnet",
 			version: "1.0.0",
 		});
@@ -33,7 +33,7 @@ describe("createPayload", () => {
 
 describe("createHiveOperation", () => {
 	test("posting action uses required_posting_auths", () => {
-		const payload = createPayload("transfer", { nftId: "nft_1", from: "alice", to: "bob" });
+		const payload = createPayload("transfer", { nftId: "nft_1", to: "bob" });
 		const op = createHiveOperation(payload, "alice");
 		expect(op[0]).toBe("custom_json");
 		expect(op[1].required_auths).toEqual([]);
@@ -56,7 +56,7 @@ describe("createHiveOperation", () => {
 	});
 
 	test("json field is valid JSON matching payload", () => {
-		const payload = createPayload("transfer", { nftId: "nft_1", from: "a", to: "b" });
+		const payload = createPayload("transfer", { nftId: "nft_1", to: "b" });
 		const op = createHiveOperation(payload, "alice");
 		const parsed = JSON.parse(op[1].json);
 		expect(parsed).toEqual(payload);
