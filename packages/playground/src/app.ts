@@ -71,7 +71,7 @@ type NftCardData = {
   owner?: string | null;
   name?: string | null;
   imageUrl?: string | null;
-  instanceDna?: string | null;
+  nftDna?: string | null;
   distributed?: number | null;
   maxSupply?: number | null;
   instanceNumber?: number | null;
@@ -105,7 +105,7 @@ type NftDetailNft = {
   collectionId: string;
   edition: number;
   originDna: string | null;
-  instanceDna: string | null;
+  nftDna: string | null;
   mintedBy: string | null;
   mintedAt: string | null;
   burned: boolean;
@@ -896,11 +896,11 @@ async function loadNftDetail(nftId: string) {
 
     // Update DNA info
     const originDnaEl = $("nft-detail-origin-dna");
-    const instanceDnaEl = $("nft-detail-instance-dna");
+    const nftDnaEl = $("nft-detail-nft-dna");
     const idEl = $("nft-detail-id");
     const collectionIdEl = $("nft-detail-collection-id");
     if (originDnaEl) originDnaEl.textContent = nft.originDna || "-";
-    if (instanceDnaEl) instanceDnaEl.textContent = nft.instanceDna || "-";
+    if (nftDnaEl) nftDnaEl.textContent = nft.nftDna || "-";
     if (idEl) idEl.textContent = nft.id;
     if (collectionIdEl) collectionIdEl.textContent = nft.collectionId;
 
@@ -1564,7 +1564,7 @@ function renderNfts(
 
       return `
 			<div class="nft-card" data-id="${escapeHtml(nft.id)}" data-collection="${escapeHtml(nft.collectionId)}"
-				 data-edition="${escapeHtml(String(nft.edition ?? ""))}" data-dna="${escapeHtml(nft.instanceDna)}">
+				 data-edition="${escapeHtml(String(nft.edition ?? ""))}" data-dna="${escapeHtml(nft.nftDna)}">
 				<img class="nft-image" src="${escapeHtml(nft.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
 				<div class="nft-card-body">
 					<div class="nft-name">${escapeHtml(nft.name ?? "Untitled NFT")}</div>

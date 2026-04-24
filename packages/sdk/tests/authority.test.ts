@@ -73,10 +73,10 @@ describe("Authority exhaustiveness", () => {
 		}
 	});
 
-	test("counts match: 3 active + 18 posting = 21 total", () => {
+	test("counts match: 3 active + 17 posting = 20 total", () => {
 		expect(ACTIVE_AUTH_ACTIONS.length).toBe(3);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(18);
-		expect(ALL_ACTIONS.length).toBe(21);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(17);
+		expect(ALL_ACTIONS.length).toBe(20);
 	});
 });
 
@@ -179,7 +179,7 @@ describe("Posting key operations use required_posting_auths", () => {
 	});
 
 	test("set_data", () => {
-		const op = buildOp(ACTION_SET_DATA, "alice", { nftId: "nft_1", instanceDna: "dna_1" });
+		const op = buildOp(ACTION_SET_DATA, "alice", { nftId: "nft_1", nftDna: "dna_1" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
@@ -191,7 +191,7 @@ describe("Posting key operations use required_posting_auths", () => {
 	});
 
 	test("set_data_from", () => {
-		const op = buildOp(ACTION_SET_DATA_FROM, "alice", { nftId: "nft_1", instanceDna: "dna_1" });
+		const op = buildOp(ACTION_SET_DATA_FROM, "alice", { nftId: "nft_1", nftDna: "dna_1" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});

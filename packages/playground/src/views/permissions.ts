@@ -67,7 +67,7 @@ function getFormData(action: string): Record<string, unknown> | null {
 			}
 			return {
 				nftId: val("perm-set-data-from-nft"),
-				instanceDna: val("perm-set-data-from-dna"),
+				nftDna: val("perm-set-data-from-dna"),
 				data,
 				operator: getConnectedUser(),
 			};

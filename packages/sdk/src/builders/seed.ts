@@ -8,7 +8,7 @@ import {
 	generateDeterministicSeedId,
 	generateOriginDna,
 	generateImageHash,
-	generateInstanceDna,
+	generateSeedDna,
 	createPayload,
 	createHiveOperation,
 	getKeyType,
@@ -67,7 +67,7 @@ export async function buildSeed(
 	const originDna = await generateOriginDna(data.collectionId);
 	const owner = data.owner ?? data.signer;
 	const imageHash = await generateImageHash(data.imageUrl);
-	const instanceDna = await generateInstanceDna(seedId, originDna, data.edition, imageHash);
+	const nftDna = await generateSeedDna(seedId, originDna, data.edition, imageHash);
 
 	// The seed's primary id IS the canonical seedId — not a derived instance id.
 	// Instances minted via bulk_distribute get their own `nft_<seedSuffix>_<n>_<hash>`
@@ -81,7 +81,7 @@ export async function buildSeed(
 		owner,
 		nftType: "seed",
 		originDna,
-		instanceDna,
+		nftDna,
 		mintedBy: data.signer,
 		...(data.collectionBlock !== undefined && { collectionBlock: data.collectionBlock }),
 		metadata: {

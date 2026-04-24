@@ -35,7 +35,7 @@ describe("verifyNftOwnership", () => {
 					created_tx_id: "mint_tx_1",
 					seed_id: null,
 					instance_number: null,
-					instance_dna: null,
+					nft_dna: null,
 				}), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -50,7 +50,7 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.8.0",
+								version: "0.9.0",
 								action: ACTION_TRANSFER,
 								data: {
 									nftId: "nft_1",
@@ -107,7 +107,7 @@ describe("verifyNftOwnership", () => {
 					created_tx_id: "mint_tx_buy_1",
 					seed_id: null,
 					instance_number: null,
-					instance_dna: null,
+					nft_dna: null,
 				}), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -122,7 +122,7 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.8.0",
+								version: "0.9.0",
 								action: ACTION_BUY,
 								data: {
 									nftId: "nft_buy_1",
@@ -216,7 +216,7 @@ describe("verifyNftOwnership", () => {
 					created_tx_id: "mint_tx_2",
 					seed_id: null,
 					instance_number: null,
-					instance_dna: null,
+					nft_dna: null,
 				}), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -231,7 +231,7 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.8.0",
+								version: "0.9.0",
 								action: ACTION_TRANSFER,
 								data: {
 									nftId: "nft_2",

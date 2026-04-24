@@ -65,7 +65,7 @@ export function buildSetData(input: SetDataBuilderInput): KeychainResult<SetData
 
 	const setDataData: SetDataData = {
 		nftId: data.nftId,
-		instanceDna: data.instanceDna,
+		nftDna: data.nftDna,
 		...(data.data && { data: data.data }),
 		...(data.mutableData && { mutableData: data.mutableData }),
 		...(data.seedId && { seedId: data.seedId }),
@@ -98,7 +98,7 @@ export function buildSetDataFrom(input: SetDataFromBuilderInput): KeychainResult
 
 	const setDataFromData: SetDataFromData = {
 		nftId: data.nftId,
-		instanceDna: data.instanceDna,
+		nftDna: data.nftDna,
 		...(data.data && { data: data.data }),
 		...(data.mutableData && { mutableData: data.mutableData }),
 		...(data.seedId && { seedId: data.seedId }),

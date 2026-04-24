@@ -233,7 +233,6 @@ describe("listInputSchema expiresAt", () => {
 describe("mintInputSchema collectionBlock", () => {
 	const validMintInput = {
 		collectionId: "col_test",
-		collectionOriginDna: "ORIGIN1234567890",
 		edition: 1,
 		owner: "testuser",
 		name: "NFT #1",

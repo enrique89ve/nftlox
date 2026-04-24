@@ -1,7 +1,6 @@
 // Batch minting routes — all routes use deterministic ID generation
 import {
 	PROTOCOL_VERSION,
-	generateOriginDna,
 	validateArtIdArray,
 	type SeedNFTWithArtId,
 } from "nftlox-sdk";
@@ -121,8 +120,7 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 					}, 400);
 				}
 
-				const collectionOriginDna = await generateOriginDna(body.collectionId);
-				const result = await createDeterministicSeedMintOperations(nfts, body.collectionId, collectionOriginDna, body.owner);
+				const result = await createDeterministicSeedMintOperations(nfts, body.collectionId, body.owner);
 				const opValidation = validateOperationsVersion(result.seeds.map(s => s.operation));
 				const batches = splitOperationsIntoBatches(result.seeds.map(s => s.operation));
 

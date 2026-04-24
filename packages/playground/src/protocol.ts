@@ -20,7 +20,6 @@ import {
 
 export interface BatchMintResult {
 	collectionId: string;
-	collectionOriginDna: string;
 	seeds: Array<{
 		seedId: string;
 		name: string;
@@ -210,7 +209,6 @@ export function previewBatchMint(
 
 export interface DeterministicBatchMintResult {
 	collectionId: string;
-	collectionOriginDna: string;
 	seeds: Array<{
 		artId: string;
 		seedId: string;
@@ -228,7 +226,6 @@ export interface DeterministicBatchMintResult {
 export async function createDeterministicSeedMintOperations(
 	nfts: SeedNFTWithArtId[],
 	collectionId: string,
-	collectionOriginDna: string,
 	owner: string,
 ): Promise<DeterministicBatchMintResult> {
 	const seeds: DeterministicBatchMintResult["seeds"] = [];
@@ -261,7 +258,6 @@ export async function createDeterministicSeedMintOperations(
 
 	return {
 		collectionId,
-		collectionOriginDna,
 		seeds,
 		totalOperations: seeds.length,
 	};

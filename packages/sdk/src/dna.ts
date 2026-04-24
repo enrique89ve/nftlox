@@ -4,7 +4,7 @@
 export {
 	generateHash,
 	generateOriginDna,
-	generateInstanceDna,
+	generateSeedDna,
 	generateImageHash,
 	generateInstanceId,
 	extractSeedId,
@@ -16,7 +16,7 @@ export {
 	generateDeterministicInstanceId,
 	generateListingNonce,
 	generateListingId,
-	generateDeterministicInstanceDna,
+	generateInstanceDna,
 	generateDeterministicAccessKey,
 } from "@nftlox/protocol";
 

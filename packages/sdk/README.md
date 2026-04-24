@@ -113,7 +113,7 @@ The SDK re-exports the wire protocol from `@nftlox/protocol` and adds builders, 
 | **SPV verification** | `verifyNftOwnership()`, `verifyOperationOnChain()`, `fetchTransaction()` |
 | **Indexer client** | `createIndexerClient()` — portable `fetch()`-based client with `getNodeAccount()` and `getMultisigNodeAccount()` helpers |
 | **Protocol state** | `initProtocol()`, `makePayload()`, `getProtocolVersion()`, `isInitialized()` |
-| **DNA / ID generation** | `generateOriginDna()`, `generateInstanceDna()`, `generateDeterministicCollectionId()`, `generateDeterministicSeedId()`, `isSeedId()`, `isInstanceId()` |
+| **DNA / ID generation** | `generateOriginDna()`, `generateSeedDna()`, `generateInstanceDna()`, `generateDeterministicCollectionId()`, `generateDeterministicSeedId()`, `isSeedId()`, `isInstanceId()` |
 | **Art ID** | `sanitizeArtId()`, `generateArtIdFromName()`, `validateArtId()` |
 | **Schema templates** | `GAMING_SCHEMA`, `ART_SCHEMA`, `COLLECTIBLE_SCHEMA`, `createSchemaBuilder()` |
 | **Types** | `ProtocolPayload`, `CollectionData`, `NFTData`, `Price`, `KeychainResult`, `CollectionCreationPlan`, `MultisigResponse`, `IndexerNft`, `UserAssetsOverview`, … |

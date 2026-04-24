@@ -250,7 +250,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				payload: {
 					issuer: GAME_ACCOUNT,
 					nftId: INSTANCE_IDS.fireDragon1,
-					instanceDna: "will-be-filled-by-indexer",
+					nftDna: "will-be-filled-by-indexer",
 					mutableData: {
 						game_owner: PLAYERS.player1,
 					},
@@ -269,7 +269,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				payload: {
 					issuer: GAME_ACCOUNT,
 					nftId: INSTANCE_IDS.starterWolf1,
-					instanceDna: "will-be-filled-by-indexer",
+					nftDna: "will-be-filled-by-indexer",
 					mutableData: {
 						game_owner: PLAYERS.player2,
 					},
@@ -288,19 +288,19 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					{
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf1,
-						instanceDna: "will-be-filled-by-indexer",
+						nftDna: "will-be-filled-by-indexer",
 						mutableData: { game_owner: PLAYERS.player3 },
 					},
 					{
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf2,
-						instanceDna: "will-be-filled-by-indexer",
+						nftDna: "will-be-filled-by-indexer",
 						mutableData: { game_owner: PLAYERS.player3 },
 					},
 					{
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf3,
-						instanceDna: "will-be-filled-by-indexer",
+						nftDna: "will-be-filled-by-indexer",
 						mutableData: { game_owner: PLAYERS.player3 },
 					},
 				],
@@ -327,7 +327,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					{
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf1,
-						instanceDna: "will-be-filled-by-indexer",
+						nftDna: "will-be-filled-by-indexer",
 						mutableData: {
 							game_owner: "",
 							lent_to: PLAYERS.player1,
@@ -336,7 +336,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					{
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf2,
-						instanceDna: "will-be-filled-by-indexer",
+						nftDna: "will-be-filled-by-indexer",
 						mutableData: {
 							game_owner: "",
 							lent_to: PLAYERS.player1,
@@ -359,7 +359,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					{
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf1,
-						instanceDna: "will-be-filled-by-indexer",
+						nftDna: "will-be-filled-by-indexer",
 						mutableData: {
 							lent_to: "",
 						},
@@ -367,7 +367,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					{
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf2,
-						instanceDna: "will-be-filled-by-indexer",
+						nftDna: "will-be-filled-by-indexer",
 						mutableData: {
 							lent_to: "",
 						},
@@ -388,7 +388,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					{
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.starterWolf3,
-						instanceDna: "will-be-filled-by-indexer",
+						nftDna: "will-be-filled-by-indexer",
 						mutableData: {
 							game_owner: PLAYERS.player1,
 							lent_to: "",
@@ -428,7 +428,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						_label: "Transfer Inferno Drake: Player 1 → Player 2",
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.fireDragon1,
-						instanceDna: "will-be-filled-by-indexer",
+						nftDna: "will-be-filled-by-indexer",
 						mutableData: {
 							game_owner: PLAYERS.player2,
 						},
@@ -437,7 +437,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						_label: "Transfer Ice Golem: Player 2 → Player 1",
 						issuer: GAME_ACCOUNT,
 						nftId: INSTANCE_IDS.iceGolem1,
-						instanceDna: "will-be-filled-by-indexer",
+						nftDna: "will-be-filled-by-indexer",
 						mutableData: {
 							game_owner: PLAYERS.player1,
 						},
@@ -460,7 +460,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					_label: "Transfer Starter Wolf: Player 2 → Player 3",
 					issuer: GAME_ACCOUNT,
 					nftId: INSTANCE_IDS.starterWolf1,
-					instanceDna: "will-be-filled-by-indexer",
+					nftDna: "will-be-filled-by-indexer",
 					mutableData: {
 						game_owner: PLAYERS.player3,
 					},
@@ -476,7 +476,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 			description: "Both set_data calls go in one Hive transaction (max 5 operations per tx). Since the game server owns all NFTs and controls the payloads, failures should only happen due to bugs in payload construction. Validate payloads before broadcasting.",
 			example: buildCustomJson(GAME_ACCOUNT, "set_data", {
 				nftId: "<instance_id>",
-				instanceDna: "<dna>",
+				nftDna: "<dna>",
 				mutableData: { game_owner: "<new_player_hash>" },
 			}),
 		},
@@ -495,7 +495,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				payload: {
 					issuer: GAME_ACCOUNT,
 					nftId: INSTANCE_IDS.fireDragon1,
-					instanceDna: "will-be-filled-by-indexer",
+					nftDna: "will-be-filled-by-indexer",
 					mutableData: {
 						level: 5,
 						xp: 2450,
@@ -516,7 +516,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				payload: {
 					issuer: GAME_ACCOUNT,
 					nftId: INSTANCE_IDS.fireDragon1,
-					instanceDna: "will-be-filled-by-indexer",
+					nftDna: "will-be-filled-by-indexer",
 					mutableData: {
 						equipped: true,
 						custom_name: "Blaze King",
@@ -529,11 +529,11 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				description: "Tournament ends — game updates multiple cards at once",
 				endpoint: "POST /api/build/set-data (batch of 5)",
 				payloads: [
-					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.fireDragon1, instanceDna: "from-indexer", mutableData: { wins: 20, xp: 5000, level: 8 } },
-					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.iceGolem1, instanceDna: "from-indexer", mutableData: { wins: 15, xp: 3800, level: 6 } },
-					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.starterWolf1, instanceDna: "from-indexer", mutableData: { wins: 8, xp: 1200, level: 3 } },
-					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.starterWolf2, instanceDna: "from-indexer", mutableData: { wins: 5, xp: 800, level: 2 } },
-					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.starterWolf3, instanceDna: "from-indexer", mutableData: { wins: 3, xp: 400, level: 2 } },
+					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.fireDragon1, nftDna: "from-indexer", mutableData: { wins: 20, xp: 5000, level: 8 } },
+					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.iceGolem1, nftDna: "from-indexer", mutableData: { wins: 15, xp: 3800, level: 6 } },
+					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.starterWolf1, nftDna: "from-indexer", mutableData: { wins: 8, xp: 1200, level: 3 } },
+					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.starterWolf2, nftDna: "from-indexer", mutableData: { wins: 5, xp: 800, level: 2 } },
+					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.starterWolf3, nftDna: "from-indexer", mutableData: { wins: 3, xp: 400, level: 2 } },
 				],
 				notes: [
 					"5 set_data operations fit in 1 Hive transaction",
@@ -641,7 +641,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						signedBy: "game-server (as data operator)",
 						payload: {
 							nftId: INSTANCE_IDS.fireDragon1,
-							instanceDna: "will-be-filled-by-indexer",
+							nftDna: "will-be-filled-by-indexer",
 							operator: GAME_ACCOUNT,
 							mutableData: {
 								level: 10,

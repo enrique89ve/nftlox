@@ -258,7 +258,7 @@ export interface IndexerNftSummary {
 	image_url: string | null;
 	origin_dna: string | null;
 	immutable_data: Record<string, unknown> | null;
-	instance_dna: string | null;
+	nft_dna: string | null;
 	seed_id: string | null;
 	seed_tx_id: string | null;
 	instance_number: number | null;
@@ -303,7 +303,7 @@ export interface IndexerNftProof extends IndexerNftOwner {
 	nft_type: IndexerNftType;
 	seed_id: string | null;
 	instance_number: number | null;
-	instance_dna: string | null;
+	nft_dna: string | null;
 }
 
 export interface IndexerNftLoan {

@@ -76,7 +76,6 @@ describe("SDK input schemas", () => {
 	describe("mintInputSchema", () => {
 		const validInput = {
 			collectionId: "col_test",
-			collectionOriginDna: "ORIGIN1234567890",
 			edition: 1,
 			owner: "user",
 			name: "NFT #1",
@@ -86,11 +85,6 @@ describe("SDK input schemas", () => {
 
 		test("valid input passes", () => {
 			expect(mintInputSchema.safeParse(validInput).success).toBe(true);
-		});
-
-		test("missing origin DNA fails", () => {
-			const invalid = { ...validInput, collectionOriginDna: "" };
-			expect(mintInputSchema.safeParse(invalid).success).toBe(false);
 		});
 
 		test("invalid edition fails", () => {

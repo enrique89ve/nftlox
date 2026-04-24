@@ -103,12 +103,12 @@ export const mergeSchemas = protocol.mergeSchemas;
 
 export const generateHash = protocol.generateHash;
 export const generateOriginDna = protocol.generateOriginDna;
-export const generateInstanceDna = protocol.generateInstanceDna;
+export const generateSeedDna = protocol.generateSeedDna;
 export const generateImageHash = protocol.generateImageHash;
 export const generateDeterministicCollectionId = protocol.generateDeterministicCollectionId;
 export const generateDeterministicSeedId = protocol.generateDeterministicSeedId;
 export const generateDeterministicInstanceId = protocol.generateDeterministicInstanceId;
-export const generateDeterministicInstanceDna = protocol.generateDeterministicInstanceDna;
+export const generateInstanceDna = protocol.generateInstanceDna;
 export const generateDeterministicAccessKey = protocol.generateDeterministicAccessKey;
 export const generateInstanceId = protocol.generateInstanceId;
 export const extractSeedId = protocol.extractSeedId;

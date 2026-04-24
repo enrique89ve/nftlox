@@ -3,7 +3,7 @@
 
 import {
 	generateDeterministicInstanceId,
-	generateDeterministicInstanceDna,
+	generateInstanceDna,
 	generateDeterministicAccessKey,
 } from "../dna";
 import {
@@ -48,7 +48,7 @@ export interface DeterministicDerivationParams {
 
 export interface DeterministicDerivationResult {
 	instanceId: string;
-	instanceDna: string;
+	nftDna: string;
 	accessKey: string;
 }
 
@@ -63,18 +63,18 @@ export async function verifyDeterministicDerivation(
 		params.seedId,
 		params.instanceNumber,
 	);
-	const instanceDna = await generateDeterministicInstanceDna(
+	const nftDna = await generateInstanceDna(
 		params.seedId,
 		params.instanceNumber,
 		params.txId,
 		params.blockNum,
 	);
 	const accessKey = await generateDeterministicAccessKey(
-		instanceDna,
+		nftDna,
 		params.signer,
 		params.txId,
 	);
-	return { instanceId, instanceDna, accessKey };
+	return { instanceId, nftDna, accessKey };
 }
 
 // ============ GENERIC ON-CHAIN VERIFICATION ============
@@ -151,7 +151,7 @@ type IndexerOwnershipSnapshot = Readonly<{
 	createdTxId: string;
 	seedId: string | null;
 	instanceNumber: number | null;
-	instanceDna: string | null;
+	nftDna: string | null;
 }>;
 
 type DerivedOwnershipProof = Readonly<{
@@ -214,7 +214,7 @@ function parseIndexerOwnershipSnapshot(raw: unknown): IndexerOwnershipSnapshot {
 		),
 		seedId: parseNullableString(raw.seed_id, "seed_id"),
 		instanceNumber: parseNullableInteger(raw.instance_number, "instance_number"),
-		instanceDna: parseNullableString(raw.instance_dna, "instance_dna"),
+		nftDna: parseNullableString(raw.nft_dna, "nft_dna"),
 	};
 }
 
@@ -382,9 +382,9 @@ async function deriveOwnershipProof(
 			};
 		}
 		case ACTION_BULK_DISTRIBUTE: {
-			if (!snapshot.seedId || snapshot.instanceNumber === null || !snapshot.instanceDna) {
+			if (!snapshot.seedId || snapshot.instanceNumber === null || !snapshot.nftDna) {
 				throw new Error(
-					"Indexer NFT data missing seed_id, instance_number, or instance_dna required for bulk_distribute verification",
+					"Indexer NFT data missing seed_id, instance_number, or nft_dna required for bulk_distribute verification",
 				);
 			}
 
@@ -415,15 +415,15 @@ async function deriveOwnershipProof(
 				);
 			}
 
-			const derivedInstanceDna = await generateDeterministicInstanceDna(
+			const derivedNftDna = await generateInstanceDna(
 				snapshot.seedId,
 				snapshot.instanceNumber,
 				resolved.txId,
 				resolved.blockNum,
 			);
-			if (derivedInstanceDna !== snapshot.instanceDna) {
+			if (derivedNftDna !== snapshot.nftDna) {
 				throw new OwnershipMismatchError(
-					"Instance DNA does not match deterministic bulk_distribute derivation",
+					"NFT DNA does not match deterministic bulk_distribute derivation",
 				);
 			}
 

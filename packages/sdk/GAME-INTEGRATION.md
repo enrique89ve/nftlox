@@ -187,7 +187,7 @@ const approval = buildDataOperatorApprove({
 
 const update = buildSetDataFrom({
 	nftId: "nft_abc123",
-	instanceDna: "A3F7B2C119D0E4",
+	nftDna: "A3F7B2C119D0E4",
 	operator: "ragnarok-server",
 	mutableData: {
 		level: 5,

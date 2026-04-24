@@ -63,7 +63,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					name: nft.name,
 					imageUrl: nft.image_url,
 					originDna: nft.origin_dna,
-					instanceDna: nft.instance_dna,
+					nftDna: nft.nft_dna,
 					seedId: nft.seed_id,
 					seedTxId: nft.seed_tx_id ?? null,
 					instanceNumber: nft.instance_number,
@@ -126,7 +126,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			return json({
 				id: nft.id,
 				origin_dna: nft.origin_dna,
-				instance_dna: nft.instance_dna,
+				nft_dna: nft.nft_dna,
 				tx_id: nft.tx_id,
 				nft: {
 					id: nft.id,
@@ -136,7 +136,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					collectionId: nft.collection_id,
 					edition: nft.edition,
 					originDna: nft.origin_dna,
-					instanceDna: nft.instance_dna,
+					nftDna: nft.nft_dna,
 					mintedBy,
 					mintedAt: nft.created_at,
 					burned: nft.status === "burned",
@@ -216,7 +216,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 						maxSupply: nft.max_supply,
 						distributed: nft.distributed || 0,
 						originDna: nft.origin_dna,
-						instanceDna: nft.instance_dna,
+						nftDna: nft.nft_dna,
 					})),
 				},
 				instances: {

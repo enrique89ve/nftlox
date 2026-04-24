@@ -141,10 +141,9 @@ export type CreateCollectionInput = z.infer<typeof createCollectionInputSchema>;
 
 export const mintInputSchema = z.object({
 	collectionId: z.string().min(1, "Collection ID is required"),
-	collectionOriginDna: z.string().min(1, "Collection origin DNA is required"),
 	edition: z.number().int().min(1, "Edition must be at least 1"),
 	owner: usernameSchema,
-	nftType: z.enum(["seed", "instance"]).optional(),
+	nftType: z.literal("seed").default("seed"),
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH),
 	description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
 	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH),
@@ -277,7 +276,7 @@ export type NftTransferFromInput = z.infer<typeof nftTransferFromInputSchema>;
 
 export const setDataInputSchema = z.object({
 	nftId: z.string().min(1),
-	instanceDna: z.string().min(1),
+	nftDna: z.string().min(1),
 	data: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",
@@ -300,7 +299,7 @@ export type DataOperatorApproveInput = z.infer<typeof dataOperatorApproveInputSc
 
 export const setDataFromInputSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1),
-	instanceDna: z.string().min(1),
+	nftDna: z.string().min(1),
 	data: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",

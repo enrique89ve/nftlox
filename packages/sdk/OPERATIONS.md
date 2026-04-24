@@ -19,16 +19,15 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | 9 | `node_heartbeat` | Core | posting | Periodic proof-of-liveness + ownership state-root hash |
 | 10 | `list` | Marketplace | posting | Lists an NFT for sale |
 | 11 | `unlist` | Marketplace | posting | Removes an NFT from the marketplace |
-| 12 | `sale_lock` | Marketplace | posting | Deprecated legacy reservation op (audit only — routed to `handleDeprecatedSaleLock` which throws) |
-| 13 | `buy_commitment` | Marketplace | active | Node-broadcast reservation that wins the cross-node ordering race before the node co-signs a `buy` |
-| 14 | `buy` | Marketplace | active | Settles a reserved listing (buyer-signed transfers + node-cosigned custom_json, must match the preceding `buy_commitment`) |
-| 15 | `nft_approve` | Approve | posting | Approves a spender for ONE specific NFT |
-| 16 | `nft_approve_all` | Approve | posting | Approves a spender for ALL NFTs in a collection |
-| 17 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
-| 18 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
-| 19 | `nft_return` | Lending | posting | Returns a lent NFT |
-| 20 | `data_operator_approve` | DataOperator | posting | Authorizes an external operator for a collection |
-| 21 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
+| 12 | `buy_commitment` | Marketplace | active | Node-broadcast reservation that wins the cross-node ordering race before the node co-signs a `buy` |
+| 13 | `buy` | Marketplace | active | Settles a reserved listing (buyer-signed transfers + node-cosigned custom_json, must match the preceding `buy_commitment`) |
+| 14 | `nft_approve` | Approve | posting | Approves a spender for ONE specific NFT |
+| 15 | `nft_approve_all` | Approve | posting | Approves a spender for ALL NFTs in a collection |
+| 16 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
+| 17 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
+| 18 | `nft_return` | Lending | posting | Returns a lent NFT |
+| 19 | `data_operator_approve` | DataOperator | posting | Authorizes an external operator for a collection |
+| 20 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
 
 ---
 
@@ -97,7 +96,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | `mutableData` | object | no | Mutable data validated against schema |
 | `collectionBlock` | number | yes | Block where the collection was created (L1 traceability without indexer) |
 
-**Note**: `originDna`, `instanceDna`, and `uniqueAccessKey` are always computed by the indexer — any payload values are ignored. The `uniqueAccessKey` is derived from `(instanceDna, owner, txId)` and can be verified client-side post-broadcast via `generateDeterministicAccessKey()`.
+**Note**: `originDna`, `nftDna`, and `uniqueAccessKey` are always computed by the indexer — any payload values are ignored. The `uniqueAccessKey` is derived from `(nftDna, owner, txId)` and can be verified client-side post-broadcast via `generateDeterministicAccessKey()`.
 
 **Indexer validations**:
 - Only seeds can be minted (non-seed nftType is rejected)
@@ -164,7 +163,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 - Each seed must have available supply (`distributed + quantity <= maxSupply`)
 - Signer must be the owner of the seed
 - If the collection has a schema and `mutableData` is provided, it is validated against the schema
-- `uniqueAccessKey` is computed by the indexer from `(instanceDna, recipient, txId)` — not from signer
+- `uniqueAccessKey` is computed by the indexer from `(nftDna, recipient, txId)` — not from signer
 
 **State changes**: Inserts N rows in `nfts` (type `instance`) stamped with the collection's current `schema_version`, increments `distributed` on the seed, and stores each instance's creation/current ownership anchors (`owner_operation_id`, `owner_action = "bulk_distribute"`, `owner_block_num`).
 **Operation status**: `bulk_distribute` does not store the full created instance list in `confirmed_operations.nft_ids`; it can return `[]` there to keep the confirmation cache bounded. Per-instance provenance comes from each `nfts` row.
@@ -184,7 +183,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `nftId` | string | yes | NFT ID |
-| `instanceDna` | string | yes | Instance DNA (must match) |
+| `nftDna` | string | yes | Instance DNA (must match) |
 | `mutableData` | object | yes | Mutable data to update |
 
 **Note**: The collection MUST have a defined schema. No legacy fallback exists. Data sent is validated against the mutable schema fields and merged with existing mutable data.
@@ -192,7 +191,7 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 **Indexer validations**:
 - NFT must exist and not be `burned`
 - `collection.creator === op.signer` (only creator can use set_data)
-- `instanceDna` must match the stored DNA
+- `nftDna` must match the stored DNA
 - Collection must have a schema
 - `mutableData` is validated against the schema (fields and types)
 
@@ -582,14 +581,14 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `nftId` | string | yes | NFT ID |
-| `instanceDna` | string | yes | Instance DNA (must match) |
+| `nftDna` | string | yes | Instance DNA (must match) |
 | `mutableData` | object | yes | Mutable data to update |
 
 **Note**: The collection MUST have a defined schema. No legacy fallback exists. Data sent is validated against the mutable schema fields and merged with existing mutable data.
 
 **Indexer validations**:
 - NFT must exist and not be `burned`
-- `instanceDna` must match
+- `nftDna` must match
 - `hasDataOperatorApproval(signer, collectionId)` must be true
 - Collection must have a schema
 - `mutableData` is validated against the schema (fields and types)

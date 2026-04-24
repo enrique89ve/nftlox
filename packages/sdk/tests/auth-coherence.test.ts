@@ -181,7 +181,7 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 	});
 
 	test("buildSetData", () => {
-		const r = buildSetData({ nftId: "nft_1", instanceDna: "dna_1", owner: "alice" });
+		const r = buildSetData({ nftId: "nft_1", nftDna: "dna_1", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
