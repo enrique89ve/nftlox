@@ -302,13 +302,8 @@ async function deriveOwnershipProof(
 		}
 		case ACTION_TRANSFER: {
 			requireNftIdInTransferPayload(resolved.data, nftId);
-			const from = parseRequiredString(resolved.data.from, "transfer.data.from");
 			const to = parseRequiredString(resolved.data.to, "transfer.data.to");
-			if (resolved.signer !== from) {
-				throw new OwnershipMismatchError(
-					`Transfer signer ${resolved.signer} does not match payload.from ${from}`,
-				);
-			}
+			const from = resolved.signer;
 			return {
 				txId: resolved.txId,
 				blockNum: resolved.blockNum,

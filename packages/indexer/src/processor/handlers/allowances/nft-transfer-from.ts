@@ -11,6 +11,7 @@ import {
 } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertOwnershipChangeable, assertNotPendingSale, assertNotSeed } from "@/utils/status-checks.ts";
+import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { ACTION_NFT_TRANSFER_FROM } from "@/protocol/index.ts";
 
@@ -25,6 +26,8 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 
 	const nft = await getNftForProcessingForUpdate(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
+
+	await validateSeedProvenance(op, nft, txn);
 
 	// Delegated transfer on a `pending_sale` row would race the buy_commitment
 	// of another buyer. Reject before we touch allowance tables so the

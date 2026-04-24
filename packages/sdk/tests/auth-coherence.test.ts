@@ -117,10 +117,11 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
-	test("buildTransfer", async () => {
-		const r = await buildTransfer({ nftId: "nft_1", from: "alice", to: "bob" });
+	test("buildTransfer", () => {
+		const r = buildTransfer({ nftId: "nft_1", from: "alice", to: "bob" });
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
+		expect(r.payload.data).not.toHaveProperty("from");
 	});
 
 	test("buildList", async () => {
@@ -133,8 +134,8 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
-	test("buildUnlist", async () => {
-		const r = await buildUnlist({ nftId: "nft_1", owner: "alice" });
+	test("buildUnlist", () => {
+		const r = buildUnlist({ nftId: "nft_1", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});

@@ -27,7 +27,7 @@ const seedDataSchema = z.record(z.string(), z.unknown()).refine(
 export const seedInputSchema = z.object({
 	artId: z.string(),
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH, `Name must be at most ${MAX_NAME_LENGTH} characters`),
-	imageUrl: z.string().url("Invalid image URL format").max(MAX_IMAGE_URL_LENGTH, `Image URL must be at most ${MAX_IMAGE_URL_LENGTH} characters`),
+	imageUrl: z.url("Invalid image URL format").max(MAX_IMAGE_URL_LENGTH, `Image URL must be at most ${MAX_IMAGE_URL_LENGTH} characters`),
 	maxSupply: z.number().int().positive("Max supply must be greater than 0"),
 	brief: z.string().max(MAX_DESCRIPTION_LENGTH, `Brief must be at most ${MAX_DESCRIPTION_LENGTH} characters`).optional(),
 	immutableData: seedDataSchema.optional(),

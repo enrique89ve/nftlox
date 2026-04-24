@@ -212,20 +212,19 @@ buildBulkDistribute({
     { seedId: "seed_…", quantity: 3, seedTxId: "tx_…" },
   ],
   mutableData: { level: 1, xp: 0 }, // optional initial mutable fields
-  imageOverrides: { "seed_…": { imageUrl: "https://…" } }, // optional
 })
+// Instances inherit name + image_url from the seed; the payload never carries them.
 ```
 
 ### buildList
 ```typescript
-// async (computes imageHash, listingId, listingNonce)
+// async (computes listingId, listingNonce)
 await buildList({
   owner: "alice",
   nftId: "nft_…",
   price: { amount: "25.000", currency: "HIVE" },  // amount is a 3-decimal string
   expiresAt: Date.now() + 7 * 24 * 3600 * 1000,   // optional ms timestamp
   marketplace: "my-marketplace",  // optional scope tag for UI filtering
-  imageUrl: "https://…",          // optional; SDK hashes it
 })
 // result.generatedIds = { listingId, listingNonce }
 ```

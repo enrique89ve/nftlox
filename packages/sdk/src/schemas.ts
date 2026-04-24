@@ -22,10 +22,9 @@ import {
 export { validateHiveUsername };
 
 // Safe URL: only http:// and https:// protocols (blocks javascript:, data:, etc.)
-const httpUrlSchema = z.string().url().refine(
-	(val) => /^https?:\/\//i.test(val),
-	{ message: "URL must use http or https protocol" },
-);
+// `z.httpUrl` is zod v4's native http/https-only URL format — equivalent to
+// `z.url()` with a protocol restriction, so no separate refine is needed.
+const httpUrlSchema = z.httpUrl({ message: "URL must use http or https protocol" });
 
 export const nodeEndpointSchema = z.string()
 	.trim()
@@ -170,8 +169,6 @@ export const listInputSchema = seedProvenanceSchema.extend({
 			{ message: `Expiration date must be more than ${MIN_LISTING_TTL_MS / 1000}s in the future` },
 		)
 		.optional(),
-	imageUrl: httpUrlSchema.optional(),
-	imageHash: z.string().optional(),
 	marketplace: z.string().optional(),
 });
 export type ListInput = z.infer<typeof listInputSchema>;
@@ -215,10 +212,6 @@ export const bulkDistributeInputSchema = z.object({
 			(items) => items.reduce((total, item) => total + item.quantity, 0) <= MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
 			{ message: `Total quantity cannot exceed ${MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY} instances per operation` }
 		),
-	imageOverrides: z.record(z.string(), z.object({ imageUrl: z.string().optional(), imageHash: z.string().optional() })).refine(
-		(obj) => Object.keys(obj).length <= 50,
-		"imageOverrides cannot exceed 50 entries",
-	).optional(),
 	mutableData: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",
@@ -236,12 +229,8 @@ export const burnInputSchema = z.object({
 );
 export type BurnInput = z.infer<typeof burnInputSchema>;
 
-export const unlistInputSchema = z.object({
+export const unlistInputSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1),
-	imageUrl: httpUrlSchema.optional(),
-	imageHash: z.string().optional(),
-	seedId: z.string().optional(),
-	seedTxId: z.string().optional(),
 });
 export type UnlistInput = z.infer<typeof unlistInputSchema>;
 
@@ -266,15 +255,13 @@ export const nftTransferFromInputSchema = seedProvenanceSchema.extend({
 });
 export type NftTransferFromInput = z.infer<typeof nftTransferFromInputSchema>;
 
-export const setDataInputSchema = z.object({
+export const setDataInputSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1),
 	nftDna: z.string().min(1),
 	mutableData: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",
 	),
-	seedId: z.string().optional(),
-	seedTxId: z.string().optional(),
 });
 export type SetDataInput = z.infer<typeof setDataInputSchema>;
 

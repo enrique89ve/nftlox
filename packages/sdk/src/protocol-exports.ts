@@ -266,7 +266,6 @@ export type {
 	NFTData,
 	BulkDistributeItem,
 	BulkDistributeData,
-	ImageOverride,
 	TransferData,
 	SetDataData,
 	SetDataFromData,

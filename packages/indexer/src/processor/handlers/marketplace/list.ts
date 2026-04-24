@@ -1,10 +1,11 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessing, getNftForProcessingForUpdate, updateNftListing, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { getNftForProcessingForUpdate, updateNftListing, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireHiveAmount, optionalNumber, optionalString } from "@/utils/validation.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
+import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
 import { generateListingId, LISTING_ID_PREFIX, MIN_LISTING_TTL_MS, MIN_PRICE_AMOUNT } from "@/protocol/index.ts";
 
 function validateExpiresAt(expiresAt: number | null, blockTimestamp: string, nftId: string): void {
@@ -40,6 +41,8 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 
 	const nft = await getNftForProcessingForUpdate(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
+
+	await validateSeedProvenance(op, nft, txn);
 
 	assertActionable(nft, nftId);
 	assertMarketplaceInstance(nft, nftId);

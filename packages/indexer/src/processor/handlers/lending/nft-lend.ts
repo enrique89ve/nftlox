@@ -6,6 +6,7 @@ import { insertLoan, getLoan } from "@/db/queries/loans.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertNotSeed } from "@/utils/status-checks.ts";
+import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
 
 export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const instanceId = requireString(op.data.instanceId, "instanceId");
@@ -15,6 +16,9 @@ export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promis
 
 	const nft = await getNftForProcessingForUpdate(instanceId, txn);
 	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
+
+	await validateSeedProvenance(op, nft, txn);
+
 	if (nft.status !== NFT_STATUS_ACTIVE) throw new Error(`NFT must be active to lend, current status: ${nft.status}`);
 	assertNotSeed(nft, instanceId);
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${instanceId}`);

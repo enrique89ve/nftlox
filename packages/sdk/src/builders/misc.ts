@@ -38,8 +38,8 @@ export function buildBurn(input: BurnBuilderInput): KeychainResult<TransferData>
 	const data = parsed.data;
 
 	const transferData: TransferData = data.nftIds
-		? { nftIds: data.nftIds, from: data.owner, to: BURN_RECIPIENT }
-		: { nftId: data.nftId!, from: data.owner, to: BURN_RECIPIENT };
+		? { nftIds: data.nftIds, to: BURN_RECIPIENT }
+		: { nftId: data.nftId!, to: BURN_RECIPIENT };
 
 	const payload = createPayload("transfer", transferData);
 	const operation = createHiveOperation(payload, data.owner);

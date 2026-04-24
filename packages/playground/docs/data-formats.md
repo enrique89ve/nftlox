@@ -28,7 +28,7 @@ The `id` on the Hive op equals `PROTOCOL_ID`. The indexer filters custom_jsons b
 
 ## Image & external URL wire format
 
-Every URL-bearing field — `metadata.image`, `metadata.externalUrl`, `metadata.imageUrl`, `imageOverrides[].imageUrl` — is transported on-chain with the `https://` prefix **stripped**. This saves ~8 bytes per URL (up to ~5% of the payload budget on `bulk_distribute` with 50 overrides).
+Every URL-bearing field — `metadata.image` (collection), `metadata.externalUrl`, and `metadata.imageUrl` (seed mint) — is transported on-chain with the `https://` prefix **stripped**. This saves ~8 bytes per URL. Instance-level payloads (`bulk_distribute`, `transfer`, `list`, `unlist`) do not carry image URLs: instances inherit `image_url` from their seed via the FK chain at read time.
 
 Canonical rule, implemented once in `@nftlox/protocol`:
 
@@ -67,6 +67,25 @@ A subset of those active-auth actions additionally require the signer to be a **
 Exceeding `SAFE_PAYLOAD_MAX_BYTES` throws `PayloadTooLargeError` with a suggested batch size.
 
 ---
+
+## Seed provenance (optional attestation)
+
+Eight actions support optional `seedId?` and `seedTxId?` fields carrying a
+self-attested provenance reference (the `SeedProvenance` type in
+`@nftlox/protocol`):
+
+- **Affected**: `transfer`, `list`, `unlist`, `set_data`, `set_data_from`,
+  `nft_transfer_from`, `nft_lend`, `nft_return`.
+- **If declared**: the indexer validates each field against the NFT's
+  canonical `seed_id` and the seed's `created_tx_id`. Any mismatch, any
+  wrong-type value, or any attempt to attach provenance to a seed NFT
+  rejects the whole op before state mutation.
+- **If absent**: the op processes normally (backwards-compatible).
+
+This lets apps reading Hive L1 directly trust the provenance fields of
+accepted ops without a second indexer round-trip after bootstrap. The
+`items[].seedTxId` inside `bulk_distribute` is a different field — required
+and validated since the first release.
 
 ## Action catalogue
 
@@ -174,7 +193,6 @@ type NFTData = {
 type BulkDistributeData = {
 	readonly to?: string;                    // defaults to signer
 	readonly items: readonly BulkDistributeItem[];
-	readonly imageOverrides?: Record<string, { imageUrl?: string; imageHash?: string }>;
 	readonly mutableData?: Record<string, unknown>;
 };
 
@@ -197,16 +215,13 @@ Instance IDs are computed server-side as `generateDeterministicInstanceId(seedId
 type TransferData = {
 	readonly nftId?: string;                 // single
 	readonly nftIds?: readonly string[];     // bulk (≤50)
-	readonly from: string;
 	readonly to: string;                     // BURN_RECIPIENT ("null") = burn
-	readonly imageUrl?: string;
-	readonly imageHash?: string;
 	readonly seedId?: string;                // optional provenance reference
 	readonly seedTxId?: string;
 };
 ```
 
-Either `nftId` or `nftIds` must be present. Burning is a transfer with `to` set to the exported `BURN_RECIPIENT` constant — its literal value is `"null"`, Hive's reserved burn account.
+Either `nftId` or `nftIds` must be present. The sender is the Hive `custom_json` signer, not a payload field. Burning is a transfer with `to` set to the exported `BURN_RECIPIENT` constant — its literal value is `"null"`, Hive's reserved burn account.
 
 ### `set_data`
 
@@ -263,8 +278,6 @@ type ListingData = {
 	readonly listingNonce: string;           // 12 random chars — de-duplicates identical relistings
 	readonly price: { readonly amount: string; readonly currency: "HIVE" | "HBD" };
 	readonly expiresAt?: number;             // unix millis
-	readonly imageUrl?: string;
-	readonly imageHash?: string;
 	readonly marketplace?: string;           // empty ⇒ global listing
 	readonly seedId?: string;
 	readonly seedTxId?: string;
@@ -280,8 +293,6 @@ Prices are 3-decimal strings, minimum `0.100`. Currency is `"HIVE"` or `"HBD"`.
 ```typescript
 type UnlistData = {
 	readonly nftId: string;
-	readonly imageUrl?: string;
-	readonly imageHash?: string;
 	readonly seedId?: string;
 	readonly seedTxId?: string;
 };

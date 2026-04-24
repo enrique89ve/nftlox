@@ -7,6 +7,7 @@ import {
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { hasDataOperatorApproval } from "@/db/queries/allowances.ts";
 import { requireString, requireObject, optionalCollectionSchema } from "@/utils/validation.ts";
+import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { computeDataHash, validateMutableSnapshot } from "@/protocol/index.ts";
 
@@ -17,6 +18,8 @@ export async function handleSetDataFrom(op: ParsedOperation, txn: Queryable): Pr
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 	if (nft.nft_dna !== nftDna) throw new Error(`NFT DNA mismatch for ${nftId}`);
+
+	await validateSeedProvenance(op, nft, txn);
 
 	const isOperator = await hasDataOperatorApproval(nft.collection_id, op.signer, txn);
 	if (!isOperator) {

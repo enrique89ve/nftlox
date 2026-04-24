@@ -1067,6 +1067,19 @@ describe("Handlers (integration)", () => {
 			expect(nft!.owner).toBe("bob");
 		});
 
+		test("rejects transfer when payload declares from", async () => {
+			await seedCollection();
+			await seedMint();
+
+			const op = makeOp(ACTION_TRANSFER, { nftId: SEED_TEST1, from: "alice", to: "bob" });
+			await expect(withTransaction((txn) => handleTransfer(op, txn))).rejects.toThrow(
+				"must not include from",
+			);
+
+			const [nft] = await sql`SELECT owner FROM nfts WHERE id = ${SEED_TEST1}`;
+			expect(nft!.owner).toBe("alice");
+		});
+
 		test("rejects transfer by non-owner", async () => {
 			await seedCollection();
 			await seedMint();
@@ -1164,6 +1177,20 @@ describe("Handlers (integration)", () => {
 			expect(burned).toBeDefined();
 			expect(burned!.burned_by).toBe("alice");
 			expect(burned!.created_at).toBeInstanceOf(Date);
+		});
+
+		test("rejects burn when payload declares from", async () => {
+			await seedCollection();
+			await seedMint();
+
+			await expect(
+				withTransaction((txn) =>
+					handleTransfer(makeOp(ACTION_TRANSFER, { nftId: SEED_TEST1, from: "alice", to: "null" }), txn),
+				),
+			).rejects.toThrow("must not include from");
+
+			const [nft] = await sql`SELECT owner FROM nfts WHERE id = ${SEED_TEST1}`;
+			expect(nft!.owner).toBe("alice");
 		});
 
 		test("rejects double burn", async () => {

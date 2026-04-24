@@ -8,6 +8,7 @@ import {
 import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { requireString } from "@/utils/validation.ts";
 import { assertNotPendingSale } from "@/utils/status-checks.ts";
+import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
 
 /**
  * Unlist is instantaneous. Any active buy settlement is projected as a
@@ -21,6 +22,9 @@ export async function handleUnlist(op: ParsedOperation, txn: Queryable): Promise
 
 	const nft = await getNftForProcessingForUpdate(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
+
+	await validateSeedProvenance(op, nft, txn);
+
 	assertNotPendingSale(nft, nftId);
 	if (nft.status !== NFT_STATUS_LISTED) throw new Error(`NFT not listed: ${nftId}`);
 	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);

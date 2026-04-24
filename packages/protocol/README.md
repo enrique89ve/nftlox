@@ -117,6 +117,55 @@ the node-last buy flow.
 There are no native pack actions in the protocol. Pack planning lives outside
 the base protocol and ultimately emits normal `bulk_distribute` operations.
 
+## Instance Inheritance
+
+Only `mint` carries image metadata on the wire. Instances are never self-describing:
+
+- A **seed** stores its own `imageUrl` / `imageHash` in the `nfts` row written
+  at mint time (via `NFTMetadata` in `NFTData`).
+- An **instance** (created by `bulk_distribute`) has `image_url = NULL` and
+  inherits name, image, and origin-DNA via the `instance → seed → collection`
+  foreign-key chain resolved at read time.
+- `transfer`, `list`, and `unlist` payloads **do not carry** `imageUrl` or
+  `imageHash`. Explorers and clients resolve the image by following the same
+  FK chain. Seeds are immutable, so there is no "snapshot at listing time" to
+  preserve.
+
+This keeps the on-chain payload autodescriptive without reintroducing
+duplication that the database would have to reconcile on every read.
+
+## SeedProvenance Attestation
+
+Eight actions accept an optional `SeedProvenance` block in their payload:
+`transfer`, `list`, `unlist`, `set_data`, `set_data_from`,
+`nft_transfer_from`, `nft_lend`, `nft_return`.
+
+```typescript
+type SeedProvenance = {
+	readonly seedId?: string;    // parent seed id
+	readonly seedTxId?: string;  // Hive txId where the seed was minted
+};
+```
+
+Semantics — **opt-in, verified-if-present**:
+
+- **Both absent** → op processes normally. Backwards-compatible default.
+- **Either declared** → the indexer validates the declared field(s) against
+  the authoritative NFT row (and the seed's `created_tx_id`). Any mismatch
+  rejects the whole op and no state mutation occurs.
+- **Declared on a seed NFT** → rejected. Seeds have no parent seed.
+- **Declared with a non-string type** (e.g. `seedId: 123`) → rejected. A
+  malformed attestation is semantically different from an absent one.
+
+Because the indexer filters out false attestations at write time, apps that
+read Hive L1 directly can trust `seedId` / `seedTxId` on any accepted op
+without an extra indexer round-trip. Apps that prefer simpler payloads may
+omit both fields and resolve `seed_id` through the indexer at bootstrap.
+
+The `items[].seedTxId` carried inside `bulk_distribute` is **not** this
+attestation — it is a required nested field already validated since the
+first release.
+
 ## Payload Data
 
 Payload interfaces live in `src/action-data.ts` and are exported from the

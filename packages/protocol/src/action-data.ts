@@ -100,33 +100,21 @@ export type BulkDistributeItem = {
 	readonly seedTxId: string;
 };
 
-/**
- * Optional per-instance image metadata passed to `bulk_distribute` so the
- * distributor can assign unique imagery to individual minted instances
- * without re-emitting the full seed metadata. Keyed on an instance identifier
- * chosen by the caller (typically the instance number or a slot label).
- */
-export type ImageOverride = {
-	readonly imageUrl?: string | undefined;
-	readonly imageHash?: string | undefined;
-};
-
 export type BulkDistributeData = {
 	readonly to?: string | undefined;
 	readonly items: readonly BulkDistributeItem[];
-	readonly imageOverrides?: Readonly<Record<string, ImageOverride>> | undefined;
 	readonly mutableData?: Record<string, unknown> | undefined;
 };
 
 // Transfer (burn = transfer to "null")
+// Image metadata is intentionally absent: seeds carry their own imageUrl/hash
+// in the `nfts` row (written at mint), and instances inherit via the
+// seed→collection FK chain. Duplicating it on transfer would reintroduce drift.
 
 export type TransferData = SeedProvenance & {
 	readonly nftId?: string | undefined;
 	readonly nftIds?: readonly string[] | undefined;
-	readonly from: string;
 	readonly to: string;
-	readonly imageUrl?: string | undefined;
-	readonly imageHash?: string | undefined;
 };
 
 // Set data
@@ -155,21 +143,20 @@ export type SetDataFromData = SeedProvenance & {
 
 // Marketplace
 
+// Listings resolve image metadata via FK (listing → nft → seed → collection).
+// Seeds are immutable, so a snapshot on the listing payload would add
+// duplication without protecting against any real mutation.
 export type ListingData = SeedProvenance & {
 	readonly nftId: string;
 	readonly listingId: string;
 	readonly listingNonce: string;
 	readonly price: Price;
 	readonly expiresAt?: number | undefined;
-	readonly imageUrl?: string | undefined;
-	readonly imageHash?: string | undefined;
 	readonly marketplace?: string | undefined;
 };
 
 export type UnlistData = {
 	readonly nftId: string;
-	readonly imageUrl?: string | undefined;
-	readonly imageHash?: string | undefined;
 	readonly seedId?: string | undefined;
 	readonly seedTxId?: string | undefined;
 };

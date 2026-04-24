@@ -3,8 +3,8 @@ import { buildTransfer, buildList } from "../src/builders";
 
 describe("Builder username validation", () => {
 	describe("buildTransfer rejects invalid Hive usernames", () => {
-		test("rejects segment too short (a.b)", async () => {
-			const result = await buildTransfer({
+		test("rejects segment too short (a.b)", () => {
+			const result = buildTransfer({
 				nftId: "nft_test123",
 				from: "a.b",
 				to: "alice",
@@ -16,8 +16,8 @@ describe("Builder username validation", () => {
 			}
 		});
 
-		test("rejects trailing dot (abc.)", async () => {
-			const result = await buildTransfer({
+		test("rejects trailing dot (abc.)", () => {
+			const result = buildTransfer({
 				nftId: "nft_test123",
 				from: "abc.",
 				to: "alice",
@@ -29,8 +29,8 @@ describe("Builder username validation", () => {
 			}
 		});
 
-		test("rejects uppercase letters (ABC)", async () => {
-			const result = await buildTransfer({
+		test("rejects uppercase letters (ABC)", () => {
+			const result = buildTransfer({
 				nftId: "nft_test123",
 				from: "ABC",
 				to: "alice",
@@ -42,8 +42,8 @@ describe("Builder username validation", () => {
 			}
 		});
 
-		test("valid usernames do not produce username errors", async () => {
-			const result = await buildTransfer({
+		test("valid usernames do not produce username errors", () => {
+			const result = buildTransfer({
 				nftId: "nft_test123",
 				from: "alice",
 				to: "bob123",

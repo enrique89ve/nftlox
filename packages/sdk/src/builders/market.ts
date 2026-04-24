@@ -3,13 +3,11 @@ import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema } fr
 import { formatZodError } from "./helpers";
 import type { KeychainResult } from "./types";
 import {
-	generateImageHash,
 	generateListingNonce,
 	generateListingId,
 	createPayload,
 	createHiveOperation,
 	getKeyType,
-	toWireUrl,
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
@@ -33,13 +31,6 @@ export async function buildList(
 	}
 
 	const data = parsed.data;
-	const warnings: string[] = [];
-
-	if (!data.imageUrl) {
-		warnings.push("imageUrl not provided - recommended for indexer verification");
-	}
-
-	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
 
 	const listingNonce = generateListingNonce();
 	const listingId = await generateListingId({
@@ -58,8 +49,6 @@ export async function buildList(
 		listingNonce,
 		price: data.price,
 		...(data.expiresAt && { expiresAt: data.expiresAt }),
-		...(data.imageUrl && { imageUrl: toWireUrl(data.imageUrl) }),
-		...(imageHash && { imageHash }),
 		...(data.seedId && { seedId: data.seedId }),
 		...(data.seedTxId && { seedTxId: data.seedTxId }),
 		...(data.marketplace && { marketplace: data.marketplace }),
@@ -75,7 +64,6 @@ export async function buildList(
 		signer: data.owner,
 		payload,
 		generatedIds: { listingId, listingNonce },
-		...(warnings.length > 0 && { warnings }),
 	};
 }
 
@@ -84,27 +72,18 @@ export const unlistBuilderSchema = unlistInputSchema.extend({
 });
 export type UnlistBuilderInput = z.infer<typeof unlistBuilderSchema>;
 
-export async function buildUnlist(
+export function buildUnlist(
 	input: UnlistBuilderInput,
-): Promise<KeychainResult<UnlistData>> {
+): KeychainResult<UnlistData> {
 	const parsed = unlistBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 
 	const data = parsed.data;
-	const warnings: string[] = [];
-
-	if (!data.imageUrl) {
-		warnings.push("imageUrl not provided - recommended for indexer verification");
-	}
-
-	const imageHash = data.imageHash || (data.imageUrl ? await generateImageHash(data.imageUrl) : undefined);
 
 	const unlistData: UnlistData = {
 		nftId: data.nftId,
-		...(data.imageUrl && { imageUrl: toWireUrl(data.imageUrl) }),
-		...(imageHash && { imageHash }),
 		...(data.seedId && { seedId: data.seedId }),
 		...(data.seedTxId && { seedTxId: data.seedTxId }),
 	};
@@ -118,7 +97,6 @@ export async function buildUnlist(
 		keyType: getKeyType("unlist"),
 		signer: data.owner,
 		payload,
-		...(warnings.length > 0 && { warnings }),
 	};
 }
 

@@ -1332,12 +1332,10 @@ async function seedGroupTransferPrompt(nftId: string) {
     return;
   }
   const nft = validation.nft!;
-  const buildResult = await buildTransfer({
+  const buildResult = buildTransfer({
     nftId: nft.id,
     from: connectedUser,
     to,
-    imageUrl: nft.imageUrl ?? undefined,
-    imageHash: nft.imageHash ?? undefined,
   });
   if (!buildResult.success) {
     log(`Build transfer failed: ${buildResult.errors.join(", ")}`, "error");
@@ -2839,12 +2837,10 @@ async function nftDetailTransfer() {
   }
 
   const nft = validation.nft!;
-  const buildResult = await buildTransfer({
+  const buildResult = buildTransfer({
     nftId: nft.id,
     from: connectedUser,
     to,
-    imageUrl: nft.imageUrl ?? undefined,
-    imageHash: nft.imageHash ?? undefined,
   });
 
   if (!buildResult.success) {
@@ -2920,12 +2916,10 @@ async function nftDetailTransferSeed() {
     return;
   }
 
-  const buildResult = await buildTransfer({
+  const buildResult = buildTransfer({
     nftId: nft.id,
     from: connectedUser,
     to,
-    imageUrl: nft.imageUrl ?? undefined,
-    imageHash: nft.imageHash ?? undefined,
   });
 
   if (!buildResult.success) {

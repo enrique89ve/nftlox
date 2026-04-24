@@ -31,6 +31,22 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 
 ---
 
+## Seed provenance (optional attestation)
+
+Eight operations accept optional `seedId` and `seedTxId` fields in their
+payload — `transfer`, `list`, `unlist`, `set_data`, `set_data_from`,
+`nft_transfer_from`, `nft_lend`, `nft_return`.
+
+- **Both absent** → the op processes normally (backwards-compatible).
+- **Either declared** → the indexer validates the declared field against
+  the NFT's canonical `seed_id` and the seed's `created_tx_id`. A mismatch
+  or a wrong-type value rejects the whole op.
+- **Declared on a seed NFT** → rejected (seeds have no parent seed).
+
+Apps that verify operations directly against Hive L1 can trust these fields
+on accepted ops without re-consulting the indexer. See the full semantics
+in `packages/protocol/README.md` under "SeedProvenance Attestation".
+
 ## Core (9 operations)
 
 ### 1. `create_collection`
@@ -150,10 +166,9 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | `to` | string | no | Owner of the instances (default signer) |
 | `items` | array | yes | `[{ seedId, quantity, seedTxId }]` -- max 50 items |
 | `items[].seedTxId` | string | yes | Transaction ID where the seed was minted (L1 traceability without indexer) |
-| `imageOverrides` | object | no | `{ seedId: { imageUrl, imageHash } }` -- override per seed |
 | `mutableData` | object | no | Mutable data for the instances (validated against schema) |
 
-**Note**: Instances inherit `immutable_data` and `immutable_data_hash` from the seed automatically. If the collection has a schema, `mutableData` is validated against the mutable schema fields.
+**Note**: Instances inherit `immutable_data`, `immutable_data_hash`, `name`, and `image_url` from the seed via the `seed → collection` FK chain — instance rows store only references, never duplicates. If the collection has a schema, `mutableData` is validated against the mutable schema fields.
 
 **Indexer validations**:
 - Items not empty, max 50

@@ -33,7 +33,6 @@ const result = await buildList({
 	price: { amount: "25.000", currency: "HIVE" },
 	expiresAt: Date.now() + 7 * 24 * 3600 * 1000,
 	marketplace: "ragnarok",           // optional scope tag, used by UIs to filter
-	imageUrl: "https://…/nft.png",     // optional; SDK hashes it for indexer verification
 });
 if (!result.success) throw new Error(JSON.stringify(result.errors));
 
@@ -49,7 +48,7 @@ await tx.broadcast();
 
 - `listingNonce` — random 16-byte hex, included in the hash so the same NFT can be re-listed without collision.
 - `listingId = sha256(domain | nftId | owner | marketplace | price | expiresAt | nonce)` — deterministic, verifiable off-chain.
-- `imageHash` if you pass `imageUrl` (the indexer compares hashes on first sight).
+- The image is resolved by consumers via the `listing → nft → seed` FK chain; the listing payload itself does not carry image metadata.
 
 **Indexer validation:**
 

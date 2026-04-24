@@ -6,6 +6,7 @@ import {
 } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { requireString, requireObject, optionalCollectionSchema } from "@/utils/validation.ts";
+import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { computeDataHash, validateMutableSnapshot } from "@/protocol/index.ts";
 
@@ -16,6 +17,8 @@ export async function handleSetData(op: ParsedOperation, txn: Queryable): Promis
 	const nft = await getNftForProcessing(nftId, txn);
 	if (!nft) throw new Error(`NFT not found: ${nftId}`);
 	if (nft.nft_dna !== nftDna) throw new Error(`NFT DNA mismatch for ${nftId}`);
+
+	await validateSeedProvenance(op, nft, txn);
 
 	const collection = await getCollectionRules(nft.collection_id, txn);
 	const schema = optionalCollectionSchema(collection?.schema);

@@ -54,14 +54,6 @@ type IndexerStatusResponse = {
 	nodeAccount?: string | null;
 }
 
-type CollectionMultisigResponse = {
-	ok: boolean;
-	signature?: string;
-	digest?: string;
-	code?: string;
-	message?: string;
-}
-
 type BuildSeedsRequestSeed = Readonly<{
 	artId: string;
 	name: string;
@@ -87,10 +79,6 @@ type BuiltSeedOperation = Readonly<{
 
 function isIndexerStatusResponse(v: unknown): v is IndexerStatusResponse {
 	return typeof v === "object" && v !== null;
-}
-
-function isCollectionMultisigResponse(v: unknown): v is CollectionMultisigResponse {
-	return typeof v === "object" && v !== null && typeof (v as Record<string, unknown>).ok === "boolean";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -285,7 +273,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/transfer": buildRoute(async (body) => {
-		const result = await buildTransfer(body);
+		const result = buildTransfer(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -309,7 +297,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/unlist": buildRoute(async (body) => {
-		const result = await buildUnlist(body);
+		const result = buildUnlist(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -321,7 +309,7 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 	}),
 
 	"/api/build/burn": buildRoute(async (body) => {
-		const result = await buildBurn(body);
+		const result = buildBurn(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,

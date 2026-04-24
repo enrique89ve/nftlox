@@ -59,7 +59,7 @@ type ValidationError = {
 - `keyType` tells the caller which private key to sign with (`Active` for `create_collection`, `buy_commitment`, and `buy`; `Posting` for everything else).
 - `coSigners` is present on multi-signer flows (`buildCollection` and `buildBuy`). Hand the listed operation to the node's multisig endpoint — see [Signing & Broadcasting](../broadcasting.md).
 - `generatedIds` surfaces deterministic IDs computed by the builder (`collectionId`, `seedId`, `listingId`, `listingNonce`, `originDna`) before the transaction is even broadcast. This is the hook for pre-computing links, caching, or optimistic UI.
-- `warnings` are non-fatal ergonomic hints (long names, unusually high royalty, missing `imageUrl` on a list/transfer).
+- `warnings` are non-fatal ergonomic hints (long names, unusually high royalty, etc.).
 
 ## Builders
 
@@ -144,10 +144,11 @@ A **seed** is the non-distributable template. It carries the visual asset, max s
 	creator: string;                 // must be the seed owner or an authorized distributor
 	to?: string;                     // defaults to creator
 	items: ReadonlyArray<{ seedId: string; quantity: number; seedTxId: string }>;
-	imageOverrides?: Record<string, { imageUrl?: string; imageHash?: string }>;
 	mutableData?: Record<string, unknown>;
 }
 ```
+
+Instances inherit `name`, `image_url`, and `art_id` from the seed via the `instance → seed → collection` FK chain. The payload never carries per-instance image metadata; resolve imagery at read time through the indexer or a JOIN.
 
 Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY = 250` instances per call. Duplicate `seedId`s are rejected — aggregate the quantity instead.
 
@@ -155,7 +156,7 @@ Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_T
 
 | Builder | Signature | Auth | Ops |
 |---|---|---|---|
-| `buildTransfer` | `(input) => Promise<KeychainResult<TransferData>>` | Posting | `[custom_json]` |
+| `buildTransfer` | `(input) => KeychainResult<TransferData>` | Posting | `[custom_json]` |
 | `buildBurn` | `(input) => KeychainResult<TransferData>` | Posting | `[custom_json]` |
 
 `buildBurn` is a thin wrapper that emits a `transfer` whose `to` is the exported `BURN_RECIPIENT` constant (Hive's reserved `"null"` account). It accepts either a single `nftId` or a `nftIds` array for bulk burn.
@@ -165,7 +166,7 @@ Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_T
 | Builder | Signature | Auth | Ops |
 |---|---|---|---|
 | `buildList` | `(input) => Promise<KeychainResult<ListingData>>` | Posting | `[custom_json]` |
-| `buildUnlist` | `(input) => Promise<KeychainResult<UnlistData>>` | Posting | `[custom_json]` |
+| `buildUnlist` | `(input) => KeychainResult<UnlistData>` | Posting | `[custom_json]` |
 | `buildBuy` | `(input) => KeychainResult<BuyData>` | Active + node multisig | `[...transfers, custom_json]` |
 
 **`buildList`** generates a deterministic `listingId` and a random `listingNonce`. The nonce is what distinguishes re-listings of the same NFT at the same price — without it, relisting would collide with the previous ID.
@@ -176,11 +177,11 @@ Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_T
 	nftId: string;
 	price: { amount: string; currency: "HIVE" | "HBD" };   // amount in 3-decimal string, ≥ 0.001
 	expiresAt?: number;              // unix millis, must be > now
-	imageUrl?: string;
-	imageHash?: string;
 	marketplace?: string;            // namespacing tag; empty ⇒ global listing
 }
 ```
+
+Listings do not carry image metadata. Explorers and marketplaces resolve imagery via the `listing → nft → seed` FK chain — seeds are immutable, so there is no snapshot to preserve on the listing.
 
 **`buildBuy`** produces an ordered sequence of transfers (seller payout, optional royalty, protocol fee) followed by the `buy` custom_json. The custom_json is co-signed by the node. The transfers use fixed memo prefixes (`MEMO_PREFIX_BUY`, `MEMO_PREFIX_ROYALTY`, `MEMO_PREFIX_FEE`) so the indexer can reconcile each transfer against its listing unambiguously. Get the `paymentSplit` object from `client.getPaymentInfo(nftId)`.
 

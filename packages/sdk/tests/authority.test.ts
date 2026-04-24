@@ -110,7 +110,7 @@ describe("Active key operations use required_auths", () => {
 
 describe("Posting key operations use required_posting_auths", () => {
 	test("transfer", () => {
-		const op = buildOp(ACTION_TRANSFER, "alice", { nftId: "nft_1", from: "alice", to: "bob" });
+		const op = buildOp(ACTION_TRANSFER, "alice", { nftId: "nft_1", to: "bob" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
@@ -124,7 +124,7 @@ describe("Posting key operations use required_posting_auths", () => {
 	});
 
 	test("burn (transfer to null)", () => {
-		const op = buildOp(ACTION_TRANSFER, "alice", { nftId: "nft_1", from: "alice", to: "null" });
+		const op = buildOp(ACTION_TRANSFER, "alice", { nftId: "nft_1", to: "null" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
