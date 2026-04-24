@@ -64,8 +64,7 @@ describe("protocol contract integrity", () => {
 	test("fee and royalty bounds are sane", () => {
 		expect(PROTOCOL_FEE_BPS).toBeGreaterThan(0);
 		expect(PROTOCOL_FEE_BPS).toBeLessThanOrEqual(1000);
-		expect(MAX_ROYALTY_PCT).toBeGreaterThan(0);
-		expect(MAX_ROYALTY_PCT).toBeLessThanOrEqual(50);
+		expect(MAX_ROYALTY_PCT).toBe(50);
 	});
 
 	test("batch limits are positive", () => {

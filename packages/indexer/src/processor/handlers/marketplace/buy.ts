@@ -11,7 +11,7 @@ import { insertSale } from "@/db/queries/marketplace-history.ts";
 import { requireString, requireUsername, verifyTransfers, requireSupportedCurrency } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
-import { ACTION_BUY } from "@/protocol/index.ts";
+import { ACTION_BUY, MAX_ROYALTY_PCT } from "@/protocol/index.ts";
 
 /**
  * Settles a `buy` action against the on-chain reservation projected by the
@@ -90,7 +90,7 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	const currency = requireSupportedCurrency(nft.listing_currency, "listing_currency");
 
 	const royaltyPct = Number(nft.royalty_pct ?? 0);
-	if (royaltyPct < 0 || royaltyPct > 50) {
+	if (royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
 		throw new Error(`Corrupted royalty_pct for collection ${nft.collection_id}: ${royaltyPct}`);
 	}
 	const royaltyRecipient = nft.royalty_recipient ?? null;

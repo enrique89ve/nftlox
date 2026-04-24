@@ -5,6 +5,7 @@ import {
 	ACTION_BUY_COMMITMENT,
 	BUY_API_LAG_MAX_BLOCKS,
 	BUY_COMMITMENT_TTL_BLOCKS,
+	MAX_ROYALTY_PCT,
 	createPayload,
 	validateHiveUsername,
 	type BuyCommitmentData,
@@ -310,7 +311,7 @@ function assertPaymentSplit(
 	}
 
 	const royaltyPct = Number(nft.royalty_pct ?? 0);
-	if (!Number.isFinite(royaltyPct) || royaltyPct < 0 || royaltyPct > 50) {
+	if (!Number.isFinite(royaltyPct) || royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
 		throw createMultisigError("INTERNAL_ERROR", "Collection royalty_pct is invalid");
 	}
 

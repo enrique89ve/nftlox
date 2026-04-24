@@ -26,6 +26,7 @@ import {
 	MAX_IMAGE_URL_LENGTH,
 	MAX_URL_LENGTH,
 	MAX_ID_LENGTH,
+	MAX_ROYALTY_PCT,
 	INSTANCE_FEE_PER_N,
 	MAX_INSTANCES_PER_COLLECTION,
 } from "@/protocol/index.ts";
@@ -83,8 +84,8 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const transferable = requireBoolean(rules.transferable, "rules.transferable");
 	const burnable = requireBoolean(rules.burnable, "rules.burnable");
 	const royaltyPct = requireNumber(rules.royaltyPct, "rules.royaltyPct");
-	if (royaltyPct < 0 || royaltyPct > 50) {
-		throw new Error(`royaltyPct must be between 0 and 50, got ${royaltyPct}`);
+	if (royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
+		throw new Error(`royaltyPct must be between 0 and ${MAX_ROYALTY_PCT}, got ${royaltyPct}`);
 	}
 
 	// Validate royaltyRecipient as a real Hive username at creation time. Buy-time

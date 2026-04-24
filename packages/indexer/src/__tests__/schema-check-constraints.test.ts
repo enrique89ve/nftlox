@@ -57,7 +57,7 @@ describe("collections — total_potential >= 0", () => {
   });
 });
 
-describe("collections — royalty_pct in [0, 100]", () => {
+describe("collections — royalty_pct in [0, 50]", () => {
   it("rejects royalty_pct below 0", async () => {
     await expectQueryError(
       () => sql`
@@ -68,17 +68,17 @@ describe("collections — royalty_pct in [0, 100]", () => {
     );
   });
 
-  it("rejects royalty_pct above 100", async () => {
+  it("rejects royalty_pct above 50", async () => {
     await expectQueryError(
       () => sql`
 				INSERT INTO collections (id, name, symbol, creator, origin_dna, royalty_pct, block_num, tx_id, created_at)
-				VALUES ('coll-rp-over', 'X', 'XRNG02', 'alice', 'odna_rpover', 100.01, 100, 'tx-rp', NOW())
+					VALUES ('coll-rp-over', 'X', 'XRNG02', 'alice', 'odna_rpover', 50.01, 100, 'tx-rp', NOW())
 			`,
       /royalty_pct/i,
     );
   });
 
-  it("accepts boundary values (0, 100) and typical mid-range", async () => {
+  it("accepts boundary values (0, 50) and typical mid-range", async () => {
     await sql`
 			INSERT INTO collections (id, name, symbol, creator, origin_dna, royalty_pct, block_num, tx_id, created_at)
 			VALUES ('coll-rp-zero', 'X', 'XRNG03', 'alice', 'odna_rpzero', 0,    50, 'tx-rp', NOW()),
