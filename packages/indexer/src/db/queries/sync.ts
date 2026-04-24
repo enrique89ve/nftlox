@@ -75,7 +75,7 @@ export async function updateHiveHeadBlock(
 		WHERE id = 1
 		  AND (
 			hive_head_block < ${blockNum}
-			OR (${headTime} IS NOT NULL AND hive_head_time IS NULL)
+			OR (${headTime}::timestamptz IS NOT NULL AND hive_head_time IS NULL)
 		  )
 	`;
 }
