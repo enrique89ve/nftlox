@@ -8,6 +8,7 @@ import {
 	createPayload,
 	createHiveOperation,
 	getKeyType,
+	toWireUrl,
 	MAX_NAME_LENGTH,
 	MEMO_PREFIX_FEE_COL,
 	PROTOCOL_COLLECTION_FEE_HBD,
@@ -169,7 +170,13 @@ export async function buildCollection(
 		totalPotential: data.totalPotential,
 		maxInstances: data.maxInstances,
 		originDna,
-		metadata: data.metadata,
+		metadata: {
+			description: data.metadata.description,
+			image: toWireUrl(data.metadata.image),
+			...(data.metadata.externalUrl !== undefined && {
+				externalUrl: toWireUrl(data.metadata.externalUrl),
+			}),
+		},
 		rules: data.rules,
 		...(data.schema && { schema: data.schema }),
 	};

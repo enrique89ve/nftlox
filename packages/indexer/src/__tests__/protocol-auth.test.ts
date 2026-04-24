@@ -94,11 +94,23 @@ describe("protocol auth map", () => {
 	});
 
 	test("auth mismatch messages are derived from the canonical map", () => {
-		expect(getAuthMismatchReason(ACTION_BUY, "active")).toBeNull();
-		expect(getAuthMismatchReason(ACTION_BUY, "posting")).toBe("Action 'buy' requires active key authority, got posting");
-		expect(getAuthMismatchReason(ACTION_CREATE_COLLECTION, "posting")).toBe("Action 'create_collection' requires active key authority, got posting");
-		expect(getAuthMismatchReason(ACTION_NODE_REGISTER, "active")).toBe("Action 'node_register' requires posting key authority, got active");
-		expect(getAuthMismatchReason(ACTION_NODE_REGISTER, "posting")).toBeNull();
+		expect(getAuthMismatchReason(ACTION_BUY, "active")).toEqual({ ok: true });
+		expect(getAuthMismatchReason(ACTION_BUY, "posting")).toEqual({
+			ok: false,
+			reason: "auth_mismatch",
+			message: "Action 'buy' requires active key authority, got posting",
+		});
+		expect(getAuthMismatchReason(ACTION_CREATE_COLLECTION, "posting")).toEqual({
+			ok: false,
+			reason: "auth_mismatch",
+			message: "Action 'create_collection' requires active key authority, got posting",
+		});
+		expect(getAuthMismatchReason(ACTION_NODE_REGISTER, "active")).toEqual({
+			ok: false,
+			reason: "auth_mismatch",
+			message: "Action 'node_register' requires posting key authority, got active",
+		});
+		expect(getAuthMismatchReason(ACTION_NODE_REGISTER, "posting")).toEqual({ ok: true });
 	});
 });
 

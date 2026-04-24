@@ -2,7 +2,7 @@
 
 Full surface of `nftlox-sdk` — every builder, helper, client, and type that ships in the package. This is the authoritative map; short-form examples live in [Using the SDK](overview.md).
 
-`nftlox-sdk` is a thin builder layer around the wire protocol defined in `@nftlox/protocol`. The protocol package is re-exported in full, so **one import** gives you every constant, type, ID generator, and validator:
+`nftlox-sdk` is a thin builder layer around the wire protocol defined in `@nftlox/protocol`. It re-exports a **curated subset** of the protocol package — every symbol in the SDK is part of its semver contract. Protocol-internal helpers that aren't integrator-facing (e.g. DNA-prefix constants) stay internal; import `@nftlox/protocol` directly if you need them. The curated list lives in `packages/sdk/src/protocol-exports.ts`.
 
 ```typescript
 import {
@@ -56,7 +56,7 @@ type ValidationError = {
 
 - `success` is a compile-time discriminator — narrow on it before touching any other field.
 - `operations` is already in Hive's `["custom_json", {...}]` / `["transfer", {...}]` tuple form. Pass directly to `hive-tx`, `@hiveio/wax`, or `dhive`.
-- `keyType` tells the caller which private key to sign with (`Active` for `create_collection` and `buy`, `Posting` for everything else).
+- `keyType` tells the caller which private key to sign with (`Active` for `create_collection`, `buy_commitment`, and `buy`; `Posting` for everything else).
 - `coSigners` is present on multi-signer flows (`buildCollection` and `buildBuy`). Hand the listed operation to the node's multisig endpoint — see [Signing & Broadcasting](../broadcasting.md).
 - `generatedIds` surfaces deterministic IDs computed by the builder (`collectionId`, `seedId`, `listingId`, `listingNonce`, `originDna`) before the transaction is even broadcast. This is the hook for pre-computing links, caching, or optimistic UI.
 - `warnings` are non-fatal ergonomic hints (long names, unusually high royalty, missing `imageUrl` on a list/transfer).
@@ -145,7 +145,6 @@ A **seed** is the non-distributable template. It carries the visual asset, max s
 	to?: string;                     // defaults to creator
 	items: ReadonlyArray<{ seedId: string; quantity: number; seedTxId: string }>;
 	imageOverrides?: Record<string, { imageUrl?: string; imageHash?: string }>;
-	data?: Record<string, unknown>;
 	mutableData?: Record<string, unknown>;
 }
 ```
@@ -159,7 +158,7 @@ Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_T
 | `buildTransfer` | `(input) => Promise<KeychainResult<TransferData>>` | Posting | `[custom_json]` |
 | `buildBurn` | `(input) => KeychainResult<TransferData>` | Posting | `[custom_json]` |
 
-`buildBurn` is a thin wrapper that emits a `transfer` to the sentinel account `"null"`. It accepts either a single `nftId` or a `nftIds` array for bulk burn.
+`buildBurn` is a thin wrapper that emits a `transfer` whose `to` is the exported `BURN_RECIPIENT` constant (Hive's reserved `"null"` account). It accepts either a single `nftId` or a `nftIds` array for bulk burn.
 
 ### Marketplace
 
@@ -210,7 +209,7 @@ Lending only applies to instances. Seeds cannot be lent.
 
 | Builder | Caller | Notes |
 |---|---|---|
-| `buildSetData` | NFT owner | Updates `mutableData` (and optionally free-form `data`) on an instance. Validated against the collection schema. |
+| `buildSetData` | NFT owner | Updates `mutableData` on an instance. Validated against the `mutable` section of the collection schema. |
 | `buildSetDataFrom` | Approved operator | Same effect, but authorized via `data_operator_approve`. |
 
 ### Node operations (optional for running an indexer)
@@ -256,6 +255,17 @@ generateListingId(params)                                  // "list_<32 hex>"
 ```
 
 Guards: `isSeedId(id)`, `isInstanceId(id)`, `extractSeedId(instanceId)`, `extractInstanceNumber(instanceId)`.
+
+### URL wire normalization
+
+The protocol transports image and external URLs on-chain with the `https://` prefix stripped to save payload bytes (see [Data Formats](../data-formats.md#image--external-url-wire-format) for the canonical rule). Builders and the `IndexerClient` apply the transforms automatically; these helpers are exposed for integrators who parse raw Hive ops or call the indexer API without the SDK:
+
+```typescript
+toWireUrl(fullUrl)    // strips https://; preserves http:// and scheme-less
+fromWireUrl(wire)     // re-adds https:// when scheme-less; preserves http(s):// as-is
+```
+
+Round-trip invariant: `fromWireUrl(toWireUrl(url)) === url.trim()` for every http(s) URL.
 
 ### ArtId validation
 
@@ -403,22 +413,29 @@ Re-exported from `@nftlox/protocol`:
 | Constant | Value | Meaning |
 |---|---|---|
 | `PROTOCOL_ID` | `"nftlox_testnet"` | The `id` field on every `custom_json`. |
-| `PROTOCOL_VERSION` | `"0.6.2"` | The `version` field in every payload. |
+| `PROTOCOL_VERSION` | `"0.9.0"` | The `version` field in every payload. |
+| `MIN_PROTOCOL_VERSION` | `"0.9.0"` | Lowest protocol version the indexer still accepts. |
+| `HIVE_BLOCK_TIME_MS` | `3000` | Hive block cadence. Every `*_BLOCKS` window converts to wall time through this. |
+| `HIVE_DECIMALS` / `HIVE_PRECISION` | `3` / `1000` | Decimals and micro-unit multiplier for HIVE/HBD amounts. |
 | `MAX_OPERATIONS_PER_TX` | `5` | Hard cap per Hive transaction. |
 | `MAX_BULK_DISTRIBUTE_ITEMS` | `50` | Max distinct seeds per `bulk_distribute`. |
 | `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY` | `250` | Max created instances per `bulk_distribute`. |
 | `MAX_TRANSFER_BATCH_SIZE` | `50` | Max `nftIds` per bulk transfer/burn. |
+| `MAX_INSTANCES_PER_COLLECTION` | `1_000_000` | Hard upper bound on creator-declared `maxInstances`. |
 | `SAFE_PAYLOAD_MAX_BYTES` | `7372` | 90% of Hive's 8 KiB custom_json ceiling. |
 | `PROTOCOL_COLLECTION_FEE_HBD` | `"0.100"` | Default fee for `create_collection`. |
 | `PROTOCOL_FEE_BPS` | `100` | Marketplace fee (1%). |
 | `MAX_ROYALTY_PCT` | `50` | Royalty cap (whole %). |
-| `MIN_PRICE_AMOUNT` | `"0.001"` | Minimum listing price. |
-| `UNLIST_DELAY_BLOCKS` | `3` | Cooldown so in-flight `buy` multisigs outlive their unlist. |
+| `MIN_PRICE_AMOUNT` | `"0.100"` | Minimum listing price (3-decimal string). |
+| `MIN_LISTING_TTL_MS` / `MIN_LISTING_TTL_BUFFER_MS` | derived / `60_000` | Floor on listing durations and the safety buffer on top of the block-denominated minimum. |
 | `MULTISIG_TX_MIN_EXPIRATION_MS` | `30_000` | Lower bound on a buy transaction's L1 `expiration`. |
 | `MULTISIG_TX_MAX_EXPIRATION_MS` | `120_000` | Upper bound on a buy transaction's L1 `expiration`. |
 | `RECOMMENDED_BUY_TX_EXPIRATION_MS` | `60_000` | Default expiration the SDK helpers pick — fits PoW + Keychain + node orchestration with headroom. |
 | `BUY_COMMITMENT_TTL_BLOCKS` | `10` | Blocks (~30 s) a `buy_commitment` stays valid before the NFT is released back to `listed`. |
 | `BUY_API_LAG_MAX_BLOCKS` | `3` | Max indexer-vs-HEAD lag (blocks) that still allows `/api/multisig/buy` to serve requests. |
+| `BURN_RECIPIENT` | `"null"` | Hive's reserved burn account; `buildBurn` transfers `to` this value. |
+| `HASH_FORMAT_PREFIX` | `"sha256:"` | Canonical textual form for protocol hashes (data hashes, state roots). |
+| `COLLECTION_ID_PREFIX` / `SEED_ID_PREFIX` / `INSTANCE_ID_PREFIX` / `IMAGE_ID_PREFIX` | `"col_"` / `"seed_"` / `"nft_"` / `"img_"` | Id classification prefixes — use these instead of raw string literals. |
 
 ## Type re-exports
 
@@ -436,12 +453,12 @@ type CollectionData, NFTData, BulkDistributeData, TransferData, SetDataData,
      NodeRegisterData, NodeHeartbeatData,
      ArchiveCollectionData, ExtendSchemaData;
 
-// Discriminator
+// Discriminator — exactly 20 actions
 type ProtocolAction =
 	| "create_collection" | "mint" | "transfer" | "bulk_distribute"
 	| "set_data" | "extend_schema" | "archive_collection"
 	| "node_register" | "node_heartbeat"
-	| "list" | "unlist" | "buy"
+	| "list" | "unlist" | "buy_commitment" | "buy"
 	| "nft_approve" | "nft_approve_all" | "nft_transfer_from"
 	| "nft_lend" | "nft_return"
 	| "data_operator_approve" | "set_data_from";

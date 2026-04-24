@@ -1,14 +1,13 @@
 import {
-	ACTION_BUY,
 	HIVE_AMOUNT_EPSILON,
 	HIVE_DECIMALS,
 	HIVE_PRECISION,
 	MAX_ROYALTY_PCT,
 	MIN_PRICE_AMOUNT,
 	BASIS_POINTS_DENOMINATOR,
+	PROTOCOL_FEE_BPS,
 	type SupportedCurrency,
 } from "./constants";
-import { getPaymentRequirement } from "./payment-requirements";
 import type { PaymentSplit } from "./types";
 
 function assertFiniteNumber(value: number, fieldName: string): void {
@@ -62,14 +61,6 @@ function calculateBasisPointsUnits(totalUnits: number, basisPoints: number): num
 	return Math.round(product / BASIS_POINTS_DENOMINATOR);
 }
 
-function getBuyProtocolFeeBps(): number {
-	const requirement = getPaymentRequirement(ACTION_BUY);
-	if (requirement.kind !== "split") {
-		throw new Error("buy payment requirement must be a split payment");
-	}
-	return requirement.protocolFeeBps;
-}
-
 const MIN_PRICE_UNITS = toExactHiveUnits(Number(MIN_PRICE_AMOUNT), "MIN_PRICE_AMOUNT");
 
 export function roundHive(n: number): number {
@@ -94,6 +85,28 @@ export function calculateBasisPointsAmount(
 	return fromHiveUnits(calculateBasisPointsUnits(totalUnits, basisPoints));
 }
 
+// Pure royalty resolution: returns zero units when the royalty is not
+// payable (no recipient, zero percent, or the recipient equals the seller —
+// self-royalty is collapsed to "no royalty" so the seller receives the full
+// residual). Caller guarantees royaltyPct ∈ [0, MAX_ROYALTY_PCT].
+function computeRoyalty(
+	totalUnits: number,
+	royaltyPct: number,
+	royaltyRecipient: string | null,
+	seller: string,
+): { readonly royaltyUnits: number; readonly effectiveRoyaltyRecipient: string | null } {
+	if (!royaltyRecipient || royaltyPct <= 0 || royaltyRecipient === seller) {
+		return { royaltyUnits: 0, effectiveRoyaltyRecipient: null };
+	}
+	return {
+		royaltyUnits: calculateBasisPointsUnits(
+			totalUnits,
+			percentageToBasisPoints(royaltyPct),
+		),
+		effectiveRoyaltyRecipient: royaltyRecipient,
+	};
+}
+
 export function calculatePaymentSplit(
 	totalPrice: number,
 	currency: SupportedCurrency,
@@ -115,21 +128,14 @@ export function calculatePaymentSplit(
 
 	const feeUnits = feeAccount === seller
 		? 0
-		: calculateBasisPointsUnits(totalUnits, getBuyProtocolFeeBps());
+		: calculateBasisPointsUnits(totalUnits, PROTOCOL_FEE_BPS);
 
-	let royaltyUnits = 0;
-	let effectiveRoyaltyRecipient: string | null = null;
-	if (royaltyRecipient && royaltyPct > 0) {
-		if (royaltyRecipient === seller) {
-			effectiveRoyaltyRecipient = null;
-		} else {
-			royaltyUnits = calculateBasisPointsUnits(
-				totalUnits,
-				percentageToBasisPoints(royaltyPct),
-			);
-			effectiveRoyaltyRecipient = royaltyRecipient;
-		}
-	}
+	const { royaltyUnits, effectiveRoyaltyRecipient } = computeRoyalty(
+		totalUnits,
+		royaltyPct,
+		royaltyRecipient,
+		seller,
+	);
 
 	const sellerUnits = totalUnits - royaltyUnits - feeUnits;
 	if (sellerUnits < 0) {

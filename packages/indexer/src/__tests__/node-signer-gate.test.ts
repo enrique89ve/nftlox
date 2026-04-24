@@ -15,11 +15,12 @@ import { seedActiveSettlementNode } from "./helpers/settlement-node.ts";
 import { makeOp as _makeOp } from "./helpers/make-op.ts";
 import { seedCollection, insertListedInstance, cleanCommonTables } from "./helpers/nft-fixtures.ts";
 
-// Tests que validan la gate del action-router para NODE_SIGNED_ACTIONS
-// (buy_commitment, buy): op.signer DEBE estar registrado + activo en l2_nodes
-// al bloque de procesamiento. Pre-fix, cualquier cuenta Hive podía firmar estas
-// acciones — habilitando (a) DOS vía buy_commitment espurio con hash falso, y
-// (b) fee-bypass firmando la propia buy con una cuenta no-nodo como feeAccount.
+// Tests that validate the action-router gate for NODE_SIGNED_ACTIONS
+// (buy_commitment, buy): op.signer MUST be registered and active in l2_nodes
+// at the processing block. Before the fix any Hive account could sign these
+// actions — enabling (a) DOS via a spurious buy_commitment with a fake hash,
+// and (b) fee-bypass by signing the buy itself with a non-node account set
+// as feeAccount.
 
 const REGISTERED_NODE = "gate.node";
 const STRANGER = "random.hiver";
@@ -27,14 +28,14 @@ const SELLER = "seller.gate";
 const BUYER = "buyer.gate";
 const COLLECTION_ID = "col_gate_tests";
 const REGISTERED_BLOCK = 100_000;
-const FRESH_BLOCK = REGISTERED_BLOCK + 500; // dentro de la ventana de staleness
+const FRESH_BLOCK = REGISTERED_BLOCK + 500; // inside the staleness window
 const STALE_BLOCK = REGISTERED_BLOCK + MAX_NODE_HEARTBEAT_STALENESS_BLOCKS + 1;
 
 /**
- * Construye una buy op con los transfers válidos dirigidos al feeAccount
- * especificado (que es siempre == signer en el flujo real, ya que el handler
- * usa op.signer como feeAccount). Usarla con signer stranger simula el
- * fee-bypass antes del fix.
+ * Builds a buy op with valid transfers directed at the provided feeAccount
+ * (which always equals signer in the real flow, since the handler uses
+ * op.signer as feeAccount). Calling it with a stranger signer simulates the
+ * fee-bypass that existed before the fix.
  */
 function makeBuyOp(params: {
 	readonly nftId: string;
@@ -203,9 +204,9 @@ describe("router node-signer gate — buy_commitment", () => {
 
 describe("router node-signer gate — buy", () => {
 	test("rejects buy whose custom_json signer is not a registered node (fee-bypass prevention)", async () => {
-		// Set-up: nodo legítimo proyecta el commitment para que handleBuy
-		// tuviera una reserva real que consumir. El fix debe bloquear la buy
-		// ANTES de que llegue al handler, sin alterar el estado de la reserva.
+		// Set-up: the legitimate node projects the commitment so handleBuy
+		// would have a real reservation to consume. The fix must block the
+		// buy BEFORE it reaches the handler, without altering the reservation.
 		await seedActiveSettlementNode(REGISTERED_NODE, { registeredBlock: REGISTERED_BLOCK });
 
 		const nftId = "nft_gate_buy";
@@ -227,8 +228,8 @@ describe("router node-signer gate — buy", () => {
 		const committed = await withTransaction((txn) => routeOperation(commitOp, txn));
 		expect(committed).toBe(true);
 
-		// Atacante: misma tx_hash que la reserva, pero firma con cuenta no-nodo
-		// y se auto-direcciona la fee (signer === feeAccount).
+		// Attacker: same tx_hash as the reservation, but signs with a non-node
+		// account and self-directs the fee (signer === feeAccount).
 		const buyOp = makeBuyOp({
 			nftId,
 			listingId: "list_buy",
@@ -243,7 +244,7 @@ describe("router node-signer gate — buy", () => {
 		const ok = await withTransaction((txn) => routeOperation(buyOp, txn));
 		expect(ok).toBe(false);
 
-		// La reserva sigue intacta — handleBuy no se ejecutó.
+		// Reservation is still intact — handleBuy did not run.
 		const [nft] = await sql<
 			{ status: string; sale_buyer: string | null; owner: string; sale_commitment_buy_tx_hash: string | null }[]
 		>`
@@ -254,23 +255,23 @@ describe("router node-signer gate — buy", () => {
 		expect(nft?.owner).toBe(SELLER);
 		expect(nft?.sale_commitment_buy_tx_hash).toBe(buyTxHash);
 
-		// Ninguna venta registrada.
+		// No sale was recorded.
 		const sales = await sql`SELECT id FROM sales WHERE nft_id = ${nftId}`;
 		expect(sales).toHaveLength(0);
 
-		// Reason en invalid_operations debe ser del gate, no del handler.
+		// The reason in invalid_operations must come from the gate, not the handler.
 		const invalid = await sql<{ reason: string }[]>`
 			SELECT reason FROM invalid_operations WHERE operation_id = ${buyOp.operationId}
 		`;
 		expect(invalid).toHaveLength(1);
 		expect(invalid[0]!.reason).toContain("is not registered in l2_nodes");
 
-		// Cuando el atacante broadcastea la buy real en Hive, los transfers L1
-		// ya habrían ocurrido antes del procesamiento. El catch del router
-		// registra ese hecho en orphaned_buys con la misma razón del gate —
-		// la mitigación del fix no es "recuperar los fondos" sino "evitar que
-		// el NFT cambie de dueño sin fee al nodo legítimo". Asegurar este
-		// registro mantiene la trazabilidad operativa.
+		// When the attacker broadcasts the actual buy on Hive, the L1
+		// transfers have already occurred before processing. The router's
+		// catch records that fact in orphaned_buys with the same gate reason
+		// — the fix's mitigation is not "recover the funds" but "prevent the
+		// NFT from changing hands without paying the fee to the legitimate
+		// node". Ensuring this record keeps operational traceability.
 		const orphaned = await sql<{ reason: string }[]>`
 			SELECT reason FROM orphaned_buys WHERE tx_id = ${buyOp.txId}
 		`;

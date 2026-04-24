@@ -222,18 +222,18 @@ export async function routeOperationDetailed(
 		// Lookup is non-optional: if this compiles, the handler exists.
 		const handler = handlers[op.action];
 
-		const authMismatchReason = getAuthMismatchReason(op.action, op.authLevel);
-		if (authMismatchReason) {
+		const authCheck = getAuthMismatchReason(op.action, op.authLevel);
+		if (!authCheck.ok) {
 			await insertInvalidOperation({
 				blockNum: op.blockNum,
 				txId: op.txId,
 				operationId: op.operationId,
 				signer: op.signer,
 				action: op.action,
-				reason: authMismatchReason,
+				reason: authCheck.message,
 				rawPayload: op.data,
 			}, txn);
-			return { kind: "rejected", reason: authMismatchReason };
+			return { kind: "rejected", reason: authCheck.message };
 		}
 
 		try {

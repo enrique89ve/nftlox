@@ -16,12 +16,13 @@ The signer is derived from the Hive `custom_json` authority, not from a payload 
 | A2 | Owner-scoped actions use `op.signer` as the owner authority. |
 | A3 | Operator-scoped actions use `op.signer` as the delegated operator and must prove an existing approval. |
 | A4 | Payload fields can identify targets, but they cannot grant authority by themselves. |
+| A5 | Actions in `NODE_SIGNED_ACTIONS` (`buy_commitment`, `buy`) additionally require `op.signer` to be a registered active settlement node at processing time. Enforced via `requiresActiveNodeSigner(action)`. Orthogonal to the auth-level rule in `ACTION_AUTH_LEVEL`. |
 
 Examples:
 
 - `nft_approve_all` stores `owner = op.signer`; the payload does not contain an owner field.
 - `nft_transfer_from` accepts `from` in the payload, but it still requires `op.signer` to match an instance or collection approval from that owner.
-- `create_collection` and `buy` require active authority because they are node-cosigned flows with native-token consequences.
+- `create_collection`, `buy_commitment`, and `buy` require active authority because they are node-cosigned flows with native-token consequences. `buy_commitment` and `buy` further require the signer to be an active settlement node (A5); `create_collection` is active-signed by the creator, not by a node.
 
 ---
 
@@ -33,7 +34,7 @@ Examples:
 |---|---|
 | `mint` | Creates a seed and sets its initial owner. |
 | `bulk_distribute` | Creates instances and sets their initial owner. |
-| `transfer` | Moves ownership from the signer to another account, or burns via `to = "null"`. |
+| `transfer` | Moves ownership from the signer to another account, or burns via `to = BURN_RECIPIENT` (the reserved Hive `null` account). |
 | `nft_transfer_from` | Moves ownership through an instance or collection approval. |
 | `buy` | Moves ownership after marketplace settlement. |
 | `list`, `unlist` | Do not change owner. |
@@ -78,13 +79,17 @@ Listings are exclusive with ownership-changing and lending flows.
 | Invariant | Rule |
 |---|---|
 | L1 | Active listings block direct ownership and custody changes such as `transfer`, `nft_transfer_from`, `burn`, and `nft_lend`. |
-| L2 | `buy` requires a valid active listing; expired or effective-unlisted listings cannot settle. |
+| L2 | `buy` requires a valid active listing; expired or unlisted listings cannot settle. |
 | L3 | Expired listings may be replaced or cleared by the action that proves they are expired. |
-| L4 | `unlist` stamps `pending_unlist_block` and leaves the NFT listed until the delay window materializes. |
-| L5 | Any action that changes ownership or creates a fresh listing must clear stale `pending_unlist_block`. |
+| L4 | `unlist` clears the listing row immediately. Exclusivity with in-flight settlements is provided by the `buy_commitment` gate below (L5), not by a post-unlist delay. |
+| L5 | While a `buy_commitment` holds an NFT (`status = "pending_sale"`), `unlist`, `transfer`, `nft_transfer_from`, `burn`, `nft_lend`, and re-listing are all rejected. The NFT returns to `active` only when the matching `buy` settles or the commitment TTL expires. |
 | L6 | `collection_stats.listed` changes exactly once for each listed-to-active or active-to-listed transition. |
 
-The pending-unlist delay protects multisig buys already in flight while still giving the owner a deterministic exit.
+Exclusivity between unlist and in-flight buys is enforced by the node-last
+multisig flow: a settlement node only broadcasts `buy_commitment` after it
+observes a still-active listing, and `handleUnlist` refuses any row already
+in `pending_sale`. The commitment TTL (`BUY_COMMITMENT_TTL_BLOCKS`) bounds
+how long an unlisted-but-reserved NFT can stay in that state.
 
 ---
 

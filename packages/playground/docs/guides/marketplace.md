@@ -6,7 +6,7 @@ Peer-to-peer NFT trading on Hive. Listings are pure on-chain state; buys settle 
 
 ```
 list           (owner, posting)             → NFT status: listed, listingId/listingNonce recorded
-unlist         (owner, posting)             → returns to active after UNLIST_DELAY_BLOCKS (3) blocks
+unlist         (owner, posting)             → clears the listing immediately; blocked while a buy_commitment holds the NFT
 buy_commitment (node,  active, server-side) → reserves the NFT in pending_sale, emitted by the settlement node
 buy            (buyer, active  +  node)     → transfers + custom_json, broadcast by the node after its commitment wins
 ```
@@ -71,7 +71,7 @@ const result = await buildUnlist({
 });
 ```
 
-An unlist is effective immediately for UI purposes, but the NFT cannot be re-listed for **`UNLIST_DELAY_BLOCKS = 3`** blocks (~9 s). This tiny cooldown blocks a race where a seller unlists to dodge an in-flight buy and re-lists at a higher price in the same window.
+Unlist is instantaneous: the listing row is cleared in the same block. Race protection against in-flight settlements comes from the `buy_commitment` gate — a settlement node that has already broadcast a commitment holds the NFT as `status = "pending_sale"`, and `handleUnlist` refuses to touch any `pending_sale` row. The NFT returns to `active` only when the matching `buy` settles or the commitment TTL (`BUY_COMMITMENT_TTL_BLOCKS`) expires.
 
 ## 3. Buying — `buildBuy` (node-last)
 

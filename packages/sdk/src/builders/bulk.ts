@@ -6,8 +6,27 @@ import {
 	createPayload,
 	createHiveOperation,
 	getKeyType,
+	toWireUrl,
 	type BulkDistributeData,
+	type ImageOverride,
 } from "@nftlox/protocol";
+
+function normalizeOverride(override: ImageOverride): ImageOverride {
+	return {
+		...(override.imageUrl !== undefined && { imageUrl: toWireUrl(override.imageUrl) }),
+		...(override.imageHash !== undefined && { imageHash: override.imageHash }),
+	};
+}
+
+function normalizeImageOverrides(
+	overrides: Readonly<Record<string, ImageOverride>>,
+): Readonly<Record<string, ImageOverride>> {
+	const normalized: Record<string, ImageOverride> = {};
+	for (const [key, override] of Object.entries(overrides)) {
+		normalized[key] = normalizeOverride(override);
+	}
+	return normalized;
+}
 
 export const bulkDistributeBuilderSchema = bulkDistributeInputSchema.extend({
 	signer: usernameSchema,
@@ -30,7 +49,9 @@ export function buildBulkDistribute(
 			quantity: item.quantity,
 			seedTxId: item.seedTxId,
 		})),
-		...(data.imageOverrides !== undefined && { imageOverrides: data.imageOverrides }),
+		...(data.imageOverrides !== undefined && {
+			imageOverrides: normalizeImageOverrides(data.imageOverrides),
+		}),
 		...(data.mutableData !== undefined && { mutableData: data.mutableData }),
 	};
 

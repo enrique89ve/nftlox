@@ -1,12 +1,13 @@
 // NFTLox Indexer API Client
 // Portable client using only fetch() — works in browser, Bun, and Node.
 
-import type {
-	PaymentInfo,
-	BuyMultisigRequest,
-	BuyMultisigResponse,
-	MultisigRequest,
-	MultisigResponse,
+import {
+	fromWireUrl,
+	type PaymentInfo,
+	type BuyMultisigRequest,
+	type BuyMultisigResponse,
+	type MultisigRequest,
+	type MultisigResponse,
 } from "@nftlox/protocol";
 import {
 	resolveNodeAccountFromStatus,
@@ -454,6 +455,57 @@ interface CompactInstancesResponse {
 	instances: IndexerNftSummary[];
 }
 
+// ============ URL DENORMALIZERS ============
+// The indexer stores URLs in their on-chain wire form (scheme stripped for
+// https; preserved for http/other). Each reader helper below re-applies
+// `fromWireUrl` to URL-bearing fields so callers see fully-qualified URLs.
+// Transparent: public response types stay `string | null`.
+
+function denormalizeOptionalUrl(value: string | null): string | null {
+	return value === null ? null : fromWireUrl(value);
+}
+
+function denormalizeCollection<T extends IndexerCollectionBase>(c: T): T {
+	return {
+		...c,
+		image_url: denormalizeOptionalUrl(c.image_url),
+		external_url: denormalizeOptionalUrl(c.external_url),
+	};
+}
+
+function denormalizeNftSummary<T extends IndexerNftSummary>(n: T): T {
+	return { ...n, image_url: denormalizeOptionalUrl(n.image_url) };
+}
+
+function denormalizeLoan(l: IndexerNftLoan): IndexerNftLoan {
+	return { ...l, image_url: denormalizeOptionalUrl(l.image_url) };
+}
+
+function denormalizeNftLoanStatus(s: IndexerNftLoanStatus): IndexerNftLoanStatus {
+	return { ...s, loan: s.loan === null ? null : denormalizeLoan(s.loan) };
+}
+
+function denormalizeUserNftsPage(page: UserNftsPage): UserNftsPage {
+	return { ...page, nfts: page.nfts.map(denormalizeNftSummary) };
+}
+
+function denormalizeUserLoansPage(page: UserLoansPage): UserLoansPage {
+	return { ...page, loans: page.loans.map(denormalizeLoan) };
+}
+
+function denormalizeUserAssetsOverview(o: UserAssetsOverview): UserAssetsOverview {
+	return {
+		...o,
+		assets: {
+			owned: o.assets.owned.map(denormalizeNftSummary),
+			seeds: o.assets.seeds.map(denormalizeNftSummary),
+			lentOut: o.assets.lentOut.map(denormalizeLoan),
+			borrowed: o.assets.borrowed.map(denormalizeLoan),
+			collections: o.assets.collections.map(denormalizeCollection),
+		},
+	};
+}
+
 // ============ INTERNAL HELPERS ============
 
 type QueryParams = { [key: string]: string | number | boolean | undefined | null };
@@ -627,19 +679,23 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 
 		// ---- Collections ----
 		getCollections: (params) =>
-			get<IndexerCollectionSummary[]>(baseUrl, "/api/collections", params, http),
+			get<IndexerCollectionSummary[]>(baseUrl, "/api/collections", params, http)
+				.then((arr) => arr.map(denormalizeCollection)),
 		getCollection: (id) =>
-			get<IndexerCollection>(baseUrl, `/api/collections/${encodeURIComponent(id)}`, undefined, http),
+			get<IndexerCollection>(baseUrl, `/api/collections/${encodeURIComponent(id)}`, undefined, http)
+				.then(denormalizeCollection),
 		getCollectionSchemaHistory: (id) =>
 			get<SchemaHistoryEntry[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/schema-history`, undefined, http),
 		getCollectionNfts: (id, params) =>
-			get<IndexerNftSummary[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/nfts`, params, http),
+			get<IndexerNftSummary[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/nfts`, params, http)
+				.then((arr) => arr.map(denormalizeNftSummary)),
 		getCollectionStats: (id) =>
 			get<CollectionStats>(baseUrl, `/api/collections/${encodeURIComponent(id)}/stats`, undefined, http),
 
 		// ---- NFTs ----
 		getNft: (id) =>
-			get<IndexerNft>(baseUrl, `/api/nfts/${encodeURIComponent(id)}`, undefined, http),
+			get<IndexerNft>(baseUrl, `/api/nfts/${encodeURIComponent(id)}`, undefined, http)
+				.then(denormalizeNftSummary),
 		getNftOwner: (id) =>
 			get<IndexerNftOwner>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/owner`, undefined, http),
 		getNftOwnership: (id) =>
@@ -647,31 +703,41 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 		getNftProof: (id) =>
 			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/proof`, undefined, http),
 		getNftLoan: (id) =>
-			get<IndexerNftLoanStatus>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/loan`, undefined, http),
+			get<IndexerNftLoanStatus>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/loan`, undefined, http)
+				.then(denormalizeNftLoanStatus),
 		getNftInstances: async (id, params) => {
 			const path = `/api/nfts/${encodeURIComponent(id)}/instances`;
 			if (params?.compact) {
 				const { seed, instances } = await get<CompactInstancesResponse>(baseUrl, path, { ...params, compact: true }, http);
-				return instances.map((inst) => resolveInstance(inst, seed));
+				const denormalizedSeed = denormalizeNftSummary(seed);
+				return instances
+					.map(denormalizeNftSummary)
+					.map((inst) => resolveInstance(inst, denormalizedSeed));
 			}
-			return get<IndexerNftSummary[]>(baseUrl, path, params, http);
+			const arr = await get<IndexerNftSummary[]>(baseUrl, path, params, http);
+			return arr.map(denormalizeNftSummary);
 		},
 
 		// ---- Users ----
 		getUserAssets: (username, params) =>
-			get<UserAssetsOverview>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets`, params, http),
+			get<UserAssetsOverview>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets`, params, http)
+				.then(denormalizeUserAssetsOverview),
 		getUserNfts: (username, params) =>
-			get<UserNftsPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts`, params, http),
+			get<UserNftsPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts`, params, http)
+				.then(denormalizeUserNftsPage),
 		getUserNftCounts: (username) =>
 			get<UserNftCounts>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts/count`, undefined, http),
 		getUserCollections: (username, params) =>
-			get<IndexerCollectionSummary[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/collections`, params, http),
+			get<IndexerCollectionSummary[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/collections`, params, http)
+				.then((arr) => arr.map(denormalizeCollection)),
 		getUserLoans: (username, params) =>
-			get<UserLoansPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/loans`, params, http),
+			get<UserLoansPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/loans`, params, http)
+				.then(denormalizeUserLoansPage),
 
 		// ---- Marketplace ----
 		getListings: (params) =>
-			get<IndexerNftSummary[]>(baseUrl, "/api/marketplace/listings", params, http),
+			get<IndexerNftSummary[]>(baseUrl, "/api/marketplace/listings", params, http)
+				.then((arr) => arr.map(denormalizeNftSummary)),
 		getSales: (params) =>
 			get<MarketplaceSale[]>(baseUrl, "/api/marketplace/sales", params, http),
 		getSalesVolume: (params) =>

@@ -1,9 +1,9 @@
 import type { IndexerNftSummary } from "./client";
 
-/** Campos que un instance hereda del seed cuando son null/vacios */
+/** Fields an instance inherits from its seed when they are null or empty. */
 const INHERITABLE_FIELDS = ["name", "image_url", "origin_dna", "immutable_data"] as const;
 
-/** Merge instance delta con seed data. Retorna objeto completo. */
+/** Merges the instance delta with seed data and returns the resolved object. */
 export function resolveInstance<T extends IndexerNftSummary>(
 	instance: T,
 	seed: IndexerNftSummary,

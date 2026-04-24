@@ -44,7 +44,7 @@ curl https://api-nftlox.hivecreators.co/api/status
 
 ```json
 {
-	"protocolVersion": "0.6.2",
+	"protocolVersion": "0.9.0",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -190,8 +190,8 @@ console.log(`${confirmation.confirmed}/${confirmation.totalOperations} ops confi
 | Property | Value |
 |---|---|
 | Protocol ID | `nftlox_testnet` |
-| Version | `0.6.2` |
-| Minimum supported | `0.6.2` |
+| Version | `0.9.0` |
+| Minimum supported | `0.9.0` |
 | Blockchain | Hive L1 |
 | Finality | ~3 s (block time) |
 | Max ops per custom_json tx | 5 |

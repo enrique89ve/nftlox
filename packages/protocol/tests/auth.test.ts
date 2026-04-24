@@ -96,16 +96,26 @@ describe("auth", () => {
 	});
 
 	describe("getAuthMismatchReason", () => {
-		it("returns null when auth level matches", () => {
-			expect(getAuthMismatchReason(ACTION_CREATE_COLLECTION, "active")).toBeNull();
-			expect(getAuthMismatchReason(ACTION_MINT, "posting")).toBeNull();
+		it("returns ok when auth level matches", () => {
+			expect(getAuthMismatchReason(ACTION_CREATE_COLLECTION, "active")).toEqual({ ok: true });
+			expect(getAuthMismatchReason(ACTION_MINT, "posting")).toEqual({ ok: true });
 		});
 
-		it("returns a descriptive string when auth level mismatches", () => {
-			const reason = getAuthMismatchReason(ACTION_CREATE_COLLECTION, "posting");
-			expect(reason).not.toBeNull();
-			expect(reason).toContain("create_collection");
-			expect(reason).toContain("active");
+		it("returns a descriptive mismatch result when auth level differs", () => {
+			const result = getAuthMismatchReason(ACTION_CREATE_COLLECTION, "posting");
+			expect(result.ok).toBe(false);
+			if (result.ok) throw new Error("unreachable");
+			expect(result.reason).toBe("auth_mismatch");
+			expect(result.message).toContain("create_collection");
+			expect(result.message).toContain("active");
+		});
+
+		it("returns unknown_action for non-ProtocolAction strings", () => {
+			const result = getAuthMismatchReason("not_a_real_action", "posting");
+			expect(result.ok).toBe(false);
+			if (result.ok) throw new Error("unreachable");
+			expect(result.reason).toBe("unknown_action");
+			expect(result.message).toContain("not_a_real_action");
 		});
 	});
 

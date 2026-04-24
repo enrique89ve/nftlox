@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { assumePayload } from "../src/types";
+import { castPayloadByAction } from "../src/payload-assertions";
 import { ACTION_BUY, ACTION_MINT } from "../src/constants";
 
-describe("assumePayload", () => {
+describe("castPayloadByAction", () => {
 	test("returns the payload when action matches", () => {
 		const p = {
 			protocol: "nftlox_testnet",
-			version: "0.8.0",
+			version: "0.9.0",
 			action: ACTION_BUY,
 			data: {
 				nftId: "inst_x",
@@ -14,7 +14,7 @@ describe("assumePayload", () => {
 				listTxId: "t",
 			},
 		} as const;
-		const narrowed = assumePayload(p, ACTION_BUY);
+		const narrowed = castPayloadByAction(p, ACTION_BUY);
 		expect(narrowed).not.toBeNull();
 		expect(narrowed?.data.nftId).toBe("inst_x");
 	});
@@ -22,10 +22,10 @@ describe("assumePayload", () => {
 	test("returns null when action does not match", () => {
 		const p = {
 			protocol: "nftlox_testnet",
-			version: "0.8.0",
+			version: "0.9.0",
 			action: ACTION_MINT,
 			data: {},
 		} as const;
-		expect(assumePayload(p, ACTION_BUY)).toBeNull();
+		expect(castPayloadByAction(p, ACTION_BUY)).toBeNull();
 	});
 });

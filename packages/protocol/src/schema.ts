@@ -16,15 +16,15 @@ import type {
 function sortKeysDeep(value: unknown): unknown {
 	if (value === null || value === undefined) return value;
 	if (Array.isArray(value)) return value.map(sortKeysDeep);
-	if (typeof value === "object") {
-		const sorted: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
-		for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-			if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
-			sorted[key] = sortKeysDeep((value as Record<string, unknown>)[key]);
-		}
-		return sorted;
+	if (typeof value !== "object") return value;
+
+	const record = value as Record<string, unknown>;
+	const sorted: Record<string, unknown> = Object.create(null);
+	for (const key of Object.keys(record).sort()) {
+		if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+		sorted[key] = sortKeysDeep(record[key]);
 	}
-	return value;
+	return sorted;
 }
 
 export function canonicalJson(data: Record<string, unknown>): string {
@@ -60,7 +60,13 @@ export const VALID_SCHEMA_TYPES: ReadonlySet<string> = new Set([
 	...ARRAY_TYPES,
 ]);
 
-const INT_RANGES: Record<string, { min: number; max: number }> = {
+export type IntegerSchemaType =
+	| "uint8" | "uint16" | "uint32" | "uint64"
+	| "int8" | "int16" | "int32" | "int64";
+
+type IntRange = { readonly min: number; readonly max: number };
+
+const INT_RANGES: { readonly [K in IntegerSchemaType]: IntRange } = {
 	uint8: { min: 0, max: 255 },
 	uint16: { min: 0, max: 65535 },
 	uint32: { min: 0, max: 4294967295 },
@@ -102,7 +108,6 @@ export function validateValueAgainstType(
 			if (typeof value !== "number") return false;
 			if (!Number.isInteger(value)) return false;
 			const range = INT_RANGES[type];
-			if (!range) return false;
 			return value >= range.min && value <= range.max;
 		}
 		default:
@@ -110,22 +115,67 @@ export function validateValueAgainstType(
 	}
 }
 
+// Single-field shape validation: name presence, length, regex, and type
+// membership. Returns `nameUsable: false` only when the name itself is
+// missing or non-string — the caller then skips any follow-up check (like
+// duplicate detection) that reads `field.name`.
+function validateFieldShape(
+	field: SchemaField,
+	section: string,
+): { readonly errors: readonly ValidationError[]; readonly nameUsable: boolean } {
+	const prefix = `schema.${section}.${field.name}`;
+	const errors: ValidationError[] = [];
+
+	if (!field.name || typeof field.name !== "string") {
+		errors.push({
+			field: prefix,
+			message: "Field name is required",
+			code: "FIELD_NAME_MISSING",
+		});
+		return { errors, nameUsable: false };
+	}
+
+	if (field.name.length > MAX_FIELD_NAME_LENGTH) {
+		errors.push({
+			field: prefix,
+			message: `Field name exceeds ${MAX_FIELD_NAME_LENGTH} characters`,
+			code: "FIELD_NAME_TOO_LONG",
+		});
+	}
+
+	if (!FIELD_NAME_REGEX.test(field.name)) {
+		errors.push({
+			field: prefix,
+			message: "Field name must start with lowercase letter and contain only lowercase letters, numbers, and underscores",
+			code: "FIELD_NAME_INVALID",
+		});
+	}
+
+	if (!VALID_SCHEMA_TYPES.has(field.type)) {
+		errors.push({
+			field: prefix,
+			message: `Invalid type "${field.type}". Valid types: ${[...VALID_SCHEMA_TYPES].join(", ")}`,
+			code: "FIELD_TYPE_INVALID",
+		});
+	}
+
+	return { errors, nameUsable: true };
+}
+
 export function validateSchemaDefinition(
 	schema: CollectionSchema,
 ): ValidationError[] {
-	const errors: ValidationError[] = [];
-	const allNames = new Set<string>();
 	const totalFields = schema.immutable.length + schema.mutable.length;
 
 	if (totalFields === 0) {
-		errors.push({
+		return [{
 			field: "schema",
 			message: "Schema must have at least one field",
 			code: "SCHEMA_EMPTY",
-		});
-		return errors;
+		}];
 	}
 
+	const errors: ValidationError[] = [];
 	if (totalFields > MAX_SCHEMA_FIELDS) {
 		errors.push({
 			field: "schema",
@@ -134,56 +184,26 @@ export function validateSchemaDefinition(
 		});
 	}
 
-	const validateFields = (fields: readonly SchemaField[], section: string) => {
+	const seenNames = new Set<string>();
+	const validateSection = (fields: readonly SchemaField[], section: string): void => {
 		for (const field of fields) {
-			const prefix = `schema.${section}.${field.name}`;
+			const { errors: fieldErrors, nameUsable } = validateFieldShape(field, section);
+			errors.push(...fieldErrors);
+			if (!nameUsable) continue;
 
-			if (!field.name || typeof field.name !== "string") {
+			if (seenNames.has(field.name)) {
 				errors.push({
-					field: prefix,
-					message: "Field name is required",
-					code: "FIELD_NAME_MISSING",
-				});
-				continue;
-			}
-
-			if (field.name.length > MAX_FIELD_NAME_LENGTH) {
-				errors.push({
-					field: prefix,
-					message: `Field name exceeds ${MAX_FIELD_NAME_LENGTH} characters`,
-					code: "FIELD_NAME_TOO_LONG",
-				});
-			}
-
-			if (!FIELD_NAME_REGEX.test(field.name)) {
-				errors.push({
-					field: prefix,
-					message: "Field name must start with lowercase letter and contain only lowercase letters, numbers, and underscores",
-					code: "FIELD_NAME_INVALID",
-				});
-			}
-
-			if (!VALID_SCHEMA_TYPES.has(field.type)) {
-				errors.push({
-					field: prefix,
-					message: `Invalid type "${field.type}". Valid types: ${[...VALID_SCHEMA_TYPES].join(", ")}`,
-					code: "FIELD_TYPE_INVALID",
-				});
-			}
-
-			if (allNames.has(field.name)) {
-				errors.push({
-					field: prefix,
+					field: `schema.${section}.${field.name}`,
 					message: `Duplicate field name "${field.name}" across immutable and mutable sections`,
 					code: "FIELD_NAME_DUPLICATE",
 				});
 			}
-			allNames.add(field.name);
+			seenNames.add(field.name);
 		}
 	};
 
-	validateFields(schema.immutable, "immutable");
-	validateFields(schema.mutable, "mutable");
+	validateSection(schema.immutable, "immutable");
+	validateSection(schema.mutable, "mutable");
 
 	return errors;
 }
@@ -343,32 +363,24 @@ export function validateMutableSnapshot(
 	return errors;
 }
 
-export function mergeSchemas(
-	existing: CollectionSchema,
-	extension: {
-		newImmutableFields?: readonly SchemaField[] | undefined;
-		newMutableFields?: readonly SchemaField[] | undefined;
-	},
-): { merged: CollectionSchema; errors: ValidationError[] } {
+function detectExtensionEmpty(
+	newImmutable: readonly SchemaField[],
+	newMutable: readonly SchemaField[],
+): ValidationError | null {
+	if (newImmutable.length > 0 || newMutable.length > 0) return null;
+	return {
+		field: "extension",
+		message: "At least one new field is required",
+		code: "EXTENSION_EMPTY",
+	};
+}
+
+function detectFieldCollisions(
+	newFields: readonly SchemaField[],
+	existingNames: ReadonlySet<string>,
+): ValidationError[] {
 	const errors: ValidationError[] = [];
-	const existingNames = new Set([
-		...existing.immutable.map((f) => f.name),
-		...existing.mutable.map((f) => f.name),
-	]);
-
-	const newImmutable = extension.newImmutableFields ?? [];
-	const newMutable = extension.newMutableFields ?? [];
-
-	if (newImmutable.length === 0 && newMutable.length === 0) {
-		errors.push({
-			field: "extension",
-			message: "At least one new field is required",
-			code: "EXTENSION_EMPTY",
-		});
-		return { merged: existing, errors };
-	}
-
-	for (const field of [...newImmutable, ...newMutable]) {
+	for (const field of newFields) {
 		if (existingNames.has(field.name)) {
 			errors.push({
 				field: `extension.${field.name}`,
@@ -377,22 +389,20 @@ export function mergeSchemas(
 			});
 		}
 	}
+	return errors;
+}
 
-	const merged: CollectionSchema = {
-		immutable: [...existing.immutable, ...newImmutable],
-		mutable: [...existing.mutable, ...newMutable],
-	};
-
-	const totalFields = merged.immutable.length + merged.mutable.length;
-	if (totalFields > MAX_SCHEMA_FIELDS) {
-		errors.push({
-			field: "schema",
-			message: `Extended schema exceeds maximum of ${MAX_SCHEMA_FIELDS} fields (got ${totalFields})`,
-			code: "SCHEMA_TOO_LARGE",
-		});
-	}
-
-	for (const field of [...newImmutable, ...newMutable]) {
+// Lighter shape check than validateFieldShape above — this one runs on the
+// extension side and only flags grossly malformed entries (missing/invalid
+// name format, invalid type). The extension flow treats length/regex as a
+// single "format" signal rather than the fine-grained FIELD_NAME_TOO_LONG
+// etc. split used by validateSchemaDefinition. Preserved verbatim so
+// ValidationError codes and messages stay stable for consumers.
+function validateExtensionFieldShapes(
+	newFields: readonly SchemaField[],
+): ValidationError[] {
+	const errors: ValidationError[] = [];
+	for (const field of newFields) {
 		if (!field.name || !FIELD_NAME_REGEX.test(field.name)) {
 			errors.push({
 				field: `extension.${field.name}`,
@@ -408,6 +418,49 @@ export function mergeSchemas(
 			});
 		}
 	}
+	return errors;
+}
+
+export function mergeSchemas(
+	existing: CollectionSchema,
+	extension: {
+		newImmutableFields?: readonly SchemaField[] | undefined;
+		newMutableFields?: readonly SchemaField[] | undefined;
+	},
+): { merged: CollectionSchema; errors: ValidationError[] } {
+	const newImmutable = extension.newImmutableFields ?? [];
+	const newMutable = extension.newMutableFields ?? [];
+
+	const emptyError = detectExtensionEmpty(newImmutable, newMutable);
+	if (emptyError !== null) {
+		return { merged: existing, errors: [emptyError] };
+	}
+
+	const existingNames = new Set<string>([
+		...existing.immutable.map((f) => f.name),
+		...existing.mutable.map((f) => f.name),
+	]);
+	const newFields = [...newImmutable, ...newMutable];
+
+	const errors: ValidationError[] = [
+		...detectFieldCollisions(newFields, existingNames),
+	];
+
+	const merged: CollectionSchema = {
+		immutable: [...existing.immutable, ...newImmutable],
+		mutable: [...existing.mutable, ...newMutable],
+	};
+
+	const totalFields = merged.immutable.length + merged.mutable.length;
+	if (totalFields > MAX_SCHEMA_FIELDS) {
+		errors.push({
+			field: "schema",
+			message: `Extended schema exceeds maximum of ${MAX_SCHEMA_FIELDS} fields (got ${totalFields})`,
+			code: "SCHEMA_TOO_LARGE",
+		});
+	}
+
+	errors.push(...validateExtensionFieldShapes(newFields));
 
 	return { merged, errors };
 }

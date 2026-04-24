@@ -513,14 +513,16 @@ Validation errors never throw — they live in `result.errors[]`.
 ```typescript
 import {
   PROTOCOL_ID,              // "nftlox_testnet"
-  PROTOCOL_VERSION,         // "0.6.2"
+  PROTOCOL_VERSION,         // "0.9.0"
   PROTOCOL_FEE_BPS,         // 100 (1%)
   MAX_ROYALTY_PCT,          // 50
-  UNLIST_DELAY_BLOCKS,      // 3
+  BUY_COMMITMENT_TTL_BLOCKS, // 10 (~30 s)
   MAX_OPERATIONS_PER_TX,    // 5
   MAX_BULK_DISTRIBUTE_ITEMS, // 50
   MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY, // 250
   SAFE_PAYLOAD_MAX_BYTES,   // 7372
+  HIVE_BLOCK_TIME_MS,       // 3000
+  BURN_RECIPIENT,           // "null"
   MEMO_PREFIX_BUY,          // "NFTLox BUY:"
   MEMO_PREFIX_ROYALTY,      // "NFTLox ROY:"
   MEMO_PREFIX_FEE,          // "NFTLox FEE:"

@@ -26,6 +26,7 @@ import {
 	HASH_DOMAIN_IMG,
 	HASH_DOMAIN_LISTING,
 } from "./constants";
+import { toWireUrl } from "./url";
 
 // Hash
 
@@ -63,9 +64,16 @@ export async function generateSeedDna(
 }
 
 // Image Hash
+//
+// Third-party consumers can pass any shape of URL (full https, full http, or
+// already-stripped wire form). `toWireUrl` canonicalises to the on-chain wire
+// form before hashing, so the SDK builder and the indexer always derive the
+// same image id for the same logical image — regardless of who holds the
+// scheme prefix at call time.
 
 export async function generateImageHash(imageUrl: string): Promise<string> {
-	const input = `${HASH_DOMAIN_IMG}${imageUrl}`;
+	const canonical = toWireUrl(imageUrl);
+	const input = `${HASH_DOMAIN_IMG}${canonical}`;
 	const fullHash = await generateHash(input);
 	return `${IMAGE_ID_PREFIX}${fullHash.slice(0, IMAGE_ID_HASH_LENGTH)}`;
 }
@@ -111,18 +119,13 @@ export async function generateInstanceId(
 
 // ID guards & extraction
 
-// Regex built from INSTANCE_ID_HASH_LENGTH + INSTANCE_ID_PREFIX so both the
-// prefix and hash-length constants are the single source of truth. A mismatch
-// between this regex and the id emitted by generateDeterministicInstanceId
-// would silently break extractSeedId/extractInstanceNumber at runtime.
-const INSTANCE_ID_REGEX = new RegExp(
-	`^${INSTANCE_ID_PREFIX}[a-f0-9]{${INSTANCE_ID_HASH_LENGTH}}_\\d+$`,
-);
-const INSTANCE_ID_SEED_CAPTURE_REGEX = new RegExp(
-	`^${INSTANCE_ID_PREFIX}([a-f0-9]{${INSTANCE_ID_HASH_LENGTH}})_\\d+$`,
-);
-const INSTANCE_ID_NUMBER_CAPTURE_REGEX = new RegExp(
-	`^${INSTANCE_ID_PREFIX}[a-f0-9]{${INSTANCE_ID_HASH_LENGTH}}_(\\d+)$`,
+// Single parse regex — built from INSTANCE_ID_HASH_LENGTH + INSTANCE_ID_PREFIX
+// so the prefix and hash-length constants stay the single source of truth.
+// A mismatch between this regex and the id emitted by
+// generateDeterministicInstanceId would silently break parseInstanceId and
+// every helper below that consumes it.
+const INSTANCE_ID_PARSE_REGEX = new RegExp(
+	`^${INSTANCE_ID_PREFIX}([a-f0-9]{${INSTANCE_ID_HASH_LENGTH}})_(\\d+)$`,
 );
 
 export function isSeedId(id: string): boolean {
@@ -130,19 +133,33 @@ export function isSeedId(id: string): boolean {
 }
 
 export function isInstanceId(id: string): boolean {
-	return INSTANCE_ID_REGEX.test(id);
+	return INSTANCE_ID_PARSE_REGEX.test(id);
+}
+
+/**
+ * Parses a full instance id into its seed id and instance number. Returns
+ * `null` when the input does not match the canonical instance-id form
+ * (INSTANCE_ID_PREFIX + hex hash + underscore + number).
+ * Primary helper: `extractSeedId` and `extractInstanceNumber` are thin
+ * wrappers retained for backwards compatibility with the SDK public surface.
+ */
+export function parseInstanceId(
+	id: string,
+): { readonly seedId: string; readonly instanceNumber: number } | null {
+	const match = INSTANCE_ID_PARSE_REGEX.exec(id);
+	if (!match || !match[1] || !match[2]) return null;
+	return {
+		seedId: `${SEED_ID_PREFIX}${match[1]}`,
+		instanceNumber: Number.parseInt(match[2], 10),
+	};
 }
 
 export function extractSeedId(instanceId: string): string | null {
-	const match = instanceId.match(INSTANCE_ID_SEED_CAPTURE_REGEX);
-	if (!match || !match[1]) return null;
-	return `${SEED_ID_PREFIX}${match[1]}`;
+	return parseInstanceId(instanceId)?.seedId ?? null;
 }
 
 export function extractInstanceNumber(instanceId: string): number | null {
-	const match = instanceId.match(INSTANCE_ID_NUMBER_CAPTURE_REGEX);
-	if (!match || !match[1]) return null;
-	return parseInt(match[1], 10);
+	return parseInstanceId(instanceId)?.instanceNumber ?? null;
 }
 
 // Instance DNA — hashed from (seedId, instanceNumber, txId, blockNum).

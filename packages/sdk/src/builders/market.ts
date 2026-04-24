@@ -9,6 +9,7 @@ import {
 	createPayload,
 	createHiveOperation,
 	getKeyType,
+	toWireUrl,
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
@@ -57,7 +58,7 @@ export async function buildList(
 		listingNonce,
 		price: data.price,
 		...(data.expiresAt && { expiresAt: data.expiresAt }),
-		...(data.imageUrl && { imageUrl: data.imageUrl }),
+		...(data.imageUrl && { imageUrl: toWireUrl(data.imageUrl) }),
 		...(imageHash && { imageHash }),
 		...(data.seedId && { seedId: data.seedId }),
 		...(data.seedTxId && { seedTxId: data.seedTxId }),
@@ -102,7 +103,7 @@ export async function buildUnlist(
 
 	const unlistData: UnlistData = {
 		nftId: data.nftId,
-		...(data.imageUrl && { imageUrl: data.imageUrl }),
+		...(data.imageUrl && { imageUrl: toWireUrl(data.imageUrl) }),
 		...(imageHash && { imageHash }),
 		...(data.seedId && { seedId: data.seedId }),
 		...(data.seedTxId && { seedTxId: data.seedTxId }),

@@ -100,10 +100,21 @@ export type BulkDistributeItem = {
 	readonly seedTxId: string;
 };
 
+/**
+ * Optional per-instance image metadata passed to `bulk_distribute` so the
+ * distributor can assign unique imagery to individual minted instances
+ * without re-emitting the full seed metadata. Keyed on an instance identifier
+ * chosen by the caller (typically the instance number or a slot label).
+ */
+export type ImageOverride = {
+	readonly imageUrl?: string | undefined;
+	readonly imageHash?: string | undefined;
+};
+
 export type BulkDistributeData = {
 	readonly to?: string | undefined;
 	readonly items: readonly BulkDistributeItem[];
-	readonly imageOverrides?: Readonly<Record<string, { readonly imageUrl?: string | undefined; readonly imageHash?: string | undefined }>> | undefined;
+	readonly imageOverrides?: Readonly<Record<string, ImageOverride>> | undefined;
 	readonly mutableData?: Record<string, unknown> | undefined;
 };
 

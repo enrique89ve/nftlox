@@ -214,12 +214,18 @@ export const generateDeterministicInstanceId = protocol.generateDeterministicIns
 export const generateInstanceDna = protocol.generateInstanceDna;
 export const generateDeterministicAccessKey = protocol.generateDeterministicAccessKey;
 export const generateInstanceId = protocol.generateInstanceId;
+export const parseInstanceId = protocol.parseInstanceId;
 export const extractSeedId = protocol.extractSeedId;
 export const extractInstanceNumber = protocol.extractInstanceNumber;
 export const isSeedId = protocol.isSeedId;
 export const isInstanceId = protocol.isInstanceId;
 export const generateListingNonce = protocol.generateListingNonce;
 export const generateListingId = protocol.generateListingId;
+
+// URL wire helpers — integrators that bypass the IndexerClient must apply
+// these manually when emitting or reading image/external URLs.
+export const toWireUrl = protocol.toWireUrl;
+export const fromWireUrl = protocol.fromWireUrl;
 
 // ============================================================================
 // Type exports
@@ -228,6 +234,7 @@ export const generateListingId = protocol.generateListingId;
 export type {
 	ProtocolAction,
 	AuthLevel,
+	AuthCheckResult,
 	KeyType,
 	ActiveAuthAction,
 	PostingAuthAction,
@@ -259,6 +266,7 @@ export type {
 	NFTData,
 	BulkDistributeItem,
 	BulkDistributeData,
+	ImageOverride,
 	TransferData,
 	SetDataData,
 	SetDataFromData,

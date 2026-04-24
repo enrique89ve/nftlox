@@ -12,6 +12,7 @@ import {
 	createPayload,
 	createHiveOperation,
 	getKeyType,
+	toWireUrl,
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
@@ -87,7 +88,7 @@ export async function buildSeed(
 		metadata: {
 			name: data.name,
 			...(data.brief !== undefined && { description: data.brief }),
-			imageUrl: data.imageUrl,
+			imageUrl: toWireUrl(data.imageUrl),
 			imageHash,
 		},
 		maxSupply: data.maxSupply,

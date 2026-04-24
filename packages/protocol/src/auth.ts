@@ -85,14 +85,55 @@ export function getKeyType(action: string): KeyType {
 	return ACTION_AUTH_LEVEL[action] === "active" ? "Active" : "Posting";
 }
 
-/** Returns null if auth matches; otherwise a human-readable mismatch reason. Throws if the action string is not a known ProtocolAction. */
+/**
+ * Discriminated result of auth validation. `ok: true` means the action's
+ * expected auth level matches `actualAuthLevel`. The two `ok: false` variants
+ * distinguish:
+ *
+ *   - `auth_mismatch` — action is recognised but the signer used the wrong
+ *     key type.
+ *   - `unknown_action` — the string is not a registered ProtocolAction.
+ *
+ * Callers must narrow on `result.ok` before reading `.message`. This replaces
+ * the previous `string | null` + throw-on-unknown-action dual contract with a
+ * single total function.
+ */
+export type AuthCheckResult =
+	| { readonly ok: true }
+	| {
+			readonly ok: false;
+			readonly reason: "auth_mismatch";
+			readonly message: string;
+	  }
+	| {
+			readonly ok: false;
+			readonly reason: "unknown_action";
+			readonly message: string;
+	  };
+
+/**
+ * Checks whether `actualAuthLevel` matches the auth level expected for the
+ * given protocol action. Returns a discriminated `AuthCheckResult` — never
+ * throws, never returns null.
+ */
 export function getAuthMismatchReason(
 	action: string,
 	actualAuthLevel: AuthLevel,
-): string | null {
-	const expectedAuthLevel = getAuthLevel(action);
-	if (actualAuthLevel === expectedAuthLevel) return null;
-	return `Action '${action}' requires ${expectedAuthLevel} key authority, got ${actualAuthLevel}`;
+): AuthCheckResult {
+	if (!isProtocolAction(action)) {
+		return {
+			ok: false,
+			reason: "unknown_action",
+			message: `Unsupported protocol action: ${action}`,
+		};
+	}
+	const expectedAuthLevel = ACTION_AUTH_LEVEL[action];
+	if (actualAuthLevel === expectedAuthLevel) return { ok: true };
+	return {
+		ok: false,
+		reason: "auth_mismatch",
+		message: `Action '${action}' requires ${expectedAuthLevel} key authority, got ${actualAuthLevel}`,
+	};
 }
 
 type ActionForAuthLevel<Level extends AuthLevel> = {
@@ -124,13 +165,13 @@ export const POSTING_AUTH_ACTIONS: readonly PostingAuthAction[] = Object.freeze(
 	),
 );
 
-// Subconjunto de ACTIVE_AUTH_ACTIONS cuyo op.signer DEBE ser un nodo de
-// settlement registrado y activo en l2_nodes al bloque de procesamiento.
-// Regla de rol de firmante, ortogonal a PaymentRequirement: buy_commitment
-// no tiene fees y buy tiene split que no cae en recipient:action:signer, así
-// que ninguna de las dos está cubierta por la gate basada en fees del router.
-// Consumido por el action-router (packages/indexer) junto a
-// requirementNeedsActiveNodeSigner para invocar assertActiveSettlementNode.
+// Subset of ACTIVE_AUTH_ACTIONS whose op.signer MUST be a registered and
+// active settlement node (present in l2_nodes at the processing block).
+// Signer-role rule, orthogonal to PaymentRequirement: buy_commitment carries
+// no fees and buy's payment split does not land on recipient:action:signer,
+// so neither is covered by the router's fee-based gate.
+// Consumed by the action-router (packages/indexer) together with
+// requirementNeedsActiveNodeSigner to invoke assertActiveSettlementNode.
 const NODE_SIGNED_ACTIONS_SET: ReadonlySet<ProtocolAction> = new Set<ProtocolAction>([
 	ACTION_BUY_COMMITMENT,
 	ACTION_BUY,

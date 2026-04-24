@@ -7,6 +7,7 @@ import {
 	createPayload,
 	createHiveOperation,
 	getKeyType,
+	toWireUrl,
 	type TransferData,
 } from "@nftlox/protocol";
 
@@ -43,7 +44,7 @@ export async function buildTransfer(
 		nftId: data.nftId,
 		from: data.from,
 		to: data.to,
-		...(data.imageUrl && { imageUrl: data.imageUrl }),
+		...(data.imageUrl && { imageUrl: toWireUrl(data.imageUrl) }),
 		...(imageHash && { imageHash }),
 		...(data.seedId && { seedId: data.seedId }),
 		...(data.seedTxId && { seedTxId: data.seedTxId }),

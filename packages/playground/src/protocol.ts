@@ -99,7 +99,7 @@ export async function createTestCollection(
 // ============ BATCH HELPERS ============
 
 /**
- * Divide operaciones en lotes para evitar exceder límites de transacción.
+ * Splits operations into batches to avoid exceeding per-transaction limits.
  */
 export function splitOperationsIntoBatches(
 	operations: HiveOperation[],
@@ -115,14 +115,14 @@ export function splitOperationsIntoBatches(
 }
 
 /**
- * Calcula el tamaño en bytes de una operación.
+ * Returns the size in bytes of a single operation.
  */
 export function getOperationSize(operation: HiveOperation): number {
 	return JSON.stringify(operation).length;
 }
 
 /**
- * Verifica que todas las operaciones tengan la versión correcta.
+ * Verifies that every operation carries the expected protocol version.
  */
 export function validateOperationsVersion(
 	operations: HiveOperation[],
