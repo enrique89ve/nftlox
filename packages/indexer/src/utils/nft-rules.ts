@@ -1,17 +1,6 @@
 // Pure business rules for NFT operations.
 // Zero I/O, zero side-effects — testable with plain values.
 
-type NftType = "seed" | "instance";
-
-export const resolveNftType = (
-	explicitType: string | null,
-	nftId: string,
-): NftType => {
-	if (explicitType === "seed") return "seed";
-	if (!explicitType && nftId.startsWith("seed_")) return "seed";
-	return "instance";
-};
-
 export const validateSeedCap = (
 	collectionId: string,
 	seedCount: number,

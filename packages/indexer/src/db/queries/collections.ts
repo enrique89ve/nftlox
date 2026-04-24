@@ -10,6 +10,7 @@ export interface InsertCollectionParams {
 	name: string;
 	symbol: string;
 	creator: string;
+	originDna: string;
 	totalPotential: number;
 	maxInstances: number;
 	description: string | null;
@@ -29,14 +30,15 @@ export interface InsertCollectionParams {
 export async function insertCollection(params: InsertCollectionParams, txn: Queryable = sql): Promise<boolean> {
 	const result = await txn`
 		INSERT INTO collections (
-			id, name, symbol, creator, total_potential, max_instances,
+			id, name, symbol, creator, origin_dna, total_potential, max_instances,
 			description, image_url, external_url,
 			transferable, burnable, royalty_pct, royalty_recipient,
 			schema, schema_version,
 			block_num, tx_id, created_at
 		) VALUES (
 			${params.id}, ${params.name}, ${params.symbol},
-			${params.creator}, ${params.totalPotential}, ${params.maxInstances},
+			${params.creator}, ${params.originDna},
+			${params.totalPotential}, ${params.maxInstances},
 			${params.description}, ${params.imageUrl}, ${params.externalUrl},
 			${params.transferable}, ${params.burnable}, ${params.royaltyPct},
 			${params.royaltyRecipient},
@@ -51,7 +53,7 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 
 export async function getCollectionById(id: string): Promise<Record<string, unknown> | null> {
 	const [row] = await sql`
-		SELECT id, name, symbol, creator, total_potential,
+		SELECT id, name, symbol, creator, origin_dna, total_potential,
 			description, image_url, external_url,
 			transferable, burnable, royalty_pct, royalty_recipient,
 			schema, schema_version, tx_id, created_at
@@ -64,6 +66,7 @@ export async function getCollectionById(id: string): Promise<Record<string, unkn
 export interface CollectionRulesRow {
 	id: string;
 	creator: string;
+	origin_dna: string;
 	total_potential: number;
 	seed_count: number;
 	// True once any seed has ever been minted in this collection — even if all
@@ -90,7 +93,7 @@ export async function getCollectionRules(
 	txn: Queryable = sql,
 ): Promise<CollectionRulesRow | null> {
 	const [row] = await txn<CollectionRulesRow[]>`
-		SELECT c.id, c.creator, c.total_potential, c.transferable,
+		SELECT c.id, c.creator, c.origin_dna, c.total_potential, c.transferable,
 			c.burnable, c.royalty_pct, c.royalty_recipient,
 			c.schema, c.schema_version,
 			COALESCE(cs.seeds, 0)::int AS seed_count,

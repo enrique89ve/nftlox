@@ -1,7 +1,7 @@
 import { sql, toJsonb, type Queryable } from "@/db/client.ts";
 import type { InsertNftParams, OwnerChangeCtx, BurnCtx, ListingCtx, NftStatus } from "./nft-types.ts";
 import { NFT_KIND_INSTANCE, NFT_STATUS_ACTIVE, NFT_STATUS_LISTED, NFT_STATUS_PENDING_SALE } from "./nft-types.ts";
-import { adjustOwnerNftCount, recordCollectionMint, adjustCollectionListed, recordCollectionBurn } from "./nft-counters.ts";
+import { adjustCollectionListed } from "./nft-counters.ts";
 import { queueStateRootDelta, parseNftStateRow } from "./state-root.ts";
 import { getStateRootBuffer } from "@/db/client.ts";
 import type { NftStateRow } from "@/utils/state-root-hash.ts";
@@ -29,7 +29,7 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 	const result = await txn`
 		INSERT INTO nfts (
 			id, collection_id, nft_type, status, edition, owner,
-			origin_dna, instance_dna,
+			nft_dna,
 			name, image_url,
 			max_supply, distributed,
 			seed_id, instance_number, art_id,
@@ -40,7 +40,7 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 		) VALUES (
 			${params.id}, ${params.collectionId}, ${params.nftType},
 			${params.status ?? NFT_STATUS_ACTIVE}, ${params.edition}, ${params.owner},
-			${params.originDna}, ${params.instanceDna},
+			${params.nftDna},
 			${params.name}, ${params.imageUrl},
 			${params.maxSupply}, ${params.distributed ?? 0},
 			${params.seedId}, ${params.instanceNumber}, ${params.artId},
@@ -57,13 +57,10 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 		ON CONFLICT (id) DO NOTHING
 	`;
 	if (result.count > 0) {
-		// Queue the state-root delta BEFORE any counter update. Counters
-		// (adjustOwnerNftCount, recordCollectionMint) can throw — if they do,
-		// routeOperation swallows the error and withTransaction still commits.
-		// If the delta were queued AFTER the counters, a counter-update failure
-		// would leave the nfts row committed with no matching state-root delta
-		// → silent divergence. queueStateRootDelta is a sync memory op and
-		// cannot fail, so moving it first closes that window.
+		// Counters (owner_nft_counts, collection_stats) are maintained by the
+		// AFTER INSERT trigger `maintain_nft_counters`. The state-root delta
+		// stays here because it lives in a txn-local buffer, not in SQL, so
+		// no trigger equivalent exists.
 		const newRow: NftStateRow = {
 			id: params.id,
 			owner: params.owner,
@@ -77,8 +74,6 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			newRow,
 			blockNum: params.ownerBlockNum,
 		});
-		await adjustOwnerNftCount(params.owner, params.nftType, 1, txn);
-		await recordCollectionMint(params.collectionId, params.nftType, txn);
 	}
 	return result.count > 0;
 }
@@ -125,8 +120,10 @@ export async function updateNftOwner(
 		newRow,
 		blockNum: ctx.ownerBlockNum,
 	});
-	await adjustOwnerNftCount(ctx.oldOwner, ctx.nftType, -1, txn);
-	await adjustOwnerNftCount(newOwner, ctx.nftType, 1, txn);
+	// Owner counters (both sides of the ownership move) are applied by the
+	// AFTER UPDATE OF owner trigger `maintain_nft_counters`. It raises
+	// `"Owner NFT count missing for …"` when OLD.owner has no counter row —
+	// exactly the error adjustOwnerNftCount(-1) used to throw.
 	if (ctx.wasListed) {
 		await adjustCollectionListed(ctx.collectionId, -1, txn);
 	}
@@ -156,14 +153,13 @@ export async function hardDeleteNft(
 		ON CONFLICT (id) DO NOTHING
 	`;
 	await txn`DELETE FROM nfts WHERE id = ${nftId}`;
-	// Queue the delta BEFORE counter updates. See insertNft for rationale.
+	// Counter decrement and `collection_stats.burned` increment happen in
+	// the AFTER DELETE trigger `maintain_nft_counters`.
 	queueStateRootDelta(getStateRootBuffer(txn), {
 		type: "delete",
 		oldRow,
 		blockNum: ctx.blockNum,
 	});
-	await adjustOwnerNftCount(ctx.owner, ctx.nftType, -1, txn);
-	await recordCollectionBurn(ctx.collectionId, ctx.nftType, txn);
 }
 
 export async function updateNftListing(
@@ -248,6 +244,14 @@ export async function updateNftDataRef(
 	`;
 }
 
+/**
+ * Repairs structurally impossible marketplace rows without evaluating expiry.
+ *
+ * Listing expiration is chain-time state and must stay in the block processing
+ * path (`op.timestamp`) or in read filters. Using `NOW()` here would let an API
+ * or delayed indexer boot mutate a listing before an older valid buy operation
+ * has been processed.
+ */
 export async function cleanupInvalidMarketplaceListings(
 	txn: Queryable = sql,
 ): Promise<MarketplaceListingCleanupResult> {
@@ -258,29 +262,25 @@ export async function cleanupInvalidMarketplaceListings(
 		    listing_price = NULL, listing_currency = NULL,
 		    listing_expires_at = NULL, listing_marketplace = NULL
 		WHERE status = ${NFT_STATUS_LISTED}
-			AND (
-				nft_type <> ${NFT_KIND_INSTANCE}
-				OR (listing_expires_at IS NOT NULL AND listing_expires_at <= NOW())
-			)
+			AND nft_type <> ${NFT_KIND_INSTANCE}
 	`;
 
 	const reconciled = await txn`
-		WITH active_listed AS (
+		WITH marketplace_rows AS (
 			SELECT
 				cs.collection_id,
 				COUNT(n.id)::int AS listed
 			FROM collection_stats cs
 			LEFT JOIN nfts n ON n.collection_id = cs.collection_id
 				AND n.nft_type = ${NFT_KIND_INSTANCE}
-				AND n.status = ${NFT_STATUS_LISTED}
-				AND (n.listing_expires_at IS NULL OR n.listing_expires_at > NOW())
+				AND n.status IN (${NFT_STATUS_LISTED}, ${NFT_STATUS_PENDING_SALE})
 			GROUP BY cs.collection_id
 		)
 		UPDATE collection_stats cs
-		SET listed = active_listed.listed
-		FROM active_listed
-		WHERE cs.collection_id = active_listed.collection_id
-			AND cs.listed <> active_listed.listed
+		SET listed = marketplace_rows.listed
+		FROM marketplace_rows
+		WHERE cs.collection_id = marketplace_rows.collection_id
+			AND cs.listed <> marketplace_rows.listed
 	`;
 
 	return {

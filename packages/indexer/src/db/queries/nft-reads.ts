@@ -32,7 +32,7 @@ type NftOwnershipProofRow = NftOwnerClaimRow & Readonly<{
 	readonly nft_type: NftKind;
 	readonly seed_id: string | null;
 	readonly instance_number: number | null;
-	readonly instance_dna: string | null;
+	readonly nft_dna: string | null;
 }>;
 
 function toSafeInteger(value: NumericRowValue, fieldName: string): number {
@@ -79,8 +79,8 @@ export async function getNftById(id: string) {
 			n.id, n.collection_id, n.nft_type, n.status, n.edition, n.owner,
 			COALESCE(NULLIF(n.name, ''), s.name) AS name,
 			COALESCE(n.image_url, s.image_url) AS image_url,
-			COALESCE(n.origin_dna, s.origin_dna) AS origin_dna,
-			n.instance_dna,
+			c.origin_dna AS origin_dna,
+			n.nft_dna,
 			COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
 			n.data_hash, n.schema_version,
 			n.max_supply, n.distributed, n.supply_exhausted,
@@ -95,6 +95,7 @@ export async function getNftById(id: string) {
 				THEN true ELSE false
 			END AS listing_expired
 		FROM nfts n
+		JOIN collections c ON c.id = n.collection_id
 		LEFT JOIN nfts s ON s.id = n.seed_id
 		LEFT JOIN confirmed_operations co ON co.operation_id = n.created_operation_id
 		WHERE n.id = ${id}
@@ -115,8 +116,8 @@ export async function getNftsByIds(ids: readonly string[]) {
 			n.id, n.collection_id, n.nft_type, n.status, n.edition, n.owner,
 			COALESCE(NULLIF(n.name, ''), s.name) AS name,
 			COALESCE(n.image_url, s.image_url) AS image_url,
-			COALESCE(n.origin_dna, s.origin_dna) AS origin_dna,
-			n.instance_dna,
+			c.origin_dna AS origin_dna,
+			n.nft_dna,
 			COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
 			n.data_hash, n.schema_version,
 			n.max_supply, n.distributed, n.supply_exhausted,
@@ -131,6 +132,7 @@ export async function getNftsByIds(ids: readonly string[]) {
 				THEN true ELSE false
 			END AS listing_expired
 		FROM nfts n
+		JOIN collections c ON c.id = n.collection_id
 		LEFT JOIN nfts s ON s.id = n.seed_id
 		LEFT JOIN confirmed_operations co ON co.operation_id = n.created_operation_id
 		WHERE n.id = ANY(${sql.array([...ids], PG_TEXT_OID)})
@@ -168,7 +170,7 @@ export async function getNftOwnershipProof(id: string): Promise<NftOwnershipProo
 			n.nft_type,
 			n.seed_id,
 			n.instance_number,
-			n.instance_dna
+			n.nft_dna
 		FROM nfts n
 		WHERE n.id = ${id}
 	`;
@@ -183,7 +185,7 @@ export async function getNftOwnershipProof(id: string): Promise<NftOwnershipProo
 		nft_type: row.nft_type,
 		seed_id: row.seed_id,
 		instance_number: row.instance_number,
-		instance_dna: row.instance_dna,
+		nft_dna: row.nft_dna,
 	};
 }
 
@@ -207,7 +209,7 @@ export async function isBurnedId(id: string, txn: Queryable = sql): Promise<bool
 export async function getNftForProcessing(id: string, txn: Queryable = sql): Promise<NftProcessingRow | null> {
 	const [row] = await txn<NftProcessingRow[]>`
 		SELECT id, owner, status, nft_type, name, seed_id, max_supply, distributed, reserved_supply,
-		       collection_id, instance_dna,
+		       collection_id, nft_dna,
 		       listing_id, listing_tx_id, listing_price, listing_currency, listing_expires_at, listing_marketplace,
 		       sale_buyer, sale_settlement_node, sale_expires_block, sale_commitment_op_tx_id, sale_commitment_buy_tx_hash,
 		       data_operation_id
@@ -219,7 +221,7 @@ export async function getNftForProcessing(id: string, txn: Queryable = sql): Pro
 export async function getNftForProcessingForUpdate(id: string, txn: Queryable): Promise<NftProcessingRow | null> {
 	const [row] = await txn<NftProcessingRow[]>`
 		SELECT id, owner, status, nft_type, name, seed_id, max_supply, distributed, reserved_supply,
-		       collection_id, instance_dna,
+		       collection_id, nft_dna,
 		       listing_id, listing_tx_id, listing_price, listing_currency, listing_expires_at, listing_marketplace,
 		       sale_buyer, sale_settlement_node, sale_expires_block, sale_commitment_op_tx_id, sale_commitment_buy_tx_hash,
 		       data_operation_id
@@ -237,7 +239,7 @@ export async function getNftWithCollectionRules(
 		SELECT
 			n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_supply, n.distributed,
 			n.reserved_supply,
-			n.collection_id, n.instance_dna, n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
+			n.collection_id, n.nft_dna, n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
 			n.listing_expires_at, n.listing_marketplace,
 			n.sale_buyer, n.sale_settlement_node, n.sale_expires_block, n.sale_commitment_op_tx_id, n.sale_commitment_buy_tx_hash,
 			n.data_operation_id, n.created_tx_id,
@@ -259,7 +261,7 @@ export async function getNftWithCollectionRulesForUpdate(
 		SELECT
 			n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_supply, n.distributed,
 			n.reserved_supply,
-			n.collection_id, n.instance_dna, n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
+			n.collection_id, n.nft_dna, n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency,
 			n.listing_expires_at, n.listing_marketplace,
 			n.sale_buyer, n.sale_settlement_node, n.sale_expires_block, n.sale_commitment_op_tx_id, n.sale_commitment_buy_tx_hash,
 			n.data_operation_id, n.created_tx_id,
@@ -278,14 +280,16 @@ export async function getNftWithCollectionRulesForUpdate(
 export async function getSeedSummary(id: string): Promise<NftListRow | null> {
 	const [row] = await sql<NftListRow[]>`
 		SELECT
-			id, collection_id, nft_type, status, edition, owner,
-			name, image_url, origin_dna, immutable_data,
-			instance_dna,
-			seed_id, instance_number, NULL::text AS seed_tx_id,
-			max_supply, distributed, supply_exhausted,
-			schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num::int AS owner_block_num,
-			listing_id, listing_tx_id, listing_price, listing_currency, listing_expires_at, listing_marketplace, created_at
-		FROM nfts WHERE id = ${id} AND nft_type = 'seed'
+			n.id, n.collection_id, n.nft_type, n.status, n.edition, n.owner,
+			n.name, n.image_url, c.origin_dna AS origin_dna, n.immutable_data,
+			n.nft_dna,
+			n.seed_id, n.instance_number, NULL::text AS seed_tx_id,
+			n.max_supply, n.distributed, n.supply_exhausted,
+			n.schema_version, n.previous_owner, n.owner_operation_id, n.owner_action, n.owner_block_num::int AS owner_block_num,
+			n.listing_id, n.listing_tx_id, n.listing_price, n.listing_currency, n.listing_expires_at, n.listing_marketplace, n.created_at
+		FROM nfts n
+		JOIN collections c ON c.id = n.collection_id
+		WHERE n.id = ${id} AND n.nft_type = 'seed'
 	`;
 	return row ?? null;
 }
@@ -294,7 +298,7 @@ export async function getSeedWithSchemaForUpdate(id: string, txn: Queryable): Pr
 	const [row] = await txn<SeedWithSchemaRow[]>`
 		SELECT n.id, n.owner, n.status, n.nft_type, n.name, n.seed_id, n.max_supply, n.distributed,
 			n.reserved_supply,
-			n.collection_id, n.instance_dna, n.origin_dna, n.image_url, n.created_tx_id,
+			n.collection_id, n.nft_dna, c.origin_dna, n.image_url, n.created_tx_id,
 			c.schema, c.schema_version, c.creator, c.max_instances
 		FROM nfts n
 		JOIN collections c ON c.id = n.collection_id

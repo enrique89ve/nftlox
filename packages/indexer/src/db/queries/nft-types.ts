@@ -71,8 +71,7 @@ export type InsertNftParams = {
 	readonly status?: NftStatus;
 	readonly edition: number;
 	readonly owner: string;
-	readonly originDna: string | null;
-	readonly instanceDna: string | null;
+	readonly nftDna: string | null;
 	readonly name: string;
 	readonly imageUrl: string | null;
 	readonly maxSupply: number;
@@ -105,7 +104,7 @@ export type NftProcessingRow = {
 	readonly distributed: number;
 	readonly reserved_supply: number;
 	readonly collection_id: string;
-	readonly instance_dna: string | null;
+	readonly nft_dna: string | null;
 	readonly listing_id: string | null;
 	readonly listing_tx_id: string | null;
 	readonly listing_price: string | null;
@@ -150,7 +149,7 @@ export type SeedWithDnaRow = {
 	readonly distributed: number;
 	readonly reserved_supply: number;
 	readonly collection_id: string;
-	readonly instance_dna: string | null;
+	readonly nft_dna: string | null;
 	readonly origin_dna: string | null;
 	readonly image_url: string | null;
 	readonly created_tx_id: string;
@@ -191,7 +190,7 @@ export type NftListRow = {
 	readonly image_url: string | null;
 	readonly origin_dna: string | null;
 	readonly immutable_data: Record<string, unknown> | null;
-	readonly instance_dna: string | null;
+	readonly nft_dna: string | null;
 	readonly seed_id: string | null;
 	readonly instance_number: number | null;
 	readonly seed_tx_id: string | null;
@@ -234,5 +233,5 @@ export type NftOwnershipProof = NftOwnerClaim & Readonly<{
 	readonly nft_type: NftKind;
 	readonly seed_id: string | null;
 	readonly instance_number: number | null;
-	readonly instance_dna: string | null;
+	readonly nft_dna: string | null;
 }>;
