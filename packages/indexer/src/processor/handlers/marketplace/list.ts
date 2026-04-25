@@ -3,14 +3,18 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessingForUpdate, updateNftListing, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
-import { requireString, requireHiveAmount, optionalNumber, optionalString } from "@/utils/validation.ts";
+import { requireString, requireHiveAmount, requireNumber, optionalString } from "@/utils/validation.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
 import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
-import { generateListingId, LISTING_ID_PREFIX, MIN_LISTING_TTL_MS, MIN_PRICE_AMOUNT } from "@/protocol/index.ts";
+import {
+	generateListingId,
+	LISTING_ID_PREFIX,
+	MIN_LISTING_TTL_MS,
+	MAX_LISTING_TTL_MS,
+	MIN_PRICE_AMOUNT,
+} from "@/protocol/index.ts";
 
-function validateExpiresAt(expiresAt: number | null, blockTimestamp: string, nftId: string): void {
-	if (expiresAt === null || expiresAt === 0) return;
-
+function validateExpiresAt(expiresAt: number, blockTimestamp: string, nftId: string): void {
 	const blockTimestampMs = new Date(blockTimestamp).getTime();
 	if (Number.isNaN(blockTimestampMs)) {
 		throw new Error(`Invalid block timestamp for listing: ${blockTimestamp}`);
@@ -20,9 +24,18 @@ function validateExpiresAt(expiresAt: number | null, blockTimestamp: string, nft
 	}
 
 	const minimumExpiresAt = blockTimestampMs + MIN_LISTING_TTL_MS;
-	if (expiresAt <= minimumExpiresAt) {
+	if (expiresAt < minimumExpiresAt) {
+		const minDays = MIN_LISTING_TTL_MS / 86_400_000;
 		throw new Error(
-			`Listing expiresAt is too soon for safe settlement: must be more than ${MIN_LISTING_TTL_MS / 1000}s after the listing block timestamp`,
+			`Listing expiresAt is too soon: must be at least ${minDays} days (${MIN_LISTING_TTL_MS} ms) after the listing block timestamp`,
+		);
+	}
+
+	const maximumExpiresAt = blockTimestampMs + MAX_LISTING_TTL_MS;
+	if (expiresAt > maximumExpiresAt) {
+		const maxDays = MAX_LISTING_TTL_MS / 86_400_000;
+		throw new Error(
+			`Listing expiresAt is too far in the future: must be at most ${maxDays} days (${MAX_LISTING_TTL_MS} ms) after the listing block timestamp`,
 		);
 	}
 }
@@ -32,7 +45,7 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 	const listingId = requireString(op.data.listingId, "listingId");
 	const listingNonce = requireString(op.data.listingNonce, "listingNonce");
 	const price = requireHiveAmount(op.data.price, "price");
-	const expiresAt = optionalNumber(op.data.expiresAt);
+	const expiresAt = requireNumber(op.data.expiresAt, "expiresAt");
 	const marketplace = optionalString(op.data.marketplace);
 
 	if (!listingId.startsWith(LISTING_ID_PREFIX)) {
@@ -69,7 +82,7 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 		marketplace: marketplace ?? "",
 		priceAmount: price.amount,
 		priceCurrency: price.currency,
-		expiresAt: expiresAt ?? 0,
+		expiresAt,
 		nonce: listingNonce,
 	});
 

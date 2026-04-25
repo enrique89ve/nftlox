@@ -9,7 +9,7 @@ import {
 	nodeRegisterInputSchema,
 	nodeHeartbeatInputSchema,
 } from "../schemas";
-import { formatZodError } from "./helpers";
+import { formatZodError, withProvenance } from "./helpers";
 import type { KeychainResult } from "./types";
 import {
 	BURN_RECIPIENT,
@@ -69,8 +69,7 @@ export function buildSetData(input: SetDataBuilderInput): KeychainResult<SetData
 		nftId: data.nftId,
 		nftDna: data.nftDna,
 		...(data.mutableData && { mutableData: data.mutableData }),
-		...(data.seedId && { seedId: data.seedId }),
-		...(data.seedTxId && { seedTxId: data.seedTxId }),
+		...withProvenance(data),
 	};
 
 	const payload = createPayload("set_data", setDataData);
@@ -101,8 +100,7 @@ export function buildSetDataFrom(input: SetDataFromBuilderInput): KeychainResult
 		nftId: data.nftId,
 		nftDna: data.nftDna,
 		...(data.mutableData && { mutableData: data.mutableData }),
-		...(data.seedId && { seedId: data.seedId }),
-		...(data.seedTxId && { seedTxId: data.seedTxId }),
+		...withProvenance(data),
 	};
 
 	const payload = createPayload("set_data_from", setDataFromData);
@@ -136,8 +134,7 @@ export function buildNftLend(input: NftLendBuilderInput): KeychainResult<NftLend
 	const nftLendData: NftLendData = {
 		instanceId: data.instanceId,
 		borrower: data.borrower,
-		...(data.seedId && { seedId: data.seedId }),
-		...(data.seedTxId && { seedTxId: data.seedTxId }),
+		...withProvenance(data),
 	};
 
 	const payload = createPayload("nft_lend", nftLendData);
@@ -166,8 +163,7 @@ export function buildNftReturn(input: NftReturnBuilderInput): KeychainResult<Nft
 
 	const nftReturnData: NftReturnData = {
 		instanceId: data.instanceId,
-		...(data.seedId && { seedId: data.seedId }),
-		...(data.seedTxId && { seedTxId: data.seedTxId }),
+		...withProvenance(data),
 	};
 
 	const payload = createPayload("nft_return", nftReturnData);

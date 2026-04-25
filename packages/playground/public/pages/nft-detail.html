@@ -445,6 +445,21 @@
                           <option value="HBD">HBD</option>
                         </select>
                       </div>
+                      <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center">
+                        <label
+                          for="nft-action-duration"
+                          style="font-size: 12px; color: var(--text-muted); white-space: nowrap"
+                        >Duration (days)</label>
+                        <input
+                          type="number"
+                          class="form-input"
+                          id="nft-action-duration"
+                          min="7"
+                          max="60"
+                          value="30"
+                          style="flex: 1; background: var(--surface)"
+                        />
+                      </div>
                       <button
                         class="btn btn-primary"
                         onclick="nftDetailList()"

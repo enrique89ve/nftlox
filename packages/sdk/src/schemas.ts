@@ -15,6 +15,7 @@ import {
 	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
 	INSTANCE_FEE_PER_N,
 	MIN_LISTING_TTL_MS,
+	MAX_LISTING_TTL_MS,
 	normalizeNodeEndpoint,
 	validateNodeEndpoint,
 } from "@nftlox/protocol";
@@ -65,8 +66,12 @@ export const priceSchema = z.object({
 	currency: z.enum(SUPPORTED_CURRENCIES),
 });
 
+// Seed provenance attestation — see `@nftlox/protocol`'s seed-provenance
+// module for the canonical contract. Each declared field must be a non-empty
+// string; both fields may be omitted entirely. `seedTxId` is additionally
+// constrained to the 40-char hex Hive transaction id format.
 export const seedProvenanceSchema = z.object({
-	seedId: z.string().optional(),
+	seedId: z.string().min(1, "seedId must be a non-empty string when provided").optional(),
 	seedTxId: txIdSchema.optional(),
 });
 
@@ -160,15 +165,23 @@ export const mintInputSchema = z.object({
 });
 export type MintInput = z.infer<typeof mintInputSchema>;
 
+// Expiration window is enforced authoritatively by the indexer against the
+// listing block timestamp; the SDK adds a `Date.now()`-anchored fail-fast
+// check here so devs see the rejection in their build step instead of after
+// broadcast. The MIN/MAX bounds come from the protocol package.
+const ttlDays = (ms: number) => Math.round(ms / 86_400_000);
 export const listInputSchema = seedProvenanceSchema.extend({
 	nftId: z.string().min(1, "NFT ID is required"),
 	price: priceSchema,
-	expiresAt: z.number()
+	expiresAt: z.number().int("expiresAt must be an integer Unix timestamp in ms")
 		.refine(
-			(v) => v > Date.now() + MIN_LISTING_TTL_MS,
-			{ message: `Expiration date must be more than ${MIN_LISTING_TTL_MS / 1000}s in the future` },
+			(v) => v >= Date.now() + MIN_LISTING_TTL_MS,
+			{ message: `expiresAt must be at least ${ttlDays(MIN_LISTING_TTL_MS)} days in the future. Use expireIn({ days }) to construct it.` },
 		)
-		.optional(),
+		.refine(
+			(v) => v <= Date.now() + MAX_LISTING_TTL_MS,
+			{ message: `expiresAt must be at most ${ttlDays(MAX_LISTING_TTL_MS)} days in the future` },
+		),
 	marketplace: z.string().optional(),
 });
 export type ListInput = z.infer<typeof listInputSchema>;

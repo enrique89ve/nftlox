@@ -19,8 +19,8 @@
 // ============================================================================
 
 export const PROTOCOL_ID = "nftlox_testnet";
-export const PROTOCOL_VERSION = "0.9.1";
-export const MIN_PROTOCOL_VERSION = "0.9.1";
+export const PROTOCOL_VERSION = "0.10.0";
+export const MIN_PROTOCOL_VERSION = "0.10.0";
 export const HASH_VERSION = "v1";
 
 // ============================================================================
@@ -48,12 +48,22 @@ export const HIVE_AMOUNT_EPSILON = 1e-9;
 // these is a protocol upgrade and requires coordinated network-wide rollout.
 // ============================================================================
 
-// Floor on listing duration, expressed in blocks. Existed historically to
-// match the pre-0.7.0 sale_lock reservation window; post-migration it only
-// anchors the MIN_LISTING_TTL_MS derivation below so listings can never be
-// so short that a buy flow races expiration. Distinct from the new
-// BUY_COMMITMENT_TTL_BLOCKS (commitment validity window, ~10 blocks).
-export const LISTING_MIN_DURATION_BLOCKS = 60;
+// Listing duration window, expressed in blocks (block-denominated so all
+// indexers compute the same accept/reject decision regardless of host clock).
+// Anchors the MIN_LISTING_TTL_MS / MAX_LISTING_TTL_MS derivations below.
+//
+// Floor (7 days) — protects against listings that expire inside a normal
+// shopping window: long enough that browsing apps don't show stale listings,
+// short enough to discourage tying up inventory at obsolete prices. Distinct
+// from BUY_COMMITMENT_TTL_BLOCKS (~10 blocks) which is settlement-internal.
+//
+// Ceiling (60 days) — caps how long an unsold listing can pollute the
+// marketplace. Mirrors the OpenSea / LooksRare practice of forcing every
+// listing to carry an end time, scaled down to a window that fits a
+// game-card use case where prices move on weekly cadences. Re-listing is the
+// supported path for sellers who want to extend exposure.
+export const LISTING_MIN_DURATION_BLOCKS = 7 * 24 * 60 * 60 * 1000 / HIVE_BLOCK_TIME_MS;   // 201_600
+export const LISTING_MAX_DURATION_BLOCKS = 60 * 24 * 60 * 60 * 1000 / HIVE_BLOCK_TIME_MS;  // 1_728_000
 
 // ============================================================================
 // Node API policy
@@ -194,13 +204,16 @@ export const BASIS_POINTS_DENOMINATOR = 10_000;
 export const PROTOCOL_FEE_BPS = 100;
 export const DEFAULT_FEE_ACCOUNT = "nftlox";
 export const PROTOCOL_COLLECTION_FEE_HBD = "0.100";
-// Conservative floor for listing TTLs. Even with single-tx buys, listings that
-// expire almost immediately create avoidable races between quoting payment info,
-// node co-signing, buyer signature, and broadcast. 60s safety buffer on top of
-// the minimum block-denominated window.
+// Wall-time floor for listing TTLs, derived from LISTING_MIN_DURATION_BLOCKS.
+// 60s buffer absorbs the gap between the wall clock the SDK uses for input
+// validation and the block timestamp the indexer compares against — without
+// it, a listing built right at the floor by a slightly-fast client clock
+// could land in a block whose timestamp pushes it under MIN.
 export const MIN_LISTING_TTL_BUFFER_MS = 60_000;
 export const MIN_LISTING_TTL_MS =
 	LISTING_MIN_DURATION_BLOCKS * HIVE_BLOCK_TIME_MS + MIN_LISTING_TTL_BUFFER_MS;
+export const MAX_LISTING_TTL_MS =
+	LISTING_MAX_DURATION_BLOCKS * HIVE_BLOCK_TIME_MS;
 
 // Per-instance fee for create_collection. When enabled, the total fee becomes
 //   PROTOCOL_COLLECTION_FEE_HBD + INSTANCE_FEE_UNIT_HBD * ceil(maxInstances / INSTANCE_FEE_PER_N)

@@ -106,7 +106,10 @@ export const PROTOCOL_FEE_BPS = protocol.PROTOCOL_FEE_BPS;
 export const DEFAULT_FEE_ACCOUNT = protocol.DEFAULT_FEE_ACCOUNT;
 export const PROTOCOL_COLLECTION_FEE_HBD = protocol.PROTOCOL_COLLECTION_FEE_HBD;
 export const MIN_LISTING_TTL_MS = protocol.MIN_LISTING_TTL_MS;
+export const MAX_LISTING_TTL_MS = protocol.MAX_LISTING_TTL_MS;
 export const MIN_LISTING_TTL_BUFFER_MS = protocol.MIN_LISTING_TTL_BUFFER_MS;
+export const LISTING_MIN_DURATION_BLOCKS = protocol.LISTING_MIN_DURATION_BLOCKS;
+export const LISTING_MAX_DURATION_BLOCKS = protocol.LISTING_MAX_DURATION_BLOCKS;
 export const MAX_INSTANCES_PER_COLLECTION = protocol.MAX_INSTANCES_PER_COLLECTION;
 
 export const MULTISIG_TX_MIN_EXPIRATION_MS = protocol.MULTISIG_TX_MIN_EXPIRATION_MS;
@@ -227,6 +230,14 @@ export const generateListingId = protocol.generateListingId;
 export const toWireUrl = protocol.toWireUrl;
 export const fromWireUrl = protocol.fromWireUrl;
 
+// Seed-provenance attestation helpers — see protocol README §"SeedProvenance
+// Attestation" for the trust model. Integrators reading Hive L1 directly can
+// run `readDeclaredProvenance` on a payload to mirror the indexer's accept
+// criteria without round-tripping the indexer.
+export const readDeclaredProvenance = protocol.readDeclaredProvenance;
+export const assertProvenanceTarget = protocol.assertProvenanceTarget;
+export const matchProvenance = protocol.matchProvenance;
+
 // ============================================================================
 // Type exports
 // ============================================================================
@@ -253,6 +264,7 @@ export type {
 	Price,
 	PaymentSplit,
 	SeedProvenance,
+	ActualProvenance,
 	SchemaFieldType,
 	SchemaField,
 	CollectionSchema,

@@ -261,7 +261,9 @@ async function makeListData(params: {
 	const amount = params.priceAmount ?? "10.000";
 	const currency = params.priceCurrency ?? "HIVE";
 	const marketplace = params.marketplace ?? "";
-	const expiresAt = params.expiresAt ?? 0;
+	// Default to 14 days ahead — well inside the [7d, 60d] consensus window
+	// that the listing handler enforces against the op block timestamp.
+	const expiresAt = params.expiresAt ?? Date.now() + 14 * 86_400_000;
 
 	const listingId = await generateListingId({
 		nftId: params.nftId,
@@ -279,7 +281,7 @@ async function makeListData(params: {
 		listingNonce: nonce,
 		price: { amount, currency },
 		...(marketplace ? { marketplace } : {}),
-		...(expiresAt ? { expiresAt } : {}),
+		expiresAt,
 	};
 }
 
@@ -1379,6 +1381,30 @@ describe("Handlers (integration)", () => {
 			await expect(
 				withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn)),
 			).rejects.toThrow("must be in the future");
+		});
+
+		test("rejects list when expiresAt is below the 7-day floor", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+			const expiresAt = Date.now() + 6 * 86_400_000;
+			const listData = await makeListData({ nftId: instId, expiresAt });
+
+			await expect(
+				withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn)),
+			).rejects.toThrow(/too soon/);
+		});
+
+		test("rejects list when expiresAt exceeds the 60-day ceiling", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+			const expiresAt = Date.now() + 61 * 86_400_000;
+			const listData = await makeListData({ nftId: instId, expiresAt });
+
+			await expect(
+				withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData), txn)),
+			).rejects.toThrow(/too far in the future/);
 		});
 
 		test("queries, stats, cleanup, and payment-info only expose active instance listings without mutating expired rows", async () => {

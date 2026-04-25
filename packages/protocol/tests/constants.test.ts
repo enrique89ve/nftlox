@@ -14,6 +14,11 @@ import {
 	HIVE_BLOCK_TIME_MS,
 	HIVE_DECIMALS,
 	HIVE_PRECISION,
+	LISTING_MIN_DURATION_BLOCKS,
+	LISTING_MAX_DURATION_BLOCKS,
+	MIN_LISTING_TTL_MS,
+	MAX_LISTING_TTL_MS,
+	MIN_LISTING_TTL_BUFFER_MS,
 	isProtocolAction,
 } from "../src/constants.ts";
 
@@ -104,6 +109,37 @@ describe("constants", () => {
 		it("HIVE_BLOCK_TIME_MS is positive and in whole milliseconds", () => {
 			expect(HIVE_BLOCK_TIME_MS).toBeGreaterThan(0);
 			expect(Number.isInteger(HIVE_BLOCK_TIME_MS)).toBe(true);
+		});
+	});
+
+	describe("listing duration window", () => {
+		const DAY_MS = 86_400_000;
+
+		it("LISTING_MIN_DURATION_BLOCKS resolves to exactly 7 days of wall time", () => {
+			expect(LISTING_MIN_DURATION_BLOCKS * HIVE_BLOCK_TIME_MS).toBe(7 * DAY_MS);
+		});
+
+		it("LISTING_MAX_DURATION_BLOCKS resolves to exactly 60 days of wall time", () => {
+			expect(LISTING_MAX_DURATION_BLOCKS * HIVE_BLOCK_TIME_MS).toBe(60 * DAY_MS);
+		});
+
+		it("MIN_LISTING_TTL_MS is the block-anchored floor plus the safety buffer", () => {
+			expect(MIN_LISTING_TTL_MS).toBe(
+				LISTING_MIN_DURATION_BLOCKS * HIVE_BLOCK_TIME_MS + MIN_LISTING_TTL_BUFFER_MS,
+			);
+		});
+
+		it("MAX_LISTING_TTL_MS is the block-anchored ceiling without buffer", () => {
+			expect(MAX_LISTING_TTL_MS).toBe(LISTING_MAX_DURATION_BLOCKS * HIVE_BLOCK_TIME_MS);
+		});
+
+		it("MAX is strictly larger than MIN", () => {
+			expect(MAX_LISTING_TTL_MS).toBeGreaterThan(MIN_LISTING_TTL_MS);
+		});
+
+		it("both block-denominated bounds are integer block counts", () => {
+			expect(Number.isInteger(LISTING_MIN_DURATION_BLOCKS)).toBe(true);
+			expect(Number.isInteger(LISTING_MAX_DURATION_BLOCKS)).toBe(true);
 		});
 	});
 });

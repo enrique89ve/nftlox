@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { seedProvenanceSchema, usernameSchema } from "../schemas";
-import { formatZodError } from "./helpers";
+import { formatZodError, withProvenance } from "./helpers";
 import type { KeychainResult } from "./types";
 import {
 	createPayload,
@@ -43,8 +43,7 @@ export function buildTransfer(
 	const transferData: TransferData = {
 		nftId: data.nftId,
 		to: data.to,
-		...(data.seedId && { seedId: data.seedId }),
-		...(data.seedTxId && { seedTxId: data.seedTxId }),
+		...withProvenance(data),
 	};
 
 	const payload = createPayload("transfer", transferData);

@@ -61,11 +61,14 @@ describe("Builder username validation", () => {
 
 describe("Builder price validation", () => {
 	describe("buildList normalizes price formats", () => {
+		const validExpiresAt = () => Date.now() + 14 * 86_400_000;
+
 		test("normalizes 2 decimal places (1.00 → 1.000)", async () => {
 			const result = await buildList({
 				nftId: "nft_test123",
 				price: { amount: "1.00", currency: "HIVE" },
 				owner: "alice",
+				expiresAt: validExpiresAt(),
 			});
 			expect(result.success).toBe(true);
 		});
@@ -75,6 +78,7 @@ describe("Builder price validation", () => {
 				nftId: "nft_test123",
 				price: { amount: "001.000", currency: "HIVE" },
 				owner: "alice",
+				expiresAt: validExpiresAt(),
 			});
 			expect(result.success).toBe(true);
 		});
@@ -84,6 +88,7 @@ describe("Builder price validation", () => {
 				nftId: "nft_test123",
 				price: { amount: "1.000", currency: "HIVE" },
 				owner: "alice",
+				expiresAt: validExpiresAt(),
 			});
 
 			if (!result.success) {

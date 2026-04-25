@@ -132,6 +132,7 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 			nftId: "nft_1",
 			price: { amount: "10.000", currency: "HIVE" },
 			owner: "alice",
+			expiresAt: Date.now() + 14 * 86_400_000,
 		});
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");

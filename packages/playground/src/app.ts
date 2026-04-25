@@ -1381,7 +1381,14 @@ async function seedGroupListPrompt(nftId: string) {
     log("Currency must be HIVE or HBD", "error");
     return;
   }
+  const rawDays = window.prompt("Duration in days? (7-60)", "30")?.trim();
+  const durationDays = parseInt(rawDays ?? "30", 10);
+  if (!Number.isFinite(durationDays) || durationDays < 7 || durationDays > 60) {
+    log("Duration must be between 7 and 60 days", "error");
+    return;
+  }
   const price = parsed.toFixed(3);
+  const expiresAt = Date.now() + durationDays * 86_400_000;
 
   try {
     const response = await fetch("/api/build/list", {
@@ -1391,6 +1398,7 @@ async function seedGroupListPrompt(nftId: string) {
         nftId,
         owner: connectedUser,
         price: { amount: price, currency },
+        expiresAt,
       }),
     });
     const result = await response.json();
@@ -2960,6 +2968,13 @@ async function nftDetailList() {
   }
 
   const price = parseFloat(rawPrice).toFixed(3);
+  const rawDuration = ($("nft-action-duration") as HTMLInputElement)?.value.trim();
+  const durationDays = parseInt(rawDuration || "30", 10);
+  if (!Number.isFinite(durationDays) || durationDays < 7 || durationDays > 60) {
+    log("Duration must be between 7 and 60 days", "error");
+    return;
+  }
+  const expiresAt = Date.now() + durationDays * 86_400_000;
 
   try {
     const response = await fetch("/api/build/list", {
@@ -2969,6 +2984,7 @@ async function nftDetailList() {
         nftId: currentNftId,
         owner: connectedUser,
         price: { amount: price, currency },
+        expiresAt,
       }),
     });
     const result = await response.json();

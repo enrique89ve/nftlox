@@ -126,12 +126,10 @@ export type TransferData = SeedProvenance & {
 
 // Set data
 
-export type SetDataData = {
+export type SetDataData = SeedProvenance & {
 	readonly nftId: string;
 	readonly nftDna: string;
 	readonly mutableData?: Record<string, unknown> | undefined;
-	readonly seedId?: string | undefined;
-	readonly seedTxId?: string | undefined;
 };
 
 // Data operator
@@ -153,19 +151,22 @@ export type SetDataFromData = SeedProvenance & {
 // Listings resolve image metadata via FK (listing → nft → seed → collection).
 // Seeds are immutable, so a snapshot on the listing payload would add
 // duplication without protecting against any real mutation.
+//
+// `expiresAt` is mandatory in 0.10.0+ — every listing carries an end time, in
+// line with OpenSea / LooksRare. The accepted window is bounded by
+// `MIN_LISTING_TTL_MS` / `MAX_LISTING_TTL_MS` against the listing block
+// timestamp; the indexer rejects values outside that window.
 export type ListingData = SeedProvenance & {
 	readonly nftId: string;
 	readonly listingId: string;
 	readonly listingNonce: string;
 	readonly price: Price;
-	readonly expiresAt?: number | undefined;
+	readonly expiresAt: number;
 	readonly marketplace?: string | undefined;
 };
 
-export type UnlistData = {
+export type UnlistData = SeedProvenance & {
 	readonly nftId: string;
-	readonly seedId?: string | undefined;
-	readonly seedTxId?: string | undefined;
 };
 
 // Emitted on-chain by a settlement node as its active-key custom_json BEFORE

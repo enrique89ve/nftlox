@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema } from "../schemas";
-import { formatZodError } from "./helpers";
+import { formatZodError, withProvenance } from "./helpers";
 import type { KeychainResult } from "./types";
 import {
 	generateListingNonce,
@@ -39,7 +39,7 @@ export async function buildList(
 		marketplace: data.marketplace ?? "",
 		priceAmount: data.price.amount,
 		priceCurrency: data.price.currency,
-		expiresAt: data.expiresAt ?? 0,
+		expiresAt: data.expiresAt,
 		nonce: listingNonce,
 	});
 
@@ -48,9 +48,8 @@ export async function buildList(
 		listingId,
 		listingNonce,
 		price: data.price,
-		...(data.expiresAt && { expiresAt: data.expiresAt }),
-		...(data.seedId && { seedId: data.seedId }),
-		...(data.seedTxId && { seedTxId: data.seedTxId }),
+		expiresAt: data.expiresAt,
+		...withProvenance(data),
 		...(data.marketplace && { marketplace: data.marketplace }),
 	};
 
@@ -84,8 +83,7 @@ export function buildUnlist(
 
 	const unlistData: UnlistData = {
 		nftId: data.nftId,
-		...(data.seedId && { seedId: data.seedId }),
-		...(data.seedTxId && { seedTxId: data.seedTxId }),
+		...withProvenance(data),
 	};
 
 	const payload = createPayload("unlist", unlistData);

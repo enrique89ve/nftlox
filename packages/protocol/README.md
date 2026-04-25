@@ -22,6 +22,7 @@ The implementation in this package is normative:
 | `src/schema.ts` | Collection schema validation, canonical JSON, data hashing |
 | `src/username.ts` | Hive username validation |
 | `src/node-endpoint.ts` | Node endpoint URL validation and normalization |
+| `src/seed-provenance.ts` | Pure parser, target assert, and matcher for the optional `seedId`/`seedTxId` attestation |
 
 Other repository docs should link here instead of maintaining a second protocol
 specification. If prose and code diverge, this package wins.
@@ -31,8 +32,8 @@ specification. If prose and code diverge, this package wins.
 | Property | Value |
 |---|---|
 | Protocol id | `nftlox_testnet` |
-| Protocol version | `0.9.1` |
-| Minimum accepted version | `0.9.1` |
+| Protocol version | `0.10.0` |
+| Minimum accepted version | `0.10.0` |
 | Transport | Hive `custom_json` |
 | Max JSON payload | `8000` bytes |
 | Hive hard cap | `8192` bytes |
@@ -156,6 +157,17 @@ Semantics — **opt-in, verified-if-present**:
 - **Declared on a seed NFT** → rejected. Seeds have no parent seed.
 - **Declared with a non-string type** (e.g. `seedId: 123`) → rejected. A
   malformed attestation is semantically different from an absent one.
+- **Declared as an empty string** (`seedId: ""`) → rejected. An attestation
+  must point to a real id/txid or be omitted entirely.
+
+The contract is owned by `src/seed-provenance.ts` and exposed via three pure
+helpers reusable by any L1 reader:
+
+| Helper | Purpose |
+|---|---|
+| `readDeclaredProvenance(data)` | Parses payload data; returns the declared shape or `undefined`; throws on malformed values. |
+| `assertProvenanceTarget(declared, nftType)` | Rejects any attestation declared on a seed NFT. |
+| `matchProvenance(declared, actual)` | Compares the declared attestation against the authoritative `seedId` / parent-seed `created_tx_id`. |
 
 Because the indexer filters out false attestations at write time, apps that
 read Hive L1 directly can trust `seedId` / `seedTxId` on any accepted op

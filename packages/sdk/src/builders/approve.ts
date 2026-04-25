@@ -6,7 +6,7 @@ import {
 	dataOperatorApproveInputSchema,
 	usernameSchema,
 } from "../schemas";
-import { formatZodError } from "./helpers";
+import { formatZodError, withProvenance } from "./helpers";
 import type { KeychainResult } from "./types";
 import {
 	createPayload,
@@ -94,8 +94,7 @@ export function buildNftTransferFrom(input: NftTransferFromBuilderInput): Keycha
 		from: data.from,
 		to: data.to,
 		instanceId: data.instanceId,
-		...(data.seedId && { seedId: data.seedId }),
-		...(data.seedTxId && { seedTxId: data.seedTxId }),
+		...withProvenance(data),
 	};
 
 	const payload = createPayload("nft_transfer_from", nftTransferFromData);

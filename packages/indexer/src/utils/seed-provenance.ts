@@ -1,44 +1,34 @@
+import {
+	assertProvenanceTarget,
+	matchProvenance,
+	readDeclaredProvenance,
+} from "@nftlox/protocol";
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { NftProcessingRow } from "@/db/queries/nft-types.ts";
 
 // Narrowed shape of the NFT row needed by `validateSeedProvenance`. Handlers
 // typically already fetch the full `NftProcessingRow` via
-// `getNftForProcessing[ForUpdate]` — this alias keeps the helper decoupled from
-// fields it does not consume.
+// `getNftForProcessing[ForUpdate]` — this alias keeps the helper decoupled
+// from fields it does not consume.
 type NftForProvenance = Pick<NftProcessingRow, "nft_type" | "seed_id">;
 
 type SeedCreatedTxRow = { created_tx_id: string };
-
-// `optionalString` from utils/validation treats wrong-type values as absent —
-// that would silently bypass provenance validation when a client declares a
-// malformed attestation (e.g. `seedId: 123`). For this trust-boundary check
-// we want "declared-but-wrong-type" to fail loudly.
-function readOptionalPayloadString(
-	data: Record<string, unknown>,
-	fieldName: "seedId" | "seedTxId",
-): string | undefined {
-	if (!Object.prototype.hasOwnProperty.call(data, fieldName)) return undefined;
-
-	const value = data[fieldName];
-	if (value === undefined || value === null) return undefined;
-	if (typeof value !== "string") {
-		throw new Error(`${fieldName} must be a string when provided, got ${typeof value}`);
-	}
-	return value;
-}
 
 /**
  * Validates the optional `seedId` / `seedTxId` attestations carried in an
  * action payload against the indexer's authoritative view.
  *
+ * The pure parser/asserts/matcher live in `@nftlox/protocol`'s
+ * `seed-provenance` module — that package owns the contract. This wrapper
+ * only adds the database lookup needed to resolve the parent seed's
+ * `created_tx_id` when the payload declares `seedTxId`.
+ *
  * States:
- *   1. Both fields absent  → no-op (backwards-compatible; the payload simply
- *      does not carry the attestation).
- *   2. Any field present but inconsistent with the DB → throws, rejecting the
- *      whole op. The indexer thereby filters out falsely-attested payloads at
- *      write time, so L1 consumers can trust any accepted op's provenance
- *      fields without a round-trip.
+ *   1. Both fields absent → no-op (backwards-compatible default).
+ *   2. Any declared field inconsistent with the DB → throws, rejecting the
+ *      whole op. This is how L1 consumers gain the right to trust the
+ *      attestation without an indexer round-trip.
  *   3. All declared fields present and correct → pass; the attestation stays
  *      on-chain as a verifiable reference.
  */
@@ -47,23 +37,13 @@ export async function validateSeedProvenance(
 	nft: NftForProvenance,
 	txn: Queryable,
 ): Promise<void> {
-	const declaredSeedId = readOptionalPayloadString(op.data, "seedId");
-	const declaredSeedTxId = readOptionalPayloadString(op.data, "seedTxId");
-	if (declaredSeedId === undefined && declaredSeedTxId === undefined) return;
+	const declared = readDeclaredProvenance(op.data);
+	if (declared === undefined) return;
 
-	if (nft.nft_type === "seed") {
-		throw new Error(
-			"Seed provenance cannot be declared on a seed NFT — seeds have no parent seed",
-		);
-	}
+	assertProvenanceTarget(declared, nft.nft_type);
 
-	if (declaredSeedId !== undefined && nft.seed_id !== declaredSeedId) {
-		throw new Error(
-			`Declared seedId '${declaredSeedId}' does not match actual '${nft.seed_id ?? "null"}'`,
-		);
-	}
-
-	if (declaredSeedTxId !== undefined) {
+	let seedCreatedTxId: string | null = null;
+	if (declared.seedTxId !== undefined) {
 		if (nft.seed_id === null) {
 			throw new Error("Cannot validate seedTxId: NFT has no parent seed");
 		}
@@ -75,10 +55,8 @@ export async function validateSeedProvenance(
 				`Seed not found while validating seedTxId: ${nft.seed_id}`,
 			);
 		}
-		if (row.created_tx_id !== declaredSeedTxId) {
-			throw new Error(
-				`Declared seedTxId '${declaredSeedTxId}' does not match actual '${row.created_tx_id}'`,
-			);
-		}
+		seedCreatedTxId = row.created_tx_id;
 	}
+
+	matchProvenance(declared, { seedId: nft.seed_id, seedCreatedTxId });
 }

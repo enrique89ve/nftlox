@@ -2,6 +2,7 @@ import { test, expect, describe } from "bun:test";
 import {
 	MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY,
 	MIN_LISTING_TTL_MS,
+	MAX_LISTING_TTL_MS,
 	priceSchema,
 	txIdSchema,
 	listInputSchema,
@@ -184,7 +185,7 @@ describe("listInputSchema expiresAt", () => {
 	});
 
 	test("rejects a near-future timestamp inside the settlement window", () => {
-		const nearFutureTimestamp = Date.now() + MIN_LISTING_TTL_MS;
+		const nearFutureTimestamp = Date.now() + MIN_LISTING_TTL_MS - 1_000;
 		const result = listInputSchema.safeParse({
 			...validBaseInput,
 			expiresAt: nearFutureTimestamp,
@@ -222,8 +223,26 @@ describe("listInputSchema expiresAt", () => {
 		expect(result2.success).toBe(false);
 	});
 
-	test("accepts listing without expiresAt (optional)", () => {
+	test("rejects listing without expiresAt (mandatory in 0.10.0+)", () => {
 		const result = listInputSchema.safeParse(validBaseInput);
+		expect(result.success).toBe(false);
+	});
+
+	test("rejects a timestamp beyond the maximum listing window", () => {
+		const tooFarTimestamp = Date.now() + MAX_LISTING_TTL_MS + 86_400_000;
+		const result = listInputSchema.safeParse({
+			...validBaseInput,
+			expiresAt: tooFarTimestamp,
+		});
+		expect(result.success).toBe(false);
+	});
+
+	test("accepts a timestamp at the exact maximum window", () => {
+		const atMaxTimestamp = Date.now() + MAX_LISTING_TTL_MS - 1_000;
+		const result = listInputSchema.safeParse({
+			...validBaseInput,
+			expiresAt: atMaxTimestamp,
+		});
 		expect(result.success).toBe(true);
 	});
 });
