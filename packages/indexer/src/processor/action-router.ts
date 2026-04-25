@@ -25,6 +25,7 @@ import {
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
 	ACTION_NODE_HEARTBEAT,
+	ACTION_NODE_STATE_CHECKPOINT,
 	assertNeverPaymentKind,
 	getAuthMismatchReason,
 	getPaymentRequirement,
@@ -46,6 +47,7 @@ import { handleExtendSchema } from "./handlers/core/extend-schema.ts";
 import { handleArchiveCollection } from "./handlers/core/archive-collection.ts";
 import { handleNodeRegister } from "./handlers/core/node_register.ts";
 import { handleNodeHeartbeat } from "./handlers/core/node_heartbeat.ts";
+import { handleNodeStateCheckpoint } from "./handlers/core/node_state_checkpoint.ts";
 
 // Marketplace
 import { handleList } from "./handlers/marketplace/list.ts";
@@ -174,6 +176,7 @@ const handlers: Record<ProtocolAction, Handler> = {
 	[ACTION_ARCHIVE_COLLECTION]: handleArchiveCollection,
 	[ACTION_NODE_REGISTER]: handleNodeRegister,
 	[ACTION_NODE_HEARTBEAT]: handleNodeHeartbeat,
+	[ACTION_NODE_STATE_CHECKPOINT]: handleNodeStateCheckpoint,
 
 	// Marketplace
 	[ACTION_LIST]: handleList,

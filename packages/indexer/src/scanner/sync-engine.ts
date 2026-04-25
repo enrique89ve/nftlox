@@ -8,6 +8,12 @@ import {
 } from "@/db/queries/sync.ts";
 import { sweepExpiredBuyCommitments } from "@/db/queries/nft-mutations.ts";
 import {
+  flushStateRootBuffer,
+  getStateMeta,
+  recordCheckpointIfBoundary,
+} from "@/db/queries/state-root.ts";
+import { getStateRootBuffer } from "@/db/client.ts";
+import {
   acquireSyncLock,
   releaseSyncLock,
   verifyLockHeld,
@@ -460,6 +466,23 @@ export async function syncCycle(): Promise<void> {
       // `sale_expires_block < X` fires for any commitment whose expiry was
       // <= lastBatch.to.
       await sweepExpiredBuyCommitments(lastBatch.to + 1, txn);
+
+      // State-root checkpoint snapshot (F3.A). Recorded ONLY when the batch
+      // ends exactly on a multiple-of-N boundary, because at any other point
+      // we would not have the state_root AT the boundary — flushes are
+      // batch-end events. Boundaries that fall mid-batch are silently
+      // skipped; in steady-state most batches are 1-10 blocks so most
+      // boundaries land on a batch end and get captured. During catch-up
+      // batches are large and other live nodes already publish the missed
+      // boundaries on chain, so the gap closes from the network side.
+      //
+      // Order: flush the SPV buffer FIRST so getStateMeta() returns the
+      // root committed at lastBatch.to, then snapshot. The follow-up
+      // automatic flush in withTransaction is a no-op (buffer empty).
+      await flushStateRootBuffer(getStateRootBuffer(txn), txn);
+      const meta = await getStateMeta(txn);
+      await recordCheckpointIfBoundary(lastBatch.to, meta.state_root, txn);
+
       await updateLastBlock(lastBatch.to, txn);
     });
 

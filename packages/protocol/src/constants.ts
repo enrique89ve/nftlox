@@ -72,26 +72,36 @@ export const LISTING_MAX_DURATION_BLOCKS = 60 * 24 * 60 * 60 * 1000 / HIVE_BLOCK
 // Clients negotiate via /api/status.
 // ============================================================================
 
-// Upper bound on expiration of the unsigned buy transaction that the node will
-// co-sign. This window must cover: node validation, buy_commitment broadcast,
-// commitment inclusion wait, node signature issuance, and the final Hive
-// broadcast. Aligned with BUY_COMMITMENT_TTL_BLOCKS so tx expiration and
-// commitment validity share the same window.
+// Protocol-internal commitment TTL in clock terms. Anchors
+// BUY_COMMITMENT_TTL_BLOCKS below: a `buy_commitment` is valid for exactly
+// this many milliseconds (≈ 10 Hive blocks). Settlement-internal — clients
+// do not set this, the indexer enforces it on the commitment lifecycle.
 export const BUY_TX_TTL_MS = 30_000;
 
-// Accepted range for the `expiration` field of a buy transaction submitted to
-// POST /api/multisig/buy. The indexer rejects anything outside this window
-// with INVALID_TX_STRUCTURE. MIN protects the node's orchestration budget
-// (broadcast commitment → wait inclusion → co-sign → broadcast); MAX prevents
-// a buyer signature from staying replayable on the mempool for too long.
+// Per-node accepted range for the signed buy tx's `expiration` field at
+// POST /api/multisig/buy. Outside this window the indexer rejects with
+// INVALID_TX_STRUCTURE.
+//
+// MIN equals BUY_TX_TTL_MS so the node has a full commitment window to run
+// its orchestration (validate → broadcast commitment → wait inclusion →
+// co-sign → broadcast).
+//
+// MAX deliberately exceeds BUY_TX_TTL_MS to give human signers UX headroom
+// (PoW + Keychain prompt + network RTT). The residual gap — where a buy tx
+// remains broadcastable past commitment expiry — is a known, accepted
+// tradeoff: any post-expiry settlement is rejected by handleBuy and the
+// already-transferred funds are recorded in `orphaned_buys` for an
+// off-chain refund flow. Tightening MAX to BUY_TX_TTL_MS would close the
+// gap but break human-signer flows; the conservative 60s ceiling is the
+// chosen compromise.
 export const MULTISIG_TX_MIN_EXPIRATION_MS = 30_000;
-export const MULTISIG_TX_MAX_EXPIRATION_MS = 120_000;
+export const MULTISIG_TX_MAX_EXPIRATION_MS = 60_000;
 
-// Recommended expiration for an unsigned buy transaction. Gives ≥30s of
-// headroom above MIN so that buyer-side work (PoW, Keychain prompt, network
-// round-trip) plus the node's own orchestration (~6s) comfortably fits
-// before Hive drops the tx from the mempool. SDK helpers that construct
-// buy transactions default to this value.
+// SDK default for unsigned buy tx expiration. Equals MAX by design: the
+// recommended value sits exactly at the upper bound so first-class SDK
+// callers get full UX headroom out of the box. Callers that want a
+// tighter orphan-risk profile may pass any value in
+// [MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS].
 export const RECOMMENDED_BUY_TX_EXPIRATION_MS = 60_000;
 
 // Block-denominated TTL for `buy_commitment` reservations. A node that emits
@@ -123,6 +133,17 @@ export const MIN_HEARTBEAT_INTERVAL_BLOCKS = 5000;
 // the same accept/reject decision. A node gets one missed-heartbeat grace
 // window before its signatures stop settling globally.
 export const MAX_NODE_HEARTBEAT_STALENESS_BLOCKS = MIN_HEARTBEAT_INTERVAL_BLOCKS * 2;
+
+// State-root checkpoint cadence. Aligned with rollup output-root practice
+// (~30min-1h). Shorter than heartbeat cadence so divergence is detectable
+// within ~50min of the offending block. Must divide evenly into blocks since
+// the handler validates alignment via modulo (`blockNum % N === 0`).
+//
+// Block time on Hive is 3s, so 1000 blocks ≈ 50min. The on-chain action
+// `node_state_checkpoint` (see ACTION_NODE_STATE_CHECKPOINT) carries
+// `{ blockNum, stateRoot }` and is published by registered nodes once per
+// boundary the node has snapshotted locally.
+export const STATE_CHECKPOINT_INTERVAL_BLOCKS = 1000;
 
 // ============================================================================
 // Payload / transaction limits
@@ -283,6 +304,12 @@ export const ACTION_EXTEND_SCHEMA = "extend_schema";
 export const ACTION_ARCHIVE_COLLECTION = "archive_collection";
 export const ACTION_NODE_REGISTER = "node_register";
 export const ACTION_NODE_HEARTBEAT = "node_heartbeat";
+// Periodic state-root snapshot taken at exact STATE_CHECKPOINT_INTERVAL_BLOCKS
+// boundaries. Mirrors node_heartbeat in shape (signed by the registered node's
+// posting key) but carries no indexer version — only `{ blockNum, stateRoot }`.
+// The handler enforces alignment (`blockNum % N === 0`) so two nodes that
+// processed the same block range publish checkpoints over comparable points.
+export const ACTION_NODE_STATE_CHECKPOINT = "node_state_checkpoint";
 
 // Marketplace
 export const ACTION_LIST = "list";
@@ -314,6 +341,7 @@ export const CORE_ACTIONS = [
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
 	ACTION_NODE_HEARTBEAT,
+	ACTION_NODE_STATE_CHECKPOINT,
 ] as const;
 
 export const MARKETPLACE_ACTIONS = [

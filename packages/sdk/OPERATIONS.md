@@ -17,17 +17,18 @@ Complete reference for SDK-owned protocol operations. Each operation is broadcas
 | 7 | `archive_collection` | Core | posting | Archives an empty collection |
 | 8 | `node_register` | Core | posting | Opt-in listing in the public `l2_nodes` directory (≥100 HP) |
 | 9 | `node_heartbeat` | Core | posting | Periodic proof-of-liveness + ownership state-root hash |
-| 10 | `list` | Marketplace | posting | Lists an NFT for sale |
-| 11 | `unlist` | Marketplace | posting | Removes an NFT from the marketplace |
-| 12 | `buy_commitment` | Marketplace | active | Node-broadcast reservation that wins the cross-node ordering race before the node co-signs a `buy` |
-| 13 | `buy` | Marketplace | active | Settles a reserved listing (buyer-signed transfers + node-cosigned custom_json, must match the preceding `buy_commitment`) |
-| 14 | `nft_approve` | Approve | posting | Approves a spender for ONE specific NFT |
-| 15 | `nft_approve_all` | Approve | posting | Approves a spender for ALL NFTs in a collection |
-| 16 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
-| 17 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
-| 18 | `nft_return` | Lending | posting | Returns a lent NFT |
-| 19 | `data_operator_approve` | DataOperator | posting | Authorizes an external operator for a collection |
-| 20 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
+| 10 | `node_state_checkpoint` | Core | posting | Periodic state-root snapshot at fixed block boundaries (every 1000 blocks) |
+| 11 | `list` | Marketplace | posting | Lists an NFT for sale |
+| 12 | `unlist` | Marketplace | posting | Removes an NFT from the marketplace |
+| 13 | `buy_commitment` | Marketplace | active | Node-broadcast reservation that wins the cross-node ordering race before the node co-signs a `buy` |
+| 14 | `buy` | Marketplace | active | Settles a reserved listing (buyer-signed transfers + node-cosigned custom_json, must match the preceding `buy_commitment`) |
+| 15 | `nft_approve` | Approve | posting | Approves a spender for ONE specific NFT |
+| 16 | `nft_approve_all` | Approve | posting | Approves a spender for ALL NFTs in a collection |
+| 17 | `nft_transfer_from` | Approve | posting | Approved spender transfers an NFT from the owner |
+| 18 | `nft_lend` | Lending | posting | Lends an NFT to a borrower |
+| 19 | `nft_return` | Lending | posting | Returns a lent NFT |
+| 20 | `data_operator_approve` | DataOperator | posting | Authorizes an external operator for a collection |
+| 21 | `set_data_from` | DataOperator | posting | Approved operator modifies mutable data of NFTs (requires schema) |
 
 ---
 

@@ -153,6 +153,44 @@ mock.module("@/processor/action-router.ts", () => ({
 	routeOperation: mock(() => Promise.resolve(true)),
 }));
 
+// state-root queries are exercised by sync-engine.ts at batch-end (flush +
+// snapshot for the F3.A checkpoint emitter). The full DB layer never runs in
+// these tests — the txn is a mock — so we stub the three call sites with
+// no-op implementations that satisfy the real signatures. parseNftStateRow,
+// queueStateRootDelta, etc. are kept as inert stubs because nft-mutations.ts
+// imports them at module load even though no real path here invokes them.
+mock.module("@/db/queries/state-root.ts", () => ({
+	flushStateRootBuffer: mock(() => Promise.resolve()),
+	getStateMeta: mock(() =>
+		Promise.resolve({
+			state_root: new Uint8Array(32),
+			nft_count: 0,
+			last_block_num: 0,
+			updated_at: "1970-01-01T00:00:00.000Z",
+		}),
+	),
+	recordCheckpointIfBoundary: mock(() => Promise.resolve()),
+	parseNftStateRow: mock((row: unknown) => row),
+	queueStateRootDelta: mock(() => undefined),
+	bootstrapStateRootFromFullScan: mock(() =>
+		Promise.resolve({
+			state_root: new Uint8Array(32),
+			nft_count: 0,
+			last_block_num: 0,
+			updated_at: "1970-01-01T00:00:00.000Z",
+		}),
+	),
+	getFormattedStateRoot: mock(() =>
+		Promise.resolve({
+			state_root: `sha256:${"0".repeat(64)}`,
+			nft_count: 0,
+			last_block_num: 0,
+			updated_at: "1970-01-01T00:00:00.000Z",
+		}),
+	),
+	computeStateRootFullScan: mock(() => Promise.resolve(new Uint8Array(32))),
+}));
+
 // Minimal StateRootBuffer stub — only the fields that nft-mutations.ts and
 // state-root.ts touch at runtime (all through the mock txn, which never
 // reaches real DB code). Keeping it structurally complete avoids TS import

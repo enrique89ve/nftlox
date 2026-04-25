@@ -12,6 +12,7 @@ import {
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
 	ACTION_NODE_HEARTBEAT,
+	ACTION_NODE_STATE_CHECKPOINT,
 	ACTION_LIST,
 	ACTION_UNLIST,
 	ACTION_BUY_COMMITMENT,
@@ -42,6 +43,7 @@ const ACTION_AUTH_LEVEL_MAP = {
 	[ACTION_ARCHIVE_COLLECTION]: "posting",
 	[ACTION_NODE_REGISTER]: "posting",
 	[ACTION_NODE_HEARTBEAT]: "posting",
+	[ACTION_NODE_STATE_CHECKPOINT]: "posting",
 	[ACTION_LIST]: "posting",
 	[ACTION_UNLIST]: "posting",
 	// buy_commitment: the node broadcasts this on-chain with its own active key

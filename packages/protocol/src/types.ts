@@ -16,6 +16,7 @@ import {
 	ACTION_NFT_TRANSFER_FROM,
 	ACTION_NODE_HEARTBEAT,
 	ACTION_NODE_REGISTER,
+	ACTION_NODE_STATE_CHECKPOINT,
 	ACTION_SET_DATA,
 	ACTION_SET_DATA_FROM,
 	ACTION_TRANSFER,
@@ -38,6 +39,7 @@ import type {
 	NftTransferFromData,
 	NodeHeartbeatData,
 	NodeRegisterData,
+	NodeStateCheckpointData,
 	SetDataData,
 	SetDataFromData,
 	TransferData,
@@ -223,6 +225,7 @@ export type PayloadDataByAction = {
 	readonly [ACTION_ARCHIVE_COLLECTION]: ArchiveCollectionData;
 	readonly [ACTION_NODE_REGISTER]: NodeRegisterData;
 	readonly [ACTION_NODE_HEARTBEAT]: NodeHeartbeatData;
+	readonly [ACTION_NODE_STATE_CHECKPOINT]: NodeStateCheckpointData;
 	readonly [ACTION_LIST]: ListingData;
 	readonly [ACTION_UNLIST]: UnlistData;
 	readonly [ACTION_BUY_COMMITMENT]: BuyCommitmentData;

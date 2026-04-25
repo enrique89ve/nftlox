@@ -10,6 +10,7 @@ import {
 	type NftStateRow,
 } from "@/utils/state-root-hash.ts";
 import type { StateRootBuffer, BufferedMutation } from "@/utils/state-root-buffer.ts";
+import { STATE_CHECKPOINT_INTERVAL_BLOCKS } from "@/protocol/index.ts";
 
 // DB adapter for the incremental state-root.
 //
@@ -215,6 +216,35 @@ export async function getFormattedStateRoot(): Promise<Readonly<{
 // Re-export full-scan for audit jobs that want to compare incremental vs
 // reference without touching the hashing module directly.
 export { computeStateRootFullScan };
+
+/**
+ * Records a state-root checkpoint into `state_root_checkpoints` IFF
+ * `blockNum` is a positive multiple of STATE_CHECKPOINT_INTERVAL_BLOCKS.
+ * Idempotent via ON CONFLICT — re-applying the same boundary on a crash
+ * replay leaves the existing row untouched.
+ *
+ * Pure DB write; the caller must invoke this inside the same transaction
+ * that just flushed the SPV state-root for `blockNum` so the snapshot
+ * captures the root AT that exact boundary, not a later head value.
+ */
+export async function recordCheckpointIfBoundary(
+	blockNum: number,
+	stateRoot: Uint8Array,
+	txn: Queryable,
+): Promise<void> {
+	if (!Number.isInteger(blockNum) || blockNum <= 0) return;
+	if (blockNum % STATE_CHECKPOINT_INTERVAL_BLOCKS !== 0) return;
+	if (stateRoot.length !== STATE_ROOT_BYTES) {
+		throw new Error(
+			`recordCheckpointIfBoundary: state_root must be ${STATE_ROOT_BYTES} bytes, got ${stateRoot.length}`,
+		);
+	}
+	await txn`
+		INSERT INTO state_root_checkpoints (block_num, state_root)
+		VALUES (${blockNum}, ${Buffer.from(stateRoot)})
+		ON CONFLICT (block_num) DO NOTHING
+	`;
+}
 
 // Queues a delta into the tx-scoped buffer. The buffer is flushed exactly once
 // per transaction by withTransaction(), eliminating the per-mutation

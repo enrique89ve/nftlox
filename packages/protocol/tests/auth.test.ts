@@ -50,8 +50,8 @@ describe("auth", () => {
 			expect(ACTIVE_AUTH_ACTIONS.length).toBe(3);
 		});
 
-		it("has exactly 17 posting actions", () => {
-			expect(POSTING_AUTH_ACTIONS.length).toBe(17);
+		it("has exactly 18 posting actions", () => {
+			expect(POSTING_AUTH_ACTIONS.length).toBe(18);
 		});
 	});
 

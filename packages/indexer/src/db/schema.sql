@@ -398,6 +398,12 @@ CREATE TABLE IF NOT EXISTS l2_nodes (
 	-- NULL until the first heartbeat. Written by `handleNodeHeartbeat`, also used
 	-- by the handler's rate-limit guard (MIN_HEARTBEAT_INTERVAL_BLOCKS).
 	last_heartbeat_block BIGINT,
+	-- Boundary block (multiple of STATE_CHECKPOINT_INTERVAL_BLOCKS) of the most
+	-- recent `node_state_checkpoint` this LOCAL daemon has emitted to chain.
+	-- NULL until the first emission. Read at daemon startup so a restart does
+	-- not re-broadcast checkpoints already on-chain. Other accounts' rows track
+	-- the same field for their own emissions; this is per-account, not global.
+	last_emitted_checkpoint_block BIGINT,
 	block_num BIGINT NOT NULL,
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -420,6 +426,37 @@ CREATE TABLE IF NOT EXISTS l2_node_heartbeats (
 -- Serves "latest heartbeat from account" lookups (registry freshness displays,
 -- divergence probes). DESC on block_num keeps the top-N query index-only.
 CREATE INDEX IF NOT EXISTS idx_l2_node_heartbeats_account_block ON l2_node_heartbeats(account, block_num DESC);
+
+-- Append-only state-root checkpoint log. One row per accepted
+-- `node_state_checkpoint` op. Mirrors `l2_node_heartbeats` minus the indexer
+-- version (checkpoints are a consensus probe — version metadata would muddy
+-- the equality semantics F3.B compares on). Rows from peer nodes accumulate
+-- here and are read by the F3.B detector; this table never feeds the local
+-- SPV state-root.
+CREATE TABLE IF NOT EXISTS l2_node_checkpoints (
+	id BIGSERIAL PRIMARY KEY,
+	account TEXT NOT NULL REFERENCES l2_nodes(account) ON DELETE CASCADE,
+	block_num BIGINT NOT NULL,
+	state_root TEXT NOT NULL,
+	tx_id TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Serves "latest checkpoint from account at boundary B" lookups. (account,
+-- block_num) is the natural lookup pair for divergence probes; DESC on
+-- block_num keeps the top-N variant index-only.
+CREATE INDEX IF NOT EXISTS idx_l2_node_checkpoints_account_block ON l2_node_checkpoints(account, block_num DESC);
+
+-- Local-only snapshot of state_root at every multiple-of-N block boundary the
+-- sync engine HAS observed (i.e. boundaries that landed exactly on a batch's
+-- final block). Never receives chain data — populated by sync-engine.ts inside
+-- the same write transaction as `flushStateRootBuffer`. Drives the daemon's
+-- decision of which checkpoints are publishable on-chain via
+-- `node_state_checkpoint`.
+CREATE TABLE IF NOT EXISTS state_root_checkpoints (
+	block_num BIGINT PRIMARY KEY,
+	state_root BYTEA NOT NULL,
+	recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- ============ MULTISIG LOCKS ============
 --

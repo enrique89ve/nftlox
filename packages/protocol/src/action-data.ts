@@ -244,6 +244,19 @@ export type NodeHeartbeatData = {
 	readonly indexerVersion: string;
 };
 
+// Node state-root checkpoint — a snapshot of the ownership state-root taken at
+// a fixed boundary (`blockNum % STATE_CHECKPOINT_INTERVAL_BLOCKS === 0`). One
+// row is emitted per boundary the node has locally snapshotted. Unlike the
+// heartbeat, the field set is intentionally minimal so two nodes that agree
+// on `(blockNum, stateRoot)` are guaranteed to be comparing the same point —
+// no version metadata leaks into the consensus surface.
+export type NodeStateCheckpointData = {
+	/** Boundary block the snapshot was taken at. Must be a positive multiple of STATE_CHECKPOINT_INTERVAL_BLOCKS. */
+	readonly blockNum: number;
+	/** Ownership state-root hash AT `blockNum`, formatted as "sha256:<64-hex>". */
+	readonly stateRoot: string;
+};
+
 // Multisig envelopes
 
 // `creator` is intentionally absent. The multisig endpoint derives the creator

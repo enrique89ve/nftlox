@@ -106,6 +106,42 @@ mock.module("@/processor/action-router.ts", () => ({
 	routeOperation: mock(() => Promise.resolve(true)),
 }));
 
+// Stub the state-root query module: sync-engine.ts now flushes the buffer
+// and reads state_meta at every batch end (F3.A snapshot snapshotting). The
+// concurrency suite never reaches a real DB; returning constant zero-bytes
+// keeps the snapshot path inert without losing the cursor-advance assertions.
+mock.module("@/db/queries/state-root.ts", () => ({
+	flushStateRootBuffer: mock(() => Promise.resolve()),
+	getStateMeta: mock(() =>
+		Promise.resolve({
+			state_root: new Uint8Array(32),
+			nft_count: 0,
+			last_block_num: 0,
+			updated_at: "1970-01-01T00:00:00.000Z",
+		}),
+	),
+	recordCheckpointIfBoundary: mock(() => Promise.resolve()),
+	parseNftStateRow: mock((row: unknown) => row),
+	queueStateRootDelta: mock(() => undefined),
+	bootstrapStateRootFromFullScan: mock(() =>
+		Promise.resolve({
+			state_root: new Uint8Array(32),
+			nft_count: 0,
+			last_block_num: 0,
+			updated_at: "1970-01-01T00:00:00.000Z",
+		}),
+	),
+	getFormattedStateRoot: mock(() =>
+		Promise.resolve({
+			state_root: `sha256:${"0".repeat(64)}`,
+			nft_count: 0,
+			last_block_num: 0,
+			updated_at: "1970-01-01T00:00:00.000Z",
+		}),
+	),
+	computeStateRootFullScan: mock(() => Promise.resolve(new Uint8Array(32))),
+}));
+
 // config.ts throws at module-load time when INDEXER_ROLE=both and ACTIVE_KEY is
 // absent (the default when running bun test from the monorepo root). Mock it so
 // the file is safely importable regardless of the environment.

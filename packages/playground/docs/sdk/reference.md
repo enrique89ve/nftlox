@@ -430,8 +430,8 @@ Re-exported from `@nftlox/protocol`:
 | `MIN_PRICE_AMOUNT` | `"0.100"` | Minimum listing price (3-decimal string). |
 | `MIN_LISTING_TTL_MS` / `MIN_LISTING_TTL_BUFFER_MS` | derived / `60_000` | Floor on listing durations and the safety buffer on top of the block-denominated minimum. |
 | `MULTISIG_TX_MIN_EXPIRATION_MS` | `30_000` | Lower bound on a buy transaction's L1 `expiration`. |
-| `MULTISIG_TX_MAX_EXPIRATION_MS` | `120_000` | Upper bound on a buy transaction's L1 `expiration`. |
-| `RECOMMENDED_BUY_TX_EXPIRATION_MS` | `60_000` | Default expiration the SDK helpers pick — fits PoW + Keychain + node orchestration with headroom. |
+| `MULTISIG_TX_MAX_EXPIRATION_MS` | `60_000` | Upper bound on a buy transaction's L1 `expiration`. Exceeds the 30 s commitment window on purpose for human-signer UX; post-expiry settlements are recorded in `orphaned_buys` for off-chain refund. |
+| `RECOMMENDED_BUY_TX_EXPIRATION_MS` | `60_000` | SDK default — equals MAX. Lower it toward `MULTISIG_TX_MIN_EXPIRATION_MS` (30 s) for a tighter orphan-risk profile. |
 | `BUY_COMMITMENT_TTL_BLOCKS` | `10` | Blocks (~30 s) a `buy_commitment` stays valid before the NFT is released back to `listed`. |
 | `BUY_API_LAG_MAX_BLOCKS` | `3` | Max indexer-vs-HEAD lag (blocks) that still allows `/api/multisig/buy` to serve requests. |
 | `BURN_RECIPIENT` | `"null"` | Hive's reserved burn account; `buildBurn` transfers `to` this value. |

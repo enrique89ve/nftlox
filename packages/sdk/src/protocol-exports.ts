@@ -152,6 +152,11 @@ export const ACTION_EXTEND_SCHEMA = protocol.ACTION_EXTEND_SCHEMA;
 export const ACTION_ARCHIVE_COLLECTION = protocol.ACTION_ARCHIVE_COLLECTION;
 export const ACTION_NODE_REGISTER = protocol.ACTION_NODE_REGISTER;
 export const ACTION_NODE_HEARTBEAT = protocol.ACTION_NODE_HEARTBEAT;
+export const ACTION_NODE_STATE_CHECKPOINT = protocol.ACTION_NODE_STATE_CHECKPOINT;
+// Cadence (in blocks) at which registered nodes emit `node_state_checkpoint`
+// payloads. Re-exported so SDK consumers running their own snapshot tooling
+// land on the same boundaries every other node compares against.
+export const STATE_CHECKPOINT_INTERVAL_BLOCKS = protocol.STATE_CHECKPOINT_INTERVAL_BLOCKS;
 export const ACTION_LIST = protocol.ACTION_LIST;
 export const ACTION_UNLIST = protocol.ACTION_UNLIST;
 export const ACTION_BUY_COMMITMENT = protocol.ACTION_BUY_COMMITMENT;
@@ -304,6 +309,7 @@ export type {
 	NftReturnData,
 	NodeRegisterData,
 	NodeHeartbeatData,
+	NodeStateCheckpointData,
 	BuyMultisigRequest,
 	BuyMultisigResponse,
 	CreateCollectionMultisigRequest,
