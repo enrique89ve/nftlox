@@ -6,18 +6,29 @@ import {
 	type ProtocolAction,
 } from "./constants";
 import { ACTION_AUTH_LEVEL } from "./auth";
-import type { ProtocolPayload, HiveOperation } from "./types";
+import type {
+	ProtocolPayload,
+	HiveOperation,
+	PayloadDataByAction,
+	TypedProtocolPayload,
+} from "./types";
 
 export type CreatePayloadOptions = {
 	readonly protocol?: string | undefined;
 	readonly version?: string | undefined;
 };
 
-export function createPayload<T>(
-	action: ProtocolAction,
-	data: T,
+/**
+ * Builds a protocol-shaped payload for `action`. The generic `A` constrains
+ * `data` to the exact `PayloadDataByAction[A]` shape — passing the wrong
+ * structure (e.g. a stale `from` field on a `transfer` payload) is a compile
+ * error, not a runtime accident.
+ */
+export function createPayload<A extends ProtocolAction>(
+	action: A,
+	data: PayloadDataByAction[A],
 	options?: CreatePayloadOptions,
-): ProtocolPayload<T> {
+): TypedProtocolPayload<A> {
 	if (!isProtocolAction(action)) {
 		throw new Error(`Unsupported protocol action: ${String(action)}`);
 	}
@@ -26,7 +37,7 @@ export function createPayload<T>(
 		version: options?.version ?? PROTOCOL_VERSION,
 		action,
 		data,
-	};
+	} as TypedProtocolPayload<A>;
 }
 
 export class PayloadTooLargeError extends Error {

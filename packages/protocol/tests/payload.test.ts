@@ -27,7 +27,8 @@ describe("createPayload", () => {
 	});
 
 	test("rejects invalid action", () => {
-		expect(() => createPayload("invalid_action" as "transfer", {})).toThrow("Unsupported protocol action");
+		expect(() => createPayload("invalid_action" as "transfer", { nftId: "nft_1", to: "bob" }))
+			.toThrow("Unsupported protocol action");
 	});
 });
 
@@ -43,12 +44,14 @@ describe("createHiveOperation", () => {
 
 	test("active action uses required_auths", () => {
 		const payload = createPayload("create_collection", {
-			collectionId: "col_1",
+			id: "col_1",
 			name: "n",
-			description: "d",
-			schema: { immutable: [], mutable: [] },
-			royaltyAccount: "alice",
-			royaltyPct: 0,
+			symbol: "N",
+			totalPotential: 1,
+			maxInstances: 0,
+			originDna: "a".repeat(32),
+			metadata: { description: "d", image: "img" },
+			rules: { transferable: true, burnable: true, royaltyPct: 0 },
 		});
 		const op = createHiveOperation(payload, "alice");
 		expect(op[1].required_auths).toEqual(["alice"]);

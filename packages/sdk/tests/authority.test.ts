@@ -82,8 +82,13 @@ describe("Authority exhaustiveness", () => {
 
 // ============ ACTIVE KEY OPERATIONS ============
 
+// Test helper: this suite asserts auth-field emission across all actions, not
+// data shape. The `as never` cast at the boundary lets each test pass minimal
+// or partial data without dragging every action's full payload schema into
+// every assertion. Runtime behavior of `createPayload + createHiveOperation`
+// is what's under test here.
 function buildOp(action: ProtocolAction, signer: string, data: Record<string, unknown> = {}) {
-	const payload = createPayload(action, data);
+	const payload = createPayload(action, data as never);
 	return createHiveOperation(payload, signer);
 }
 

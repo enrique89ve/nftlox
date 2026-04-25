@@ -107,9 +107,16 @@ export type BulkDistributeData = {
 };
 
 // Transfer (burn = transfer to "null")
+//
 // Image metadata is intentionally absent: seeds carry their own imageUrl/hash
 // in the `nfts` row (written at mint), and instances inherit via the
 // seed→collection FK chain. Duplicating it on transfer would reintroduce drift.
+//
+// `from` is intentionally absent: the owner is derived from `op.signer` (the
+// Hive custom_json authority), which is the cryptographic source of truth.
+// Any payload that ships a `from` field is rejected by the transfer handler.
+// The allowance action (see NftTransferFromData below) is the only protocol
+// op where `from` legitimately appears in the payload.
 
 export type TransferData = SeedProvenance & {
 	readonly nftId?: string | undefined;

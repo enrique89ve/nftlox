@@ -17,16 +17,9 @@ import {
 	type SchemaField,
 	type SchemaFieldType,
 } from "@/protocol/index.ts";
+import type { TransferDetail } from "@/scanner/operation-parser.ts";
 
 // ============ TRANSFER VERIFICATION (source-agnostic) ============
-
-export interface TransferRecord {
-	from: string;
-	to: string;
-	amount: number;
-	currency: string;
-	memo: string;
-}
 
 const SUPPORTED_CURRENCIES_SET = new Set<string>(SUPPORTED_CURRENCIES);
 
@@ -47,7 +40,7 @@ export function requireSupportedCurrency(
 }
 
 export interface VerifyTransfersParams {
-	transfers: ReadonlyArray<TransferRecord>;
+	transfers: ReadonlyArray<TransferDetail>;
 	seller: string;
 	totalPrice: number;
 	currency: SupportedCurrency;
@@ -81,10 +74,10 @@ export interface VerifyTransfersResult {
 }
 
 function findUniqueTransferIndex(params: {
-	readonly transfers: ReadonlyArray<TransferRecord>;
+	readonly transfers: ReadonlyArray<TransferDetail>;
 	readonly consumedIndices: ReadonlySet<number> | undefined;
 	readonly staged: ReadonlySet<number>;
-	readonly predicate: (transfer: TransferRecord) => boolean;
+	readonly predicate: (transfer: TransferDetail) => boolean;
 	readonly missingMessage: string;
 	readonly ambiguousMessage: (count: number) => string;
 }): number {

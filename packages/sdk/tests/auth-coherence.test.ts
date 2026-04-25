@@ -54,7 +54,10 @@ describe("createHiveOperation emits auth fields from ACTION_AUTH_LEVEL", () => {
 	for (const action of ALL_ACTIONS) {
 		const level = ACTION_AUTH_LEVEL[action as ProtocolAction];
 		test(`${action} → ${level}`, () => {
-			const payload = createPayload(action, {});
+			// This test only validates auth-field emission, not data shape.
+			// Cast at the boundary so the empty object satisfies the strict
+			// generic without obscuring the runtime intent.
+			const payload = createPayload(action, {} as never);
 			const op = createHiveOperation(payload, "alice");
 			if (level === "active") {
 				expect(op[1].required_auths).toEqual(["alice"]);
@@ -67,7 +70,7 @@ describe("createHiveOperation emits auth fields from ACTION_AUTH_LEVEL", () => {
 	}
 
 	test("rejects removed pack actions instead of falling back to posting auth", () => {
-		expect(() => createPayload("pack_buy" as ProtocolAction, { packId: "pack_1", quantity: 1 }))
+		expect(() => createPayload("pack_buy" as ProtocolAction, { packId: "pack_1", quantity: 1 } as never))
 			.toThrow("Unsupported protocol action: pack_buy");
 	});
 });

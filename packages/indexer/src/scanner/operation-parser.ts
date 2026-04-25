@@ -8,20 +8,16 @@ import {
 	type ProtocolAction,
 } from "@/protocol/index.ts";
 import { createLogger } from "@/utils/logger.ts";
-import type { HafAHOperation } from "./hive-client.ts";
+import type { HafAHOperation, TransferDetail } from "./hive-client.ts";
 import type { PaymentMatch } from "@/processor/payment.ts";
 
 const log = createLogger("parser");
 
 export type { AuthLevel } from "@/protocol/index.ts";
 
-export interface TransferDetail {
-	from: string;
-	to: string;
-	amount: number;
-	currency: string;
-	memo: string;
-}
+// Re-exported so consumers that already speak the parser layer
+// (`TransferPool`, `ParsedOperation`) don't need to reach into hive-client.
+export type { TransferDetail } from "./hive-client.ts";
 
 /**
  * Pool of transfers shared across operations within the same Hive transaction.

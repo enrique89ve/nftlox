@@ -1,12 +1,13 @@
 import { describe, test, expect } from "bun:test";
-import { verifyTransfers, type TransferRecord } from "@/utils/validation.ts";
+import { verifyTransfers } from "@/utils/validation.ts";
+import type { TransferDetail } from "@/scanner/operation-parser.ts";
 
 // Regression: a partial match on a failed verifyTransfers used to leak matched
 // indices into the shared TransferPool.consumed set, corrupting subsequent ops
 // in the same Hive tx. The fix stages matches locally and only commits to the
 // shared set after ALL expected transfers are found.
 
-function makeTransfer(overrides: Partial<TransferRecord> = {}): TransferRecord {
+function makeTransfer(overrides: Partial<TransferDetail> = {}): TransferDetail {
 	return {
 		from: "buyer",
 		to: "seller",
@@ -20,7 +21,7 @@ function makeTransfer(overrides: Partial<TransferRecord> = {}): TransferRecord {
 describe("verifyTransfers — TransferPool atomicity", () => {
 	test("on partial match failure, shared consumedIndices stays clean", () => {
 		// Pool contains only the seller payment — royalty + fee transfers are missing.
-		const transfers: TransferRecord[] = [
+		const transfers: TransferDetail[] = [
 			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:nft_1" }),
 		];
 		const consumed = new Set<number>();
@@ -46,7 +47,7 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 	});
 
 	test("on full match success, consumedIndices receives all staged entries", () => {
-		const transfers: TransferRecord[] = [
+		const transfers: TransferDetail[] = [
 			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:nft_1" }),
 			makeTransfer({ to: "artist", amount: 1.0, memo: "NFTLox ROY:nft_1" }),
 			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:nft_1" }),
@@ -72,7 +73,7 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 	test("two ops in same tx do not double-claim the same transfer index", () => {
 		// Two buys with identical amounts but different memos. Each buy has its own
 		// seller/royalty/fee triple; the pool must give each op its own indices.
-		const transfers: TransferRecord[] = [
+		const transfers: TransferDetail[] = [
 			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:nft_1" }),
 			makeTransfer({ to: "artist", amount: 1.0, memo: "NFTLox ROY:nft_1" }),
 			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:nft_1" }),
@@ -102,7 +103,7 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 	test("after partial-fail, a retry with complete pool still succeeds", () => {
 		// First call fails (missing fee). Pool must stay empty so the caller can
 		// retry with a corrected pool — validates no dirty state leaks.
-		const incomplete: TransferRecord[] = [
+		const incomplete: TransferDetail[] = [
 			makeTransfer({ to: "seller", amount: 9.9, memo: "NFTLox BUY:nft_1" }),
 		];
 		const consumed = new Set<number>();
@@ -122,7 +123,7 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 		).toThrow();
 		expect(consumed.size).toBe(0);
 
-		const complete: TransferRecord[] = [
+		const complete: TransferDetail[] = [
 			makeTransfer({ to: "seller", amount: 9.9, memo: "NFTLox BUY:nft_1" }),
 			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:nft_1" }),
 		];
