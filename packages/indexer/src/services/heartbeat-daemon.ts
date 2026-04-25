@@ -47,7 +47,11 @@ import {
 	signPostingDigest,
 } from "@/api/services/beekeeper-signer.ts";
 import { sql } from "@/db/client.ts";
-import { getFormattedStateRoot } from "@/db/queries/state-root.ts";
+import {
+	findHighestDivergentCheckpointBlock,
+	getFormattedStateRoot,
+	setDivergentAtBlock,
+} from "@/db/queries/state-root.ts";
 import { formatStateRoot } from "@/utils/state-root-hash.ts";
 import { getHeadBlockNum } from "@/scanner/hive-client.ts";
 import {
@@ -236,6 +240,13 @@ async function tick(): Promise<void> {
 		// so a backlog is drained one boundary per minute, well below the
 		// per-minute RC envelope of a posting-key custom_json.
 		await tickCheckpoint();
+
+		// Divergence: cheap indexed JOIN + LIMIT 1. Always run; the
+		// no-divergence path emits no log line. On hit we set the flag
+		// monotonically and log loudly so an operator grepping the log can
+		// reconstruct the disagreement without querying the DB. F3.B does NOT
+		// gate any API — that's F3.C.
+		await tickDivergenceCheck();
 	} finally {
 		inFlight = false;
 	}
@@ -251,6 +262,33 @@ async function tickCheckpoint(): Promise<void> {
 	// this point; the DB write is the durable cursor.
 	await persistEmittedCheckpoint(config.hiveAccount, pending.blockNum);
 	lastEmittedCheckpointBlock = pending.blockNum;
+}
+
+/**
+ * F3.B — Comparator probe. Looks for the highest checkpoint block where our
+ * local snapshot disagrees with any peer's `node_state_checkpoint`, and if
+ * found:
+ *   1. Logs an `error`-level structured event with all four diagnostic fields
+ *      (blockNum, ourRoot, theirAccount, theirRoot) so an operator can
+ *      reconstruct the disagreement from the log alone.
+ *   2. Persists the divergence flag via `setDivergentAtBlock` (monotonic).
+ *
+ * Exported so the bun:test suite can drive a single tick deterministically
+ * without orchestrating the full daemon loop. Production callers go through
+ * `tick()`.
+ */
+export async function tickDivergenceCheck(): Promise<void> {
+	const ourAccount = config.hiveAccount;
+	const hit = await findHighestDivergentCheckpointBlock(ourAccount);
+	if (!hit) return;
+
+	log.error("STATE-ROOT DIVERGENCE DETECTED", {
+		blockNum: hit.blockNum,
+		ourRoot: hit.ourRoot,
+		theirAccount: hit.theirAccount,
+		theirRoot: hit.theirRoot,
+	});
+	await setDivergentAtBlock(hit.blockNum);
 }
 
 async function emitHeartbeat(currentBlock: number): Promise<void> {

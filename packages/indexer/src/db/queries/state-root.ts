@@ -246,6 +246,109 @@ export async function recordCheckpointIfBoundary(
 	`;
 }
 
+/**
+ * F3.B — Divergence detection. Returns the highest block_num where our local
+ * state_root snapshot disagrees with at least one other node's
+ * `node_state_checkpoint` for the same boundary, or null if no disagreement
+ * exists.
+ *
+ * Symmetric semantics: any peer disagreeing with us at the same block triggers
+ * a hit. We do NOT try to determine which side is correct — that's an operator
+ * investigation. With 3+ nodes and one byzantine, both honest peers will see
+ * the byzantine disagree and flag themselves; the byzantine flags itself too
+ * if it runs honest comparator code. Conservative-but-correct.
+ *
+ * The query JOINs the BYTEA local snapshot against the TEXT on-chain
+ * checkpoints by formatting the BYTEA side to "sha256:<hex>" inside the query
+ * — keeps a single round-trip and reuses the (account, block_num) index on
+ * `l2_node_checkpoints`.
+ *
+ * Edge cases handled:
+ *   - Empty `state_root_checkpoints` → JOIN yields no row → null.
+ *   - Empty `l2_node_checkpoints` → JOIN yields no row → null.
+ *   - Boundary B exists locally but no peer has a checkpoint at B → null at B.
+ *     (Absence of a peer datum is NOT divergence.)
+ *   - Multiple peers disagree at B → returns ANY ONE (LIMIT 1). We only need
+ *     to know SOMETHING disagreed, not how many.
+ */
+export type DivergentCheckpoint = Readonly<{
+	blockNum: number;
+	ourRoot: string;
+	theirAccount: string;
+	theirRoot: string;
+}>;
+
+export async function findHighestDivergentCheckpointBlock(
+	ourAccount: string,
+	txn: Queryable = sql,
+): Promise<DivergentCheckpoint | null> {
+	if (typeof ourAccount !== "string" || ourAccount.length === 0) {
+		throw new Error(
+			`findHighestDivergentCheckpointBlock: ourAccount must be non-empty string, got ${describeValue(ourAccount)}`,
+		);
+	}
+	const [row] = await txn`
+		SELECT
+			us.block_num AS block_num,
+			'sha256:' || encode(us.state_root, 'hex') AS our_root,
+			them.account AS their_account,
+			them.state_root AS their_root
+		FROM state_root_checkpoints us
+		JOIN l2_node_checkpoints them
+			ON them.block_num = us.block_num
+			AND them.account != ${ourAccount}
+			AND them.state_root != ('sha256:' || encode(us.state_root, 'hex'))
+		ORDER BY us.block_num DESC
+		LIMIT 1
+	`;
+	if (!row) return null;
+	const blockNum = Number(row.block_num);
+	if (!Number.isFinite(blockNum) || !Number.isInteger(blockNum) || blockNum <= 0) {
+		throw new Error(
+			`findHighestDivergentCheckpointBlock: block_num invalid: ${describeValue(row.block_num)}`,
+		);
+	}
+	const ourRoot = row.our_root;
+	const theirAccount = row.their_account;
+	const theirRoot = row.their_root;
+	if (typeof ourRoot !== "string" || ourRoot.length === 0) {
+		throw new Error(`findHighestDivergentCheckpointBlock: our_root invalid: ${describeValue(ourRoot)}`);
+	}
+	if (typeof theirAccount !== "string" || theirAccount.length === 0) {
+		throw new Error(
+			`findHighestDivergentCheckpointBlock: their_account invalid: ${describeValue(theirAccount)}`,
+		);
+	}
+	if (typeof theirRoot !== "string" || theirRoot.length === 0) {
+		throw new Error(
+			`findHighestDivergentCheckpointBlock: their_root invalid: ${describeValue(theirRoot)}`,
+		);
+	}
+	return { blockNum, ourRoot, theirAccount, theirRoot };
+}
+
+/**
+ * F3.B — Sets `state_meta.divergent_at_block` to GREATEST(current, blockNum).
+ * Monotonic on a single tick: a later call with a lower block cannot lower the
+ * flag. Operator clears it manually after investigation. The flag is a
+ * single-bit alarm; diagnostic detail (peer account, roots) lives in the
+ * structured log emitted by the daemon, not in extra columns.
+ */
+export async function setDivergentAtBlock(
+	blockNum: number,
+	txn: Queryable = sql,
+): Promise<void> {
+	if (!Number.isInteger(blockNum) || blockNum <= 0) {
+		throw new Error(`setDivergentAtBlock: blockNum must be positive integer, got ${blockNum}`);
+	}
+	await txn`
+		UPDATE state_meta
+		SET divergent_at_block = GREATEST(COALESCE(divergent_at_block, 0), ${blockNum}),
+		    updated_at = NOW()
+		WHERE id = ${STATE_META_ID}
+	`;
+}
+
 // Queues a delta into the tx-scoped buffer. The buffer is flushed exactly once
 // per transaction by withTransaction(), eliminating the per-mutation
 // SELECT … FOR UPDATE contention that otherwise caps throughput at ~1-3k
