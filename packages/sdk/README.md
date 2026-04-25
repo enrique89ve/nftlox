@@ -43,59 +43,54 @@ See [`packages/playground/docs/guides/game-bot-testing.md`](../playground/docs/g
 
 ## Quick start
 
+The recommended entry point is `createNftloxClient`, which bundles the
+indexer client, builders, SPV verifiers, and protocol metadata behind one
+configured object so you do not have to wire `baseUrl` / `l1Config` into
+every call.
+
 ```typescript
-import {
-	initProtocol,
-	buildCollection,
-	buildSeed,
-	buildBulkDistribute,
-	buildTransfer,
-	fetchMultisigNodeAccount,
-} from "nftlox-sdk";
+import { createNftloxClient, expireIn } from "nftlox-sdk";
 
-const INDEXER_URL = "https://api-nftlox.hivecreators.co";
-
-// Initialize from the indexer API (call once at startup)
-await initProtocol(INDEXER_URL);
-
-const nodeAccount = await fetchMultisigNodeAccount(INDEXER_URL);
-console.log(`Node co-signer: ${nodeAccount}`);
-
-// Build a collection (Zod-validated, returns transfer + custom_json operations)
-const col = await buildCollection(
-	{
-		name: "My Collection",
-		symbol: "MYCOL",
-		creator: "alice",
-		totalPotential: 1000,
-		metadata: { description: "...", image: "https://example.com/cover.png" },
-		rules: { transferable: true, burnable: true, royaltyPct: 5 },
-	},
-	{ indexerBaseUrl: INDEXER_URL, feeCurrency: "HBD", feeAmount: "0.100" },
-);
-
-if (!col.success) {
-	throw new Error(`Collection build failed: ${JSON.stringify(col.errors)}`);
-}
-
-// Build a seed
-const seed = await buildSeed({
-	artId: "unique-art-id",
-	collectionId: col.generatedIds.collectionId,
-	signer: "alice",
-	name: "NFT Name",
-	imageUrl: "https://example.com/nft.png",
-	maxSupply: 100,
-	edition: 1,
+const client = createNftloxClient({
+	indexerUrl: "https://api-nftlox.hivecreators.co",
 });
 
-if (!seed.success) {
-	throw new Error(`Seed build failed: ${JSON.stringify(seed.errors)}`);
-}
+// (optional) Sync the SDK's protocol version with the live indexer.
+await client.connect();
 
-// Each builder returns { payload, operations, generatedIds?, warnings? }.
-// Collection creation includes a fee transfer and a node co-signed custom_json.
+// Read the indexer.
+const inventory = await client.indexer.getUserNfts("alice");
+
+// Build an unsigned `list` operation. Always pass `expiresAt` inside the
+// protocol's [7, 60]-day window — `expireIn` is a small ergonomic helper.
+const listing = await client.builders.list({
+	nftId: inventory.nfts[0]!.id,
+	owner: "alice",
+	price: { amount: "10.000", currency: "HIVE" },
+	expiresAt: expireIn({ days: 14 }),
+});
+if (!listing.success) throw new Error(JSON.stringify(listing.errors));
+
+// You sign + broadcast `listing.operations` with Hive Keychain (browser),
+// @hiveio/wax, or hive-tx. The SDK never touches private keys.
+
+// Trustless verification of an existing listing against Hive L1 — useful
+// for apps that don't want to trust the indexer's projection.
+const proof = await client.spv.verifyNftOwnership({
+	nftId: inventory.nfts[0]!.id,
+	expectedOwner: "alice",
+});
+console.log(proof.status); // "verified" | "mismatch" | ...
 ```
+
+A complete runnable walkthrough lives at
+[`examples/quick-game.ts`](./examples/quick-game.ts) — read-only Part A
+queries the live indexer with no signing, Part B shows distribute → list
+with a stubbed signer.
+
+The lower-level surface (`buildCollection`, `buildSeed`, `createIndexerClient`,
+the SPV functions) is still exported at the package root for callers who
+prefer to wire the modules themselves.
 
 ## Main exports
 

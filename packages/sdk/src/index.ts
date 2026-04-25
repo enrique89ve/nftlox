@@ -117,3 +117,12 @@ export type {
 // ============ SDK-ONLY: UTILS ============
 export * from "./utils/tx-sizing";
 export * from "./utils/listing-expiration";
+
+// ============ SDK-ONLY: UNIFIED CLIENT ============
+export {
+	createNftloxClient,
+	type NftloxClient,
+	type NftloxClientOptions,
+	type NftloxBuilders,
+	type NftloxSpv,
+} from "./nftlox-client";
