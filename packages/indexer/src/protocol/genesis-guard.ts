@@ -1,10 +1,10 @@
 import { PROTOCOL_ID } from "@nftlox/protocol";
 
-export const PROTOCOL_GENESIS_BLOCK = 105_759_886;
+export const PROTOCOL_GENESIS_BLOCK = 105_814_532;
 // Anchor hash for PROTOCOL_GENESIS_BLOCK. Verified against ≥2 Hive endpoints at
 // startup so a hostile HafAH cannot hand us a fabricated chain from scratch.
 export const PROTOCOL_GENESIS_BLOCK_ID =
-  "064dc48e2a4c3b30ee7160cff6feb9bf611cdb0a";
+  "064e9a04f927a197e6c9e6b0b4c69d4a4bb5819b";
 
 export type GenesisBlockValidationInput = {
   readonly genesisBlock: number;

@@ -131,7 +131,7 @@ Each publish emits a signed JSON manifest:
 	"at_block": 106000000,
 	"block_id": "0650a3c0…",             // verifiable against Hive
 	"state_root": "sha256:…",             // matches /api/state-root at at_block
-	"schema_version": "0.9.0",
+	"schema_version": "0.9.1",
 	"nft_count": 152340,
 	"collection_count": 1217,
 	"format": "pg_dump-custom+zstd",

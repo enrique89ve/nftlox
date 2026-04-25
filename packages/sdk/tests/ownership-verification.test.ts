@@ -50,11 +50,10 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.9.0",
+								version: "0.9.1",
 								action: ACTION_TRANSFER,
 								data: {
 									nftId: "nft_1",
-									from: "alice",
 									to: "bob",
 								},
 							}),
@@ -122,7 +121,7 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.9.0",
+								version: "0.9.1",
 								action: ACTION_BUY,
 								data: {
 									nftId: "nft_buy_1",
@@ -231,7 +230,7 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.9.0",
+								version: "0.9.1",
 								action: ACTION_TRANSFER,
 								data: {
 									nftId: "nft_2",

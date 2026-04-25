@@ -414,8 +414,8 @@ Re-exported from `@nftlox/protocol`:
 | Constant | Value | Meaning |
 |---|---|---|
 | `PROTOCOL_ID` | `"nftlox_testnet"` | The `id` field on every `custom_json`. |
-| `PROTOCOL_VERSION` | `"0.9.0"` | The `version` field in every payload. |
-| `MIN_PROTOCOL_VERSION` | `"0.9.0"` | Lowest protocol version the indexer still accepts. |
+| `PROTOCOL_VERSION` | `"0.9.1"` | The `version` field in every payload. |
+| `MIN_PROTOCOL_VERSION` | `"0.9.1"` | Lowest protocol version the indexer still accepts. |
 | `HIVE_BLOCK_TIME_MS` | `3000` | Hive block cadence. Every `*_BLOCKS` window converts to wall time through this. |
 | `HIVE_DECIMALS` / `HIVE_PRECISION` | `3` / `1000` | Decimals and micro-unit multiplier for HIVE/HBD amounts. |
 | `MAX_OPERATIONS_PER_TX` | `5` | Hard cap per Hive transaction. |

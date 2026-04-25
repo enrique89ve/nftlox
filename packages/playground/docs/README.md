@@ -85,7 +85,7 @@ Then follow [Getting Started](getting-started.md) to make your first transaction
 | Property | Value |
 |---|---|
 | Protocol ID | `nftlox_testnet` |
-| Protocol version | `0.9.0` |
+| Protocol version | `0.9.1` |
 | Blockchain | Hive L1 |
 | Finality | ~3 seconds |
 | Active-key actions | `create_collection`, `buy` |
@@ -99,7 +99,7 @@ Then follow [Getting Started](getting-started.md) to make your first transaction
 ---
 
 <div class="nftlox-footer">
-	<span class="version-badge">v0.9.0</span>
+	<span class="version-badge">v0.9.1</span>
 	<br>
 	NFTLox Protocol — Built on Hive L1
 </div>

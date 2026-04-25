@@ -6,7 +6,7 @@ describe("castPayloadByAction", () => {
 	test("returns the payload when action matches", () => {
 		const p = {
 			protocol: "nftlox_testnet",
-			version: "0.9.0",
+			version: "0.9.1",
 			action: ACTION_BUY,
 			data: {
 				nftId: "inst_x",
@@ -22,7 +22,7 @@ describe("castPayloadByAction", () => {
 	test("returns null when action does not match", () => {
 		const p = {
 			protocol: "nftlox_testnet",
-			version: "0.9.0",
+			version: "0.9.1",
 			action: ACTION_MINT,
 			data: {},
 		} as const;
