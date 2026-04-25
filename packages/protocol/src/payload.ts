@@ -6,6 +6,7 @@ import {
 	type ProtocolAction,
 } from "./constants";
 import { ACTION_AUTH_LEVEL } from "./auth";
+import { assertAcceptedProtocolVersion } from "./version";
 import type {
 	ProtocolPayload,
 	HiveOperation,
@@ -23,6 +24,12 @@ export type CreatePayloadOptions = {
  * `data` to the exact `PayloadDataByAction[A]` shape — passing the wrong
  * structure (e.g. a stale `from` field on a `transfer` payload) is a compile
  * error, not a runtime accident.
+ *
+ * When `options.version` is provided it is validated against the protocol
+ * compatibility window (must be strict semver and >= MIN_PROTOCOL_VERSION).
+ * This prevents builders from emitting payloads that the indexer would
+ * silently reject, which used to surface as confusing post-broadcast
+ * "operation not indexed" symptoms.
  */
 export function createPayload<A extends ProtocolAction>(
 	action: A,
@@ -32,9 +39,13 @@ export function createPayload<A extends ProtocolAction>(
 	if (!isProtocolAction(action)) {
 		throw new Error(`Unsupported protocol action: ${String(action)}`);
 	}
+	const version = options?.version ?? PROTOCOL_VERSION;
+	if (options?.version !== undefined) {
+		assertAcceptedProtocolVersion(options.version);
+	}
 	return {
 		protocol: options?.protocol ?? PROTOCOL_ID,
-		version: options?.version ?? PROTOCOL_VERSION,
+		version,
 		action,
 		data,
 	} as TypedProtocolPayload<A>;

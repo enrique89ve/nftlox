@@ -30,6 +30,27 @@ describe("createPayload", () => {
 		expect(() => createPayload("invalid_action" as "transfer", { nftId: "nft_1", to: "bob" }))
 			.toThrow("Unsupported protocol action");
 	});
+
+	test("rejects malformed version override", () => {
+		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: "abc" }))
+			.toThrow(/Invalid protocol version/);
+		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: "1.0" }))
+			.toThrow(/Invalid protocol version/);
+		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: "" }))
+			.toThrow(/Invalid protocol version/);
+	});
+
+	test("rejects version override below MIN_PROTOCOL_VERSION", () => {
+		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: "0.0.1" }))
+			.toThrow(/below MIN_PROTOCOL_VERSION/);
+	});
+
+	test("accepts version override at or above MIN", () => {
+		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: PROTOCOL_VERSION }))
+			.not.toThrow();
+		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: "99.0.0" }))
+			.not.toThrow();
+	});
 });
 
 describe("createHiveOperation", () => {

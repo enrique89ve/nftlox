@@ -12,3 +12,4 @@ export * from "./action-data";
 export * from "./node-endpoint";
 export * from "./url";
 export * from "./seed-provenance";
+export * from "./version";

@@ -8,7 +8,9 @@ import {
 	MIN_PROTOCOL_VERSION,
 	MULTISIG_TX_MAX_EXPIRATION_MS,
 	MULTISIG_TX_MIN_EXPIRATION_MS,
+	compareVersions,
 	isProtocolAction,
+	parseProtocolVersion,
 	type MultisigErrorCode,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
@@ -45,10 +47,6 @@ type ParsedProtocolPayload = Readonly<{
 	readonly action: ProtocolAction;
 	readonly data: Record<string, unknown>;
 }>;
-
-type ProtocolVersionParts = readonly [number, number, number];
-
-const PROTOCOL_VERSION_REGEX = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 export function validateBaseRequestShape(raw: unknown): Readonly<{ readonly transaction: Record<string, unknown> }> {
 	if (!isRecord(raw)) {
@@ -533,42 +531,6 @@ function validateProtocolVersion(value: unknown): string {
 	}
 
 	return value;
-}
-
-function parseProtocolVersion(version: string): ProtocolVersionParts | null {
-	const match = PROTOCOL_VERSION_REGEX.exec(version);
-	if (!match) return null;
-
-	const majorText = match[1];
-	const minorText = match[2];
-	const patchText = match[3];
-	if (!majorText || !minorText || !patchText) return null;
-
-	const major = Number(majorText);
-	const minor = Number(minorText);
-	const patch = Number(patchText);
-
-	return [major, minor, patch];
-}
-
-function compareVersions(a: string, b: string): number {
-	const partsA = parseProtocolVersion(a);
-	const partsB = parseProtocolVersion(b);
-	if (!partsA || !partsB) {
-		throw new Error(
-			`Invalid protocol version comparison: '${a}' vs '${b}'`,
-			{ cause: new Error(`One or both versions failed to parse`) },
-		);
-	}
-
-	for (let index = 0; index < 3; index++) {
-		const numberA = partsA[index] ?? 0;
-		const numberB = partsB[index] ?? 0;
-		if (numberA < numberB) return -1;
-		if (numberA > numberB) return 1;
-	}
-
-	return 0;
 }
 
 function toHiveTxOperations(tx: ValidatedTransaction): TransactionType["operations"] {

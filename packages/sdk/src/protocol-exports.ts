@@ -238,6 +238,18 @@ export const readDeclaredProvenance = protocol.readDeclaredProvenance;
 export const assertProvenanceTarget = protocol.assertProvenanceTarget;
 export const matchProvenance = protocol.matchProvenance;
 
+// Protocol-version helpers. The SDK uses these internally (createPayload
+// validates `options.version` via `assertAcceptedProtocolVersion`); they are
+// re-exported so app code can run the same checks before broadcasting a
+// hand-built payload or while filtering payloads read directly from L1.
+export const PROTOCOL_VERSION_REGEX = protocol.PROTOCOL_VERSION_REGEX;
+export const parseProtocolVersion = protocol.parseProtocolVersion;
+export const isValidProtocolVersion = protocol.isValidProtocolVersion;
+export const assertValidProtocolVersion = protocol.assertValidProtocolVersion;
+export const compareVersions = protocol.compareVersions;
+export const isAcceptedProtocolVersion = protocol.isAcceptedProtocolVersion;
+export const assertAcceptedProtocolVersion = protocol.assertAcceptedProtocolVersion;
+
 // ============================================================================
 // Type exports
 // ============================================================================

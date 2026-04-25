@@ -23,6 +23,7 @@ The implementation in this package is normative:
 | `src/username.ts` | Hive username validation |
 | `src/node-endpoint.ts` | Node endpoint URL validation and normalization |
 | `src/seed-provenance.ts` | Pure parser, target assert, and matcher for the optional `seedId`/`seedTxId` attestation |
+| `src/version.ts` | Strict semver regex, parser, comparator, and accept-rule helpers for `PROTOCOL_VERSION` / `MIN_PROTOCOL_VERSION` |
 
 Other repository docs should link here instead of maintaining a second protocol
 specification. If prose and code diverge, this package wins.

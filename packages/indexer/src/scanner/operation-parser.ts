@@ -3,7 +3,9 @@ import {
 	MIN_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	TX_ID_REGEX,
+	compareVersions,
 	isProtocolAction,
+	parseProtocolVersion,
 	type AuthLevel,
 	type ProtocolAction,
 } from "@/protocol/index.ts";
@@ -183,43 +185,9 @@ function prototypePollutionReviver(key: string, value: unknown): unknown {
 }
 
 // ─── Payload Validation ─────────────────────────────
-
-type ProtocolVersionParts = readonly [number, number, number];
-
-const PROTOCOL_VERSION_REGEX = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-
-function parseProtocolVersion(version: string): ProtocolVersionParts | null {
-	const match = PROTOCOL_VERSION_REGEX.exec(version);
-	if (!match) return null;
-
-	const major = Number(match[1]);
-	const minor = Number(match[2]);
-	const patch = Number(match[3]);
-	if (
-		!Number.isSafeInteger(major) ||
-		!Number.isSafeInteger(minor) ||
-		!Number.isSafeInteger(patch)
-	) {
-		return null;
-	}
-
-	return [major, minor, patch];
-}
-
-function compareVersions(a: string, b: string): number {
-	const partsA = parseProtocolVersion(a);
-	const partsB = parseProtocolVersion(b);
-	if (!partsA || !partsB) {
-		throw new Error(`Invalid protocol version comparison: '${a}' vs '${b}'`);
-	}
-	for (let i = 0; i < 3; i++) {
-		const numA = partsA[i] ?? 0;
-		const numB = partsB[i] ?? 0;
-		if (numA < numB) return -1;
-		if (numA > numB) return 1;
-	}
-	return 0;
-}
+//
+// Version semantics live in `@nftlox/protocol`'s `version` module —
+// `parseProtocolVersion` and `compareVersions` are imported above.
 
 function isValidPayload(payload: unknown): payload is {
 	protocol: string;

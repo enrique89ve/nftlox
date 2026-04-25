@@ -1,7 +1,14 @@
 // SPV "Boleto Suizo" - Lightweight Hive L1 Client
 // Uses HAFAH REST API with fetch (zero dependencies, browser-compatible)
 
-import { MIN_PROTOCOL_VERSION, isProtocolAction, computeDataHash, type ProtocolAction } from "@nftlox/protocol";
+import {
+	MIN_PROTOCOL_VERSION,
+	compareVersions,
+	computeDataHash,
+	isProtocolAction,
+	isValidProtocolVersion,
+	type ProtocolAction,
+} from "@nftlox/protocol";
 import { getProtocolId } from "../protocol-state";
 import {
 	DEFAULT_HIVE_ENDPOINTS,
@@ -52,22 +59,6 @@ function parseStringArray(value: unknown, fieldName: string): string[] {
 		throw new Error(`HAFAH response has invalid ${fieldName}`);
 	}
 	return [...value] as string[];
-}
-
-const VERSION_REGEX = /^\d+\.\d+\.\d+$/;
-
-function compareVersions(a: string, b: string): number {
-	const partsA = a.split(".").map(Number);
-	const partsB = b.split(".").map(Number);
-
-	for (let i = 0; i < 3; i++) {
-		const partA = partsA[i] ?? 0;
-		const partB = partsB[i] ?? 0;
-		if (partA < partB) return -1;
-		if (partA > partB) return 1;
-	}
-
-	return 0;
 }
 
 // ============ HAFAH REST API ============
@@ -332,7 +323,7 @@ function parseOperationPayload(
 	if (typeof parsed.version !== "string") {
 		throw new Error(`Operation ${operationId} payload missing version`);
 	}
-	if (!VERSION_REGEX.test(parsed.version)) {
+	if (!isValidProtocolVersion(parsed.version)) {
 		throw new Error(`Operation ${operationId} payload has invalid version format: ${parsed.version}`);
 	}
 	if (compareVersions(parsed.version, MIN_PROTOCOL_VERSION) < 0) {
