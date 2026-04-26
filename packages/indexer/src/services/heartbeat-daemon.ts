@@ -257,9 +257,12 @@ async function tickCheckpoint(): Promise<void> {
 	if (!pending) return;
 
 	await emitCheckpoint(pending);
-	// Persist FIRST so a process crash between in-memory advance and DB write
-	// does not re-broadcast on next start. The on-chain row already exists at
-	// this point; the DB write is the durable cursor.
+	// Broadcast FIRST so the chain is the durable cursor. A crash between
+	// broadcast and the local persist below means we re-broadcast on the next
+	// start; the duplicate is harmless — same blockNum + same stateRoot — and
+	// the daemon's cursor advances after re-emission so the system self-heals.
+	// The reverse order would risk silent loss: cursor advanced but broadcast
+	// failed → next start skips the missed checkpoint.
 	await persistEmittedCheckpoint(config.hiveAccount, pending.blockNum);
 	lastEmittedCheckpointBlock = pending.blockNum;
 }

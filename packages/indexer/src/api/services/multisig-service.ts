@@ -9,6 +9,7 @@
 import { createSigningQueue } from "@/api/services/signing-queue.ts";
 import { createMultisigCollectionLock } from "@/api/services/multisig-collection-lock.ts";
 import { processCollectionRequest } from "@/api/services/multisig/create-collection.ts";
+import { assertNodeNotDivergent } from "@/api/services/multisig/divergence-gate.ts";
 import { mapErrorToMultisigResponse } from "@/api/services/multisig/errors.ts";
 import {
 	detectMultisigAction,
@@ -41,6 +42,11 @@ export async function processMultisigRequest(
 	protocolId: string,
 ): Promise<MultisigResponse> {
 	try {
+		// F3.C — gate fires before parsing so a divergent node returns
+		// NODE_DIVERGENT even on garbage input, not a misleading parse error.
+		// processCollectionRequest re-asserts as defense-in-depth in case it's
+		// invoked outside this dispatcher.
+		await assertNodeNotDivergent(db);
 		const { transaction } = validateBaseRequestShape(rawBody);
 		const action = detectMultisigAction(transaction, protocolId);
 
