@@ -61,6 +61,7 @@ Then follow [Getting Started](getting-started.md) to make your first transaction
 | **Core Concepts** | |
 | [Collections](concepts/collections.md) | Create, extend schema, archive |
 | [Ownership Model](concepts/ownership.md) | Creator vs seed owner vs instance owner; provenance fields |
+| [Ecosystem Economy](concepts/economy.md) | Fees, royalties, payment split, deterministic fee schedule |
 | [Protocol Invariants](concepts/protocol-invariants.md) | Public reasoning model for authority, ownership, approvals, listings, and seeds |
 | [Key Security](concepts/security.md) | Active vs posting; account architectures for games |
 | **Guides** | |
