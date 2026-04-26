@@ -150,12 +150,12 @@ export async function getStateMeta(txn: Queryable = sql): Promise<StateMetaRow> 
 }
 
 // `divergent_at_block` is BIGINT NULL — pg driver may surface it as
-// number | bigint | string | null. Coerce to a finite positive number, or null
-// if the column is unset. Anything else is corrupt: fail loudly so the multisig
-// gate can never silently mistake a corrupt value for "clean".
+// number | bigint | string | null. Coerce to a finite positive integer, or
+// null if the column is unset. Anything else is corrupt: fail loudly so the
+// multisig gate can never silently mistake a corrupt value for "clean".
 function parseDivergentAtBlock(raw: unknown): number | null {
 	if (raw === null || raw === undefined) return null;
-	const n = typeof raw === "bigint" ? Number(raw) : Number(raw);
+	const n = Number(raw);
 	if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
 		throw new Error(`state_meta.divergent_at_block invalid: ${String(raw)}`);
 	}

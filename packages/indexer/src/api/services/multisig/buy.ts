@@ -1,6 +1,5 @@
 import { getNftForProcessing, getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED, NFT_STATUS_PENDING_SALE } from "@/db/queries/nfts.ts";
 import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
-import { getStateMeta } from "@/db/queries/state-root.ts";
 import { getChainTimeSnapshot, type ChainTimeSnapshot } from "@/db/queries/sync.ts";
 import {
 	ACTION_BUY_COMMITMENT,
@@ -16,6 +15,7 @@ import {
 import { computeExpectedTransferCount } from "@/utils/nft-rules.ts";
 import { requireSupportedCurrency, verifyTransfers } from "@/utils/validation.ts";
 import { createMultisigError, isMultisigError } from "@/api/services/multisig/errors.ts";
+import { assertNodeNotDivergent } from "@/api/services/multisig/divergence-gate.ts";
 import { requireMultisigChainReferenceTimeMs } from "@/api/services/multisig/chain-time.ts";
 import { signWithBeekeeper } from "@/api/services/beekeeper-signer.ts";
 import { createLogger } from "@/utils/logger.ts";
@@ -81,19 +81,7 @@ async function executeBuyRequest(
 	rawBody: unknown,
 	ctx: MultisigBuyContext,
 ): Promise<BuyMultisigResponse> {
-	// F3.C — Refuse to sign while this node has been observed diverging from
-	// peers. This MUST fire before any other validation so a divergent node
-	// never co-signs even a malformed request: the safety story is "if our
-	// local state is suspect, we don't put our name on anything new". Operator
-	// clears the flag manually after audit (UPDATE state_meta SET
-	// divergent_at_block = NULL WHERE id = 1).
-	const meta = await getStateMeta(ctx.db);
-	if (meta.divergent_at_block !== null) {
-		throw createMultisigError(
-			"NODE_DIVERGENT",
-			`Settlement node refused to sign: state-root divergence detected at block ${meta.divergent_at_block}; operator review required`,
-		);
-	}
+	await assertNodeNotDivergent(ctx.db);
 
 	const syncSnapshot = await readSyncState(ctx);
 	assertSyncHealthy(syncSnapshot);
