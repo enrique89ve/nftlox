@@ -1,12 +1,24 @@
 # NFTLox Protocol
 
-**Polymorphic ownership infrastructure on Hive L1.** Build games, marketplaces, and digital-asset products with on-chain NFTs that have functional DNA — no smart contracts, no gas fees, no oracles.
+**Self-custodial digital property infrastructure on Hive L1.** Build games, marketplaces, and digital-asset products with on-chain NFTs that have functional DNA — no smart contracts, no gas fees, no oracles.
+
+## The thesis: autonomy of digital property
+
+NFTLox is built around one premise: **a digital asset that you cannot independently re-derive, transfer, and verify is not yours**. Most NFT stacks fall short of that bar. They depend on a contract that can be paused, an RPC the issuer controls, a centralized indexer whose database *is* the asset, or a marketplace contract that custodies the listing while it advertises one.
+
+The protocol takes the opposite stance:
+
+- **Your keys, your asset — always.** Every state transition is a `custom_json` you sign with your own Hive key. No protocol contract holds your NFT in escrow. Listings, lending, and approvals are scoped *rights*, never custody transfers.
+- **The chain is the source of truth, the indexer is just a projection.** Anyone can run an indexer from Hive L1 and re-derive the entire state. The public indexer is a convenience, not an authority — every endpoint that accepts a write co-signs from the same deterministic rules anyone else's indexer would apply.
+- **Verification is a single-byte comparison.** A protocol-wide `state_root` and on-chain `node_state_checkpoint`s let any third party detect a divergent or compromised indexer in O(1). Settlement nodes that diverge from peers refuse to co-sign. SPV verifiers (`verifyNftOwnership`, `verifyListingPrice`) bypass the indexer entirely and resolve against Hive L1 + HafAH.
+- **The marketplace cannot eat your sale.** `buy` is an atomic Hive transaction the buyer signs in full; the node only adds a co-signature after broadcasting an on-chain `buy_commitment` that pins the sale. There is no escrow contract that could be drained, frozen, or upgraded.
+- **Economic rules are deterministic and protocol-coded.** Fees are constants in source, not parameters in a database. The schedule cannot drift between nodes; changing it is a hardfork. See [Ecosystem Economy](concepts/economy.md).
+
+If you are building a **game** with collectible cards, items, or characters, NFTLox gives you typed schemas, seed/instance distribution, mutable data fields a game server can update in real time, non-custodial lending, and a protected marketplace — all anchored to L1, all owned by your players.
 
 ## Why NFTLox
 
 Traditional NFT protocols force you into rigid smart-contract environments. NFTLox takes a different approach: every action is a deterministic `custom_json` operation on Hive L1, and the protocol's state is reconstructed by a public indexer. No execution fees, no gas, 3-second finality, and the full audit trail lives on Hive itself.
-
-If you are building a **game** with collectible cards, items, or characters, NFTLox gives you typed schemas, seed/instance distribution, mutable data fields a game server can update in real time, non-custodial lending, and a protected marketplace — all anchored to L1.
 
 ## Features
 

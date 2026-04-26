@@ -56,6 +56,7 @@ The `MultisigErrorCode` type (defined in `packages/protocol/src/types.ts`) repre
 |------|-------------|-------------|
 | `RATE_LIMITED` | 429 | Too many requests from this buyer or IP within the rate-limit window. Back off `retryAfterMs`. |
 | `MULTISIG_DISABLED` | 503 | The node has no `ACTIVE_KEY` configured, or is in clock-drift safeguard. Use a different indexer. |
+| `NODE_DIVERGENT` | 503 | This node's local state-root disagrees with at least one peer's `node_state_checkpoint` for the same boundary. The divergence gate refuses to co-sign anything (buy or collection) until an operator clears `state_meta.divergent_at_block` after audit. Route to a different indexer; this is **not** a transient retry — it requires manual remediation on the failing node. |
 
 ### Node-last settlement (buy orchestration)
 

@@ -77,6 +77,54 @@ Health check endpoint. Returns `200` if the indexer is healthy, `503` if unhealt
 
 ---
 
+### GET /api/state-root
+
+Public commitment to this indexer's projected NFT-ownership state. Two indexers on the same Hive block stream MUST converge on the same value — divergence is a single byte comparison.
+
+**Parameters:** none
+
+**Response:**
+
+```json
+{
+	"state_root": "sha256:b7c3…",
+	"nft_count": 12483,
+	"last_block_num": 98765432,
+	"updated_at": "2026-04-25T12:00:00.000Z"
+}
+```
+
+The hash is the incremental XOR over a fixed subset of per-NFT SPV fields (`owner`, `previous_owner`, `owner_action`, `owner_operation_id`, `owner_block_num`, `id`). Endpoint is O(1) — it reads the singleton `state_meta` row, no recomputation. The same value is what registered nodes publish on chain via `node_state_checkpoint` at every `STATE_CHECKPOINT_INTERVAL_BLOCKS` boundary; clients can cross-check this endpoint against on-chain checkpoints from independent nodes.
+
+```bash
+curl https://api-nftlox.hivecreators.co/api/state-root
+```
+
+---
+
+### GET /api/nodes/:account
+
+Profile for one settlement node: registry metadata, last heartbeat, and current settlement liveness (active vs stale per `MAX_NODE_HEARTBEAT_STALENESS_BLOCKS`).
+
+```bash
+curl https://api-nftlox.hivecreators.co/api/nodes/nftlox
+```
+
+Returns `404` if the account is not a registered node.
+
+---
+
+### GET /api/nodes/:account/operations
+
+Indexed protocol operations (confirmed and invalid) signed by this node account, ordered newest-first. Useful for auditing a node's heartbeat / checkpoint cadence.
+
+| Query | Default | Range |
+|---|---|---|
+| `limit` | `50` | `1–200` |
+| `offset` | `0` | `≥ 0` |
+
+---
+
 ### GET /api/stats
 
 Aggregate protocol statistics.
@@ -790,7 +838,7 @@ Submit a buyer-signed `buy` transaction for **node-last** settlement. The node v
 
 `txId` is the Hive `tx_id` of the fully settled buy transaction (already on chain). `commitmentOpTxId` is the `tx_id` of the `buy_commitment` custom_json the node used to reserve the NFT — keep it for auditing cross-node race outcomes.
 
-**Error codes:** See [errors.md](errors.md) for the full `MultisigErrorCode` surface. Notable codes specific to the node-last flow: `BUYER_SIGNATURE_MISSING`, `CROSS_NODE_RESERVATION`, `COMMITMENT_BROADCAST_FAILED`, `COMMITMENT_INCLUSION_TIMEOUT`, `BUY_BROADCAST_FAILED`, `NODE_NOT_ACTIVE`, `INDEXER_LAGGED`.
+**Error codes:** See [errors.md](errors.md) for the full `MultisigErrorCode` surface. Notable codes specific to the node-last flow: `BUYER_SIGNATURE_MISSING`, `CROSS_NODE_RESERVATION`, `COMMITMENT_BROADCAST_FAILED`, `COMMITMENT_INCLUSION_TIMEOUT`, `BUY_BROADCAST_FAILED`, `NODE_NOT_ACTIVE`, `INDEXER_LAGGED`, `NODE_DIVERGENT` (HTTP 503 — this node detected a state-root mismatch with peers and is refusing to co-sign until an operator clears the flag; route to a different indexer).
 
 SDK helper: `requestBuyMultisig(baseUrl, { transaction })` or `client.requestBuyMultisig(...)`. PoW-gated — the SDK solves the token automatically.
 

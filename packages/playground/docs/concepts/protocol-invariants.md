@@ -121,6 +121,24 @@ Games should prefer `data_operator_approve` when the server only needs to update
 
 ---
 
+## Network State & Determinism
+
+Independent indexers must converge on the same projected state for the same Hive block stream. The protocol exposes that convergence as a public, byte-comparable commitment so divergence is detectable by anyone — including the buyer about to settle a `buy`.
+
+| Invariant | Rule |
+|---|---|
+| N1 | The projected `state_root` is the incremental XOR over a fixed subset of every NFT's SPV fields (`owner`, `previous_owner`, `owner_action`, `owner_operation_id`, `owner_block_num`, `id`). The subset is consensus — adding or removing a field is a hardfork. |
+| N2 | The state-root is updated inside the same transaction as the NFT mutation that changes it. Drift between the projection and its commitment is impossible by construction. |
+| N3 | At every `STATE_CHECKPOINT_INTERVAL_BLOCKS` boundary (1000 blocks ≈ 50 min), a registered node MAY publish a `node_state_checkpoint` custom_json carrying `{ blockNum, stateRoot }`. The handler enforces alignment (`blockNum % N === 0`) so peers compare the same boundaries. |
+| N4 | A node whose local checkpoint disagrees with at least one peer's `node_state_checkpoint` for the same boundary records `state_meta.divergent_at_block` and stops co-signing multisig requests until an operator clears the flag manually after audit. |
+| N5 | Nodes also publish `node_heartbeat` at most every `MIN_HEARTBEAT_INTERVAL_BLOCKS` (5000 blocks). A node with no heartbeat in `MAX_NODE_HEARTBEAT_STALENESS_BLOCKS` (10000 blocks) is treated as inactive and its signatures stop settling globally — the same accept/reject decision on every indexer because the threshold is block-denominated, not wall-clock. |
+
+### Why this matters for the autonomy thesis
+
+A divergent indexer is exactly the failure mode that turns a "decentralized" NFT into a centralized one. N3+N4 reduce that risk to a single-byte comparison anyone can run, and the divergence gate ensures a suspect node refuses to put its signature on new transactions while it is suspect. Multisig endpoints (`/api/multisig/buy`, `/api/multisig/collection`) call `assertNodeNotDivergent` **before** any other validation, so a divergent node returns `NODE_DIVERGENT` (HTTP 503) even on garbage input.
+
+---
+
 ## Review Checklist
 
 Before adding or changing a handler, verify:

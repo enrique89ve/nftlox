@@ -185,6 +185,7 @@ In a browser UI, swap the local active-key sign step for Hive Keychain's `reques
 | `NODE_NOT_ACTIVE` | Node missed too many heartbeats and no longer serves settlement. Use a different indexer. |
 | `SIGNING_QUEUE_FULL` / `SIGNING_TIMEOUT` | Beekeeper queue saturated or timed out. Transient. |
 | `MULTISIG_DISABLED` | Node has no `ACTIVE_KEY` configured or is in clock-drift safeguard. Use a different indexer. |
+| `NODE_DIVERGENT` | This node's state-root disagrees with peers' on-chain `node_state_checkpoint`. The divergence gate refuses to co-sign anything until an operator clears the flag manually. **Not transient** — switch to a different indexer. |
 | `POW_REQUIRED` / `INVALID_POW` / `POW_EXPIRED` / `POW_REPLAYED` | PoW token missing, invalid, stale, or reused. SDK handles this automatically. |
 
 The node's checklist before broadcasting its commitment:
