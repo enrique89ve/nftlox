@@ -3,7 +3,7 @@ dist/
 *.log
 .env
 docs_ref/
-docs
+/docs/
 
 OPERATIONS.md
 .claude/settings.json
