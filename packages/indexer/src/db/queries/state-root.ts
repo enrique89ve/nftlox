@@ -29,6 +29,10 @@ export type StateMetaRow = Readonly<{
 	nft_count: number;
 	last_block_num: number;
 	updated_at: string;
+	// F3.B/F3.C — non-null means divergence with another node was detected at
+	// the given block. Multisig signing endpoints must refuse to operate while
+	// this is set (see api/services/multisig/buy.ts and create-collection.ts).
+	divergent_at_block: number | null;
 }>;
 
 function describeValue(v: unknown): string {
@@ -119,7 +123,7 @@ function assertRootBytes(buffer: Uint8Array): void {
 
 export async function getStateMeta(txn: Queryable = sql): Promise<StateMetaRow> {
 	const [row] = await txn`
-		SELECT state_root, nft_count, last_block_num, updated_at
+		SELECT state_root, nft_count, last_block_num, updated_at, divergent_at_block
 		FROM state_meta
 		WHERE id = ${STATE_META_ID}
 	`;
@@ -141,7 +145,21 @@ export async function getStateMeta(txn: Queryable = sql): Promise<StateMetaRow> 
 		nft_count: nftCount,
 		last_block_num: lastBlockNum,
 		updated_at: String(row.updated_at),
+		divergent_at_block: parseDivergentAtBlock(row.divergent_at_block),
 	};
+}
+
+// `divergent_at_block` is BIGINT NULL — pg driver may surface it as
+// number | bigint | string | null. Coerce to a finite positive number, or null
+// if the column is unset. Anything else is corrupt: fail loudly so the multisig
+// gate can never silently mistake a corrupt value for "clean".
+function parseDivergentAtBlock(raw: unknown): number | null {
+	if (raw === null || raw === undefined) return null;
+	const n = typeof raw === "bigint" ? Number(raw) : Number(raw);
+	if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
+		throw new Error(`state_meta.divergent_at_block invalid: ${String(raw)}`);
+	}
+	return n;
 }
 
 // One-time bootstrap: rebuild the root from a full scan over the current
@@ -194,6 +212,11 @@ export async function bootstrapStateRootFromFullScan(
 		nft_count: count,
 		last_block_num: maxBlock,
 		updated_at: new Date().toISOString(),
+		// Bootstrap rebuilds the canonical root from full scan — the divergence
+		// flag is independent state owned by the heartbeat daemon, so we
+		// surface whatever the operator left in the column (typically NULL on a
+		// fresh genesis replay).
+		divergent_at_block: null,
 	};
 }
 

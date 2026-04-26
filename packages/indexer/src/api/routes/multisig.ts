@@ -96,6 +96,9 @@ const BUY_MULTISIG_STATUS: Record<MultisigErrorCode, number> = {
 	// upstream / temporal unavailability
 	NODE_NOT_ACTIVE: 503,
 	INDEXER_LAGGED: 503,
+	// F3.C — node refuses to sign while a state-root divergence with peers is
+	// outstanding; clears manually after operator audit.
+	NODE_DIVERGENT: 503,
 	COMMITMENT_INCLUSION_TIMEOUT: 503,
 	COMMITMENT_BROADCAST_FAILED: 503,
 	BUY_BROADCAST_FAILED: 503,

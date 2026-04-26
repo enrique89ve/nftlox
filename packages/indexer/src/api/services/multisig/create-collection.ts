@@ -1,4 +1,5 @@
 import { symbolTakenByCreator } from "@/db/queries/collections.ts";
+import { getStateMeta } from "@/db/queries/state-root.ts";
 import { createMultisigError } from "@/api/services/multisig/errors.ts";
 import { readRequiredMultisigChainReferenceTimeMs } from "@/api/services/multisig/chain-time.ts";
 import {
@@ -45,6 +46,20 @@ export async function processCollectionRequest(
 	rawBody: unknown,
 	ctx: MultisigCollectionContext,
 ) {
+	// F3.C — Refuse to sign while this node has been observed diverging from
+	// peers. This MUST fire before any other validation so a divergent node
+	// never co-signs even a malformed request: the safety story is "if our
+	// local state is suspect, we don't put our name on anything new". Operator
+	// clears the flag manually after audit (UPDATE state_meta SET
+	// divergent_at_block = NULL WHERE id = 1).
+	const meta = await getStateMeta(ctx.db);
+	if (meta.divergent_at_block !== null) {
+		throw createMultisigError(
+			"NODE_DIVERGENT",
+			`Settlement node refused to sign: state-root divergence detected at block ${meta.divergent_at_block}; operator review required`,
+		);
+	}
+
 	const requestShape = validateCollectionRequestShape(rawBody);
 	const transaction = await validateCollectionTransactionStructure(
 		requestShape.transaction,
