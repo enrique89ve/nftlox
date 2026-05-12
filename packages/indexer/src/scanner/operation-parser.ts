@@ -243,6 +243,13 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 	const rejected: RejectedOperation[] = [];
 
 	for (const hafOp of hafOps) {
+		// The HafAH client blind-casts its JSON response to HafAHOperation[];
+		// a compromised endpoint could ship primitives of the wrong shape.
+		// Drop ops whose block isn't a non-negative integer before any code
+		// that copies the value into ParsedOperation, the genesis gate
+		// (NaN coerces to `false` on `<`), or rejected[] forensics.
+		if (!Number.isInteger(hafOp.block) || hafOp.block < 0) continue;
+
 		const rawValue: unknown = hafOp.op.value;
 		if (!isCustomJsonValue(rawValue)) {
 			const rawId = isNonNullObject(rawValue) ? rawValue.id : null;
