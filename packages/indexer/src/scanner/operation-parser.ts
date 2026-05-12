@@ -10,6 +10,7 @@ import {
 	type ProtocolAction,
 } from "@/protocol/index.ts";
 import { createLogger } from "@/utils/logger.ts";
+import { prototypePollutionReviver } from "@/utils/json-safety.ts";
 import type { HafAHOperation, TransferDetail } from "./hive-client.ts";
 import type { PaymentMatch } from "@/processor/payment.ts";
 
@@ -164,24 +165,6 @@ function isValidOperationId(opId: unknown): boolean {
 	if (typeof opId === "number") return Number.isInteger(opId) && opId >= 0;
 	if (typeof opId === "string") return /^\d+$/.test(opId);
 	return false;
-}
-
-// ─── Prototype Pollution Guard ──────────────────────
-
-/**
- * `JSON.parse` reviver that drops `__proto__` and `constructor` keys so
- * user-supplied blockchain payloads cannot poison objects downstream.
- *
- * Without this, a payload like `{"data": {"__proto__": {"admin": true}}}`
- * creates the key as an own property today, but any code that later spreads
- * or merges that object with `Object.assign`, structured clone through
- * prototype-aware libraries, or `for..in` loops without `hasOwnProperty`
- * guards can escalate it into actual prototype pollution. Strip at the
- * earliest boundary instead of auditing every consumer.
- */
-function prototypePollutionReviver(key: string, value: unknown): unknown {
-	if (key === "__proto__" || key === "constructor") return undefined;
-	return value;
 }
 
 // ─── Payload Validation ─────────────────────────────

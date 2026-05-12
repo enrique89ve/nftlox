@@ -1,6 +1,7 @@
 import { Transaction, type CustomJsonOperation, type TransactionType, type TransferOperation } from "hive-tx";
 import { signWithBeekeeper } from "@/api/services/beekeeper-signer.ts";
 import { createMultisigError } from "@/api/services/multisig/errors.ts";
+import { prototypePollutionReviver } from "@/utils/json-safety.ts";
 import {
 	ACTION_BUY,
 	ACTION_CREATE_COLLECTION,
@@ -484,7 +485,7 @@ function validateCustomJsonString(value: unknown): string {
 function parseProtocolPayload(json: string, protocolId: string): ParsedProtocolPayload {
 	let parsed: unknown;
 	try {
-		parsed = JSON.parse(json);
+		parsed = JSON.parse(json, prototypePollutionReviver);
 	} catch (cause) {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "custom_json.json is not valid JSON", { cause });
 	}
