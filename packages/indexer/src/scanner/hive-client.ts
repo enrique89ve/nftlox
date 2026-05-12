@@ -542,7 +542,7 @@ export interface TransferDetail {
  * Used both for transfer amounts inside operations and for account balance
  * fields returned by `condenser_api.get_accounts`.
  */
-function parseHiveAsset(raw: unknown): { amount: number; currency: string } | null {
+export function parseHiveAsset(raw: unknown): { amount: number; currency: string } | null {
 	if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
 		const nai = raw as { amount?: string; precision?: number; nai?: string };
 		if (typeof nai.amount === "string" && typeof nai.precision === "number" && typeof nai.nai === "string") {
@@ -553,7 +553,10 @@ function parseHiveAsset(raw: unknown): { amount: number; currency: string } | nu
 	}
 	if (typeof raw === "string") {
 		const parts = raw.split(" ");
-		if (parts.length === 2 && parts[0] && parts[1]) {
+		// Hive consensus emits HIVE/HBD assets with exactly 3 decimals.
+		// Rejecting non-canonical formats blocks malformed RPC payloads
+		// before they reach fee-validator's epsilon comparison.
+		if (parts.length === 2 && parts[0] && parts[1] && /^\d+\.\d{3}$/.test(parts[0])) {
 			const amount = parseFloat(parts[0]);
 			if (Number.isNaN(amount)) return null;
 			return { amount, currency: parts[1] };
