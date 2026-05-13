@@ -27,9 +27,10 @@ export {
 export {
 	HiveRpcError,
 	createDefaultL1Config,
-	fetchTransaction,
-	fetchOperationById,
-	fetchOperationId,
+		fetchTransaction,
+		fetchOperationById,
+		fetchCustomJsonOperationsInRange,
+		fetchOperationId,
 	fetchOperationIds,
 	fetchFromHiveRpc,
 	parseNftloxOperation,

@@ -25,6 +25,8 @@ import type {
 	ResolvedMutableData,
 } from "./types";
 
+const CUSTOM_JSON_OP_TYPE = 18;
+
 // ============ ERRORS ============
 
 export class HiveRpcError extends Error {
@@ -148,6 +150,124 @@ export async function fetchOperationById(
 
 	throw new HiveRpcError(
 		`All endpoints failed for operation ${operationId}: ${details}`,
+		config.endpoints[0] ?? "unknown",
+	);
+}
+
+export async function fetchCustomJsonOperationsInRange(
+	config: HiveL1Config,
+	fromBlock: number,
+	toBlock: number,
+): Promise<HafahOperationRecord[]> {
+	if (!Number.isInteger(fromBlock) || !Number.isInteger(toBlock) || fromBlock < 0 || toBlock < fromBlock) {
+		throw new Error(`Invalid operation range: ${fromBlock}-${toBlock}`);
+	}
+
+	const errors: Array<{ endpoint: string; error: unknown }> = [];
+	// Track whether at least one endpoint successfully returned the empty set.
+	// A single endpoint serving `{ ops: [] }` is indistinguishable from a
+	// censoring proxy and from a legitimate empty range; only when EVERY
+	// reachable endpoint agrees on emptiness do we treat the range as empty.
+	// Otherwise a single hostile mirror could grief SPV by hiding the buy's
+	// matching commitment (see verifiers.ts::assertMatchingBuyCommitment).
+	let anyEndpointConfirmedEmpty = false;
+
+	for (const endpoint of config.endpoints) {
+		try {
+			const records: HafahOperationRecord[] = [];
+			let operationBegin = "-1";
+			let pages = 0;
+			const maxPages = 100;
+
+			while (pages < maxPages) {
+				const controller = new AbortController();
+				const timeoutId = setTimeout(
+					() => controller.abort(),
+					config.timeoutMs,
+				);
+				try {
+					const url = `${endpoint}/hafah-api/operations?from-block=${fromBlock}&to-block=${toBlock + 1}&operation-types=${CUSTOM_JSON_OP_TYPE}&page-size=1000&operation-begin=${operationBegin}`;
+					const response = await fetch(url, {
+						signal: controller.signal,
+						headers: { "Accept": "application/json" },
+					});
+
+					if (!response.ok) {
+						throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+					}
+
+					const raw = await response.json() as unknown;
+					if (!isRecord(raw)) {
+						throw new Error("HAFAH operations response must be an object");
+					}
+					const rawOps = Array.isArray(raw.ops) ? raw.ops : [];
+					for (const rawOp of rawOps) {
+						if (!isRecord(rawOp)) continue;
+						try {
+							const operation = normalizeHafahOperation(rawOp);
+							if (operation.op.type === "custom_json_operation") records.push(operation);
+						} catch {
+							continue;
+						}
+					}
+
+					pages++;
+					const nextOperationBegin =
+						typeof raw.next_operation_begin === "string" ? raw.next_operation_begin : null;
+					if (
+						nextOperationBegin === null ||
+						nextOperationBegin === "0" ||
+						nextOperationBegin === operationBegin
+					) {
+						break;
+					}
+					operationBegin = nextOperationBegin;
+				} finally {
+					clearTimeout(timeoutId);
+				}
+			}
+			if (pages >= maxPages) {
+				throw new Error(
+					`HAFAH pagination overflow for operations range ${fromBlock}-${toBlock}`,
+				);
+			}
+
+			// First endpoint with records wins — downstream verifiers re-derive
+			// every observable field cryptographically (`generateListingId`,
+			// `generateDeterministicCollectionId`, commitment payload match), so
+			// a hostile endpoint cannot inject a passing record. The only
+			// remaining risk is silent suppression, handled by the
+			// all-endpoints-must-agree rule below.
+			if (records.length > 0) return records;
+			anyEndpointConfirmedEmpty = true;
+		} catch (err) {
+			errors.push({ endpoint, error: err });
+		}
+	}
+
+	if (anyEndpointConfirmedEmpty && errors.length === 0) {
+		return [];
+	}
+	if (anyEndpointConfirmedEmpty && errors.length > 0) {
+		// Mixed success-empty + transport-error means we cannot distinguish
+		// "range is truly empty" from "live endpoint had a hiccup and the only
+		// reachable mirror suppressed records". Bubble up the errors so the
+		// caller treats this as inconclusive rather than confirming emptiness.
+		const details = errors
+			.map((e) => `${e.endpoint}: ${e.error instanceof Error ? e.error.message : String(e.error)}`)
+			.join("; ");
+		throw new HiveRpcError(
+			`Inconclusive operations range ${fromBlock}-${toBlock}: ${errors.length} endpoint(s) failed while ${config.endpoints.length - errors.length} reported empty: ${details}`,
+			config.endpoints[0] ?? "unknown",
+		);
+	}
+
+	const details = errors
+		.map((e) => `${e.endpoint}: ${e.error instanceof Error ? e.error.message : String(e.error)}`)
+		.join("; ");
+
+	throw new HiveRpcError(
+		`All endpoints failed for operations range ${fromBlock}-${toBlock}: ${details}`,
 		config.endpoints[0] ?? "unknown",
 	);
 }
@@ -348,8 +468,6 @@ function parseOperationPayload(
 
 // ============ OPERATION ID FETCHER ============
 
-const CUSTOM_JSON_OP_TYPE = 18;
-
 /**
  * Fetches ALL HafAH operation_ids for NFTLox custom_json ops in a given tx.
  * Returns them in the same order they appear on-chain, so they can be matched
@@ -361,41 +479,13 @@ export async function fetchOperationIds(
 	blockNum: number,
 ): Promise<string[]> {
 	const protocolId = getProtocolId();
-	const errors: Array<{ endpoint: string; error: unknown }> = [];
-
-	for (const endpoint of config.endpoints) {
-		try {
-			const controller = new AbortController();
-			const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
-			const url = `${endpoint}/hafah-api/operations?from-block=${blockNum}&to-block=${blockNum + 1}&operation-types=${CUSTOM_JSON_OP_TYPE}&page-size=1000&operation-begin=-1`;
-			const response = await fetch(url, { signal: controller.signal });
-			clearTimeout(timeoutId);
-
-			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-			const data = await response.json() as Record<string, unknown>;
-			const ops = Array.isArray(data.ops) ? data.ops : [];
-
-			const ids: string[] = [];
-			for (const op of ops) {
-				const entry = op as Record<string, unknown>;
-				if (entry.trx_id !== txId) continue;
-				const opValue = (entry.op as Record<string, unknown>)?.value as Record<string, unknown> | undefined;
-				if (opValue?.id !== protocolId) continue;
-				if (typeof entry.operation_id === "string") ids.push(entry.operation_id);
-				else if (typeof entry.operation_id === "number") ids.push(String(entry.operation_id));
-			}
-
-			// Data result — don't retry on other endpoints (same blockchain data)
-			return ids;
-		} catch (err) {
-			errors.push({ endpoint, error: err });
-		}
-	}
-
-	const details = errors
-		.map((e) => `${e.endpoint}: ${e.error instanceof Error ? e.error.message : String(e.error)}`)
-		.join("; ");
-	throw new HiveRpcError(`All endpoints failed for operationIds: ${details}`, config.endpoints[0] ?? "unknown");
+	const operations = await fetchCustomJsonOperationsInRange(config, blockNum, blockNum);
+	return operations
+		.filter((operation) =>
+			operation.trx_id === txId &&
+			operation.op.value.id === protocolId
+		)
+		.map((operation) => operation.operation_id);
 }
 
 /** Backward-compatible: returns the first operation_id. */

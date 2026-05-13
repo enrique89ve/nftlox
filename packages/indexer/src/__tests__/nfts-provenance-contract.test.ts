@@ -11,6 +11,8 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 //   - owner_action       : which protocol action last changed ownership
 //   - owner_operation_id : HafAH operation id of that action
 //   - owner_block_num    : block in which the action landed
+//   - collection_id + collection_created_{block_num,tx_id}: collection anchor
+//     used by SPV buy verification to resolve create_collection rules on L1
 //
 // With those five fields the client can pick any HafAH lookup path
 // (`/operations/{id}`, `/accounts/:acc/operations`, `get_ops_in_block`, ...)
@@ -61,6 +63,9 @@ function makeOwnershipProof(id: string): Record<string, unknown> {
 		seed_id: "seed_1",
 		instance_number: 1,
 		nft_dna: "0x" + "b".repeat(40),
+		collection_id: "col_1",
+		collection_created_block_num: 105_530_400,
+		collection_created_tx_id: "0".repeat(40),
 	};
 }
 
@@ -99,6 +104,15 @@ function hasProvenance(value: unknown): boolean {
 		&& typeof value.owner_action === "string"
 		&& typeof value.owner_operation_id === "string"
 		&& typeof value.owner_block_num === "number"
+	);
+}
+
+function hasCollectionAnchor(value: unknown): boolean {
+	if (!isObject(value)) return false;
+	return (
+		typeof value.collection_id === "string"
+		&& typeof value.collection_created_block_num === "number"
+		&& typeof value.collection_created_tx_id === "string"
 	);
 }
 
@@ -195,5 +209,12 @@ describe("SPV provenance contract across NFT reads", () => {
 			const { [field]: _removed, ...rest } = complete as Record<string, unknown>;
 			expect(hasProvenance(rest)).toBe(false);
 		}
+	});
+
+	test("ownership proof exposes the collection L1 anchor used by SPV buy checks", async () => {
+		const response = await app.handle(new Request("http://localhost/api/nfts/nft_1/proof"));
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as unknown;
+		expect(hasCollectionAnchor(body)).toBe(true);
 	});
 });

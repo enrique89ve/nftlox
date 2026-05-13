@@ -33,6 +33,9 @@ type NftOwnershipProofRow = NftOwnerClaimRow & Readonly<{
 	readonly seed_id: string | null;
 	readonly instance_number: number | null;
 	readonly nft_dna: string | null;
+	readonly collection_id: string;
+	readonly collection_created_block_num: NumericRowValue;
+	readonly collection_created_tx_id: string;
 }>;
 
 function toSafeInteger(value: NumericRowValue, fieldName: string): number {
@@ -170,8 +173,12 @@ export async function getNftOwnershipProof(id: string): Promise<NftOwnershipProo
 			n.nft_type,
 			n.seed_id,
 			n.instance_number,
-			n.nft_dna
+			n.nft_dna,
+			n.collection_id,
+			c.block_num AS collection_created_block_num,
+			c.tx_id AS collection_created_tx_id
 		FROM nfts n
+		JOIN collections c ON c.id = n.collection_id
 		WHERE n.id = ${id}
 	`;
 	if (!row) return null;
@@ -186,6 +193,9 @@ export async function getNftOwnershipProof(id: string): Promise<NftOwnershipProo
 		seed_id: row.seed_id,
 		instance_number: row.instance_number,
 		nft_dna: row.nft_dna,
+		collection_id: row.collection_id,
+		collection_created_block_num: toSafeInteger(row.collection_created_block_num, "collection_created_block_num"),
+		collection_created_tx_id: row.collection_created_tx_id,
 	};
 }
 
