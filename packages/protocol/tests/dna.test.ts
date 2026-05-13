@@ -7,6 +7,7 @@ import {
 	generateDeterministicInstanceId,
 	generateImageHash,
 	generateListingId,
+	isCollectionId,
 	isSeedId,
 	isInstanceId,
 	isListingId,
@@ -94,6 +95,20 @@ describe("DNA generation", () => {
 		expect(isSymbol("")).toBe(false);
 		expect(isSymbol("AB-CD")).toBe(false);
 		expect(isSymbol("AB CD")).toBe(false);
+	});
+
+	test("isCollectionId guard", async () => {
+		const collectionId = await generateDeterministicCollectionId("alice", "Test", "TST");
+		expect(isCollectionId(collectionId)).toBe(true);
+		// Rejects: wrong prefix, uppercase hex (emitter is lowercase), wrong
+		// length on either side, missing prefix, empty, non-hex chars.
+		expect(isCollectionId("coll_c68ff3c9d182617bf2d0")).toBe(false);
+		expect(isCollectionId(`col_${"A".repeat(20)}`)).toBe(false);
+		expect(isCollectionId(`col_${"a".repeat(19)}`)).toBe(false);
+		expect(isCollectionId(`col_${"a".repeat(21)}`)).toBe(false);
+		expect(isCollectionId("c68ff3c9d182617bf2d0")).toBe(false);
+		expect(isCollectionId("")).toBe(false);
+		expect(isCollectionId(`col_${"g".repeat(20)}`)).toBe(false);
 	});
 
 	test("isHiveTxId guard", () => {

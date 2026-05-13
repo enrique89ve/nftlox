@@ -328,8 +328,11 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects non-canonical collectionId", async () => {
+			// Shape-valid (passes `isCollectionId`) but not the canonical hash for
+			// (creator, name, symbol). Lets the canonical-equality check be the
+			// gate under test rather than the upstream shape gate.
 			const op = await makeCreateCollectionOp({
-				id: "col_fake_id_12345",
+				id: `col_${"a".repeat(20)}`,
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: 100,

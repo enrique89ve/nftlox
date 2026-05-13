@@ -23,7 +23,6 @@ import { optionalCollectionSchema } from "@/utils/validation.ts";
 import {
 	INSTANCE_FEE_PER_N,
 	MAX_DESCRIPTION_LENGTH,
-	MAX_ID_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
 	MAX_INSTANCES_PER_COLLECTION,
 	MAX_NAME_LENGTH,
@@ -33,6 +32,7 @@ import {
 	PROTOCOL_COLLECTION_FEE_HBD,
 	generateDeterministicCollectionId,
 	generateOriginDna,
+	isCollectionId,
 	isSymbol,
 	validateHiveUsername,
 	validateSchemaDefinition,
@@ -208,7 +208,11 @@ async function validateCollectionPayloadData(
 	ctx: MultisigCollectionContext,
 ): Promise<void> {
 	const data = payload.data;
-	const id = validateNonEmptyBoundedPayloadString(data.id, "id", MAX_ID_LENGTH);
+	// `isCollectionId` is the same protocol guard `requireShapedString` consumes
+	// on the handler side, so the multisig rejects malformed ids byte-for-byte
+	// matching the chain handler (parity invariant). Shape gate fails fast
+	// before the async canonical-id hash work.
+	const id = validateShapedPayloadString(data.id, "id", isCollectionId, "col_<20 hex>");
 	const name = validateNonEmptyBoundedPayloadString(data.name, "name", MAX_NAME_LENGTH);
 	const symbol = validateCollectionSymbol(data.symbol);
 

@@ -169,6 +169,18 @@ export function isSymbol(value: string): boolean {
 	return SYMBOL_REGEX.test(value);
 }
 
+// Collection-id shape — COLLECTION_ID_PREFIX followed by COLLECTION_ID_HASH_LENGTH
+// lowercase hex chars. Derived from the emitter in
+// `generateDeterministicCollectionId` so the regex and the producer share the
+// same constants; a hardfork on either flips one source.
+const COLLECTION_ID_PARSE_REGEX = new RegExp(
+	`^${COLLECTION_ID_PREFIX}[a-f0-9]{${COLLECTION_ID_HASH_LENGTH}}$`,
+);
+
+export function isCollectionId(id: string): boolean {
+	return COLLECTION_ID_PARSE_REGEX.test(id);
+}
+
 /**
  * Parses a full instance id into its seed id and instance number. Returns
  * `null` when the input does not match the canonical instance-id form

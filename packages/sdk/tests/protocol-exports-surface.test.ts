@@ -175,6 +175,7 @@ const PROTOCOL_RUNTIME_SURFACE: ReadonlyArray<string> = [
 	"getLimit",
 	"getPaymentRequirement",
 	"isAcceptedProtocolVersion",
+	"isCollectionId",
 	"isHiveTxId",
 	"isInstanceId",
 	"isListingId",

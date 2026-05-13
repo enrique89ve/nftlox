@@ -260,8 +260,9 @@ describe("M5 multisig <-> handler payload parity", () => {
 	// B-1 — handler's `requireBoundedString` rejects "" via `requireString`
 	// (utils/validation.ts:198-203). Multisig must reject the same empty values
 	// before signing, or the protocol fee is paid for a tx the chain bounces.
+	// Note: `id` is shape-gated (see malformed-id table below) — empty `id`
+	// fails the shape check first, not the empty check.
 	test.each([
-		["id", { id: "" }] as const,
 		["name", { name: "" }] as const,
 		["metadata.description", { description: "" }] as const,
 		["metadata.image", { image: "" }] as const,
@@ -312,6 +313,32 @@ describe("M5 multisig <-> handler payload parity", () => {
 			expect(outcome.message).toContain("collectionsPerCreator");
 			expect(outcome.message).toContain(CREATOR);
 			expect(outcome.message).toContain(String(cap));
+		}
+	});
+
+	// Shape-guard parity on `id`. Handler runs `requireShapedString` with
+	// `isCollectionId` before the canonical-equality check; multisig must
+	// reject the same malformed ids pre-broadcast or the protocol fee is
+	// paid for a tx the chain bounces. Pins prefix / hex-charset / length
+	// constraints derived from `generateDeterministicCollectionId`.
+	test.each([
+		["wrong prefix", "coll_c68ff3c9d182617bf2d0"],
+		["uppercase hex", `col_${"A".repeat(20)}`],
+		["too short", `col_${"a".repeat(19)}`],
+		["too long", `col_${"a".repeat(21)}`],
+		["non-hex char", `col_${"g".repeat(20)}`],
+		["missing prefix", "c68ff3c9d182617bf2d0"],
+		["empty", ""],
+	])("rejects malformed id (%s)", async (_label, badId) => {
+		const body = await buildPassingCollectionBody({ id: badId });
+
+		const outcome = await callCollection(body);
+
+		expect(outcome.thrown).toBe(true);
+		if (outcome.thrown) {
+			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
+			expect(outcome.message).toContain("data.id");
+			expect(outcome.message).toContain("canonical shape");
 		}
 	});
 
