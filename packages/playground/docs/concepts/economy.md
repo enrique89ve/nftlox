@@ -130,7 +130,7 @@ The minimum a `buy` can produce is **1 transfer + 1 custom_json** (2 ops); the m
 
 ### Why the buyer trusts the math
 
-`buildBuy` does **not** recompute the split — it forwards whatever the buyer-side caller passes. The settlement node and the indexer recompute it independently against `nft.listing` and reject any drift with `INVALID_PAYMENT_SPLIT`. Always read the canonical split from the indexer (`getNftBuyInfo`) and forward it verbatim.
+`buildBuy` does not recompute listing economics, but it rejects internally inconsistent splits whose transfer legs do not add up to `totalPrice`. The settlement node and the indexer still recompute the canonical split independently against `nft.listing` and reject any drift with `INVALID_PAYMENT_SPLIT`. Always read the canonical split from the indexer (`getNftBuyInfo`) and forward it verbatim.
 
 ## 5. Determinism — what is **not** in the fee schedule
 

@@ -61,10 +61,11 @@ if (result.status !== "verified") {
 
 **What runs under the hood:**
 
-1. `GET /api/nfts/{nftId}/proof` — indexer returns `{ reportedOwner, owner_operation_id, previous_owner, event_type }`.
-2. For each check, the SDK resolves `owner_operation_id` on HafAH and parses the `custom_json`.
-3. The derived owner from L1 is compared to both `reportedOwner` (indexer) and `expectedOwner` (your call).
-4. `status = "verified"` only if all three agree for the referenced ownership edge.
+1. `GET /api/nfts/{nftId}/proof` — indexer returns the ownership edge plus creation and collection anchors.
+2. The SDK resolves `owner_operation_id` on HafAH and parses the ownership `custom_json`.
+3. For `buy`, the SDK also resolves the listing transaction, the collection `create_collection` transaction, the payment transfers, and the prior `buy_commitment`.
+4. The derived owner from L1 is compared to both `reportedOwner` (indexer) and `expectedOwner` (your call).
+5. `status = "verified"` only if L1 ownership, collection rules, listing fields, payment split, and commitment all match the protocol contract.
 
 **Result shape:**
 
