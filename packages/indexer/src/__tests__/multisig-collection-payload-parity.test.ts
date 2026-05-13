@@ -99,6 +99,10 @@ function expirationFromNow(offsetMs: number): string {
 }
 
 type CollectionPayloadOverrides = Readonly<{
+	readonly id?: unknown;
+	readonly name?: unknown;
+	readonly description?: unknown;
+	readonly image?: unknown;
 	readonly originDna?: unknown;
 	readonly maxInstances?: unknown;
 	readonly royaltyPct?: number;
@@ -112,15 +116,15 @@ async function buildPassingCollectionBody(
 	const originDna = await generateOriginDna(canonicalId);
 	const royaltyPct = overrides.royaltyPct ?? 0;
 	const data: Record<string, unknown> = {
-		id: canonicalId,
-		name: COLLECTION_NAME,
+		id: "id" in overrides ? overrides.id : canonicalId,
+		name: "name" in overrides ? overrides.name : COLLECTION_NAME,
 		symbol: COLLECTION_SYMBOL,
 		originDna: "originDna" in overrides ? overrides.originDna : originDna,
 		totalPotential: 5,
 		maxInstances: "maxInstances" in overrides ? overrides.maxInstances : 0,
 		metadata: {
-			description: "parity test collection",
-			image: "https://example.com/parity.png",
+			description: "description" in overrides ? overrides.description : "parity test collection",
+			image: "image" in overrides ? overrides.image : "https://example.com/parity.png",
 		},
 		rules: {
 			transferable: true,
@@ -220,6 +224,27 @@ describe("M5 multisig <-> handler payload parity", () => {
 			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
 			expect(outcome.message).toContain("royaltyRecipient");
 			expect(outcome.message).toContain("Bad_User!");
+		}
+	});
+
+	// B-1 — handler's `requireBoundedString` rejects "" via `requireString`
+	// (utils/validation.ts:198-203). Multisig must reject the same empty values
+	// before signing, or the protocol fee is paid for a tx the chain bounces.
+	test.each([
+		["id", { id: "" }] as const,
+		["name", { name: "" }] as const,
+		["metadata.description", { description: "" }] as const,
+		["metadata.image", { image: "" }] as const,
+	])("rejects empty %s", async (fieldName, overrides) => {
+		const body = await buildPassingCollectionBody(overrides);
+
+		const outcome = await callCollection(body);
+
+		expect(outcome.thrown).toBe(true);
+		if (outcome.thrown) {
+			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
+			expect(outcome.message).toContain(fieldName);
+			expect(outcome.message).toContain("non-empty");
 		}
 	});
 

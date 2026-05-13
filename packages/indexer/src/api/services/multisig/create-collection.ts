@@ -9,6 +9,7 @@ import {
 	parseHiveAmount,
 	validateBoundedPayloadString,
 	validateExactLengthPayloadString,
+	validateNonEmptyBoundedPayloadString,
 	validateCommonTransactionStructure,
 	validateCustomJsonOperation,
 	validatePayloadDataString,
@@ -200,8 +201,8 @@ async function validateCollectionPayloadData(
 	ctx: MultisigCollectionContext,
 ): Promise<void> {
 	const data = payload.data;
-	const id = validateBoundedPayloadString(data.id, "id", MAX_ID_LENGTH);
-	const name = validateBoundedPayloadString(data.name, "name", MAX_NAME_LENGTH);
+	const id = validateNonEmptyBoundedPayloadString(data.id, "id", MAX_ID_LENGTH);
+	const name = validateNonEmptyBoundedPayloadString(data.name, "name", MAX_NAME_LENGTH);
 	const symbol = validateCollectionSymbol(data.symbol);
 
 	const canonicalId = await generateDeterministicCollectionId(creator, name, symbol);
@@ -230,8 +231,8 @@ function validateCollectionMetadata(value: unknown): void {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "Payload data.metadata must be an object");
 	}
 
-	validateBoundedPayloadString(value.description, "metadata.description", MAX_DESCRIPTION_LENGTH);
-	validateBoundedPayloadString(value.image, "metadata.image", MAX_IMAGE_URL_LENGTH);
+	validateNonEmptyBoundedPayloadString(value.description, "metadata.description", MAX_DESCRIPTION_LENGTH);
+	validateNonEmptyBoundedPayloadString(value.image, "metadata.image", MAX_IMAGE_URL_LENGTH);
 	if (value.externalUrl !== undefined && value.externalUrl !== null) {
 		validateBoundedPayloadString(value.externalUrl, "metadata.externalUrl", MAX_URL_LENGTH);
 	}

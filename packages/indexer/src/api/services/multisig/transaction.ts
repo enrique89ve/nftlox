@@ -278,6 +278,31 @@ export function validateBoundedPayloadString(value: unknown, fieldName: string, 
 	return str;
 }
 
+// Non-empty + bounded variant — use for fields the handler validates via
+// `requireBoundedString` (which rejects "" via `requireString`). Accepting ""
+// here while the handler rejects it would let the multisig co-sign a payload
+// that the chain bounces post-broadcast, orphaning the protocol fee. Sibling
+// validateBoundedPayloadString stays loose for fields the handler treats as
+// optional (e.g. metadata.externalUrl via optionalBoundedString, which itself
+// passes through "").
+export function validateNonEmptyBoundedPayloadString(value: unknown, fieldName: string, maxLength: number): string {
+	const str = validatePayloadDataString(value, fieldName);
+	if (str === "") {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.${fieldName} must be a non-empty string`,
+		);
+	}
+	if (str.length > maxLength) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.${fieldName} exceeds max length ${maxLength}`,
+		);
+	}
+
+	return str;
+}
+
 // Exact-length variant — use for fields whose protocol contract is a fixed
 // length (DNA, hashes, access keys). Sibling validateBoundedPayloadString
 // only enforces an upper bound; mixing it with a *_LENGTH constant relies on
