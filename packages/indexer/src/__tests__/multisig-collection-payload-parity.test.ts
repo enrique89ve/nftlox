@@ -30,6 +30,7 @@ import type {
 } from "@/api/services/multisig/types.ts";
 import type { MultisigErrorCode } from "@/protocol/index.ts";
 import { config } from "@/config.ts";
+import { seedActiveSettlementNode } from "./helpers/settlement-node.ts";
 
 const NODE_ACCOUNT = config.hiveAccount;
 const FEE_AMOUNT_STRING = `${PROTOCOL_COLLECTION_FEE_HBD} HBD`;
@@ -89,7 +90,7 @@ async function clearDivergentFlag(): Promise<void> {
 }
 
 async function seedSyncStateForTimeWindow(): Promise<void> {
-	await sql`UPDATE sync_state SET hive_head_time = NOW(), hive_head_block = 1 WHERE id = 1`;
+	await sql`UPDATE sync_state SET last_block = 1, hive_head_time = NOW(), hive_head_block = 1 WHERE id = 1`;
 }
 
 async function clearCollectionForCreator(): Promise<void> {
@@ -133,6 +134,7 @@ type CollectionPayloadOverrides = Readonly<{
 	readonly maxInstances?: unknown;
 	readonly royaltyPct?: number;
 	readonly royaltyRecipient?: unknown;
+	readonly feeMemo?: string;
 }>;
 
 async function buildPassingCollectionBody(
@@ -179,7 +181,7 @@ async function buildPassingCollectionBody(
 						from: CREATOR,
 						to: NODE_ACCOUNT,
 						amount: FEE_AMOUNT_STRING,
-						memo: `NFTLox FEE-COL:${canonicalId}`,
+						memo: overrides.feeMemo ?? `NFTLox FEE-COL:${canonicalId}`,
 					},
 				],
 				[
@@ -205,6 +207,7 @@ describe("M5 multisig <-> handler payload parity", () => {
 
 	beforeEach(async () => {
 		await clearDivergentFlag();
+		await seedActiveSettlementNode(NODE_ACCOUNT, { registeredBlock: 1 });
 		await clearCollectionForCreator();
 		await clearStubCollections(CREATOR);
 	});
@@ -276,6 +279,22 @@ describe("M5 multisig <-> handler payload parity", () => {
 			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
 			expect(outcome.message).toContain(fieldName);
 			expect(outcome.message).toContain("non-empty");
+		}
+	});
+
+	test.each([
+		["empty memo", ""],
+		["wrong collection id", "NFTLox FEE-COL:col_aaaaaaaaaaaaaaaaaaaa"],
+	])("rejects fee transfer with %s", async (_label, feeMemo) => {
+		const body = await buildPassingCollectionBody({ feeMemo });
+
+		const outcome = await callCollection(body);
+
+		expect(outcome.thrown).toBe(true);
+		if (outcome.thrown) {
+			expect(outcome.code).toBe("INVALID_PAYMENT_SPLIT");
+			expect(outcome.message).toContain("Collection fee memo");
+			expect(outcome.message).toContain("NFTLox FEE-COL:");
 		}
 	});
 

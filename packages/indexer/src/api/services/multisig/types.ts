@@ -101,8 +101,8 @@ export type BuyLockAcquisition =
 	| Readonly<{ readonly acquired: false; readonly heldBy: string; readonly retryAfterMs: number }>;
 
 export type CollectionLockHandle = Readonly<{
-	readonly acquire: (creator: string, symbol: string) => Promise<CollectionLockAcquisition>;
-	readonly release: (creator: string, symbol: string) => Promise<void>;
+	readonly acquire: (creator: string) => Promise<CollectionLockAcquisition>;
+	readonly release: (creator: string) => Promise<void>;
 }>;
 
 export type BuyLockHandle = Readonly<{

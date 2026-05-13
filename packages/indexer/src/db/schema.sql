@@ -268,6 +268,8 @@ CREATE INDEX IF NOT EXISTS idx_invalid_ops_indexed_at ON invalid_operations(inde
 -- Confirmed operations (append-only tracking of successful handler executions).
 -- Stores immutable NFT IDs for lightweight per-NFT operations. Bulk creation ops
 -- can intentionally store an empty array because each NFT stores its own origin.
+-- Durable: nfts.owner_operation_id / nfts.created_operation_id and auditor
+-- invariants join back to this table, so retention cleanup must not prune it.
 CREATE TABLE IF NOT EXISTS confirmed_operations (
 	operation_id TEXT PRIMARY KEY,
 	tx_id TEXT NOT NULL,
@@ -278,9 +280,7 @@ CREATE TABLE IF NOT EXISTS confirmed_operations (
 	created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_confirmed_ops_tx ON confirmed_operations(tx_id);
--- Ordered by created_at for range-based retention cleanup. Without this index the
--- TTL DELETE becomes a full-table scan as the table grows, which is exactly what
--- the retention job exists to prevent.
+-- Ordered history queries and forensic inspection by operation timestamp.
 CREATE INDEX IF NOT EXISTS idx_confirmed_ops_created_at ON confirmed_operations(created_at);
 
 -- Orphaned buys
@@ -490,10 +490,9 @@ CREATE TABLE IF NOT EXISTS multisig_buy_locks (
 );
 CREATE INDEX IF NOT EXISTS idx_multisig_buy_locks_expires ON multisig_buy_locks(expires_at);
 
--- Scoped by (creator, symbol): two concurrent create_collection signings for the
--- same (creator, symbol) would both broadcast a tx; only one wins on-chain and
--- the loser forfeits the fee. Lock prevents double-sign without serializing
--- legitimate distinct collections from the same creator.
+-- Scoped by creator for create_collection signing. The `symbol` column remains
+-- in the key for schema compatibility; current code stores a fixed internal
+-- scope there so cap checks by creator cannot race across different symbols.
 CREATE TABLE IF NOT EXISTS multisig_collection_locks (
 	creator TEXT NOT NULL,
 	symbol TEXT NOT NULL,

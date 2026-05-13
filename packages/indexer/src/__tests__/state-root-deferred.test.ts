@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { sql, withTransaction, getStateRootBuffer } from "@/db/client.ts";
 import { useSingletonLock } from "./helpers/singleton-lock.ts";
-import { getStateMeta, queueStateRootDelta } from "@/db/queries/state-root.ts";
+import { flushStateRootBuffer, getStateMeta, queueStateRootDelta } from "@/db/queries/state-root.ts";
 import { computeStateRootFullScan, type NftStateRow } from "@/utils/state-root-hash.ts";
 import { insertNft } from "@/db/queries/nft-mutations.ts";
 
@@ -93,5 +93,43 @@ describe("state-root deferred flush", () => {
 		expect(after.nft_count).toBe(before.nft_count);
 		expect(Buffer.from(after.state_root).toString("hex"))
 			.toBe(Buffer.from(before.state_root).toString("hex"));
+	});
+
+	it("manual flush inside a transaction is not applied again at commit", async () => {
+		const collectionId = await seedCollection();
+		const row: NftStateRow = {
+			id: "manual-flush",
+			owner: "alice",
+			previous_owner: null,
+			owner_action: "mint",
+			owner_operation_id: "op-manual",
+			owner_block_num: 300,
+		};
+
+		await withTransaction(async (txn) => {
+			await insertNft({
+				id: row.id, collectionId, nftType: "seed", edition: 1, owner: row.owner,
+				nftDna: null,
+				name: "manual", imageUrl: null,
+				maxSupply: 1, seedId: null, instanceNumber: null, artId: "manual-art",
+				immutableData: null, dataOperationId: null, dataHash: null,
+				schemaVersion: 0,
+				ownerOperationId: row.owner_operation_id, ownerAction: "mint", ownerBlockNum: row.owner_block_num,
+				createdOperationId: row.owner_operation_id, createdBlockNum: row.owner_block_num,
+				createdTxId: "tx-manual", createdAt: new Date().toISOString(),
+			}, txn);
+
+			const buffer = getStateRootBuffer(txn);
+			await flushStateRootBuffer(buffer, txn);
+			expect(buffer.isEmpty()).toBe(true);
+		});
+
+		const meta = await getStateMeta();
+		expect(meta.nft_count).toBe(1);
+		expect(meta.last_block_num).toBe(row.owner_block_num);
+
+		const reference = await computeStateRootFullScan([row]);
+		expect(Buffer.from(meta.state_root).toString("hex"))
+			.toBe(Buffer.from(reference).toString("hex"));
 	});
 });

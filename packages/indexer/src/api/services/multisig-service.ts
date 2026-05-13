@@ -76,9 +76,9 @@ export async function processMultisigRequest(
 
 function buildCollectionLockHandle(holder: string): CollectionLockHandle {
 	return {
-		acquire: (creator, symbol) =>
-			collectionLock.acquire(creator, symbol, holder, COLLECTION_LOCK_TTL_MS),
-		release: (creator, symbol) => collectionLock.release(creator, symbol, holder),
+		acquire: (creator) =>
+			collectionLock.acquire(creator, holder, COLLECTION_LOCK_TTL_MS),
+		release: (creator) => collectionLock.release(creator, holder),
 	};
 }
 

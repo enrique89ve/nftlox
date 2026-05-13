@@ -1,4 +1,5 @@
 import { countCollectionsByCreator, symbolTakenByCreator } from "@/db/queries/collections.ts";
+import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
 import { createMultisigError } from "@/api/services/multisig/errors.ts";
 import { assertNodeNotDivergent } from "@/api/services/multisig/divergence-gate.ts";
 import { readRequiredMultisigChainReference } from "@/api/services/multisig/chain-time.ts";
@@ -28,6 +29,7 @@ import {
 	MAX_NAME_LENGTH,
 	MAX_ROYALTY_PCT,
 	MAX_URL_LENGTH,
+	MEMO_PREFIX_FEE_COL,
 	ORIGIN_DNA_LENGTH,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	generateDeterministicCollectionId,
@@ -48,40 +50,48 @@ import type {
 
 const CREATE_COLLECTION_OPERATION_COUNT = 2;
 
+type ValidatedCollectionRequest = Readonly<{
+	readonly transaction: ValidatedCollectionTransaction;
+	readonly creator: string;
+	readonly symbol: string;
+}>;
+
+type ValidatedCollectionIdentity = Readonly<{
+	readonly canonicalId: string;
+	readonly symbol: string;
+}>;
+
 export async function processCollectionRequest(
 	rawBody: unknown,
 	ctx: MultisigCollectionContext,
 ) {
 	await assertNodeNotDivergent(ctx.db);
+	const chainReference = await readRequiredMultisigChainReference(ctx.db);
+	await assertCollectionNodeActive(ctx, chainReference.lastBlock);
 
 	const requestShape = validateCollectionRequestShape(rawBody);
-	const transaction = await validateCollectionTransactionStructure(
+	const validatedRequest = await validateCollectionTransactionStructure(
 		requestShape.transaction,
 		ctx,
+		chainReference.referenceTimeMs,
 	);
+	const { transaction, creator, symbol } = validatedRequest;
 
-	// After validation the creator + symbol are known; acquire the per-
-	// (creator, symbol) lock BEFORE signing so two concurrent requests for the
-	// same collection can't both get co-signed (only one wins on-chain and the
-	// loser forfeits the fee). Holder is a per-request UUID, so a same-creator
-	// same-symbol parallel request gets rejected instead of refreshing the slot.
-	const transferOp = transaction.transferOperations[0];
-	if (!transferOp) {
-		throw createMultisigError("INVALID_TX_STRUCTURE", "Missing fee transfer after validation");
-	}
-	const creator = transferOp.from;
-	const symbol = String(transaction.customJsonOperation.payload.data.symbol);
-	const acquisition = await ctx.collectionLock.acquire(creator, symbol);
+	// Serialize by creator, not symbol. The consensus cap is per creator, so
+	// allowing different symbols through concurrently can sign cap+1 requests.
+	const acquisition = await ctx.collectionLock.acquire(creator);
 	if (!acquisition.acquired) {
 		throw createMultisigError(
 			"COLLECTION_LOCKED",
-			`A collection signing for ${creator}/${symbol} is already in flight. Retry after ${acquisition.retryAfterMs}ms`,
+			`A collection signing for ${creator} is already in flight. Retry after ${acquisition.retryAfterMs}ms`,
 			{ retryAfterMs: acquisition.retryAfterMs },
 		);
 	}
 
 	let signingSucceeded = false;
 	try {
+		await assertCreatorCanCreateCollection(creator, symbol, chainReference.hiveHeadBlock, ctx);
+
 		const response = await ctx.sign(transaction);
 		if (response.ok) {
 			signingSucceeded = true;
@@ -91,7 +101,7 @@ export async function processCollectionRequest(
 		// On success, leave the lock to expire naturally so a second request can't
 		// be signed while the first tx is still within its broadcast window.
 		if (!signingSucceeded) {
-			await ctx.collectionLock.release(creator, symbol);
+			await ctx.collectionLock.release(creator);
 		}
 	}
 }
@@ -109,8 +119,8 @@ function validateCollectionRequestShape(raw: unknown): CollectionRequestShape {
 async function validateCollectionTransactionStructure(
 	tx: Record<string, unknown>,
 	ctx: MultisigCollectionContext,
-): Promise<ValidatedCollectionTransaction> {
-	const { referenceTimeMs, hiveHeadBlock } = await readRequiredMultisigChainReference(ctx.db);
+	referenceTimeMs: number,
+): Promise<ValidatedCollectionRequest> {
 	const validated = validateCommonTransactionStructure(tx, {
 		referenceTimeMs,
 	});
@@ -132,17 +142,20 @@ async function validateCollectionTransactionStructure(
 		parseCollectionPayload,
 	);
 
-	await validateCollectionPayloadData(
+	const identity = await validateCollectionPayloadData(
 		customJsonOperation.payload,
 		transferOperations[0].from,
-		hiveHeadBlock,
-		ctx,
 	);
+	assertCollectionFeeMemo(transferOperations[0].memo, identity.canonicalId);
 
 	return {
-		...validated,
-		transferOperations,
-		customJsonOperation,
+		transaction: {
+			...validated,
+			transferOperations,
+			customJsonOperation,
+		},
+		creator: transferOperations[0].from,
+		symbol: identity.symbol,
 	};
 }
 
@@ -204,9 +217,7 @@ async function validateCollectionFeeTransfer(
 async function validateCollectionPayloadData(
 	payload: ValidatedCollectionPayload,
 	creator: string,
-	hiveHeadBlock: number,
-	ctx: MultisigCollectionContext,
-): Promise<void> {
+): Promise<ValidatedCollectionIdentity> {
 	const data = payload.data;
 	// `isCollectionId` is the same protocol guard `requireShapedString` consumes
 	// on the handler side, so the multisig rejects malformed ids byte-for-byte
@@ -224,6 +235,47 @@ async function validateCollectionPayloadData(
 		);
 	}
 
+	await validateOriginDna(data.originDna, canonicalId);
+
+	validateCollectionMetadata(data.metadata);
+	validateCollectionRules(data.rules);
+	validateTotalPotential(data.totalPotential);
+	validateMaxInstances(data.maxInstances);
+	validateCollectionSchema(data.schema);
+
+	return { canonicalId, symbol };
+}
+
+async function assertCollectionNodeActive(
+	ctx: MultisigCollectionContext,
+	lastBlock: number,
+): Promise<void> {
+	try {
+		await assertActiveSettlementNode(ctx.nodeAccount, lastBlock, ctx.db);
+	} catch (cause) {
+		throw createMultisigError(
+			"NODE_NOT_ACTIVE",
+			cause instanceof Error ? cause.message : "Settlement node is not active",
+			{ cause },
+		);
+	}
+}
+
+function assertCollectionFeeMemo(memo: string, canonicalId: string): void {
+	const expectedMemo = `${MEMO_PREFIX_FEE_COL}${canonicalId}`;
+	if (memo === expectedMemo) return;
+	throw createMultisigError(
+		"INVALID_PAYMENT_SPLIT",
+		`Collection fee memo must be '${expectedMemo}', got '${memo}'`,
+	);
+}
+
+async function assertCreatorCanCreateCollection(
+	creator: string,
+	symbol: string,
+	hiveHeadBlock: number,
+	ctx: MultisigCollectionContext,
+): Promise<void> {
 	// Mirror the handler's `collectionsPerCreator` cap (see
 	// processor/handlers/core/create-collection.ts:72-73). The indexer's HEAD
 	// block is the best estimate of the block the broadcast will land in;
@@ -245,14 +297,6 @@ async function validateCollectionPayloadData(
 	if (await symbolTakenByCreator(creator, symbol, ctx.db)) {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", `Symbol ${symbol} already used by @${creator}`);
 	}
-
-	await validateOriginDna(data.originDna, canonicalId);
-
-	validateCollectionMetadata(data.metadata);
-	validateCollectionRules(data.rules);
-	validateTotalPotential(data.totalPotential);
-	validateMaxInstances(data.maxInstances);
-	validateCollectionSchema(data.schema);
 }
 
 function validateCollectionMetadata(value: unknown): void {

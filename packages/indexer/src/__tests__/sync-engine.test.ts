@@ -624,7 +624,7 @@ describe("syncCycle", () => {
 		await expect(syncCycle()).rejects.toThrow("Circuit breaker");
 	});
 
-	test("disables synchronous_commit during massive sync", async () => {
+	test("keeps durable commits during massive sync", async () => {
 		const hafOps = [fakeHafOp(1001)];
 		const parsedOps = [fakeParsedOp(1001)];
 		const txnCalls: string[] = [];
@@ -650,8 +650,7 @@ describe("syncCycle", () => {
 
 		await syncCycle();
 
-		// Should have called SET LOCAL synchronous_commit = OFF
-		expect(txnCalls.some(c => c.includes("SET LOCAL synchronous_commit = OFF"))).toBe(true);
+		expect(txnCalls.some(c => c.includes("SET LOCAL synchronous_commit"))).toBe(false);
 	});
 
 	test("detects and corrects block continuity violations", async () => {

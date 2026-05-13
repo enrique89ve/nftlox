@@ -307,7 +307,7 @@ export async function syncCycle(): Promise<void> {
 
     // --- Block continuity assertion ---
     // Backward divergence (expectedStart < current) is recoverable: a crash mid-batch
-    // with synchronous_commit=OFF can lose the last_block advance — re-process from DB.
+    // can leave the in-memory cursor ahead of the durable DB cursor — re-process from DB.
     // Forward divergence (expectedStart > current) means another writer advanced the
     // cursor without us processing those blocks. Silently jumping to expectedStart would
     // skip ops in the gap. This is a data-integrity violation — abort immediately.
@@ -410,10 +410,6 @@ export async function syncCycle(): Promise<void> {
     // NFT to `listed` before the cursor advances. The partial index
     // `idx_nfts_sale_expires` keeps the UPDATE at ~zero cost when no rows are due.
     await withSyncWriteTransaction(async (txn) => {
-      if (isMassive && hasOps) {
-        await txn`SET LOCAL synchronous_commit = OFF`;
-      }
-
       if (hasOps) {
         let consecutiveFatalFailures = 0;
         let sweptThrough: number | null = null;
