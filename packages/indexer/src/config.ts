@@ -1,5 +1,9 @@
-import { DEFAULT_FEE_ACCOUNT, PROTOCOL_GENESIS_BLOCK, PROTOCOL_ID } from "@/protocol/index.ts";
-import { validateGenesisBlockSelection } from "@/protocol/genesis-guard.ts";
+import {
+	DEFAULT_FEE_ACCOUNT,
+	PROTOCOL_GENESIS_BLOCK,
+	PROTOCOL_ID,
+	validateGenesisBlockSelection,
+} from "@/protocol/index.ts";
 
 const toInt = (val: string | undefined, fallback: number): number => {
 	if (val === undefined || val === "") return fallback;
