@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach } from "bun:test";
+import { useSingletonLock } from "./helpers/singleton-lock.ts";
 import { sql, withTransaction } from "@/db/client.ts";
 import { routeOperationDetailed } from "@/processor/action-router.ts";
 import type { ParsedOperation, TransferDetail } from "@/scanner/operation-parser.ts";
@@ -381,6 +382,8 @@ async function replayFixture(): Promise<string> {
 }
 
 describe("F2.B genesis replay determinism", () => {
+	useSingletonLock();
+
 	beforeAll(cleanDb);
 	beforeEach(cleanDb);
 

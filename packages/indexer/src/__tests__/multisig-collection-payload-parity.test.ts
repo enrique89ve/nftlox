@@ -8,6 +8,7 @@
 // (processCollectionRequest); we never reach into helpers.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { useSingletonLock } from "./helpers/singleton-lock.ts";
 import { sql } from "@/db/client.ts";
 import { processCollectionRequest } from "@/api/services/multisig/create-collection.ts";
 import { isMultisigError } from "@/api/services/multisig/errors.ts";
@@ -195,6 +196,8 @@ async function buildPassingCollectionBody(
 }
 
 describe("M5 multisig <-> handler payload parity", () => {
+	useSingletonLock();
+
 	beforeAll(async () => {
 		await seedSyncStateForTimeWindow();
 	});

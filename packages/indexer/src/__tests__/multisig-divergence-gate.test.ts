@@ -11,6 +11,7 @@
 
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { sql } from "@/db/client.ts";
+import { useSingletonLock } from "./helpers/singleton-lock.ts";
 import { processBuyRequest } from "@/api/services/multisig/buy.ts";
 import { processCollectionRequest } from "@/api/services/multisig/create-collection.ts";
 import { isMultisigError } from "@/api/services/multisig/errors.ts";
@@ -72,6 +73,8 @@ async function clearDivergentFlag(): Promise<void> {
 }
 
 describe("F3.C multisig divergence gate", () => {
+	useSingletonLock();
+
 	beforeEach(async () => {
 		// Bootstrap-level safety net: the schema is owned by other suites, so we
 		// only reset the one column we mutate here. This keeps the test isolated

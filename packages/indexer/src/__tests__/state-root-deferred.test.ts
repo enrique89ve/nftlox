@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { sql, withTransaction, getStateRootBuffer } from "@/db/client.ts";
+import { useSingletonLock } from "./helpers/singleton-lock.ts";
 import { getStateMeta, queueStateRootDelta } from "@/db/queries/state-root.ts";
 import { computeStateRootFullScan, type NftStateRow } from "@/utils/state-root-hash.ts";
 import { insertNft } from "@/db/queries/nft-mutations.ts";
@@ -22,6 +23,8 @@ async function seedCollection(): Promise<string> {
 }
 
 describe("state-root deferred flush", () => {
+	useSingletonLock();
+
 	beforeEach(truncateNftsTx);
 
 	it("bulk inserts in one tx → state_meta updated exactly once", async () => {

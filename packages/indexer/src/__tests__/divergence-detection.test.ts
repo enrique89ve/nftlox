@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach, spyOn } from "bun:test";
+import { useSingletonLock } from "./helpers/singleton-lock.ts";
 import { sql } from "@/db/client.ts";
 import {
 	findHighestDivergentCheckpointBlock,
@@ -85,6 +86,8 @@ async function clearAllDivergenceState(): Promise<void> {
 }
 
 describe("F3.B divergence detection", () => {
+	useSingletonLock();
+
 	beforeAll(async () => {
 		// Schema is bootstrapped by handlers.test.ts in a full run, but we own
 		// the suite when invoked in isolation. Re-applying schema.sql is
