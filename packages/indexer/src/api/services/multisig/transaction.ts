@@ -6,6 +6,7 @@ import {
 	ACTION_BUY,
 	ACTION_CREATE_COLLECTION,
 	HIVE_CUSTOM_JSON_MAX_BYTES,
+	MAX_ID_LENGTH,
 	MIN_PROTOCOL_VERSION,
 	MULTISIG_TX_MAX_EXPIRATION_MS,
 	MULTISIG_TX_MIN_EXPIRATION_MS,
@@ -233,12 +234,17 @@ export function parseBuyPayload(json: string, protocolId: string): ValidatedBuyP
 		);
 	}
 
+	// Handler-side `handleBuy` calls `requireString` on these three fields,
+	// which rejects empty strings. Mirror that here so a co-signed payload
+	// that the chain will bounce post-broadcast (orphaning the fee) is caught
+	// pre-broadcast. Bounded by MAX_ID_LENGTH on the multisig-strict / DoS-safe
+	// side; the handler is unbounded but the SDK never produces longer ids.
 	return {
 		action: ACTION_BUY,
 		data: {
-			nftId: validatePayloadDataString(parsed.data.nftId, "nftId"),
-			listingId: validatePayloadDataString(parsed.data.listingId, "listingId"),
-			listTxId: validatePayloadDataString(parsed.data.listTxId, "listTxId"),
+			nftId: validateNonEmptyBoundedPayloadString(parsed.data.nftId, "nftId", MAX_ID_LENGTH),
+			listingId: validateNonEmptyBoundedPayloadString(parsed.data.listingId, "listingId", MAX_ID_LENGTH),
+			listTxId: validateNonEmptyBoundedPayloadString(parsed.data.listTxId, "listTxId", MAX_ID_LENGTH),
 		},
 	};
 }
