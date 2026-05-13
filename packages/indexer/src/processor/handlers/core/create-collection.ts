@@ -5,6 +5,7 @@ import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	requireBoundedString,
+	requireExactLengthString,
 	requireSymbol,
 	requireNumber,
 	requireObject,
@@ -133,7 +134,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	// auditor can validate ownership via the Hive API without trusting the
 	// indexer to silently substitute missing/incorrect values.
 	const originDna = await generateOriginDna(canonicalId);
-	const payloadOriginDna = requireBoundedString(d.originDna, "originDna", ORIGIN_DNA_LENGTH);
+	const payloadOriginDna = requireExactLengthString(d.originDna, "originDna", ORIGIN_DNA_LENGTH);
 	if (payloadOriginDna !== originDna) {
 		throw new Error(
 			`Non-canonical originDna: expected ${originDna} for collection ${canonicalId}, got ${payloadOriginDna}`,

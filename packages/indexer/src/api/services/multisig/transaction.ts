@@ -278,6 +278,23 @@ export function validateBoundedPayloadString(value: unknown, fieldName: string, 
 	return str;
 }
 
+// Exact-length variant — use for fields whose protocol contract is a fixed
+// length (DNA, hashes, access keys). Sibling validateBoundedPayloadString
+// only enforces an upper bound; mixing it with a *_LENGTH constant relies on
+// a downstream equality check, which is easy to forget when copying the
+// pattern to a new validator (see feedback_bounded_payload_string_is_max_not_exact).
+export function validateExactLengthPayloadString(value: unknown, fieldName: string, length: number): string {
+	const str = validatePayloadDataString(value, fieldName);
+	if (str.length !== length) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.${fieldName} must be exactly ${length} characters, got ${str.length}`,
+		);
+	}
+
+	return str;
+}
+
 export function parseHiveAmount(amountStr: string): ParsedAmount {
 	const parts = amountStr.split(" ");
 	if (parts.length !== 2) {

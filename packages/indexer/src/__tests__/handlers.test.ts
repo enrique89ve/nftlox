@@ -343,13 +343,15 @@ describe("Handlers (integration)", () => {
 			// correct origin_dna so an auditor can validate it offline. The
 			// handler recomputes canonical = generateOriginDna(id) and rejects
 			// any payload whose origin_dna does not match — same discipline as
-			// the id/artId canonical checks.
+			// the id/artId canonical checks. Fixture must be exactly
+			// ORIGIN_DNA_LENGTH chars (length-bound enforces this earlier);
+			// the value below has the right shape but a wrong hash payload.
 			const op = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: 100,
-				originDna: "FAKE_ORIGIN_DNA",
+				originDna: "oFAKEORIGINDEAD0",
 				metadata: { description: "Test", image: "https://example.com/img.png" },
 				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});

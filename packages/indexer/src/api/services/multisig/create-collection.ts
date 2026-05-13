@@ -8,6 +8,7 @@ import {
 	parseCollectionPayload,
 	parseHiveAmount,
 	validateBoundedPayloadString,
+	validateExactLengthPayloadString,
 	validateCommonTransactionStructure,
 	validateCustomJsonOperation,
 	validatePayloadDataString,
@@ -343,7 +344,7 @@ function validateCollectionSymbol(value: unknown): string {
 }
 
 async function validateOriginDna(value: unknown, canonicalId: string): Promise<void> {
-	const declared = validateBoundedPayloadString(value, "originDna", ORIGIN_DNA_LENGTH);
+	const declared = validateExactLengthPayloadString(value, "originDna", ORIGIN_DNA_LENGTH);
 	const expected = await generateOriginDna(canonicalId);
 	if (declared !== expected) {
 		throw createMultisigError(

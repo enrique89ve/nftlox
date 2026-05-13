@@ -220,6 +220,18 @@ export function requireBoundedString(value: unknown, fieldName: string, maxLengt
 	return str;
 }
 
+// Exact-length variant — mirrors validateExactLengthPayloadString in the
+// multisig path. Use for fields whose protocol contract is a fixed length
+// (DNA, hashes, access keys). Sibling requireBoundedString only enforces an
+// upper bound, which is easy to misread when paired with a *_LENGTH constant.
+export function requireExactLengthString(value: unknown, fieldName: string, length: number): string {
+	const str = requireString(value, fieldName);
+	if (str.length !== length) {
+		throw new Error(`${fieldName} must be exactly ${length} characters, got ${str.length}`);
+	}
+	return str;
+}
+
 export function requireUsername(value: unknown, fieldName: string): string {
 	const str = requireString(value, fieldName);
 	const error = validateHiveUsername(str);
