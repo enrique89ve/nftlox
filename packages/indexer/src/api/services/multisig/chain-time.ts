@@ -32,3 +32,22 @@ export async function readRequiredMultisigChainReferenceTimeMs(
 	const snapshot = await getChainTimeSnapshot(db);
 	return requireMultisigChainReferenceTimeMs(snapshot);
 }
+
+export type MultisigChainReference = Readonly<{
+	readonly referenceTimeMs: number;
+	readonly hiveHeadBlock: number;
+}>;
+
+// Reads the chain snapshot once and exposes both the indexer's reference time
+// (for transaction expiration gating) AND its view of HEAD block (for handler-
+// parity consensus-param lookups via @nftlox/protocol's getLimit). Callers
+// that need both must use this — splitting the read into two snapshot fetches
+// would race a hardfork boundary, picking different LIMIT_SCHEDULE entries
+// for the same request.
+export async function readRequiredMultisigChainReference(
+	db: Queryable,
+): Promise<MultisigChainReference> {
+	const snapshot = await getChainTimeSnapshot(db);
+	const referenceTimeMs = requireMultisigChainReferenceTimeMs(snapshot);
+	return { referenceTimeMs, hiveHeadBlock: snapshot.hiveHeadBlock };
+}

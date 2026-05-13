@@ -1,7 +1,8 @@
-import { symbolTakenByCreator } from "@/db/queries/collections.ts";
+import { countCollectionsByCreator, symbolTakenByCreator } from "@/db/queries/collections.ts";
 import { createMultisigError } from "@/api/services/multisig/errors.ts";
 import { assertNodeNotDivergent } from "@/api/services/multisig/divergence-gate.ts";
-import { readRequiredMultisigChainReferenceTimeMs } from "@/api/services/multisig/chain-time.ts";
+import { readRequiredMultisigChainReference } from "@/api/services/multisig/chain-time.ts";
+import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	getLastOperation,
 	isRecord,
@@ -109,9 +110,9 @@ async function validateCollectionTransactionStructure(
 	tx: Record<string, unknown>,
 	ctx: MultisigCollectionContext,
 ): Promise<ValidatedCollectionTransaction> {
-	const chainReferenceTimeMs = await readRequiredMultisigChainReferenceTimeMs(ctx.db);
+	const { referenceTimeMs, hiveHeadBlock } = await readRequiredMultisigChainReference(ctx.db);
 	const validated = validateCommonTransactionStructure(tx, {
-		referenceTimeMs: chainReferenceTimeMs,
+		referenceTimeMs,
 	});
 	if (validated.operations.length !== CREATE_COLLECTION_OPERATION_COUNT) {
 		throw createMultisigError(
@@ -131,7 +132,12 @@ async function validateCollectionTransactionStructure(
 		parseCollectionPayload,
 	);
 
-	await validateCollectionPayloadData(customJsonOperation.payload, transferOperations[0].from, ctx);
+	await validateCollectionPayloadData(
+		customJsonOperation.payload,
+		transferOperations[0].from,
+		hiveHeadBlock,
+		ctx,
+	);
 
 	return {
 		...validated,
@@ -198,6 +204,7 @@ async function validateCollectionFeeTransfer(
 async function validateCollectionPayloadData(
 	payload: ValidatedCollectionPayload,
 	creator: string,
+	hiveHeadBlock: number,
 	ctx: MultisigCollectionContext,
 ): Promise<void> {
 	const data = payload.data;
@@ -210,6 +217,24 @@ async function validateCollectionPayloadData(
 		throw createMultisigError(
 			"INVALID_PROTOCOL_PAYLOAD",
 			`Non-canonical collectionId: expected ${canonicalId}, got ${id}`,
+		);
+	}
+
+	// Mirror the handler's `collectionsPerCreator` cap (see
+	// processor/handlers/core/create-collection.ts:72-73). The indexer's HEAD
+	// block is the best estimate of the block the broadcast will land in;
+	// `getLimit` is a pure function of block height (no runtime config) so the
+	// answer is the same value both indexer implementations would compute.
+	// Translates handler's `throw new Error(...)` into the multisig's typed
+	// error envelope so the API returns a structured response.
+	const creatorCollectionCount = await countCollectionsByCreator(creator, ctx.db);
+	try {
+		assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount, hiveHeadBlock);
+	} catch (cause) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			cause instanceof Error ? cause.message : String(cause),
+			{ cause },
 		);
 	}
 

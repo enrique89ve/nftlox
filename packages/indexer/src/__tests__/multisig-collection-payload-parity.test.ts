@@ -20,6 +20,7 @@ import {
 	PROTOCOL_ID,
 	generateDeterministicCollectionId,
 	generateOriginDna,
+	getLimit,
 } from "@/protocol/index.ts";
 import type {
 	CollectionLockHandle,
@@ -92,6 +93,29 @@ async function seedSyncStateForTimeWindow(): Promise<void> {
 
 async function clearCollectionForCreator(): Promise<void> {
 	await sql`DELETE FROM collections WHERE creator = ${CREATOR} AND symbol = ${COLLECTION_SYMBOL}`;
+}
+
+// B-2 — collectionsPerCreator cap parity. Seeds the cap-many stub rows so the
+// next create_collection request hits the same `assertWithinLimit` boundary
+// the handler enforces at `processor/handlers/core/create-collection.ts:73`.
+async function seedCollectionsAtCap(creator: string, count: number): Promise<void> {
+	await sql`
+		INSERT INTO collections (id, name, symbol, creator, origin_dna, block_num, tx_id, created_at)
+		SELECT
+			'coll-cap-stub-' || lpad(g::text, 3, '0'),
+			'stub',
+			'STB' || lpad(g::text, 3, '0'),
+			${creator},
+			'odna_cap_stub_' || lpad(g::text, 3, '0'),
+			100,
+			'tx-cap-stub-' || lpad(g::text, 3, '0'),
+			NOW()
+		FROM generate_series(1, ${count}) g
+	`;
+}
+
+async function clearStubCollections(creator: string): Promise<void> {
+	await sql`DELETE FROM collections WHERE creator = ${creator} AND id LIKE 'coll-cap-stub-%'`;
 }
 
 function expirationFromNow(offsetMs: number): string {
@@ -178,10 +202,12 @@ describe("M5 multisig <-> handler payload parity", () => {
 	beforeEach(async () => {
 		await clearDivergentFlag();
 		await clearCollectionForCreator();
+		await clearStubCollections(CREATOR);
 	});
 
 	afterAll(async () => {
 		await clearCollectionForCreator();
+		await clearStubCollections(CREATOR);
 	});
 
 	test("rejects payloads whose originDna does not equal generateOriginDna(canonicalId)", async () => {
@@ -260,6 +286,28 @@ describe("M5 multisig <-> handler payload parity", () => {
 			expect(outcome.message).toContain("maxInstances");
 			expect(outcome.message).toContain("exceeds protocol cap");
 			expect(outcome.message).toContain(String(MAX_INSTANCES_PER_COLLECTION));
+		}
+	});
+
+	// B-2 — handler caps a creator at `collectionsPerCreator` collections
+	// (processor/handlers/core/create-collection.ts:72-73 via
+	// @nftlox/protocol's `getLimit`). Multisig must reject the cap+1 request
+	// or the protocol fee is paid for a tx the chain bounces. Seed-block is
+	// the genesis schedule, so the value `getLimit("collectionsPerCreator", 1)`
+	// resolves at module-load time matches the value the handler sees.
+	test("rejects payloads when creator is at collectionsPerCreator cap", async () => {
+		const cap = getLimit("collectionsPerCreator", 1);
+		await seedCollectionsAtCap(CREATOR, cap);
+
+		const body = await buildPassingCollectionBody();
+		const outcome = await callCollection(body);
+
+		expect(outcome.thrown).toBe(true);
+		if (outcome.thrown) {
+			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
+			expect(outcome.message).toContain("collectionsPerCreator");
+			expect(outcome.message).toContain(CREATOR);
+			expect(outcome.message).toContain(String(cap));
 		}
 	});
 
