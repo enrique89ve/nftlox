@@ -22,12 +22,15 @@ import {
 	MAX_DESCRIPTION_LENGTH,
 	MAX_ID_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
+	MAX_INSTANCES_PER_COLLECTION,
 	MAX_NAME_LENGTH,
 	MAX_ROYALTY_PCT,
 	MAX_URL_LENGTH,
+	ORIGIN_DNA_LENGTH,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	SYMBOL_REGEX,
 	generateDeterministicCollectionId,
+	generateOriginDna,
 	validateHiveUsername,
 	validateSchemaDefinition,
 } from "@/protocol/index.ts";
@@ -212,6 +215,8 @@ async function validateCollectionPayloadData(
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", `Symbol ${symbol} already used by @${creator}`);
 	}
 
+	await validateOriginDna(data.originDna, canonicalId);
+
 	validateCollectionMetadata(data.metadata);
 	validateCollectionRules(data.rules);
 	validateTotalPotential(data.totalPotential);
@@ -251,13 +256,30 @@ function validateCollectionRules(value: unknown): void {
 			`Payload data.rules.royaltyPct must be between 0 and ${MAX_ROYALTY_PCT}`,
 		);
 	}
-	if (
-		value.royaltyRecipient !== undefined &&
-		value.royaltyRecipient !== null &&
-		typeof value.royaltyRecipient !== "string"
-	) {
+	const royaltyRecipient = normalizeRoyaltyRecipient(value.royaltyRecipient);
+	if (value.royaltyPct > 0 && royaltyRecipient === null) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			"Payload data.rules.royaltyRecipient is required when rules.royaltyPct > 0",
+		);
+	}
+	if (royaltyRecipient !== null) {
+		const usernameError = validateHiveUsername(royaltyRecipient);
+		if (usernameError) {
+			throw createMultisigError(
+				"INVALID_PROTOCOL_PAYLOAD",
+				`Payload data.rules.royaltyRecipient ("${royaltyRecipient}") is not a valid Hive username: ${usernameError}`,
+			);
+		}
+	}
+}
+
+function normalizeRoyaltyRecipient(value: unknown): string | null {
+	if (value === undefined || value === null || value === "") return null;
+	if (typeof value !== "string") {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "Payload data.rules.royaltyRecipient must be a string");
 	}
+	return value;
 }
 
 function validateTotalPotential(value: unknown): void {
@@ -274,6 +296,12 @@ function validateMaxInstances(value: unknown): void {
 		throw createMultisigError(
 			"INVALID_PROTOCOL_PAYLOAD",
 			"Payload data.maxInstances must be a non-negative integer",
+		);
+	}
+	if (value > MAX_INSTANCES_PER_COLLECTION) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.maxInstances exceeds protocol cap of ${MAX_INSTANCES_PER_COLLECTION}, got ${value}`,
 		);
 	}
 	if (value > 0 && value % INSTANCE_FEE_PER_N !== 0) {
@@ -312,4 +340,15 @@ function validateCollectionSymbol(value: unknown): string {
 	}
 
 	return symbol;
+}
+
+async function validateOriginDna(value: unknown, canonicalId: string): Promise<void> {
+	const declared = validateBoundedPayloadString(value, "originDna", ORIGIN_DNA_LENGTH);
+	const expected = await generateOriginDna(canonicalId);
+	if (declared !== expected) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Non-canonical originDna: expected ${expected} for collection ${canonicalId}, got ${declared}`,
+		);
+	}
 }

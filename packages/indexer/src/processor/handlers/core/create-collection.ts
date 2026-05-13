@@ -29,6 +29,7 @@ import {
 	MAX_ROYALTY_PCT,
 	INSTANCE_FEE_PER_N,
 	MAX_INSTANCES_PER_COLLECTION,
+	ORIGIN_DNA_LENGTH,
 } from "@/protocol/index.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
@@ -132,7 +133,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	// auditor can validate ownership via the Hive API without trusting the
 	// indexer to silently substitute missing/incorrect values.
 	const originDna = await generateOriginDna(canonicalId);
-	const payloadOriginDna = requireBoundedString(d.originDna, "originDna", 32);
+	const payloadOriginDna = requireBoundedString(d.originDna, "originDna", ORIGIN_DNA_LENGTH);
 	if (payloadOriginDna !== originDna) {
 		throw new Error(
 			`Non-canonical originDna: expected ${originDna} for collection ${canonicalId}, got ${payloadOriginDna}`,

@@ -1,0 +1,256 @@
+// M5 — multisig <-> handler payload parity.
+//
+// The multisig pre-signing path and the on-chain handler must reject the same
+// set of malformed/illegal create_collection payloads. Each test forces ONE
+// invariant by mutating ONE field of a known-good fixture and asserts that
+// processCollectionRequest throws INVALID_PROTOCOL_PAYLOAD with a message that
+// identifies the offending field. Behaviour flows through the public seam only
+// (processCollectionRequest); we never reach into helpers.
+
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { sql } from "@/db/client.ts";
+import { processCollectionRequest } from "@/api/services/multisig/create-collection.ts";
+import { isMultisigError } from "@/api/services/multisig/errors.ts";
+import {
+	ACTION_CREATE_COLLECTION,
+	INSTANCE_FEE_PER_N,
+	MAX_INSTANCES_PER_COLLECTION,
+	MIN_PROTOCOL_VERSION,
+	PROTOCOL_COLLECTION_FEE_HBD,
+	PROTOCOL_ID,
+	generateDeterministicCollectionId,
+	generateOriginDna,
+} from "@/protocol/index.ts";
+import type {
+	CollectionLockHandle,
+	MultisigCollectionContext,
+	MultisigSign,
+} from "@/api/services/multisig/types.ts";
+import type { MultisigErrorCode } from "@/protocol/index.ts";
+import { config } from "@/config.ts";
+
+const NODE_ACCOUNT = config.hiveAccount;
+const FEE_AMOUNT_STRING = `${PROTOCOL_COLLECTION_FEE_HBD} HBD`;
+const CREATOR = "alice";
+const COLLECTION_NAME = "Parity";
+const COLLECTION_SYMBOL = "PRTY";
+
+const collectionLockStub: CollectionLockHandle = {
+	acquire: async () => ({ acquired: true }),
+	release: async () => {},
+};
+
+const signStub: MultisigSign = async () => {
+	throw new Error("sign should not be reached when validation fires");
+};
+
+const passingSignStub: MultisigSign = async () => ({
+	ok: true,
+	signature: "stub-signature",
+	digest: "stub-digest",
+	expiration: "2030-01-01T00:00:00",
+});
+
+function buildCollectionCtx(sign: MultisigSign = signStub): MultisigCollectionContext {
+	return {
+		db: sql,
+		nodeAccount: NODE_ACCOUNT,
+		protocolId: PROTOCOL_ID,
+		sign,
+		collectionLock: collectionLockStub,
+	};
+}
+
+async function callCollection(rawBody: unknown): Promise<
+	Readonly<
+		| { thrown: true; code: MultisigErrorCode; message: string }
+		| { thrown: false; ok: boolean; code?: MultisigErrorCode }
+	>
+> {
+	try {
+		const result = await processCollectionRequest(rawBody, buildCollectionCtx());
+		return {
+			thrown: false,
+			ok: result.ok,
+			code: result.ok ? undefined : result.code,
+		};
+	} catch (err) {
+		if (isMultisigError(err)) {
+			return { thrown: true, code: err.code, message: err.message };
+		}
+		throw err;
+	}
+}
+
+async function clearDivergentFlag(): Promise<void> {
+	await sql`UPDATE state_meta SET divergent_at_block = NULL WHERE id = 1`;
+}
+
+async function seedSyncStateForTimeWindow(): Promise<void> {
+	await sql`UPDATE sync_state SET hive_head_time = NOW(), hive_head_block = 1 WHERE id = 1`;
+}
+
+async function clearCollectionForCreator(): Promise<void> {
+	await sql`DELETE FROM collections WHERE creator = ${CREATOR} AND symbol = ${COLLECTION_SYMBOL}`;
+}
+
+function expirationFromNow(offsetMs: number): string {
+	return new Date(Date.now() + offsetMs).toISOString().replace(/\.\d{3}Z$/, "");
+}
+
+type CollectionPayloadOverrides = Readonly<{
+	readonly originDna?: unknown;
+	readonly maxInstances?: unknown;
+	readonly royaltyPct?: number;
+	readonly royaltyRecipient?: unknown;
+}>;
+
+async function buildPassingCollectionBody(
+	overrides: CollectionPayloadOverrides = {},
+): Promise<Record<string, unknown>> {
+	const canonicalId = await generateDeterministicCollectionId(CREATOR, COLLECTION_NAME, COLLECTION_SYMBOL);
+	const originDna = await generateOriginDna(canonicalId);
+	const royaltyPct = overrides.royaltyPct ?? 0;
+	const data: Record<string, unknown> = {
+		id: canonicalId,
+		name: COLLECTION_NAME,
+		symbol: COLLECTION_SYMBOL,
+		originDna: "originDna" in overrides ? overrides.originDna : originDna,
+		totalPotential: 5,
+		maxInstances: "maxInstances" in overrides ? overrides.maxInstances : 0,
+		metadata: {
+			description: "parity test collection",
+			image: "https://example.com/parity.png",
+		},
+		rules: {
+			transferable: true,
+			burnable: false,
+			royaltyPct,
+			...("royaltyRecipient" in overrides ? { royaltyRecipient: overrides.royaltyRecipient } : {}),
+		},
+	};
+	const json = JSON.stringify({
+		protocol: PROTOCOL_ID,
+		version: MIN_PROTOCOL_VERSION,
+		action: ACTION_CREATE_COLLECTION,
+		data,
+	});
+	return {
+		transaction: {
+			ref_block_num: 1,
+			ref_block_prefix: 1,
+			expiration: expirationFromNow(45_000),
+			extensions: [],
+			signatures: [],
+			operations: [
+				[
+					"transfer",
+					{
+						from: CREATOR,
+						to: NODE_ACCOUNT,
+						amount: FEE_AMOUNT_STRING,
+						memo: `NFTLox FEE-COL:${canonicalId}`,
+					},
+				],
+				[
+					"custom_json",
+					{
+						id: PROTOCOL_ID,
+						required_auths: [NODE_ACCOUNT],
+						required_posting_auths: [],
+						json,
+					},
+				],
+			],
+		},
+	};
+}
+
+describe("M5 multisig <-> handler payload parity", () => {
+	beforeAll(async () => {
+		await seedSyncStateForTimeWindow();
+	});
+
+	beforeEach(async () => {
+		await clearDivergentFlag();
+		await clearCollectionForCreator();
+	});
+
+	afterAll(async () => {
+		await clearCollectionForCreator();
+	});
+
+	test("rejects payloads whose originDna does not equal generateOriginDna(canonicalId)", async () => {
+		const tamperedOriginDna = "oDEADBEEFDEADBEE"; // 16 chars, valid shape, wrong value
+		const body = await buildPassingCollectionBody({ originDna: tamperedOriginDna });
+
+		const outcome = await callCollection(body);
+
+		expect(outcome.thrown).toBe(true);
+		if (outcome.thrown) {
+			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
+			expect(outcome.message).toContain("Non-canonical originDna");
+			expect(outcome.message).toContain(tamperedOriginDna);
+		}
+	});
+
+	test("rejects payloads with royaltyPct > 0 and no royaltyRecipient", async () => {
+		const body = await buildPassingCollectionBody({ royaltyPct: 5 });
+
+		const outcome = await callCollection(body);
+
+		expect(outcome.thrown).toBe(true);
+		if (outcome.thrown) {
+			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
+			expect(outcome.message).toContain("royaltyRecipient is required when");
+			expect(outcome.message).toContain("royaltyPct");
+		}
+	});
+
+	test("rejects payloads whose royaltyRecipient is not a well-formed Hive username", async () => {
+		const body = await buildPassingCollectionBody({
+			royaltyPct: 5,
+			royaltyRecipient: "Bad_User!",
+		});
+
+		const outcome = await callCollection(body);
+
+		expect(outcome.thrown).toBe(true);
+		if (outcome.thrown) {
+			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
+			expect(outcome.message).toContain("royaltyRecipient");
+			expect(outcome.message).toContain("Bad_User!");
+		}
+	});
+
+	test(`rejects maxInstances above ${MAX_INSTANCES_PER_COLLECTION}`, async () => {
+		const oversized = MAX_INSTANCES_PER_COLLECTION + INSTANCE_FEE_PER_N;
+		const body = await buildPassingCollectionBody({ maxInstances: oversized });
+
+		const outcome = await callCollection(body);
+
+		expect(outcome.thrown).toBe(true);
+		if (outcome.thrown) {
+			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
+			expect(outcome.message).toContain("maxInstances");
+			expect(outcome.message).toContain("exceeds protocol cap");
+			expect(outcome.message).toContain(String(MAX_INSTANCES_PER_COLLECTION));
+		}
+	});
+
+	// Happy-path guard. Without this test, a future refactor that wrongly
+	// rejects canonical payloads would silently widen the multisig-strict
+	// direction of the parity contract — a denial-of-service vector against
+	// legitimate creators. The four reject-tests above only defend the
+	// multisig-loose direction.
+	test("accepts a canonical payload and returns a signed response", async () => {
+		const body = await buildPassingCollectionBody();
+
+		const result = await processCollectionRequest(body, buildCollectionCtx(passingSignStub));
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.signature).toBe("stub-signature");
+		}
+	});
+});
