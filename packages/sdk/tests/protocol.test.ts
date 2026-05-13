@@ -187,10 +187,10 @@ describe("buildBuy transfer generation", () => {
 		expect(ops).toHaveLength(3);
 	});
 
-		test("skips fee transfer when feeAmount is 0", () => {
-			const result = buildBuy({
-				...baseInput,
-				paymentSplit: {
+	test("skips fee transfer when feeAmount is 0", () => {
+		const result = buildBuy({
+			...baseInput,
+			paymentSplit: {
 				sellerAmount: 9.0,
 				royaltyAmount: 0,
 				royaltyRecipient: null,
@@ -209,49 +209,49 @@ describe("buildBuy transfer generation", () => {
 			.filter((op): op is HiveTransferOperation => op[0] === "transfer")
 			.map((op) => op[1].memo);
 
-			expect(transferMemos.some((m) => m?.includes("NFTLox FEE:"))).toBe(false);
-			expect(ops).toHaveLength(2);
+		expect(transferMemos.some((m) => m?.includes("NFTLox FEE:"))).toBe(false);
+		expect(ops).toHaveLength(2);
+	});
+
+	test("rejects payment splits whose legs do not sum to totalPrice", () => {
+		const result = buildBuy({
+			...baseInput,
+			paymentSplit: {
+				sellerAmount: 0.001,
+				royaltyAmount: 0,
+				royaltyRecipient: null,
+				feeAmount: 0,
+				feeAccount: FEE_ACCOUNT,
+				totalPrice: 100,
+				currency: "HIVE",
+			},
 		});
 
-		test("rejects payment splits whose legs do not sum to totalPrice", () => {
-			const result = buildBuy({
-				...baseInput,
-				paymentSplit: {
-					sellerAmount: 0.001,
-					royaltyAmount: 0,
-					royaltyRecipient: null,
-					feeAmount: 0,
-					feeAccount: FEE_ACCOUNT,
-					totalPrice: 100,
-					currency: "HIVE",
-				},
-			});
+		expect(result.success).toBe(false);
+		if (result.success) return;
+		expect(result.errors.some((error) => error.code === "INVALID_PAYMENT_SPLIT")).toBe(true);
+	});
 
-			expect(result.success).toBe(false);
-			if (result.success) return;
-			expect(result.errors.some((error) => error.code === "INVALID_PAYMENT_SPLIT")).toBe(true);
+	test("rejects royalty amount without a royalty recipient", () => {
+		const result = buildBuy({
+			...baseInput,
+			paymentSplit: {
+				sellerAmount: 8,
+				royaltyAmount: 1,
+				royaltyRecipient: null,
+				feeAmount: 0,
+				feeAccount: FEE_ACCOUNT,
+				totalPrice: 9,
+				currency: "HIVE",
+			},
 		});
 
-		test("rejects royalty amount without a royalty recipient", () => {
-			const result = buildBuy({
-				...baseInput,
-				paymentSplit: {
-					sellerAmount: 8,
-					royaltyAmount: 1,
-					royaltyRecipient: null,
-					feeAmount: 0,
-					feeAccount: FEE_ACCOUNT,
-					totalPrice: 9,
-					currency: "HIVE",
-				},
-			});
+		expect(result.success).toBe(false);
+		if (result.success) return;
+		expect(result.errors[0]?.field).toBe("paymentSplit.royaltyRecipient");
+	});
 
-			expect(result.success).toBe(false);
-			if (result.success) return;
-			expect(result.errors[0]?.field).toBe("paymentSplit.royaltyRecipient");
-		});
-
-		test("transfer memos use correct NFTLox BUY/ROY/FEE prefixes", () => {
+	test("transfer memos use correct NFTLox BUY/ROY/FEE prefixes", () => {
 		const result = buildBuy({
 			...baseInput,
 			paymentSplit: {

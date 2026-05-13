@@ -157,20 +157,20 @@ describe("buildCollection consistency", () => {
 		const result = await buildCollection(validInput, { nodeAccount });
 		if (!result.success) throw new Error("Expected success");
 
-			const transferOp = result.operations[0] as unknown as readonly ["transfer", Record<string, string>];
-			expect(transferOp[1]?.from).toBe(validInput.creator);
-			expect(transferOp[1]?.to).toBe(nodeAccount);
-			expect(transferOp[1]?.amount).toMatch(/^\d+\.\d{3} HBD$/);
-			expect(transferOp[1]?.memo).toBe(`NFTLox FEE-COL:${result.generatedIds?.collectionId}`);
-		});
+		const transferOp = result.operations[0] as unknown as readonly ["transfer", Record<string, string>];
+		expect(transferOp[1]?.from).toBe(validInput.creator);
+		expect(transferOp[1]?.to).toBe(nodeAccount);
+		expect(transferOp[1]?.amount).toMatch(/^\d+\.\d{3} HBD$/);
+		expect(transferOp[1]?.memo).toBe(`NFTLox FEE-COL:${result.generatedIds?.collectionId}`);
+	});
 
-		test("rejects HIVE collection fees because the protocol requires HBD", async () => {
-			const result = await buildCollection(validInput, { nodeAccount, feeCurrency: "HIVE" });
+	test("rejects HIVE collection fees because the protocol requires HBD", async () => {
+		const result = await buildCollection(validInput, { nodeAccount, feeCurrency: "HIVE" });
 
-			expect(result.success).toBe(false);
-			if (result.success) return;
-			expect(result.errors[0]?.field).toBe("feeCurrency");
-		});
+		expect(result.success).toBe(false);
+		if (result.success) return;
+		expect(result.errors[0]?.field).toBe("feeCurrency");
+	});
 
 	test("custom_json required_auths is [nodeAccount] (node co-signs)", async () => {
 		const result = await buildCollection(validInput, { nodeAccount });
