@@ -139,4 +139,13 @@ describe("DNA helpers normalize Unicode inputs", () => {
 		expect(fromNfc).toBe(fromNfd);
 		expect(fromNfc).toBe("seed_54bc09b235b1c5274d2a");
 	});
+
+	// NFC normalization lives inside `toWireUrl` so any third-party indexer
+	// reproducing image-hash derivation must apply NFC before hashing the URL.
+	test("NFC and NFD image URLs map to the same image id", async () => {
+		const fromNfc = await generateImageHash(`https://example.com/${NFC_NAIVE}.png`);
+		const fromNfd = await generateImageHash(`https://example.com/${NFD_NAIVE}.png`);
+		expect(fromNfc).toBe(fromNfd);
+		expect(fromNfc).toBe("img_090e5c2b65c65667");
+	});
 });

@@ -32,6 +32,18 @@ describe("toWireUrl", () => {
 			toWireUrl("https://bucket.s3.amazonaws.com/img?X-Amz-Signature=abc"),
 		).toBe("bucket.s3.amazonaws.com/img?X-Amz-Signature=abc");
 	});
+
+	// Cousin trap to [[project_protocol_hash_inputs_must_be_normalized]]: an
+	// NFD-encoded URL must canonicalize to its NFC form so emitters on Android
+	// (NFD) and Desktop (NFC) put the same bytes on chain.
+	it("NFC-normalizes decomposed inputs", () => {
+		// "naïve" decomposed: i (U+0069) + COMBINING DIAERESIS (U+0308).
+		const nfd = "https://example.com/naïve.png";
+		// "naïve" precomposed: LATIN SMALL LETTER I WITH DIAERESIS (U+00EF).
+		const nfc = "https://example.com/naïve.png";
+		expect(toWireUrl(nfd)).toBe(toWireUrl(nfc));
+		expect(toWireUrl(nfd)).toBe("example.com/naïve.png");
+	});
 });
 
 describe("fromWireUrl", () => {
@@ -71,4 +83,10 @@ describe("round-trip invariant", () => {
 			expect(fromWireUrl(toWireUrl(url))).toBe(url);
 		});
 	}
+
+	it("canonicalizes NFD inputs to NFC on the round trip", () => {
+		const nfd = "https://example.com/naïve.png";
+		const nfc = "https://example.com/naïve.png";
+		expect(fromWireUrl(toWireUrl(nfd))).toBe(nfc);
+	});
 });

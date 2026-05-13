@@ -6,6 +6,9 @@
 // `fromWireUrl` after reading a value back.
 //
 // Rule:
+//   - Input is NFC-normalized so visually-identical URLs typed on different
+//     platforms (Android NFD, Desktop NFC) hash to the same canonical id —
+//     mirrors the policy applied to `name`/`artId` inside `dna.ts`.
 //   - URLs starting with `https://` (case-insensitive) → prefix stripped.
 //   - URLs starting with `http://` → preserved verbatim.
 //   - Anything else (already-stripped, non-http scheme) → preserved verbatim.
@@ -14,10 +17,9 @@
 //   - Wire value starting with `http://` or `https://` → returned unchanged.
 //   - Anything else → prepended with `https://`.
 //
-// Round-trip invariant: `fromWireUrl(toWireUrl(x)) === x.trim()` for every
-// http(s) URL. This matches the convention already used by the node-endpoint
-// normalizer — the protocol treats scheme as redundant state when it can be
-// derived from context.
+// Round-trip invariant: `fromWireUrl(toWireUrl(x)) === x.trim().normalize("NFC")`
+// for every http(s) URL. NFC-canonical inputs round-trip byte-for-byte; NFD
+// inputs canonicalize to NFC on the wire and stay NFC on read-back.
 
 const HTTPS_PREFIX = "https://";
 const HTTP_PREFIX = "http://";
@@ -36,7 +38,7 @@ function startsWithInsensitive(value: string, prefix: string): boolean {
  * computing a deterministic hash over a URL.
  */
 export function toWireUrl(fullUrl: string): string {
-	const trimmed = fullUrl.trim();
+	const trimmed = fullUrl.trim().normalize("NFC");
 	if (startsWithInsensitive(trimmed, HTTPS_PREFIX)) {
 		return trimmed.slice(HTTPS_PREFIX.length);
 	}
