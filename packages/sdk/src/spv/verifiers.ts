@@ -552,6 +552,13 @@ async function resolveCollectionBuyRules(params: {
 		throw new OwnershipMismatchError(`Collection ${params.collectionId} has royaltyPct > 0 without royaltyRecipient`);
 	}
 
+	// Invariant: the create_collection custom_json signer is the fee recipient.
+	// The handler enforces this via assertActiveSettlementNode(op.signer, blockNum)
+	// + PAYMENT_VALIDATORS routing the fee to op.signer; SPV mirrors that binding
+	// by passing collectionOp.signer as nodeAccount to findCollectionFeeTransfer.
+	// Breaks if fee routing ever moves to a fixed account (e.g. DEFAULT_FEE_ACCOUNT):
+	// SPV would resolve the wrong recipient and reject every legitimate buy.
+	// Any such change MUST update this resolver in the same hardfork.
 	const feeTransfer = findCollectionFeeTransfer({
 		tx,
 		collectionId: params.collectionId,
