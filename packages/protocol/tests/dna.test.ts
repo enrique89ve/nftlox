@@ -11,6 +11,7 @@ import {
 	isInstanceId,
 	isListingId,
 	isHiveTxId,
+	isSymbol,
 	extractSeedId,
 	generateListingNonce,
 } from "../src/index.ts";
@@ -77,6 +78,22 @@ describe("DNA generation", () => {
 		expect(isListingId(`list_${"a".repeat(31)}`)).toBe(false);
 		expect(isListingId(`list_${"a".repeat(33)}`)).toBe(false);
 		expect(isListingId("a".repeat(37))).toBe(false);
+	});
+
+	test("isSymbol guard", () => {
+		// Canonical: 3-10 uppercase chars, leading letter, A-Z0-9 in tail.
+		expect(isSymbol("CARD")).toBe(true);
+		expect(isSymbol("NFT01")).toBe(true);
+		expect(isSymbol("ABC")).toBe(true);
+		expect(isSymbol("A1B2C3D4E5")).toBe(true);
+		// Rejects: lowercase, leading digit, too short, too long, empty, bad chars.
+		expect(isSymbol("card")).toBe(false);
+		expect(isSymbol("1ABC")).toBe(false);
+		expect(isSymbol("AB")).toBe(false);
+		expect(isSymbol("A".repeat(11))).toBe(false);
+		expect(isSymbol("")).toBe(false);
+		expect(isSymbol("AB-CD")).toBe(false);
+		expect(isSymbol("AB CD")).toBe(false);
 	});
 
 	test("isHiveTxId guard", () => {

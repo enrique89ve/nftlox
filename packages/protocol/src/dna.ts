@@ -17,6 +17,7 @@ import {
 	LISTING_ID_PREFIX,
 	LISTING_NONCE_LENGTH,
 	LISTING_HASH_LENGTH,
+	SYMBOL_REGEX,
 	TX_ID_REGEX,
 	HASH_DOMAIN_COL,
 	HASH_DOMAIN_ORIGIN,
@@ -158,6 +159,14 @@ export function isListingId(id: string): boolean {
 // other id guards.
 export function isHiveTxId(id: string): boolean {
 	return TX_ID_REGEX.test(id);
+}
+
+// Collection symbol shape — derived from SYMBOL_REGEX (3-10 uppercase chars,
+// leading letter, A-Z0-9). Wrapped as a function so multisig + handler call
+// sites read symmetrically with isInstanceId/isListingId/isHiveTxId and the
+// underlying regex stays the single source of truth.
+export function isSymbol(value: string): boolean {
+	return SYMBOL_REGEX.test(value);
 }
 
 /**

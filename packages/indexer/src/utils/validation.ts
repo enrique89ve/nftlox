@@ -5,8 +5,8 @@
 
 import {
 	calculatePaymentSplit,
+	isSymbol,
 	validateHiveUsername,
-	SYMBOL_REGEX,
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
@@ -204,7 +204,7 @@ export function requireString(value: unknown, fieldName: string): string {
 
 export function requireSymbol(value: unknown, fieldName: string): string {
 	const str = requireString(value, fieldName);
-	if (!SYMBOL_REGEX.test(str)) {
+	if (!isSymbol(str)) {
 		throw new Error(
 			`Invalid ${fieldName}: "${str}" must be 3-10 uppercase chars, start with letter (e.g. "CARD", "NFT01")`,
 		);

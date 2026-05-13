@@ -13,8 +13,8 @@ import {
 	validateNonEmptyBoundedPayloadString,
 	validateCommonTransactionStructure,
 	validateCustomJsonOperation,
-	validatePayloadDataString,
 	validateRecord,
+	validateShapedPayloadString,
 	validateTransferBody,
 } from "@/api/services/multisig/transaction.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
@@ -31,9 +31,9 @@ import {
 	MAX_URL_LENGTH,
 	ORIGIN_DNA_LENGTH,
 	PROTOCOL_COLLECTION_FEE_HBD,
-	SYMBOL_REGEX,
 	generateDeterministicCollectionId,
 	generateOriginDna,
+	isSymbol,
 	validateHiveUsername,
 	validateSchemaDefinition,
 } from "@/protocol/index.ts";
@@ -358,15 +358,15 @@ function validateCollectionSchema(value: unknown): void {
 }
 
 function validateCollectionSymbol(value: unknown): string {
-	const symbol = validatePayloadDataString(value, "symbol");
-	if (!SYMBOL_REGEX.test(symbol)) {
-		throw createMultisigError(
-			"INVALID_PROTOCOL_PAYLOAD",
-			"Payload data.symbol must be 3-10 uppercase characters and start with a letter",
-		);
-	}
-
-	return symbol;
+	// `isSymbol` is the same protocol guard `requireSymbol` consumes on the
+	// handler side, so multisig and on-chain code reject identical payloads
+	// (parity invariant: [[project_multisig_handler_parity_invariant]]).
+	return validateShapedPayloadString(
+		value,
+		"symbol",
+		isSymbol,
+		"3-10 uppercase A-Z0-9, leading letter",
+	);
 }
 
 async function validateOriginDna(value: unknown, canonicalId: string): Promise<void> {

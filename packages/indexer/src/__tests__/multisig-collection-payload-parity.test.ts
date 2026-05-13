@@ -126,6 +126,7 @@ function expirationFromNow(offsetMs: number): string {
 type CollectionPayloadOverrides = Readonly<{
 	readonly id?: unknown;
 	readonly name?: unknown;
+	readonly symbol?: unknown;
 	readonly description?: unknown;
 	readonly image?: unknown;
 	readonly originDna?: unknown;
@@ -143,7 +144,7 @@ async function buildPassingCollectionBody(
 	const data: Record<string, unknown> = {
 		id: "id" in overrides ? overrides.id : canonicalId,
 		name: "name" in overrides ? overrides.name : COLLECTION_NAME,
-		symbol: COLLECTION_SYMBOL,
+		symbol: "symbol" in overrides ? overrides.symbol : COLLECTION_SYMBOL,
 		originDna: "originDna" in overrides ? overrides.originDna : originDna,
 		totalPotential: 5,
 		maxInstances: "maxInstances" in overrides ? overrides.maxInstances : 0,
@@ -311,6 +312,31 @@ describe("M5 multisig <-> handler payload parity", () => {
 			expect(outcome.message).toContain("collectionsPerCreator");
 			expect(outcome.message).toContain(CREATOR);
 			expect(outcome.message).toContain(String(cap));
+		}
+	});
+
+	// Shape-guard parity on `symbol`. Handler uses `requireSymbol` (which
+	// delegates to `isSymbol` from `@nftlox/protocol`). Multisig must reject
+	// the same malformed symbols before signing — otherwise the protocol
+	// fee is paid for a tx the chain bounces post-broadcast. Pinned cases
+	// cover the regex's defining constraints: case, leading char, length.
+	test.each([
+		["lowercase", "card"],
+		["leading digit", "1ABC"],
+		["too short", "AB"],
+		["too long", "ABCDEFGHIJK"],
+		["special char", "AB-C"],
+		["empty", ""],
+	])("rejects malformed symbol (%s)", async (_label, badSymbol) => {
+		const body = await buildPassingCollectionBody({ symbol: badSymbol });
+
+		const outcome = await callCollection(body);
+
+		expect(outcome.thrown).toBe(true);
+		if (outcome.thrown) {
+			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
+			expect(outcome.message).toContain("data.symbol");
+			expect(outcome.message).toContain("canonical shape");
 		}
 	});
 

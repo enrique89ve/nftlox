@@ -180,6 +180,7 @@ const PROTOCOL_RUNTIME_SURFACE: ReadonlyArray<string> = [
 	"isListingId",
 	"isProtocolAction",
 	"isSeedId",
+	"isSymbol",
 	"isValidProtocolVersion",
 	"matchProvenance",
 	"mergeSchemas",
