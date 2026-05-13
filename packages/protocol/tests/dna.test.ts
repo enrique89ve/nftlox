@@ -6,8 +6,11 @@ import {
 	generateDeterministicSeedId,
 	generateDeterministicInstanceId,
 	generateImageHash,
+	generateListingId,
 	isSeedId,
 	isInstanceId,
+	isListingId,
+	isHiveTxId,
 	extractSeedId,
 	generateListingNonce,
 } from "../src/index.ts";
@@ -55,6 +58,37 @@ describe("DNA generation", () => {
 		expect(isSeedId(instanceId)).toBe(false);
 		expect(isInstanceId(instanceId)).toBe(true);
 		expect(isInstanceId(seedId)).toBe(false);
+	});
+
+	test("isListingId guard", async () => {
+		const listingId = await generateListingId({
+			nftId: "nft_aaaaaaaaaaaaaaaaaaaa_1",
+			owner: "alice",
+			marketplace: "nftlox",
+			priceAmount: "1.000",
+			priceCurrency: "HIVE",
+			expiresAt: 1_700_000_000_000,
+			nonce: "abcdef012345",
+		});
+		expect(isListingId(listingId)).toBe(true);
+		// Rejects: wrong prefix, wrong charset, wrong length, missing prefix.
+		expect(isListingId("listing_abcd")).toBe(false);
+		expect(isListingId(`list_${"Z".repeat(32)}`)).toBe(false);
+		expect(isListingId(`list_${"a".repeat(31)}`)).toBe(false);
+		expect(isListingId(`list_${"a".repeat(33)}`)).toBe(false);
+		expect(isListingId("a".repeat(37))).toBe(false);
+	});
+
+	test("isHiveTxId guard", () => {
+		// 40 lowercase hex — the canonical Hive tx id shape.
+		expect(isHiveTxId("a".repeat(40))).toBe(true);
+		expect(isHiveTxId("0123456789abcdef0123456789abcdef01234567")).toBe(true);
+		// Rejects: wrong case, wrong length, non-hex chars.
+		expect(isHiveTxId("A".repeat(40))).toBe(false);
+		expect(isHiveTxId("a".repeat(39))).toBe(false);
+		expect(isHiveTxId("a".repeat(41))).toBe(false);
+		expect(isHiveTxId("g".repeat(40))).toBe(false);
+		expect(isHiveTxId("")).toBe(false);
 	});
 
 	test("extractSeedId round-trips", async () => {

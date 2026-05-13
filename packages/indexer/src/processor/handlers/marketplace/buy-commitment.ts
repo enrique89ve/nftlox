@@ -5,12 +5,14 @@ import {
 	NFT_STATUS_LISTED,
 	NFT_STATUS_PENDING_SALE,
 } from "@/db/queries/nfts.ts";
-import { requireString, requireUsername } from "@/utils/validation.ts";
+import { requireShapedString, requireString, requireUsername } from "@/utils/validation.ts";
 import { assertActionable, isListingExpired } from "@/utils/status-checks.ts";
 import {
 	BUY_COMMITMENT_TTL_BLOCKS,
 	MAX_ACTIVE_COMMITMENTS_PER_NODE,
-	TX_ID_REGEX,
+	isHiveTxId,
+	isInstanceId,
+	isListingId,
 } from "@/protocol/index.ts";
 
 /**
@@ -30,14 +32,18 @@ export async function handleBuyCommitment(
 	op: ParsedOperation,
 	txn: Queryable,
 ): Promise<ReadonlyArray<string>> {
-	const nftId = requireString(op.data.nftId, "nftId");
-	const listingId = requireString(op.data.listingId, "listingId");
-	const listTxId = requireString(op.data.listTxId, "listTxId");
+	const nftId = requireShapedString(op.data.nftId, "nftId", isInstanceId, "nft_<20 hex>_<instance>");
+	const listingId = requireShapedString(op.data.listingId, "listingId", isListingId, "list_<32 hex>");
+	const listTxId = requireShapedString(op.data.listTxId, "listTxId", isHiveTxId, "<40 lowercase hex>");
 	const buyer = requireUsername(requireString(op.data.buyer, "buyer"), "buyer");
-	const buyTxHash = requireString(op.data.txHash, "txHash").toLowerCase();
-	if (!TX_ID_REGEX.test(buyTxHash)) {
-		throw new Error(`Invalid txHash format: ${buyTxHash}`);
-	}
+	// txHash lower-cased to canonicalize before shape-guarding — Hive nodes
+	// emit lower-hex but some buyer-side libraries upcase before signing.
+	const buyTxHash = requireShapedString(
+		requireString(op.data.txHash, "txHash").toLowerCase(),
+		"txHash",
+		isHiveTxId,
+		"<40 lowercase hex>",
+	);
 
 	// The node that emitted the commitment is the active-auth signer of the
 	// custom_json. Eligibility as a settlement node (registered + active in

@@ -6,11 +6,13 @@ import {
 	ACTION_BUY,
 	ACTION_CREATE_COLLECTION,
 	HIVE_CUSTOM_JSON_MAX_BYTES,
-	MAX_ID_LENGTH,
 	MIN_PROTOCOL_VERSION,
 	MULTISIG_TX_MAX_EXPIRATION_MS,
 	MULTISIG_TX_MIN_EXPIRATION_MS,
 	compareVersions,
+	isHiveTxId,
+	isInstanceId,
+	isListingId,
 	isProtocolAction,
 	parseProtocolVersion,
 	type MultisigErrorCode,
@@ -234,17 +236,16 @@ export function parseBuyPayload(json: string, protocolId: string): ValidatedBuyP
 		);
 	}
 
-	// Handler-side `handleBuy` calls `requireString` on these three fields,
-	// which rejects empty strings. Mirror that here so a co-signed payload
-	// that the chain will bounce post-broadcast (orphaning the fee) is caught
-	// pre-broadcast. Bounded by MAX_ID_LENGTH on the multisig-strict / DoS-safe
-	// side; the handler is unbounded but the SDK never produces longer ids.
+	// Handler-side `handleBuy` / `handleBuyCommitment` apply the same shape
+	// guards (isInstanceId / isListingId / isHiveTxId) and reject identical
+	// payloads. Catching the mismatch pre-broadcast avoids orphaning the
+	// protocol fee on a chain rejection.
 	return {
 		action: ACTION_BUY,
 		data: {
-			nftId: validateNonEmptyBoundedPayloadString(parsed.data.nftId, "nftId", MAX_ID_LENGTH),
-			listingId: validateNonEmptyBoundedPayloadString(parsed.data.listingId, "listingId", MAX_ID_LENGTH),
-			listTxId: validateNonEmptyBoundedPayloadString(parsed.data.listTxId, "listTxId", MAX_ID_LENGTH),
+			nftId: validateShapedPayloadString(parsed.data.nftId, "nftId", isInstanceId, "nft_<20 hex>_<instance>"),
+			listingId: validateShapedPayloadString(parsed.data.listingId, "listingId", isListingId, "list_<32 hex>"),
+			listTxId: validateShapedPayloadString(parsed.data.listTxId, "listTxId", isHiveTxId, "<40 lowercase hex>"),
 		},
 	};
 }
@@ -320,6 +321,29 @@ export function validateExactLengthPayloadString(value: unknown, fieldName: stri
 		throw createMultisigError(
 			"INVALID_PROTOCOL_PAYLOAD",
 			`Payload data.${fieldName} must be exactly ${length} characters, got ${str.length}`,
+		);
+	}
+
+	return str;
+}
+
+// Shape-guard variant — use for fields whose protocol contract is a regex
+// (id prefixes, hex widths). The predicate is a pure protocol guard
+// (`isInstanceId`, `isListingId`, `isHiveTxId`) so the multisig and handler
+// reject the same string for the same reason. `shapeDescription` should name
+// the canonical shape ("nft_<20 hex>_<n>") so client logs surface why the
+// payload was rejected.
+export function validateShapedPayloadString(
+	value: unknown,
+	fieldName: string,
+	predicate: (s: string) => boolean,
+	shapeDescription: string,
+): string {
+	const str = validatePayloadDataString(value, fieldName);
+	if (!predicate(str)) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.${fieldName} does not match the canonical shape ${shapeDescription}`,
 		);
 	}
 

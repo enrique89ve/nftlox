@@ -13,7 +13,14 @@ import {
 } from "@/protocol/index.ts";
 import { seedActiveSettlementNode } from "./helpers/settlement-node.ts";
 import { makeOp as _makeOp } from "./helpers/make-op.ts";
-import { seedCollection, insertListedInstance, cleanCommonTables } from "./helpers/nft-fixtures.ts";
+import {
+	seedCollection,
+	insertListedInstance,
+	cleanCommonTables,
+	fixtureNftId,
+	fixtureListingId,
+	fixtureHiveTxId,
+} from "./helpers/nft-fixtures.ts";
 
 // Tests that validate the action-router gate for NODE_SIGNED_ACTIONS
 // (buy_commitment, buy): op.signer MUST be registered and active in l2_nodes
@@ -104,8 +111,10 @@ afterAll(async () => {
 
 describe("router node-signer gate — buy_commitment", () => {
 	test("rejects a non-registered signer (DOS prevention)", async () => {
-		const nftId = "nft_gate_a";
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_a", listTxId: "tx_a" });
+		const nftId = fixtureNftId("gate-a");
+		const listingId = fixtureListingId("a");
+		const listTxId = fixtureHiveTxId("a");
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 		const op = _makeOp({
 			action: ACTION_BUY_COMMITMENT,
@@ -113,8 +122,8 @@ describe("router node-signer gate — buy_commitment", () => {
 			blockNum: FRESH_BLOCK,
 			data: {
 				nftId,
-				listingId: "list_a",
-				listTxId: "tx_a",
+				listingId,
+				listTxId,
 				buyer: BUYER,
 				txHash: "b".repeat(40),
 			},
@@ -138,8 +147,10 @@ describe("router node-signer gate — buy_commitment", () => {
 
 	test("accepts a registered + fresh node signer (happy path)", async () => {
 		await seedActiveSettlementNode(REGISTERED_NODE, { registeredBlock: REGISTERED_BLOCK });
-		const nftId = "nft_gate_b";
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_b", listTxId: "tx_b" });
+		const nftId = fixtureNftId("gate-b");
+		const listingId = fixtureListingId("b");
+		const listTxId = fixtureHiveTxId("b");
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 		const op = _makeOp({
 			action: ACTION_BUY_COMMITMENT,
@@ -147,8 +158,8 @@ describe("router node-signer gate — buy_commitment", () => {
 			blockNum: FRESH_BLOCK,
 			data: {
 				nftId,
-				listingId: "list_b",
-				listTxId: "tx_b",
+				listingId,
+				listTxId,
 				buyer: BUYER,
 				txHash: "c".repeat(40),
 			},
@@ -169,8 +180,10 @@ describe("router node-signer gate — buy_commitment", () => {
 
 	test("rejects a registered node with a stale heartbeat", async () => {
 		await seedActiveSettlementNode(REGISTERED_NODE, { registeredBlock: REGISTERED_BLOCK });
-		const nftId = "nft_gate_c";
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_c", listTxId: "tx_c" });
+		const nftId = fixtureNftId("gate-c");
+		const listingId = fixtureListingId("c");
+		const listTxId = fixtureHiveTxId("c");
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 		const op = _makeOp({
 			action: ACTION_BUY_COMMITMENT,
@@ -178,8 +191,8 @@ describe("router node-signer gate — buy_commitment", () => {
 			blockNum: STALE_BLOCK,
 			data: {
 				nftId,
-				listingId: "list_c",
-				listTxId: "tx_c",
+				listingId,
+				listTxId,
 				buyer: BUYER,
 				txHash: "d".repeat(40),
 			},
@@ -209,8 +222,10 @@ describe("router node-signer gate — buy", () => {
 		// buy BEFORE it reaches the handler, without altering the reservation.
 		await seedActiveSettlementNode(REGISTERED_NODE, { registeredBlock: REGISTERED_BLOCK });
 
-		const nftId = "nft_gate_buy";
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_buy", listTxId: "tx_buy" });
+		const nftId = fixtureNftId("gate-buy");
+		const listingId = fixtureListingId("buy");
+		const listTxId = fixtureHiveTxId("buy");
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 		const buyTxHash = "e".repeat(40);
 
 		const commitOp = _makeOp({
@@ -219,8 +234,8 @@ describe("router node-signer gate — buy", () => {
 			blockNum: FRESH_BLOCK,
 			data: {
 				nftId,
-				listingId: "list_buy",
-				listTxId: "tx_buy",
+				listingId,
+				listTxId,
 				buyer: BUYER,
 				txHash: buyTxHash,
 			},
@@ -232,8 +247,8 @@ describe("router node-signer gate — buy", () => {
 		// account and self-directs the fee (signer === feeAccount).
 		const buyOp = makeBuyOp({
 			nftId,
-			listingId: "list_buy",
-			listTxId: "tx_buy",
+			listingId,
+			listTxId,
 			buyer: BUYER,
 			seller: SELLER,
 			signer: STRANGER,

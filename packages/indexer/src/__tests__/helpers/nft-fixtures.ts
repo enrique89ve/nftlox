@@ -1,4 +1,42 @@
 import { sql } from "@/db/client.ts";
+import {
+	INSTANCE_ID_PREFIX,
+	INSTANCE_ID_HASH_LENGTH,
+	LISTING_ID_PREFIX,
+	LISTING_HASH_LENGTH,
+} from "@/protocol/index.ts";
+
+// Shape-valid id factories. Fixtures used to use short slugs like "nft_a" or
+// "tx_x" — those are now rejected by the handler/multisig shape guards
+// (isInstanceId / isListingId / isHiveTxId). These helpers pad a free-form
+// slug into the canonical width, preserving readability inside tests while
+// satisfying the protocol regexes.
+//
+// The padding is deterministic so two fixtures built from the same slug
+// collide intentionally; pass a unique slug when uniqueness matters.
+
+function deterministicHex(slug: string, width: number): string {
+	// Emit each char as 2 lowercase hex digits (charCode & 0xff). Collisions
+	// between two distinct slugs require both to share their first ceil(width/2)
+	// chars exactly — sufficient for fixture-level uniqueness without pulling
+	// in a real hash.
+	const hex = Array.from(slug)
+		.map((ch) => (ch.charCodeAt(0) & 0xff).toString(16).padStart(2, "0"))
+		.join("");
+	return (hex + "0".repeat(width)).slice(0, width);
+}
+
+export function fixtureNftId(slug: string, instance: number = 1): string {
+	return `${INSTANCE_ID_PREFIX}${deterministicHex(slug, INSTANCE_ID_HASH_LENGTH)}_${instance}`;
+}
+
+export function fixtureListingId(slug: string): string {
+	return `${LISTING_ID_PREFIX}${deterministicHex(slug, LISTING_HASH_LENGTH)}`;
+}
+
+export function fixtureHiveTxId(slug: string): string {
+	return deterministicHex(slug, 40);
+}
 
 export async function seedCollection(id: string, seller: string): Promise<void> {
 	await sql`

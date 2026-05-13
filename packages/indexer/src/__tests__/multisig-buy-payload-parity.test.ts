@@ -19,6 +19,7 @@ import {
 } from "@/protocol/index.ts";
 import { parseBuyPayload } from "@/api/services/multisig/transaction.ts";
 import { isMultisigError } from "@/api/services/multisig/errors.ts";
+import { fixtureHiveTxId, fixtureListingId, fixtureNftId } from "./helpers/nft-fixtures.ts";
 
 function buildJson(data: Record<string, unknown>): string {
 	return JSON.stringify({
@@ -30,9 +31,9 @@ function buildJson(data: Record<string, unknown>): string {
 }
 
 const VALID = {
-	nftId: "nft_abc123",
-	listingId: "list_xyz789",
-	listTxId: "tx_deadbeef",
+	nftId: fixtureNftId("parity-happy"),
+	listingId: fixtureListingId("parity-happy"),
+	listTxId: fixtureHiveTxId("parity-happy"),
 };
 
 describe("parseBuyPayload — handler parity on required id fields", () => {
@@ -60,6 +61,33 @@ describe("parseBuyPayload — handler parity on required id fields", () => {
 				// that drops the field-name context can't slip past the substring
 				// match.
 				expect(err.message).toContain(`data.${field}`);
+			}
+		}
+	});
+
+	// Shape-guard parity: non-empty but malformed ids must be rejected
+	// pre-broadcast for the same reason the handler rejects them — otherwise
+	// the multisig co-signs a payload the chain will bounce, orphaning the
+	// buyer's fee transfer. The handler uses the same protocol guards
+	// (isInstanceId / isListingId / isHiveTxId), so parity is structural; this
+	// test pins the multisig layer's contribution.
+	test.each([
+		["nftId", { ...VALID, nftId: "nft_zz_1" }, "shape nft_<20 hex>_<instance>"],
+		["nftId", { ...VALID, nftId: VALID.nftId.toUpperCase() }, "shape nft_<20 hex>_<instance>"],
+		["listingId", { ...VALID, listingId: `list_${"z".repeat(32)}` }, "shape list_<32 hex>"],
+		["listingId", { ...VALID, listingId: `list_${"a".repeat(31)}` }, "shape list_<32 hex>"],
+		["listTxId", { ...VALID, listTxId: "A".repeat(40) }, "shape <40 lowercase hex>"],
+		["listTxId", { ...VALID, listTxId: "a".repeat(39) }, "shape <40 lowercase hex>"],
+	])("rejects malformed %s (canonical %s)", (field, data, _shape) => {
+		try {
+			parseBuyPayload(buildJson(data), PROTOCOL_ID);
+			throw new Error(`expected parseBuyPayload to throw for malformed ${field}`);
+		} catch (err) {
+			expect(isMultisigError(err)).toBe(true);
+			if (isMultisigError(err)) {
+				expect(err.code).toBe("INVALID_PROTOCOL_PAYLOAD");
+				expect(err.message).toContain(`data.${field}`);
+				expect(err.message).toContain("canonical shape");
 			}
 		}
 	});

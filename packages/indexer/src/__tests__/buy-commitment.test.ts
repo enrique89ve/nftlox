@@ -9,7 +9,14 @@ import {
 	MAX_ACTIVE_COMMITMENTS_PER_NODE,
 } from "@/protocol/index.ts";
 import { makeOp as _makeOp } from "./helpers/make-op.ts";
-import { seedCollection, insertListedInstance, cleanCommonTables } from "./helpers/nft-fixtures.ts";
+import {
+	seedCollection,
+	insertListedInstance,
+	cleanCommonTables,
+	fixtureNftId,
+	fixtureListingId,
+	fixtureHiveTxId,
+} from "./helpers/nft-fixtures.ts";
 
 const NODE = "node.one";
 const OTHER_NODE = "node.two";
@@ -57,11 +64,13 @@ afterAll(async () => {
 
 describe("handleBuyCommitment", () => {
 	test("projects pending_sale on a listed NFT", async () => {
-		const nftId = "nft_commit_a";
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_a", listTxId: "tx_a" });
+		const nftId = fixtureNftId("commit-a");
+		const listingId = fixtureListingId("a");
+		const listTxId = fixtureHiveTxId("a");
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 		const buyTxHash = "b".repeat(40);
-		const op = commitmentOp({ nftId, listingId: "list_a", listTxId: "tx_a", buyer: BUYER, buyTxHash, blockNum: 100_500 });
+		const op = commitmentOp({ nftId, listingId, listTxId, buyer: BUYER, buyTxHash, blockNum: 100_500 });
 
 		await withTransaction((txn) => handleBuyCommitment(op, txn));
 
@@ -86,31 +95,35 @@ describe("handleBuyCommitment", () => {
 
 	test("rejects when NFT is not found", async () => {
 		const op = commitmentOp({
-			nftId: "nft_ghost",
-			listingId: "list_x",
-			listTxId: "tx_x",
+			nftId: fixtureNftId("ghost"),
+			listingId: fixtureListingId("x"),
+			listTxId: fixtureHiveTxId("x"),
 			buyer: BUYER,
 		});
 		await expect(withTransaction((txn) => handleBuyCommitment(op, txn))).rejects.toThrow("not found");
 	});
 
 	test("rejects listingId mismatch", async () => {
-		const nftId = "nft_commit_mismatch";
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_real", listTxId: "tx_real" });
+		const nftId = fixtureNftId("commit-mismatch");
+		const realListing = fixtureListingId("real");
+		const realTx = fixtureHiveTxId("real");
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: realListing, listTxId: realTx });
 
 		const op = commitmentOp({
 			nftId,
-			listingId: "list_wrong",
-			listTxId: "tx_real",
+			listingId: fixtureListingId("wrong"),
+			listTxId: realTx,
 			buyer: BUYER,
 		});
 		await expect(withTransaction((txn) => handleBuyCommitment(op, txn))).rejects.toThrow("listingId mismatch");
 	});
 
 	test("rejects when buyer is the seller", async () => {
-		const nftId = "nft_commit_self";
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_self", listTxId: "tx_self" });
-		const op = commitmentOp({ nftId, listingId: "list_self", listTxId: "tx_self", buyer: SELLER });
+		const nftId = fixtureNftId("commit-self");
+		const listingId = fixtureListingId("self");
+		const listTxId = fixtureHiveTxId("self");
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
+		const op = commitmentOp({ nftId, listingId, listTxId, buyer: SELLER });
 		await expect(withTransaction((txn) => handleBuyCommitment(op, txn))).rejects.toThrow("Cannot reserve own");
 	});
 
@@ -122,20 +135,22 @@ describe("handleBuyCommitment", () => {
 	// listing. Expiry is evaluated against `op.timestamp` (block timestamp)
 	// so the check is replay-deterministic across indexers.
 	test("rejects a commitment when the listing is already expired", async () => {
-		const nftId = "nft_commit_expired_listing";
+		const nftId = fixtureNftId("commit-expired-listing");
+		const listingId = fixtureListingId("expired");
+		const listTxId = fixtureHiveTxId("expired-list");
 		await insertListedInstance({
 			nftId,
 			collectionId: COLLECTION_ID,
 			seller: SELLER,
-			listingId: "list_expired",
-			listTxId: "tx_expired_list",
+			listingId,
+			listTxId,
 			expiresAtMs: Date.now() - 60_000,
 		});
 
 		const op = commitmentOp({
 			nftId,
-			listingId: "list_expired",
-			listTxId: "tx_expired_list",
+			listingId,
+			listTxId,
 			buyer: BUYER,
 		});
 
@@ -158,21 +173,23 @@ describe("handleBuyCommitment", () => {
 	});
 
 	test("rejects a competing commitment while a reservation is active", async () => {
-		const nftId = "nft_commit_race";
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_race", listTxId: "tx_race" });
+		const nftId = fixtureNftId("commit-race");
+		const listingId = fixtureListingId("race");
+		const listTxId = fixtureHiveTxId("race");
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 		const firstBlock = 100_200;
 		await withTransaction((txn) =>
 			handleBuyCommitment(
-				commitmentOp({ nftId, listingId: "list_race", listTxId: "tx_race", buyer: BUYER, blockNum: firstBlock }),
+				commitmentOp({ nftId, listingId, listTxId, buyer: BUYER, blockNum: firstBlock }),
 				txn,
 			),
 		);
 
 		const competingOp = commitmentOp({
 			nftId,
-			listingId: "list_race",
-			listTxId: "tx_race",
+			listingId,
+			listTxId,
 			buyer: "buyer.two",
 			buyTxHash: "c".repeat(40),
 			settlementNode: OTHER_NODE,
@@ -182,16 +199,18 @@ describe("handleBuyCommitment", () => {
 	});
 
 	test("overwrites an expired reservation", async () => {
-		const nftId = "nft_commit_expired";
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_exp", listTxId: "tx_exp" });
+		const nftId = fixtureNftId("commit-expired");
+		const listingId = fixtureListingId("exp");
+		const listTxId = fixtureHiveTxId("exp");
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 		const firstBlock = 100_000;
 		await withTransaction((txn) =>
 			handleBuyCommitment(
 				commitmentOp({
 					nftId,
-					listingId: "list_exp",
-					listTxId: "tx_exp",
+					listingId,
+					listTxId,
 					buyer: BUYER,
 					buyTxHash: "d".repeat(40),
 					blockNum: firstBlock,
@@ -207,8 +226,8 @@ describe("handleBuyCommitment", () => {
 			handleBuyCommitment(
 				commitmentOp({
 					nftId,
-					listingId: "list_exp",
-					listTxId: "tx_exp",
+					listingId,
+					listTxId,
 					buyer: secondBuyer,
 					buyTxHash: secondHash,
 					settlementNode: OTHER_NODE,
@@ -231,13 +250,15 @@ describe("handleBuyCommitment", () => {
 	});
 
 	test("sweep clears expired reservations", async () => {
-		const nftId = "nft_commit_sweep";
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId: "list_sweep", listTxId: "tx_sweep" });
+		const nftId = fixtureNftId("commit-sweep");
+		const listingId = fixtureListingId("sweep");
+		const listTxId = fixtureHiveTxId("sweep");
+		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 		const firstBlock = 100_000;
 		await withTransaction((txn) =>
 			handleBuyCommitment(
-				commitmentOp({ nftId, listingId: "list_sweep", listTxId: "tx_sweep", buyer: BUYER, blockNum: firstBlock }),
+				commitmentOp({ nftId, listingId, listTxId, buyer: BUYER, blockNum: firstBlock }),
 				txn,
 			),
 		);
@@ -260,9 +281,9 @@ describe("handleBuyCommitment", () => {
 		const firstBlock = 200_000;
 
 		for (let i = 0; i <= MAX_ACTIVE_COMMITMENTS_PER_NODE; i++) {
-			const nftId = `nft_cap_${i}`;
-			const listingId = `list_cap_${i}`;
-			const listTxId = `tx_cap_${i}`.padEnd(40, "0").slice(0, 40);
+			const nftId = fixtureNftId(`cap-${i}`);
+			const listingId = fixtureListingId(`cap-${i}`);
+			const listTxId = fixtureHiveTxId(`cap-${i}`);
 			await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 			const op = commitmentOp({

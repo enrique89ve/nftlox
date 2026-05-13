@@ -232,6 +232,24 @@ export function requireExactLengthString(value: unknown, fieldName: string, leng
 	return str;
 }
 
+// Shape-guard variant — mirrors validateShapedPayloadString in the multisig
+// path so handler and pre-broadcast checks reject the same string for the
+// same reason. `predicate` is a pure protocol guard from `@nftlox/protocol`
+// (`isInstanceId`, `isListingId`, `isHiveTxId`); `shapeDescription` names the
+// canonical shape so chain-rejection logs are debuggable.
+export function requireShapedString(
+	value: unknown,
+	fieldName: string,
+	predicate: (s: string) => boolean,
+	shapeDescription: string,
+): string {
+	const str = requireString(value, fieldName);
+	if (!predicate(str)) {
+		throw new Error(`${fieldName} does not match the canonical shape ${shapeDescription}`);
+	}
+	return str;
+}
+
 export function requireUsername(value: unknown, fieldName: string): string {
 	const str = requireString(value, fieldName);
 	const error = validateHiveUsername(str);

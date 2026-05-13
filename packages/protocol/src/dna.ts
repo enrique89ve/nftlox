@@ -17,6 +17,7 @@ import {
 	LISTING_ID_PREFIX,
 	LISTING_NONCE_LENGTH,
 	LISTING_HASH_LENGTH,
+	TX_ID_REGEX,
 	HASH_DOMAIN_COL,
 	HASH_DOMAIN_ORIGIN,
 	HASH_DOMAIN_SEED,
@@ -138,6 +139,25 @@ export function isSeedId(id: string): boolean {
 
 export function isInstanceId(id: string): boolean {
 	return INSTANCE_ID_PARSE_REGEX.test(id);
+}
+
+// Listing-id shape guard — derived from LISTING_ID_PREFIX + LISTING_HASH_LENGTH
+// so the regex and the emitter (`generateListingId` below) stay locked to a
+// single source of truth. Pure shape check; no DB or hash lookup.
+const LISTING_ID_PARSE_REGEX = new RegExp(
+	`^${LISTING_ID_PREFIX}[a-f0-9]{${LISTING_HASH_LENGTH}}$`,
+);
+
+export function isListingId(id: string): boolean {
+	return LISTING_ID_PARSE_REGEX.test(id);
+}
+
+// Hive transaction id — 40 lowercase hex chars (RIPEMD-160 of the serialized
+// tx body). Reused from constants.ts so a hardfork on the digest format flips
+// one source. Wrapped as a function so call sites read symmetrically with the
+// other id guards.
+export function isHiveTxId(id: string): boolean {
+	return TX_ID_REGEX.test(id);
 }
 
 /**

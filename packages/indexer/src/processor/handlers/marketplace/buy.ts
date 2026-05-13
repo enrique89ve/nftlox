@@ -8,10 +8,10 @@ import {
 import type { OwnerChangeCtx } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { insertSale } from "@/db/queries/marketplace-history.ts";
-import { requireString, requireUsername, verifyTransfers, requireSupportedCurrency } from "@/utils/validation.ts";
+import { requireShapedString, requireUsername, verifyTransfers, requireSupportedCurrency } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
-import { ACTION_BUY, MAX_ROYALTY_PCT } from "@/protocol/index.ts";
+import { ACTION_BUY, MAX_ROYALTY_PCT, isHiveTxId, isInstanceId, isListingId } from "@/protocol/index.ts";
 
 /**
  * Settles a `buy` action against the on-chain reservation projected by the
@@ -33,9 +33,9 @@ import { ACTION_BUY, MAX_ROYALTY_PCT } from "@/protocol/index.ts";
  * collided with the committed hash — computationally infeasible.
  */
 export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
-	const nftId = requireString(op.data.nftId, "nftId");
-	const listingId = requireString(op.data.listingId, "listingId");
-	const listTxId = requireString(op.data.listTxId, "listTxId");
+	const nftId = requireShapedString(op.data.nftId, "nftId", isInstanceId, "nft_<20 hex>_<instance>");
+	const listingId = requireShapedString(op.data.listingId, "listingId", isListingId, "list_<32 hex>");
+	const listTxId = requireShapedString(op.data.listTxId, "listTxId", isHiveTxId, "<40 lowercase hex>");
 
 	const transfers = op.pairedTransfers ?? [];
 

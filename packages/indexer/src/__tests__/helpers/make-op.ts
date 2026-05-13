@@ -25,9 +25,12 @@ export function makeOp(params: {
 	const id = ++opCounter;
 	const authLevel: AuthLevel =
 		params.authLevel ?? (ACTIVE_SET.has(params.action) ? "active" : "posting");
-	const txId = (params.txId ?? `tx_${params.action}_${id}`)
-		.padEnd(40, "0")
-		.slice(0, 40);
+	// Default txId is shape-valid Hive tx id (40 lowercase hex) so buy /
+	// buy_commitment handlers — which enforce `isHiveTxId` via
+	// `requireShapedString` — accept the op without the caller having to
+	// hand-craft a hex string. Explicit txIds from callers are passed through;
+	// if a caller targets a buy* test it must provide a 40-hex value.
+	const txId = params.txId ?? id.toString(16).padStart(40, "0");
 	return {
 		blockNum: params.blockNum ?? 90_000_100,
 		timestamp: params.timestamp ?? new Date().toISOString(),
