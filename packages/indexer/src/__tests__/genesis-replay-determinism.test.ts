@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach } from "bun:test";
+import { useSingletonLock } from "./helpers/singleton-lock.ts";
 import { sql, withTransaction } from "@/db/client.ts";
 import { routeOperationDetailed } from "@/processor/action-router.ts";
 import type { ParsedOperation, TransferDetail } from "@/scanner/operation-parser.ts";
@@ -168,7 +169,7 @@ async function replayFixture(): Promise<string> {
 			const result = await routeOperationDetailed(op, txn);
 			if (result.kind !== "applied") {
 				throw new Error(
-					`Fixture op did not apply (kind=${result.kind}, action=${op.action}, txId=${op.txId}): ${result.kind === "applied" ? "" : result.reason}`,
+					`Fixture op did not apply (kind=${result.kind}, action=${op.action}, txId=${op.txId}): ${result.reason}`,
 				);
 			}
 		});
@@ -381,6 +382,8 @@ async function replayFixture(): Promise<string> {
 }
 
 describe("F2.B genesis replay determinism", () => {
+	useSingletonLock();
+
 	beforeAll(cleanDb);
 	beforeEach(cleanDb);
 

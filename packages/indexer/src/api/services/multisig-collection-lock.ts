@@ -7,14 +7,15 @@ export type CollectionLockAcquireResult =
 export type MultisigCollectionLock = Readonly<{
 	readonly acquire: (
 		creator: string,
-		symbol: string,
 		holder: string,
 		expirationMs: number,
 	) => Promise<CollectionLockAcquireResult>;
-	readonly release: (creator: string, symbol: string, holder: string) => Promise<void>;
+	readonly release: (creator: string, holder: string) => Promise<void>;
 	readonly cleanupExpired: () => Promise<void>;
 	readonly destroy: () => void;
 }>;
+
+const CREATOR_LOCK_SCOPE = "__creator__";
 
 export function createMultisigCollectionLock(): MultisigCollectionLock {
 	const cleanupTimer = setInterval(() => {
@@ -26,7 +27,6 @@ export function createMultisigCollectionLock(): MultisigCollectionLock {
 
 	const acquire = async (
 		creator: string,
-		symbol: string,
 		holder: string,
 		expirationMs: number,
 		attempt = 0,
@@ -39,10 +39,10 @@ export function createMultisigCollectionLock(): MultisigCollectionLock {
 		const [inserted] = await sql`
 			WITH cleanup AS (
 				DELETE FROM multisig_collection_locks
-				WHERE creator = ${creator} AND symbol = ${symbol} AND expires_at < NOW()
+				WHERE creator = ${creator} AND symbol = ${CREATOR_LOCK_SCOPE} AND expires_at < NOW()
 			)
 			INSERT INTO multisig_collection_locks (creator, symbol, holder, expires_at)
-			VALUES (${creator}, ${symbol}, ${holder}, ${expiresAt})
+			VALUES (${creator}, ${CREATOR_LOCK_SCOPE}, ${holder}, ${expiresAt})
 			ON CONFLICT (creator, symbol) DO UPDATE
 				SET holder = ${holder}, expires_at = ${expiresAt}
 				WHERE multisig_collection_locks.holder = ${holder}
@@ -56,10 +56,10 @@ export function createMultisigCollectionLock(): MultisigCollectionLock {
 		const [existing] = await sql`
 			SELECT holder, expires_at
 			FROM multisig_collection_locks
-			WHERE creator = ${creator} AND symbol = ${symbol}
+			WHERE creator = ${creator} AND symbol = ${CREATOR_LOCK_SCOPE}
 		`;
 		if (!existing && attempt < MAX_ACQUIRE_RETRIES) {
-			return acquire(creator, symbol, holder, expirationMs, attempt + 1);
+			return acquire(creator, holder, expirationMs, attempt + 1);
 		}
 		if (!existing) {
 			return { acquired: false, heldBy: "unknown", retryAfterMs: 1000 };
@@ -71,10 +71,10 @@ export function createMultisigCollectionLock(): MultisigCollectionLock {
 
 	// Holder-scoped: only the holder that acquired the lock can release it, so a
 	// late-arriving release from a stale request can never nuke an active lock.
-	const release = async (creator: string, symbol: string, holder: string): Promise<void> => {
+	const release = async (creator: string, holder: string): Promise<void> => {
 		await sql`
 			DELETE FROM multisig_collection_locks
-			WHERE creator = ${creator} AND symbol = ${symbol} AND holder = ${holder}
+			WHERE creator = ${creator} AND symbol = ${CREATOR_LOCK_SCOPE} AND holder = ${holder}
 		`;
 	};
 

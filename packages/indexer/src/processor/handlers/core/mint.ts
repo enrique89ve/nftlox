@@ -82,7 +82,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	// Signer is the creator here — handleMint above already enforces
 	// `collection.creator !== op.signer` rejection.
 	const seedsByCreator = await countSeedsByCreator(op.signer, txn);
-	await assertWithinLimit("seedsPerCreator", op.signer, seedsByCreator);
+	assertWithinLimit("seedsPerCreator", op.signer, seedsByCreator, op.blockNum);
 
 	const schema = optionalCollectionSchema(collection.schema);
 	const immutableData = optionalObject(d.immutableData) as Record<string, unknown> | null;

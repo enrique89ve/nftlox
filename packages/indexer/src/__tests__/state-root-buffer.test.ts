@@ -118,4 +118,16 @@ describe("StateRootBuffer", () => {
 		expect(second).toHaveLength(2);
 		expect(first).toEqual(second);
 	});
+
+	it("clear drains all queued mutations", () => {
+		const buf = createStateRootBuffer();
+		buf.queue({ type: "insert", newRow: row("nft-1", "alice"), blockNum: 100 });
+
+		buf.clear();
+
+		expect(buf.isEmpty()).toBe(true);
+		expect(buf.size()).toBe(0);
+		expect([...buf.iter()]).toEqual([]);
+		expect(buf.maxBlockNum()).toBe(0);
+	});
 });

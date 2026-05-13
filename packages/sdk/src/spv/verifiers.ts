@@ -12,15 +12,29 @@ import {
 	ACTION_TRANSFER,
 	ACTION_LIST,
 	ACTION_BUY,
+	ACTION_BUY_COMMITMENT,
+	ACTION_CREATE_COLLECTION,
 	ACTION_NFT_TRANSFER_FROM,
+	BUY_COMMITMENT_TTL_BLOCKS,
+	INSTANCE_FEE_ENABLED,
+	INSTANCE_FEE_PER_N,
+	INSTANCE_FEE_UNIT_HBD,
+	MAX_ROYALTY_PCT,
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
+	MEMO_PREFIX_FEE_COL,
+	PROTOCOL_COLLECTION_FEE_HBD,
 	SUPPORTED_CURRENCIES,
+	calculatePaymentSplitFromUnits,
+	generateDeterministicCollectionId,
+	generateListingId,
 	type SupportedCurrency,
 } from "@nftlox/protocol";
 import {
+	fetchCustomJsonOperationsInRange,
 	fetchTransaction,
+	parseAllNftloxOperations,
 	parseNftloxOperation,
 	resolveOperationById,
 } from "./hive-l1-client";
@@ -152,6 +166,9 @@ type IndexerOwnershipSnapshot = Readonly<{
 	seedId: string | null;
 	instanceNumber: number | null;
 	nftDna: string | null;
+	collectionId: string;
+	collectionCreatedBlockNum: number;
+	collectionCreatedTxId: string;
 }>;
 
 type DerivedOwnershipProof = Readonly<{
@@ -179,6 +196,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseRequiredString(value: unknown, fieldName: string): string {
 	if (typeof value !== "string" || value.length === 0) {
 		throw new Error(`Indexer NFT data missing ${fieldName}`);
+	}
+	return value;
+}
+
+function parseRequiredBoolean(value: unknown, fieldName: string): boolean {
+	if (typeof value !== "boolean") {
+		throw new Error(`Indexer NFT data missing ${fieldName}`);
+	}
+	return value;
+}
+
+function parseRequiredRecord(value: unknown, fieldName: string): Record<string, unknown> {
+	if (!isRecord(value)) {
+		throw new Error(`Indexer NFT data missing ${fieldName}`);
+	}
+	return value;
+}
+
+function parseOptionalString(value: unknown, fieldName: string): string | null {
+	if (value === undefined || value === null) return null;
+	if (typeof value !== "string" || value.length === 0) {
+		throw new Error(`Indexer NFT data has invalid ${fieldName}`);
 	}
 	return value;
 }
@@ -215,6 +254,9 @@ function parseIndexerOwnershipSnapshot(raw: unknown): IndexerOwnershipSnapshot {
 		seedId: parseNullableString(raw.seed_id, "seed_id"),
 		instanceNumber: parseNullableInteger(raw.instance_number, "instance_number"),
 		nftDna: parseNullableString(raw.nft_dna, "nft_dna"),
+		collectionId: parseRequiredString(raw.collection_id, "collection_id"),
+		collectionCreatedBlockNum: parseRequiredNumber(raw.collection_created_block_num, "collection_created_block_num"),
+		collectionCreatedTxId: parseRequiredString(raw.collection_created_tx_id, "collection_created_tx_id"),
 	};
 }
 
@@ -243,17 +285,48 @@ function requireNftIdInTransferPayload(data: Record<string, unknown>, nftId: str
 type BuyTransferEdge = Readonly<{
 	from: string;
 	to: string;
+	amountUnits: number;
+	currency: SupportedCurrency;
 	memo: string;
+}>;
+
+type BuyListingProof = Readonly<{
+	seller: string;
+	price: OnChainPrice;
+}>;
+
+type CollectionBuyRules = Readonly<{
+	royaltyPct: number;
+	royaltyRecipient: string | null;
 }>;
 
 function parseBuyTransferEdge(raw: unknown): BuyTransferEdge | null {
 	if (!isRecord(raw)) return null;
 	if (raw.type !== "transfer_operation" || !isRecord(raw.value)) return null;
 	const value = raw.value;
-	if (typeof value.from !== "string" || typeof value.to !== "string" || typeof value.memo !== "string") {
+	if (
+		typeof value.from !== "string" ||
+		typeof value.to !== "string" ||
+		typeof value.memo !== "string" ||
+		typeof value.amount !== "string"
+	) {
 		return null;
 	}
-	return { from: value.from, to: value.to, memo: value.memo };
+	const parsedAmount = parseTransferAmount(value.amount);
+	if (!parsedAmount) return null;
+	return {
+		from: value.from,
+		to: value.to,
+		amountUnits: parsedAmount.amountUnits,
+		currency: parsedAmount.currency,
+		memo: value.memo,
+	};
+}
+
+function extractTransferEdges(tx: { readonly operations: ReadonlyArray<unknown> }): ReadonlyArray<BuyTransferEdge> {
+	return tx.operations
+		.map(parseBuyTransferEdge)
+		.filter((edge): edge is BuyTransferEdge => edge !== null);
 }
 
 function extractBuyTransfersForNft(
@@ -266,9 +339,397 @@ function extractBuyTransfersForNft(
 		`${MEMO_PREFIX_FEE}${nftId}`,
 	]);
 
-	return tx.operations
-		.map(parseBuyTransferEdge)
-		.filter((edge): edge is BuyTransferEdge => edge !== null && expectedMemos.has(edge.memo));
+	return extractTransferEdges(tx)
+		.filter((edge) => expectedMemos.has(edge.memo));
+}
+
+function parseRequiredNumber(value: unknown, fieldName: string): number {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		throw new Error(`Indexer NFT data missing ${fieldName}`);
+	}
+	return value;
+}
+
+// Exact integer-units parser for canonical Hive amount strings ("X.XXX CUR").
+// Avoids `parseFloat` so the rounding behaviour stays deterministic across
+// every consumer of the buy verifier (sister to protocol's `toExactHiveUnits`).
+// Returns null when the string does not match the canonical wire format.
+function hiveAmountStringToUnits(rawNumeric: string): number | null {
+	const match = /^(\d+)(?:\.(\d{1,3}))?$/.exec(rawNumeric);
+	if (!match) return null;
+	const intPart = match[1];
+	const decPart = (match[2] ?? "").padEnd(3, "0");
+	if (intPart === undefined) return null;
+	const intNum = Number.parseInt(intPart, 10);
+	const decNum = Number.parseInt(decPart, 10);
+	if (!Number.isInteger(intNum) || !Number.isInteger(decNum)) return null;
+	const units = intNum * 1000 + decNum;
+	if (!Number.isSafeInteger(units) || units < 0) return null;
+	return units;
+}
+
+function parseTransferAmount(rawAmount: string): { readonly amountUnits: number; readonly currency: SupportedCurrency } | null {
+	const match = /^(\d+(?:\.\d{1,3})?)\s+([A-Z]{3,5})$/.exec(rawAmount);
+	if (!match) return null;
+	const currency = match[2];
+	if (!currency || !isSupportedCurrency(currency)) return null;
+	const amountUnits = hiveAmountStringToUnits(match[1] ?? "");
+	if (amountUnits === null) return null;
+	return { amountUnits, currency };
+}
+
+function unitsToCanonicalString(units: number): string {
+	if (!Number.isSafeInteger(units) || units < 0) return String(units);
+	const intPart = Math.floor(units / 1000);
+	const decPart = units % 1000;
+	return `${intPart}.${decPart.toString().padStart(3, "0")}`;
+}
+
+function computeExpectedCollectionFeeUnits(maxInstances: number): number {
+	const baseUnits = hiveAmountStringToUnits(PROTOCOL_COLLECTION_FEE_HBD);
+	if (baseUnits === null) {
+		throw new Error(`PROTOCOL_COLLECTION_FEE_HBD is not a canonical Hive amount: ${PROTOCOL_COLLECTION_FEE_HBD}`);
+	}
+	if (!INSTANCE_FEE_ENABLED || maxInstances <= 0) return baseUnits;
+	const unitUnits = hiveAmountStringToUnits(INSTANCE_FEE_UNIT_HBD);
+	if (unitUnits === null) {
+		throw new Error(`INSTANCE_FEE_UNIT_HBD is not a canonical Hive amount: ${INSTANCE_FEE_UNIT_HBD}`);
+	}
+	return baseUnits + unitUnits * Math.ceil(maxInstances / INSTANCE_FEE_PER_N);
+}
+
+function findExactTransfer(params: {
+	readonly transfers: ReadonlyArray<BuyTransferEdge>;
+	readonly from: string;
+	readonly to: string;
+	readonly amountUnits: number;
+	readonly currency: SupportedCurrency;
+	readonly memo: string;
+	readonly label: string;
+}): BuyTransferEdge {
+	const matches = params.transfers.filter((transfer) =>
+		transfer.from === params.from &&
+		transfer.to === params.to &&
+		transfer.currency === params.currency &&
+		transfer.memo === params.memo &&
+		transfer.amountUnits === params.amountUnits
+	);
+	if (matches.length !== 1) {
+		throw new OwnershipMismatchError(
+			`Buy transaction expected exactly one ${params.label}: ${unitsToCanonicalString(params.amountUnits)} ${params.currency} from ${params.from} to ${params.to} with memo ${params.memo}; found ${matches.length}`,
+		);
+	}
+	return matches[0]!;
+}
+
+function findCollectionFeeTransfer(params: {
+	readonly tx: { readonly operations: ReadonlyArray<unknown> };
+	readonly collectionId: string;
+	readonly nodeAccount: string;
+	readonly expectedFeeUnits: number;
+}): BuyTransferEdge {
+	const expectedMemo = `${MEMO_PREFIX_FEE_COL}${params.collectionId}`;
+	const matches = extractTransferEdges(params.tx).filter((transfer) =>
+		transfer.to === params.nodeAccount &&
+		transfer.currency === "HBD" &&
+		transfer.memo === expectedMemo &&
+		transfer.amountUnits === params.expectedFeeUnits
+	);
+	if (matches.length !== 1) {
+		throw new OwnershipMismatchError(
+			`Collection creation transaction expected exactly one fee transfer ${unitsToCanonicalString(params.expectedFeeUnits)} HBD to ${params.nodeAccount} with memo ${expectedMemo}; found ${matches.length}`,
+		);
+	}
+	return matches[0]!;
+}
+
+async function resolveBuyListingProof(params: {
+	readonly l1Config: HiveL1Config;
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
+	readonly seller: string;
+}): Promise<BuyListingProof> {
+	const tx = await fetchTransaction(params.l1Config, params.listTxId);
+	const matchingListOps = parseAllNftloxOperations(tx).filter((op) =>
+		op.action === ACTION_LIST &&
+		op.signer === params.seller &&
+		op.data.nftId === params.nftId &&
+		op.data.listingId === params.listingId
+	);
+	if (matchingListOps.length !== 1) {
+		throw new OwnershipMismatchError(
+			`Listing transaction ${params.listTxId} expected exactly one list op for NFT ${params.nftId}, listing ${params.listingId}, seller ${params.seller}; found ${matchingListOps.length}`,
+		);
+	}
+	const listOp = matchingListOps[0]!;
+	if (listOp.signer !== params.seller) {
+		throw new OwnershipMismatchError(
+			`Buy seller ${params.seller} does not match listing signer ${listOp.signer}`,
+		);
+	}
+
+	const listedNftId = parseRequiredString(listOp.data.nftId, "list.data.nftId");
+	if (listedNftId !== params.nftId) {
+		throw new OwnershipMismatchError(`Listing targets NFT ${listedNftId}, expected ${params.nftId}`);
+	}
+
+	const listedListingId = parseRequiredString(listOp.data.listingId, "list.data.listingId");
+	if (listedListingId !== params.listingId) {
+		throw new OwnershipMismatchError(
+			`Buy listingId ${params.listingId} does not match listing payload ${listedListingId}`,
+		);
+	}
+
+	const listingNonce = parseRequiredString(listOp.data.listingNonce, "list.data.listingNonce");
+	const expiresAt = parseRequiredNumber(listOp.data.expiresAt, "list.data.expiresAt");
+	const price = parseOnChainPrice(listOp.data.price);
+	if (!price) {
+		throw new Error(`Listing transaction ${params.listTxId} missing valid price`);
+	}
+	const marketplace = typeof listOp.data.marketplace === "string" ? listOp.data.marketplace : "";
+	const expectedListingId = await generateListingId({
+		nftId: params.nftId,
+		owner: listOp.signer,
+		marketplace,
+		priceAmount: price.amount,
+		priceCurrency: price.currency,
+		expiresAt,
+		nonce: listingNonce,
+	});
+	if (expectedListingId !== params.listingId) {
+		throw new OwnershipMismatchError(
+			`listingId ${params.listingId} does not match L1 listing fields (${expectedListingId})`,
+		);
+	}
+
+	return { seller: listOp.signer, price };
+}
+
+async function resolveCollectionBuyRules(params: {
+	readonly l1Config: HiveL1Config;
+	readonly collectionId: string;
+	readonly collectionCreatedTxId: string;
+	readonly collectionCreatedBlockNum: number;
+}): Promise<CollectionBuyRules> {
+	const tx = await fetchTransaction(params.l1Config, params.collectionCreatedTxId);
+	if (tx.block_num !== params.collectionCreatedBlockNum) {
+		throw new OwnershipMismatchError(
+			`Collection tx ${params.collectionCreatedTxId} is in block ${tx.block_num}, proof expected ${params.collectionCreatedBlockNum}`,
+		);
+	}
+
+	const matchingCollectionOps = parseAllNftloxOperations(tx).filter((op) =>
+		op.action === ACTION_CREATE_COLLECTION &&
+		op.data.id === params.collectionId
+	);
+	if (matchingCollectionOps.length !== 1) {
+		throw new OwnershipMismatchError(
+			`Collection transaction ${params.collectionCreatedTxId} expected exactly one create_collection for ${params.collectionId}; found ${matchingCollectionOps.length}`,
+		);
+	}
+	const collectionOp = matchingCollectionOps[0]!;
+	const name = parseRequiredString(collectionOp.data.name, "create_collection.data.name");
+	const symbol = parseRequiredString(collectionOp.data.symbol, "create_collection.data.symbol");
+	const maxInstances = parseRequiredNumber(collectionOp.data.maxInstances, "create_collection.data.maxInstances");
+	if (!Number.isInteger(maxInstances) || maxInstances < 0) {
+		throw new OwnershipMismatchError(`Collection ${params.collectionId} maxInstances is invalid: ${maxInstances}`);
+	}
+	const rules = parseRequiredRecord(collectionOp.data.rules, "create_collection.data.rules");
+	const transferable = parseRequiredBoolean(rules.transferable, "create_collection.data.rules.transferable");
+	if (!transferable) {
+		throw new OwnershipMismatchError(`Collection ${params.collectionId} is not transferable`);
+	}
+	const royaltyPct = parseRequiredNumber(rules.royaltyPct, "create_collection.data.rules.royaltyPct");
+	const royaltyRecipient = parseOptionalString(
+		rules.royaltyRecipient,
+		"create_collection.data.rules.royaltyRecipient",
+	);
+	if (royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
+		throw new OwnershipMismatchError(`Collection ${params.collectionId} royaltyPct is out of range: ${royaltyPct}`);
+	}
+	if (royaltyPct > 0 && !royaltyRecipient) {
+		throw new OwnershipMismatchError(`Collection ${params.collectionId} has royaltyPct > 0 without royaltyRecipient`);
+	}
+
+	// Invariant: the create_collection custom_json signer is the fee recipient.
+	// The handler enforces this via assertActiveSettlementNode(op.signer, blockNum)
+	// + PAYMENT_VALIDATORS routing the fee to op.signer; SPV mirrors that binding
+	// by passing collectionOp.signer as nodeAccount to findCollectionFeeTransfer.
+	// Breaks if fee routing ever moves to a fixed account (e.g. DEFAULT_FEE_ACCOUNT):
+	// SPV would resolve the wrong recipient and reject every legitimate buy.
+	// Any such change MUST update this resolver in the same hardfork.
+	const feeTransfer = findCollectionFeeTransfer({
+		tx,
+		collectionId: params.collectionId,
+		nodeAccount: collectionOp.signer,
+		expectedFeeUnits: computeExpectedCollectionFeeUnits(maxInstances),
+	});
+	const expectedCollectionId = await generateDeterministicCollectionId(feeTransfer.from, name, symbol);
+	if (expectedCollectionId !== params.collectionId) {
+		throw new OwnershipMismatchError(
+			`Collection id ${params.collectionId} does not match L1 creator/name/symbol (${expectedCollectionId})`,
+		);
+	}
+
+	return { royaltyPct, royaltyRecipient };
+}
+
+function assertBuyTransfersMatchListing(params: {
+	readonly transfers: ReadonlyArray<BuyTransferEdge>;
+	readonly buyTransfer: BuyTransferEdge;
+	readonly buyer: string;
+	readonly settlementNode: string;
+	readonly nftId: string;
+	readonly listing: BuyListingProof;
+	readonly collectionRules: CollectionBuyRules;
+}): void {
+	const listingUnits = hiveAmountStringToUnits(params.listing.price.amount);
+	if (listingUnits === null) {
+		throw new OwnershipMismatchError(
+			`Listing price is not a canonical Hive amount: ${params.listing.price.amount}`,
+		);
+	}
+	let split: ReturnType<typeof calculatePaymentSplitFromUnits>;
+	try {
+		split = calculatePaymentSplitFromUnits(
+			listingUnits,
+			params.collectionRules.royaltyPct,
+			params.collectionRules.royaltyRecipient,
+			params.listing.seller,
+			params.settlementNode,
+		);
+	} catch (cause) {
+		throw new OwnershipMismatchError(
+			`Unable to calculate protocol payment split: ${cause instanceof Error ? cause.message : String(cause)}`,
+		);
+	}
+
+	// Presence of optional legs is decided strictly by `units > 0`, mirroring
+	// the protocol primitive's contract. The royalty leg also requires a
+	// non-null `effectiveRoyaltyRecipient` — `computeRoyalty` collapses
+	// self-royalty (recipient === seller) to (units=0, recipient=null) so the
+	// two checks are redundant in practice but kept explicit for readability.
+	const hasRoyaltyLeg = split.royaltyUnits > 0 && split.effectiveRoyaltyRecipient !== null;
+	const hasFeeLeg = split.feeUnits > 0;
+	const expectedTransferCount = 1 + (hasRoyaltyLeg ? 1 : 0) + (hasFeeLeg ? 1 : 0);
+	if (params.transfers.length !== expectedTransferCount) {
+		throw new OwnershipMismatchError(
+			`Buy transaction has ${params.transfers.length} payment transfers for NFT, expected ${expectedTransferCount}`,
+		);
+	}
+	findExactTransfer({
+		transfers: params.transfers,
+		from: params.buyer,
+		to: params.listing.seller,
+		amountUnits: split.sellerUnits,
+		currency: params.listing.price.currency,
+		memo: `${MEMO_PREFIX_BUY}${params.nftId}`,
+		label: "seller payment",
+	});
+	if (hasRoyaltyLeg) {
+		findExactTransfer({
+			transfers: params.transfers,
+			from: params.buyer,
+			to: split.effectiveRoyaltyRecipient!,
+			amountUnits: split.royaltyUnits,
+			currency: params.listing.price.currency,
+			memo: `${MEMO_PREFIX_ROYALTY}${params.nftId}`,
+			label: "royalty payment",
+		});
+	}
+	if (hasFeeLeg) {
+		findExactTransfer({
+			transfers: params.transfers,
+			from: params.buyer,
+			to: params.settlementNode,
+			amountUnits: split.feeUnits,
+			currency: params.listing.price.currency,
+			memo: `${MEMO_PREFIX_FEE}${params.nftId}`,
+			label: "protocol fee",
+		});
+	}
+}
+
+function compareOperationIds(left: string, right: string): number | null {
+	try {
+		const leftId = BigInt(left);
+		const rightId = BigInt(right);
+		if (leftId < rightId) return -1;
+		if (leftId > rightId) return 1;
+		return 0;
+	} catch {
+		return null;
+	}
+}
+
+function parseCommitmentPayload(rawJson: string, protocolId: string): Record<string, unknown> | null {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(rawJson);
+	} catch {
+		return null;
+	}
+	if (
+		!isRecord(parsed) ||
+		parsed.protocol !== protocolId ||
+		parsed.action !== ACTION_BUY_COMMITMENT ||
+		!isRecord(parsed.data)
+	) {
+		return null;
+	}
+	return parsed.data;
+}
+
+async function assertMatchingBuyCommitment(params: {
+	readonly l1Config: HiveL1Config;
+	readonly protocolId: string;
+	readonly buyOperationId: string;
+	readonly buyTxId: string;
+	readonly buyBlockNum: number;
+	readonly settlementNode: string;
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
+	readonly buyer: string;
+}): Promise<void> {
+	const fromBlock = Math.max(0, params.buyBlockNum - BUY_COMMITMENT_TTL_BLOCKS);
+	const operations = await fetchCustomJsonOperationsInRange(params.l1Config, fromBlock, params.buyBlockNum);
+
+	for (const operation of operations) {
+		if (operation.op.value.id !== params.protocolId) continue;
+		if (operation.op.value.required_auths.length !== 1 || operation.op.value.required_posting_auths.length !== 0) continue;
+		if (operation.op.value.required_auths[0] !== params.settlementNode) continue;
+		if (operation.block > params.buyBlockNum) continue;
+		const order = compareOperationIds(operation.operation_id, params.buyOperationId);
+		// Non-comparable operation_id (BigInt parse failed) means HAFAH changed
+		// its operation_id format. Without ordering we cannot enforce
+		// commitment-precedes-buy — fail hard rather than silently accept the
+		// rest of the loop, which would mask a real protocol-vs-indexer drift.
+		if (order === null) {
+			throw new OwnershipMismatchError(
+				`HAFAH operation_id ${operation.operation_id} is not a parseable BigInt — cannot enforce commitment-before-buy ordering`,
+			);
+		}
+		if (order >= 0) continue;
+
+		const data = parseCommitmentPayload(operation.op.value.json, params.protocolId);
+		if (!data) continue;
+		const txHash = typeof data.txHash === "string" ? data.txHash.toLowerCase() : null;
+		if (
+			txHash === params.buyTxId.toLowerCase() &&
+			data.nftId === params.nftId &&
+			data.listingId === params.listingId &&
+			data.listTxId === params.listTxId &&
+			data.buyer === params.buyer
+		) {
+			return;
+		}
+	}
+
+	throw new OwnershipMismatchError(
+		`Buy operation ${params.buyOperationId} has no matching buy_commitment for tx ${params.buyTxId}`,
+	);
 }
 
 async function deriveOwnershipProof(
@@ -340,12 +801,8 @@ async function deriveOwnershipProof(
 			if (payloadNftId !== nftId) {
 				throw new OwnershipMismatchError(`Buy operation targets NFT ${payloadNftId}, expected ${nftId}`);
 			}
-			const createdTxId = parseRequiredString(resolved.data.txId, "buy.data.txId");
-			if (snapshot.createdTxId !== createdTxId) {
-				throw new OwnershipMismatchError(
-					`Indexer creation tx ${snapshot.createdTxId} does not match buy payload txId ${createdTxId}`,
-				);
-			}
+			const listingId = parseRequiredString(resolved.data.listingId, "buy.data.listingId");
+			const listTxId = parseRequiredString(resolved.data.listTxId, "buy.data.listTxId");
 
 			const tx = await fetchTransaction(l1Config, resolved.txId);
 			const transfers = extractBuyTransfersForNft(tx, nftId);
@@ -364,6 +821,41 @@ async function deriveOwnershipProof(
 			if (!buyTransfer) {
 				throw new Error(`Buy transaction ${resolved.txId} is missing seller transfer for NFT ${nftId}`);
 			}
+			const buyer = buyTransfer.from;
+			const listing = await resolveBuyListingProof({
+				l1Config,
+				nftId,
+				listingId,
+				listTxId,
+				seller: buyTransfer.to,
+			});
+			const collectionRules = await resolveCollectionBuyRules({
+				l1Config,
+				collectionId: snapshot.collectionId,
+				collectionCreatedTxId: snapshot.collectionCreatedTxId,
+				collectionCreatedBlockNum: snapshot.collectionCreatedBlockNum,
+			});
+			assertBuyTransfersMatchListing({
+				transfers,
+				buyTransfer,
+				buyer,
+				settlementNode: resolved.signer,
+				nftId,
+				listing,
+				collectionRules,
+			});
+			await assertMatchingBuyCommitment({
+				l1Config,
+				protocolId: resolved.protocolId,
+				buyOperationId: resolved.operationId,
+				buyTxId: resolved.txId,
+				buyBlockNum: resolved.blockNum,
+				settlementNode: resolved.signer,
+				nftId,
+				listingId,
+				listTxId,
+				buyer,
+			});
 
 			return {
 				txId: resolved.txId,
@@ -371,9 +863,9 @@ async function deriveOwnershipProof(
 				operationId: resolved.operationId,
 				eventType: resolved.action,
 				expectedSigner: resolved.signer,
-				derivedOwner: buyTransfer.from,
-				previousOwner: buyTransfer.to,
-				message: "Verified current owner from buy operation and payment transfers",
+				derivedOwner: buyer,
+				previousOwner: listing.seller,
+				message: "Verified current owner from buy operation, collection rules, listing, payment transfers, and commitment",
 			};
 		}
 		case ACTION_BULK_DISTRIBUTE: {

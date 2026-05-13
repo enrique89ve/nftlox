@@ -10,6 +10,7 @@ import {
 	type ProtocolAction,
 } from "@/protocol/index.ts";
 import { createLogger } from "@/utils/logger.ts";
+import { prototypePollutionReviver } from "@/utils/json-safety.ts";
 import type { HafAHOperation, TransferDetail } from "./hive-client.ts";
 import type { PaymentMatch } from "@/processor/payment.ts";
 
@@ -53,6 +54,44 @@ export interface ParsedOperation {
 }
 
 const protocolId = config.protocolId;
+const HAFAH_UTC_TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z?$/;
+
+function normalizeHafahTimestampToUtc(raw: unknown): string {
+	if (typeof raw !== "string") {
+		throw new Error(`HAFAH timestamp must be a string, got ${typeof raw}`);
+	}
+
+	const match = HAFAH_UTC_TIMESTAMP_RE.exec(raw);
+	if (!match) {
+		throw new Error(`Invalid HAFAH timestamp format: ${raw}`);
+	}
+
+	const year = Number(match[1]);
+	const month = Number(match[2]);
+	const day = Number(match[3]);
+	const hour = Number(match[4]);
+	const minute = Number(match[5]);
+	const second = Number(match[6]);
+	const fraction = match[7] ?? "";
+	const millisecond = fraction.length === 0 ? 0 : Number(fraction.padEnd(3, "0"));
+	const epochMs = Date.UTC(year, month - 1, day, hour, minute, second, millisecond);
+	const date = new Date(epochMs);
+
+	if (
+		!Number.isFinite(epochMs) ||
+		date.getUTCFullYear() !== year ||
+		date.getUTCMonth() !== month - 1 ||
+		date.getUTCDate() !== day ||
+		date.getUTCHours() !== hour ||
+		date.getUTCMinutes() !== minute ||
+		date.getUTCSeconds() !== second ||
+		date.getUTCMilliseconds() !== millisecond
+	) {
+		throw new Error(`Invalid HAFAH timestamp value: ${raw}`);
+	}
+
+	return date.toISOString();
+}
 
 // ─── Type Guards ────────────────────────────────────
 
@@ -166,24 +205,6 @@ function isValidOperationId(opId: unknown): boolean {
 	return false;
 }
 
-// ─── Prototype Pollution Guard ──────────────────────
-
-/**
- * `JSON.parse` reviver that drops `__proto__` and `constructor` keys so
- * user-supplied blockchain payloads cannot poison objects downstream.
- *
- * Without this, a payload like `{"data": {"__proto__": {"admin": true}}}`
- * creates the key as an own property today, but any code that later spreads
- * or merges that object with `Object.assign`, structured clone through
- * prototype-aware libraries, or `for..in` loops without `hasOwnProperty`
- * guards can escalate it into actual prototype pollution. Strip at the
- * earliest boundary instead of auditing every consumer.
- */
-function prototypePollutionReviver(key: string, value: unknown): unknown {
-	if (key === "__proto__" || key === "constructor") return undefined;
-	return value;
-}
-
 // ─── Payload Validation ─────────────────────────────
 //
 // Version semantics live in `@nftlox/protocol`'s `version` module —
@@ -260,7 +281,16 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 	const rejected: RejectedOperation[] = [];
 
 	for (const hafOp of hafOps) {
-		const rawValue: unknown = hafOp.op.value;
+		// The HafAH client blind-casts its JSON response to HafAHOperation[];
+		// a compromised endpoint could ship primitives of the wrong shape.
+		// Drop ops whose block isn't a non-negative integer before any code
+		// that copies the value into ParsedOperation, the genesis gate
+		// (NaN coerces to `false` on `<`), or rejected[] forensics.
+		if (!Number.isInteger(hafOp.block) || hafOp.block < 0) continue;
+
+		const rawOperation: unknown = hafOp.op;
+		if (!isNonNullObject(rawOperation)) continue;
+		const rawValue: unknown = rawOperation.value;
 		if (!isCustomJsonValue(rawValue)) {
 			const rawId = isNonNullObject(rawValue) ? rawValue.id : null;
 			if (rawId !== protocolId) continue;
@@ -358,9 +388,11 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 			continue;
 		}
 
+		const timestamp = normalizeHafahTimestampToUtc(hafOp.timestamp);
+
 		ops.push({
 			blockNum: hafOp.block,
-			timestamp: hafOp.timestamp,
+			timestamp,
 			txId: hafOp.trx_id,
 			operationId: hafOp.operation_id,
 			signer: auth.signer,

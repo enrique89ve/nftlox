@@ -5,6 +5,8 @@ import { insertSchemaVersion } from "@/db/queries/schema-versions.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	requireBoundedString,
+	requireExactLengthString,
+	requireShapedString,
 	requireSymbol,
 	requireNumber,
 	requireObject,
@@ -21,14 +23,15 @@ import {
 	computeDataHash,
 	generateDeterministicCollectionId,
 	generateOriginDna,
+	isCollectionId,
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
 	MAX_URL_LENGTH,
-	MAX_ID_LENGTH,
 	MAX_ROYALTY_PCT,
 	INSTANCE_FEE_PER_N,
 	MAX_INSTANCES_PER_COLLECTION,
+	ORIGIN_DNA_LENGTH,
 } from "@/protocol/index.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
@@ -50,7 +53,10 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 
 	const d = op.data;
 
-	const payloadId = requireBoundedString(d.id, "id", MAX_ID_LENGTH);
+	// Shape-gate the declared id before the async canonical-id hash work.
+	// Both reasons to reject — shape and canonical equality — are kept so
+	// debug logs surface which gate caught a malformed payload first.
+	const payloadId = requireShapedString(d.id, "id", isCollectionId, "col_<20 hex>");
 	const name = requireBoundedString(d.name, "name", MAX_NAME_LENGTH);
 	const symbol = requireSymbol(d.symbol, "symbol");
 
@@ -68,7 +74,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	if (await collectionExists(canonicalId, txn)) return [];
 
 	const creatorCollectionCount = await countCollectionsByCreator(creator, txn);
-	await assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount);
+	assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount, op.blockNum);
 
 	if (await symbolTakenByCreator(creator, symbol, txn)) {
 		throw new Error(`Symbol ${symbol} already used by @${creator}`);
@@ -132,7 +138,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	// auditor can validate ownership via the Hive API without trusting the
 	// indexer to silently substitute missing/incorrect values.
 	const originDna = await generateOriginDna(canonicalId);
-	const payloadOriginDna = requireBoundedString(d.originDna, "originDna", 32);
+	const payloadOriginDna = requireExactLengthString(d.originDna, "originDna", ORIGIN_DNA_LENGTH);
 	if (payloadOriginDna !== originDna) {
 		throw new Error(
 			`Non-canonical originDna: expected ${originDna} for collection ${canonicalId}, got ${payloadOriginDna}`,

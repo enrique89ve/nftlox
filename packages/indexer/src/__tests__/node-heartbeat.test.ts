@@ -84,6 +84,19 @@ describe("handleNodeHeartbeat", () => {
 		await expect(handleNodeHeartbeat(op, sql)).rejects.toThrow(/stateRoot/);
 	});
 
+	// Locks the exact-length tightening — `formatStateRoot()` never emits
+	// whitespace, so any padded input is malformed and must reject. Prevents
+	// drift back to the legacy `.trim()`-then-check shape.
+	test("rejects whitespace-padded stateRoot", async () => {
+		await insertRegisteredNode(TEST_ACCOUNT);
+		const op = makeHeartbeatOp({
+			blockNum: 100_000_000,
+			stateRoot: ` ${VALID_STATE_ROOT}`,
+			indexerVersion: "0.5.3",
+		});
+		await expect(handleNodeHeartbeat(op, sql)).rejects.toThrow(/stateRoot/);
+	});
+
 	test("rejects negative blockNum", async () => {
 		await insertRegisteredNode(TEST_ACCOUNT);
 		const op = makeHeartbeatOp({

@@ -12,7 +12,7 @@
 //   2) Decide whether packages/sdk/src/protocol-exports.ts should re-export the
 //      new symbol (integrator-facing? semver-stable?) or keep it internal.
 //
-// Last review: 2026-04-24.
+// Last review: 2026-05-13.
 
 import { describe, expect, it } from "bun:test";
 import * as protocol from "@nftlox/protocol";
@@ -127,6 +127,8 @@ const PROTOCOL_RUNTIME_SURFACE: ReadonlyArray<string> = [
 	"POSTING_AUTH_ACTIONS",
 	"PROTOCOL_COLLECTION_FEE_HBD",
 	"PROTOCOL_FEE_BPS",
+	"PROTOCOL_GENESIS_BLOCK",
+	"PROTOCOL_GENESIS_BLOCK_ID",
 	"PROTOCOL_ID",
 	"PROTOCOL_VERSION",
 	"PROTOCOL_VERSION_REGEX",
@@ -146,6 +148,7 @@ const PROTOCOL_RUNTIME_SURFACE: ReadonlyArray<string> = [
 	"assertValidProtocolVersion",
 	"calculateBasisPointsAmount",
 	"calculatePaymentSplit",
+	"calculatePaymentSplitFromUnits",
 	"canonicalJson",
 	"castPayloadByAction",
 	"compareVersions",
@@ -170,11 +173,16 @@ const PROTOCOL_RUNTIME_SURFACE: ReadonlyArray<string> = [
 	"getAuthLevel",
 	"getAuthMismatchReason",
 	"getKeyType",
+	"getLimit",
 	"getPaymentRequirement",
 	"isAcceptedProtocolVersion",
+	"isCollectionId",
+	"isHiveTxId",
 	"isInstanceId",
+	"isListingId",
 	"isProtocolAction",
 	"isSeedId",
+	"isSymbol",
 	"isValidProtocolVersion",
 	"matchProvenance",
 	"mergeSchemas",
@@ -188,6 +196,7 @@ const PROTOCOL_RUNTIME_SURFACE: ReadonlyArray<string> = [
 	"resolvePaymentRecipient",
 	"roundHive",
 	"toWireUrl",
+	"validateGenesisBlockSelection",
 	"validateHiveUsername",
 	"validateMintData",
 	"validateMutableSnapshot",

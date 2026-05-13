@@ -1,22 +1,21 @@
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { Queryable } from "@/db/client.ts";
-import { MIN_HEARTBEAT_INTERVAL_BLOCKS } from "@/protocol/index.ts";
-import { requireBoundedString } from "@/utils/validation.ts";
+import { HASH_FORMAT_PREFIX, MIN_HEARTBEAT_INTERVAL_BLOCKS } from "@/protocol/index.ts";
+import {
+	requireBoundedString,
+	requireExactLengthString,
+	requireNonNegativeInt,
+} from "@/utils/validation.ts";
 
-// Mirrors `formatStateRoot()` / `stateRootSchema` in the SDK.
+// Mirrors `formatStateRoot()` / `stateRootSchema` in the SDK. The SHA-256 hex
+// payload is exactly 64 chars and the `sha256:` prefix adds 7 — total wire
+// length is fixed.
 const STATE_ROOT_REGEX = /^sha256:[0-9a-f]{64}$/;
-const MAX_STATE_ROOT_LENGTH = 128;
+const STATE_ROOT_LENGTH = HASH_FORMAT_PREFIX.length + 64;
 const MAX_INDEXER_VERSION_LENGTH = 32;
 
-function requireNonNegativeInt(value: unknown, fieldName: string): number {
-	if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-		throw new Error(`Missing or invalid '${fieldName}' parameter: expected non-negative integer`);
-	}
-	return value;
-}
-
 function requireStateRoot(value: unknown): string {
-	const str = requireBoundedString(value, "stateRoot", MAX_STATE_ROOT_LENGTH).trim();
+	const str = requireExactLengthString(value, "stateRoot", STATE_ROOT_LENGTH);
 	if (!STATE_ROOT_REGEX.test(str)) {
 		throw new Error("Invalid 'stateRoot' parameter: expected 'sha256:<64 lowercase hex chars>'");
 	}

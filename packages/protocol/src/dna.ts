@@ -17,6 +17,8 @@ import {
 	LISTING_ID_PREFIX,
 	LISTING_NONCE_LENGTH,
 	LISTING_HASH_LENGTH,
+	SYMBOL_REGEX,
+	TX_ID_REGEX,
 	HASH_DOMAIN_COL,
 	HASH_DOMAIN_ORIGIN,
 	HASH_DOMAIN_SEED,
@@ -85,7 +87,11 @@ export async function generateDeterministicCollectionId(
 	name: string,
 	symbol: string,
 ): Promise<string> {
-	const input = `${HASH_DOMAIN_COL}${creator.toLowerCase()}:${name}:${symbol.toUpperCase()}`;
+	// NFC-normalize free-form string inputs so visually-identical names typed
+	// on different platforms (Android NFD, Desktop NFC, macOS HFS+ NFD) map to
+	// the same canonical id. creator and symbol are ASCII-gated upstream via
+	// validateHiveUsername / SYMBOL_REGEX and are exempt.
+	const input = `${HASH_DOMAIN_COL}${creator.toLowerCase()}:${name.normalize("NFC")}:${symbol.toUpperCase()}`;
 	const hash = await generateHash(input);
 	return `${COLLECTION_ID_PREFIX}${hash.slice(0, COLLECTION_ID_HASH_LENGTH)}`;
 }
@@ -94,7 +100,7 @@ export async function generateDeterministicSeedId(
 	collectionId: string,
 	artId: string,
 ): Promise<string> {
-	const input = `${HASH_DOMAIN_SEED}${collectionId}:${artId.toLowerCase()}`;
+	const input = `${HASH_DOMAIN_SEED}${collectionId}:${artId.normalize("NFC").toLowerCase()}`;
 	const hash = await generateHash(input);
 	// Seed and instance ids share the same hash length so their on-chain
 	// footprints match and the INSTANCE_ID_REGEX machinery below stays stable.
@@ -134,6 +140,45 @@ export function isSeedId(id: string): boolean {
 
 export function isInstanceId(id: string): boolean {
 	return INSTANCE_ID_PARSE_REGEX.test(id);
+}
+
+// Listing-id shape guard — derived from LISTING_ID_PREFIX + LISTING_HASH_LENGTH
+// so the regex and the emitter (`generateListingId` below) stay locked to a
+// single source of truth. Pure shape check; no DB or hash lookup.
+const LISTING_ID_PARSE_REGEX = new RegExp(
+	`^${LISTING_ID_PREFIX}[a-f0-9]{${LISTING_HASH_LENGTH}}$`,
+);
+
+export function isListingId(id: string): boolean {
+	return LISTING_ID_PARSE_REGEX.test(id);
+}
+
+// Hive transaction id — 40 lowercase hex chars (RIPEMD-160 of the serialized
+// tx body). Reused from constants.ts so a hardfork on the digest format flips
+// one source. Wrapped as a function so call sites read symmetrically with the
+// other id guards.
+export function isHiveTxId(id: string): boolean {
+	return TX_ID_REGEX.test(id);
+}
+
+// Collection symbol shape — derived from SYMBOL_REGEX (3-10 uppercase chars,
+// leading letter, A-Z0-9). Wrapped as a function so multisig + handler call
+// sites read symmetrically with isInstanceId/isListingId/isHiveTxId and the
+// underlying regex stays the single source of truth.
+export function isSymbol(value: string): boolean {
+	return SYMBOL_REGEX.test(value);
+}
+
+// Collection-id shape — COLLECTION_ID_PREFIX followed by COLLECTION_ID_HASH_LENGTH
+// lowercase hex chars. Derived from the emitter in
+// `generateDeterministicCollectionId` so the regex and the producer share the
+// same constants; a hardfork on either flips one source.
+const COLLECTION_ID_PARSE_REGEX = new RegExp(
+	`^${COLLECTION_ID_PREFIX}[a-f0-9]{${COLLECTION_ID_HASH_LENGTH}}$`,
+);
+
+export function isCollectionId(id: string): boolean {
+	return COLLECTION_ID_PARSE_REGEX.test(id);
 }
 
 /**

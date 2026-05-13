@@ -1,13 +1,16 @@
 import { z } from "zod";
 import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema } from "../schemas";
 import { formatZodError, withProvenance } from "./helpers";
-import type { KeychainResult } from "./types";
+import type { KeychainResult, ValidationError } from "./types";
 import {
 	generateListingNonce,
 	generateListingId,
 	createPayload,
 	createHiveOperation,
 	getKeyType,
+	HIVE_DECIMALS,
+	HIVE_PRECISION,
+	HIVE_AMOUNT_EPSILON,
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
@@ -116,6 +119,64 @@ export const buyBuilderSchema = buyInputSchema.extend({
 });
 export type BuyBuilderInput = z.infer<typeof buyBuilderSchema>;
 
+function toHiveUnits(value: number, field: string): number | ValidationError {
+	const units = Math.round(value * HIVE_PRECISION);
+	const canonical = units / HIVE_PRECISION;
+	if (!Number.isSafeInteger(units) || Math.abs(value - canonical) > HIVE_AMOUNT_EPSILON) {
+		return {
+			field,
+			message: `${field} must use at most ${HIVE_DECIMALS} decimal places`,
+			code: "INVALID_AMOUNT_PRECISION",
+		};
+	}
+	return units;
+}
+
+function validateBuyPaymentSplit(paymentSplit: BuyBuilderInput["paymentSplit"]): ValidationError[] {
+	const errors: ValidationError[] = [];
+	const sellerUnits = toHiveUnits(paymentSplit.sellerAmount, "paymentSplit.sellerAmount");
+	const royaltyUnits = toHiveUnits(paymentSplit.royaltyAmount, "paymentSplit.royaltyAmount");
+	const feeUnits = toHiveUnits(paymentSplit.feeAmount, "paymentSplit.feeAmount");
+	const totalUnits = toHiveUnits(paymentSplit.totalPrice, "paymentSplit.totalPrice");
+
+	for (const result of [sellerUnits, royaltyUnits, feeUnits, totalUnits]) {
+		if (typeof result !== "number") errors.push(result);
+	}
+	if (errors.length > 0) return errors;
+	if (
+		typeof sellerUnits !== "number" ||
+		typeof royaltyUnits !== "number" ||
+		typeof feeUnits !== "number" ||
+		typeof totalUnits !== "number"
+	) {
+		return errors;
+	}
+
+	if (sellerUnits <= 0) {
+		errors.push({
+			field: "paymentSplit.sellerAmount",
+			message: "Seller payment must be greater than zero",
+			code: "INVALID_PAYMENT_SPLIT",
+		});
+	}
+	if (royaltyUnits > 0 && !paymentSplit.royaltyRecipient) {
+		errors.push({
+			field: "paymentSplit.royaltyRecipient",
+			message: "royaltyRecipient is required when royaltyAmount is greater than zero",
+			code: "INVALID_PAYMENT_SPLIT",
+		});
+	}
+	if (sellerUnits + royaltyUnits + feeUnits !== totalUnits) {
+		errors.push({
+			field: "paymentSplit",
+			message: "sellerAmount + royaltyAmount + feeAmount must equal totalPrice",
+			code: "INVALID_PAYMENT_SPLIT",
+		});
+	}
+
+	return errors;
+}
+
 export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 	const parsed = buyBuilderSchema.safeParse(input);
 	if (!parsed.success) {
@@ -126,6 +187,10 @@ export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 
 	if (data.buyer === data.seller) {
 		return { success: false, errors: [{ field: "buyer", message: "Cannot buy your own NFT", code: "CANNOT_BUY_OWN" }] };
+	}
+	const paymentSplitErrors = validateBuyPaymentSplit(data.paymentSplit);
+	if (paymentSplitErrors.length > 0) {
+		return { success: false, errors: paymentSplitErrors };
 	}
 
 	const buyData: BuyData = {

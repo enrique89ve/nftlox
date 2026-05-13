@@ -213,6 +213,44 @@ describe("buildBuy transfer generation", () => {
 		expect(ops).toHaveLength(2);
 	});
 
+	test("rejects payment splits whose legs do not sum to totalPrice", () => {
+		const result = buildBuy({
+			...baseInput,
+			paymentSplit: {
+				sellerAmount: 0.001,
+				royaltyAmount: 0,
+				royaltyRecipient: null,
+				feeAmount: 0,
+				feeAccount: FEE_ACCOUNT,
+				totalPrice: 100,
+				currency: "HIVE",
+			},
+		});
+
+		expect(result.success).toBe(false);
+		if (result.success) return;
+		expect(result.errors.some((error) => error.code === "INVALID_PAYMENT_SPLIT")).toBe(true);
+	});
+
+	test("rejects royalty amount without a royalty recipient", () => {
+		const result = buildBuy({
+			...baseInput,
+			paymentSplit: {
+				sellerAmount: 8,
+				royaltyAmount: 1,
+				royaltyRecipient: null,
+				feeAmount: 0,
+				feeAccount: FEE_ACCOUNT,
+				totalPrice: 9,
+				currency: "HIVE",
+			},
+		});
+
+		expect(result.success).toBe(false);
+		if (result.success) return;
+		expect(result.errors[0]?.field).toBe("paymentSplit.royaltyRecipient");
+	});
+
 	test("transfer memos use correct NFTLox BUY/ROY/FEE prefixes", () => {
 		const result = buildBuy({
 			...baseInput,

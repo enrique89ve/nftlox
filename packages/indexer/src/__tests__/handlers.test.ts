@@ -51,6 +51,7 @@ import {
 	PROTOCOL_COLLECTION_FEE_HBD,
 } from "@/protocol/index.ts";
 import { makeOp as _makeOp } from "./helpers/make-op.ts";
+import { fixtureHiveTxId, fixtureListingId, fixtureNftId } from "./helpers/nft-fixtures.ts";
 
 // Canonical collection ID for alice + "Test Collection" + "TEST"
 let COL_ID: string;
@@ -327,8 +328,11 @@ describe("Handlers (integration)", () => {
 		});
 
 		test("rejects non-canonical collectionId", async () => {
+			// Shape-valid (passes `isCollectionId`) but not the canonical hash for
+			// (creator, name, symbol). Lets the canonical-equality check be the
+			// gate under test rather than the upstream shape gate.
 			const op = await makeCreateCollectionOp({
-				id: "col_fake_id_12345",
+				id: `col_${"a".repeat(20)}`,
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: 100,
@@ -343,13 +347,15 @@ describe("Handlers (integration)", () => {
 			// correct origin_dna so an auditor can validate it offline. The
 			// handler recomputes canonical = generateOriginDna(id) and rejects
 			// any payload whose origin_dna does not match — same discipline as
-			// the id/artId canonical checks.
+			// the id/artId canonical checks. Fixture must be exactly
+			// ORIGIN_DNA_LENGTH chars (length-bound enforces this earlier);
+			// the value below has the right shape but a wrong hash payload.
 			const op = await makeCreateCollectionOp({
 				id: COL_ID,
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: 100,
-				originDna: "FAKE_ORIGIN_DNA",
+				originDna: "oFAKEORIGINDEAD0",
 				metadata: { description: "Test", image: "https://example.com/img.png" },
 				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
@@ -1537,7 +1543,7 @@ describe("Handlers (integration)", () => {
 				UPDATE nfts
 				SET status = 'listed',
 					listing_id = ${listData.listingId as string},
-					listing_tx_id = 'tx_fake_list',
+					listing_tx_id = ${fixtureHiveTxId("fake-list")},
 					listing_price = 10,
 					listing_currency = 'HIVE'
 				WHERE id = ${instId}
@@ -1554,7 +1560,7 @@ describe("Handlers (integration)", () => {
 			const buyOp = makeOp(ACTION_BUY, {
 				nftId: instId,
 				listingId: listData.listingId,
-				listTxId: "tx_fake_list",
+				listTxId: fixtureHiveTxId("fake-list"),
 				txId: nftTx!.tx_id,
 			}, nodeAccount, transfers);
 			buyOp.txId = buyTxHash;
@@ -1566,7 +1572,7 @@ describe("Handlers (integration)", () => {
 				{
 					nftId: instId,
 					listingId: listData.listingId as string,
-					listTxId: "tx_fake_list",
+					listTxId: fixtureHiveTxId("fake-list"),
 					buyer: "bob",
 					txHash: buyTxHash,
 				},
@@ -1906,8 +1912,7 @@ describe("Handlers (integration)", () => {
 			).rejects.toThrow("listed for sale");
 		});
 
-		// After unlist, approved spender can transfer
-		test("transferFrom succeeds after unlist", async () => {
+		test("list clears individual approval so transferFrom stays blocked after unlist", async () => {
 			await seedCollection();
 			await seedMint();
 			const instId = await seedInstance();
@@ -1920,19 +1925,22 @@ describe("Handlers (integration)", () => {
 
 			const listData2 = await makeListData({ nftId: instId, priceAmount: "50.000" });
 			await withTransaction((txn) => handleList(makeOp(ACTION_LIST, listData2), txn));
+			const [allowanceAfterList] = await sql`SELECT * FROM nft_allowances WHERE nft_id = ${instId}`;
+			expect(allowanceAfterList).toBeUndefined();
 
 			// Alice quita el listado (instantaneous post-0.7.0)
 			await withTransaction((txn) => handleUnlist(makeOp(ACTION_UNLIST, { nftId: instId }), txn));
 
-			// Ahora gameshop puede mover el NFT
-			await withTransaction((txn) => handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
-				from: "alice",
-				to: "buyer1",
-				instanceId: instId,
-			}, "gameshop"), txn));
+			await expect(
+				withTransaction((txn) => handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
+					from: "alice",
+					to: "buyer1",
+					instanceId: instId,
+				}, "gameshop"), txn)),
+			).rejects.toThrow("not approved");
 
 			const [nft] = await sql`SELECT owner, status FROM nfts WHERE id = ${instId}`;
-			expect(nft!.owner).toBe("buyer1");
+			expect(nft!.owner).toBe("alice");
 			expect(nft!.status).toBe("active");
 		});
 
@@ -2216,12 +2224,12 @@ describe("Handlers (integration)", () => {
 			await seedMint();
 			const instId = await seedInstance();
 
-			const buyOp = makeBuyOp(instId, "list_fake", "tx_fake", "bob", "alice");
+			const buyOp = makeBuyOp(instId, fixtureListingId("fake"), fixtureHiveTxId("fake"), "bob", "alice");
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("not reserved");
 		});
 
 		test("rejects buy non-existent NFT", async () => {
-			const buyOp = makeBuyOp("nft_ghost", "list_fake", "tx_fake", "bob", "alice");
+			const buyOp = makeBuyOp(fixtureNftId("ghost"), fixtureListingId("fake"), fixtureHiveTxId("fake"), "bob", "alice");
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("not found");
 		});
 
@@ -2231,7 +2239,7 @@ describe("Handlers (integration)", () => {
 			const instId = await seedInstance();
 			await withTransaction((txn) => handleTransfer(makeOp(ACTION_TRANSFER, { nftId: instId, to: "null" }), txn));
 
-			const buyOp = makeBuyOp(instId, "list_fake", "tx_fake", "bob", "alice");
+			const buyOp = makeBuyOp(instId, fixtureListingId("fake"), fixtureHiveTxId("fake"), "bob", "alice");
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("not found");
 		});
 
@@ -2241,7 +2249,7 @@ describe("Handlers (integration)", () => {
 			const instId = await seedInstance();
 			await withTransaction((txn) => handleNftLend(makeOp(ACTION_NFT_LEND, { instanceId: instId, borrower: "bob" }), txn));
 
-			const buyOp = makeBuyOp(instId, "list_fake", "tx_fake", "charlie", "alice");
+			const buyOp = makeBuyOp(instId, fixtureListingId("fake"), fixtureHiveTxId("fake"), "charlie", "alice");
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("lent");
 		});
 
@@ -2273,17 +2281,21 @@ describe("Handlers (integration)", () => {
 			await sql`
 				UPDATE nfts
 				SET status = 'listed',
-					listing_id = 'legacy_seed_buy',
-					listing_tx_id = 'tx_legacy_seed_buy',
+					listing_id = ${fixtureListingId("legacy-seed-buy")},
+					listing_tx_id = ${fixtureHiveTxId("legacy-seed-buy")},
 					listing_price = 10,
 					listing_currency = 'HIVE'
 				WHERE id = ${SEED_TEST1}
 			`;
 			const [seed] = await sql`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${SEED_TEST1}`;
 
+			// Seeds use the `seed_…` id prefix, so `requireShapedString` rejects
+			// them at the shape gate before `assertMarketplaceInstance` ("Only
+			// instances") would fire. The shape-gate rejection is stricter
+			// defense-in-depth — a seed id cannot reach the buy handler at all.
 			await expect(
-				withTransaction((txn) => handleBuy(makeBuyOp(SEED_TEST1, "legacy_seed_buy", "tx_legacy_seed_buy", "bob", "alice", 10, seed!.tx_id as string), txn)),
-			).rejects.toThrow("Only instances");
+				withTransaction((txn) => handleBuy(makeBuyOp(SEED_TEST1, fixtureListingId("legacy-seed-buy"), fixtureHiveTxId("legacy-seed-buy"), "bob", "alice", 10, seed!.tx_id as string), txn)),
+			).rejects.toThrow("nftId does not match the canonical shape");
 		});
 
 		test("rejects buy with listingId mismatch", async () => {
@@ -2297,7 +2309,7 @@ describe("Handlers (integration)", () => {
 			// commitment match, so this exercises the listing_id mismatch path.
 			const buyTxHash = "d".repeat(40);
 			await projectBuyCommitment(instId, listingId, listTxId, "bob", buyTxHash);
-			const buyOp = makeBuyOp(instId, "list_wrong_id", listTxId, "bob", "alice", 10, buyTxHash);
+			const buyOp = makeBuyOp(instId, fixtureListingId("wrong-id"), listTxId, "bob", "alice", 10, buyTxHash);
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("listingId mismatch");
 		});
 
@@ -2309,7 +2321,7 @@ describe("Handlers (integration)", () => {
 
 			const buyTxHash = "e".repeat(40);
 			await projectBuyCommitment(instId, listingId, listTxId, "bob", buyTxHash);
-			const buyOp = makeBuyOp(instId, listingId, "tx_wrong", "bob", "alice", 10, buyTxHash);
+			const buyOp = makeBuyOp(instId, listingId, fixtureHiveTxId("wrong"), "bob", "alice", 10, buyTxHash);
 			await expect(withTransaction((txn) => handleBuy(buyOp, txn))).rejects.toThrow("listTxId mismatch");
 		});
 

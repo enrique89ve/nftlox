@@ -111,10 +111,9 @@ export async function insertInvalidOperation(
 
 /**
  * Fast existence check keyed on the PK. Used by the router to skip handler
- * dispatch when an op has already been processed (e.g. crash-replay under
- * `synchronous_commit=OFF`). Without this gate, replaying a successful
- * transfer/buy re-adjusts owner_nft_counts and collection_stats, drifting
- * the denormalized counters.
+ * dispatch when an op has already been processed during crash-replay. Without
+ * this gate, replaying a successful transfer/buy re-adjusts owner_nft_counts
+ * and collection_stats, drifting the denormalized counters.
  */
 export async function isOperationConfirmed(
 	operationId: string,
@@ -156,14 +155,11 @@ export async function insertConfirmedOperation(
 // ============ EXPIRED OPERATIONS CLEANUP ============
 
 const RETENTION_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
-// confirmed_operations is primarily the crash-replay idempotency index for the
-// router. 2 days comfortably covers any realistic sync stall: a crash + restart
-// replays at most the un-committed tail, which is minutes to hours, not days.
-// Keeping longer just bloats the table without strengthening the guarantee —
-// the blockchain is the source of truth for historical operation lookups.
-const CONFIRMED_OPS_RETENTION_MS = RETENTION_MS;
+// confirmed_operations is durable provenance, not ephemeral retention data:
+// nfts.owner_operation_id / nfts.created_operation_id and auditor invariants
+// intentionally join back to it. Only invalid/orphaned diagnostic rows expire.
 
-// Hard cap per retention table. Time-based TTL alone does not bound row count:
+// Hard cap per ephemeral retention table. Time-based TTL alone does not bound row count:
 // a bot flooding malformed ops can inflate `invalid_operations` faster than the
 // 2-day window evicts (e.g. 10 rps of invalids = ~1.7M rows before cutoff). This
 // cap ensures we always shed the oldest surplus so indexes stay small and the
@@ -171,8 +167,8 @@ const CONFIRMED_OPS_RETENTION_MS = RETENTION_MS;
 export const MAX_ROWS_PER_TABLE = 100_000;
 
 type RetentionSpec = Readonly<{
-	table: "invalid_operations" | "orphaned_buys" | "confirmed_operations";
-	pkColumn: "id" | "operation_id";
+	table: "invalid_operations" | "orphaned_buys";
+	pkColumn: "id";
 	timeColumn: "indexed_at" | "created_at";
 }>;
 
@@ -202,7 +198,6 @@ async function pruneExcessRows(spec: RetentionSpec): Promise<number> {
 
 export async function cleanupExpiredOperations(): Promise<number> {
 	const cutoff = new Date(Date.now() - RETENTION_MS).toISOString();
-	const confirmedCutoff = new Date(Date.now() - CONFIRMED_OPS_RETENTION_MS).toISOString();
 	const invalid = await sql`
 		DELETE FROM invalid_operations WHERE indexed_at < ${cutoff}
 		RETURNING 1
@@ -211,18 +206,13 @@ export async function cleanupExpiredOperations(): Promise<number> {
 		DELETE FROM orphaned_buys WHERE created_at < ${cutoff}
 		RETURNING 1
 	`;
-	const confirmed = await sql`
-		DELETE FROM confirmed_operations WHERE created_at < ${confirmedCutoff}
-		RETURNING 1
-	`;
-	const [invalidExcess, orphanedExcess, confirmedExcess] = await Promise.all([
+	const [invalidExcess, orphanedExcess] = await Promise.all([
 		pruneExcessRows({ table: "invalid_operations", pkColumn: "id", timeColumn: "indexed_at" }),
 		pruneExcessRows({ table: "orphaned_buys", pkColumn: "id", timeColumn: "created_at" }),
-		pruneExcessRows({ table: "confirmed_operations", pkColumn: "operation_id", timeColumn: "created_at" }),
 	]);
 	return (
-		invalid.length + orphaned.length + confirmed.length
-		+ invalidExcess + orphanedExcess + confirmedExcess
+		invalid.length + orphaned.length
+		+ invalidExcess + orphanedExcess
 	);
 }
 

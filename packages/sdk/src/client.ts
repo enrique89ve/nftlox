@@ -305,6 +305,9 @@ export interface IndexerNftProof extends IndexerNftOwner {
 	seed_id: string | null;
 	instance_number: number | null;
 	nft_dna: string | null;
+	collection_id: string;
+	collection_created_block_num: number;
+	collection_created_tx_id: string;
 }
 
 export interface IndexerNftLoan {

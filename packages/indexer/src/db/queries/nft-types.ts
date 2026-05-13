@@ -234,4 +234,7 @@ export type NftOwnershipProof = NftOwnerClaim & Readonly<{
 	readonly seed_id: string | null;
 	readonly instance_number: number | null;
 	readonly nft_dna: string | null;
+	readonly collection_id: string;
+	readonly collection_created_block_num: number;
+	readonly collection_created_tx_id: string;
 }>;

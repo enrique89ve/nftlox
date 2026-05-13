@@ -15,7 +15,6 @@ import {
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
 	ACTION_CREATE_COLLECTION,
-	SUPPORTED_CURRENCIES,
 	INSTANCE_FEE_ENABLED,
 	INSTANCE_FEE_UNIT_HBD,
 	INSTANCE_FEE_PER_N,
@@ -131,10 +130,10 @@ export async function buildCollection(
 	const nodeAccount = nodeAccountResult;
 
 	const feeCurrency: SupportedCurrency = options.feeCurrency ?? "HBD";
-	if (!(SUPPORTED_CURRENCIES as readonly string[]).includes(feeCurrency)) {
+	if (feeCurrency !== "HBD") {
 		return {
 			success: false,
-			errors: [{ field: "feeCurrency", message: `Unsupported currency: ${feeCurrency}`, code: "invalid_currency" }],
+			errors: [{ field: "feeCurrency", message: "Collection fees must be paid in HBD", code: "invalid_currency" }],
 		};
 	}
 

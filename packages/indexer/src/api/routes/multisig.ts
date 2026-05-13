@@ -386,7 +386,11 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 							// clients never retry a millisecond before the lock frees.
 							set.headers["Retry-After"] = String(Math.ceil(result.retryAfterMs / 1000));
 						}
-					} else if (result.code === "INDEXER_LAGGED") {
+					} else if (
+						result.code === "INDEXER_LAGGED"
+						|| result.code === "NODE_NOT_ACTIVE"
+						|| result.code === "NODE_DIVERGENT"
+					) {
 						set.status = 503;
 						if (result.retryAfterMs !== undefined) {
 							set.headers["Retry-After"] = String(Math.ceil(result.retryAfterMs / 1000));

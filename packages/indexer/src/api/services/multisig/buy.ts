@@ -3,7 +3,6 @@ import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
 import { getChainTimeSnapshot, type ChainTimeSnapshot } from "@/db/queries/sync.ts";
 import {
 	ACTION_BUY_COMMITMENT,
-	BUY_API_LAG_MAX_BLOCKS,
 	BUY_COMMITMENT_TTL_BLOCKS,
 	HIVE_BLOCK_TIME_MS,
 	MAX_ROYALTY_PCT,
@@ -16,7 +15,10 @@ import { computeExpectedTransferCount } from "@/utils/nft-rules.ts";
 import { requireSupportedCurrency, verifyTransfers } from "@/utils/validation.ts";
 import { createMultisigError, isMultisigError } from "@/api/services/multisig/errors.ts";
 import { assertNodeNotDivergent } from "@/api/services/multisig/divergence-gate.ts";
-import { requireMultisigChainReferenceTimeMs } from "@/api/services/multisig/chain-time.ts";
+import {
+	assertMultisigSyncHealthy,
+	requireMultisigChainReferenceTimeMs,
+} from "@/api/services/multisig/chain-time.ts";
 import { signWithBeekeeper } from "@/api/services/beekeeper-signer.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { Transaction, type CustomJsonOperation, type TransactionType } from "hive-tx";
@@ -84,7 +86,7 @@ async function executeBuyRequest(
 	await assertNodeNotDivergent(ctx.db);
 
 	const syncSnapshot = await readSyncState(ctx);
-	assertSyncHealthy(syncSnapshot);
+	assertMultisigSyncHealthy(syncSnapshot);
 	const chainReferenceTimeMs = requireMultisigChainReferenceTimeMs(syncSnapshot);
 	await assertNodeActive(ctx, syncSnapshot);
 
@@ -139,6 +141,8 @@ async function executeBuyRequest(
 			nftId: validated.customJsonOperation.payload.data.nftId,
 			buyTxHash: buyTxId,
 		});
+
+		await assertBuyFinalSigningAllowed(ctx);
 
 		const fullySignedTx = addNodeSignatureToBuy(validated, buyerSignature);
 		const broadcastResult = await broadcastCompletedBuy(fullySignedTx);
@@ -344,19 +348,6 @@ function assertPaymentSplit(
 	}
 }
 
-function assertSyncHealthy(snapshot: SyncStateSnapshot): void {
-	const lag = snapshot.hiveHeadBlock - snapshot.lastBlock;
-	if (lag > BUY_API_LAG_MAX_BLOCKS) {
-		const deficit = Math.max(1, lag - BUY_API_LAG_MAX_BLOCKS + 1);
-		const retryAfterMs = deficit * HIVE_BLOCK_TIME_MS;
-		throw createMultisigError(
-			"INDEXER_LAGGED",
-			`Indexer is ${lag} blocks behind Hive HEAD (max ${BUY_API_LAG_MAX_BLOCKS}); retry in ~${retryAfterMs}ms`,
-			{ retryAfterMs },
-		);
-	}
-}
-
 async function assertNodeActive(
 	ctx: MultisigBuyContext,
 	snapshot: SyncStateSnapshot,
@@ -370,6 +361,13 @@ async function assertNodeActive(
 			{ cause },
 		);
 	}
+}
+
+export async function assertBuyFinalSigningAllowed(ctx: MultisigBuyContext): Promise<void> {
+	await assertNodeNotDivergent(ctx.db);
+	const snapshot = await readSyncState(ctx);
+	assertMultisigSyncHealthy(snapshot);
+	await assertNodeActive(ctx, snapshot);
 }
 
 type SyncStateSnapshot = ChainTimeSnapshot;

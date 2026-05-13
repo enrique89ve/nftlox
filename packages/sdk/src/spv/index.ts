@@ -29,6 +29,7 @@ export {
 	createDefaultL1Config,
 	fetchTransaction,
 	fetchOperationById,
+	fetchCustomJsonOperationsInRange,
 	fetchOperationId,
 	fetchOperationIds,
 	fetchFromHiveRpc,

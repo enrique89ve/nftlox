@@ -124,6 +124,19 @@ describe("handleNodeStateCheckpoint", () => {
 		expect(count?.c).toBe(0);
 	});
 
+	// Locks the exact-length tightening — `formatStateRoot()` never emits
+	// whitespace, so any padded input is malformed and must reject. Prevents
+	// drift back to the legacy `.trim()`-then-check shape.
+	test("rejects whitespace-padded stateRoot", async () => {
+		await insertRegisteredNode(TEST_ACCOUNT);
+
+		const op = makeCheckpointOp({
+			blockNum: ALIGNED_BLOCK,
+			stateRoot: ` ${VALID_STATE_ROOT}`,
+		});
+		await expect(handleNodeStateCheckpoint(op, sql)).rejects.toThrow(/stateRoot/);
+	});
+
 	test("rejects non-positive blockNum (zero is structurally a sentinel, not a valid checkpoint)", async () => {
 		await insertRegisteredNode(TEST_ACCOUNT);
 

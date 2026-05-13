@@ -15,6 +15,7 @@ import {
 	requirePositiveInt,
 	requireObject,
 	requireArray,
+	requireNonNegativeInt,
 	optionalString,
 	optionalObject,
 	optionalCollectionSchema,
@@ -107,7 +108,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 			creatorInstanceBudget.set(seed.creator, budget);
 		}
 		budget.planned += quantity;
-		await assertWithinLimit("instancesPerCreator", seed.creator, budget.baseline, budget.planned);
+		assertWithinLimit("instancesPerCreator", seed.creator, budget.baseline, op.blockNum, budget.planned);
 
 		// Per-collection cap: enforce only when the creator declared one
 		// (max_instances > 0). The seed row already carries the cap, so no
@@ -143,8 +144,8 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 			}
 		}
 
-		const distributed = Number(seed.distributed) || 0;
-		const maxSupply = Number(seed.max_supply) || 0;
+		const distributed = requireNonNegativeInt(seed.distributed, "seed.distributed");
+		const maxSupply = requireNonNegativeInt(seed.max_supply, "seed.max_supply");
 
 		// Idempotency: count instances already created by THIS operation.
 		const [existingFromOp] = await txn`
@@ -155,7 +156,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const alreadyMintedThisOp = existingFromOp?.count ?? 0;
 		const baseDistributed = computeInstanceBaseline(distributed, alreadyMintedThisOp);
 
-		const reservedSupply = Number(seed.reserved_supply) || 0;
+		const reservedSupply = requireNonNegativeInt(seed.reserved_supply, "seed.reserved_supply");
 		validateSeedSupplyForDistribution(seedId, maxSupply, baseDistributed, quantity, reservedSupply);
 
 		let minted = 0;

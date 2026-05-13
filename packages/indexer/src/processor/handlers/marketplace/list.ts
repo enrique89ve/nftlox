@@ -3,6 +3,7 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getNftForProcessingForUpdate, updateNftListing, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
 import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
+import { deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireHiveAmount, requireNumber, optionalString } from "@/utils/validation.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
 import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
@@ -101,6 +102,7 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 		wasListed: hadExpiredListing, // re-listing expired → net 0; fresh listing → +1
 	};
 	await updateNftListing(nftId, priceAmount, price.currency, expiresAt, marketplace, listingId, op.txId, ctx, txn);
+	await deleteNftAllowance(nftId, txn);
 
 	return [nftId];
 }

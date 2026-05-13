@@ -15,6 +15,9 @@ import { config } from "@/config.ts";
 import { seedActiveSettlementNode } from "./helpers/settlement-node.ts";
 
 async function cleanDb(): Promise<void> {
+	// `nfts` first — leaked rows from earlier suites (e.g. buy-commitment) hold
+	// FKs into `collections` and would block the truncate below.
+	await sql`DELETE FROM nfts`;
 	await sql`DELETE FROM collections`;
 	await sql`DELETE FROM invalid_operations`;
 	await sql`DELETE FROM confirmed_operations`;

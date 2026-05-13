@@ -1,17 +1,21 @@
-import { symbolTakenByCreator } from "@/db/queries/collections.ts";
+import { countCollectionsByCreator, symbolTakenByCreator } from "@/db/queries/collections.ts";
+import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
 import { createMultisigError } from "@/api/services/multisig/errors.ts";
 import { assertNodeNotDivergent } from "@/api/services/multisig/divergence-gate.ts";
-import { readRequiredMultisigChainReferenceTimeMs } from "@/api/services/multisig/chain-time.ts";
+import { readRequiredMultisigChainReference } from "@/api/services/multisig/chain-time.ts";
+import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	getLastOperation,
 	isRecord,
 	parseCollectionPayload,
 	parseHiveAmount,
 	validateBoundedPayloadString,
+	validateExactLengthPayloadString,
+	validateNonEmptyBoundedPayloadString,
 	validateCommonTransactionStructure,
 	validateCustomJsonOperation,
-	validatePayloadDataString,
 	validateRecord,
+	validateShapedPayloadString,
 	validateTransferBody,
 } from "@/api/services/multisig/transaction.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
@@ -20,14 +24,18 @@ import { optionalCollectionSchema } from "@/utils/validation.ts";
 import {
 	INSTANCE_FEE_PER_N,
 	MAX_DESCRIPTION_LENGTH,
-	MAX_ID_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
+	MAX_INSTANCES_PER_COLLECTION,
 	MAX_NAME_LENGTH,
 	MAX_ROYALTY_PCT,
 	MAX_URL_LENGTH,
+	MEMO_PREFIX_FEE_COL,
+	ORIGIN_DNA_LENGTH,
 	PROTOCOL_COLLECTION_FEE_HBD,
-	SYMBOL_REGEX,
 	generateDeterministicCollectionId,
+	generateOriginDna,
+	isCollectionId,
+	isSymbol,
 	validateHiveUsername,
 	validateSchemaDefinition,
 } from "@/protocol/index.ts";
@@ -42,40 +50,48 @@ import type {
 
 const CREATE_COLLECTION_OPERATION_COUNT = 2;
 
+type ValidatedCollectionRequest = Readonly<{
+	readonly transaction: ValidatedCollectionTransaction;
+	readonly creator: string;
+	readonly symbol: string;
+}>;
+
+type ValidatedCollectionIdentity = Readonly<{
+	readonly canonicalId: string;
+	readonly symbol: string;
+}>;
+
 export async function processCollectionRequest(
 	rawBody: unknown,
 	ctx: MultisigCollectionContext,
 ) {
 	await assertNodeNotDivergent(ctx.db);
+	const chainReference = await readRequiredMultisigChainReference(ctx.db);
+	await assertCollectionNodeActive(ctx, chainReference.lastBlock);
 
 	const requestShape = validateCollectionRequestShape(rawBody);
-	const transaction = await validateCollectionTransactionStructure(
+	const validatedRequest = await validateCollectionTransactionStructure(
 		requestShape.transaction,
 		ctx,
+		chainReference.referenceTimeMs,
 	);
+	const { transaction, creator, symbol } = validatedRequest;
 
-	// After validation the creator + symbol are known; acquire the per-
-	// (creator, symbol) lock BEFORE signing so two concurrent requests for the
-	// same collection can't both get co-signed (only one wins on-chain and the
-	// loser forfeits the fee). Holder is a per-request UUID, so a same-creator
-	// same-symbol parallel request gets rejected instead of refreshing the slot.
-	const transferOp = transaction.transferOperations[0];
-	if (!transferOp) {
-		throw createMultisigError("INVALID_TX_STRUCTURE", "Missing fee transfer after validation");
-	}
-	const creator = transferOp.from;
-	const symbol = String(transaction.customJsonOperation.payload.data.symbol);
-	const acquisition = await ctx.collectionLock.acquire(creator, symbol);
+	// Serialize by creator, not symbol. The consensus cap is per creator, so
+	// allowing different symbols through concurrently can sign cap+1 requests.
+	const acquisition = await ctx.collectionLock.acquire(creator);
 	if (!acquisition.acquired) {
 		throw createMultisigError(
 			"COLLECTION_LOCKED",
-			`A collection signing for ${creator}/${symbol} is already in flight. Retry after ${acquisition.retryAfterMs}ms`,
+			`A collection signing for ${creator} is already in flight. Retry after ${acquisition.retryAfterMs}ms`,
 			{ retryAfterMs: acquisition.retryAfterMs },
 		);
 	}
 
 	let signingSucceeded = false;
 	try {
+		await assertCreatorCanCreateCollection(creator, symbol, chainReference.hiveHeadBlock, ctx);
+
 		const response = await ctx.sign(transaction);
 		if (response.ok) {
 			signingSucceeded = true;
@@ -85,7 +101,7 @@ export async function processCollectionRequest(
 		// On success, leave the lock to expire naturally so a second request can't
 		// be signed while the first tx is still within its broadcast window.
 		if (!signingSucceeded) {
-			await ctx.collectionLock.release(creator, symbol);
+			await ctx.collectionLock.release(creator);
 		}
 	}
 }
@@ -103,10 +119,10 @@ function validateCollectionRequestShape(raw: unknown): CollectionRequestShape {
 async function validateCollectionTransactionStructure(
 	tx: Record<string, unknown>,
 	ctx: MultisigCollectionContext,
-): Promise<ValidatedCollectionTransaction> {
-	const chainReferenceTimeMs = await readRequiredMultisigChainReferenceTimeMs(ctx.db);
+	referenceTimeMs: number,
+): Promise<ValidatedCollectionRequest> {
 	const validated = validateCommonTransactionStructure(tx, {
-		referenceTimeMs: chainReferenceTimeMs,
+		referenceTimeMs,
 	});
 	if (validated.operations.length !== CREATE_COLLECTION_OPERATION_COUNT) {
 		throw createMultisigError(
@@ -126,12 +142,20 @@ async function validateCollectionTransactionStructure(
 		parseCollectionPayload,
 	);
 
-	await validateCollectionPayloadData(customJsonOperation.payload, transferOperations[0].from, ctx);
+	const identity = await validateCollectionPayloadData(
+		customJsonOperation.payload,
+		transferOperations[0].from,
+	);
+	assertCollectionFeeMemo(transferOperations[0].memo, identity.canonicalId);
 
 	return {
-		...validated,
-		transferOperations,
-		customJsonOperation,
+		transaction: {
+			...validated,
+			transferOperations,
+			customJsonOperation,
+		},
+		creator: transferOperations[0].from,
+		symbol: identity.symbol,
 	};
 }
 
@@ -193,11 +217,14 @@ async function validateCollectionFeeTransfer(
 async function validateCollectionPayloadData(
 	payload: ValidatedCollectionPayload,
 	creator: string,
-	ctx: MultisigCollectionContext,
-): Promise<void> {
+): Promise<ValidatedCollectionIdentity> {
 	const data = payload.data;
-	const id = validateBoundedPayloadString(data.id, "id", MAX_ID_LENGTH);
-	const name = validateBoundedPayloadString(data.name, "name", MAX_NAME_LENGTH);
+	// `isCollectionId` is the same protocol guard `requireShapedString` consumes
+	// on the handler side, so the multisig rejects malformed ids byte-for-byte
+	// matching the chain handler (parity invariant). Shape gate fails fast
+	// before the async canonical-id hash work.
+	const id = validateShapedPayloadString(data.id, "id", isCollectionId, "col_<20 hex>");
+	const name = validateNonEmptyBoundedPayloadString(data.name, "name", MAX_NAME_LENGTH);
 	const symbol = validateCollectionSymbol(data.symbol);
 
 	const canonicalId = await generateDeterministicCollectionId(creator, name, symbol);
@@ -208,15 +235,68 @@ async function validateCollectionPayloadData(
 		);
 	}
 
-	if (await symbolTakenByCreator(creator, symbol, ctx.db)) {
-		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", `Symbol ${symbol} already used by @${creator}`);
-	}
+	await validateOriginDna(data.originDna, canonicalId);
 
 	validateCollectionMetadata(data.metadata);
 	validateCollectionRules(data.rules);
 	validateTotalPotential(data.totalPotential);
 	validateMaxInstances(data.maxInstances);
 	validateCollectionSchema(data.schema);
+
+	return { canonicalId, symbol };
+}
+
+async function assertCollectionNodeActive(
+	ctx: MultisigCollectionContext,
+	lastBlock: number,
+): Promise<void> {
+	try {
+		await assertActiveSettlementNode(ctx.nodeAccount, lastBlock, ctx.db);
+	} catch (cause) {
+		throw createMultisigError(
+			"NODE_NOT_ACTIVE",
+			cause instanceof Error ? cause.message : "Settlement node is not active",
+			{ cause },
+		);
+	}
+}
+
+function assertCollectionFeeMemo(memo: string, canonicalId: string): void {
+	const expectedMemo = `${MEMO_PREFIX_FEE_COL}${canonicalId}`;
+	if (memo === expectedMemo) return;
+	throw createMultisigError(
+		"INVALID_PAYMENT_SPLIT",
+		`Collection fee memo must be '${expectedMemo}', got '${memo}'`,
+	);
+}
+
+async function assertCreatorCanCreateCollection(
+	creator: string,
+	symbol: string,
+	hiveHeadBlock: number,
+	ctx: MultisigCollectionContext,
+): Promise<void> {
+	// Mirror the handler's `collectionsPerCreator` cap (see
+	// processor/handlers/core/create-collection.ts:72-73). The indexer's HEAD
+	// block is the best estimate of the block the broadcast will land in;
+	// `getLimit` is a pure function of block height (no runtime config) so the
+	// answer is the same value both indexer implementations would compute.
+	// Translates handler's `throw new Error(...)` into the multisig's typed
+	// error envelope so the API returns a structured response.
+	const creatorCollectionCount = await countCollectionsByCreator(creator, ctx.db);
+	try {
+		assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount, hiveHeadBlock);
+	} catch (cause) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			cause instanceof Error ? cause.message : String(cause),
+			{ cause },
+		);
+	}
+
+	if (await symbolTakenByCreator(creator, symbol, ctx.db)) {
+		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", `Symbol ${symbol} already used by @${creator}`);
+	}
 }
 
 function validateCollectionMetadata(value: unknown): void {
@@ -224,8 +304,8 @@ function validateCollectionMetadata(value: unknown): void {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "Payload data.metadata must be an object");
 	}
 
-	validateBoundedPayloadString(value.description, "metadata.description", MAX_DESCRIPTION_LENGTH);
-	validateBoundedPayloadString(value.image, "metadata.image", MAX_IMAGE_URL_LENGTH);
+	validateNonEmptyBoundedPayloadString(value.description, "metadata.description", MAX_DESCRIPTION_LENGTH);
+	validateNonEmptyBoundedPayloadString(value.image, "metadata.image", MAX_IMAGE_URL_LENGTH);
 	if (value.externalUrl !== undefined && value.externalUrl !== null) {
 		validateBoundedPayloadString(value.externalUrl, "metadata.externalUrl", MAX_URL_LENGTH);
 	}
@@ -251,13 +331,30 @@ function validateCollectionRules(value: unknown): void {
 			`Payload data.rules.royaltyPct must be between 0 and ${MAX_ROYALTY_PCT}`,
 		);
 	}
-	if (
-		value.royaltyRecipient !== undefined &&
-		value.royaltyRecipient !== null &&
-		typeof value.royaltyRecipient !== "string"
-	) {
+	const royaltyRecipient = normalizeRoyaltyRecipient(value.royaltyRecipient);
+	if (value.royaltyPct > 0 && royaltyRecipient === null) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			"Payload data.rules.royaltyRecipient is required when rules.royaltyPct > 0",
+		);
+	}
+	if (royaltyRecipient !== null) {
+		const usernameError = validateHiveUsername(royaltyRecipient);
+		if (usernameError) {
+			throw createMultisigError(
+				"INVALID_PROTOCOL_PAYLOAD",
+				`Payload data.rules.royaltyRecipient ("${royaltyRecipient}") is not a valid Hive username: ${usernameError}`,
+			);
+		}
+	}
+}
+
+function normalizeRoyaltyRecipient(value: unknown): string | null {
+	if (value === undefined || value === null || value === "") return null;
+	if (typeof value !== "string") {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "Payload data.rules.royaltyRecipient must be a string");
 	}
+	return value;
 }
 
 function validateTotalPotential(value: unknown): void {
@@ -274,6 +371,12 @@ function validateMaxInstances(value: unknown): void {
 		throw createMultisigError(
 			"INVALID_PROTOCOL_PAYLOAD",
 			"Payload data.maxInstances must be a non-negative integer",
+		);
+	}
+	if (value > MAX_INSTANCES_PER_COLLECTION) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.maxInstances exceeds protocol cap of ${MAX_INSTANCES_PER_COLLECTION}, got ${value}`,
 		);
 	}
 	if (value > 0 && value % INSTANCE_FEE_PER_N !== 0) {
@@ -303,13 +406,24 @@ function validateCollectionSchema(value: unknown): void {
 }
 
 function validateCollectionSymbol(value: unknown): string {
-	const symbol = validatePayloadDataString(value, "symbol");
-	if (!SYMBOL_REGEX.test(symbol)) {
+	// `isSymbol` is the same protocol guard `requireSymbol` consumes on the
+	// handler side, so multisig and on-chain code reject identical payloads
+	// (parity invariant: [[project_multisig_handler_parity_invariant]]).
+	return validateShapedPayloadString(
+		value,
+		"symbol",
+		isSymbol,
+		"3-10 uppercase A-Z0-9, leading letter",
+	);
+}
+
+async function validateOriginDna(value: unknown, canonicalId: string): Promise<void> {
+	const declared = validateExactLengthPayloadString(value, "originDna", ORIGIN_DNA_LENGTH);
+	const expected = await generateOriginDna(canonicalId);
+	if (declared !== expected) {
 		throw createMultisigError(
 			"INVALID_PROTOCOL_PAYLOAD",
-			"Payload data.symbol must be 3-10 uppercase characters and start with a letter",
+			`Non-canonical originDna: expected ${expected} for collection ${canonicalId}, got ${declared}`,
 		);
 	}
-
-	return symbol;
 }

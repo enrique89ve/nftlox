@@ -194,6 +194,10 @@ export const getAuthMismatchReason = protocol.getAuthMismatchReason;
 export const requiresActiveNodeSigner = protocol.requiresActiveNodeSigner;
 
 export const calculatePaymentSplit = protocol.calculatePaymentSplit;
+// Integer-units primitive — drivers comparing against on-chain transfers
+// (SPV verifier, indexer handler tests) must use this rather than the float
+// API so optional-leg presence is decided by `units > 0`, not by tolerance.
+export const calculatePaymentSplitFromUnits = protocol.calculatePaymentSplitFromUnits;
 export const calculateBasisPointsAmount = protocol.calculateBasisPointsAmount;
 export const percentageToBasisPoints = protocol.percentageToBasisPoints;
 export const roundHive = protocol.roundHive;
@@ -227,6 +231,14 @@ export const extractSeedId = protocol.extractSeedId;
 export const extractInstanceNumber = protocol.extractInstanceNumber;
 export const isSeedId = protocol.isSeedId;
 export const isInstanceId = protocol.isInstanceId;
+// Shape guards re-exported so integrators reading payloads directly from L1
+// (no SDK builder roundtrip) can reject malformed ids with the same predicate
+// the multisig + on-chain handler use. Each guard wraps a constant-derived
+// regex; a hardfork on prefix/length flips both sides at once.
+export const isCollectionId = protocol.isCollectionId;
+export const isListingId = protocol.isListingId;
+export const isHiveTxId = protocol.isHiveTxId;
+export const isSymbol = protocol.isSymbol;
 export const generateListingNonce = protocol.generateListingNonce;
 export const generateListingId = protocol.generateListingId;
 
@@ -242,6 +254,20 @@ export const fromWireUrl = protocol.fromWireUrl;
 export const readDeclaredProvenance = protocol.readDeclaredProvenance;
 export const assertProvenanceTarget = protocol.assertProvenanceTarget;
 export const matchProvenance = protocol.matchProvenance;
+
+// SPV anchor. Light clients that verify proofs offline pin the genesis block
+// number + id to reject hostile HafAH endpoints serving a fabricated chain.
+// `validateGenesisBlockSelection` is the shared accept/reject routine; SDK
+// consumers running their own chain bootstrap call it before trusting block 0.
+export const PROTOCOL_GENESIS_BLOCK = protocol.PROTOCOL_GENESIS_BLOCK;
+export const PROTOCOL_GENESIS_BLOCK_ID = protocol.PROTOCOL_GENESIS_BLOCK_ID;
+export const validateGenesisBlockSelection = protocol.validateGenesisBlockSelection;
+
+// Consensus cap query. `getLimit(dimension, blockNum)` is a pure function of
+// the protocol-coded LIMIT_SCHEDULE. Integrators verifying caps pre-broadcast
+// (e.g. collections-per-creator) hit the same answer every indexer computes —
+// see [[project_consensus_params_are_protocol_coded]].
+export const getLimit = protocol.getLimit;
 
 // Protocol-version helpers. The SDK uses these internally (createPayload
 // validates `options.version` via `assertAcceptedProtocolVersion`); they are

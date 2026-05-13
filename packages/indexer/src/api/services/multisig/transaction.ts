@@ -1,6 +1,7 @@
 import { Transaction, type CustomJsonOperation, type TransactionType, type TransferOperation } from "hive-tx";
 import { signWithBeekeeper } from "@/api/services/beekeeper-signer.ts";
 import { createMultisigError } from "@/api/services/multisig/errors.ts";
+import { prototypePollutionReviver } from "@/utils/json-safety.ts";
 import {
 	ACTION_BUY,
 	ACTION_CREATE_COLLECTION,
@@ -9,6 +10,9 @@ import {
 	MULTISIG_TX_MAX_EXPIRATION_MS,
 	MULTISIG_TX_MIN_EXPIRATION_MS,
 	compareVersions,
+	isHiveTxId,
+	isInstanceId,
+	isListingId,
 	isProtocolAction,
 	parseProtocolVersion,
 	type MultisigErrorCode,
@@ -232,12 +236,16 @@ export function parseBuyPayload(json: string, protocolId: string): ValidatedBuyP
 		);
 	}
 
+	// Handler-side `handleBuy` / `handleBuyCommitment` apply the same shape
+	// guards (isInstanceId / isListingId / isHiveTxId) and reject identical
+	// payloads. Catching the mismatch pre-broadcast avoids orphaning the
+	// protocol fee on a chain rejection.
 	return {
 		action: ACTION_BUY,
 		data: {
-			nftId: validatePayloadDataString(parsed.data.nftId, "nftId"),
-			listingId: validatePayloadDataString(parsed.data.listingId, "listingId"),
-			listTxId: validatePayloadDataString(parsed.data.listTxId, "listTxId"),
+			nftId: validateShapedPayloadString(parsed.data.nftId, "nftId", isInstanceId, "nft_<20 hex>_<instance>"),
+			listingId: validateShapedPayloadString(parsed.data.listingId, "listingId", isListingId, "list_<32 hex>"),
+			listTxId: validateShapedPayloadString(parsed.data.listTxId, "listTxId", isHiveTxId, "<40 lowercase hex>"),
 		},
 	};
 }
@@ -271,6 +279,71 @@ export function validateBoundedPayloadString(value: unknown, fieldName: string, 
 		throw createMultisigError(
 			"INVALID_PROTOCOL_PAYLOAD",
 			`Payload data.${fieldName} exceeds max length ${maxLength}`,
+		);
+	}
+
+	return str;
+}
+
+// Non-empty + bounded variant — use for fields the handler validates via
+// `requireBoundedString` (which rejects "" via `requireString`). Accepting ""
+// here while the handler rejects it would let the multisig co-sign a payload
+// that the chain bounces post-broadcast, orphaning the protocol fee. Sibling
+// validateBoundedPayloadString stays loose for fields the handler treats as
+// optional (e.g. metadata.externalUrl via optionalBoundedString, which itself
+// passes through "").
+export function validateNonEmptyBoundedPayloadString(value: unknown, fieldName: string, maxLength: number): string {
+	const str = validatePayloadDataString(value, fieldName);
+	if (str === "") {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.${fieldName} must be a non-empty string`,
+		);
+	}
+	if (str.length > maxLength) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.${fieldName} exceeds max length ${maxLength}`,
+		);
+	}
+
+	return str;
+}
+
+// Exact-length variant — use for fields whose protocol contract is a fixed
+// length (DNA, hashes, access keys). Sibling validateBoundedPayloadString
+// only enforces an upper bound; mixing it with a *_LENGTH constant relies on
+// a downstream equality check, which is easy to forget when copying the
+// pattern to a new validator (see feedback_bounded_payload_string_is_max_not_exact).
+export function validateExactLengthPayloadString(value: unknown, fieldName: string, length: number): string {
+	const str = validatePayloadDataString(value, fieldName);
+	if (str.length !== length) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.${fieldName} must be exactly ${length} characters, got ${str.length}`,
+		);
+	}
+
+	return str;
+}
+
+// Shape-guard variant — use for fields whose protocol contract is a regex
+// (id prefixes, hex widths). The predicate is a pure protocol guard
+// (`isInstanceId`, `isListingId`, `isHiveTxId`) so the multisig and handler
+// reject the same string for the same reason. `shapeDescription` should name
+// the canonical shape ("nft_<20 hex>_<n>") so client logs surface why the
+// payload was rejected.
+export function validateShapedPayloadString(
+	value: unknown,
+	fieldName: string,
+	predicate: (s: string) => boolean,
+	shapeDescription: string,
+): string {
+	const str = validatePayloadDataString(value, fieldName);
+	if (!predicate(str)) {
+		throw createMultisigError(
+			"INVALID_PROTOCOL_PAYLOAD",
+			`Payload data.${fieldName} does not match the canonical shape ${shapeDescription}`,
 		);
 	}
 
@@ -484,7 +557,7 @@ function validateCustomJsonString(value: unknown): string {
 function parseProtocolPayload(json: string, protocolId: string): ParsedProtocolPayload {
 	let parsed: unknown;
 	try {
-		parsed = JSON.parse(json);
+		parsed = JSON.parse(json, prototypePollutionReviver);
 	} catch (cause) {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "custom_json.json is not valid JSON", { cause });
 	}

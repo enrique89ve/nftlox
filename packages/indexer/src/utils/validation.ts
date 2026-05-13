@@ -5,8 +5,8 @@
 
 import {
 	calculatePaymentSplit,
+	isSymbol,
 	validateHiveUsername,
-	SYMBOL_REGEX,
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
@@ -204,7 +204,7 @@ export function requireString(value: unknown, fieldName: string): string {
 
 export function requireSymbol(value: unknown, fieldName: string): string {
 	const str = requireString(value, fieldName);
-	if (!SYMBOL_REGEX.test(str)) {
+	if (!isSymbol(str)) {
 		throw new Error(
 			`Invalid ${fieldName}: "${str}" must be 3-10 uppercase chars, start with letter (e.g. "CARD", "NFT01")`,
 		);
@@ -216,6 +216,36 @@ export function requireBoundedString(value: unknown, fieldName: string, maxLengt
 	const str = requireString(value, fieldName);
 	if (str.length > maxLength) {
 		throw new Error(`${fieldName} exceeds max length: ${str.length} > ${maxLength}`);
+	}
+	return str;
+}
+
+// Exact-length variant — mirrors validateExactLengthPayloadString in the
+// multisig path. Use for fields whose protocol contract is a fixed length
+// (DNA, hashes, access keys). Sibling requireBoundedString only enforces an
+// upper bound, which is easy to misread when paired with a *_LENGTH constant.
+export function requireExactLengthString(value: unknown, fieldName: string, length: number): string {
+	const str = requireString(value, fieldName);
+	if (str.length !== length) {
+		throw new Error(`${fieldName} must be exactly ${length} characters, got ${str.length}`);
+	}
+	return str;
+}
+
+// Shape-guard variant — mirrors validateShapedPayloadString in the multisig
+// path so handler and pre-broadcast checks reject the same string for the
+// same reason. `predicate` is a pure protocol guard from `@nftlox/protocol`
+// (`isInstanceId`, `isListingId`, `isHiveTxId`); `shapeDescription` names the
+// canonical shape so chain-rejection logs are debuggable.
+export function requireShapedString(
+	value: unknown,
+	fieldName: string,
+	predicate: (s: string) => boolean,
+	shapeDescription: string,
+): string {
+	const str = requireString(value, fieldName);
+	if (!predicate(str)) {
+		throw new Error(`${fieldName} does not match the canonical shape ${shapeDescription}`);
 	}
 	return str;
 }
@@ -303,6 +333,13 @@ export function requirePositiveInt(value: unknown, fieldName: string): number {
 		throw new Error(`${fieldName} must be a positive integer, got ${n}`);
 	}
 	return n;
+}
+
+export function requireNonNegativeInt(value: unknown, fieldName: string): number {
+	if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+		throw new Error(`Missing or invalid '${fieldName}' parameter: expected non-negative integer`);
+	}
+	return value;
 }
 
 export function optionalString(value: unknown): string | null {

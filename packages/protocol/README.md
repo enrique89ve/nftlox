@@ -219,6 +219,20 @@ base operations instead of a second copy of the type system.
   `IMAGE_ID_PREFIX`, `ORIGIN_DNA_PREFIX`, `NFT_DNA_PREFIX`) are single sources
   of truth: raw literals outside `constants.ts` are rejected by
   `tests/no-magic-prefixes.test.ts`.
+- Free-form string inputs to every deterministic-id helper in `src/dna.ts`
+  are **NFC-normalized** before hashing. Third-party re-implementers
+  (Rust/Go indexers, alt-clients) MUST apply Unicode NFC to the same inputs
+  or they will derive different ids for the same logical text:
+  - `generateDeterministicCollectionId(creator, name, symbol)` — `name` is
+    normalized inside the helper. `creator` and `symbol` are ASCII-gated
+    upstream and exempt.
+  - `generateDeterministicSeedId(collectionId, artId)` — `artId` is
+    normalized inside the helper.
+  - `generateImageHash(imageUrl)` — `imageUrl` flows through `toWireUrl`,
+    which NFC-normalizes after trim. The on-chain wire bytes are also NFC
+    as a consequence, so DB-persisted URL fields and the hash preimage
+    agree byte-for-byte.
+  Frozen NFC vs NFD vectors in `tests/dna.test.ts` lock these invariants.
 - Any action that changes ownership must preserve deterministic replay.
 
 Run the package checks after changing protocol contracts:
