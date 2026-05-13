@@ -246,13 +246,17 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 			instanceId = inst!.id as string;
 
 			const nonce = generateListingNonce();
+			// 14-day TTL: comfortably between MIN_LISTING_TTL_MS and MAX, so the
+			// handler's `validateExpiresAt` accepts. Test predates the floor and
+			// previously passed `expiresAt: 0`, which now rejects.
+			const expiresAt = Date.now() + 14 * 86_400_000;
 			const listingId = await generateListingId({
 				nftId: instanceId,
 				owner: "alice",
 				marketplace: "",
 				priceAmount: "10.000",
 				priceCurrency: "HIVE",
-				expiresAt: 0,
+				expiresAt,
 				nonce,
 			});
 			const listOp: ParsedOperation = {
@@ -269,6 +273,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 					listingId,
 					listingNonce: nonce,
 					price: { amount: "10.000", currency: "HIVE" },
+					expiresAt,
 				},
 			};
 			await handleList(listOp, txn);
