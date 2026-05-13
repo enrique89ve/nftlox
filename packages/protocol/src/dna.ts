@@ -85,7 +85,11 @@ export async function generateDeterministicCollectionId(
 	name: string,
 	symbol: string,
 ): Promise<string> {
-	const input = `${HASH_DOMAIN_COL}${creator.toLowerCase()}:${name}:${symbol.toUpperCase()}`;
+	// NFC-normalize free-form string inputs so visually-identical names typed
+	// on different platforms (Android NFD, Desktop NFC, macOS HFS+ NFD) map to
+	// the same canonical id. creator and symbol are ASCII-gated upstream via
+	// validateHiveUsername / SYMBOL_REGEX and are exempt.
+	const input = `${HASH_DOMAIN_COL}${creator.toLowerCase()}:${name.normalize("NFC")}:${symbol.toUpperCase()}`;
 	const hash = await generateHash(input);
 	return `${COLLECTION_ID_PREFIX}${hash.slice(0, COLLECTION_ID_HASH_LENGTH)}`;
 }
@@ -94,7 +98,7 @@ export async function generateDeterministicSeedId(
 	collectionId: string,
 	artId: string,
 ): Promise<string> {
-	const input = `${HASH_DOMAIN_SEED}${collectionId}:${artId.toLowerCase()}`;
+	const input = `${HASH_DOMAIN_SEED}${collectionId}:${artId.normalize("NFC").toLowerCase()}`;
 	const hash = await generateHash(input);
 	// Seed and instance ids share the same hash length so their on-chain
 	// footprints match and the INSTANCE_ID_REGEX machinery below stays stable.
