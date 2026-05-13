@@ -108,7 +108,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 			creatorInstanceBudget.set(seed.creator, budget);
 		}
 		budget.planned += quantity;
-		await assertWithinLimit("instancesPerCreator", seed.creator, budget.baseline, budget.planned);
+		assertWithinLimit("instancesPerCreator", seed.creator, budget.baseline, op.blockNum, budget.planned);
 
 		// Per-collection cap: enforce only when the creator declared one
 		// (max_instances > 0). The seed row already carries the cap, so no

@@ -70,7 +70,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	if (await collectionExists(canonicalId, txn)) return [];
 
 	const creatorCollectionCount = await countCollectionsByCreator(creator, txn);
-	await assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount);
+	assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount, op.blockNum);
 
 	if (await symbolTakenByCreator(creator, symbol, txn)) {
 		throw new Error(`Symbol ${symbol} already used by @${creator}`);
