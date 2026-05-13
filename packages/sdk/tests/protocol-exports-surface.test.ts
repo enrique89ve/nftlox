@@ -148,6 +148,7 @@ const PROTOCOL_RUNTIME_SURFACE: ReadonlyArray<string> = [
 	"assertValidProtocolVersion",
 	"calculateBasisPointsAmount",
 	"calculatePaymentSplit",
+	"calculatePaymentSplitFromUnits",
 	"canonicalJson",
 	"castPayloadByAction",
 	"compareVersions",

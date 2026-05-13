@@ -194,6 +194,10 @@ export const getAuthMismatchReason = protocol.getAuthMismatchReason;
 export const requiresActiveNodeSigner = protocol.requiresActiveNodeSigner;
 
 export const calculatePaymentSplit = protocol.calculatePaymentSplit;
+// Integer-units primitive — drivers comparing against on-chain transfers
+// (SPV verifier, indexer handler tests) must use this rather than the float
+// API so optional-leg presence is decided by `units > 0`, not by tolerance.
+export const calculatePaymentSplitFromUnits = protocol.calculatePaymentSplitFromUnits;
 export const calculateBasisPointsAmount = protocol.calculateBasisPointsAmount;
 export const percentageToBasisPoints = protocol.percentageToBasisPoints;
 export const roundHive = protocol.roundHive;

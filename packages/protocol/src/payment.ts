@@ -107,17 +107,46 @@ function computeRoyalty(
 	};
 }
 
-export function calculatePaymentSplit(
-	totalPrice: number,
-	currency: SupportedCurrency,
+/**
+ * Integer-units primitive of the payment split. Pure function of `totalUnits`
+ * (already validated by the caller) plus the listing rules. Every observable
+ * — counts, equality checks, presence of optional legs — must derive from
+ * this output to stay deterministic across SDK, indexer, and SPV verifier.
+ *
+ * Optional-leg rules baked in:
+ *  - `royaltyUnits === 0` when `royaltyRecipient` is null, `royaltyPct <= 0`,
+ *    or `royaltyRecipient === seller` (self-royalty collapses into the seller
+ *    leg). `effectiveRoyaltyRecipient` is null in all three cases so the
+ *    caller can branch with a single check.
+ *  - `feeUnits === 0` when `feeAccount === seller` (the seller IS the fee
+ *    account; emitting a self-transfer would be redundant).
+ *
+ * Drivers that compare against on-chain transfers MUST decide leg presence
+ * by `units > 0`, never by a float-tolerance threshold — see
+ * [[project_determinism_audit]].
+ */
+export type PaymentSplitUnits = Readonly<{
+	readonly sellerUnits: number;
+	readonly royaltyUnits: number;
+	readonly effectiveRoyaltyRecipient: string | null;
+	readonly feeUnits: number;
+	readonly totalUnits: number;
+}>;
+
+export function calculatePaymentSplitFromUnits(
+	totalUnits: number,
 	royaltyPct: number,
 	royaltyRecipient: string | null,
 	seller: string,
 	feeAccount: string,
-): PaymentSplit {
-	const totalUnits = toExactHiveUnits(totalPrice, "totalPrice");
+): PaymentSplitUnits {
+	if (!Number.isSafeInteger(totalUnits)) {
+		throw new Error(`totalUnits must be a safe integer, got ${totalUnits}`);
+	}
 	if (totalUnits < MIN_PRICE_UNITS) {
-		throw new Error(`totalPrice must be at least ${MIN_PRICE_AMOUNT}, got ${totalPrice}`);
+		throw new Error(
+			`totalUnits ${totalUnits} below MIN_PRICE_AMOUNT (${MIN_PRICE_AMOUNT} = ${MIN_PRICE_UNITS} units)`,
+		);
 	}
 	assertFiniteNumber(royaltyPct, "royaltyPct");
 	if (royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
@@ -143,12 +172,38 @@ export function calculatePaymentSplit(
 	}
 
 	return {
-		sellerAmount: fromHiveUnits(sellerUnits),
-		royaltyAmount: fromHiveUnits(royaltyUnits),
-		royaltyRecipient: effectiveRoyaltyRecipient,
-		feeAmount: fromHiveUnits(feeUnits),
+		sellerUnits,
+		royaltyUnits,
+		effectiveRoyaltyRecipient,
+		feeUnits,
+		totalUnits,
+	};
+}
+
+export function calculatePaymentSplit(
+	totalPrice: number,
+	currency: SupportedCurrency,
+	royaltyPct: number,
+	royaltyRecipient: string | null,
+	seller: string,
+	feeAccount: string,
+): PaymentSplit {
+	const totalUnits = toExactHiveUnits(totalPrice, "totalPrice");
+	const split = calculatePaymentSplitFromUnits(
+		totalUnits,
+		royaltyPct,
+		royaltyRecipient,
+		seller,
 		feeAccount,
-		totalPrice: fromHiveUnits(totalUnits),
+	);
+
+	return {
+		sellerAmount: fromHiveUnits(split.sellerUnits),
+		royaltyAmount: fromHiveUnits(split.royaltyUnits),
+		royaltyRecipient: split.effectiveRoyaltyRecipient,
+		feeAmount: fromHiveUnits(split.feeUnits),
+		feeAccount,
+		totalPrice: fromHiveUnits(split.totalUnits),
 		currency,
 	};
 }

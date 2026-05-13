@@ -26,7 +26,7 @@ import {
 	MEMO_PREFIX_FEE_COL,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	SUPPORTED_CURRENCIES,
-	calculatePaymentSplit,
+	calculatePaymentSplitFromUnits,
 	generateDeterministicCollectionId,
 	generateListingId,
 	type SupportedCurrency,
@@ -285,7 +285,7 @@ function requireNftIdInTransferPayload(data: Record<string, unknown>, nftId: str
 type BuyTransferEdge = Readonly<{
 	from: string;
 	to: string;
-	amount: number;
+	amountUnits: number;
 	currency: SupportedCurrency;
 	memo: string;
 }>;
@@ -317,7 +317,7 @@ function parseBuyTransferEdge(raw: unknown): BuyTransferEdge | null {
 	return {
 		from: value.from,
 		to: value.to,
-		amount: parsedAmount.amount,
+		amountUnits: parsedAmount.amountUnits,
 		currency: parsedAmount.currency,
 		memo: value.memo,
 	};
@@ -350,32 +350,59 @@ function parseRequiredNumber(value: unknown, fieldName: string): number {
 	return value;
 }
 
-function parseTransferAmount(rawAmount: string): { readonly amount: number; readonly currency: SupportedCurrency } | null {
+// Exact integer-units parser for canonical Hive amount strings ("X.XXX CUR").
+// Avoids `parseFloat` so the rounding behaviour stays deterministic across
+// every consumer of the buy verifier (sister to protocol's `toExactHiveUnits`).
+// Returns null when the string does not match the canonical wire format.
+function hiveAmountStringToUnits(rawNumeric: string): number | null {
+	const match = /^(\d+)(?:\.(\d{1,3}))?$/.exec(rawNumeric);
+	if (!match) return null;
+	const intPart = match[1];
+	const decPart = (match[2] ?? "").padEnd(3, "0");
+	if (intPart === undefined) return null;
+	const intNum = Number.parseInt(intPart, 10);
+	const decNum = Number.parseInt(decPart, 10);
+	if (!Number.isInteger(intNum) || !Number.isInteger(decNum)) return null;
+	const units = intNum * 1000 + decNum;
+	if (!Number.isSafeInteger(units) || units < 0) return null;
+	return units;
+}
+
+function parseTransferAmount(rawAmount: string): { readonly amountUnits: number; readonly currency: SupportedCurrency } | null {
 	const match = /^(\d+(?:\.\d{1,3})?)\s+([A-Z]{3,5})$/.exec(rawAmount);
 	if (!match) return null;
 	const currency = match[2];
 	if (!currency || !isSupportedCurrency(currency)) return null;
-	const amount = Number.parseFloat(match[1] ?? "");
-	if (!Number.isFinite(amount) || amount < 0) return null;
-	return { amount, currency };
+	const amountUnits = hiveAmountStringToUnits(match[1] ?? "");
+	if (amountUnits === null) return null;
+	return { amountUnits, currency };
 }
 
-function amountsMatch(left: number, right: number): boolean {
-	return Math.abs(left - right) <= HIVE_AMOUNT_TOLERANCE;
+function unitsToCanonicalString(units: number): string {
+	if (!Number.isSafeInteger(units) || units < 0) return String(units);
+	const intPart = Math.floor(units / 1000);
+	const decPart = units % 1000;
+	return `${intPart}.${decPart.toString().padStart(3, "0")}`;
 }
 
-function computeExpectedCollectionFeeHbd(maxInstances: number): number {
-	const base = Number.parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
-	if (!INSTANCE_FEE_ENABLED || maxInstances <= 0) return base;
-	const unit = Number.parseFloat(INSTANCE_FEE_UNIT_HBD);
-	return base + unit * Math.ceil(maxInstances / INSTANCE_FEE_PER_N);
+function computeExpectedCollectionFeeUnits(maxInstances: number): number {
+	const baseUnits = hiveAmountStringToUnits(PROTOCOL_COLLECTION_FEE_HBD);
+	if (baseUnits === null) {
+		throw new Error(`PROTOCOL_COLLECTION_FEE_HBD is not a canonical Hive amount: ${PROTOCOL_COLLECTION_FEE_HBD}`);
+	}
+	if (!INSTANCE_FEE_ENABLED || maxInstances <= 0) return baseUnits;
+	const unitUnits = hiveAmountStringToUnits(INSTANCE_FEE_UNIT_HBD);
+	if (unitUnits === null) {
+		throw new Error(`INSTANCE_FEE_UNIT_HBD is not a canonical Hive amount: ${INSTANCE_FEE_UNIT_HBD}`);
+	}
+	return baseUnits + unitUnits * Math.ceil(maxInstances / INSTANCE_FEE_PER_N);
 }
 
 function findExactTransfer(params: {
 	readonly transfers: ReadonlyArray<BuyTransferEdge>;
 	readonly from: string;
 	readonly to: string;
-	readonly amount: number;
+	readonly amountUnits: number;
 	readonly currency: SupportedCurrency;
 	readonly memo: string;
 	readonly label: string;
@@ -385,11 +412,11 @@ function findExactTransfer(params: {
 		transfer.to === params.to &&
 		transfer.currency === params.currency &&
 		transfer.memo === params.memo &&
-		amountsMatch(transfer.amount, params.amount)
+		transfer.amountUnits === params.amountUnits
 	);
 	if (matches.length !== 1) {
 		throw new OwnershipMismatchError(
-			`Buy transaction expected exactly one ${params.label}: ${params.amount.toFixed(3)} ${params.currency} from ${params.from} to ${params.to} with memo ${params.memo}; found ${matches.length}`,
+			`Buy transaction expected exactly one ${params.label}: ${unitsToCanonicalString(params.amountUnits)} ${params.currency} from ${params.from} to ${params.to} with memo ${params.memo}; found ${matches.length}`,
 		);
 	}
 	return matches[0]!;
@@ -399,18 +426,18 @@ function findCollectionFeeTransfer(params: {
 	readonly tx: { readonly operations: ReadonlyArray<unknown> };
 	readonly collectionId: string;
 	readonly nodeAccount: string;
-	readonly expectedFeeHbd: number;
+	readonly expectedFeeUnits: number;
 }): BuyTransferEdge {
 	const expectedMemo = `${MEMO_PREFIX_FEE_COL}${params.collectionId}`;
 	const matches = extractTransferEdges(params.tx).filter((transfer) =>
 		transfer.to === params.nodeAccount &&
 		transfer.currency === "HBD" &&
 		transfer.memo === expectedMemo &&
-		amountsMatch(transfer.amount, params.expectedFeeHbd)
+		transfer.amountUnits === params.expectedFeeUnits
 	);
 	if (matches.length !== 1) {
 		throw new OwnershipMismatchError(
-			`Collection creation transaction expected exactly one fee transfer ${params.expectedFeeHbd.toFixed(3)} HBD to ${params.nodeAccount} with memo ${expectedMemo}; found ${matches.length}`,
+			`Collection creation transaction expected exactly one fee transfer ${unitsToCanonicalString(params.expectedFeeUnits)} HBD to ${params.nodeAccount} with memo ${expectedMemo}; found ${matches.length}`,
 		);
 	}
 	return matches[0]!;
@@ -529,7 +556,7 @@ async function resolveCollectionBuyRules(params: {
 		tx,
 		collectionId: params.collectionId,
 		nodeAccount: collectionOp.signer,
-		expectedFeeHbd: computeExpectedCollectionFeeHbd(maxInstances),
+		expectedFeeUnits: computeExpectedCollectionFeeUnits(maxInstances),
 	});
 	const expectedCollectionId = await generateDeterministicCollectionId(feeTransfer.from, name, symbol);
 	if (expectedCollectionId !== params.collectionId) {
@@ -550,15 +577,16 @@ function assertBuyTransfersMatchListing(params: {
 	readonly listing: BuyListingProof;
 	readonly collectionRules: CollectionBuyRules;
 }): void {
-	const listingAmount = Number.parseFloat(params.listing.price.amount);
-	if (!Number.isFinite(listingAmount)) {
-		throw new OwnershipMismatchError(`Listing price is not a finite amount: ${params.listing.price.amount}`);
+	const listingUnits = hiveAmountStringToUnits(params.listing.price.amount);
+	if (listingUnits === null) {
+		throw new OwnershipMismatchError(
+			`Listing price is not a canonical Hive amount: ${params.listing.price.amount}`,
+		);
 	}
-	let split: ReturnType<typeof calculatePaymentSplit>;
+	let split: ReturnType<typeof calculatePaymentSplitFromUnits>;
 	try {
-		split = calculatePaymentSplit(
-			listingAmount,
-			params.listing.price.currency,
+		split = calculatePaymentSplitFromUnits(
+			listingUnits,
 			params.collectionRules.royaltyPct,
 			params.collectionRules.royaltyRecipient,
 			params.listing.seller,
@@ -570,9 +598,14 @@ function assertBuyTransfersMatchListing(params: {
 		);
 	}
 
-	const expectedTransferCount = 1
-		+ (split.royaltyAmount > HIVE_AMOUNT_TOLERANCE && split.royaltyRecipient ? 1 : 0)
-		+ (split.feeAmount > HIVE_AMOUNT_TOLERANCE ? 1 : 0);
+	// Presence of optional legs is decided strictly by `units > 0`, mirroring
+	// the protocol primitive's contract. The royalty leg also requires a
+	// non-null `effectiveRoyaltyRecipient` — `computeRoyalty` collapses
+	// self-royalty (recipient === seller) to (units=0, recipient=null) so the
+	// two checks are redundant in practice but kept explicit for readability.
+	const hasRoyaltyLeg = split.royaltyUnits > 0 && split.effectiveRoyaltyRecipient !== null;
+	const hasFeeLeg = split.feeUnits > 0;
+	const expectedTransferCount = 1 + (hasRoyaltyLeg ? 1 : 0) + (hasFeeLeg ? 1 : 0);
 	if (params.transfers.length !== expectedTransferCount) {
 		throw new OwnershipMismatchError(
 			`Buy transaction has ${params.transfers.length} payment transfers for NFT, expected ${expectedTransferCount}`,
@@ -582,28 +615,28 @@ function assertBuyTransfersMatchListing(params: {
 		transfers: params.transfers,
 		from: params.buyer,
 		to: params.listing.seller,
-		amount: split.sellerAmount,
+		amountUnits: split.sellerUnits,
 		currency: params.listing.price.currency,
 		memo: `${MEMO_PREFIX_BUY}${params.nftId}`,
 		label: "seller payment",
 	});
-	if (split.royaltyAmount > HIVE_AMOUNT_TOLERANCE && split.royaltyRecipient) {
+	if (hasRoyaltyLeg) {
 		findExactTransfer({
 			transfers: params.transfers,
 			from: params.buyer,
-			to: split.royaltyRecipient,
-			amount: split.royaltyAmount,
+			to: split.effectiveRoyaltyRecipient!,
+			amountUnits: split.royaltyUnits,
 			currency: params.listing.price.currency,
 			memo: `${MEMO_PREFIX_ROYALTY}${params.nftId}`,
 			label: "royalty payment",
 		});
 	}
-	if (split.feeAmount > HIVE_AMOUNT_TOLERANCE) {
+	if (hasFeeLeg) {
 		findExactTransfer({
 			transfers: params.transfers,
 			from: params.buyer,
 			to: params.settlementNode,
-			amount: split.feeAmount,
+			amountUnits: split.feeUnits,
 			currency: params.listing.price.currency,
 			memo: `${MEMO_PREFIX_FEE}${params.nftId}`,
 			label: "protocol fee",
