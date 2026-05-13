@@ -305,6 +305,13 @@ export function requirePositiveInt(value: unknown, fieldName: string): number {
 	return n;
 }
 
+export function requireNonNegativeInt(value: unknown, fieldName: string): number {
+	if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+		throw new Error(`Missing or invalid '${fieldName}' parameter: expected non-negative integer`);
+	}
+	return value;
+}
+
 export function optionalString(value: unknown): string | null {
 	if (value === undefined || value === null) return null;
 	if (typeof value !== "string") return null;
