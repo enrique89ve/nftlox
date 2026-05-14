@@ -282,6 +282,63 @@ export const isAcceptedProtocolVersion = protocol.isAcceptedProtocolVersion;
 export const assertAcceptedProtocolVersion = protocol.assertAcceptedProtocolVersion;
 
 // ============================================================================
+// Marketplace timing
+// Block- and clock-denominated TTLs for the buy/commitment lifecycle.
+// Integrators building buy transactions outside the SDK builder pipeline use
+// these to validate `expiration` windows pre-broadcast and to size their own
+// commitment polling. Values are protocol-coded (see
+// [[project_consensus_params_are_protocol_coded]]); any change is a hardfork.
+// ============================================================================
+
+export const BUY_TX_TTL_MS = protocol.BUY_TX_TTL_MS;
+export const BUY_COMMITMENT_TTL_BLOCKS = protocol.BUY_COMMITMENT_TTL_BLOCKS;
+export const BUY_API_LAG_MAX_BLOCKS = protocol.BUY_API_LAG_MAX_BLOCKS;
+
+// ============================================================================
+// Node-operator cadence
+// Block-denominated cadence + caps observed by every indexer when validating
+// node activity. Integrators running their own settlement node or filtering
+// `l2_nodes` for "live" peers land on the same accept/reject decision the
+// rest of the network computes.
+// ============================================================================
+
+export const MAX_ACTIVE_COMMITMENTS_PER_NODE = protocol.MAX_ACTIVE_COMMITMENTS_PER_NODE;
+export const MIN_HEARTBEAT_INTERVAL_BLOCKS = protocol.MIN_HEARTBEAT_INTERVAL_BLOCKS;
+export const MAX_NODE_HEARTBEAT_STALENESS_BLOCKS = protocol.MAX_NODE_HEARTBEAT_STALENESS_BLOCKS;
+
+// ============================================================================
+// Payment requirements
+// Pure-function dispatch over the protocol-coded `ACTION_PAYMENT` map.
+// Integrators validating paid actions pre-broadcast (or auditing transfers
+// they observe on L1) call `getPaymentRequirement(action)` and pattern-match
+// on `.kind`. `resolvePaymentRecipient` reproduces the determinism rule the
+// indexer applies (`action:signer` ⇒ `op.signer`, no node-local config).
+// `castPayloadByAction` is the typed-coercion guard for raw L1 payloads.
+//
+// `assertNeverPaymentKind` is intentionally NOT re-exported: it is an
+// exhaustive-switch sentinel useful only when implementing one's own
+// `PaymentRequirement` dispatcher inside the protocol package itself.
+// ============================================================================
+
+export const ACTION_PAYMENT = protocol.ACTION_PAYMENT;
+export const getPaymentRequirement = protocol.getPaymentRequirement;
+export const requiresTransferEnrichment = protocol.requiresTransferEnrichment;
+export const resolvePaymentRecipient = protocol.resolvePaymentRecipient;
+export const castPayloadByAction = protocol.castPayloadByAction;
+
+// ============================================================================
+// Input validators
+// String-level validators integrators reach for in form input or pre-broadcast
+// guards. Each returns `null` on success or an error message string. The SDK
+// schemas wrap these for zod; raw consumers (CLI tools, non-zod UIs) want the
+// underlying predicates directly.
+// ============================================================================
+
+export const validateHiveUsername = protocol.validateHiveUsername;
+export const validateNodeEndpoint = protocol.validateNodeEndpoint;
+export const normalizeNodeEndpoint = protocol.normalizeNodeEndpoint;
+
+// ============================================================================
 // Type exports
 // ============================================================================
 
@@ -306,6 +363,8 @@ export type {
 	HiveTransferBody,
 	Price,
 	PaymentSplit,
+	PaymentRequirement,
+	PaymentRecipient,
 	SeedProvenance,
 	ActualProvenance,
 	SchemaFieldType,

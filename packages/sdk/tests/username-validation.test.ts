@@ -1,5 +1,6 @@
 import { test, expect, describe } from "bun:test";
-import { validateHiveUsername, usernameSchema } from "../src/schemas";
+import { validateHiveUsername } from "../src/protocol-exports";
+import { usernameSchema } from "../src/schemas";
 
 describe("validateHiveUsername", () => {
 	describe("Valid usernames (should return null)", () => {

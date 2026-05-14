@@ -20,8 +20,6 @@ import {
 	validateNodeEndpoint,
 } from "@nftlox/protocol";
 
-export { validateHiveUsername };
-
 // Safe URL: only http:// and https:// protocols (blocks javascript:, data:, etc.)
 // `z.httpUrl` is zod v4's native http/https-only URL format — equivalent to
 // `z.url()` with a protocol restriction, so no separate refine is needed.
