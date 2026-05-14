@@ -46,6 +46,17 @@ function makeOpWithBlock(block: unknown): HafAHOperation {
 	return raw as unknown as HafAHOperation;
 }
 
+function makeOpWithoutEnvelope(): HafAHOperation {
+	const raw = {
+		block: POST_GENESIS_BLOCK,
+		trx_id: TX_ID,
+		timestamp: "2026-01-01T00:00:00",
+		operation_id: "1",
+		virtual_op: false,
+	};
+	return raw as unknown as HafAHOperation;
+}
+
 describe("parseHafAHOperations — block field guard", () => {
 	test("does not emit ops whose block is a string", () => {
 		const result = parseHafAHOperations([makeOpWithBlock("not-a-number")]);
@@ -70,5 +81,26 @@ describe("parseHafAHOperations — block field guard", () => {
 
 		expect(result.ops).toHaveLength(1);
 		expect(result.ops[0]?.blockNum).toBe(POST_GENESIS_BLOCK);
+	});
+
+	test("canonicalizes HAFAH timezone-less timestamps as UTC", () => {
+		const result = parseHafAHOperations([makeOpWithBlock(POST_GENESIS_BLOCK)]);
+
+		expect(result.ops[0]?.timestamp).toBe("2026-01-01T00:00:00.000Z");
+	});
+
+	test("throws before projecting protocol ops with invalid HAFAH timestamps", () => {
+		const op = makeOpWithBlock(POST_GENESIS_BLOCK) as unknown as { timestamp: string };
+		op.timestamp = "2026-02-30T00:00:00";
+
+		expect(() => parseHafAHOperations([op as unknown as HafAHOperation]))
+			.toThrow("Invalid HAFAH timestamp value");
+	});
+
+	test("drops malformed rows with valid block but missing op envelope", () => {
+		const result = parseHafAHOperations([makeOpWithoutEnvelope()]);
+
+		expect(result.ops).toEqual([]);
+		expect(result.rejected).toEqual([]);
 	});
 });

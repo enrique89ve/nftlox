@@ -213,9 +213,8 @@ export async function routeOperationDetailed(
 ): Promise<RouteOperationResult> {
 	try {
 		// Idempotency gate: skip handler dispatch if this operation_id has already been
-		// confirmed. Protects against crash-replay drift in denormalized counters when
-		// `synchronous_commit=OFF` (used during massive sync) lets a committed tx be lost
-		// and the sync engine re-processes the same range.
+		// confirmed. Protects against ordinary crash-replay drift in denormalized
+		// counters when the sync engine re-processes the same range.
 		if (await isOperationConfirmed(op.operationId, txn)) {
 			return { kind: "applied" };
 		}

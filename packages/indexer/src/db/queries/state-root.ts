@@ -429,4 +429,5 @@ export async function flushStateRootBuffer(
 		    updated_at = NOW()
 		WHERE id = ${STATE_META_ID}
 	`;
+	buffer.clear();
 }
