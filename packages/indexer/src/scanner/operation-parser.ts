@@ -198,9 +198,18 @@ function isValidTxId(txId: string): boolean {
 	return TX_ID_REGEX.test(txId);
 }
 
-/** HafAH operation_id is a bigint (numeric string or number) */
+/**
+ * HafAH `operation_id` is a Postgres bigint. The wire contract is a numeric
+ * string (see `HafAHOperation.operation_id: string`), but some endpoints serialize
+ * it as a JSON number. We accept both but reject numbers outside JS's safe-
+ * integer range: two distinct bigints above 2^53 - 1 collapse to the same JS
+ * Number on parse, which would let the `confirmed_operations` replay gate in
+ * `action-router.ts` treat two unrelated operations as the same one and skip
+ * the second handler dispatch — silent double-skip is worse than refusing the
+ * batch outright.
+ */
 function isValidOperationId(opId: unknown): boolean {
-	if (typeof opId === "number") return Number.isInteger(opId) && opId >= 0;
+	if (typeof opId === "number") return Number.isSafeInteger(opId) && opId >= 0;
 	if (typeof opId === "string") return /^\d+$/.test(opId);
 	return false;
 }
@@ -308,7 +317,7 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 			rejected.push({
 				blockNum: hafOp.block,
 				txId: hafOp.trx_id,
-				operationId: hafOp.operation_id,
+				operationId: String(hafOp.operation_id),
 				signer,
 				reason: `Invalid transaction ID format: ${hafOp.trx_id}`,
 				rawPayload: value.json,
@@ -341,7 +350,7 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 			rejected.push({
 				blockNum: hafOp.block,
 				txId: hafOp.trx_id,
-				operationId: hafOp.operation_id,
+				operationId: String(hafOp.operation_id),
 				signer,
 				reason: describePayloadRejection(payload),
 				rawPayload: payload,
@@ -363,7 +372,7 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 			rejected.push({
 				blockNum: hafOp.block,
 				txId: hafOp.trx_id,
-				operationId: hafOp.operation_id,
+				operationId: String(hafOp.operation_id),
 				signer: auth.signer,
 				reason: auth.reason,
 				rawPayload: payload,
@@ -380,7 +389,7 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 			rejected.push({
 				blockNum: hafOp.block,
 				txId: hafOp.trx_id,
-				operationId: hafOp.operation_id,
+				operationId: String(hafOp.operation_id),
 				signer: auth.signer,
 				reason: `Operation at block ${hafOp.block} predates genesis ${config.genesisBlock}`,
 				rawPayload: payload,
@@ -390,11 +399,16 @@ export function parseHafAHOperations(hafOps: HafAHOperation[]): ParseResult {
 
 		const timestamp = normalizeHafahTimestampToUtc(hafOp.timestamp);
 
+		// String-coerce defense-in-depth: HafAHOperation declares operation_id as
+		// string, but the JSON cast in hive-client.ts is unchecked. If an endpoint
+		// ever emits a JSON number, isValidOperationId guarded it to the safe-
+		// integer range above; coercing here guarantees downstream BD reads and
+		// the `confirmed_operations` replay gate see a single canonical type.
 		ops.push({
 			blockNum: hafOp.block,
 			timestamp,
 			txId: hafOp.trx_id,
-			operationId: hafOp.operation_id,
+			operationId: String(hafOp.operation_id),
 			signer: auth.signer,
 			authLevel: auth.authLevel,
 			action: payload.action,

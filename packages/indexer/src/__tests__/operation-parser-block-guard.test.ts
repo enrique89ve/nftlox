@@ -104,3 +104,86 @@ describe("parseHafAHOperations — block field guard", () => {
 		expect(result.rejected).toEqual([]);
 	});
 });
+
+// HafAH bigints above Number.MAX_SAFE_INTEGER (2^53 - 1) collapse onto the
+// same JS double when serialized as JSON number, so two unrelated operations
+// would share the same `operationId`. Downstream, the `confirmed_operations`
+// replay gate in action-router.ts:215 keys on operationId — a collision would
+// cause the second buy/transfer to be silently skipped during crash replay.
+// The parser must refuse the unsafe range and force the consumer to either
+// receive a numeric string or downgrade the endpoint.
+function makeOpWithOperationId(operationId: unknown): HafAHOperation {
+	const raw = {
+		op: {
+			type: "custom_json",
+			value: {
+				id: PROTOCOL_ID,
+				json: JSON.stringify({
+					protocol: PROTOCOL_ID,
+					version: PROTOCOL_VERSION,
+					action: ACTION_TRANSFER,
+					data: { from: "alice", to: "bob", nftId: "nft_1" },
+				}),
+				required_auths: [],
+				required_posting_auths: ["alice"],
+			},
+		},
+		block: POST_GENESIS_BLOCK,
+		trx_id: TX_ID,
+		timestamp: "2026-01-01T00:00:00",
+		operation_id: operationId,
+		virtual_op: false,
+	};
+	return raw as unknown as HafAHOperation;
+}
+
+describe("parseHafAHOperations — operation_id safety guard", () => {
+	test("accepts a numeric string and coerces it onto ParsedOperation as string", () => {
+		const result = parseHafAHOperations([makeOpWithOperationId("4294967296000")]);
+
+		expect(result.ops).toHaveLength(1);
+		expect(result.ops[0]?.operationId).toBe("4294967296000");
+		expect(typeof result.ops[0]?.operationId).toBe("string");
+	});
+
+	test("accepts a safe-integer number and string-coerces it on the parsed output", () => {
+		const result = parseHafAHOperations([makeOpWithOperationId(4_294_967_296)]);
+
+		expect(result.ops).toHaveLength(1);
+		expect(result.ops[0]?.operationId).toBe("4294967296");
+		expect(typeof result.ops[0]?.operationId).toBe("string");
+	});
+
+	test("rejects a number above Number.MAX_SAFE_INTEGER (collapsing bigint)", () => {
+		// `Number.MAX_SAFE_INTEGER + 1` cannot be distinguished from
+		// `Number.MAX_SAFE_INTEGER + 2` once parsed into a JS Number.
+		const result = parseHafAHOperations([makeOpWithOperationId(Number.MAX_SAFE_INTEGER + 1)]);
+
+		expect(result.ops).toEqual([]);
+		expect(result.rejected).toHaveLength(1);
+		expect(result.rejected[0]?.reason).toContain("Invalid operation ID format");
+	});
+
+	test("rejects the JSON-collision pair (9007199254740993 → 9007199254740992)", () => {
+		// `JSON.parse('{"id":9007199254740993}')` returns `{id: 9007199254740992}`.
+		// Both literal numbers compile to the same JS Number, so this fixture
+		// represents the exact collision scenario that motivates the guard.
+		const collided = JSON.parse('{"id":9007199254740993}').id;
+		const result = parseHafAHOperations([makeOpWithOperationId(collided)]);
+
+		expect(result.ops).toEqual([]);
+		expect(result.rejected).toHaveLength(1);
+	});
+
+	test("rejects negative, fractional, and non-numeric operation_id", () => {
+		const negative = parseHafAHOperations([makeOpWithOperationId(-1)]);
+		const fractional = parseHafAHOperations([makeOpWithOperationId(1.5)]);
+		const nonNumericString = parseHafAHOperations([makeOpWithOperationId("not-a-number")]);
+		const nullValue = parseHafAHOperations([makeOpWithOperationId(null)]);
+
+		expect(negative.ops).toEqual([]);
+		expect(fractional.ops).toEqual([]);
+		expect(nonNumericString.ops).toEqual([]);
+		expect(nullValue.ops).toEqual([]);
+	});
+});
