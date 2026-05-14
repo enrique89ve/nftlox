@@ -67,7 +67,7 @@ export async function processCollectionRequest(
 ) {
 	await assertNodeNotDivergent(ctx.db);
 	const chainReference = await readRequiredMultisigChainReference(ctx.db);
-	await assertCollectionNodeActive(ctx, chainReference.lastBlock);
+	await assertCollectionNodeActive(ctx, chainReference.signingEvaluationBlock);
 
 	const requestShape = validateCollectionRequestShape(rawBody);
 	const validatedRequest = await validateCollectionTransactionStructure(

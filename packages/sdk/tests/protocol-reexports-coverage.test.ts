@@ -38,6 +38,7 @@ const REQUIRED_REEXPORTS: ReadonlyArray<{
 	// Consensus cap query — integrators verify caps pre-broadcast.
 	{ name: "getLimit", typeofValue: "function" },
 	// N-5: marketplace timing — buy/commitment TTLs for pre-broadcast windows.
+	{ name: "HIVE_FINALITY_SAFETY_BLOCKS", typeofValue: "number" },
 	{ name: "BUY_TX_TTL_MS", typeofValue: "number" },
 	{ name: "BUY_COMMITMENT_TTL_BLOCKS", typeofValue: "number" },
 	{ name: "BUY_API_LAG_MAX_BLOCKS", typeofValue: "number" },

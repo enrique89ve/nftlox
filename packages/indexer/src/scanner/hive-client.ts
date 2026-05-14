@@ -134,7 +134,7 @@ export interface HafAHOperation {
 	block: number;
 	trx_id: string;
 	timestamp: string;
-	operation_id: string;
+	operation_id: string | number;
 	virtual_op: boolean;
 }
 
@@ -161,6 +161,107 @@ const HAFAH_BLOCK_RANGE = 2000;
 // Hive protocol operation type ID for custom_json (immutable blockchain constant)
 const CUSTOM_JSON_OP_TYPE = 18;
 
+type JsonRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is JsonRecord {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function readStringField(record: JsonRecord, field: string, context: string): string {
+	const value = record[field];
+	if (typeof value !== "string") {
+		throw new Error(`${context}: expected ${field} to be a string`);
+	}
+	return value;
+}
+
+function readStringArrayField(record: JsonRecord, field: string, context: string): string[] {
+	const value = record[field];
+	if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+		throw new Error(`${context}: expected ${field} to be a string array`);
+	}
+	return value;
+}
+
+function readOperationIdField(record: JsonRecord, context: string): string | number {
+	const value = record.operation_id;
+	if (typeof value === "string") return value;
+	if (typeof value === "number" && Number.isSafeInteger(value)) return value;
+	throw new Error(`${context}: expected operation_id to be a numeric string or safe integer`);
+}
+
+function readHafAHOperation(value: unknown, index: number, endpoint: string): HafAHOperation {
+	const context = `Invalid HafAH response from ${endpoint}: ops[${index}]`;
+	if (!isRecord(value)) throw new Error(`${context} is not an object`);
+
+	const op = value.op;
+	if (!isRecord(op)) throw new Error(`${context}.op is not an object`);
+	const opValue = op.value;
+	if (!isRecord(opValue)) throw new Error(`${context}.op.value is not an object`);
+
+	const block = value.block;
+	if (typeof block !== "number" || !Number.isInteger(block) || block < 0) {
+		throw new Error(`${context}: expected block to be a non-negative integer`);
+	}
+
+	const virtualOp = value.virtual_op;
+	if (typeof virtualOp !== "boolean") {
+		throw new Error(`${context}: expected virtual_op to be a boolean`);
+	}
+
+	return {
+		op: {
+			type: readStringField(op, "type", context),
+			value: {
+				id: readStringField(opValue, "id", context),
+				json: readStringField(opValue, "json", context),
+				required_auths: readStringArrayField(opValue, "required_auths", context),
+				required_posting_auths: readStringArrayField(opValue, "required_posting_auths", context),
+			},
+		},
+		block,
+		trx_id: readStringField(value, "trx_id", context),
+		timestamp: readStringField(value, "timestamp", context),
+		operation_id: readOperationIdField(value, context),
+		virtual_op: virtualOp,
+	};
+}
+
+function readHafAHResponse(raw: unknown, endpoint: string): HafAHResponse {
+	if (!isRecord(raw)) {
+		throw new Error(`Invalid HafAH response from ${endpoint}: expected object envelope`);
+	}
+
+	if (!Array.isArray(raw.ops)) {
+		throw new Error(`Invalid HafAH response from ${endpoint}: expected ops array`);
+	}
+
+	if (!Object.prototype.hasOwnProperty.call(raw, "next_operation_begin")) {
+		throw new Error(`Invalid HafAH response from ${endpoint}: missing next_operation_begin cursor`);
+	}
+
+	const nextOperationBegin = raw.next_operation_begin;
+	if (nextOperationBegin !== null && typeof nextOperationBegin !== "string") {
+		throw new Error(`Invalid HafAH response from ${endpoint}: next_operation_begin must be string or null`);
+	}
+
+	const nextBlockRangeBegin = raw.next_block_range_begin;
+	if (
+		nextBlockRangeBegin !== undefined
+		&& nextBlockRangeBegin !== null
+		&& (typeof nextBlockRangeBegin !== "number" || !Number.isInteger(nextBlockRangeBegin) || nextBlockRangeBegin < 0)
+	) {
+		throw new Error(`Invalid HafAH response from ${endpoint}: next_block_range_begin must be a non-negative integer or null`);
+	}
+	const parsedNextBlockRangeBegin = typeof nextBlockRangeBegin === "number" ? nextBlockRangeBegin : null;
+
+	return {
+		ops: raw.ops.map((op, index) => readHafAHOperation(op, index, endpoint)),
+		next_block_range_begin: parsedNextBlockRangeBegin,
+		next_operation_begin: nextOperationBegin,
+	};
+}
+
 async function hafahFetch(endpoint: string, fromBlock: number, toBlock: number, operationBegin: string, pageSize: number): Promise<HafAHResponse> {
 	// Adaptive timeout: larger pages need more time but 10-15s is plenty
 	// (benchmarks show 2-4s for 2000 blocks with pageSize 5000)
@@ -176,18 +277,8 @@ async function hafahFetch(endpoint: string, fromBlock: number, toBlock: number, 
 		throw new FetchError(response.status, endpoint, response.statusText, retryAfterMs);
 	}
 
-	const data = await response.json() as Record<string, unknown>;
-
-	// Validate response structure
-	if (!Array.isArray(data.ops)) {
-		return { ops: [], next_block_range_begin: null, next_operation_begin: null };
-	}
-
-	return {
-		ops: data.ops as HafAHOperation[],
-		next_block_range_begin: typeof data.next_block_range_begin === "number" ? data.next_block_range_begin : null,
-		next_operation_begin: typeof data.next_operation_begin === "string" ? data.next_operation_begin : null,
-	};
+	const data = await response.json();
+	return readHafAHResponse(data, endpoint);
 }
 
 async function hafahWithFailover(fromBlock: number, toBlock: number, operationBegin: string, pageSize: number): Promise<HafAHResponse> {

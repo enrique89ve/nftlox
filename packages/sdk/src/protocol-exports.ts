@@ -23,6 +23,7 @@ export const HASH_VERSION = protocol.HASH_VERSION;
 // ============================================================================
 
 export const HIVE_BLOCK_TIME_MS = protocol.HIVE_BLOCK_TIME_MS;
+export const HIVE_FINALITY_SAFETY_BLOCKS = protocol.HIVE_FINALITY_SAFETY_BLOCKS;
 export const HIVE_DECIMALS = protocol.HIVE_DECIMALS;
 export const HIVE_PRECISION = protocol.HIVE_PRECISION;
 export const HIVE_AMOUNT_EPSILON = protocol.HIVE_AMOUNT_EPSILON;

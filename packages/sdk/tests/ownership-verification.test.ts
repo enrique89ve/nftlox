@@ -6,6 +6,7 @@ import {
 	ACTION_CREATE_COLLECTION,
 	ACTION_LIST,
 	ACTION_TRANSFER,
+	BUY_COMMITMENT_TTL_BLOCKS,
 	calculatePaymentSplitFromUnits,
 	generateDeterministicCollectionId,
 	generateListingId,
@@ -41,6 +42,8 @@ describe("verifyNftOwnership", () => {
 		operationId: string;
 		signer: string;
 		data: Record<string, unknown>;
+		requiredAuths?: readonly string[];
+		requiredPostingAuths?: readonly string[];
 	}>;
 
 	function installTransferOwnershipMock(params: TransferOwnershipMockParams): void {
@@ -78,8 +81,8 @@ describe("verifyNftOwnership", () => {
 								action: ACTION_TRANSFER,
 								data: params.data,
 							}),
-							required_auths: [],
-							required_posting_auths: [params.signer],
+							required_auths: params.requiredAuths ?? [],
+							required_posting_auths: params.requiredPostingAuths ?? [params.signer],
 						},
 					},
 					block: 105212166,
@@ -224,6 +227,56 @@ describe("verifyNftOwnership", () => {
 		expect(result.message).toContain("does not include NFT nft_shadowed");
 	});
 
+	test("rejects direct transfer proofs whose auth level differs from the handler", async () => {
+		installTransferOwnershipMock({
+			nftId: "nft_auth_1",
+			owner: "bob",
+			previousOwner: "alice",
+			operationId: "451882812111325102",
+			signer: "alice",
+			requiredAuths: ["alice"],
+			requiredPostingAuths: [],
+			data: {
+				nftId: "nft_auth_1",
+				to: "bob",
+			},
+		});
+
+		const result = await verifyNftOwnership({
+			nftId: "nft_auth_1",
+			expectedOwner: "bob",
+			indexerBaseUrl: "https://indexer.test",
+			l1Config,
+		});
+
+		expect(result.status).toBe("error");
+		expect(result.message).toContain("requires posting key authority");
+	});
+
+	test("rejects batch transfer proofs because handler commits the whole batch atomically", async () => {
+		installTransferOwnershipMock({
+			nftId: "nft_batch_ok",
+			owner: "bob",
+			previousOwner: "alice",
+			operationId: "451882812111325103",
+			signer: "alice",
+			data: {
+				nftIds: ["nft_batch_ok", "nft_missing"],
+				to: "bob",
+			},
+		});
+
+		const result = await verifyNftOwnership({
+			nftId: "nft_batch_ok",
+			expectedOwner: "bob",
+			indexerBaseUrl: "https://indexer.test",
+			l1Config,
+		});
+
+		expect(result.status).toBe("mismatch");
+		expect(result.message).toContain("Batch transfer ownership proofs are not supported");
+	});
+
 	type BuyFlowOverrides = Readonly<{
 		readonly commitmentOperationId?: string;
 		readonly royaltyPct?: number;
@@ -231,6 +284,7 @@ describe("verifyNftOwnership", () => {
 		// Override the seller to exercise self-royalty (seller === royaltyRecipient)
 		// or the seller-is-settlement-node edge (seller === settlementNode).
 		readonly seller?: string;
+		readonly priorWinningCommitment?: boolean;
 	}>;
 
 	async function installBuyFlowMock(overrides: BuyFlowOverrides = {}): Promise<{
@@ -251,7 +305,7 @@ describe("verifyNftOwnership", () => {
 		const collectionId = await generateDeterministicCollectionId("creator", collectionName, collectionSymbol);
 		const listingNonce = "nonce-buy-1";
 		const listingExpiresAt = 1_800_000_000_000;
-		const listingId = await generateListingId({
+			const listingId = await generateListingId({
 			nftId: "nft_buy_1",
 			owner: seller,
 			marketplace: "",
@@ -259,8 +313,10 @@ describe("verifyNftOwnership", () => {
 			priceCurrency: "HIVE",
 			expiresAt: listingExpiresAt,
 			nonce: listingNonce,
-		});
-		const commitmentOperationId = overrides.commitmentOperationId ?? "451882812111324998";
+			});
+			const commitmentOperationId = overrides.commitmentOperationId ?? "451882812111324998";
+			const buyBlockNum = 105212200;
+			const commitmentFromBlock = buyBlockNum - BUY_COMMITMENT_TTL_BLOCKS;
 
 		// Drive transfer emission via the protocol-codified split so every test
 		// shape (no royalty, with royalty, self-royalty, seller-is-fee-account)
@@ -350,7 +406,7 @@ describe("verifyNftOwnership", () => {
 							required_posting_auths: [],
 						},
 					},
-					block: 105212200,
+						block: buyBlockNum,
 					trx_id: "buy_tx_1",
 					timestamp: "2026-04-04T01:02:18",
 					virtual_op: false,
@@ -464,11 +520,40 @@ describe("verifyNftOwnership", () => {
 				});
 			}
 
-			if (url === "https://hafah.test/hafah-api/operations?from-block=105212190&to-block=105212201&operation-types=18&page-size=1000&operation-begin=-1") {
-				return new Response(JSON.stringify({
-					ops: [
-						{
-							op: {
+				if (url === `https://hafah.test/hafah-api/operations?from-block=${commitmentFromBlock}&to-block=105212201&operation-types=18&page-size=1000&operation-begin=-1`) {
+					return new Response(JSON.stringify({
+						ops: [
+							...(overrides.priorWinningCommitment
+								? [{
+									op: {
+										type: "custom_json_operation",
+										value: {
+											id: "nftlox_testnet",
+											json: JSON.stringify({
+												protocol: "nftlox_testnet",
+												version: "0.10.0",
+												action: ACTION_BUY_COMMITMENT,
+												data: {
+													txHash: "other_buy_tx",
+													nftId: "nft_buy_1",
+													listingId,
+													listTxId,
+													buyer: "carol",
+												},
+											}),
+											required_auths: ["node.signer"],
+											required_posting_auths: [],
+										},
+									},
+									block: 105212197,
+									trx_id: "commit_tx_0",
+									timestamp: "2026-04-04T01:01:45",
+									virtual_op: false,
+									operation_id: "451882812111324997",
+								}]
+								: []),
+							{
+								op: {
 								type: "custom_json_operation",
 								value: {
 									id: "nftlox_testnet",
@@ -585,7 +670,7 @@ describe("verifyNftOwnership", () => {
 		expect(transferCount).toBe(2);
 	});
 
-	test("rejects buy when HAFAH commitment operation_id is not parseable as BigInt", async () => {
+		test("rejects buy when HAFAH commitment operation_id is not parseable as BigInt", async () => {
 		// F4 guard: a HAFAH operation_id that BigInt() cannot parse means the
 		// commitment-precedes-buy ordering is unenforceable. Verifier must
 		// fail hard, not silently skip the operation, so a HAFAH format flip
@@ -600,10 +685,24 @@ describe("verifyNftOwnership", () => {
 		});
 
 		expect(result.status).toBe("mismatch");
-		expect(result.message).toContain("not a parseable BigInt");
-	});
+			expect(result.message).toContain("not a parseable BigInt");
+		});
 
-	test("returns mismatch when indexer previous_owner contradicts the on-chain ownership edge", async () => {
+		test("rejects buy when a prior active commitment won the reservation", async () => {
+			await installBuyFlowMock({ priorWinningCommitment: true });
+
+			const result = await verifyNftOwnership({
+				nftId: "nft_buy_1",
+				expectedOwner: "bob",
+				indexerBaseUrl: "https://indexer.test",
+				l1Config,
+			});
+
+			expect(result.status).toBe("mismatch");
+			expect(result.message).toContain("did not win the active reservation");
+		});
+
+		test("returns mismatch when indexer previous_owner contradicts the on-chain ownership edge", async () => {
 		globalThis.fetch = (async (input: string | URL | Request): Promise<Response> => {
 			const url = String(input);
 

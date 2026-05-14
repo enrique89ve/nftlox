@@ -1,6 +1,15 @@
-import { describe, test, expect } from "bun:test";
+import { afterEach, describe, test, expect } from "bun:test";
 import type { ConsensusHead } from "../scanner/head-consensus.ts";
 import { selectConsensusSample } from "../scanner/head-consensus.ts";
+
+process.env.INDEXER_ROLE = "sync";
+process.env.HIVE_ENDPOINTS = "https://hafah.test";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+	globalThis.fetch = originalFetch;
+});
 
 function sample(headBlock: number, irreversibleBlock: number): ConsensusHead {
 	return { headBlock, irreversibleBlock };
@@ -33,5 +42,37 @@ describe("selectConsensusSample", () => {
 			headBlock: 131,
 			irreversibleBlock: 101,
 		});
+	});
+});
+
+describe("getCustomJsonInRange — HafAH envelope validation", () => {
+	test("rejects a 200 response that omits the ops array", async () => {
+		const { getCustomJsonInRange } = await import("../scanner/hive-client.ts");
+		globalThis.fetch = (async () => new Response(JSON.stringify({
+			error: "temporary backend error",
+		}), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		})) as unknown as typeof fetch;
+
+		await expect(getCustomJsonInRange(100, 120, "nftlox_testnet"))
+			.rejects
+			.toThrow("Invalid HafAH response");
+	});
+
+	test("accepts an explicit empty final page", async () => {
+		const { getCustomJsonInRange } = await import("../scanner/hive-client.ts");
+		globalThis.fetch = (async () => new Response(JSON.stringify({
+			ops: [],
+			next_block_range_begin: null,
+			next_operation_begin: null,
+		}), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		})) as unknown as typeof fetch;
+
+		await expect(getCustomJsonInRange(100, 120, "nftlox_testnet"))
+			.resolves
+			.toEqual([]);
 	});
 });

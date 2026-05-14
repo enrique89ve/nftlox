@@ -9,7 +9,7 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
 	source "$PROJECT_ROOT/.env"
 fi
 
-: "${DATABASE_URL:=postgresql://postgres:postgres@localhost:5432/nftlox}"
+: "${DATABASE_URL:=postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer}"
 
 echo "WARNING: This will drop ALL data in the nftlox database."
 echo "DATABASE_URL: $DATABASE_URL"

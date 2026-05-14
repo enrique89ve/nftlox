@@ -17,6 +17,7 @@ import { createMultisigError, isMultisigError } from "@/api/services/multisig/er
 import { assertNodeNotDivergent } from "@/api/services/multisig/divergence-gate.ts";
 import {
 	assertMultisigSyncHealthy,
+	getMultisigSigningEvaluationBlock,
 	requireMultisigChainReferenceTimeMs,
 } from "@/api/services/multisig/chain-time.ts";
 import { signWithBeekeeper } from "@/api/services/beekeeper-signer.ts";
@@ -353,7 +354,11 @@ async function assertNodeActive(
 	snapshot: SyncStateSnapshot,
 ): Promise<void> {
 	try {
-		await assertActiveSettlementNode(ctx.nodeAccount, snapshot.lastBlock, ctx.db);
+		await assertActiveSettlementNode(
+			ctx.nodeAccount,
+			getMultisigSigningEvaluationBlock(snapshot),
+			ctx.db,
+		);
 	} catch (cause) {
 		throw createMultisigError(
 			"NODE_NOT_ACTIVE",

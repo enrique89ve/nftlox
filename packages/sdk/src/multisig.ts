@@ -315,16 +315,13 @@ async function postMultisig(
  * a typed error (`CROSS_NODE_RESERVATION`, `COMMITMENT_INCLUSION_TIMEOUT`,
  * `BUYER_SIGNATURE_MISSING`, etc.) so clients can retry or surface to the user.
  *
- * The unsigned transaction's `expiration` field MUST fall inside
- * `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]`.
- * `RECOMMENDED_BUY_TX_EXPIRATION_MS` (60s) is the default and equals MAX:
- * it covers PoW + Keychain + the node's ~6s orchestration end-to-end. The
- * ceiling exceeds the protocol's commitment TTL on purpose for human-signer
- * UX, so a tx that lands after commitment expiry is rejected by handleBuy
- * and the transfer is recorded in `orphaned_buys` for off-chain refund.
- * Callers wanting a tighter orphan-risk profile may pass any value down to
- * `MULTISIG_TX_MIN_EXPIRATION_MS`.
- */
+	 * The unsigned transaction's `expiration` field MUST fall inside
+	 * `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]`.
+	 * `RECOMMENDED_BUY_TX_EXPIRATION_MS` is the default and equals MAX: it
+	 * covers PoW + Keychain + the node's irreversible-observation wait before
+	 * final broadcast. Callers wanting a tighter profile may pass any value down
+	 * to `MULTISIG_TX_MIN_EXPIRATION_MS`.
+	 */
 export async function requestBuyMultisig(
 	indexerUrl: string,
 	request: BuyMultisigRequest,

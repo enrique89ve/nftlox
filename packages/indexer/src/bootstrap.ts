@@ -52,8 +52,7 @@ async function ensurePostgres(): Promise<void> {
 // id=1 row and break the subsequent UPDATE ... WHERE id = 1 (0 rows affected).
 // Every new singleton MUST be added here AND have an explicit reset UPDATE in
 // wipeAllProjectedData below.
-// schema_migrations tracks applied migrations and must not be truncated.
-export const STATE_SINGLETONS: ReadonlySet<string> = new Set(["state_meta", "sync_state", "schema_migrations"]);
+export const STATE_SINGLETONS: ReadonlySet<string> = new Set(["state_meta", "sync_state"]);
 
 // Builds the TRUNCATE statement that wipes every projected table in one shot.
 // Pure so it can be unit-tested without a live DB. Returns null when the
@@ -102,6 +101,9 @@ async function wipeAllProjectedData(newSchemaHash: string | null): Promise<void>
 			UPDATE sync_state
 			SET last_block = 0,
 			    genesis_block = ${config.genesisBlock},
+			    hive_head_block = 0,
+			    hive_irreversible_block = 0,
+			    hive_head_time = NULL,
 			    schema_hash = ${newSchemaHash},
 			    updated_at = NOW()
 		`;
@@ -111,6 +113,7 @@ async function wipeAllProjectedData(newSchemaHash: string | null): Promise<void>
 			SET state_root = decode(repeat('00', 32), 'hex'),
 			    nft_count = 0,
 			    last_block_num = 0,
+			    divergent_at_block = NULL,
 			    updated_at = NOW()
 			WHERE id = 1
 		`;

@@ -14,11 +14,17 @@ import {
 	HIVE_BLOCK_TIME_MS,
 	HIVE_DECIMALS,
 	HIVE_PRECISION,
+	HIVE_FINALITY_SAFETY_BLOCKS,
 	LISTING_MIN_DURATION_BLOCKS,
 	LISTING_MAX_DURATION_BLOCKS,
 	MIN_LISTING_TTL_MS,
 	MAX_LISTING_TTL_MS,
 	MIN_LISTING_TTL_BUFFER_MS,
+	BUY_TX_TTL_MS,
+	BUY_COMMITMENT_TTL_BLOCKS,
+	MULTISIG_TX_MIN_EXPIRATION_MS,
+	MULTISIG_TX_MAX_EXPIRATION_MS,
+	RECOMMENDED_BUY_TX_EXPIRATION_MS,
 	isProtocolAction,
 } from "../src/constants.ts";
 
@@ -109,6 +115,21 @@ describe("constants", () => {
 		it("HIVE_BLOCK_TIME_MS is positive and in whole milliseconds", () => {
 			expect(HIVE_BLOCK_TIME_MS).toBeGreaterThan(0);
 			expect(Number.isInteger(HIVE_BLOCK_TIME_MS)).toBe(true);
+		});
+	});
+
+	describe("buy settlement windows", () => {
+		it("commitment TTL covers the finality safety window", () => {
+			expect(BUY_COMMITMENT_TTL_BLOCKS).toBe(BUY_TX_TTL_MS / HIVE_BLOCK_TIME_MS);
+			expect(BUY_COMMITMENT_TTL_BLOCKS).toBeGreaterThan(HIVE_FINALITY_SAFETY_BLOCKS);
+		});
+
+		it("multisig tx window is inside the commitment TTL", () => {
+			expect(MULTISIG_TX_MIN_EXPIRATION_MS).toBeGreaterThan(
+				HIVE_FINALITY_SAFETY_BLOCKS * HIVE_BLOCK_TIME_MS,
+			);
+			expect(MULTISIG_TX_MAX_EXPIRATION_MS).toBe(BUY_TX_TTL_MS);
+			expect(RECOMMENDED_BUY_TX_EXPIRATION_MS).toBe(MULTISIG_TX_MAX_EXPIRATION_MS);
 		});
 	});
 

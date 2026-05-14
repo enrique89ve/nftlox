@@ -8,6 +8,7 @@ import {
 	ACTION_CREATE_COLLECTION,
 	BUY_API_LAG_MAX_BLOCKS,
 	MEMO_PREFIX_FEE_COL,
+	MULTISIG_TX_MAX_EXPIRATION_MS,
 	MIN_PROTOCOL_VERSION,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	generateDeterministicCollectionId,
@@ -91,11 +92,9 @@ async function buildCollectionBody(params: Readonly<{
 		transaction: {
 			ref_block_num: 1,
 			ref_block_prefix: 1,
-			// Sized so it stays inside [MIN, MAX] expiration relative to the
-			// chain reference time. The fixture's hive_head_time = NOW() and the
-			// HEAD-vs-irreversible delta is ~15 blocks, so reference time sits
-			// at NOW − 45s and the valid window is [NOW − 15s, NOW + 15s].
-			expiration: expirationFromNow(10_000),
+			// Sized inside the HEAD-based multisig expiration window while leaving
+			// a small margin for test execution time.
+			expiration: expirationFromNow(MULTISIG_TX_MAX_EXPIRATION_MS - 5_000),
 			extensions: [],
 			signatures: [],
 			operations: [

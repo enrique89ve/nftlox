@@ -5,8 +5,10 @@ import {
 	MIN_PROTOCOL_VERSION,
 	compareVersions,
 	computeDataHash,
+	getAuthMismatchReason,
 	isProtocolAction,
 	isValidProtocolVersion,
+	type AuthLevel,
 	type ProtocolAction,
 } from "@nftlox/protocol";
 import { getProtocolId } from "../protocol-state";
@@ -61,6 +63,39 @@ function parseStringArray(value: unknown, fieldName: string): string[] {
 		throw new Error(`HAFAH response has invalid ${fieldName}`);
 	}
 	return [...value] as string[];
+}
+
+type CustomJsonAuth = Readonly<{
+	signer: string;
+	authLevel: AuthLevel;
+}>;
+
+function resolveCustomJsonAuth(
+	operationId: string,
+	requiredAuths: readonly string[],
+	requiredPostingAuths: readonly string[],
+): CustomJsonAuth {
+	const signer = requiredAuths[0] ?? requiredPostingAuths[0] ?? null;
+	if (requiredAuths.length === 0 && requiredPostingAuths.length === 0) {
+		throw new Error(`Operation ${operationId} does not have a signer`);
+	}
+	if (requiredAuths.length > 0 && requiredPostingAuths.length > 0) {
+		throw new Error(
+			`Operation ${operationId} mixes required_auths and required_posting_auths`,
+		);
+	}
+	if (requiredAuths.length > 1) {
+		throw new Error(`Operation ${operationId} has ${requiredAuths.length} active signers; exactly one is supported`);
+	}
+	if (requiredPostingAuths.length > 1) {
+		throw new Error(`Operation ${operationId} has ${requiredPostingAuths.length} posting signers; exactly one is supported`);
+	}
+	if (!signer) throw new Error(`Operation ${operationId} does not have a signer`);
+
+	return {
+		signer,
+		authLevel: requiredAuths.length === 1 ? "active" : "posting",
+	};
 }
 
 // ============ HAFAH REST API ============
@@ -565,12 +600,14 @@ export async function resolveOperationById(
 		);
 	}
 
-	const signer =
-		operation.op.value.required_auths[0]
-		?? operation.op.value.required_posting_auths[0]
-		?? "";
-	if (!signer) {
-		throw new Error(`Operation ${params.operationId} does not have a signer`);
+	const auth = resolveCustomJsonAuth(
+		params.operationId,
+		operation.op.value.required_auths,
+		operation.op.value.required_posting_auths,
+	);
+	const authCheck = getAuthMismatchReason(payload.action, auth.authLevel);
+	if (!authCheck.ok) {
+		throw new Error(`Operation ${params.operationId} auth mismatch: ${authCheck.message}`);
 	}
 
 	return {
@@ -581,7 +618,7 @@ export async function resolveOperationById(
 		protocolId: payload.protocol,
 		version: payload.version,
 		action: payload.action,
-		signer,
+		signer: auth.signer,
 		data: payload.data,
 	};
 }

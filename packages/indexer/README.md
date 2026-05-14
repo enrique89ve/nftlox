@@ -159,18 +159,17 @@ If you want a dedicated internal liveness port in Dokploy, set `HEALTH_PORT=3100
 ## Documentation
 
 - [API Endpoints reference](../playground/docs/reference/api.md)
-- [Database Migration Strategy](../playground/docs/contributing/database-migrations.md)
 - [Development Guide](../playground/docs/contributing/development-guide.md)
 
 ## Database Management
 
-The indexer uses an **incremental migration system** for schema evolution. See [DB_MANAGEMENT.md](./DB_MANAGEMENT.md) for details.
+The indexer currently uses a **single clean schema baseline** for testnet. See [DB_MANAGEMENT.md](./DB_MANAGEMENT.md) for details.
 
 ### Database scripts
 
 | Script | Purpose |
 |---|---|
-| `./scripts/install_schema.sh` | Apply baseline + all pending migrations |
+| `./scripts/install_schema.sh` | Apply `src/db/schema.sql` |
 | `./scripts/uninstall_schema.sh` | Drop schema (with confirmation) |
 | `./scripts/reset_db.sh` | Full reset: uninstall + install |
 
@@ -184,12 +183,11 @@ All scripts read `DATABASE_URL` from `.env` or environment.
 ./scripts/reset_db.sh
 ```
 
-**Migration flow:**
-1. `schema.sql` creates baseline (tables, indexes, triggers, schema_migrations table)
-2. `src/db/migrations/*.sql` files apply in lexical order (e.g., 0001_init.sql, 0002_add_column.sql)
-3. Each migration tracked in `schema_migrations` table with SHA-256 checksum
-4. Incremental: adding a column = `ALTER TABLE`, no data loss
-5. Only genesis block change triggers full reset
+**Schema flow:**
+1. `schema.sql` creates the full baseline: tables, indexes, triggers, and singleton rows.
+2. Before testnet deployment, schema changes are folded directly into the baseline.
+3. After deployment, schema evolution should move to explicit migrations instead of editing historical baseline in place.
+4. A genesis block or schema hash change triggers a full projected-data reset.
 
 ## Scripts
 

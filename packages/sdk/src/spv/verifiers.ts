@@ -286,6 +286,11 @@ function requireNftIdInTransferPayload(data: Record<string, unknown>, nftId: str
 			}
 			return value;
 		});
+		if (nftIds.length !== 1) {
+			throw new OwnershipMismatchError(
+				"Batch transfer ownership proofs are not supported: the handler commits the whole nftIds array atomically",
+			);
+		}
 		if (!nftIds.includes(nftId)) {
 			throw new OwnershipMismatchError(
 				`Ownership operation does not include NFT ${nftId}`,
@@ -686,7 +691,15 @@ function compareOperationIds(left: string, right: string): number | null {
 	}
 }
 
-function parseCommitmentPayload(rawJson: string, protocolId: string): Record<string, unknown> | null {
+type BuyCommitmentPayload = Readonly<{
+	readonly txHash: string;
+	readonly nftId: string;
+	readonly listingId: string;
+	readonly listTxId: string;
+	readonly buyer: string;
+}>;
+
+function parseCommitmentPayload(rawJson: string, protocolId: string): BuyCommitmentPayload | null {
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(rawJson);
@@ -701,7 +714,25 @@ function parseCommitmentPayload(rawJson: string, protocolId: string): Record<str
 	) {
 		return null;
 	}
-	return parsed.data;
+
+	const data = parsed.data;
+	if (
+		typeof data.txHash !== "string" ||
+		typeof data.nftId !== "string" ||
+		typeof data.listingId !== "string" ||
+		typeof data.listTxId !== "string" ||
+		typeof data.buyer !== "string"
+	) {
+		return null;
+	}
+
+	return {
+		txHash: data.txHash,
+		nftId: data.nftId,
+		listingId: data.listingId,
+		listTxId: data.listTxId,
+		buyer: data.buyer,
+	};
 }
 
 async function assertMatchingBuyCommitment(params: {
@@ -719,10 +750,19 @@ async function assertMatchingBuyCommitment(params: {
 	const fromBlock = Math.max(0, params.buyBlockNum - BUY_COMMITMENT_TTL_BLOCKS);
 	const operations = await fetchCustomJsonOperationsInRange(params.l1Config, fromBlock, params.buyBlockNum);
 
+	type CommitmentCandidate = Readonly<{
+		readonly operationId: string;
+		readonly blockNum: number;
+		readonly settlementNode: string;
+		readonly txHash: string;
+		readonly buyer: string;
+		readonly expiresBlock: number;
+	}>;
+
+	const candidates: CommitmentCandidate[] = [];
 	for (const operation of operations) {
 		if (operation.op.value.id !== params.protocolId) continue;
 		if (operation.op.value.required_auths.length !== 1 || operation.op.value.required_posting_auths.length !== 0) continue;
-		if (operation.op.value.required_auths[0] !== params.settlementNode) continue;
 		if (operation.block > params.buyBlockNum) continue;
 		const order = compareOperationIds(operation.operation_id, params.buyOperationId);
 		// Non-comparable operation_id (BigInt parse failed) means HAFAH changed
@@ -738,21 +778,57 @@ async function assertMatchingBuyCommitment(params: {
 
 		const data = parseCommitmentPayload(operation.op.value.json, params.protocolId);
 		if (!data) continue;
-		const txHash = typeof data.txHash === "string" ? data.txHash.toLowerCase() : null;
+		const txHash = data.txHash.toLowerCase();
 		if (
-			txHash === params.buyTxId.toLowerCase() &&
-			data.nftId === params.nftId &&
-			data.listingId === params.listingId &&
-			data.listTxId === params.listTxId &&
-			data.buyer === params.buyer
-		) {
-			return;
-		}
+			data.nftId !== params.nftId ||
+			data.listingId !== params.listingId ||
+			data.listTxId !== params.listTxId
+		) continue;
+
+		candidates.push({
+			operationId: operation.operation_id,
+			blockNum: operation.block,
+			settlementNode: operation.op.value.required_auths[0]!,
+			txHash,
+			buyer: data.buyer,
+			expiresBlock: operation.block + BUY_COMMITMENT_TTL_BLOCKS,
+		});
 	}
 
-	throw new OwnershipMismatchError(
-		`Buy operation ${params.buyOperationId} has no matching buy_commitment for tx ${params.buyTxId}`,
-	);
+	const ordered = [...candidates].sort((left, right) => {
+		if (left.blockNum !== right.blockNum) return left.blockNum - right.blockNum;
+		const order = compareOperationIds(left.operationId, right.operationId);
+		if (order === null) {
+			throw new OwnershipMismatchError(
+				`HAFAH operation_id ${left.operationId} or ${right.operationId} is not a parseable BigInt — cannot reconstruct buy_commitment ordering`,
+			);
+		}
+		return order;
+	});
+
+	let activeReservation: CommitmentCandidate | null = null;
+	for (const candidate of ordered) {
+		if (activeReservation && activeReservation.expiresBlock >= candidate.blockNum) {
+			continue;
+		}
+		activeReservation = candidate;
+	}
+
+	if (!activeReservation || activeReservation.expiresBlock < params.buyBlockNum) {
+		throw new OwnershipMismatchError(
+			`Buy operation ${params.buyOperationId} has no active buy_commitment reservation for tx ${params.buyTxId}`,
+		);
+	}
+
+	if (
+		activeReservation.txHash !== params.buyTxId.toLowerCase() ||
+		activeReservation.buyer !== params.buyer ||
+		activeReservation.settlementNode !== params.settlementNode
+	) {
+		throw new OwnershipMismatchError(
+			`buy_commitment ${params.buyTxId} did not win the active reservation for NFT ${params.nftId}`,
+		);
+	}
 }
 
 async function deriveOwnershipProof(

@@ -4,12 +4,12 @@ import { sql } from "./db/client.ts";
 const log = console;
 
 try {
-	log.log("Starting migrations...");
+	log.log("Applying schema baseline...");
 	await runMigrations();
-	log.log("✓ All migrations applied successfully");
+	log.log("✓ Schema baseline applied successfully");
 	process.exit(0);
 } catch (err) {
-	log.error("Migration failed:", err);
+	log.error("Schema install failed:", err);
 	process.exit(1);
 } finally {
 	await sql.end();

@@ -1,7 +1,6 @@
-// The HafAH client (`hive-client.ts:187`) blind-casts its JSON response to
-// `HafAHOperation[]`. If the upstream endpoint is compromised or returns a
-// malformed page, primitive fields like `block` are not actually guaranteed
-// to be numbers at runtime. The parser must enforce the contract.
+// The parser still defends its boundary even when the HafAH client validates
+// the page envelope: primitive row fields like `block` are not actually
+// guaranteed to be numbers if a compromised or malformed endpoint responds.
 //
 // Without a guard, `hafOp.block` of type `string` slips past the genesis
 // gate (`"not-a-number" < 100_000_000` is `false` under JS coercion), and
@@ -15,7 +14,7 @@ import {
 	PROTOCOL_VERSION,
 	PROTOCOL_GENESIS_BLOCK,
 } from "@/protocol/index.ts";
-import { parseHafAHOperations } from "@/scanner/operation-parser.ts";
+import { parseHafAHOperations } from "../scanner/operation-parser.ts";
 import type { HafAHOperation } from "@/scanner/hive-client.ts";
 
 const TX_ID = "a".repeat(40);
@@ -31,7 +30,7 @@ function makeOpWithBlock(block: unknown): HafAHOperation {
 					protocol: PROTOCOL_ID,
 					version: PROTOCOL_VERSION,
 					action: ACTION_TRANSFER,
-					data: { from: "alice", to: "bob", nftId: "nft_1" },
+					data: { to: "bob", nftId: "nft_1" },
 				}),
 				required_auths: [],
 				required_posting_auths: ["alice"],
@@ -122,7 +121,7 @@ function makeOpWithOperationId(operationId: unknown): HafAHOperation {
 					protocol: PROTOCOL_ID,
 					version: PROTOCOL_VERSION,
 					action: ACTION_TRANSFER,
-					data: { from: "alice", to: "bob", nftId: "nft_1" },
+					data: { to: "bob", nftId: "nft_1" },
 				}),
 				required_auths: [],
 				required_posting_auths: ["alice"],

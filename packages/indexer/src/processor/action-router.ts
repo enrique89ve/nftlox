@@ -356,9 +356,10 @@ export async function routeOperationDetailed(
 		}
 	} catch (fatal) {
 		// Last-resort catch: even insertInvalidOperation/insertOrphanedBuy failed.
-		// Log and continue — never let a single operation abort the entire batch.
+		// Surface a fatal result so the sync engine aborts without advancing
+		// the cursor over an operation whose failure was not durably recorded.
 		const reason = fatal instanceof Error ? fatal.message : String(fatal);
-		log.error("FATAL: routeOperation could not record error — operation skipped silently", {
+		log.error("FATAL: routeOperation could not record error — operation not durably recorded", {
 			blockNum: op.blockNum,
 			txId: op.txId,
 			action: op.action,

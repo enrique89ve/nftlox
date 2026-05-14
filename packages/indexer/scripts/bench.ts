@@ -66,12 +66,13 @@ async function ensureBenchDatabase(devUrl: string, dbName: string): Promise<void
 
 async function truncateAllTables(): Promise<void> {
 	// TRUNCATE ... CASCADE wipes state while preserving schema. Faster than
-	// dropping + re-migrating between bench runs. `schema_migrations` and
-	// `schema_versions` are NOT truncated so we don't re-run migrations.
+	// dropping + rebuilding the schema between bench runs. `schema_versions` is
+	// kept so schema-history fixtures do not need to be replayed for parser-only
+	// benches.
 	const rows = await sql<{ tablename: string }[]>`
 		SELECT tablename FROM pg_tables
 		WHERE schemaname = 'public'
-		  AND tablename NOT IN ('schema_migrations', 'schema_versions')
+		  AND tablename <> 'schema_versions'
 	`;
 	if (rows.length === 0) return;
 	const list = rows.map((r) => `"${r.tablename}"`).join(", ");

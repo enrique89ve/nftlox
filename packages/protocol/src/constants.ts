@@ -65,6 +65,11 @@ export const HIVE_AMOUNT_EPSILON = 1e-9;
 export const LISTING_MIN_DURATION_BLOCKS = 7 * 24 * 60 * 60 * 1000 / HIVE_BLOCK_TIME_MS;   // 201_600
 export const LISTING_MAX_DURATION_BLOCKS = 60 * 24 * 60 * 60 * 1000 / HIVE_BLOCK_TIME_MS;  // 1_728_000
 
+// Hive DPoS finality is typically ~15 blocks. API-side multisig flows wait for
+// the indexer to observe irreversible state before appending node signatures,
+// so every buy settlement window must budget for that finality gap explicitly.
+export const HIVE_FINALITY_SAFETY_BLOCKS = 20;
+
 // ============================================================================
 // Node API policy
 // Per-node behavior. A node operator MAY tune these without breaking consensus
@@ -73,36 +78,31 @@ export const LISTING_MAX_DURATION_BLOCKS = 60 * 24 * 60 * 60 * 1000 / HIVE_BLOCK
 // ============================================================================
 
 // Protocol-internal commitment TTL in clock terms. Anchors
-// BUY_COMMITMENT_TTL_BLOCKS below: a `buy_commitment` is valid for exactly
-// this many milliseconds (≈ 10 Hive blocks). Settlement-internal — clients
-// do not set this, the indexer enforces it on the commitment lifecycle.
-export const BUY_TX_TTL_MS = 30_000;
+// BUY_COMMITMENT_TTL_BLOCKS below: a `buy_commitment` is valid long enough for
+// irreversible observation (~HIVE_FINALITY_SAFETY_BLOCKS) plus final buy
+// inclusion. Settlement-internal — clients do not set this, the indexer
+// enforces it on the commitment lifecycle.
+export const BUY_TX_TTL_MS = 120_000;
 
 // Per-node accepted range for the signed buy tx's `expiration` field at
 // POST /api/multisig/buy. Outside this window the indexer rejects with
 // INVALID_TX_STRUCTURE.
 //
-// MIN equals BUY_TX_TTL_MS so the node has a full commitment window to run
-// its orchestration (validate → broadcast commitment → wait inclusion →
-// co-sign → broadcast).
+// MIN budgets for irreversible observation plus a short signing/broadcast
+// window. A tx that expires sooner may be valid against the indexer's last
+// irreversible cursor but already dead at Hive HEAD by the time the node can
+// append its signature.
 //
-// MAX deliberately exceeds BUY_TX_TTL_MS to give human signers UX headroom
-// (PoW + Keychain prompt + network RTT). The residual gap — where a buy tx
-// remains broadcastable past commitment expiry — is a known, accepted
-// tradeoff: any post-expiry settlement is rejected by handleBuy and the
-// already-transferred funds are recorded in `orphaned_buys` for an
-// off-chain refund flow. Tightening MAX to BUY_TX_TTL_MS would close the
-// gap but break human-signer flows; the conservative 60s ceiling is the
-// chosen compromise.
-export const MULTISIG_TX_MIN_EXPIRATION_MS = 30_000;
-export const MULTISIG_TX_MAX_EXPIRATION_MS = 60_000;
+// MAX equals the commitment TTL so the signed buy cannot remain broadcastable
+// after the reservation window has ended. Human-signing headroom lives before
+// the request reaches the node; after submission, the node owns the settlement
+// clock.
+export const MULTISIG_TX_MIN_EXPIRATION_MS = HIVE_FINALITY_SAFETY_BLOCKS * HIVE_BLOCK_TIME_MS + 30_000;
+export const MULTISIG_TX_MAX_EXPIRATION_MS = BUY_TX_TTL_MS;
 
-// SDK default for unsigned buy tx expiration. Equals MAX by design: the
-// recommended value sits exactly at the upper bound so first-class SDK
-// callers get full UX headroom out of the box. Callers that want a
-// tighter orphan-risk profile may pass any value in
-// [MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS].
-export const RECOMMENDED_BUY_TX_EXPIRATION_MS = 60_000;
+// SDK default for unsigned buy tx expiration. Equals MAX by design so
+// first-class SDK callers get the full finality-safe orchestration window.
+export const RECOMMENDED_BUY_TX_EXPIRATION_MS = MULTISIG_TX_MAX_EXPIRATION_MS;
 
 // Block-denominated TTL for `buy_commitment` reservations. A node that emits
 // a commitment has this many blocks to get its `buy` transaction included on

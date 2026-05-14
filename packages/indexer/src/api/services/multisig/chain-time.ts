@@ -2,7 +2,7 @@ import type { Queryable } from "@/db/client.ts";
 import { getChainTimeSnapshot } from "@/db/queries/sync.ts";
 import {
 	CHAIN_TIME_RETRY_AFTER_MS,
-	resolveChainReferenceTimeMs,
+	resolveHiveHeadTimeMs,
 	type ChainReferenceTimeFailureReason,
 	type ChainTimeSnapshot,
 } from "@/utils/chain-time.ts";
@@ -21,7 +21,7 @@ const CHAIN_TIME_FAILURE_MESSAGES: Record<ChainReferenceTimeFailureReason, strin
 };
 
 export function requireMultisigChainReferenceTimeMs(snapshot: ChainTimeSnapshot): number {
-	const result = resolveChainReferenceTimeMs(snapshot);
+	const result = resolveHiveHeadTimeMs(snapshot);
 	if (result.ok) return result.referenceTimeMs;
 
 	throw createMultisigError(
@@ -79,6 +79,10 @@ export function assertMultisigSyncHealthy(
 	}
 }
 
+export function getMultisigSigningEvaluationBlock(snapshot: ChainTimeSnapshot): number {
+	return snapshot.hiveHeadBlock + BUY_API_LAG_MAX_BLOCKS;
+}
+
 export async function readRequiredMultisigChainReferenceTimeMs(
 	db: Queryable,
 ): Promise<number> {
@@ -91,9 +95,10 @@ export type MultisigChainReference = Readonly<{
 	readonly lastBlock: number;
 	readonly referenceTimeMs: number;
 	readonly hiveHeadBlock: number;
+	readonly signingEvaluationBlock: number;
 }>;
 
-// Reads the chain snapshot once and exposes both the indexer's reference time
+// Reads the chain snapshot once and exposes both the Hive HEAD reference time
 // (for transaction expiration gating) AND its view of HEAD block (for handler-
 // parity consensus-param lookups via @nftlox/protocol's getLimit). Callers
 // that need both must use this — splitting the read into two snapshot fetches
@@ -109,5 +114,6 @@ export async function readRequiredMultisigChainReference(
 		lastBlock: snapshot.lastBlock,
 		referenceTimeMs,
 		hiveHeadBlock: snapshot.hiveHeadBlock,
+		signingEvaluationBlock: getMultisigSigningEvaluationBlock(snapshot),
 	};
 }

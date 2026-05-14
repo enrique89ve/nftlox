@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	estimateIndexedChainTimeMs,
 	resolveChainReferenceTimeMs,
+	resolveHiveHeadTimeMs,
 	selectChainReferenceTimeMs,
 } from "@/utils/chain-time.ts";
 
@@ -35,5 +36,19 @@ describe("chain-time helpers", () => {
 		});
 
 		expect(result).toEqual({ ok: false, reason: "missing_head_time" });
+	});
+
+	test("resolves Hive HEAD time for multisig broadcast decisions", () => {
+		const result = resolveHiveHeadTimeMs({
+			lastBlock: 1_000,
+			hiveHeadBlock: 1_015,
+			hiveIrreversibleBlock: 1_000,
+			hiveHeadTime: "2026-04-23T00:00:45.000Z",
+		});
+
+		expect(result).toEqual({
+			ok: true,
+			referenceTimeMs: Date.parse("2026-04-23T00:00:45.000Z"),
+		});
 	});
 });

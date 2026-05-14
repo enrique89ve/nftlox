@@ -13,7 +13,7 @@ Scripts para instalar, desinstalar y reiniciar el schema de la BD en testnet.
 
 ### `./scripts/install_schema.sh`
 
-Aplica schema baseline + todas las migraciones pendientes.
+Aplica el baseline completo desde `src/db/schema.sql`.
 
 **Uso:**
 ```bash
@@ -21,9 +21,9 @@ Aplica schema baseline + todas las migraciones pendientes.
 ```
 
 **Qué hace:**
-1. Lee `schema.sql` y aplica el baseline (crea `schema_migrations` table)
-2. Ejecuta `run-migrations.ts` que aplica todos los `.sql` del directorio `migrations/`
-3. Registra cada migración en `schema_migrations` con checksum SHA-256
+1. Lee `src/db/schema.sql`
+2. Crea tablas, índices, triggers y filas singleton
+3. Puede ejecutarse más de una vez porque el baseline usa DDL idempotente donde hace falta
 
 **Cuándo usar:**
 - Primer boot (BD vacía)
@@ -83,11 +83,11 @@ Los scripts leen `DATABASE_URL` en este orden:
    ```bash
    DATABASE_URL=postgresql://user:pass@host:port/db
    ```
-3. Default: `postgresql://postgres:postgres@localhost:5432/nftlox`
+3. Default local: `postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer`
 
 **Ejemplo con Docker Postgres:**
 ```bash
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/nftlox"
+export DATABASE_URL="postgres://nftlox:nftlox_dev@localhost:5432/nftlox_indexer"
 ./scripts/install_schema.sh
 ```
 
@@ -98,14 +98,13 @@ export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/nftlox"
 **Primer boot:**
 ```bash
 ./scripts/install_schema.sh
-# Carga baseline + 0001_init.sql
+# Carga schema.sql
 ```
 
-**Desarrollo: agregar columna**
+**Desarrollo antes de testnet: cambiar el schema**
 ```bash
-# Crea src/db/migrations/0002_add_foo.sql con ALTER TABLE
+# Edita src/db/schema.sql directamente
 ./scripts/install_schema.sh
-# Aplica 0002 automáticamente
 ```
 
 **Reset testnet:**
@@ -120,22 +119,14 @@ export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/nftlox"
 
 ```
 src/db/
-├── schema.sql                  # Baseline (baseline + schema_migrations table)
-├── migrations/
-│   ├── 0001_init.sql          # Baseline DDL
-│   ├── 0002_add_foo.sql       # Futuras migraciones
-│   └── ...
-└── migration-runner.ts         # Lee migrations/, aplica en orden
+├── schema.sql                  # Baseline completo
+├── migration-runner.ts         # Aplica schema.sql
+└── queries/                    # Queries tipadas usadas por handlers/API
 ```
 
-**`schema_migrations` table:**
-```sql
-CREATE TABLE schema_migrations (
-    version TEXT PRIMARY KEY,           -- e.g. "0001_init"
-    applied_at TIMESTAMPTZ NOT NULL,    -- Cuándo se aplicó
-    checksum TEXT NOT NULL              -- SHA-256 del SQL
-);
-```
+Mientras no haya despliegue público, los cambios de DB se pliegan al baseline.
+Después de desplegar testnet/mainnet, los cambios incompatibles deberán ir en
+migraciones explícitas para preservar datos.
 
 ---
 
@@ -148,10 +139,6 @@ CREATE TABLE schema_migrations (
 **"psql: FATAL password authentication failed"**
 - Credenciales en DATABASE_URL incorrectas
 - Usuario no tiene permisos en la BD
-
-**"migration failed: ENOENT migrations directory"**
-- Asegúrate de estar en `/packages/indexer`
-- El directorio `src/db/migrations/` debe existir
 
 **"Schema already exists" error**
 - OK, los scripts usan `IF NOT EXISTS` y son idempotentes

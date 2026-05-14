@@ -16,7 +16,7 @@ import {
 	calculatePaymentSplit,
 	type MultisigErrorCode,
 } from "@/protocol/index.ts";
-import { CHAIN_TIME_RETRY_AFTER_MS, resolveChainReferenceTimeMs } from "@/utils/chain-time.ts";
+import { CHAIN_TIME_RETRY_AFTER_MS, resolveHiveHeadTimeMs } from "@/utils/chain-time.ts";
 import { requireSupportedCurrency } from "@/utils/validation.ts";
 import {
 	IDEMPOTENCY_HEADER,
@@ -208,7 +208,7 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 		}
 		if (nft.listing_expires_at) {
 			const chainTimeSnapshot = await getChainTimeSnapshot();
-			const chainTime = resolveChainReferenceTimeMs(chainTimeSnapshot);
+				const chainTime = resolveHiveHeadTimeMs(chainTimeSnapshot);
 			if (!chainTime.ok) {
 				set.status = 503;
 				set.headers["Retry-After"] = String(Math.ceil(CHAIN_TIME_RETRY_AFTER_MS / 1000));

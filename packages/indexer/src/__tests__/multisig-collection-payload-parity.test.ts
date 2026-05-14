@@ -16,6 +16,7 @@ import {
 	ACTION_CREATE_COLLECTION,
 	INSTANCE_FEE_PER_N,
 	MAX_INSTANCES_PER_COLLECTION,
+	MULTISIG_TX_MAX_EXPIRATION_MS,
 	MIN_PROTOCOL_VERSION,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	PROTOCOL_ID,
@@ -171,7 +172,7 @@ async function buildPassingCollectionBody(
 		transaction: {
 			ref_block_num: 1,
 			ref_block_prefix: 1,
-			expiration: expirationFromNow(45_000),
+			expiration: expirationFromNow(MULTISIG_TX_MAX_EXPIRATION_MS - 5_000),
 			extensions: [],
 			signatures: [],
 			operations: [

@@ -86,8 +86,19 @@ describe("buy multisig final signing gate", () => {
 		});
 	});
 
-	test("rejects if the node is no longer active at the latest local block", async () => {
+test("rejects if the node is no longer active at the latest local block", async () => {
 		await setSyncBlocks(100 + MAX_NODE_HEARTBEAT_STALENESS_BLOCKS + 1);
+
+		await expect(assertBuyFinalSigningAllowed(buildCtx())).rejects.toMatchObject({
+			code: "NODE_NOT_ACTIVE",
+		});
+	});
+
+	test("rejects if the node would be stale at Hive HEAD signing time", async () => {
+		await seedActiveSettlementNode(NODE_ACCOUNT, {
+			registeredBlock: 100,
+		});
+		await setSyncBlocks(100 + MAX_NODE_HEARTBEAT_STALENESS_BLOCKS - 1);
 
 		await expect(assertBuyFinalSigningAllowed(buildCtx())).rejects.toMatchObject({
 			code: "NODE_NOT_ACTIVE",

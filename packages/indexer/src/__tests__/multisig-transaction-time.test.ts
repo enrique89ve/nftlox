@@ -27,7 +27,7 @@ function makeTransaction(expiration: string): Record<string, unknown> {
 describe("multisig transaction time validation", () => {
 	test("validates expiration against the supplied chain reference time", () => {
 		const referenceTimeMs = Date.now() + 10 * DAY_MS;
-		const expiration = toHiveExpiration(referenceTimeMs + 60_000);
+		const expiration = toHiveExpiration(referenceTimeMs + MULTISIG_TX_MIN_EXPIRATION_MS + 10_000);
 
 		const validated = validateCommonTransactionStructure(
 			makeTransaction(expiration),
@@ -35,6 +35,23 @@ describe("multisig transaction time validation", () => {
 		);
 
 		expect(validated.expiration).toBe(expiration);
+	});
+
+	test("uses Hive HEAD time, not irreversible time, for multisig expiration", () => {
+		const headTimeMs = Date.parse("2026-04-23T00:00:45.000Z");
+		const referenceTimeMs = requireMultisigChainReferenceTimeMs({
+			lastBlock: 1_000,
+			hiveHeadBlock: 1_015,
+			hiveIrreversibleBlock: 1_000,
+			hiveHeadTime: "2026-04-23T00:00:45.000Z",
+		});
+		const tooSoonAtHead = toHiveExpiration(headTimeMs + MULTISIG_TX_MIN_EXPIRATION_MS - 1_000);
+
+		expect(referenceTimeMs).toBe(headTimeMs);
+		expect(() => validateCommonTransactionStructure(
+			makeTransaction(tooSoonAtHead),
+			{ referenceTimeMs },
+		)).toThrow("expires too soon");
 	});
 
 	test("rejects expiration outside the multisig window from the supplied reference", () => {

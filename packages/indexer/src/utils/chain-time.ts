@@ -38,6 +38,25 @@ export function resolveChainReferenceTimeMs(
 	};
 }
 
+export function resolveHiveHeadTimeMs(
+	snapshot: ChainTimeSnapshot | null | undefined,
+): ChainReferenceTimeResult {
+	if (!snapshot) return { ok: false, reason: "missing_snapshot" };
+	if (
+		!Number.isFinite(snapshot.lastBlock)
+		|| !Number.isFinite(snapshot.hiveHeadBlock)
+		|| !Number.isFinite(snapshot.hiveIrreversibleBlock)
+	) {
+		return { ok: false, reason: "invalid_block_numbers" };
+	}
+	if (!snapshot.hiveHeadTime) return { ok: false, reason: "missing_head_time" };
+
+	const headTimeMs = Date.parse(snapshot.hiveHeadTime);
+	if (Number.isNaN(headTimeMs)) return { ok: false, reason: "invalid_head_time" };
+
+	return { ok: true, referenceTimeMs: headTimeMs };
+}
+
 export function estimateIndexedChainTimeMs(
 	snapshot: ChainTimeSnapshot,
 ): number | null {

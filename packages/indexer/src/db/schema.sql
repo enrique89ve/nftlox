@@ -75,10 +75,6 @@ CREATE TABLE IF NOT EXISTS state_meta (
 );
 INSERT INTO state_meta (id, state_root) VALUES (1, decode(repeat('00', 32), 'hex'))
 	ON CONFLICT (id) DO NOTHING;
--- Idempotent column add for existing testnet DBs that ran with the F3.A
--- schema. Newly bootstrapped DBs already get the column from the CREATE above.
-ALTER TABLE state_meta
-	ADD COLUMN IF NOT EXISTS divergent_at_block BIGINT;
 
 -- Collections
 CREATE TABLE IF NOT EXISTS collections (
@@ -579,39 +575,6 @@ CREATE INDEX IF NOT EXISTS idx_sales_seller ON sales(seller, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
 
 -- ============================================================================
--- SELF-HEALING COLUMNS — idempotent ALTERs for pre-existing DBs
--- ============================================================================
---
--- schema.sql is re-executed on every boot. `CREATE TABLE IF NOT EXISTS` skips
--- existing tables entirely, so columns added to a table that already exists
--- will never appear without an explicit ALTER. The ADD COLUMN IF NOT EXISTS
--- form (PG 9.6+) is idempotent and cheap: zero cost once the column is
--- present. Keep entries here permanently — removing an ALTER after rollout
--- would leave freshly-initialized and upgraded DBs on different schemas.
-ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_block BIGINT NOT NULL DEFAULT 0;
-ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_irreversible_block BIGINT NOT NULL DEFAULT 0;
-ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_time TIMESTAMPTZ;
-ALTER TABLE l2_nodes DROP COLUMN IF EXISTS public_key;
-
--- Upgrade pre-existing DBs where idx_nfts_seed_instances was a non-unique
--- lookup index. New DBs already created the UNIQUE form above; old DBs drop the
--- non-unique index once and recreate it as the logical identity backstop.
-DO $$
-BEGIN
-	IF EXISTS (
-		SELECT 1
-		FROM pg_indexes
-		WHERE schemaname = current_schema()
-		  AND indexname = 'idx_nfts_seed_instances'
-		  AND indexdef NOT LIKE 'CREATE UNIQUE INDEX%'
-	) THEN
-		DROP INDEX idx_nfts_seed_instances;
-	END IF;
-END;
-$$;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_nfts_seed_instances ON nfts(seed_id, instance_number) WHERE seed_id IS NOT NULL;
-
--- ============================================================================
 -- TRIGGERS — defense-in-depth against projection corruption
 -- ============================================================================
 --
@@ -955,11 +918,3 @@ CREATE TRIGGER trg_prevent_schema_versions_mutation
 	BEFORE UPDATE ON schema_versions
 	FOR EACH ROW
 	EXECUTE FUNCTION prevent_schema_versions_mutation();
-
--- ============ MIGRATION CONTROL ============
-
-CREATE TABLE IF NOT EXISTS schema_migrations (
-	version TEXT PRIMARY KEY,
-	applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	checksum TEXT NOT NULL
-);
