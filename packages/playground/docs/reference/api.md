@@ -437,9 +437,14 @@ Canonical ownership proof. Returns the current owner claim plus creation anchors
 	"nft_type": "instance",
 	"seed_id": "seed-id",
 	"instance_number": 42,
-	"nft_dna": "4fc2..."
+	"nft_dna": "4fc2...",
+	"collection_id": "col_...",
+	"collection_created_block_num": 89999000,
+	"collection_created_tx_id": "abcdef1234567890abcdef1234567890abcdef12"
 }
 ```
+
+`collection_id` plus `collection_created_block_num`/`collection_created_tx_id` is a fast collection anchor for SPV marketplace checks. The SDK uses it to resolve the `create_collection` transaction on Hive L1, recover buy-relevant rules (`transferable`, `royaltyPct`, `royaltyRecipient`), and verify buy payment splits without trusting the indexer row.
 
 **Example:**
 

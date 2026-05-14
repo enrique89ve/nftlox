@@ -207,7 +207,7 @@ royaltyAmount = round3(totalPrice * royaltyPct    / 100)
 sellerAmount  = totalPrice - royaltyAmount - feeAmount
 ```
 
-The server-side math is authoritative. `buildBuy` does not recompute it — it trusts whatever `paymentSplit` you pass, and the node rejects anything that drifts.
+The server-side math is authoritative. `buildBuy` rejects internally inconsistent splits, but it does not recompute listing economics; the node rejects any drift from the canonical listing split.
 
 ### Merging rules
 

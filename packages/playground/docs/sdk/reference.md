@@ -74,7 +74,7 @@ Every builder validates its input with a Zod schema; the schema is exported alon
 | `buildExtendSchema` | `(input) => KeychainResult<ExtendSchemaData>` | Posting | `[custom_json]` | Append-only: add new `immutable` and/or `mutable` fields. Existing fields are immutable post-create. |
 | `buildCollectionWithSeeds` | `(input, options) => Promise<CollectionCreationPlan>` | mixed | multi-batch | Orchestrator: returns the collection step + N posting-only seed batches sized by `calculateMaxOperationsPerTx`. |
 
-**`buildCollection` options**: either pass `{ nodeAccount: "nftlox" }` directly, or let the SDK resolve it from the indexer with `{ indexerBaseUrl, requireMultisigReady: true }`. Fee defaults to `PROTOCOL_COLLECTION_FEE_HBD` (`0.100 HBD`) but both `feeAmount` and `feeCurrency` (`"HIVE" | "HBD"`) are overridable. The fee transfer emitted by this builder carries memo `NFTLox FEE-COL:{collectionId}` — transfers without this exact memo are ignored by the indexer.
+**`buildCollection` options**: either pass `{ nodeAccount: "nftlox" }` directly, or let the SDK resolve it from the indexer with `{ indexerBaseUrl, requireMultisigReady: true }`. Fee defaults to `PROTOCOL_COLLECTION_FEE_HBD` (`0.100 HBD`). `feeAmount` is overridable, but the currency is consensus-fixed to HBD. The fee transfer emitted by this builder carries memo `NFTLox FEE-COL:{collectionId}` — transfers without this exact memo are ignored by the indexer.
 
 **Scaled fee (gated).** When `INSTANCE_FEE_ENABLED` is `true`, the builder computes the fee as `PROTOCOL_COLLECTION_FEE_HBD + INSTANCE_FEE_UNIT_HBD * ceil(maxInstances / INSTANCE_FEE_PER_N)` (see `computeCollectionFeeHbd` in `packages/sdk/src/builders/collection.ts`). The flag is currently `false`, so the fee is a flat `0.100 HBD`, but the `maxInstances` granularity rule (`0` or multiple of `1000`) is enforced today regardless — so payloads are forward-compatible. Passing `feeAmount` always overrides the computed amount.
 
@@ -393,7 +393,7 @@ hasLeadingZeroBits(hexHash, bits)
 
 ## SPV verification
 
-`packages/sdk/src/spv/` exposes the tooling to verify ownership proofs without querying a full indexer database — useful for light clients, cross-node reconciliation, and untrusted mirrors. See the [SPV guide](../guides/spv.md). All exports are re-exported from the package root.
+`packages/sdk/src/spv/` exposes the tooling to verify ownership proofs without querying a full indexer database — useful for light clients, cross-node reconciliation, and untrusted mirrors. Buy ownership checks resolve the proof's collection anchor on Hive L1 and recompute the protocol payment split from the on-chain `create_collection` rules. See the [SPV guide](../guides/spv.md). All exports are re-exported from the package root.
 
 ## Errors
 
