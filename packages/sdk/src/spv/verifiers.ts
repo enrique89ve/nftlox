@@ -24,6 +24,7 @@ import {
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
 	MEMO_PREFIX_FEE_COL,
+	MAX_TRANSFER_BATCH_SIZE,
 	PROTOCOL_COLLECTION_FEE_HBD,
 	SUPPORTED_CURRENCIES,
 	calculatePaymentSplitFromUnits,
@@ -261,23 +262,45 @@ function parseIndexerOwnershipSnapshot(raw: unknown): IndexerOwnershipSnapshot {
 }
 
 function requireNftIdInTransferPayload(data: Record<string, unknown>, nftId: string): void {
-	if (typeof data.nftId === "string") {
-		if (data.nftId !== nftId) {
+	if (Object.prototype.hasOwnProperty.call(data, "from")) {
+		throw new OwnershipMismatchError(
+			"Transfer payload must not include from; owner is derived from Hive signer",
+		);
+	}
+
+	if (Array.isArray(data.nftIds)) {
+		const ids = data.nftIds;
+		if (ids.length === 0) {
+			throw new OwnershipMismatchError("Transfer payload nftIds array is empty");
+		}
+		if (ids.length > MAX_TRANSFER_BATCH_SIZE) {
 			throw new OwnershipMismatchError(
-				`Ownership operation targets NFT ${data.nftId}, expected ${nftId}`,
+				`Transfer payload has ${ids.length} nftIds, max ${MAX_TRANSFER_BATCH_SIZE}`,
+			);
+		}
+		const nftIds = ids.map((value, index) => {
+			if (typeof value !== "string") {
+				throw new OwnershipMismatchError(
+					`Transfer payload nftIds[${index}] must be a string`,
+				);
+			}
+			return value;
+		});
+		if (!nftIds.includes(nftId)) {
+			throw new OwnershipMismatchError(
+				`Ownership operation does not include NFT ${nftId}`,
 			);
 		}
 		return;
 	}
 
-	if (!Array.isArray(data.nftIds)) {
+	if (typeof data.nftId !== "string") {
 		throw new Error("Transfer payload missing nftId or nftIds");
 	}
 
-	const nftIds = data.nftIds.filter((value): value is string => typeof value === "string");
-	if (!nftIds.includes(nftId)) {
+	if (data.nftId !== nftId) {
 		throw new OwnershipMismatchError(
-			`Ownership operation does not include NFT ${nftId}`,
+			`Ownership operation targets NFT ${data.nftId}, expected ${nftId}`,
 		);
 	}
 }

@@ -34,6 +34,69 @@ afterEach(() => {
 });
 
 describe("verifyNftOwnership", () => {
+	type TransferOwnershipMockParams = Readonly<{
+		nftId: string;
+		owner: string;
+		previousOwner: string | null;
+		operationId: string;
+		signer: string;
+		data: Record<string, unknown>;
+	}>;
+
+	function installTransferOwnershipMock(params: TransferOwnershipMockParams): void {
+		globalThis.fetch = (async (input: string | URL | Request): Promise<Response> => {
+			const url = String(input);
+
+			if (url === `https://indexer.test/api/nfts/${params.nftId}/proof`) {
+				return new Response(JSON.stringify({
+					id: params.nftId,
+					owner: params.owner,
+					previous_owner: params.previousOwner,
+					owner_operation_id: params.operationId,
+					created_tx_id: "mint_tx_1",
+					seed_id: null,
+					instance_number: null,
+					nft_dna: null,
+					collection_id: "col_test_1",
+					collection_created_block_num: 105212100,
+					collection_created_tx_id: "c".repeat(40),
+				}), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				});
+			}
+
+			if (url === `https://hafah.test/hafah-api/operations/${params.operationId}`) {
+				return new Response(JSON.stringify({
+					op: {
+						type: "custom_json_operation",
+						value: {
+							id: "nftlox_testnet",
+							json: JSON.stringify({
+								protocol: "nftlox_testnet",
+								version: "0.10.0",
+								action: ACTION_TRANSFER,
+								data: params.data,
+							}),
+							required_auths: [],
+							required_posting_auths: [params.signer],
+						},
+					},
+					block: 105212166,
+					trx_id: "transfer_tx_1",
+					timestamp: "2026-04-04T00:50:18",
+					virtual_op: false,
+					operation_id: params.operationId,
+				}), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				});
+			}
+
+			throw new Error(`Unexpected fetch URL: ${url}`);
+		}) as unknown as typeof fetch;
+	}
+
 	test("verifies current ownership from owner_operation_id without using history", async () => {
 		const urls: string[] = [];
 
@@ -109,6 +172,56 @@ describe("verifyNftOwnership", () => {
 		expect(result.checks[0]?.derivedOwner).toBe("bob");
 		expect(result.checks[0]?.previousOwner).toBe("alice");
 		expect(urls.some((url) => url.includes("/history"))).toBe(false);
+	});
+
+	test("rejects direct transfer payloads that include from", async () => {
+		installTransferOwnershipMock({
+			nftId: "nft_from_1",
+			owner: "bob",
+			previousOwner: "alice",
+			operationId: "451882812111325100",
+			signer: "alice",
+			data: {
+				nftId: "nft_from_1",
+				from: "alice",
+				to: "bob",
+			},
+		});
+
+		const result = await verifyNftOwnership({
+			nftId: "nft_from_1",
+			expectedOwner: "bob",
+			indexerBaseUrl: "https://indexer.test",
+			l1Config,
+		});
+
+		expect(result.status).toBe("mismatch");
+		expect(result.message).toContain("must not include from");
+	});
+
+	test("uses nftIds precedence over nftId for direct transfer parity", async () => {
+		installTransferOwnershipMock({
+			nftId: "nft_shadowed",
+			owner: "bob",
+			previousOwner: "alice",
+			operationId: "451882812111325101",
+			signer: "alice",
+			data: {
+				nftId: "nft_shadowed",
+				nftIds: ["nft_other"],
+				to: "bob",
+			},
+		});
+
+		const result = await verifyNftOwnership({
+			nftId: "nft_shadowed",
+			expectedOwner: "bob",
+			indexerBaseUrl: "https://indexer.test",
+			l1Config,
+		});
+
+		expect(result.status).toBe("mismatch");
+		expect(result.message).toContain("does not include NFT nft_shadowed");
 	});
 
 	type BuyFlowOverrides = Readonly<{
@@ -525,7 +638,6 @@ describe("verifyNftOwnership", () => {
 								action: ACTION_TRANSFER,
 								data: {
 									nftId: "nft_2",
-									from: "alice",
 									to: "bob",
 								},
 							}),

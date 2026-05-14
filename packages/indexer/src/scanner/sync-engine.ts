@@ -2,7 +2,7 @@ import { config } from "@/config.ts";
 import {
   getLastBlock,
   updateLastBlock,
-  updateHiveHeadBlock,
+  updateHiveChainTip,
   cleanupExpiredOperations,
   insertInvalidOperation,
 } from "@/db/queries/sync.ts";
@@ -50,7 +50,6 @@ const MASSIVE_THRESHOLD = 100;
 // Exported so /api/health and /api/status report the same threshold.
 export const SYNC_TOLERANCE_BLOCKS = 5;
 const MAX_CONTINUITY_FAILURES = 3;
-const MAX_CONSECUTIVE_FATAL_ROUTE_FAILURES = 10;
 
 // ============ BATCH FETCH ============
 
@@ -266,10 +265,13 @@ export async function syncCycle(): Promise<void> {
   const headBlock = chain.headBlock;
   const behind = irreversibleBlock - lastBlock;
 
-  // Persist HEAD independently from last_block so /api/multisig can evaluate
-  // (hive_head_block − last_block) for its lag gate even when the indexer is
-  // actively catching up a large gap. The UPDATE only moves forward.
-  await updateHiveHeadBlock(headBlock, chain.headTime ?? null);
+  // Persist chain tip (HEAD + irreversible + HEAD time) independently from
+  // last_block so /api/multisig can evaluate:
+  //   (hive_irreversible_block − last_block) for processing-backlog lag
+  //   (Date.now() − hive_head_time) for Hive RPC outage detection
+  // The UPDATE is forward-only on all three columns — a single lying endpoint
+  // cannot rewrite our frontier between cycles.
+  await updateHiveChainTip(headBlock, irreversibleBlock, chain.headTime ?? null);
 
   updateSyncProgress({ lastBlock, headBlock, irreversibleBlock });
 
@@ -411,7 +413,6 @@ export async function syncCycle(): Promise<void> {
     // `idx_nfts_sale_expires` keeps the UPDATE at ~zero cost when no rows are due.
     await withSyncWriteTransaction(async (txn) => {
       if (hasOps) {
-        let consecutiveFatalFailures = 0;
         let sweptThrough: number | null = null;
         for (const batch of batches) {
           for (const rej of batch.rejected) {
@@ -437,16 +438,14 @@ export async function syncCycle(): Promise<void> {
             switch (routeResult.kind) {
               case "applied":
               case "rejected":
-                consecutiveFatalFailures = 0;
                 break;
               case "fatal":
-                consecutiveFatalFailures++;
-                if (consecutiveFatalFailures >= MAX_CONSECUTIVE_FATAL_ROUTE_FAILURES) {
-                  throw new Error(
-                    `Circuit breaker: ${consecutiveFatalFailures} consecutive fatal route failures in block range ${batch.from}-${batch.to}`,
-                  );
-                }
-                break;
+                // Fatal means the operation was skipped and even recording the
+                // invalid/orphaned row failed. Advancing last_block here would
+                // make that missing indexed data permanent.
+                throw new Error(
+                  `Fatal route failure at block ${op.blockNum} tx ${op.txId}: ${routeResult.reason}`,
+                );
               default: {
                 const exhaustive: never = routeResult;
                 throw new Error(`Unhandled route result: ${JSON.stringify(exhaustive)}`);

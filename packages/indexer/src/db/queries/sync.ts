@@ -20,6 +20,7 @@ export interface SyncStatus {
 export interface ChainTimeSnapshot {
 	lastBlock: number;
 	hiveHeadBlock: number;
+	hiveIrreversibleBlock: number;
 	hiveHeadTime: string | null;
 }
 
@@ -35,13 +36,14 @@ export async function getChainTimeSnapshot(
 	txn: Queryable = sql,
 ): Promise<ChainTimeSnapshot> {
 	const [row] = await txn`
-		SELECT last_block, hive_head_block, hive_head_time
+		SELECT last_block, hive_head_block, hive_irreversible_block, hive_head_time
 		FROM sync_state
 		WHERE id = 1
 	`;
 	return {
 		lastBlock: Number(row?.last_block ?? 0),
 		hiveHeadBlock: Number(row?.hive_head_block ?? 0),
+		hiveIrreversibleBlock: Number(row?.hive_irreversible_block ?? 0),
 		hiveHeadTime: row?.hive_head_time
 			? new Date(String(row.hive_head_time)).toISOString()
 			: null,
@@ -57,25 +59,39 @@ export async function updateLastBlock(blockNum: number, txn: Queryable = sql): P
 }
 
 /**
- * Persists the latest observed Hive HEAD block. Read by /api/multisig/buy to
- * enforce the lag gate: if (hive_head_block - last_block) > BUY_API_LAG_MAX_BLOCKS,
- * signing is refused. Updated each sync cycle after the chain-consensus fetch,
- * independently from last_block so the lag signal stays fresh even when the
- * indexer is actively catching up on a large gap.
+ * Persists the chain consensus snapshot (HEAD block, irreversible block, HEAD
+ * timestamp). All three are forward-only — a single endpoint that lies low
+ * cannot rewrite our frontier between cycles. Updated each sync cycle after
+ * the multi-endpoint chain fetch, independently from last_block so the
+ * /api/multisig/buy health gate stays fresh even during massive catch-up.
+ *
+ * The gate diffs hive_irreversible_block - last_block (real processing
+ * backlog, no finality-gap noise) and falls back to Date.now() - hive_head_time
+ * to catch Hive RPC outage where both blocks freeze together but real time
+ * keeps moving.
  */
-export async function updateHiveHeadBlock(
-	blockNum: number,
+export async function updateHiveChainTip(
+	headBlock: number,
+	irreversibleBlock: number,
 	headTime: string | null = null,
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
 		UPDATE sync_state
-		SET hive_head_block = ${blockNum},
-		    hive_head_time = ${headTime}
+		SET hive_head_block = GREATEST(hive_head_block, ${headBlock}),
+		    hive_irreversible_block = GREATEST(hive_irreversible_block, ${irreversibleBlock}),
+		    hive_head_time = CASE
+			WHEN ${headTime}::timestamptz IS NULL THEN hive_head_time
+			WHEN hive_head_time IS NULL THEN ${headTime}
+			WHEN ${headTime}::timestamptz > hive_head_time THEN ${headTime}
+			ELSE hive_head_time
+		    END
 		WHERE id = 1
 		  AND (
-			hive_head_block < ${blockNum}
-			OR (${headTime}::timestamptz IS NOT NULL AND hive_head_time IS NULL)
+			hive_head_block < ${headBlock}
+			OR hive_irreversible_block < ${irreversibleBlock}
+			OR (${headTime}::timestamptz IS NOT NULL
+				AND (hive_head_time IS NULL OR hive_head_time < ${headTime}))
 		  )
 	`;
 }

@@ -33,9 +33,16 @@ CREATE TABLE IF NOT EXISTS sync_state (
 	last_block BIGINT NOT NULL DEFAULT 0,
 	genesis_block BIGINT NOT NULL DEFAULT 0,
 	-- Last HEAD block observed from the Hive node. Updated by the scanner each
-	-- tick alongside last_block. Consumers (e.g. /api/multisig) diff
-	-- hive_head_block - last_block to gate signing when the indexer is lagged.
+	-- tick alongside last_block. Consumers (e.g. /api/multisig) use this for
+	-- the chain-time reference (see hive_head_time) and to detect Hive RPC
+	-- outage via wall-clock staleness.
 	hive_head_block BIGINT NOT NULL DEFAULT 0,
+	-- Last irreversible block reported by chain consensus. Tracked separately
+	-- from last_block (the indexer's processed cursor) so /api/multisig can
+	-- diff hive_irreversible_block - last_block to detect a real processing
+	-- backlog, without injecting the ~15-block finality gap that
+	-- hive_head_block - last_block would always carry.
+	hive_irreversible_block BIGINT NOT NULL DEFAULT 0,
 	-- Timestamp of the observed Hive HEAD block. Lets the API estimate chain
 	-- time for `last_block` without trusting the local wall clock.
 	hive_head_time TIMESTAMPTZ,
@@ -582,6 +589,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
 -- present. Keep entries here permanently — removing an ALTER after rollout
 -- would leave freshly-initialized and upgraded DBs on different schemas.
 ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_block BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_irreversible_block BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS hive_head_time TIMESTAMPTZ;
 ALTER TABLE l2_nodes DROP COLUMN IF EXISTS public_key;
 

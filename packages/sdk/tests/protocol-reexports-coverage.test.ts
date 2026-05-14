@@ -41,6 +41,7 @@ const REQUIRED_REEXPORTS: ReadonlyArray<{
 	{ name: "BUY_TX_TTL_MS", typeofValue: "number" },
 	{ name: "BUY_COMMITMENT_TTL_BLOCKS", typeofValue: "number" },
 	{ name: "BUY_API_LAG_MAX_BLOCKS", typeofValue: "number" },
+	{ name: "BUY_API_HEAD_STALENESS_MAX_MS", typeofValue: "number" },
 	// N-5: node-operator cadence — caps + heartbeat windows the whole network applies.
 	{ name: "MAX_ACTIVE_COMMITMENTS_PER_NODE", typeofValue: "number" },
 	{ name: "MIN_HEARTBEAT_INTERVAL_BLOCKS", typeofValue: "number" },

@@ -57,6 +57,7 @@ describe("multisig transaction time validation", () => {
 			requireMultisigChainReferenceTimeMs({
 				lastBlock: 100,
 				hiveHeadBlock: 101,
+				hiveIrreversibleBlock: 100,
 				hiveHeadTime: null,
 			});
 			throw new Error("expected requireMultisigChainReferenceTimeMs to throw");

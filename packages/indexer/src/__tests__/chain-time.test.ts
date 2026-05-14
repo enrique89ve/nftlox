@@ -10,6 +10,7 @@ describe("chain-time helpers", () => {
 		const estimated = estimateIndexedChainTimeMs({
 			lastBlock: 1_000,
 			hiveHeadBlock: 1_003,
+			hiveIrreversibleBlock: 1_000,
 			hiveHeadTime: "2026-04-23T00:00:09.000Z",
 		});
 
@@ -20,6 +21,7 @@ describe("chain-time helpers", () => {
 		expect(selectChainReferenceTimeMs({
 			lastBlock: 1_000,
 			hiveHeadBlock: 1_001,
+			hiveIrreversibleBlock: 1_000,
 			hiveHeadTime: null,
 		}, 123_456)).toBe(123_456);
 	});
@@ -28,6 +30,7 @@ describe("chain-time helpers", () => {
 		const result = resolveChainReferenceTimeMs({
 			lastBlock: 1_000,
 			hiveHeadBlock: 1_001,
+			hiveIrreversibleBlock: 1_000,
 			hiveHeadTime: null,
 		});
 

@@ -103,7 +103,7 @@ const mockTxn = Object.assign(
 mock.module("@/db/queries/sync.ts", () => ({
 	getLastBlock: mockGetLastBlock,
 	updateLastBlock: mockUpdateLastBlock,
-	updateHiveHeadBlock: mock(() => Promise.resolve()),
+	updateHiveChainTip: mock(() => Promise.resolve()),
 	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
 	insertInvalidOperation: mockInsertInvalidOperation,
 	// Stubs keep the module's export shape complete so bun's process-wide
@@ -594,7 +594,7 @@ describe("syncCycle", () => {
 		// No endpointOffset argument (default 0)
 	});
 
-	test("rejected operations do not trigger the circuit breaker", async () => {
+	test("rejected operations continue syncing and advance the cursor", async () => {
 		trackedLastBlock = 1000;
 		setupChainHead(6000); // massive
 		mockGetHafAHBlockRange.mockReturnValue(2000);
@@ -610,18 +610,17 @@ describe("syncCycle", () => {
 		expect(trackedLastBlock).toBe(6000);
 	});
 
-	test("circuit breaker spans across batches for fatal route failures", async () => {
+	test("fatal route failure aborts the batch without advancing cursor", async () => {
 		trackedLastBlock = 1000;
-		setupChainHead(6000); // massive
+		setupChainHead(1001);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 
-		const failingOps = Array.from({ length: 12 }, (_, i) => fakeParsedOp(1001 + i));
-
 		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
-		mockParseHafAHOperations.mockReturnValue(wrapOps(failingOps));
+		mockParseHafAHOperations.mockReturnValue(wrapOps([fakeParsedOp(1001)]));
 		mockRouteOperationDetailed.mockResolvedValue(fatalRouteResult("db write failed"));
 
-		await expect(syncCycle()).rejects.toThrow("Circuit breaker");
+		await expect(syncCycle()).rejects.toThrow("Fatal route failure");
+		expect(trackedLastBlock).toBe(1000);
 	});
 
 	test("keeps durable commits during massive sync", async () => {

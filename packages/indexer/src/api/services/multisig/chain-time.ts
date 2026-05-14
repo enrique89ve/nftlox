@@ -8,6 +8,7 @@ import {
 } from "@/utils/chain-time.ts";
 import { createMultisigError } from "@/api/services/multisig/errors.ts";
 import {
+	BUY_API_HEAD_STALENESS_MAX_MS,
 	BUY_API_LAG_MAX_BLOCKS,
 	HIVE_BLOCK_TIME_MS,
 } from "@/protocol/index.ts";
@@ -30,20 +31,51 @@ export function requireMultisigChainReferenceTimeMs(snapshot: ChainTimeSnapshot)
 	);
 }
 
-export function assertMultisigSyncHealthy(snapshot: ChainTimeSnapshot): void {
-	if (!Number.isFinite(snapshot.lastBlock) || !Number.isFinite(snapshot.hiveHeadBlock)) {
+export function assertMultisigSyncHealthy(
+	snapshot: ChainTimeSnapshot,
+	nowMs: number = Date.now(),
+): void {
+	if (
+		!Number.isFinite(snapshot.lastBlock)
+		|| !Number.isFinite(snapshot.hiveHeadBlock)
+		|| !Number.isFinite(snapshot.hiveIrreversibleBlock)
+	) {
 		throw createMultisigError("INTERNAL_ERROR", "sync_state row has invalid block numbers");
 	}
 
-	const lag = snapshot.hiveHeadBlock - snapshot.lastBlock;
-	if (lag > BUY_API_LAG_MAX_BLOCKS) {
-		const deficit = Math.max(1, lag - BUY_API_LAG_MAX_BLOCKS + 1);
+	// Gate (a): processing backlog. Compare against irreversible (not HEAD)
+	// because sync intentionally lags HEAD by ~15 blocks of finality —
+	// using HEAD here would make the gate structurally unsatisfiable.
+	const processingLag = snapshot.hiveIrreversibleBlock - snapshot.lastBlock;
+	if (processingLag > BUY_API_LAG_MAX_BLOCKS) {
+		const deficit = Math.max(1, processingLag - BUY_API_LAG_MAX_BLOCKS + 1);
 		const retryAfterMs = deficit * HIVE_BLOCK_TIME_MS;
 		throw createMultisigError(
 			"INDEXER_LAGGED",
-			`Indexer is ${lag} blocks behind Hive HEAD (max ${BUY_API_LAG_MAX_BLOCKS}); retry in ~${retryAfterMs}ms`,
+			`Indexer is ${processingLag} blocks behind last irreversible (max ${BUY_API_LAG_MAX_BLOCKS}); retry in ~${retryAfterMs}ms`,
 			{ retryAfterMs },
 		);
+	}
+
+	// Gate (b): wall-clock staleness. Catches Hive RPC outage where both
+	// hive_head_block and hive_irreversible_block freeze together (so the
+	// processing-lag gate stays healthy) but our chain-time reference
+	// silently rots. A buy tx co-signed against a stale reference time would
+	// carry an `expiration` window the witnesses reject — or worse, would be
+	// included against a chain that has moved on past the listing snapshot
+	// we validated against.
+	if (snapshot.hiveHeadTime) {
+		const headTimeMs = Date.parse(snapshot.hiveHeadTime);
+		if (Number.isFinite(headTimeMs)) {
+			const staleness = nowMs - headTimeMs;
+			if (staleness > BUY_API_HEAD_STALENESS_MAX_MS) {
+				throw createMultisigError(
+					"INDEXER_LAGGED",
+					`Indexer's Hive HEAD timestamp is ${staleness}ms stale (max ${BUY_API_HEAD_STALENESS_MAX_MS}ms); Hive RPC likely unreachable`,
+					{ retryAfterMs: HIVE_BLOCK_TIME_MS },
+				);
+			}
+		}
 	}
 }
 

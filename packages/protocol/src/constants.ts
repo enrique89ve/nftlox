@@ -115,11 +115,24 @@ export const BUY_COMMITMENT_TTL_BLOCKS = BUY_TX_TTL_MS / HIVE_BLOCK_TIME_MS;
 // limiting the grief a rogue node can cause.
 export const MAX_ACTIVE_COMMITMENTS_PER_NODE = 10;
 
-// Max block gap between Hive HEAD and the indexer's last-processed block that
-// still allows /api/multisig/buy to serve requests. Exceeding this means the
-// API could co-sign against a stale listing snapshot that has already been
-// invalidated in unindexed blocks. Hive block time is 3s, so 3 blocks ≈ 9s.
+// Max block gap between Hive's last-irreversible block and the indexer's
+// last-processed block that still allows /api/multisig/buy to serve requests.
+// Indexers process only up to last_irreversible_block_num (sync-engine.ts) to
+// avoid reorg-induced state divergence, so comparing against HEAD would inject
+// the ~15-block finality gap into every health check and make the gate
+// structurally unsatisfiable. The threshold therefore gates "indexer fell
+// behind chain-reported irreversible" — a real fetch/processing backlog —
+// at 3 blocks ≈ 9s of unprocessed-but-final data.
 export const BUY_API_LAG_MAX_BLOCKS = 3;
+
+// Max wall-clock staleness for the indexer's view of Hive HEAD. Catches the
+// case where Hive RPC endpoints are unreachable: lag math stays healthy
+// (hive_irreversible_block and last_block both stop advancing together) but
+// our timestamp reference becomes increasingly wrong, and any tx the API
+// co-signs would carry a stale `expiration` window. 30s ≈ 10 wall-clock
+// blocks — long enough to ride out a single endpoint hiccup, short enough
+// that integrators can react before signed txs are rejected by witnesses.
+export const BUY_API_HEAD_STALENESS_MAX_MS = 30_000;
 
 // Cadence for on-chain heartbeat (custom_json with current state-root hash).
 // Block time on Hive is 3s, so 5000 blocks ≈ 4h10m. Nodes that register must

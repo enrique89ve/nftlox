@@ -91,7 +91,11 @@ async function buildCollectionBody(params: Readonly<{
 		transaction: {
 			ref_block_num: 1,
 			ref_block_prefix: 1,
-			expiration: expirationFromNow(45_000),
+			// Sized so it stays inside [MIN, MAX] expiration relative to the
+			// chain reference time. The fixture's hive_head_time = NOW() and the
+			// HEAD-vs-irreversible delta is ~15 blocks, so reference time sits
+			// at NOW − 45s and the valid window is [NOW − 15s, NOW + 15s].
+			expiration: expirationFromNow(10_000),
 			extensions: [],
 			signatures: [],
 			operations: [
@@ -123,11 +127,22 @@ async function buildCollectionBody(params: Readonly<{
 	};
 }
 
-async function setSyncBlocks(lastBlock: number, hiveHeadBlock = lastBlock): Promise<void> {
+// ~15-block finality delta between Hive HEAD and the irreversible cursor that
+// the sync engine writes to last_block. Tests mirror this so the health gate
+// sees realistic production state.
+const HIVE_FINALITY_DELTA = 15;
+
+async function setSyncBlocks(
+	lastBlock: number,
+	options: { hiveIrreversibleBlock?: number } = {},
+): Promise<void> {
+	const hiveIrreversibleBlock = options.hiveIrreversibleBlock ?? lastBlock;
+	const hiveHeadBlock = hiveIrreversibleBlock + HIVE_FINALITY_DELTA;
 	await sql`
 		UPDATE sync_state
 		SET last_block = ${lastBlock},
 		    hive_head_block = ${hiveHeadBlock},
+		    hive_irreversible_block = ${hiveIrreversibleBlock},
 		    hive_head_time = NOW()
 		WHERE id = 1
 	`;
@@ -185,7 +200,9 @@ describe("create_collection multisig safety gates", () => {
 
 	test("rejects before signing when the indexer is lagged", async () => {
 		await seedActiveSettlementNode(NODE_ACCOUNT, { registeredBlock: 100 });
-		await setSyncBlocks(100, 100 + BUY_API_LAG_MAX_BLOCKS + 1);
+		// Force a real processing backlog: chain says irreversible has advanced
+		// past the indexer's cursor by more than the cap.
+		await setSyncBlocks(100, { hiveIrreversibleBlock: 100 + BUY_API_LAG_MAX_BLOCKS + 1 });
 		let signCalls = 0;
 		const sign: MultisigSign = async () => {
 			signCalls += 1;

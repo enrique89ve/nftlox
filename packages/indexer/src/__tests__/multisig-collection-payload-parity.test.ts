@@ -90,7 +90,7 @@ async function clearDivergentFlag(): Promise<void> {
 }
 
 async function seedSyncStateForTimeWindow(): Promise<void> {
-	await sql`UPDATE sync_state SET last_block = 1, hive_head_time = NOW(), hive_head_block = 1 WHERE id = 1`;
+	await sql`UPDATE sync_state SET last_block = 1, hive_head_time = NOW(), hive_head_block = 1, hive_irreversible_block = 1 WHERE id = 1`;
 }
 
 async function clearCollectionForCreator(): Promise<void> {

@@ -56,7 +56,7 @@ const mockWithTransaction = mock(async (fn: (txn: unknown) => Promise<void>) => 
 mock.module("@/db/queries/sync.ts", () => ({
 	getLastBlock: mockGetLastBlock,
 	updateLastBlock: mockUpdateLastBlock,
-	updateHiveHeadBlock: mock(() => Promise.resolve()),
+	updateHiveChainTip: mock(() => Promise.resolve()),
 	cleanupExpiredOperations: mock(() => Promise.resolve(0)),
 	insertInvalidOperation: mock(() => Promise.resolve()),
 	// Stubs keep the module's export shape complete for bun's process-wide mocks.

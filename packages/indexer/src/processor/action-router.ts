@@ -205,7 +205,8 @@ const handlers: Record<ProtocolAction, Handler> = {
  *
  * Returns a discriminated outcome so the sync engine can distinguish
  * consensus-invalid operations ("rejected") from infrastructure failures
- * ("fatal"). Invalid user spam must not trip the sync circuit breaker.
+ * ("fatal"). Invalid user spam can continue; infrastructure failure must
+ * abort before the sync cursor advances.
  */
 export async function routeOperationDetailed(
 	op: ParsedOperation,

@@ -5,6 +5,7 @@ export const CHAIN_TIME_RETRY_AFTER_MS = HIVE_BLOCK_TIME_MS;
 export type ChainTimeSnapshot = Readonly<{
 	readonly lastBlock: number;
 	readonly hiveHeadBlock: number;
+	readonly hiveIrreversibleBlock: number;
 	readonly hiveHeadTime: string | null;
 }>;
 
