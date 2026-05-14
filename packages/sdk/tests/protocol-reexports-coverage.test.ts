@@ -55,6 +55,8 @@ const REQUIRED_REEXPORTS: ReadonlyArray<{
 	{ name: "validateHiveUsername", typeofValue: "function" },
 	{ name: "validateNodeEndpoint", typeofValue: "function" },
 	{ name: "normalizeNodeEndpoint", typeofValue: "function" },
+	// Marketplace NFC hardening — cap hashed into listingId via generateListingId.
+	{ name: "MAX_MARKETPLACE_LENGTH", typeofValue: "number" },
 ];
 
 describe("SDK re-export coverage (N-4 + N-5 tranches)", () => {

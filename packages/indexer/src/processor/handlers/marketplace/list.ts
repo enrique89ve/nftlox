@@ -4,12 +4,13 @@ import { getNftForProcessingForUpdate, updateNftListing, NFT_STATUS_LISTED } fro
 import type { ListingCtx } from "@/db/queries/nfts.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { deleteNftAllowance } from "@/db/queries/allowances.ts";
-import { requireString, requireHiveAmount, requireNumber, optionalString } from "@/utils/validation.ts";
+import { requireString, requireHiveAmount, requireNumber, optionalBoundedString } from "@/utils/validation.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
 import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
 import {
 	generateListingId,
 	LISTING_ID_PREFIX,
+	MAX_MARKETPLACE_LENGTH,
 	MIN_LISTING_TTL_MS,
 	MAX_LISTING_TTL_MS,
 	MIN_PRICE_AMOUNT,
@@ -47,7 +48,10 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 	const listingNonce = requireString(op.data.listingNonce, "listingNonce");
 	const price = requireHiveAmount(op.data.price, "price");
 	const expiresAt = requireNumber(op.data.expiresAt, "expiresAt");
-	const marketplace = optionalString(op.data.marketplace);
+	// Bounded + typeof-checked at the boundary. generateListingId NFC-normalizes
+	// and re-asserts the cap; this gate fails fast with a marketplace-specific
+	// error rather than the generic "exceeds protocol cap" deeper in the call.
+	const marketplace = optionalBoundedString(op.data.marketplace, "marketplace", MAX_MARKETPLACE_LENGTH);
 
 	if (!listingId.startsWith(LISTING_ID_PREFIX)) {
 		throw new Error(`Invalid listingId format: must start with '${LISTING_ID_PREFIX}'`);

@@ -164,6 +164,14 @@ export const MAX_DESCRIPTION_LENGTH = 250;
 export const MAX_IMAGE_URL_LENGTH = 500;
 export const MAX_URL_LENGTH = 500;
 export const MAX_ID_LENGTH = 128;
+// Optional `marketplace` field in `list` payloads. The string is hashed into
+// `listingId` via `generateListingId`, so it MUST round-trip identically
+// across UI platforms — NFC normalization is enforced inside the helper, see
+// [[project_protocol_hash_inputs_must_be_normalized]]. 20 chars fits short
+// identifiers ("nftlox", "norse-mythos") while keeping the canonical
+// listing-id preimage bounded and bytes injected by the marketplace owner
+// strictly capped.
+export const MAX_MARKETPLACE_LENGTH = 20;
 // artId is a creator-chosen label bound to one seed within a collection. 64 chars
 // fits human-readable slugs ("hero-card-v2") without bloating payload or row size.
 export const MAX_ART_ID_LENGTH = 64;

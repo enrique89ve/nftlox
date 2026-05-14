@@ -17,6 +17,7 @@ import {
 	LISTING_ID_PREFIX,
 	LISTING_NONCE_LENGTH,
 	LISTING_HASH_LENGTH,
+	MAX_MARKETPLACE_LENGTH,
 	SYMBOL_REGEX,
 	TX_ID_REGEX,
 	HASH_DOMAIN_COL,
@@ -247,7 +248,24 @@ export async function generateListingId(params: {
 	readonly expiresAt: number;
 	readonly nonce: string;
 }): Promise<string> {
-	const input = `${HASH_DOMAIN_LISTING}${params.nftId}:${params.owner}:${params.marketplace}:${params.priceAmount}:${params.priceCurrency}:${params.expiresAt}:${params.nonce}`;
+	// `marketplace` is the only free-form user input in the listing-id preimage;
+	// every other component is canonical (hex hash, ASCII username, decimal
+	// amount, integer timestamp, hex nonce). NFC-normalize so visually-identical
+	// values typed on Android (NFD) and Desktop (NFC) hash to the same id —
+	// same discipline as `name` in generateDeterministicCollectionId. The cap
+	// is enforced post-normalization because NFC can shrink a string (combining
+	// marks collapse into pre-composed glyphs), so the user-typed length is not
+	// a tight bound on the hashed length.
+	if (typeof params.marketplace !== "string") {
+		throw new Error(`marketplace must be a string, got ${typeof params.marketplace}`);
+	}
+	const marketplace = params.marketplace.normalize("NFC");
+	if (marketplace.length > MAX_MARKETPLACE_LENGTH) {
+		throw new Error(
+			`marketplace exceeds protocol cap of ${MAX_MARKETPLACE_LENGTH} chars (got ${marketplace.length} after NFC normalization)`,
+		);
+	}
+	const input = `${HASH_DOMAIN_LISTING}${params.nftId}:${params.owner}:${marketplace}:${params.priceAmount}:${params.priceCurrency}:${params.expiresAt}:${params.nonce}`;
 	const hash = await generateHash(input);
 	return LISTING_ID_PREFIX + hash.slice(0, LISTING_HASH_LENGTH);
 }

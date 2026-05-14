@@ -214,4 +214,52 @@ describe("DNA helpers normalize Unicode inputs", () => {
 		expect(fromNfc).toBe(fromNfd);
 		expect(fromNfc).toBe("img_090e5c2b65c65667");
 	});
+
+	test("NFC and NFD marketplace strings map to the same listing id", async () => {
+		const baseParams = {
+			nftId: "nft_aaaaaaaaaaaaaaaaaaaa_1",
+			owner: "alice",
+			priceAmount: "1.000",
+			priceCurrency: "HIVE",
+			expiresAt: 1_700_000_000_000,
+			nonce: "abcdef012345",
+		} as const;
+		const fromNfc = await generateListingId({ ...baseParams, marketplace: NFC_NAIVE });
+		const fromNfd = await generateListingId({ ...baseParams, marketplace: NFD_NAIVE });
+		expect(fromNfc).toBe(fromNfd);
+	});
+});
+
+// Length cap is enforced post-NFC normalization. Both pre-composed NFC strings
+// and decomposed NFD strings that exceed the cap after normalization must be
+// rejected — protects [[project_protocol_hash_inputs_must_be_normalized]] from
+// a path where a 20-codepoint NFD input expands into > 20 codepoints via
+// re-normalization on the consumer side and silently changes the listing id.
+describe("generateListingId marketplace cap", () => {
+	const baseParams = {
+		nftId: "nft_aaaaaaaaaaaaaaaaaaaa_1",
+		owner: "alice",
+		priceAmount: "1.000",
+		priceCurrency: "HIVE",
+		expiresAt: 1_700_000_000_000,
+		nonce: "abcdef012345",
+	} as const;
+
+	test("accepts marketplace at the 20-char cap", async () => {
+		const cap = "a".repeat(20);
+		await expect(generateListingId({ ...baseParams, marketplace: cap })).resolves.toMatch(/^list_/);
+	});
+
+	test("rejects marketplace longer than 20 chars after NFC", async () => {
+		const tooLong = "a".repeat(21);
+		await expect(generateListingId({ ...baseParams, marketplace: tooLong })).rejects.toThrow(
+			"marketplace exceeds protocol cap",
+		);
+	});
+
+	test("rejects non-string marketplace (typeof guard)", async () => {
+		await expect(
+			generateListingId({ ...baseParams, marketplace: 42 as unknown as string }),
+		).rejects.toThrow("marketplace must be a string");
+	});
 });

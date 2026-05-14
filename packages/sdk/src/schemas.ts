@@ -5,6 +5,7 @@ import {
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
+	MAX_MARKETPLACE_LENGTH,
 	MAX_ROYALTY_PCT,
 	SUPPORTED_CURRENCIES,
 	MIN_PRICE_AMOUNT,
@@ -180,7 +181,10 @@ export const listInputSchema = seedProvenanceSchema.extend({
 			(v) => v <= Date.now() + MAX_LISTING_TTL_MS,
 			{ message: `expiresAt must be at most ${ttlDays(MAX_LISTING_TTL_MS)} days in the future` },
 		),
-	marketplace: z.string().optional(),
+	// Free-form marketplace label hashed into listingId. Capped + NFC-normalized
+	// inside generateListingId; this schema mirrors the cap so SDK builder
+	// callers fail fast with a zod-formatted error before the helper throws.
+	marketplace: z.string().max(MAX_MARKETPLACE_LENGTH).optional(),
 });
 export type ListInput = z.infer<typeof listInputSchema>;
 

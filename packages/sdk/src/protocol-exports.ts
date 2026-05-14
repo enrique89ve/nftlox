@@ -54,6 +54,9 @@ export const MAX_DESCRIPTION_LENGTH = protocol.MAX_DESCRIPTION_LENGTH;
 export const MAX_IMAGE_URL_LENGTH = protocol.MAX_IMAGE_URL_LENGTH;
 export const MAX_URL_LENGTH = protocol.MAX_URL_LENGTH;
 export const MAX_ID_LENGTH = protocol.MAX_ID_LENGTH;
+// Hashed into listingId; integrators capping their form inputs hit the same
+// limit the protocol helper enforces post-NFC-normalization.
+export const MAX_MARKETPLACE_LENGTH = protocol.MAX_MARKETPLACE_LENGTH;
 export const MAX_ART_ID_LENGTH = protocol.MAX_ART_ID_LENGTH;
 export const MIN_SYMBOL_LENGTH = protocol.MIN_SYMBOL_LENGTH;
 export const MAX_SYMBOL_LENGTH = protocol.MAX_SYMBOL_LENGTH;
