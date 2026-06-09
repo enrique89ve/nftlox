@@ -251,9 +251,7 @@ export const config = {
   logLevel: toLogLevel(process.env.LOG_LEVEL, "info"),
   // Only endpoints with HafAH support (required for sync)
   // Order: fastest-responding first (api.hive.blog often timeouts in Docker)
-  hiveEndpoints: (
-    process.env.HIVE_ENDPOINTS ?? "https://api.syncad.com,https://api.hive.blog"
-  )
+  hiveEndpoints: (process.env.HIVE_ENDPOINTS ?? "https://api.hive.blog")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),

@@ -1,10 +1,9 @@
 // SPV "Boleto Suizo" - Constants
 
 export const DEFAULT_HIVE_ENDPOINTS = [
-	"https://api.hive.blog",
-	"https://api.syncad.com",
-	"https://rpc.mahdiyari.info",
-	"https://anyx.io",
+  "https://api.hive.blog",
+  "https://rpc.mahdiyari.info",
+  "https://anyx.io",
 ] as const;
 
 // Wax default: 2_000ms (IWaxOptionsChain.apiTimeout)
