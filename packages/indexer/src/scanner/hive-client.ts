@@ -5,10 +5,10 @@ import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { selectConsensusSample } from "./head-consensus.ts";
 import {
-	classifyError,
-	createEndpointHealthPool,
-	getBackoffMs,
-	type ErrorCategory,
+  classifyError,
+  createEndpointHealthPool,
+  getBackoffMs,
+  type ErrorCategory,
 } from "./endpoint-health.ts";
 
 const log = createLogger("hive-client");
@@ -21,127 +21,150 @@ const hafahHealth = createEndpointHealthPool(config.hiveEndpoints);
 // ============ FETCH ERROR ============
 
 class FetchError extends Error {
-	constructor(
-		readonly status: number,
-		readonly endpoint: string,
-		statusText: string,
-		readonly retryAfterMs?: number,
-	) {
-		super(`HTTP ${status}: ${statusText}`);
-		this.name = "FetchError";
-	}
+  constructor(
+    readonly status: number,
+    readonly endpoint: string,
+    statusText: string,
+    readonly retryAfterMs?: number,
+  ) {
+    super(`HTTP ${status}: ${statusText}`);
+    this.name = "FetchError";
+  }
 }
 
 function parseRetryAfterHeader(response: Response): number | undefined {
-	const header = response.headers.get("Retry-After");
-	if (!header) return undefined;
-	const seconds = Number(header);
-	if (!Number.isNaN(seconds) && seconds > 0) return seconds * 1000;
-	return undefined;
+  const header = response.headers.get("Retry-After");
+  if (!header) return undefined;
+  const seconds = Number(header);
+  if (!Number.isNaN(seconds) && seconds > 0) return seconds * 1000;
+  return undefined;
 }
 
 function logRetryFailure(
-	message: string,
-	endpoint: string,
-	attempt: number,
-	maxAttempts: number,
-	err: unknown,
-	category: ErrorCategory,
-	context: Record<string, unknown> = {},
+  message: string,
+  endpoint: string,
+  attempt: number,
+  maxAttempts: number,
+  err: unknown,
+  category: ErrorCategory,
+  context: Record<string, unknown> = {},
 ): void {
-	const data = {
-		...context,
-		endpoint,
-		attempt: attempt + 1,
-		maxAttempts,
-		error: err instanceof Error ? err.message : String(err),
-		category,
-	};
+  const data = {
+    ...context,
+    endpoint,
+    attempt: attempt + 1,
+    maxAttempts,
+    error: err instanceof Error ? err.message : String(err),
+    category,
+  };
 
-	if (attempt === maxAttempts - 1 || category !== "transient") {
-		log.warn(message, data);
-		return;
-	}
+  if (attempt === maxAttempts - 1 || category !== "transient") {
+    log.warn(message, data);
+    return;
+  }
 
-	log.debug(message, data);
+  log.debug(message, data);
 }
 
 // ============ JSON-RPC (for head block only) ============
 
-async function rpcCall<T>(endpoint: string, method: string, params: Record<string, unknown> | unknown[]): Promise<T> {
-	const response = await fetch(endpoint, {
-		method: "POST",
-		signal: AbortSignal.timeout(15_000),
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
-	});
+async function rpcCall<T>(
+  endpoint: string,
+  method: string,
+  params: Record<string, unknown> | unknown[],
+): Promise<T> {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    signal: AbortSignal.timeout(15_000),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
+  });
 
-	if (!response.ok) {
-		const retryAfterMs = parseRetryAfterHeader(response);
-		await response.text().catch(() => {}); // drain body to release connection
-		throw new FetchError(response.status, endpoint, response.statusText, retryAfterMs);
-	}
+  if (!response.ok) {
+    const retryAfterMs = parseRetryAfterHeader(response);
+    await response.text().catch(() => {}); // drain body to release connection
+    throw new FetchError(
+      response.status,
+      endpoint,
+      response.statusText,
+      retryAfterMs,
+    );
+  }
 
-	const json = await response.json() as Record<string, unknown>;
+  const json = (await response.json()) as Record<string, unknown>;
 
-	if (json.error != null && typeof json.error === "object") {
-		const errObj = json.error as Record<string, unknown>;
-		throw new Error(`RPC error: ${typeof errObj.message === "string" ? errObj.message : "unknown"}`);
-	}
+  if (json.error != null && typeof json.error === "object") {
+    const errObj = json.error as Record<string, unknown>;
+    throw new Error(
+      `RPC error: ${typeof errObj.message === "string" ? errObj.message : "unknown"}`,
+    );
+  }
 
-	if (json.result === undefined || json.result === null) {
-		throw new Error(`RPC returned empty result for ${method}`);
-	}
+  if (json.result === undefined || json.result === null) {
+    throw new Error(`RPC returned empty result for ${method}`);
+  }
 
-	return json.result as T;
+  return json.result as T;
 }
 
-async function callWithFailover<T>(method: string, params: Record<string, unknown> | unknown[]): Promise<T> {
-	const maxAttempts = config.hiveEndpoints.length * 2;
+async function callWithFailover<T>(
+  method: string,
+  params: Record<string, unknown> | unknown[],
+): Promise<T> {
+  const maxAttempts = config.hiveEndpoints.length * 2;
 
-	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		const endpoint = rpcHealth.selectEndpoint();
-		const start = performance.now();
-		try {
-			const result = await rpcCall<T>(endpoint, method, params);
-			rpcHealth.recordSuccess(endpoint, performance.now() - start);
-			return result;
-		} catch (err) {
-			const category = classifyError(err);
-			const retryAfterMs = err instanceof FetchError ? err.retryAfterMs : undefined;
-			rpcHealth.recordFailure(endpoint, category, retryAfterMs);
-			logRetryFailure("RPC failed", endpoint, attempt, maxAttempts, err, category, { method });
-			if (attempt === maxAttempts - 1) throw err;
-			await new Promise(r => setTimeout(r, getBackoffMs(attempt, category)));
-		}
-	}
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const endpoint = rpcHealth.selectEndpoint();
+    const start = performance.now();
+    try {
+      const result = await rpcCall<T>(endpoint, method, params);
+      rpcHealth.recordSuccess(endpoint, performance.now() - start);
+      return result;
+    } catch (err) {
+      const category = classifyError(err);
+      const retryAfterMs =
+        err instanceof FetchError ? err.retryAfterMs : undefined;
+      rpcHealth.recordFailure(endpoint, category, retryAfterMs);
+      logRetryFailure(
+        "RPC failed",
+        endpoint,
+        attempt,
+        maxAttempts,
+        err,
+        category,
+        { method },
+      );
+      if (attempt === maxAttempts - 1) throw err;
+      await new Promise((r) => setTimeout(r, getBackoffMs(attempt, category)));
+    }
+  }
 
-	throw new Error("All Hive endpoints exhausted");
+  throw new Error("All Hive endpoints exhausted");
 }
 
 // ============ HAFAH REST API ============
 
 export interface HafAHOperation {
-	op: {
-		type: string;
-		value: {
-			id: string;
-			json: string;
-			required_auths: string[];
-			required_posting_auths: string[];
-		};
-	};
-	block: number;
-	trx_id: string;
-	timestamp: string;
-	operation_id: string | number;
-	virtual_op: boolean;
+  op: {
+    type: string;
+    value: {
+      id: string;
+      json: string;
+      required_auths: string[];
+      required_posting_auths: string[];
+    };
+  };
+  block: number;
+  trx_id: string;
+  timestamp: string;
+  operation_id: string | number;
+  virtual_op: boolean;
 }
 
 interface HafAHResponse {
-	ops: HafAHOperation[];
-	next_block_range_begin: number | null;
-	next_operation_begin: string | null;
+  ops: HafAHOperation[];
+  next_block_range_begin: number | null;
+  next_operation_begin: string | null;
 }
 
 // HafAH page-size limits: server allows up to 150,000 ops per page.
@@ -157,221 +180,301 @@ const MASSIVE_SYNC_THRESHOLD = 100;
 const LIVE_SYNC_THRESHOLD = 20;
 
 // HafAH enforces a hard limit of 2000 blocks per request (server-side assert)
-const HAFAH_BLOCK_RANGE = 2000;
+const HAFAH_BLOCK_RANGE = 1000;
 // Hive protocol operation type ID for custom_json (immutable blockchain constant)
 const CUSTOM_JSON_OP_TYPE = 18;
 
 type JsonRecord = Record<string, unknown>;
 
 function isRecord(value: unknown): value is JsonRecord {
-	return value !== null && typeof value === "object" && !Array.isArray(value);
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function readStringField(record: JsonRecord, field: string, context: string): string {
-	const value = record[field];
-	if (typeof value !== "string") {
-		throw new Error(`${context}: expected ${field} to be a string`);
-	}
-	return value;
+function readStringField(
+  record: JsonRecord,
+  field: string,
+  context: string,
+): string {
+  const value = record[field];
+  if (typeof value !== "string") {
+    throw new Error(`${context}: expected ${field} to be a string`);
+  }
+  return value;
 }
 
-function readStringArrayField(record: JsonRecord, field: string, context: string): string[] {
-	const value = record[field];
-	if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
-		throw new Error(`${context}: expected ${field} to be a string array`);
-	}
-	return value;
+function readStringArrayField(
+  record: JsonRecord,
+  field: string,
+  context: string,
+): string[] {
+  const value = record[field];
+  if (
+    !Array.isArray(value) ||
+    !value.every((item) => typeof item === "string")
+  ) {
+    throw new Error(`${context}: expected ${field} to be a string array`);
+  }
+  return value;
 }
 
-function readOperationIdField(record: JsonRecord, context: string): string | number {
-	const value = record.operation_id;
-	if (typeof value === "string") return value;
-	if (typeof value === "number" && Number.isSafeInteger(value)) return value;
-	throw new Error(`${context}: expected operation_id to be a numeric string or safe integer`);
+function readOperationIdField(
+  record: JsonRecord,
+  context: string,
+): string | number {
+  const value = record.operation_id;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isSafeInteger(value)) return value;
+  throw new Error(
+    `${context}: expected operation_id to be a numeric string or safe integer`,
+  );
 }
 
-function readHafAHOperation(value: unknown, index: number, endpoint: string): HafAHOperation {
-	const context = `Invalid HafAH response from ${endpoint}: ops[${index}]`;
-	if (!isRecord(value)) throw new Error(`${context} is not an object`);
+function readHafAHOperation(
+  value: unknown,
+  index: number,
+  endpoint: string,
+): HafAHOperation {
+  const context = `Invalid HafAH response from ${endpoint}: ops[${index}]`;
+  if (!isRecord(value)) throw new Error(`${context} is not an object`);
 
-	const op = value.op;
-	if (!isRecord(op)) throw new Error(`${context}.op is not an object`);
-	const opValue = op.value;
-	if (!isRecord(opValue)) throw new Error(`${context}.op.value is not an object`);
+  const op = value.op;
+  if (!isRecord(op)) throw new Error(`${context}.op is not an object`);
+  const opValue = op.value;
+  if (!isRecord(opValue))
+    throw new Error(`${context}.op.value is not an object`);
 
-	const block = value.block;
-	if (typeof block !== "number" || !Number.isInteger(block) || block < 0) {
-		throw new Error(`${context}: expected block to be a non-negative integer`);
-	}
+  const block = value.block;
+  if (typeof block !== "number" || !Number.isInteger(block) || block < 0) {
+    throw new Error(`${context}: expected block to be a non-negative integer`);
+  }
 
-	const virtualOp = value.virtual_op;
-	if (typeof virtualOp !== "boolean") {
-		throw new Error(`${context}: expected virtual_op to be a boolean`);
-	}
+  const virtualOp = value.virtual_op;
+  if (typeof virtualOp !== "boolean") {
+    throw new Error(`${context}: expected virtual_op to be a boolean`);
+  }
 
-	return {
-		op: {
-			type: readStringField(op, "type", context),
-			value: {
-				id: readStringField(opValue, "id", context),
-				json: readStringField(opValue, "json", context),
-				required_auths: readStringArrayField(opValue, "required_auths", context),
-				required_posting_auths: readStringArrayField(opValue, "required_posting_auths", context),
-			},
-		},
-		block,
-		trx_id: readStringField(value, "trx_id", context),
-		timestamp: readStringField(value, "timestamp", context),
-		operation_id: readOperationIdField(value, context),
-		virtual_op: virtualOp,
-	};
+  return {
+    op: {
+      type: readStringField(op, "type", context),
+      value: {
+        id: readStringField(opValue, "id", context),
+        json: readStringField(opValue, "json", context),
+        required_auths: readStringArrayField(
+          opValue,
+          "required_auths",
+          context,
+        ),
+        required_posting_auths: readStringArrayField(
+          opValue,
+          "required_posting_auths",
+          context,
+        ),
+      },
+    },
+    block,
+    trx_id: readStringField(value, "trx_id", context),
+    timestamp: readStringField(value, "timestamp", context),
+    operation_id: readOperationIdField(value, context),
+    virtual_op: virtualOp,
+  };
 }
 
 function readHafAHResponse(raw: unknown, endpoint: string): HafAHResponse {
-	if (!isRecord(raw)) {
-		throw new Error(`Invalid HafAH response from ${endpoint}: expected object envelope`);
-	}
+  if (!isRecord(raw)) {
+    throw new Error(
+      `Invalid HafAH response from ${endpoint}: expected object envelope`,
+    );
+  }
 
-	if (!Array.isArray(raw.ops)) {
-		throw new Error(`Invalid HafAH response from ${endpoint}: expected ops array`);
-	}
+  if (!Array.isArray(raw.ops)) {
+    throw new Error(
+      `Invalid HafAH response from ${endpoint}: expected ops array`,
+    );
+  }
 
-	if (!Object.prototype.hasOwnProperty.call(raw, "next_operation_begin")) {
-		throw new Error(`Invalid HafAH response from ${endpoint}: missing next_operation_begin cursor`);
-	}
+  if (!Object.prototype.hasOwnProperty.call(raw, "next_operation_begin")) {
+    throw new Error(
+      `Invalid HafAH response from ${endpoint}: missing next_operation_begin cursor`,
+    );
+  }
 
-	const nextOperationBegin = raw.next_operation_begin;
-	if (nextOperationBegin !== null && typeof nextOperationBegin !== "string") {
-		throw new Error(`Invalid HafAH response from ${endpoint}: next_operation_begin must be string or null`);
-	}
+  const nextOperationBegin = raw.next_operation_begin;
+  if (nextOperationBegin !== null && typeof nextOperationBegin !== "string") {
+    throw new Error(
+      `Invalid HafAH response from ${endpoint}: next_operation_begin must be string or null`,
+    );
+  }
 
-	const nextBlockRangeBegin = raw.next_block_range_begin;
-	if (
-		nextBlockRangeBegin !== undefined
-		&& nextBlockRangeBegin !== null
-		&& (typeof nextBlockRangeBegin !== "number" || !Number.isInteger(nextBlockRangeBegin) || nextBlockRangeBegin < 0)
-	) {
-		throw new Error(`Invalid HafAH response from ${endpoint}: next_block_range_begin must be a non-negative integer or null`);
-	}
-	const parsedNextBlockRangeBegin = typeof nextBlockRangeBegin === "number" ? nextBlockRangeBegin : null;
+  const nextBlockRangeBegin = raw.next_block_range_begin;
+  if (
+    nextBlockRangeBegin !== undefined &&
+    nextBlockRangeBegin !== null &&
+    (typeof nextBlockRangeBegin !== "number" ||
+      !Number.isInteger(nextBlockRangeBegin) ||
+      nextBlockRangeBegin < 0)
+  ) {
+    throw new Error(
+      `Invalid HafAH response from ${endpoint}: next_block_range_begin must be a non-negative integer or null`,
+    );
+  }
+  const parsedNextBlockRangeBegin =
+    typeof nextBlockRangeBegin === "number" ? nextBlockRangeBegin : null;
 
-	return {
-		ops: raw.ops.map((op, index) => readHafAHOperation(op, index, endpoint)),
-		next_block_range_begin: parsedNextBlockRangeBegin,
-		next_operation_begin: nextOperationBegin,
-	};
+  return {
+    ops: raw.ops.map((op, index) => readHafAHOperation(op, index, endpoint)),
+    next_block_range_begin: parsedNextBlockRangeBegin,
+    next_operation_begin: nextOperationBegin,
+  };
 }
 
-async function hafahFetch(endpoint: string, fromBlock: number, toBlock: number, operationBegin: string, pageSize: number): Promise<HafAHResponse> {
-	// Adaptive timeout: larger pages need more time but 10-15s is plenty
-	// (benchmarks show 2-4s for 2000 blocks with pageSize 5000)
-	const timeoutMs = pageSize > HAFAH_PAGE_SIZE_NORMAL ? 15_000 : 10_000;
+async function hafahFetch(
+  endpoint: string,
+  fromBlock: number,
+  toBlock: number,
+  operationBegin: string,
+  pageSize: number,
+): Promise<HafAHResponse> {
+  // Adaptive timeout: larger pages need more time but 10-15s is plenty
+  // (benchmarks show 2-4s for 2000 blocks with pageSize 5000)
+  const timeoutMs = pageSize > HAFAH_PAGE_SIZE_NORMAL ? 15_000 : 10_000;
 
-	const url = `${endpoint}/hafah-api/operations?from-block=${fromBlock}&to-block=${toBlock}&operation-types=${CUSTOM_JSON_OP_TYPE}&page-size=${pageSize}&operation-begin=${operationBegin}`;
+  const url = `${endpoint}/hafah-api/operations?from-block=${fromBlock}&to-block=${toBlock}&operation-types=${CUSTOM_JSON_OP_TYPE}&page-size=${pageSize}&operation-begin=${operationBegin}`;
 
-	const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
 
-	if (!response.ok) {
-		const retryAfterMs = parseRetryAfterHeader(response);
-		await response.text().catch(() => {}); // drain body to release connection
-		throw new FetchError(response.status, endpoint, response.statusText, retryAfterMs);
-	}
+  if (!response.ok) {
+    const retryAfterMs = parseRetryAfterHeader(response);
+    await response.text().catch(() => {}); // drain body to release connection
+    throw new FetchError(
+      response.status,
+      endpoint,
+      response.statusText,
+      retryAfterMs,
+    );
+  }
 
-	const data = await response.json();
-	return readHafAHResponse(data, endpoint);
+  const data = await response.json();
+  return readHafAHResponse(data, endpoint);
 }
 
-async function hafahWithFailover(fromBlock: number, toBlock: number, operationBegin: string, pageSize: number): Promise<HafAHResponse> {
-	const maxAttempts = config.hiveEndpoints.length * 2;
+async function hafahWithFailover(
+  fromBlock: number,
+  toBlock: number,
+  operationBegin: string,
+  pageSize: number,
+): Promise<HafAHResponse> {
+  const maxAttempts = config.hiveEndpoints.length * 2;
 
-	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		const endpoint = hafahHealth.selectEndpoint();
-		const start = performance.now();
-		try {
-			const result = await hafahFetch(endpoint, fromBlock, toBlock, operationBegin, pageSize);
-			hafahHealth.recordSuccess(endpoint, performance.now() - start);
-			return result;
-		} catch (err) {
-			const category = classifyError(err);
-			const retryAfterMs = err instanceof FetchError ? err.retryAfterMs : undefined;
-			hafahHealth.recordFailure(endpoint, category, retryAfterMs);
-			logRetryFailure("HafAH failed", endpoint, attempt, maxAttempts, err, category, {
-				fromBlock,
-				toBlock,
-				operationBegin,
-				pageSize,
-			});
-			if (attempt === maxAttempts - 1) throw err;
-			await new Promise(r => setTimeout(r, getBackoffMs(attempt, category)));
-		}
-	}
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const endpoint = hafahHealth.selectEndpoint();
+    const start = performance.now();
+    try {
+      const result = await hafahFetch(
+        endpoint,
+        fromBlock,
+        toBlock,
+        operationBegin,
+        pageSize,
+      );
+      hafahHealth.recordSuccess(endpoint, performance.now() - start);
+      return result;
+    } catch (err) {
+      const category = classifyError(err);
+      const retryAfterMs =
+        err instanceof FetchError ? err.retryAfterMs : undefined;
+      hafahHealth.recordFailure(endpoint, category, retryAfterMs);
+      logRetryFailure(
+        "HafAH failed",
+        endpoint,
+        attempt,
+        maxAttempts,
+        err,
+        category,
+        {
+          fromBlock,
+          toBlock,
+          operationBegin,
+          pageSize,
+        },
+      );
+      if (attempt === maxAttempts - 1) throw err;
+      await new Promise((r) => setTimeout(r, getBackoffMs(attempt, category)));
+    }
+  }
 
-	throw new Error("All HafAH endpoints exhausted");
+  throw new Error("All HafAH endpoints exhausted");
 }
 
 // ============ PUBLIC API ============
 
 export interface BlockchainHead {
-	readonly headBlock: number;
-	readonly irreversibleBlock: number;
-	readonly headTime?: string | null;
+  readonly headBlock: number;
+  readonly irreversibleBlock: number;
+  readonly headTime?: string | null;
 }
 
 export type EndpointHeadSample = Readonly<{
-	endpoint: string;
-	head: BlockchainHead;
+  endpoint: string;
+  head: BlockchainHead;
 }>;
 
 function parseBlockchainHead(result: Record<string, unknown>): BlockchainHead {
-	const headBlock = Number(result.head_block_number);
-	const irreversibleBlock = Number(result.last_irreversible_block_num);
-	const rawHeadTime = typeof result.time === "string" ? result.time : null;
-	const headTime = rawHeadTime
-		? new Date(`${rawHeadTime}Z`).toISOString()
-		: null;
+  const headBlock = Number(result.head_block_number);
+  const irreversibleBlock = Number(result.last_irreversible_block_num);
+  const rawHeadTime = typeof result.time === "string" ? result.time : null;
+  const headTime = rawHeadTime
+    ? new Date(`${rawHeadTime}Z`).toISOString()
+    : null;
 
-	if (Number.isNaN(headBlock) || Number.isNaN(irreversibleBlock)) {
-		throw new Error("Invalid blockchain head response", {
-			cause: { head_block_number: result.head_block_number, last_irreversible_block_num: result.last_irreversible_block_num },
-		});
-	}
+  if (Number.isNaN(headBlock) || Number.isNaN(irreversibleBlock)) {
+    throw new Error("Invalid blockchain head response", {
+      cause: {
+        head_block_number: result.head_block_number,
+        last_irreversible_block_num: result.last_irreversible_block_num,
+      },
+    });
+  }
 
-	return { headBlock, irreversibleBlock, headTime };
+  return { headBlock, irreversibleBlock, headTime };
 }
 
 /** @internal — exported for unit tests only */
-export function selectConsensusHead(samples: readonly EndpointHeadSample[]): BlockchainHead {
-	if (samples.length === 0) {
-		throw new Error("Cannot select blockchain head from an empty sample set");
-	}
+export function selectConsensusHead(
+  samples: readonly EndpointHeadSample[],
+): BlockchainHead {
+  if (samples.length === 0) {
+    throw new Error("Cannot select blockchain head from an empty sample set");
+  }
 
-	const selected = selectConsensusSample(samples, sample => sample.head);
+  const selected = selectConsensusSample(samples, (sample) => sample.head);
 
-	let minIrreversible = Infinity;
-	let maxIrreversible = -Infinity;
-	for (const s of samples) {
-		if (s.head.irreversibleBlock < minIrreversible) minIrreversible = s.head.irreversibleBlock;
-		if (s.head.irreversibleBlock > maxIrreversible) maxIrreversible = s.head.irreversibleBlock;
-	}
+  let minIrreversible = Infinity;
+  let maxIrreversible = -Infinity;
+  for (const s of samples) {
+    if (s.head.irreversibleBlock < minIrreversible)
+      minIrreversible = s.head.irreversibleBlock;
+    if (s.head.irreversibleBlock > maxIrreversible)
+      maxIrreversible = s.head.irreversibleBlock;
+  }
 
-	if (maxIrreversible !== minIrreversible) {
-		log.warn("Hive irreversible block mismatch across endpoints", {
-			samples: samples.map(({ endpoint, head }) => ({
-				endpoint,
-				headBlock: head.headBlock,
-				irreversibleBlock: head.irreversibleBlock,
-			})),
-			selectedEndpoint: selected.endpoint,
-			selectedHeadBlock: selected.head.headBlock,
-			selectedIrreversibleBlock: selected.head.irreversibleBlock,
-			minIrreversible,
-			maxIrreversible,
-			spread: maxIrreversible - minIrreversible,
-			strategy: samples.length === 2 ? "lower-of-two" : "lower-median",
-		});
-	}
+  if (maxIrreversible !== minIrreversible) {
+    log.warn("Hive irreversible block mismatch across endpoints", {
+      samples: samples.map(({ endpoint, head }) => ({
+        endpoint,
+        headBlock: head.headBlock,
+        irreversibleBlock: head.irreversibleBlock,
+      })),
+      selectedEndpoint: selected.endpoint,
+      selectedHeadBlock: selected.head.headBlock,
+      selectedIrreversibleBlock: selected.head.irreversibleBlock,
+      minIrreversible,
+      maxIrreversible,
+      spread: maxIrreversible - minIrreversible,
+      strategy: samples.length === 2 ? "lower-of-two" : "lower-median",
+    });
+  }
 
-	return selected.head;
+  return selected.head;
 }
 
 // Maximum acceptable drift between server clock and blockchain time.
@@ -379,48 +482,57 @@ export function selectConsensusHead(samples: readonly EndpointHeadSample[]): Blo
 // could diverge from the blockchain, causing incorrect accept/reject decisions.
 const MAX_CLOCK_DRIFT_MS = 15_000;
 
-export async function getBlockchainHead(consistency: "fast" | "strict" = "strict"): Promise<BlockchainHead> {
-	if (consistency === "fast" || config.hiveEndpoints.length === 1) {
-		const result = await callWithFailover<Record<string, unknown>>(
-			"condenser_api.get_dynamic_global_properties", [],
-		);
-		return parseBlockchainHead(result);
-	}
+export async function getBlockchainHead(
+  consistency: "fast" | "strict" = "strict",
+): Promise<BlockchainHead> {
+  if (consistency === "fast" || config.hiveEndpoints.length === 1) {
+    const result = await callWithFailover<Record<string, unknown>>(
+      "condenser_api.get_dynamic_global_properties",
+      [],
+    );
+    return parseBlockchainHead(result);
+  }
 
-	const results = await Promise.allSettled(
-		config.hiveEndpoints.map(async (endpoint) => {
-			const start = performance.now();
-			const result = await rpcCall<Record<string, unknown>>(
-				endpoint,
-				"condenser_api.get_dynamic_global_properties",
-				[],
-			);
-			rpcHealth.recordSuccess(endpoint, performance.now() - start);
-			return { endpoint, head: parseBlockchainHead(result) };
-		}),
-	);
+  const results = await Promise.allSettled(
+    config.hiveEndpoints.map(async (endpoint) => {
+      const start = performance.now();
+      const result = await rpcCall<Record<string, unknown>>(
+        endpoint,
+        "condenser_api.get_dynamic_global_properties",
+        [],
+      );
+      rpcHealth.recordSuccess(endpoint, performance.now() - start);
+      return { endpoint, head: parseBlockchainHead(result) };
+    }),
+  );
 
-	const successes = results.flatMap((result, idx) => {
-		if (result.status === "fulfilled") {
-			return [result.value];
-		}
-		const endpoint = config.hiveEndpoints[idx] ?? "";
-		const category = classifyError(result.reason);
-		const retryAfterMs = result.reason instanceof FetchError ? result.reason.retryAfterMs : undefined;
-		rpcHealth.recordFailure(endpoint, category, retryAfterMs);
-		log.warn("RPC head probe failed", {
-			endpoint,
-			error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-			category,
-		});
-		return [];
-	});
+  const successes = results.flatMap((result, idx) => {
+    if (result.status === "fulfilled") {
+      return [result.value];
+    }
+    const endpoint = config.hiveEndpoints[idx] ?? "";
+    const category = classifyError(result.reason);
+    const retryAfterMs =
+      result.reason instanceof FetchError
+        ? result.reason.retryAfterMs
+        : undefined;
+    rpcHealth.recordFailure(endpoint, category, retryAfterMs);
+    log.warn("RPC head probe failed", {
+      endpoint,
+      error:
+        result.reason instanceof Error
+          ? result.reason.message
+          : String(result.reason),
+      category,
+    });
+    return [];
+  });
 
-	if (successes.length === 0) {
-		throw new Error("All Hive endpoints exhausted");
-	}
+  if (successes.length === 0) {
+    throw new Error("All Hive endpoints exhausted");
+  }
 
-	return selectConsensusHead(successes);
+  return selectConsensusHead(successes);
 }
 
 /**
@@ -428,63 +540,82 @@ export async function getBlockchainHead(consistency: "fast" | "strict" = "strict
  * Returns whether the drift is within acceptable limits.
  * The caller should disable the multisig service if drift is excessive.
  */
-export async function checkClockDrift(): Promise<{ ok: boolean; driftMs: number }> {
-	try {
-		const result = await callWithFailover<Record<string, unknown>>(
-			"condenser_api.get_dynamic_global_properties", [],
-		);
-		const blockTime = new Date(result.time + "Z").getTime();
-		const serverTime = Date.now();
-		const driftMs = Math.abs(serverTime - blockTime);
+export async function checkClockDrift(): Promise<{
+  ok: boolean;
+  driftMs: number;
+}> {
+  try {
+    const result = await callWithFailover<Record<string, unknown>>(
+      "condenser_api.get_dynamic_global_properties",
+      [],
+    );
+    const blockTime = new Date(result.time + "Z").getTime();
+    const serverTime = Date.now();
+    const driftMs = Math.abs(serverTime - blockTime);
 
-		if (driftMs > MAX_CLOCK_DRIFT_MS) {
-			log.error("CLOCK DRIFT DETECTED — multisig should be disabled", {
-				serverTime: new Date(serverTime).toISOString(),
-				blockchainTime: new Date(blockTime).toISOString(),
-				driftMs,
-				driftSec: Math.round(driftMs / 1000),
-				recommendation: "Verify NTP is running: timedatectl status",
-			});
-			return { ok: false, driftMs };
-		}
+    if (driftMs > MAX_CLOCK_DRIFT_MS) {
+      log.error("CLOCK DRIFT DETECTED — multisig should be disabled", {
+        serverTime: new Date(serverTime).toISOString(),
+        blockchainTime: new Date(blockTime).toISOString(),
+        driftMs,
+        driftSec: Math.round(driftMs / 1000),
+        recommendation: "Verify NTP is running: timedatectl status",
+      });
+      return { ok: false, driftMs };
+    }
 
-		log.info("Clock sync OK", { driftMs });
-		return { ok: true, driftMs };
-	} catch (err) {
-		log.warn("Could not verify clock drift — assuming OK", {
-			error: err instanceof Error ? err.message : String(err),
-		});
-		return { ok: true, driftMs: -1 };
-	}
+    log.info("Clock sync OK", { driftMs });
+    return { ok: true, driftMs };
+  } catch (err) {
+    log.warn("Could not verify clock drift — assuming OK", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { ok: true, driftMs: -1 };
+  }
 }
 
 export async function getHeadBlockNum(): Promise<number> {
-	const maxAttempts = config.hiveEndpoints.length * 2;
-	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		const endpoint = hafahHealth.selectEndpoint();
-		const start = performance.now();
-		try {
-			const response = await fetch(`${endpoint}/hafah-api/headblock`, { signal: AbortSignal.timeout(10_000) });
-			if (!response.ok) {
-				const retryAfterMs = parseRetryAfterHeader(response);
-				await response.text().catch(() => {});
-				throw new FetchError(response.status, endpoint, response.statusText, retryAfterMs);
-			}
-			const text = await response.text();
-			const blockNum = parseInt(text, 10);
-			if (Number.isNaN(blockNum)) throw new Error(`Invalid headblock: ${text}`);
-			hafahHealth.recordSuccess(endpoint, performance.now() - start);
-			return blockNum;
-		} catch (err) {
-			const category = classifyError(err);
-			const retryAfterMs = err instanceof FetchError ? err.retryAfterMs : undefined;
-			hafahHealth.recordFailure(endpoint, category, retryAfterMs);
-			logRetryFailure("HafAH headblock failed", endpoint, attempt, maxAttempts, err, category);
-			if (attempt === maxAttempts - 1) throw err;
-			await new Promise(r => setTimeout(r, getBackoffMs(attempt, category)));
-		}
-	}
-	throw new Error("All endpoints exhausted for headblock");
+  const maxAttempts = config.hiveEndpoints.length * 2;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const endpoint = hafahHealth.selectEndpoint();
+    const start = performance.now();
+    try {
+      const response = await fetch(`${endpoint}/hafah-api/headblock`, {
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) {
+        const retryAfterMs = parseRetryAfterHeader(response);
+        await response.text().catch(() => {});
+        throw new FetchError(
+          response.status,
+          endpoint,
+          response.statusText,
+          retryAfterMs,
+        );
+      }
+      const text = await response.text();
+      const blockNum = parseInt(text, 10);
+      if (Number.isNaN(blockNum)) throw new Error(`Invalid headblock: ${text}`);
+      hafahHealth.recordSuccess(endpoint, performance.now() - start);
+      return blockNum;
+    } catch (err) {
+      const category = classifyError(err);
+      const retryAfterMs =
+        err instanceof FetchError ? err.retryAfterMs : undefined;
+      hafahHealth.recordFailure(endpoint, category, retryAfterMs);
+      logRetryFailure(
+        "HafAH headblock failed",
+        endpoint,
+        attempt,
+        maxAttempts,
+        err,
+        category,
+      );
+      if (attempt === maxAttempts - 1) throw err;
+      await new Promise((r) => setTimeout(r, getBackoffMs(attempt, category)));
+    }
+  }
+  throw new Error("All endpoints exhausted for headblock");
 }
 
 /**
@@ -492,79 +623,98 @@ export async function getHeadBlockNum(): Promise<number> {
  * Handles cursor pagination automatically.
  * Returns operations grouped by block for compatibility with existing parser.
  */
-export async function getCustomJsonInRange(fromBlock: number, toBlock: number, protocolId: string, behind = 0): Promise<HafAHOperation[]> {
-	const pageSize = behind > MASSIVE_SYNC_THRESHOLD
-		? HAFAH_PAGE_SIZE_MASSIVE
-		: behind > LIVE_SYNC_THRESHOLD
-			? HAFAH_PAGE_SIZE_NORMAL
-			: HAFAH_PAGE_SIZE_LIVE;
+export async function getCustomJsonInRange(
+  fromBlock: number,
+  toBlock: number,
+  protocolId: string,
+  behind = 0,
+): Promise<HafAHOperation[]> {
+  const pageSize =
+    behind > MASSIVE_SYNC_THRESHOLD
+      ? HAFAH_PAGE_SIZE_MASSIVE
+      : behind > LIVE_SYNC_THRESHOLD
+        ? HAFAH_PAGE_SIZE_NORMAL
+        : HAFAH_PAGE_SIZE_LIVE;
 
-	const allOps: HafAHOperation[] = [];
-	let operationBegin = "-1";
-	let pages = 0;
-	const maxPages = 100;
+  const allOps: HafAHOperation[] = [];
+  let operationBegin = "-1";
+  let pages = 0;
+  const maxPages = 100;
 
-	while (pages < maxPages) {
-		const result = await hafahWithFailover(fromBlock, toBlock, operationBegin, pageSize);
-		const ops = result.ops;
+  while (pages < maxPages) {
+    const result = await hafahWithFailover(
+      fromBlock,
+      toBlock,
+      operationBegin,
+      pageSize,
+    );
+    const ops = result.ops;
 
-		// Filter to only our protocol operations
-		const ours = ops.filter(op => op.op.value.id === protocolId);
-		allOps.push(...ours);
-		pages++;
+    // Filter to only our protocol operations
+    const ours = ops.filter((op) => op.op.value.id === protocolId);
+    allOps.push(...ours);
+    pages++;
 
-		// Trust ONLY the cursor for termination. Using `ops.length < pageSize` as an
-		// early-exit heuristic is unsafe: some HAF nodes return fewer ops than requested
-		// while still offering `next_operation_begin`, which would silently drop the
-		// remaining pages.
-		// End-of-stream signals from HafAH: `null` OR the string sentinel "0".
-		// The non-advancing-cursor guard is a defensive backstop against future server
-		// quirks — without it a stuck cursor would re-read the same page until maxPages.
-		if (
-			result.next_operation_begin === null ||
-			result.next_operation_begin === "0" ||
-			result.next_operation_begin === operationBegin
-		) break;
-		operationBegin = result.next_operation_begin;
-	}
+    // Trust ONLY the cursor for termination. Using `ops.length < pageSize` as an
+    // early-exit heuristic is unsafe: some HAF nodes return fewer ops than requested
+    // while still offering `next_operation_begin`, which would silently drop the
+    // remaining pages.
+    // End-of-stream signals from HafAH: `null` OR the string sentinel "0".
+    // The non-advancing-cursor guard is a defensive backstop against future server
+    // quirks — without it a stuck cursor would re-read the same page until maxPages.
+    if (
+      result.next_operation_begin === null ||
+      result.next_operation_begin === "0" ||
+      result.next_operation_begin === operationBegin
+    )
+      break;
+    operationBegin = result.next_operation_begin;
+  }
 
-	if (pages >= maxPages) {
-		// MUST throw — returning a partial set would let the sync engine commit those ops
-		// and advance `last_block` past blocks whose ops were silently dropped, breaking
-		// the completeness invariant for ownership data. The sync loop will retry; if the
-		// overflow is real, the operator must reduce HAFAH_BLOCK_RANGE.
-		throw new Error(
-			`HafAH pagination overflow: range ${fromBlock}-${toBlock} exceeded ${maxPages} pages ` +
-			`× ${pageSize} ops/page. Reduce HAFAH_BLOCK_RANGE or investigate custom_json density.`,
-		);
-	}
-	if (allOps.length > 0) {
-		log.debug("HafAH found", { fromBlock, toBlock, pages, protocolOps: allOps.length });
-	}
+  if (pages >= maxPages) {
+    // MUST throw — returning a partial set would let the sync engine commit those ops
+    // and advance `last_block` past blocks whose ops were silently dropped, breaking
+    // the completeness invariant for ownership data. The sync loop will retry; if the
+    // overflow is real, the operator must reduce HAFAH_BLOCK_RANGE.
+    throw new Error(
+      `HafAH pagination overflow: range ${fromBlock}-${toBlock} exceeded ${maxPages} pages ` +
+        `× ${pageSize} ops/page. Reduce HAFAH_BLOCK_RANGE or investigate custom_json density.`,
+    );
+  }
+  if (allOps.length > 0) {
+    log.debug("HafAH found", {
+      fromBlock,
+      toBlock,
+      pages,
+      protocolOps: allOps.length,
+    });
+  }
 
-	return allOps;
+  return allOps;
 }
 
 /** Optimal block range for HafAH queries */
 export function getHafAHBlockRange(): number {
-	return HAFAH_BLOCK_RANGE;
+  return HAFAH_BLOCK_RANGE;
 }
 
 // ============ BLOCK HEADERS ============
 
 function parseBlockId(result: unknown): string | null {
-	if (typeof result !== "object" || result === null) return null;
-	const root = result as Record<string, unknown>;
-	const headerContainer = root.block_id ? root : (root.block as Record<string, unknown> | undefined);
-	if (!headerContainer) return null;
-	const blockId = headerContainer.block_id;
-	if (typeof blockId !== "string" || blockId.length === 0) return null;
-	return blockId;
+  if (typeof result !== "object" || result === null) return null;
+  const root = result as Record<string, unknown>;
+  const headerContainer = root.block_id
+    ? root
+    : (root.block as Record<string, unknown> | undefined);
+  if (!headerContainer) return null;
+  const blockId = headerContainer.block_id;
+  if (typeof blockId !== "string" || blockId.length === 0) return null;
+  return blockId;
 }
 
 export type BlockIdObservation = Readonly<{
-	readonly endpoint: string;
-	readonly blockId: string;
+  readonly endpoint: string;
+  readonly blockId: string;
 }>;
 
 /**
@@ -572,59 +722,69 @@ export type BlockIdObservation = Readonly<{
  * and returns only the successful observations. Callers decide how many they
  * need for a quorum; startup cross-check requires ≥2.
  */
-export async function getBlockIdFromAllEndpoints(blockNum: number): Promise<ReadonlyArray<BlockIdObservation>> {
-	const results = await Promise.allSettled(
-		config.hiveEndpoints.map(async (endpoint) => {
-			const start = performance.now();
-			const response = await rpcCall<Record<string, unknown>>(
-				endpoint,
-				"block_api.get_block",
-				{ block_num: blockNum },
-			);
-			rpcHealth.recordSuccess(endpoint, performance.now() - start);
-			const blockId = parseBlockId(response);
-			if (!blockId) {
-				throw new Error(`block_api.get_block returned no block_id for block ${blockNum}`);
-			}
-			return { endpoint, blockId };
-		}),
-	);
+export async function getBlockIdFromAllEndpoints(
+  blockNum: number,
+): Promise<ReadonlyArray<BlockIdObservation>> {
+  const results = await Promise.allSettled(
+    config.hiveEndpoints.map(async (endpoint) => {
+      const start = performance.now();
+      const response = await rpcCall<Record<string, unknown>>(
+        endpoint,
+        "block_api.get_block",
+        { block_num: blockNum },
+      );
+      rpcHealth.recordSuccess(endpoint, performance.now() - start);
+      const blockId = parseBlockId(response);
+      if (!blockId) {
+        throw new Error(
+          `block_api.get_block returned no block_id for block ${blockNum}`,
+        );
+      }
+      return { endpoint, blockId };
+    }),
+  );
 
-	const successes: BlockIdObservation[] = [];
-	for (let i = 0; i < results.length; i++) {
-		const result = results[i];
-		const endpoint = config.hiveEndpoints[i] ?? "";
-		if (!result) continue;
-		if (result.status === "fulfilled") {
-			successes.push(result.value);
-			continue;
-		}
-		const category = classifyError(result.reason);
-		const retryAfterMs = result.reason instanceof FetchError ? result.reason.retryAfterMs : undefined;
-		rpcHealth.recordFailure(endpoint, category, retryAfterMs);
-		log.warn("Block header probe failed", {
-			endpoint,
-			blockNum,
-			error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-			category,
-		});
-	}
-	return successes;
+  const successes: BlockIdObservation[] = [];
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    const endpoint = config.hiveEndpoints[i] ?? "";
+    if (!result) continue;
+    if (result.status === "fulfilled") {
+      successes.push(result.value);
+      continue;
+    }
+    const category = classifyError(result.reason);
+    const retryAfterMs =
+      result.reason instanceof FetchError
+        ? result.reason.retryAfterMs
+        : undefined;
+    rpcHealth.recordFailure(endpoint, category, retryAfterMs);
+    log.warn("Block header probe failed", {
+      endpoint,
+      blockNum,
+      error:
+        result.reason instanceof Error
+          ? result.reason.message
+          : String(result.reason),
+      category,
+    });
+  }
+  return successes;
 }
 
 // ============ TRANSFER VERIFICATION (for buy payment checks) ============
 
 const NAI_TO_CURRENCY: Record<string, string> = {
-	"@@000000021": "HIVE",
-	"@@000000013": "HBD",
+  "@@000000021": "HIVE",
+  "@@000000013": "HBD",
 };
 
 export interface TransferDetail {
-	from: string;
-	to: string;
-	amount: number;
-	currency: string;
-	memo: string;
+  from: string;
+  to: string;
+  amount: number;
+  currency: string;
+  memo: string;
 }
 
 /**
@@ -633,74 +793,91 @@ export interface TransferDetail {
  * Used both for transfer amounts inside operations and for account balance
  * fields returned by `condenser_api.get_accounts`.
  */
-export function parseHiveAsset(raw: unknown): { amount: number; currency: string } | null {
-	if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
-		const nai = raw as { amount?: string; precision?: number; nai?: string };
-		if (typeof nai.amount === "string" && typeof nai.precision === "number" && typeof nai.nai === "string") {
-			const currency = NAI_TO_CURRENCY[nai.nai];
-			if (!currency) return null;
-			return { amount: parseInt(nai.amount, 10) / Math.pow(10, nai.precision), currency };
-		}
-	}
-	if (typeof raw === "string") {
-		const parts = raw.split(" ");
-		// Hive consensus emits HIVE/HBD assets with exactly 3 decimals.
-		// Rejecting non-canonical formats blocks malformed RPC payloads
-		// before they reach fee-validator's epsilon comparison.
-		if (parts.length === 2 && parts[0] && parts[1] && /^\d+\.\d{3}$/.test(parts[0])) {
-			const amount = parseFloat(parts[0]);
-			if (Number.isNaN(amount)) return null;
-			return { amount, currency: parts[1] };
-		}
-	}
-	return null;
+export function parseHiveAsset(
+  raw: unknown,
+): { amount: number; currency: string } | null {
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    const nai = raw as { amount?: string; precision?: number; nai?: string };
+    if (
+      typeof nai.amount === "string" &&
+      typeof nai.precision === "number" &&
+      typeof nai.nai === "string"
+    ) {
+      const currency = NAI_TO_CURRENCY[nai.nai];
+      if (!currency) return null;
+      return {
+        amount: parseInt(nai.amount, 10) / Math.pow(10, nai.precision),
+        currency,
+      };
+    }
+  }
+  if (typeof raw === "string") {
+    const parts = raw.split(" ");
+    // Hive consensus emits HIVE/HBD assets with exactly 3 decimals.
+    // Rejecting non-canonical formats blocks malformed RPC payloads
+    // before they reach fee-validator's epsilon comparison.
+    if (
+      parts.length === 2 &&
+      parts[0] &&
+      parts[1] &&
+      /^\d+\.\d{3}$/.test(parts[0])
+    ) {
+      const amount = parseFloat(parts[0]);
+      if (Number.isNaN(amount)) return null;
+      return { amount, currency: parts[1] };
+    }
+  }
+  return null;
 }
 
 /**
  * Fetch all operations in a specific transaction by txId via JSON-RPC,
  * then extract transfer operations. Direct lookup — no block scan needed.
  */
-export async function getTransfersInTransaction(txId: string): Promise<TransferDetail[]> {
-	const result = await callWithFailover<Record<string, unknown>>(
-		"account_history_api.get_transaction", { id: txId, include_reversible: false },
-	);
+export async function getTransfersInTransaction(
+  txId: string,
+): Promise<TransferDetail[]> {
+  const result = await callWithFailover<Record<string, unknown>>(
+    "account_history_api.get_transaction",
+    { id: txId, include_reversible: false },
+  );
 
-	const operations = Array.isArray(result.operations) ? result.operations : [];
+  const operations = Array.isArray(result.operations) ? result.operations : [];
 
-	const transfers: TransferDetail[] = [];
-	for (const raw of operations) {
-		if (typeof raw !== "object" || raw === null) continue;
-		const op = raw as Record<string, unknown>;
-		if (op.type !== "transfer_operation") continue;
-		if (typeof op.value !== "object" || op.value === null) continue;
-		const val = op.value as Record<string, unknown>;
-		if (typeof val.from !== "string" || typeof val.to !== "string") continue;
+  const transfers: TransferDetail[] = [];
+  for (const raw of operations) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const op = raw as Record<string, unknown>;
+    if (op.type !== "transfer_operation") continue;
+    if (typeof op.value !== "object" || op.value === null) continue;
+    const val = op.value as Record<string, unknown>;
+    if (typeof val.from !== "string" || typeof val.to !== "string") continue;
 
-		const parsed = parseHiveAsset(val.amount);
-		if (!parsed) continue;
+    const parsed = parseHiveAsset(val.amount);
+    if (!parsed) continue;
 
-		transfers.push({
-			from: val.from,
-			to: val.to,
-			amount: parsed.amount,
-			currency: parsed.currency,
-			memo: typeof val.memo === "string" ? val.memo : "",
-		});
-	}
+    transfers.push({
+      from: val.from,
+      to: val.to,
+      amount: parsed.amount,
+      currency: parsed.currency,
+      memo: typeof val.memo === "string" ? val.memo : "",
+    });
+  }
 
-	return transfers;
+  return transfers;
 }
 
 // ============ ACCOUNT BALANCE (for solvency pre-check at /api/multisig/buy) ============
 
 export interface AccountLiquidBalance {
-	readonly hive: number;
-	readonly hbd: number;
+  readonly hive: number;
+  readonly hbd: number;
 }
 
 interface HiveAccountRow {
-	readonly balance: unknown;
-	readonly hbd_balance: unknown;
+  readonly balance: unknown;
+  readonly hbd_balance: unknown;
 }
 
 /**
@@ -723,21 +900,27 @@ interface HiveAccountRow {
  * Throws if the account is not found OR if Hive returns an asset format that
  * we cannot parse — the caller maps this to a multisig error.
  */
-export async function getAccountLiquidBalance(account: string): Promise<AccountLiquidBalance> {
-	const rows = await callWithFailover<ReadonlyArray<HiveAccountRow>>(
-		"condenser_api.get_accounts",
-		[[account]],
-	);
-	const row = rows[0];
-	if (!row) throw new Error(`Hive account not found: ${account}`);
+export async function getAccountLiquidBalance(
+  account: string,
+): Promise<AccountLiquidBalance> {
+  const rows = await callWithFailover<ReadonlyArray<HiveAccountRow>>(
+    "condenser_api.get_accounts",
+    [[account]],
+  );
+  const row = rows[0];
+  if (!row) throw new Error(`Hive account not found: ${account}`);
 
-	const hive = parseHiveAsset(row.balance);
-	const hbd = parseHiveAsset(row.hbd_balance);
-	if (!hive || hive.currency !== "HIVE") {
-		throw new Error(`Unparseable HIVE balance for ${account}: ${JSON.stringify(row.balance)}`);
-	}
-	if (!hbd || hbd.currency !== "HBD") {
-		throw new Error(`Unparseable HBD balance for ${account}: ${JSON.stringify(row.hbd_balance)}`);
-	}
-	return { hive: hive.amount, hbd: hbd.amount };
+  const hive = parseHiveAsset(row.balance);
+  const hbd = parseHiveAsset(row.hbd_balance);
+  if (!hive || hive.currency !== "HIVE") {
+    throw new Error(
+      `Unparseable HIVE balance for ${account}: ${JSON.stringify(row.balance)}`,
+    );
+  }
+  if (!hbd || hbd.currency !== "HBD") {
+    throw new Error(
+      `Unparseable HBD balance for ${account}: ${JSON.stringify(row.hbd_balance)}`,
+    );
+  }
+  return { hive: hive.amount, hbd: hbd.amount };
 }
