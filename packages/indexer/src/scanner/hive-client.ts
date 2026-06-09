@@ -180,7 +180,7 @@ const MASSIVE_SYNC_THRESHOLD = 100;
 const LIVE_SYNC_THRESHOLD = 20;
 
 // HafAH enforces a hard limit of 2000 blocks per request (server-side assert)
-const HAFAH_BLOCK_RANGE = 1000;
+const HAFAH_BLOCK_RANGE = 2000;
 // Hive protocol operation type ID for custom_json (immutable blockchain constant)
 const CUSTOM_JSON_OP_TYPE = 18;
 

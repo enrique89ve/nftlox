@@ -253,7 +253,7 @@ export const config = {
   // Order: fastest-responding first (api.hive.blog often timeouts in Docker)
   hiveEndpoints: (
     process.env.HIVE_ENDPOINTS ??
-    "https://api.hive.blog, https://rpc.mahdiyari.info, https://anyx.io"
+    "https://api.hive.blog, https://rpc.mahdiyari.info"
   )
     .split(",")
     .map((s) => s.trim())
