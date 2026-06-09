@@ -11,6 +11,8 @@ import {
 	createPayload,
 	createHiveOperation,
 	getKeyType,
+	IndexerError,
+	MultisigError,
 	type HiveOperation,
 	type HiveTransactionObject,
 	// Builders
@@ -105,11 +107,35 @@ function isBuiltSeedOperation(value: BuiltSeedOperation | null): value is BuiltS
 function buildRoute(handler: (body: any) => Response | Promise<Response>): { POST: RouteHandler } {
 	return {
 		POST: async (req: Request) => {
+			let body: unknown;
 			try {
-				const body = await req.json();
+				body = await req.json();
+			} catch {
+				return json({ success: false, error: "Invalid JSON request body" }, 400);
+			}
+
+			try {
 				return await handler(body);
 			} catch (e) {
-				return json({ error: String(e) }, 500);
+				if (e instanceof MultisigError) {
+					return json({
+						success: false,
+						error: e.message,
+						code: e.code,
+						data: e.data,
+					}, e.statusCode ?? 500);
+				}
+
+				if (e instanceof IndexerError) {
+					return json({
+						success: false,
+						error: e.responseBody ?? e.message,
+						statusCode: e.statusCode,
+						data: e.data,
+					}, e.statusCode ?? 500);
+				}
+
+				return json({ success: false, error: String(e) }, 500);
 			}
 		},
 	};

@@ -399,7 +399,7 @@ function showConnectedUI(user: string) {
 
   // Auto-fill creator field
   const creatorInput = $("col-creator") as HTMLInputElement;
-  if (creatorInput && !creatorInput.value) {
+  if (creatorInput) {
     creatorInput.value = user;
   }
 }
@@ -2405,12 +2405,23 @@ async function createCollection() {
         },
       }),
     });
+
+    if (!colResponse.ok) {
+      throw new Error(
+        `collection-multisig failed (${colResponse.status}): ${await colResponse.text()}`,
+      );
+    }
+
     const colData = await colResponse.json();
-    if (colData.success === false) {
+    if (colData?.success !== true) {
       const errMsg =
-        colData.errors?.map((e: any) => e.message || e).join(", ") ||
-        "Unknown error";
+        colData?.errors?.map((e: any) => e.message || e).join(", ") ||
+        "Unknown collection build error";
       throw new Error(errMsg);
+    }
+
+    if (!colData.collectionId) {
+      throw new Error("collectionId was not returned by collection-multisig");
     }
 
     mintLog(`Collection ID: ${colData.collectionId}`, "success");
@@ -2428,12 +2439,23 @@ async function createCollection() {
         seeds: applySuffix(uploadedSeeds),
       }),
     });
+
+    if (!seedsResponse.ok) {
+      throw new Error(
+        `seed build failed (${seedsResponse.status}): ${await seedsResponse.text()}`,
+      );
+    }
+
     const mintData = await seedsResponse.json();
-    if (mintData.success === false) {
+    if (mintData?.success !== true) {
       const errMsg =
-        mintData.errors?.map((e: any) => e.message || e).join(", ") ||
-        "Unknown error";
+        mintData?.errors?.map((e: any) => e.message || e).join(", ") ||
+        "Unknown seed build error";
       throw new Error(errMsg);
+    }
+
+    if (!mintData.seeds?.length || !mintData.batches?.length) {
+      throw new Error("No seed operations were generated");
     }
 
     mintLog(
