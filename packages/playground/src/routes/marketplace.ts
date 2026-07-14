@@ -26,9 +26,9 @@ const json = (data: unknown, status = 200) =>
 
 // Default window for the unsigned buy transaction. The indexer validates
 // expiration ∈ [MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]
-// (30s – 120s); the recommended 60s value leaves ≥30s above the minimum so
-// PoW + buyer Keychain sign + the node's own ~6s orchestration all fit
-// comfortably inside the window.
+// (90s – 120s post-1e31783); the recommended 120s value equals MAX by design
+// so first-class SDK callers get the full finality-safe orchestration window
+// for PoW + buyer Keychain sign + the node's own co-sign + broadcast.
 const TX_EXPIRATION_MS = RECOMMENDED_BUY_TX_EXPIRATION_MS;
 
 type RouteHandler = (req: Request) => Promise<Response>;

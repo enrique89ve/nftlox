@@ -6,6 +6,7 @@ import { seedActiveSettlementNode } from "./helpers/settlement-node.ts";
 import {
 	BUY_API_HEAD_STALENESS_MAX_MS,
 	BUY_API_LAG_MAX_BLOCKS,
+	BUY_TX_TTL_MS,
 	MAX_NODE_HEARTBEAT_STALENESS_BLOCKS,
 } from "@/protocol/index.ts";
 import type {
@@ -28,7 +29,7 @@ function buildCtx(): MultisigBuyContext {
 		nodeAccount: NODE_ACCOUNT,
 		protocolId: PROTOCOL_ID,
 		buyLock: buyLockStub,
-		buyTxTtlMs: 60_000,
+		buyTxTtlMs: BUY_TX_TTL_MS,
 	};
 }
 

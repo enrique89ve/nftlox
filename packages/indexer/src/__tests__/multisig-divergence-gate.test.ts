@@ -24,6 +24,7 @@ import type {
 	MultisigSign,
 } from "@/api/services/multisig/types.ts";
 import type { MultisigErrorCode } from "@/protocol/index.ts";
+import { BUY_TX_TTL_MS } from "@/protocol/index.ts";
 import { config } from "@/config.ts";
 
 const NODE_ACCOUNT = config.hiveAccount;
@@ -54,7 +55,7 @@ function buildBuyCtx(): MultisigBuyContext {
 		nodeAccount: NODE_ACCOUNT,
 		protocolId: PROTOCOL_ID,
 		buyLock: buyLockStub,
-		buyTxTtlMs: 60_000,
+		buyTxTtlMs: BUY_TX_TTL_MS,
 	};
 }
 

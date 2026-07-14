@@ -11,7 +11,7 @@
  *   TEST_BUYER_ACCOUNT, TEST_BUYER_ACTIVE_KEY
  */
 import { Transaction, PrivateKey, callRPC, config } from "hive-tx";
-import { PROTOCOL_ID, PROTOCOL_VERSION } from "@nftlox/protocol";
+import { PROTOCOL_ID, PROTOCOL_VERSION, RECOMMENDED_BUY_TX_EXPIRATION_MS } from "@nftlox/protocol";
 
 type HiveTransferBody = {
 	from: string;
@@ -45,7 +45,7 @@ const nodeKey = PrivateKey.from(NODE_ACTIVE_KEY);
 const buyerKey = PrivateKey.from(BUYER_ACTIVE_KEY);
 
 async function buildBuyTx(): Promise<Transaction> {
-	const tx = new Transaction({ expiration: 60_000 });
+	const tx = new Transaction({ expiration: RECOMMENDED_BUY_TX_EXPIRATION_MS });
 	await tx.addOperation("transfer", {
 		from: BUYER_ACCOUNT,
 		to: NODE_ACCOUNT,

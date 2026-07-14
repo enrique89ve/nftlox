@@ -5,6 +5,7 @@ import {
 	PROTOCOL_VERSION,
 	HASH_VERSION,
 	PROTOCOL_COLLECTION_FEE_HBD,
+	RECOMMENDED_BUY_TX_EXPIRATION_MS,
 	requestCreateCollectionMultisig,
 	extendSchemaInputSchema,
 	usernameSchema,
@@ -50,7 +51,10 @@ const json = (data: unknown, status = 200) =>
 	});
 
 type RouteHandler = (req: Request) => Promise<Response>;
-const TX_EXPIRATION_MS = 60_000;
+// Indexer enforces expiration ∈ [MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]
+// (90s – 120s post-1e31783). RECOMMENDED_BUY_TX_EXPIRATION_MS (= MAX = 120s) gives
+// the full finality-safe orchestration window for PoW + Keychain + node co-sign.
+const TX_EXPIRATION_MS = RECOMMENDED_BUY_TX_EXPIRATION_MS;
 
 type IndexerStatusResponse = {
 	nodeAccount?: string | null;

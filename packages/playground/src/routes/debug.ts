@@ -7,6 +7,7 @@ import {
 	MEMO_PREFIX_BUY,
 	MEMO_PREFIX_ROYALTY,
 	MEMO_PREFIX_FEE,
+	RECOMMENDED_BUY_TX_EXPIRATION_MS,
 	fetchPaymentInfo,
 	requestBuyMultisig,
 	type PaymentInfo,
@@ -26,7 +27,10 @@ const SERVER_ACCOUNT = process.env.HIVE_ACCOUNT ?? "";
 const ACTIVE_KEY = process.env.ACTIVE_KEY ?? "";
 const TRANSFER_TO = "enrique89.test";
 const TRANSFER_AMOUNT = "0.001 HIVE";
-const TX_EXPIRATION_MS = 60_000;
+// Indexer enforces expiration ∈ [MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]
+// (90s – 120s post-1e31783). RECOMMENDED_BUY_TX_EXPIRATION_MS (= MAX = 120s) gives
+// the full finality-safe orchestration window for PoW + Keychain + node co-sign.
+const TX_EXPIRATION_MS = RECOMMENDED_BUY_TX_EXPIRATION_MS;
 
 type RouteHandler = (req: Request) => Promise<Response>;
 
