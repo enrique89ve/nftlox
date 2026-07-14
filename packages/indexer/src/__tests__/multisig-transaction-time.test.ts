@@ -25,8 +25,12 @@ function makeTransaction(expiration: string): Record<string, unknown> {
 }
 
 describe("multisig transaction time validation", () => {
-	test("validates expiration against the supplied chain reference time", () => {
-		const referenceTimeMs = Date.now() + 10 * DAY_MS;
+	test("validates MIN against the supplied chain reference time", () => {
+		// Chain-anchor 1 day in the past — realistic lag scenario. Under the
+		// post-1e31783 split semantics, MIN is measured from chain-anchor (not
+		// wall-clock), so a tx with `expiration = referenceTimeMs + MIN + buffer`
+		// passes even when the anchor trails wall-clock by 1 day.
+		const referenceTimeMs = Date.now() - DAY_MS;
 		const expiration = toHiveExpiration(referenceTimeMs + MULTISIG_TX_MIN_EXPIRATION_MS + 10_000);
 
 		const validated = validateCommonTransactionStructure(
@@ -54,19 +58,39 @@ describe("multisig transaction time validation", () => {
 		)).toThrow("expires too soon");
 	});
 
-	test("rejects expiration outside the multisig window from the supplied reference", () => {
+	test("rejects expiration below MIN from the chain-anchored reference", () => {
 		const referenceTimeMs = Date.parse("2026-04-23T00:00:00.000Z");
 		const tooSoon = toHiveExpiration(referenceTimeMs + MULTISIG_TX_MIN_EXPIRATION_MS - 1_000);
-		const tooFar = toHiveExpiration(referenceTimeMs + MULTISIG_TX_MAX_EXPIRATION_MS + 1_000);
 
 		expect(() => validateCommonTransactionStructure(
 			makeTransaction(tooSoon),
 			{ referenceTimeMs },
 		)).toThrow("expires too soon");
+	});
+
+	test("rejects expiration above MAX from wall-clock at validation", () => {
+		const referenceTimeMs = Date.now();
+		const tooFar = toHiveExpiration(Date.now() + MULTISIG_TX_MAX_EXPIRATION_MS + 5_000);
+
 		expect(() => validateCommonTransactionStructure(
 			makeTransaction(tooFar),
 			{ referenceTimeMs },
 		)).toThrow("too far in the future");
+	});
+
+	// Discriminating test for the post-1e31783 split semantics: chain-anchored
+	// reference lags by 1 block (~3s, realistic case). A tx built wall-clock +
+	// MAX lands inside MAX measured from Date.now() but outside MAX measured
+	// from the lagging chain-anchor. OLD validator would over-reject.
+	test("accepts wall-clock-built tx when chain-anchor lag would over-reject (split semantics)", () => {
+		const referenceTimeMs = Date.now() - 3 * 1000;
+		const acceptable = toHiveExpiration(Date.now() + MULTISIG_TX_MAX_EXPIRATION_MS);
+
+		const validated = validateCommonTransactionStructure(
+			makeTransaction(acceptable),
+			{ referenceTimeMs },
+		);
+		expect(validated.expiration).toBe(acceptable);
 	});
 
 	test("refuses delegated decisions when chain time is unavailable", () => {

@@ -461,19 +461,29 @@ function validateExpiration(
 	}
 
 	const expiresAt = parseTransactionExpirationMs(expiration);
+	// MIN measured against chain-anchored reference time. SAFETY floor — budgets
+	// for indexer processing lag so the tx is still valid by the time the indexer
+	// broadcasts the co-signature, even when the chain-anchor timestamp trails
+	// wall-clock-now.
 	const referenceTimeMs = timeValidation?.referenceTimeMs ?? Date.now();
-	const diffMs = expiresAt - referenceTimeMs;
-	if (diffMs < MULTISIG_TX_MIN_EXPIRATION_MS) {
+	const minDiffMs = expiresAt - referenceTimeMs;
+	if (minDiffMs < MULTISIG_TX_MIN_EXPIRATION_MS) {
 		throw createMultisigError(
 			"INVALID_TX_STRUCTURE",
-			`Transaction expires too soon (${Math.round(diffMs / 1000)}s). Minimum: ${MULTISIG_TX_MIN_EXPIRATION_MS / 1000}s`,
+			`Transaction expires too soon (${Math.round(minDiffMs / 1000)}s). Minimum: ${MULTISIG_TX_MIN_EXPIRATION_MS / 1000}s`,
 		);
 	}
 
-	if (diffMs > MULTISIG_TX_MAX_EXPIRATION_MS) {
+	// MAX measured against wall-clock at validation time. The protocol's MAX
+	// bounds tx lifetime from broadcast (≈ validation), NOT from the chain-anchor
+	// (which is in the past by lag*3s + (now - hiveHeadTime)). Measuring MAX from
+	// the anchor would over-tighten the bound by that lag and reject wall-clock-
+	// built txs with `expiration = Date.now() + MULTISIG_TX_MAX_EXPIRATION_MS`.
+	const maxDiffMs = expiresAt - Date.now();
+	if (maxDiffMs > MULTISIG_TX_MAX_EXPIRATION_MS) {
 		throw createMultisigError(
 			"INVALID_TX_STRUCTURE",
-			`Transaction expiration too far in the future (${Math.round(diffMs / 1000)}s). Maximum: ${MULTISIG_TX_MAX_EXPIRATION_MS / 1000}s`,
+			`Transaction expiration too far in the future (${Math.round(maxDiffMs / 1000)}s). Maximum: ${MULTISIG_TX_MAX_EXPIRATION_MS / 1000}s`,
 		);
 	}
 
