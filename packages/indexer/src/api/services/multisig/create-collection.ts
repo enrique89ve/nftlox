@@ -283,6 +283,12 @@ async function assertCreatorCanCreateCollection(
 	// answer is the same value both indexer implementations would compute.
 	// Translates handler's `throw new Error(...)` into the multisig's typed
 	// error envelope so the API returns a structured response.
+	//
+	// NB: solvency (HBD balance) is NOT checked here — the indexer's role is
+	// tx validation, not financial state. Clients are expected to pre-check
+	// the balance via `fetchCreatorCollectionFeeBalance` (SDK helper, queries
+	// Hive RPC directly) and surface a friendly alert if insufficient. This
+	// avoids the per-request get_accounts RPC overhead in the validation path.
 	const creatorCollectionCount = await countCollectionsByCreator(creator, ctx.db);
 	try {
 		assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount, hiveHeadBlock);

@@ -2,6 +2,7 @@ import {
   buildTransfer,
   buildBulkDistribute,
   PROTOCOL_ID,
+  PROTOCOL_COLLECTION_FEE_HBD,
   type SeedNFTWithArtId,
   type HiveOperation,
   ACTION_AUTH_LEVEL,
@@ -39,6 +40,76 @@ let currentSession: MintingSession | null = null;
 let broadcastedCount = 0;
 let totalBroadcastOps = 0;
 let debugRoutesEnabled = false;
+
+// Public Hive RPC endpoint used for the pre-build HBD balance check. Matches
+// the convention of the other Hive RPC calls in the playground (broadcastSignedTransaction,
+// marketplace.ts, node.ts) which hardcode this endpoint. The playground owns
+// its UX — no SDK/indexer involvement for state queries.
+const HIVE_RPC_URL = "https://api.hive.blog";
+
+type CreatorBalanceCheck =
+  | { ok: true; hasSufficient: boolean; available: number; required: number }
+  | { ok: false; error: string };
+
+// Pre-build UX gate: queries the creator's HBD liquid balance directly from a
+// public Hive node. Used to surface a friendly alert before hitting the
+// indexer's build endpoint when the creator can't cover PROTOCOL_COLLECTION_FEE_HBD.
+// The chain is the ultimate arbiter — this is purely a UX pre-flight, not a
+// protocol rule. Failure to fetch does NOT block the build (the chain will
+// reject if the balance is genuinely insufficient).
+async function checkCreatorHasCollectionFee(
+  creator: string,
+): Promise<CreatorBalanceCheck> {
+  const required = Number.parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
+  try {
+    const res = await fetch(HIVE_RPC_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "condenser_api.get_accounts",
+        params: [[creator]],
+        id: 1,
+      }),
+    });
+    if (!res.ok) {
+      return { ok: false, error: `Hive RPC returned HTTP ${res.status}` };
+    }
+    const raw = (await res.json()) as
+      | { result?: Array<{ hbd_balance?: string }> }
+      | null;
+    const account = raw?.result?.[0];
+    if (!account || typeof account.hbd_balance !== "string") {
+      return { ok: false, error: `Hive account '${creator}' not found` };
+    }
+    const match = /^(\d+)\.(\d{3})\s+HBD$/.exec(account.hbd_balance);
+    if (!match) {
+      return {
+        ok: false,
+        error: `Unexpected hbd_balance format: ${account.hbd_balance}`,
+      };
+    }
+    // Integer-units discipline mirrors hiveAmountStringToUnits in the SDK:
+    // exact arithmetic on integer parts, avoids parseFloat's forgiving behaviour
+    // on edge cases like ".5 HBD" or "1.2.3 HBD".
+    const intPart = Number.parseInt(match[1]!, 10);
+    const decPart = Number.parseInt(match[2]!, 10);
+    const available = intPart + decPart / 1000;
+    return {
+      ok: true,
+      hasSufficient: available >= required,
+      available,
+      required,
+    };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: `Hive RPC request failed: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+    };
+  }
+}
 
 type CollectionSort = "recent" | "name" | "supply" | "seeds";
 
@@ -2378,8 +2449,44 @@ async function createCollection() {
   // Show progress via step 4
   goToStep(4);
 
+  // Surface an honest loading state in the broadcast summary so the user
+  // doesn't see the static "@username" placeholder while the build is in
+  // flight. The success path below (line 2507) restores the real creator.
+  const summaryCreator = $("summary-creator");
+  if (summaryCreator) summaryCreator.textContent = "Building…";
+
   mintLog(`Creating collection "${colName}"...`);
 
+  // Pre-build UX gate: query the creator's HBD balance directly from a Hive
+  // RPC node and surface a friendly alert if the balance cannot cover the
+  // protocol fee. Soft failure on RPC errors (chain still rejects if the
+  // balance is genuinely insufficient) — we never want a flaky Hive RPC to
+  // block a legitimate creator from submitting.
+  const balanceCheck = await checkCreatorHasCollectionFee(creator);
+  if (balanceCheck.ok && !balanceCheck.hasSufficient) {
+    mintLog(
+      `Tu cuenta @${creator} no tiene suficiente HBD para crear la colección. ` +
+        `Disponible: ${balanceCheck.available.toFixed(3)} HBD, requerido: ${balanceCheck.required.toFixed(3)} HBD.`,
+      "error",
+    );
+    if (summaryCreator) summaryCreator.textContent = `@${creator}`;
+    return;
+  }
+  if (!balanceCheck.ok) {
+    mintLog(
+      `No se pudo verificar el saldo HBD (${balanceCheck.error}). Continuando; la cadena rechazará si el saldo es insuficiente.`,
+      "error",
+    );
+  }
+
+  // Disable the trigger button for the duration of the build to prevent
+  // double-click orphaning a parallel build session (other long-running
+  // flows like archiveCurrentCollection and the broadcast state machine
+  // follow the same pattern). Re-enabled in the finally block below.
+  const triggerBtn = $("btn-create-collection") as HTMLButtonElement | null;
+  if (triggerBtn) triggerBtn.disabled = true;
+
+  let buildSucceeded = false;
   try {
     // Step 1: Build collection operation
     const colResponse = await fetch("/api/build/collection-multisig", {
@@ -2515,8 +2622,18 @@ async function createCollection() {
     updateBroadcastProgress();
 
     mintLog("Ready! Click 'Broadcast' on each item", "success");
+    buildSucceeded = true;
   } catch (e) {
     mintLog(`Error: ${(e as Error).message}`, "error");
+  } finally {
+    // Restore the broadcast summary on every exit path. Without this the UI
+    // stays stuck at "Building…" after any build error (only the success path
+    // and the insufficient-balance early-return overwrote it before).
+    if (!buildSucceeded && summaryCreator) {
+      summaryCreator.textContent = `@${creator}`;
+    }
+    // Re-enable the trigger button regardless of build outcome.
+    if (triggerBtn) triggerBtn.disabled = false;
   }
 }
 
