@@ -1,6 +1,8 @@
 // Marketplace view — active listings
 import { $, log, escapeHtml, PLACEHOLDER_SM } from "../shared/dom";
 import { getConnectedUser } from "../shared/state";
+import { MultisigError, requestBuyMultisig } from "nftlox-sdk";
+import type { BuyMultisigRequest, BuyMultisigResponse } from "nftlox-sdk";
 
 type ListingSort = "recent" | "price_asc" | "price_desc";
 type ListingCurrency = "HIVE" | "HBD" | "";
@@ -38,23 +40,6 @@ interface BuyResponse {
 	};
 	indexerUrl?: string;
 }
-
-interface BuyMultisigSuccess {
-	ok: true;
-	/** tx_id of the fully-broadcast buy transaction. */
-	txId: string;
-	/** tx_id of the buy_commitment op the node used to reserve the NFT. */
-	commitmentOpTxId: string;
-}
-
-interface BuyMultisigError {
-	ok: false;
-	code: string;
-	message: string;
-	retryAfterMs?: number;
-}
-
-type BuyMultisigResult = BuyMultisigSuccess | BuyMultisigError;
 
 interface KeychainSignResponse {
 	success: boolean;
@@ -414,16 +399,20 @@ async function buyFromMarketplace(nftId: string) {
 			transaction.signatures = [buyerSig];
 
 			log("Reserving NFT on-chain via buy_commitment...");
-			const multisigRes = await fetch(`${data.indexerUrl!.replace(/\/$/, "")}/api/multisig/buy`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ transaction }),
-			});
-			const multisigData = await multisigRes.json().catch(() => ({
-				ok: false,
-				code: "INVALID_RESPONSE",
-				message: "Indexer returned non-JSON body",
-			})) as BuyMultisigResult;
+			let multisigData: BuyMultisigResponse;
+			try {
+				multisigData = await requestBuyMultisig(
+					data.indexerUrl!.replace(/\/$/, ""),
+					{ transaction: transaction as unknown as BuyMultisigRequest["transaction"] },
+				);
+			} catch (err) {
+				if (MultisigError.isInstance(err)) {
+					log(`Buy failed [${err.code ?? "MULTISIG_ERROR"}]: ${err.message}`, "error");
+				} else {
+					log(`Buy failed: ${(err as Error).message}`, "error");
+				}
+				return;
+			}
 
 			if (!multisigData.ok) {
 				const retry = multisigData.retryAfterMs
