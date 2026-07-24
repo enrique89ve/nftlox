@@ -4,6 +4,7 @@ import { getChainTimeSnapshot, type ChainTimeSnapshot } from "@/db/queries/sync.
 import {
 	ACTION_BUY_COMMITMENT,
 	BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS,
+	BUY_TX_TTL_MS,
 	MAX_ROYALTY_PCT,
 	createPayload,
 	validateHiveUsername,
@@ -187,6 +188,12 @@ async function executeBuyRequest(
 		// commitment and create duplicate reservation attempts. Hive consensus
 		// still decides the winner across nodes; this local hold closes the retry
 		// race inside this settlement node.
+		//
+		// Note: the lock acquire path uses `ON CONFLICT (nft_id) DO NOTHING`, so
+		// the SAME buyer re-issuing the same buyTxId inside the lock window also
+		// hits NFT_LOCKED — that is intentional, not a refresh. Clients must
+		// reconcile the existing commitment_op_tx_id (202) or wait the full lock
+		// TTL (BUY_TX_TTL_MS) before retrying.
 		if (!commitmentBroadcast || buyBroadcast) {
 			await ctx.buyLock.release(validated.customJsonOperation.payload.data.nftId, buyTxId);
 		}
@@ -498,7 +505,7 @@ async function waitForCommitmentVictory(input: WaitForVictoryInput): Promise<voi
 			throw createMultisigError(
 				"CROSS_NODE_RESERVATION",
 				`NFT '${input.nftId}' reserved by ${nft.sale_settlement_node} (commitment ${observedHash}); retry later`,
-				{ retryAfterMs: COMMITMENT_INCLUSION_TIMEOUT_MS },
+				{ retryAfterMs: BUY_TX_TTL_MS },
 			);
 		}
 
@@ -508,7 +515,11 @@ async function waitForCommitmentVictory(input: WaitForVictoryInput): Promise<voi
 	throw createMultisigError(
 		"COMMITMENT_INCLUSION_TIMEOUT",
 		`buy_commitment not observed within ${COMMITMENT_INCLUSION_TIMEOUT_MS}ms`,
-		{ retryAfterMs: BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS },
+		// The on-chain commitment TTL is BUY_TX_TTL_MS; the local lock is held
+		// for the same window. Any retry inside this window will hit NFT_LOCKED,
+		// so the client must wait the full TTL before a fresh attempt is
+		// reconcilable against the existing commitment_op_tx_id.
+		{ retryAfterMs: BUY_TX_TTL_MS },
 	);
 }
 
