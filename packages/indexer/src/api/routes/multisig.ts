@@ -99,7 +99,9 @@ const BUY_MULTISIG_STATUS: Record<MultisigErrorCode, number> = {
 	// F3.C — node refuses to sign while a state-root divergence with peers is
 	// outstanding; clears manually after operator audit.
 	NODE_DIVERGENT: 503,
-	COMMITMENT_INCLUSION_TIMEOUT: 503,
+	// The commitment may already be in Hive; clients must reconcile by tx id
+	// instead of treating the observation timeout as a failed purchase.
+	COMMITMENT_INCLUSION_TIMEOUT: 202,
 	COMMITMENT_BROADCAST_FAILED: 503,
 	BUY_BROADCAST_FAILED: 503,
 	SIGNING_QUEUE_FULL: 503,

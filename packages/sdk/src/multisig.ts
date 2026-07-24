@@ -384,6 +384,9 @@ function assertBuyMultisigResponse(raw: unknown): asserts raw is BuyMultisigResp
 	if (typeof raw.code !== "string" || typeof raw.message !== "string") {
 		throw new Error("Buy multisig response malformed: missing code or message");
 	}
+	if (raw.commitmentOpTxId !== undefined && typeof raw.commitmentOpTxId !== "string") {
+		throw new Error("Buy multisig response malformed: commitmentOpTxId must be a string");
+	}
 }
 
 /**

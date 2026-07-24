@@ -84,6 +84,13 @@ export const HIVE_FINALITY_SAFETY_BLOCKS = 20;
 // enforces it on the commitment lifecycle.
 export const BUY_TX_TTL_MS = 120_000;
 
+// Local settlement observation budget. This is intentionally shorter than the
+// on-chain commitment TTL: a node may stop waiting on one HTTP request while
+// retaining its local buy lock and reconciling the commitment by tx id. It
+// covers the normal Hive finality gap plus indexer polling jitter without
+// confusing an HTTP timeout with an on-chain expiry.
+export const BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS = 60_000;
+
 // Per-node accepted range for the signed buy tx's `expiration` field at
 // POST /api/multisig/buy. Outside this window the indexer rejects with
 // INVALID_TX_STRUCTURE.

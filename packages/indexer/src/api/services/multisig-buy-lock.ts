@@ -42,12 +42,7 @@ export function createMultisigBuyLock(): MultisigBuyLock {
 			)
 			INSERT INTO multisig_buy_locks (nft_id, listing_id, listing_tx_id, holder, expires_at)
 			VALUES (${nftId}, ${listingId}, ${listTxId}, ${holder}, ${expiresAt})
-			ON CONFLICT (nft_id) DO UPDATE
-				SET listing_id = ${listingId},
-				    listing_tx_id = ${listTxId},
-				    holder = ${holder},
-				    expires_at = ${expiresAt}
-				WHERE multisig_buy_locks.holder = ${holder}
+			ON CONFLICT (nft_id) DO NOTHING
 			RETURNING nft_id
 		`;
 

@@ -3,8 +3,7 @@ import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
 import { getChainTimeSnapshot, type ChainTimeSnapshot } from "@/db/queries/sync.ts";
 import {
 	ACTION_BUY_COMMITMENT,
-	BUY_COMMITMENT_TTL_BLOCKS,
-	HIVE_BLOCK_TIME_MS,
+	BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS,
 	MAX_ROYALTY_PCT,
 	createPayload,
 	validateHiveUsername,
@@ -46,10 +45,11 @@ import type {
 const BUY_TRANSFER_MIN_COUNT = 1;
 const BUY_TRANSFER_MAX_COUNT = 3;
 
-// Wait budget for buy_commitment inclusion. Derived from the block-denominated
-// TTL the protocol publishes, so a hardfork on either knob keeps the two
-// windows in sync without a local re-derivation.
-const COMMITMENT_INCLUSION_TIMEOUT_MS = BUY_COMMITMENT_TTL_BLOCKS * HIVE_BLOCK_TIME_MS;
+// This is an HTTP observation budget, not the on-chain commitment TTL. The
+// commitment remains valid for BUY_TX_TTL_MS; after this budget expires the
+// local lock stays held so a retry cannot emit a second commitment while the
+// first one may still be propagating/indexing.
+const COMMITMENT_INCLUSION_TIMEOUT_MS = BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS;
 const COMMITMENT_POLL_INTERVAL_MS = 500;
 
 const log = createLogger("multisig-buy");
@@ -67,6 +67,7 @@ export async function processBuyRequest(
 				code: err.code,
 				message: err.message,
 				...(err.retryAfterMs !== undefined ? { retryAfterMs: err.retryAfterMs } : {}),
+				...(err.commitmentOpTxId !== undefined ? { commitmentOpTxId: err.commitmentOpTxId } : {}),
 			};
 		}
 		log.error("Unexpected buy multisig error", {
@@ -126,8 +127,12 @@ async function executeBuyRequest(
 		);
 	}
 
+	let commitmentOpTxId: string | undefined;
+	let commitmentBroadcast = false;
+	let buyBroadcast = false;
+
 	try {
-		const commitmentOpTxId = await broadcastBuyCommitment({
+		commitmentOpTxId = await broadcastBuyCommitment({
 			nftId: validated.customJsonOperation.payload.data.nftId,
 			listingId: validated.customJsonOperation.payload.data.listingId,
 			listTxId: validated.customJsonOperation.payload.data.listTxId,
@@ -136,6 +141,7 @@ async function executeBuyRequest(
 			nodeAccount: ctx.nodeAccount,
 			protocolId: ctx.protocolId,
 		});
+		commitmentBroadcast = true;
 
 		await waitForCommitmentVictory({
 			ctx,
@@ -147,6 +153,7 @@ async function executeBuyRequest(
 
 		const fullySignedTx = addNodeSignatureToBuy(validated, buyerSignature);
 		const broadcastResult = await broadcastCompletedBuy(fullySignedTx);
+		buyBroadcast = true;
 
 		log.info("Buy multisig broadcast succeeded", {
 			nftId: validated.customJsonOperation.payload.data.nftId,
@@ -160,8 +167,29 @@ async function executeBuyRequest(
 			txId: broadcastResult.txId,
 			commitmentOpTxId,
 		};
+	} catch (cause) {
+		if (commitmentOpTxId !== undefined && isMultisigError(cause)) {
+			throw createMultisigError(
+				cause.code,
+				cause.message,
+				{
+					cause,
+					retryAfterMs: cause.retryAfterMs,
+					commitmentOpTxId,
+				},
+			);
+		}
+		throw cause;
 	} finally {
-		await ctx.buyLock.release(validated.customJsonOperation.payload.data.nftId, buyTxId);
+		// Once the commitment entered Hive, retain the DB lock until either the
+		// paired buy is broadcast or the lock TTL expires. Releasing on a timeout
+		// would let the same client retry before the indexer observes the first
+		// commitment and create duplicate reservation attempts. Hive consensus
+		// still decides the winner across nodes; this local hold closes the retry
+		// race inside this settlement node.
+		if (!commitmentBroadcast || buyBroadcast) {
+			await ctx.buyLock.release(validated.customJsonOperation.payload.data.nftId, buyTxId);
+		}
 	}
 }
 
@@ -480,7 +508,7 @@ async function waitForCommitmentVictory(input: WaitForVictoryInput): Promise<voi
 	throw createMultisigError(
 		"COMMITMENT_INCLUSION_TIMEOUT",
 		`buy_commitment not observed within ${COMMITMENT_INCLUSION_TIMEOUT_MS}ms`,
-		{ retryAfterMs: HIVE_BLOCK_TIME_MS },
+		{ retryAfterMs: BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS },
 	);
 }
 

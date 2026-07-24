@@ -22,6 +22,7 @@ import {
 	MIN_LISTING_TTL_BUFFER_MS,
 	BUY_TX_TTL_MS,
 	BUY_COMMITMENT_TTL_BLOCKS,
+	BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS,
 	MULTISIG_TX_MIN_EXPIRATION_MS,
 	MULTISIG_TX_MAX_EXPIRATION_MS,
 	RECOMMENDED_BUY_TX_EXPIRATION_MS,
@@ -119,6 +120,11 @@ describe("constants", () => {
 	});
 
 	describe("buy settlement windows", () => {
+		it("keeps local commitment observation inside the on-chain TTL", () => {
+			expect(BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS).toBe(60_000);
+			expect(BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS).toBeLessThan(BUY_TX_TTL_MS);
+		});
+
 		it("commitment TTL covers the finality safety window", () => {
 			expect(BUY_COMMITMENT_TTL_BLOCKS).toBe(BUY_TX_TTL_MS / HIVE_BLOCK_TIME_MS);
 			expect(BUY_COMMITMENT_TTL_BLOCKS).toBeGreaterThan(HIVE_FINALITY_SAFETY_BLOCKS);

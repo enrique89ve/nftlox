@@ -212,6 +212,8 @@ export type BuyMultisigResponse =
 			readonly code: MultisigErrorCode;
 			readonly message: string;
 			readonly retryAfterMs?: number | undefined;
+			/** Present when the commitment was broadcast but observation timed out. */
+			readonly commitmentOpTxId?: string | undefined;
 	  };
 
 // Discriminated payload form — correlates `action` with `data` at the type level.

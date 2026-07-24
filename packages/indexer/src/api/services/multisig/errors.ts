@@ -7,6 +7,7 @@ import type { MultisigErrorCode, MultisigResponse } from "@/protocol/index.ts";
 export type MultisigDomainError = Error & Readonly<{
 	readonly code: MultisigErrorCode;
 	readonly retryAfterMs?: number;
+	readonly commitmentOpTxId?: string;
 }>;
 
 type ErrorLogger = Readonly<{
@@ -16,6 +17,7 @@ type ErrorLogger = Readonly<{
 export type MultisigErrorDetails = Readonly<{
 	readonly cause?: unknown;
 	readonly retryAfterMs?: number;
+	readonly commitmentOpTxId?: string;
 }>;
 
 export function createMultisigError(
@@ -23,12 +25,13 @@ export function createMultisigError(
 	message: string,
 	details: MultisigErrorDetails = {},
 ): MultisigDomainError {
-	const { cause, retryAfterMs } = details;
+	const { cause, retryAfterMs, commitmentOpTxId } = details;
 	const error = new Error(message, cause === undefined ? undefined : { cause }) as MultisigDomainError;
 	return Object.assign(error, {
 		name: "MultisigError",
 		code,
 		...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+		...(commitmentOpTxId !== undefined ? { commitmentOpTxId } : {}),
 	});
 }
 
@@ -44,10 +47,10 @@ export function mapErrorToMultisigResponse(err: unknown, log: ErrorLogger): Mult
 	if (isMultisigError(err)) {
 		return {
 			ok: false,
-			code: err.code,
-			message: err.message,
-			...(err.retryAfterMs !== undefined ? { retryAfterMs: err.retryAfterMs } : {}),
-		};
+				code: err.code,
+				message: err.message,
+				...(err.retryAfterMs !== undefined ? { retryAfterMs: err.retryAfterMs } : {}),
+			};
 	}
 
 	if (isSigningQueueFullError(err)) {

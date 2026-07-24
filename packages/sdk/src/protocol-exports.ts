@@ -295,6 +295,7 @@ export const assertAcceptedProtocolVersion = protocol.assertAcceptedProtocolVers
 // ============================================================================
 
 export const BUY_TX_TTL_MS = protocol.BUY_TX_TTL_MS;
+export const BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS = protocol.BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS;
 export const BUY_COMMITMENT_TTL_BLOCKS = protocol.BUY_COMMITMENT_TTL_BLOCKS;
 export const BUY_API_LAG_MAX_BLOCKS = protocol.BUY_API_LAG_MAX_BLOCKS;
 export const BUY_API_HEAD_STALENESS_MAX_MS = protocol.BUY_API_HEAD_STALENESS_MAX_MS;

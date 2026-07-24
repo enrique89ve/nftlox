@@ -482,8 +482,9 @@ CREATE TABLE IF NOT EXISTS state_root_checkpoints (
 
 -- Scoped by NFT listing: a single node must not co-sign two competing buys for
 -- the same NFT while the first unsigned tx is still within its broadcast
--- window. Holder is a deterministic tx identity so exact retries can refresh
--- the lock, while a distinct in-flight buyer attempt receives `NFT_LOCKED`.
+-- window. Holder is a deterministic tx identity for diagnostics, but every
+-- existing row is contested until expiry; exact retries must reconcile rather
+-- than refresh or overwrite the lock.
 CREATE TABLE IF NOT EXISTS multisig_buy_locks (
 	nft_id TEXT PRIMARY KEY,
 	listing_id TEXT NOT NULL,

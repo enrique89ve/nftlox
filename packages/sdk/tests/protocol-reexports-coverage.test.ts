@@ -40,6 +40,7 @@ const REQUIRED_REEXPORTS: ReadonlyArray<{
 	// N-5: marketplace timing — buy/commitment TTLs for pre-broadcast windows.
 	{ name: "HIVE_FINALITY_SAFETY_BLOCKS", typeofValue: "number" },
 	{ name: "BUY_TX_TTL_MS", typeofValue: "number" },
+	{ name: "BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS", typeofValue: "number" },
 	{ name: "BUY_COMMITMENT_TTL_BLOCKS", typeofValue: "number" },
 	{ name: "BUY_API_LAG_MAX_BLOCKS", typeofValue: "number" },
 	{ name: "BUY_API_HEAD_STALENESS_MAX_MS", typeofValue: "number" },
@@ -47,6 +48,12 @@ const REQUIRED_REEXPORTS: ReadonlyArray<{
 	{ name: "MAX_ACTIVE_COMMITMENTS_PER_NODE", typeofValue: "number" },
 	{ name: "MIN_HEARTBEAT_INTERVAL_BLOCKS", typeofValue: "number" },
 	{ name: "MAX_NODE_HEARTBEAT_STALENESS_BLOCKS", typeofValue: "number" },
+	// N-6: tx-expiration windows — buy tx MIN/MAX/RECOMMENDED for pre-broadcast
+	// validation. Surfaced in the SDK doc on `requestBuyMultisig` so integrators
+	// building the buy tx themselves align to the same window the indexer accepts.
+	{ name: "MULTISIG_TX_MIN_EXPIRATION_MS", typeofValue: "number" },
+	{ name: "MULTISIG_TX_MAX_EXPIRATION_MS", typeofValue: "number" },
+	{ name: "RECOMMENDED_BUY_TX_EXPIRATION_MS", typeofValue: "number" },
 	// N-5: payment requirements — pure dispatch over ACTION_PAYMENT.
 	{ name: "ACTION_PAYMENT", typeofValue: "object" },
 	{ name: "getPaymentRequirement", typeofValue: "function" },
