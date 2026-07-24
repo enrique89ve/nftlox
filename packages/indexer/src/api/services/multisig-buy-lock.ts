@@ -1,8 +1,5 @@
 import { sql } from "@/db/client.ts";
-
-export type BuyLockAcquireResult =
-	| Readonly<{ readonly acquired: true }>
-	| Readonly<{ readonly acquired: false; readonly heldBy: string; readonly retryAfterMs: number }>;
+import type { BuyLockAcquisition } from "@/api/services/multisig/types.ts";
 
 export type MultisigBuyLock = Readonly<{
 	readonly acquire: (
@@ -11,7 +8,7 @@ export type MultisigBuyLock = Readonly<{
 		listTxId: string,
 		holder: string,
 		expirationMs: number,
-	) => Promise<BuyLockAcquireResult>;
+	) => Promise<BuyLockAcquisition>;
 	readonly release: (nftId: string, holder: string) => Promise<void>;
 	readonly cleanupExpired: () => Promise<void>;
 	readonly destroy: () => void;
@@ -32,7 +29,7 @@ export function createMultisigBuyLock(): MultisigBuyLock {
 		holder: string,
 		expirationMs: number,
 		attempt = 0,
-	): Promise<BuyLockAcquireResult> => {
+	): Promise<BuyLockAcquisition> => {
 		const expiresAt = new Date(Date.now() + expirationMs).toISOString();
 
 		const [inserted] = await sql`
