@@ -70,7 +70,7 @@ const result = await buildUnlist({
 });
 ```
 
-Unlist is instantaneous: the listing row is cleared in the same block. Race protection against in-flight settlements comes from the `buy_commitment` gate — a settlement node that has already broadcast a commitment holds the NFT as `status = "pending_sale"`, and `handleUnlist` refuses to touch any `pending_sale` row. The NFT returns to `active` only when the matching `buy` settles or the commitment TTL (`BUY_COMMITMENT_TTL_BLOCKS`) expires.
+Unlist is instantaneous: the listing row is cleared in the same block. Race protection against in-flight settlements comes from the `buy_commitment` gate — a settlement node that has already broadcast a commitment holds the NFT as `status = "pending_sale"`, and `handleUnlist` refuses to touch any `pending_sale` row. The NFT returns to `active` only when the matching `buy` settles or the on-chain commitment TTL (`BUY_COMMITMENT_TTL_BLOCKS`) expires.
 
 ## 3. Buying — `buildBuy` (node-last)
 
@@ -179,7 +179,7 @@ In a browser UI, swap the local active-key sign step for Hive Keychain's `reques
 | `NFT_LOCKED` | Another buy for this NFT is already in flight on **this** node (process-local lock). Retry. |
 | `CROSS_NODE_RESERVATION` | A different settlement node's `buy_commitment` landed first. Listing is now settled or reserved elsewhere. |
 | `COMMITMENT_BROADCAST_FAILED` | Node could not broadcast its `buy_commitment` to Hive. Transient — retry. |
-| `COMMITMENT_INCLUSION_TIMEOUT` | Node's commitment never made it into a block within the TTL window (~30 s). Transient — retry. |
+| `COMMITMENT_INCLUSION_TIMEOUT` | Node's commitment never made it into a block within the HTTP observation budget (`BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS = 60 s`). The on-chain reservation may still be live — reconcile by `commitmentOpTxId`. |
 | `BUY_BROADCAST_FAILED` | Node's final buy broadcast failed. Listing state is unchanged; retry. |
 | `INDEXER_LAGGED` | Indexer is more than `BUY_API_LAG_MAX_BLOCKS` (3 blocks) behind Hive HEAD. Transient. |
 | `NODE_NOT_ACTIVE` | Node missed too many heartbeats and no longer serves settlement. Use a different indexer. |
@@ -191,7 +191,7 @@ In a browser UI, swap the local active-key sign step for Hive Keychain's `reques
 The node's checklist before broadcasting its commitment:
 
 - Transaction has 2–4 ops (1–3 `transfer`s + the trailing `custom_json`).
-- `expiration` ∈ `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (30–120 s).
+- `expiration` ∈ `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (90–120 s).
 - Buyer's active signature already present on the transaction.
 - `custom_json.required_auths` contains the node account.
 - NFT listed, not burned/lent, collection transferable.
@@ -241,7 +241,7 @@ Without co-signing, a malicious seller could list an NFT, watch for an in-flight
 4. Node waits for its commitment to land in a block. If a different node's commitment for the same NFT lands first, Hive's block ordering awards the win to that node and ours returns `CROSS_NODE_RESERVATION`.
 5. Once our commitment wins, the node appends its active signature to the buyer-signed tx and broadcasts it itself. Hive evaluates the entire transaction atomically, so either all transfers + the ownership change land or nothing does.
 
-Transactions expire in 30–120 s (`MULTISIG_TX_MIN/MAX_EXPIRATION_MS`). `buy_commitment` reservations expire in `BUY_COMMITMENT_TTL_BLOCKS` (~30 s), so a commitment that fails to settle automatically releases the NFT back to `listed`.
+Transactions expire in 90–120 s (`MULTISIG_TX_MIN_EXPIRATION_MS` … `MULTISIG_TX_MAX_EXPIRATION_MS`). `buy_commitment` reservations expire in `BUY_COMMITMENT_TTL_BLOCKS` (~120 s ≈ 40 blocks @ 3 s/block), so a commitment that fails to settle automatically releases the NFT back to `listed`. The HTTP-side observation budget (`BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS = 60 s`) is shorter: if the node stops waiting on its own HTTP request, the on-chain commitment and the local `buyLock` (TTL = `BUY_TX_TTL_MS`) remain, so a reconcile-by-`commitmentOpTxId` retries into the same reservation instead of emitting a duplicate.
 
 ## Querying the marketplace
 
@@ -274,7 +274,13 @@ The indexer does not sweep expired listings on a timer. An expired listing stays
 
 ## Why listings need a minimum TTL
 
-Buy settlement is a multi-step orchestration: validate → broadcast `buy_commitment` → wait for inclusion (up to `BUY_COMMITMENT_TTL_BLOCKS` ≈ 30 s) → co-sign → broadcast the buy (expiration ≤ 120 s). The listing must outlive the worst case, or a late-submitted buy can have its commitment land *after* the listing expires. The protocol floor:
+Buy settlement is a multi-step orchestration with three clocks that must be understood independently:
+
+- **On-chain commitment TTL** — `BUY_COMMITMENT_TTL_BLOCKS` (40 blocks, ≈ 120 s @ 3 s/block). Bounds how long the `pending_sale` reservation survives in a block.
+- **HTTP observation budget** — `BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS` (60 s). The local node waits at most this long for its own `buy_commitment` to be indexed before returning `COMMITMENT_INCLUSION_TIMEOUT` (HTTP 202, with `commitmentOpTxId`). The on-chain commitment and the local `buyLock` (TTL = `BUY_TX_TTL_MS`) outlive this budget.
+- **Signed-buy expiration** — `MULTISIG_TX_MIN_EXPIRATION_MS`…`MULTISIG_TX_MAX_EXPIRATION_MS` (90–120 s). The buyer's signed tx must remain broadcastable across the full orchestration.
+
+The listing must outlive the worst case, or a late-submitted buy can have its commitment land *after* the listing expires. The protocol floor:
 
 - `MIN_LISTING_TTL_MS = LISTING_MIN_DURATION_BLOCKS × 3_000 ms + 60_000 ms` = `60 × 3_000 + 60_000` = **240 000 ms** (4 min).
 

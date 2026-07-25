@@ -126,7 +126,7 @@ The split is computed by `calculatePaymentSplit` and emits a `transfer` only for
 - `feeAccount == seller` → no fee transfer (the seller would just be paying themselves).
 - `royaltyAmount == 0` after rounding → no royalty transfer.
 
-The minimum a `buy` can produce is **1 transfer + 1 custom_json** (2 ops); the maximum is **3 transfers + 1 custom_json** (4 ops). The signed-buyer transaction must fall inside `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (30–60 s) so the settlement node has its full commitment window to broadcast.
+The minimum a `buy` can produce is **1 transfer + 1 custom_json** (2 ops); the maximum is **3 transfers + 1 custom_json** (4 ops). The signed-buyer transaction must fall inside `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (90–120 s) so the settlement node has its full commitment window to broadcast.
 
 ### Why the buyer trusts the math
 

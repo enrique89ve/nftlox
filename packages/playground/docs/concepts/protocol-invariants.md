@@ -88,8 +88,12 @@ Listings are exclusive with ownership-changing and lending flows.
 Exclusivity between unlist and in-flight buys is enforced by the node-last
 multisig flow: a settlement node only broadcasts `buy_commitment` after it
 observes a still-active listing, and `handleUnlist` refuses any row already
-in `pending_sale`. The commitment TTL (`BUY_COMMITMENT_TTL_BLOCKS`) bounds
-how long an unlisted-but-reserved NFT can stay in that state.
+in `pending_sale`. The on-chain commitment TTL (`BUY_COMMITMENT_TTL_BLOCKS`,
+40 blocks ≈ 120 s @ 3 s/block) bounds how long an unlisted-but-reserved NFT
+can stay in that state. The HTTP-side observation budget
+(`BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS = 60 s`) is shorter and only governs
+the local node's wait; the on-chain reservation and the local `buyLock`
+(TTL = `BUY_TX_TTL_MS`) outlive it.
 
 ---
 

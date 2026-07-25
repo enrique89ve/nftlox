@@ -829,7 +829,7 @@ Submit a buyer-signed `buy` transaction for **node-last** settlement. The node v
 }
 ```
 
-> The `transaction.expiration` MUST fall inside `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (30–120 s). The `signatures` array MUST already contain the buyer's active signature over the full transaction. The buyer account is derived from the first transfer's `from` field — no separate `buyer` field is accepted.
+> The `transaction.expiration` MUST fall inside `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (90–120 s). The `signatures` array MUST already contain the buyer's active signature over the full transaction. The buyer account is derived from the first transfer's `from` field — no separate `buyer` field is accepted.
 
 **Response (success):**
 

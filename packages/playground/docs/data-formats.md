@@ -335,7 +335,7 @@ type BuyCommitmentData = {
 };
 ```
 
-The network-wide block ordering of `buy_commitment` ops is the consensus on "which node settles this listing". First to land wins; other nodes with a competing commitment for the same `nftId` abort with `CROSS_NODE_RESERVATION`. Reservations expire after `BUY_COMMITMENT_TTL_BLOCKS` (~30 s) if the matching `buy` does not follow.
+The network-wide block ordering of `buy_commitment` ops is the consensus on "which node settles this listing". First to land wins; other nodes with a competing commitment for the same `nftId` abort with `CROSS_NODE_RESERVATION`. Reservations expire after `BUY_COMMITMENT_TTL_BLOCKS` (~120 s, 40 blocks @ 3 s/block) if the matching `buy` does not follow. The HTTP-side observation budget the local node waits (`BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS = 60 s`) is shorter; on `COMMITMENT_INCLUSION_TIMEOUT` the commitment may already be in Hive and the response carries `commitmentOpTxId` for reconciliation.
 
 > The legacy `sale_lock` op (pre-0.7.0) is deprecated. Historical `sale_lock` ops on chain surface as `invalid_operations` for audit; there is no active handler.
 

@@ -44,8 +44,8 @@ Active-auth `custom_json`s list the signer under `required_auths`; posting-auth 
 | `custom_json` byte size | ≤8192 (`HIVE_CUSTOM_JSON_MAX_BYTES`) | Hive consensus rejects larger. |
 | Safe payload budget | 7372 B (`SAFE_PAYLOAD_MAX_BYTES`, 90%) | SDK sizing utilities respect this. |
 | Delay between txs | 4000 ms (`TX_DELAY_MS`) | Allows block confirmation. |
-| Buy tx expiration range | `MULTISIG_TX_MIN_EXPIRATION_MS` (30 s) – `MULTISIG_TX_MAX_EXPIRATION_MS` (120 s) | `/api/multisig/buy` rejects anything outside. |
-| Recommended buy tx expiration | `RECOMMENDED_BUY_TX_EXPIRATION_MS` (60 s) | Leaves headroom for PoW + Keychain + node orchestration (~6 s). |
+| Buy tx expiration range | `MULTISIG_TX_MIN_EXPIRATION_MS` (90 s) – `MULTISIG_TX_MAX_EXPIRATION_MS` (120 s) | `/api/multisig/buy` rejects anything outside. The MIN budgets for irreversible-block observation plus a short signing/broadcast window; MAX equals the `buy_commitment` TTL. |
+| Recommended buy tx expiration | `RECOMMENDED_BUY_TX_EXPIRATION_MS` (120 s) | SDK default — equals MAX. First-class SDK callers get the full finality-safe orchestration window. Lower it toward `MULTISIG_TX_MIN_EXPIRATION_MS` only when explicitly minimizing the orphan-risk window. |
 
 ## Hive RPC nodes
 
@@ -247,7 +247,7 @@ The node will refuse to serve a buy if:
 - the buyer's signature is missing or the transaction is malformed,
 - the payment split in the transaction does not match its own computation,
 - the indexer is more than `BUY_API_LAG_MAX_BLOCKS` (3 blocks, ~9 s) behind Hive head,
-- the transaction `expiration` falls outside `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]`,
+- the transaction `expiration` falls outside `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (90–120 s),
 - it is not currently an active settlement node (missed too many heartbeats).
 
 ## Flow 3 — Creating a collection (dual-signer)
