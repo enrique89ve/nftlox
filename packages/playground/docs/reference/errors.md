@@ -16,15 +16,15 @@ The action router (`processor/action-router.ts`) dispatches each operation to it
 
 ## Multisig Errors
 
-The `MultisigErrorCode` type (defined in `packages/protocol/src/types.ts`) represents all error codes returned by the `POST /api/multisig/buy` and `POST /api/multisig/collection` endpoints. When a multisig request fails, the response has the shape `{ ok: false, code: MultisigErrorCode, message: string, retryAfterMs?: number }`.
+The `MultisigErrorCode` type (defined in `packages/protocol/src/types.ts`) represents all error codes returned by the `POST /api/multisig/buy` and `POST /api/multisig/collection` endpoints. When a multisig request fails, the response has the shape `{ ok: false, code: MultisigErrorCode, message: string, retryAfterMs?: number, commitmentOpTxId?: string }`. The optional `commitmentOpTxId` field is present whenever the buyer's own `buy_commitment` is already on Hive (so the client can reconcile by tx id instead of resubmitting). The optional `retryAfterMs` field is present whenever the failure is transient and backoff is safe.
 
 ### Contention / concurrency
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| `NFT_LOCKED` | 409 | Another buy for this NFT is already in flight on **this** node (process-local `buyLock`). Retry after `retryAfterMs`. |
-| `COLLECTION_LOCKED` | 409 | A concurrent `create_collection` for the same `{creator, symbol}` is already being signed. Retry. |
-| `CROSS_NODE_RESERVATION` | 409 | A different settlement node's `buy_commitment` landed first for this NFT. The listing is effectively taken — refresh payment info before retrying. |
+| Code | HTTP Status | `retryAfterMs` | `commitmentOpTxId` | Description |
+|------|-------------|----------------|--------------------|-------------|
+| `NFT_LOCKED` | 409 | = `multisig_buy_locks.expires_at − now` | — | Another buy for this NFT is already in flight on **this** node (process-local `buyLock`). The lock TTL equals `BUY_TX_TTL_MS`. |
+| `COLLECTION_LOCKED` | 409 | ✔ | — | A concurrent `create_collection` for the same `{creator, symbol}` is already being signed. |
+| `CROSS_NODE_RESERVATION` | 409 | = `BUY_TX_TTL_MS` | — | A different settlement node's `buy_commitment` landed first for this NFT. `retryAfterMs` aligns with the lock TTL so a retry waits the full commitment window. The listing is effectively taken — refresh payment info before retrying. |
 
 ### Resource state
 
@@ -37,17 +37,19 @@ The `MultisigErrorCode` type (defined in `packages/protocol/src/types.ts`) repre
 | `NFT_EXPIRED_LISTING` | 409 | The listing has expired (past its `expiresAt` timestamp). |
 | `CANNOT_BUY_OWN` | 409 | Buyer and seller are the same account. |
 | `SEED_HAS_INSTANCES` | 409 | The NFT is a seed with `distributed > 0`. Seeds lock to their owner once instances exist. |
+| `INSUFFICIENT_BALANCE` | 409 | Pre-check failed: the buyer's liquid HIVE/HBD cannot cover the transfers. Cached responses are discarded on a 409 so a top-up + retry is re-evaluated against fresh state. |
 
 ### Client-shape errors
 
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
-| `INVALID_TX_STRUCTURE` | 400 | Malformed Hive transaction: wrong op count/order, expiration outside `[MULTISIG_TX_MIN, MULTISIG_TX_MAX]` (30–120 s), missing fields. |
+| `INVALID_TX_STRUCTURE` | 400 | Malformed Hive transaction: wrong op count/order, expiration outside `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (90–120 s), missing fields. |
 | `INVALID_PROTOCOL_PAYLOAD` | 400 | `listingId`/`listTxId` don't match the active listing, or the `custom_json` payload is malformed. |
 | `INVALID_PAYMENT_SPLIT` | 400 | A transfer amount (or its memo) drifts from the node's computed split. Re-fetch `GET /api/payment-info/:nftId`. Memos MUST be `NFTLox BUY:{nftId}` / `NFTLox ROY:{nftId}` / `NFTLox FEE:{nftId}`. |
 | `NODE_ACCOUNT_MISMATCH` | 400 | `custom_json.required_auths` does not contain this node's account. |
 | `MISSING_BUYER_AUTH` | 400 | First transfer's `from` is absent, empty, or not a valid Hive username. |
 | `BUYER_SIGNATURE_MISSING` | 400 | The transaction POSTed to `/api/multisig/buy` does not yet carry the buyer's active signature. The buyer must sign **before** submitting. |
+| `INVALID_BUYER_SIGNATURE` | 400 | The buyer's signature is present but fails verification against the transaction digest. Cryptographic check runs before any `buy_commitment` is broadcast (VUL-001). |
 | `POW_REQUIRED` / `INVALID_POW` / `POW_EXPIRED` / `POW_REPLAYED` | 400 | The PoW token header was missing, malformed, stale, or reused. The SDK solves this automatically; check clock skew if it surfaces. |
 
 ### Rate limiting / feature flags
@@ -60,15 +62,15 @@ The `MultisigErrorCode` type (defined in `packages/protocol/src/types.ts`) repre
 
 ### Node-last settlement (buy orchestration)
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| `NODE_NOT_ACTIVE` | 503 | Settlement node missed too many heartbeats (`MAX_NODE_HEARTBEAT_STALENESS_BLOCKS`). Other indexers will not accept its settlements. |
-| `INDEXER_LAGGED` | 503 | Indexer is more than `BUY_API_LAG_MAX_BLOCKS` (3 blocks, ~9 s) behind Hive HEAD. Transient — retry. |
-| `COMMITMENT_BROADCAST_FAILED` | 503 | Node could not broadcast its `buy_commitment` op to Hive. Transient — retry. |
-| `COMMITMENT_INCLUSION_TIMEOUT` | 503 | Node's `buy_commitment` never made it into a block within `BUY_COMMITMENT_TTL_BLOCKS` (~30 s). Transient. |
-| `BUY_BROADCAST_FAILED` | 503 | Node's final buy broadcast failed after winning the commitment race. Listing state is unchanged — retry. |
-| `SIGNING_QUEUE_FULL` | 503 | Beekeeper signing queue is saturated. Transient. |
-| `SIGNING_TIMEOUT` | 503 | A signing request exceeded its internal deadline. Transient. |
+| Code | HTTP Status | `retryAfterMs` | `commitmentOpTxId` | Description |
+|------|-------------|----------------|--------------------|-------------|
+| `NODE_NOT_ACTIVE` | 503 | — | — | Settlement node missed too many heartbeats (`MAX_NODE_HEARTBEAT_STALENESS_BLOCKS`). Other indexers will not accept its settlements. |
+| `INDEXER_LAGGED` | 503 | ✔ (lag-derived) | — | Indexer is more than `BUY_API_LAG_MAX_BLOCKS` (3 blocks, ~9 s) behind Hive irreversible, or `hive_head_time` is more than `BUY_API_HEAD_STALENESS_MAX_MS` (30 s) stale. Transient — retry. |
+| `COMMITMENT_BROADCAST_FAILED` | 503 | — | — | Node could not broadcast its `buy_commitment` op to Hive. Transient — retry. |
+| `COMMITMENT_INCLUSION_TIMEOUT` | **202** | = `BUY_TX_TTL_MS` | ✔ | Node's `buy_commitment` never made it into a block within `BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS` (60 s). The on-chain commitment and the local `buyLock` may still be live — reconcile by `commitmentOpTxId`. The HTTP 202 (not 503) signals "may still be processing" rather than "failed". |
+| `BUY_BROADCAST_FAILED` | 503 | — | — | Node's final buy broadcast failed after winning the commitment race. Listing state is unchanged — retry. |
+| `SIGNING_QUEUE_FULL` | 503 | — | — | Beekeeper signing queue is saturated. Transient. |
+| `SIGNING_TIMEOUT` | 503 | — | — | A signing request exceeded its internal deadline. Transient. |
 
 ### Fallback
 

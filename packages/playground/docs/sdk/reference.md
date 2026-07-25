@@ -401,9 +401,11 @@ Three classes, all extending `NftloxError` (which carries a `.url` field and a s
 
 | Class | Thrown by | Extra fields |
 |---|---|---|
-| `IndexerError` | `createIndexerClient` HTTP calls | `statusCode`, `responseHeaders`, `responseBody`, `requestBodyValues` |
-| `MultisigError` | `client.requestBuyMultisig`, `client.multisig`, `requestBuyMultisig`, `requestCreateCollectionMultisig` | `code: MultisigErrorCode`, `retryAfterMs?` |
+| `IndexerError` | `createIndexerClient` HTTP calls (non-multisig) | `statusCode`, `responseHeaders`, `responseBody`, `requestBodyValues`, `isRetryable` |
+| `MultisigError` | `client.requestBuyMultisig`, `client.multisig`, `requestBuyMultisig`, `requestCreateCollectionMultisig` | `code: MultisigErrorCode` (the protocol-defined code, e.g. `CROSS_NODE_RESERVATION`, `COMMITMENT_INCLUSION_TIMEOUT`) |
 | `NftloxError` | Base class | — |
+
+`MultisigError` is intentionally generic: it carries only `code` and `message` plus the inherited `IndexerError` context. The protocol-specific fields that some multisig responses emit — `commitmentOpTxId` (when the commitment was already broadcast) and `retryAfterMs` (when the buyer should back off) — live on the **return value** of `requestBuyMultisig` / `requestCreateCollectionMultisig`, not on the throw. The functions throw only on transport / shape failures; an `ok: false` body is delivered as a discriminated union parsed by the caller. Inspect the parsed `BuyMultisigResponse` (typed as `{ ok: true; txId; commitmentOpTxId } | { ok: false; code; message; retryAfterMs?; commitmentOpTxId? }`) directly to recover those fields.
 
 Use `instanceof` to narrow.
 
@@ -429,11 +431,16 @@ Re-exported from `@nftlox/protocol`:
 | `MAX_ROYALTY_PCT` | `50` | Royalty cap (whole %). |
 | `MIN_PRICE_AMOUNT` | `"0.100"` | Minimum listing price (3-decimal string). |
 | `MIN_LISTING_TTL_MS` / `MIN_LISTING_TTL_BUFFER_MS` | derived / `60_000` | Floor on listing durations and the safety buffer on top of the block-denominated minimum. |
-| `MULTISIG_TX_MIN_EXPIRATION_MS` | `30_000` | Lower bound on a buy transaction's L1 `expiration`. |
-| `MULTISIG_TX_MAX_EXPIRATION_MS` | `60_000` | Upper bound on a buy transaction's L1 `expiration`. Exceeds the 30 s commitment window on purpose for human-signer UX; post-expiry settlements are recorded in `orphaned_buys` for off-chain refund. |
-| `RECOMMENDED_BUY_TX_EXPIRATION_MS` | `60_000` | SDK default — equals MAX. Lower it toward `MULTISIG_TX_MIN_EXPIRATION_MS` (30 s) for a tighter orphan-risk profile. |
-| `BUY_COMMITMENT_TTL_BLOCKS` | `10` | Blocks (~30 s) a `buy_commitment` stays valid before the NFT is released back to `listed`. |
-| `BUY_API_LAG_MAX_BLOCKS` | `3` | Max indexer-vs-HEAD lag (blocks) that still allows `/api/multisig/buy` to serve requests. |
+| `MULTISIG_TX_MIN_EXPIRATION_MS` | `90_000` | Lower bound on a buy transaction's L1 `expiration`. Derived from `HIVE_FINALITY_SAFETY_BLOCKS × HIVE_BLOCK_TIME_MS + 30_000` to budget for irreversible observation plus a short signing/broadcast window. |
+| `MULTISIG_TX_MAX_EXPIRATION_MS` | `120_000` | Upper bound on a buy transaction's L1 `expiration`. Equals `BUY_TX_TTL_MS` so the signed buy cannot remain broadcastable after the reservation window has ended. |
+| `RECOMMENDED_BUY_TX_EXPIRATION_MS` | `120_000` | SDK default — equals `MULTISIG_TX_MAX_EXPIRATION_MS`. First-class SDK callers get the full finality-safe orchestration window. Lower it toward `MULTISIG_TX_MIN_EXPIRATION_MS` only when minimizing the orphan-risk profile. |
+| `BUY_TX_TTL_MS` | `120_000` | Settlement-internal TTL (`alias BUY_COMMITMENT_TTL_BLOCKS × HIVE_BLOCK_TIME_MS`). The on-chain `buy_commitment` reservation and the local `buyLock` row both use this value. |
+| `BUY_COMMITMENT_TTL_BLOCKS` | `40` | Blocks (`= BUY_TX_TTL_MS / HIVE_BLOCK_TIME_MS`, ≈ 120 s @ 3 s/block) a `buy_commitment` stays valid before the NFT is released back to `listed`. |
+| `BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS` | `60_000` | HTTP-side observation budget — the local node waits at most this long for its own `buy_commitment` to be indexed. Shorter than `BUY_TX_TTL_MS` by design; on `COMMITMENT_INCLUSION_TIMEOUT` the on-chain commitment and the local `buyLock` may still be live and the response carries `commitmentOpTxId` for reconciliation. |
+| `BUY_API_LAG_MAX_BLOCKS` | `3` | Max indexer-vs-irreversible-cursor lag (blocks) that still allows `/api/multisig/buy` to serve requests. |
+| `BUY_API_HEAD_STALENESS_MAX_MS` | `30_000` | Max wall-clock staleness for the indexer's view of Hive HEAD. Catches RPC outages where lag math stays healthy but the timestamp reference becomes stale. |
+| `MAX_ACTIVE_COMMITMENTS_PER_NODE` | `10` | Per-node cap on concurrently active `buy_commitment` reservations. Limits the grief a rogue node can cause by holding too many NFTs in `pending_sale`. |
+| `MAX_NODE_HEARTBEAT_STALENESS_BLOCKS` | `10_000` | Block gap (2 × `MIN_HEARTBEAT_INTERVAL_BLOCKS`) after which a settlement node is no longer considered active for buy co-signing. |
 | `BURN_RECIPIENT` | `"null"` | Hive's reserved burn account; `buildBurn` transfers `to` this value. |
 | `HASH_FORMAT_PREFIX` | `"sha256:"` | Canonical textual form for protocol hashes (data hashes, state roots). |
 | `COLLECTION_ID_PREFIX` / `SEED_ID_PREFIX` / `INSTANCE_ID_PREFIX` / `IMAGE_ID_PREFIX` | `"col_"` / `"seed_"` / `"nft_"` / `"img_"` | Id classification prefixes — use these instead of raw string literals. |
