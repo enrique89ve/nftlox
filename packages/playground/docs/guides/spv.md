@@ -184,4 +184,4 @@ For cheap reads (gallery listings, search results), trust the indexer and verify
 
 - [SDK Reference — SPV verifiers](../sdk/reference.md#spv-verifiers)
 - [Data Formats — deterministic ID derivation](../data-formats.md#deterministic-id-derivation)
-- [Multi-node design](../multinode.md) — why client-side verification is the long-term trust anchor.
+- [Network State & Determinism](../concepts/protocol-invariants.md#network-state--determinism) — why client-side verification is the long-term trust anchor.

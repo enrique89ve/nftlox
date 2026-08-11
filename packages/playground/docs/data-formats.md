@@ -437,6 +437,21 @@ type NodeHeartbeatData = {
 
 Cadence: ≤5000 blocks (~4h10m) apart. Missing it marks the node stale in `/api/l2_nodes` but does not kick it.
 
+### `node_state_checkpoint`
+
+**Auth:** Posting (registered node account).
+
+```typescript
+type NodeStateCheckpointData = {
+	readonly blockNum: number;              // positive multiple of 1000
+	readonly stateRoot: string;             // "sha256:<64 lowercase hex>"
+};
+```
+
+Nodes publish one checkpoint at each `STATE_CHECKPOINT_INTERVAL_BLOCKS`
+boundary (1000 blocks, roughly 50 minutes). A peer mismatch is advisory
+evidence, not a Sybil-resistant quorum decision; see [Protocol Invariants](concepts/protocol-invariants.md#network-state--determinism).
+
 ---
 
 ## Schema types

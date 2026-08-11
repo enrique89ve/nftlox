@@ -126,6 +126,7 @@ These are the actions currently accepted by `ALL_ACTIONS`.
 | Lending | `nft_return` | Active | Returns a lent instance to active custody |
 | Nodes | `node_register` | Posting | Registers a public indexer node in the discovery directory |
 | Nodes | `node_heartbeat` | Posting | Publishes indexed head and ownership state-root liveness data |
+| Nodes | `node_state_checkpoint` | Posting | Publishes an aligned state-root snapshot for peer comparison |
 
 `buy_commitment` is **node-only**: it is never emitted by the SDK or by end
 users. The settlement node broadcasts it with its own active key as part of
