@@ -34,7 +34,9 @@ import {
 } from "@/protocol/index.ts";
 
 export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
-	const toRaw = optionalString(op.data.to);
+	const toRaw = Object.prototype.hasOwnProperty.call(op.data, "to")
+		? requireString(op.data.to, "to")
+		: null;
 	if (toRaw) {
 		const error = validateHiveUsername(toRaw);
 		if (error) throw new Error(`Invalid Hive username for to ("${toRaw}"): ${error}`);

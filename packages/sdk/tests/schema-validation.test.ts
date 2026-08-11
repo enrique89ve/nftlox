@@ -223,7 +223,7 @@ describe("listInputSchema expiresAt", () => {
 		expect(result2.success).toBe(false);
 	});
 
-	test("rejects listing without expiresAt (mandatory in 0.10.0+)", () => {
+	test("rejects listing without expiresAt (mandatory in 0.11.0+)", () => {
 		const result = listInputSchema.safeParse(validBaseInput);
 		expect(result.success).toBe(false);
 	});

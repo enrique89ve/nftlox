@@ -7,7 +7,7 @@ Every mutation in NFTLox is a Hive operation whose payload is a `ProtocolPayload
 ```typescript
 type ProtocolPayload<T> = {
 	readonly protocol: string;         // "nftlox_testnet"
-	readonly version: string;          // "0.10.0"
+	readonly version: string;          // "0.11.0"
 	readonly action: ProtocolAction;
 	readonly data: T;                  // shape depends on action
 };
@@ -20,7 +20,7 @@ Emitted as a Hive `custom_json`:
 	"required_auths": ["alice"],             // active-auth actions
 	"required_posting_auths": [],            // or the inverse for posting-auth actions
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.10.0\",\"action\":\"mint\",\"data\":{…}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.11.0\",\"action\":\"mint\",\"data\":{…}}"
 }]
 ```
 
@@ -49,7 +49,12 @@ SDK consumers never see the wire form: builders apply `toWireUrl` before emittin
 
 ## Action → auth level
 
-Three actions sit in `required_auths` (active key): `create_collection`, `buy_commitment`, and `buy`. Everything else sits in `required_posting_auths` (posting key). The mapping is enforced by `ACTION_AUTH_LEVEL` in `packages/protocol/src/auth.ts` — there is no ambiguity and no override.
+Custody actions sit in `required_auths` (active key): `create_collection`,
+`transfer`, `list`, `unlist`, `buy_commitment`, `buy`, `nft_approve`,
+`nft_approve_all`, `nft_transfer_from`, `nft_lend`, and `nft_return`. The
+remaining non-custodial actions use `required_posting_auths` (posting key).
+The mapping is enforced by `ACTION_AUTH_LEVEL` in
+`packages/protocol/src/auth.ts` — there is no ambiguity and no override.
 
 A subset of those active-auth actions additionally require the signer to be a **registered active settlement node** at processing time. That rule is encoded in `NODE_SIGNED_ACTIONS` and enforced via `requiresActiveNodeSigner(action)` — it currently covers `buy_commitment` and `buy`. `create_collection` is active-signed by the creator (not by a node), so it is not in `NODE_SIGNED_ACTIONS`.
 

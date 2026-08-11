@@ -96,8 +96,8 @@ const BUY_MULTISIG_STATUS: Record<MultisigErrorCode, number> = {
 	// upstream / temporal unavailability
 	NODE_NOT_ACTIVE: 503,
 	INDEXER_LAGGED: 503,
-	// F3.C — node refuses to sign while a state-root divergence with peers is
-	// outstanding; clears manually after operator audit.
+	// F3.C — node refuses to sign while its local integrity interlock is set;
+	// clears manually after operator audit.
 	NODE_DIVERGENT: 503,
 	// The commitment may already be in Hive; clients must reconcile by tx id
 	// instead of treating the observation timeout as a failed purchase.

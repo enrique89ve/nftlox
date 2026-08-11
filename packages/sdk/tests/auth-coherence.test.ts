@@ -69,9 +69,9 @@ describe("createHiveOperation emits auth fields from ACTION_AUTH_LEVEL", () => {
 		});
 	}
 
-	test("rejects removed pack actions instead of falling back to posting auth", () => {
-		expect(() => createPayload("pack_buy" as ProtocolAction, { packId: "pack_1", quantity: 1 } as never))
-			.toThrow("Unsupported protocol action: pack_buy");
+	test("rejects unsupported actions instead of falling back to posting auth", () => {
+		expect(() => createPayload("unsupported_action" as ProtocolAction, {} as never))
+			.toThrow("Unsupported protocol action: unsupported_action");
 	});
 });
 

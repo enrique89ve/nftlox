@@ -34,6 +34,12 @@ mock.module("@/scanner/hive-client.ts", () => ({
 	getCustomJsonInRange: () => Promise.resolve([]),
 	getHafAHBlockRange: () => 0,
 	getTransfersInTransaction: () => Promise.resolve([]),
+	lookupHiveAccounts: () => Promise.resolve({
+		requested: [],
+		accounts: new Map(),
+		missing: new Set<string>(),
+		attemptedEndpoints: [],
+	}),
 	getHeadBlockNum: () => Promise.resolve(0),
 	selectConsensusHead: () => ({ headBlock: 0, irreversibleBlock: 0 }),
 }));

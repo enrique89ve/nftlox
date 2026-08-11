@@ -29,7 +29,7 @@ Sync status and node information.
 
 ```json
 {
-	"protocolVersion": "0.10.0",
+	"protocolVersion": "0.11.0",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -843,7 +843,7 @@ Submit a buyer-signed `buy` transaction for **node-last** settlement. The node v
 
 `txId` is the Hive `tx_id` of the fully settled buy transaction (already on chain). `commitmentOpTxId` is the `tx_id` of the `buy_commitment` custom_json the node used to reserve the NFT — keep it for auditing cross-node race outcomes.
 
-**Error codes:** See [errors.md](errors.md) for the full `MultisigErrorCode` surface. Notable codes specific to the node-last flow: `BUYER_SIGNATURE_MISSING`, `INVALID_BUYER_SIGNATURE`, `INSUFFICIENT_BALANCE`, `CROSS_NODE_RESERVATION`, `COMMITMENT_BROADCAST_FAILED`, `COMMITMENT_INCLUSION_TIMEOUT` (HTTP **202** — the buyer's `buy_commitment` may already be on Hive; the response carries `commitmentOpTxId` for reconciliation), `BUY_BROADCAST_FAILED`, `NODE_NOT_ACTIVE`, `INDEXER_LAGGED`, `NODE_DIVERGENT` (HTTP 503 — this node detected a state-root mismatch with peers and is refusing to co-sign until an operator clears the flag; route to a different indexer). The failure body always has `{ ok: false, code, message }` and may additionally carry `retryAfterMs` (transient back-off) and `commitmentOpTxId` (when the commitment was already broadcast).
+**Error codes:** See [errors.md](errors.md) for the full `MultisigErrorCode` surface. Notable codes specific to the node-last flow: `BUYER_SIGNATURE_MISSING`, `INVALID_BUYER_SIGNATURE`, `INSUFFICIENT_BALANCE`, `CROSS_NODE_RESERVATION`, `COMMITMENT_BROADCAST_FAILED`, `COMMITMENT_INCLUSION_TIMEOUT` (HTTP **202** — the buyer's `buy_commitment` may already be on Hive; the response carries `commitmentOpTxId` for reconciliation), `BUY_BROADCAST_FAILED`, `NODE_NOT_ACTIVE`, `INDEXER_LAGGED`, `NODE_DIVERGENT` (HTTP 503 — this node's local integrity interlock is set after a verified local fault or operator action; route to a different indexer while the operator audits it). Peer checkpoint mismatches are advisory because registered node identities are not Sybil-resistant. The failure body always has `{ ok: false, code, message }` and may additionally carry `retryAfterMs` (transient back-off) and `commitmentOpTxId` (when the commitment was already broadcast).
 
 SDK helper: `requestBuyMultisig(baseUrl, { transaction })` or `client.requestBuyMultisig(...)`. PoW-gated — the SDK solves the token automatically.
 

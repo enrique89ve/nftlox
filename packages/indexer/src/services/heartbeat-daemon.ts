@@ -50,7 +50,6 @@ import { sql } from "@/db/client.ts";
 import {
 	findHighestDivergentCheckpointBlock,
 	getFormattedStateRoot,
-	setDivergentAtBlock,
 } from "@/db/queries/state-root.ts";
 import { formatStateRoot } from "@/utils/state-root-hash.ts";
 import { getHeadBlockNum } from "@/scanner/hive-client.ts";
@@ -241,11 +240,10 @@ async function tick(): Promise<void> {
 		// per-minute RC envelope of a posting-key custom_json.
 		await tickCheckpoint();
 
-		// Divergence: cheap indexed JOIN + LIMIT 1. Always run; the
-		// no-divergence path emits no log line. On hit we set the flag
-		// monotonically and log loudly so an operator grepping the log can
-		// reconstruct the disagreement without querying the DB. F3.B does NOT
-		// gate any API — that's F3.C.
+		// Peer comparison: cheap indexed JOIN + LIMIT 1. A mismatch is evidence
+		// worth surfacing, but not proof that OUR projection is wrong. Registered
+		// node identities are permissionless and currently have no bond, so one
+		// peer must never be able to activate the local multisig interlock.
 		await tickDivergenceCheck();
 	} finally {
 		inFlight = false;
@@ -268,13 +266,16 @@ async function tickCheckpoint(): Promise<void> {
 }
 
 /**
- * F3.B — Comparator probe. Looks for the highest checkpoint block where our
- * local snapshot disagrees with any peer's `node_state_checkpoint`, and if
- * found:
- *   1. Logs an `error`-level structured event with all four diagnostic fields
- *      (blockNum, ourRoot, theirAccount, theirRoot) so an operator can
- *      reconstruct the disagreement from the log alone.
- *   2. Persists the divergence flag via `setDivergentAtBlock` (monotonic).
+ * F3.B — Advisory comparator probe. Looks for the highest checkpoint block
+ * where our local snapshot disagrees with any peer's `node_state_checkpoint`
+ * and logs all four diagnostic fields so an operator can investigate.
+ *
+ * It intentionally does NOT set `state_meta.divergent_at_block`. Checkpoint
+ * publishers are permissionless identities, not a Sybil-resistant consensus
+ * committee. Turning one peer assertion into the local safety interlock lets a
+ * zero-cost node disable every honest multisig signer. The interlock remains
+ * available for independently verified local integrity failures or explicit
+ * operator action.
  *
  * Exported so the bun:test suite can drive a single tick deterministically
  * without orchestrating the full daemon loop. Production callers go through
@@ -285,13 +286,13 @@ export async function tickDivergenceCheck(): Promise<void> {
 	const hit = await findHighestDivergentCheckpointBlock(ourAccount);
 	if (!hit) return;
 
-	log.error("STATE-ROOT DIVERGENCE DETECTED", {
+	log.error("UNTRUSTED PEER CHECKPOINT MISMATCH (ADVISORY)", {
 		blockNum: hit.blockNum,
 		ourRoot: hit.ourRoot,
 		theirAccount: hit.theirAccount,
 		theirRoot: hit.theirRoot,
+		automaticShutdown: false,
 	});
-	await setDivergentAtBlock(hit.blockNum);
 }
 
 async function emitHeartbeat(currentBlock: number): Promise<void> {

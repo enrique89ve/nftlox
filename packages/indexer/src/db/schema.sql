@@ -63,13 +63,13 @@ CREATE TABLE IF NOT EXISTS state_meta (
 	state_root BYTEA NOT NULL CHECK (octet_length(state_root) = 32),
 	nft_count BIGINT NOT NULL DEFAULT 0 CHECK (nft_count >= 0),
 	last_block_num BIGINT NOT NULL DEFAULT 0,
-	-- F3.B — divergence flag. NULL = no divergence detected against any peer's
-	-- `node_state_checkpoint`. Non-null = highest checkpoint block_num where we
-	-- observed disagreement between our local state_root and another node's. The
-	-- comparator tick advances this monotonically (GREATEST). Operator clears it
-	-- manually with `UPDATE state_meta SET divergent_at_block = NULL WHERE id=1`
-	-- after investigating; if the disagreement persists in `l2_node_checkpoints`
-	-- the next tick re-sets the flag. NOT a hash input — see state-root-hash.ts.
+	-- Local multisig integrity interlock. NULL = signing is not blocked by local
+	-- integrity policy. Non-null = block associated with an independently verified
+	-- local fault or explicit operator action. Permissionless peer checkpoints are
+	-- advisory only and MUST NOT set this field: node identities are not
+	-- Sybil-resistant. Operator clears it manually with
+	-- `UPDATE state_meta SET divergent_at_block = NULL WHERE id=1`
+	-- after investigating. NOT a hash input — see state-root-hash.ts.
 	divergent_at_block BIGINT,
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

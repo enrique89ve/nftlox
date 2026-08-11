@@ -152,7 +152,7 @@ export type SetDataFromData = SeedProvenance & {
 // Seeds are immutable, so a snapshot on the listing payload would add
 // duplication without protecting against any real mutation.
 //
-// `expiresAt` is mandatory in 0.10.0+ — every listing carries an end time, in
+// `expiresAt` is mandatory in 0.11.0+ — every listing carries an end time, in
 // line with OpenSea / LooksRare. The accepted window is bounded by
 // `MIN_LISTING_TTL_MS` / `MAX_LISTING_TTL_MS` against the listing block
 // timestamp; the indexer rejects values outside that window.

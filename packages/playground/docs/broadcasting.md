@@ -6,7 +6,8 @@ The SDK builds **unsigned** Hive operations. Signing and broadcasting are your r
 
 | Flow | Triggered by | Who signs what | Transport |
 |---|---|---|---|
-| **Single-signer, posting** | 17 of 20 builders (mint, transfer, list, unlist, set_data, approvals, lending…) | You, posting key | Any Hive RPC |
+| **Single-signer, posting** | Non-custodial builders (mint, set_data, schema and node operations) | You, posting key | Any Hive RPC |
+| **Single-signer, active** | Custody builders (transfer, list, unlist, approvals, lending) | You, active key | Any Hive RPC |
 | **Node-last buy** | `buildBuy` | You sign the full tx (active); node validates, broadcasts a `buy_commitment`, co-signs, and broadcasts the settled tx itself | POST signed tx to `/api/multisig/buy` — you do **not** broadcast |
 | **Two-op, dual-signer** | `buildCollection` | You sign op[0] active; node signs op[1] via `/api/multisig/collection` | POST to indexer, then Hive RPC |
 
@@ -21,7 +22,7 @@ Every builder returns Hive-native tuples:
 	"required_auths": [],
 	"required_posting_auths": ["alice"],
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.10.0\",\"action\":\"mint\",\"data\":{…}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.11.0\",\"action\":\"mint\",\"data\":{…}}"
 }]
 ```
 
@@ -62,7 +63,8 @@ Any public node works. Rotate on failure.
 
 ## Flow 1 — Single-signer, posting auth
 
-This covers nearly every mutation. Build, sign with posting key, broadcast.
+Non-custodial mutations use the posting key. Custody mutations must be built,
+signed with the active key, and broadcast as a separate single-signer flow.
 
 ### With `hive-tx`
 

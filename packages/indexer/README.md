@@ -51,6 +51,21 @@ The indexer reads Hive L1 block by block, validates NFTLox `custom_json` operati
 
 **SPV verification ("Boleto Suizo")** — the client doesn't trust the indexer blindly. For ownership, the indexer returns a compact current-owner claim with `owner_operation_id`, and the SDK resolves it directly through HAFAH/Hive L1. PostgreSQL is a fast projection; Hive L1 remains the authority.
 
+**Historical account validation** — before opening the PostgreSQL transaction for a
+sync batch, the indexer batches Hive account lookups for account targets that can
+change ownership or custody (`transfer`, `mint`, `bulk_distribute`, approvals,
+and lending). It rejects targets that do not exist or were created after the Hive
+operation timestamp, and records them in `invalid_operations`. The lookup is
+read-only and bounded by endpoint failover/deadlines so external RPC latency does
+not hold database locks.
+
+**Peer checkpoint mismatches are advisory** — `node_state_checkpoint` comparisons
+are useful evidence for operators, but node registration is permissionless and is
+not a Sybil-resistant quorum. A mismatch therefore logs
+`UNTRUSTED PEER CHECKPOINT MISMATCH (ADVISORY)` without setting
+`state_meta.divergent_at_block`. That local multisig interlock remains reserved
+for a verified local integrity failure or explicit operator action.
+
 ## REST API
 
 Interactive documentation at `http://localhost:3050/swagger` (disabled in production).

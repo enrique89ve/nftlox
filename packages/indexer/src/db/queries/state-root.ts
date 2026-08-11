@@ -270,16 +270,15 @@ export async function recordCheckpointIfBoundary(
 }
 
 /**
- * F3.B — Divergence detection. Returns the highest block_num where our local
+ * F3.B — Peer mismatch detection. Returns the highest block_num where our local
  * state_root snapshot disagrees with at least one other node's
  * `node_state_checkpoint` for the same boundary, or null if no disagreement
  * exists.
  *
- * Symmetric semantics: any peer disagreeing with us at the same block triggers
- * a hit. We do NOT try to determine which side is correct — that's an operator
- * investigation. With 3+ nodes and one byzantine, both honest peers will see
- * the byzantine disagree and flag themselves; the byzantine flags itself too
- * if it runs honest comparator code. Conservative-but-correct.
+ * Symmetric semantics: any peer disagreeing with us at the same block produces
+ * advisory evidence. We do NOT try to determine which side is correct. In
+ * particular, callers must not treat this result as proof that the local node
+ * is wrong: registration is permissionless and peer count is not a quorum.
  *
  * The query JOINs the BYTEA local snapshot against the TEXT on-chain
  * checkpoints by formatting the BYTEA side to "sha256:<hex>" inside the query
@@ -351,11 +350,12 @@ export async function findHighestDivergentCheckpointBlock(
 }
 
 /**
- * F3.B — Sets `state_meta.divergent_at_block` to GREATEST(current, blockNum).
+ * Local safety interlock — sets `state_meta.divergent_at_block` to
+ * GREATEST(current, blockNum).
  * Monotonic on a single tick: a later call with a lower block cannot lower the
- * flag. Operator clears it manually after investigation. The flag is a
- * single-bit alarm; diagnostic detail (peer account, roots) lives in the
- * structured log emitted by the daemon, not in extra columns.
+ * flag. Operator clears it manually after investigation. Peer checkpoint
+ * mismatches alone must not call this function: they do not identify which
+ * projection is wrong and their publishers are not Sybil-resistant.
  */
 export async function setDivergentAtBlock(
 	blockNum: number,

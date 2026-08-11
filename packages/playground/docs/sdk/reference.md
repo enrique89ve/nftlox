@@ -56,7 +56,7 @@ type ValidationError = {
 
 - `success` is a compile-time discriminator — narrow on it before touching any other field.
 - `operations` is already in Hive's `["custom_json", {...}]` / `["transfer", {...}]` tuple form. Pass directly to `hive-tx`, `@hiveio/wax`, or `dhive`.
-- `keyType` tells the caller which private key to sign with (`Active` for `create_collection`, `buy_commitment`, and `buy`; `Posting` for everything else).
+- `keyType` tells the caller which private key to sign with (`Active` for collection creation, marketplace settlement, and custody/delegation actions; `Posting` for non-custodial supply, data, schema, and node actions).
 - `coSigners` is present on multi-signer flows (`buildCollection` and `buildBuy`). Hand the listed operation to the node's multisig endpoint — see [Signing & Broadcasting](../broadcasting.md).
 - `generatedIds` surfaces deterministic IDs computed by the builder (`collectionId`, `seedId`, `listingId`, `listingNonce`, `originDna`) before the transaction is even broadcast. This is the hook for pre-computing links, caching, or optimistic UI.
 - `warnings` are non-fatal ergonomic hints (long names, unusually high royalty, etc.).
@@ -156,8 +156,8 @@ Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_T
 
 | Builder | Signature | Auth | Ops |
 |---|---|---|---|
-| `buildTransfer` | `(input) => KeychainResult<TransferData>` | Posting | `[custom_json]` |
-| `buildBurn` | `(input) => KeychainResult<TransferData>` | Posting | `[custom_json]` |
+| `buildTransfer` | `(input) => KeychainResult<TransferData>` | Active | `[custom_json]` |
+| `buildBurn` | `(input) => KeychainResult<TransferData>` | Active | `[custom_json]` |
 
 `buildBurn` is a thin wrapper that emits a `transfer` whose `to` is the exported `BURN_RECIPIENT` constant (Hive's reserved `"null"` account). It accepts either a single `nftId` or a `nftIds` array for bulk burn.
 
@@ -165,8 +165,8 @@ Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_T
 
 | Builder | Signature | Auth | Ops |
 |---|---|---|---|
-| `buildList` | `(input) => Promise<KeychainResult<ListingData>>` | Posting | `[custom_json]` |
-| `buildUnlist` | `(input) => KeychainResult<UnlistData>` | Posting | `[custom_json]` |
+| `buildList` | `(input) => Promise<KeychainResult<ListingData>>` | Active | `[custom_json]` |
+| `buildUnlist` | `(input) => KeychainResult<UnlistData>` | Active | `[custom_json]` |
 | `buildBuy` | `(input) => KeychainResult<BuyData>` | Active + node multisig | `[...transfers, custom_json]` |
 
 **`buildList`** generates a deterministic `listingId` and a random `listingNonce`. The nonce is what distinguishes re-listings of the same NFT at the same price — without it, relisting would collide with the previous ID.
@@ -195,7 +195,10 @@ Listings do not carry image metadata. Explorers and marketplaces resolve imagery
 | `buildDataOperatorApprove` | Collection creator grants an operator rights to call `set_data_from`. |
 | `buildSetDataFrom` | Operator updates `mutableData` on an instance they are approved for. |
 
-All require Posting auth. `buildNftApprove` / `buildNftApproveAll` operate on **instances** only — seeds are never approvable (they are templates, not tradable assets).
+`buildNftApprove`, `buildNftApproveAll`, and `buildNftTransferFrom` require
+Active auth. `buildDataOperatorApprove` and `buildSetDataFrom` remain Posting
+auth. The approval builders operate on **instances** only — seeds are never
+approvable (they are templates, not tradable assets).
 
 ### Lending
 
@@ -205,6 +208,8 @@ All require Posting auth. `buildNftApprove` / `buildNftApproveAll` operate on **
 | `buildNftReturn` | Borrower | Returns the instance. Signer must be the current borrower. |
 
 Lending only applies to instances. Seeds cannot be lent.
+
+Both lending builders require Active auth because they change custody rights.
 
 ### Data (per-instance)
 
@@ -416,8 +421,8 @@ Re-exported from `@nftlox/protocol`:
 | Constant | Value | Meaning |
 |---|---|---|
 | `PROTOCOL_ID` | `"nftlox_testnet"` | The `id` field on every `custom_json`. |
-| `PROTOCOL_VERSION` | `"0.10.0"` | The `version` field in every payload. |
-| `MIN_PROTOCOL_VERSION` | `"0.10.0"` | Lowest protocol version the indexer still accepts. |
+| `PROTOCOL_VERSION` | `"0.11.0"` | The `version` field in every payload. |
+| `MIN_PROTOCOL_VERSION` | `"0.11.0"` | Lowest protocol version the indexer still accepts. |
 | `HIVE_BLOCK_TIME_MS` | `3000` | Hive block cadence. Every `*_BLOCKS` window converts to wall time through this. |
 | `HIVE_DECIMALS` / `HIVE_PRECISION` | `3` / `1000` | Decimals and micro-unit multiplier for HIVE/HBD amounts. |
 | `MAX_OPERATIONS_PER_TX` | `5` | Hard cap per Hive transaction. |

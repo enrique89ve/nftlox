@@ -174,10 +174,10 @@ Each instance gets a unique `nftDna` and `instanceNumber`. The player owns disti
 
 ## 4. Marketplace — List & Buy
 
-Listings require only the **posting key**. Buys require the buyer's **active key** + node co-signature. Always read the payment split from the indexer — never compute it yourself.
+Listings require the owner's **active key**. Buys require the buyer's **active key** + node co-signature. Always read the payment split from the indexer — never compute it yourself.
 
 ```typescript
-// Player lists a card (posting key, single-signer)
+// Player lists a card (active key, single-signer)
 async function listCard(owner: string, nftId: string, priceHive: string) {
 	const result = await buildList({
 		owner,
@@ -187,7 +187,7 @@ async function listCard(owner: string, nftId: string, priceHive: string) {
 		marketplace: "ragnarok",                         // optional scope tag
 	});
 	if (!result.success) throw new Error(JSON.stringify(result.errors));
-	return broadcast(result.operations, POSTING);
+	return broadcast(result.operations, ACTIVE);
 }
 
 // Another player buys it (active key + node multisig)
@@ -265,18 +265,18 @@ For the owner updating their own NFT, use `buildSetData` with `owner:` instead o
 Non-custodial lending: the lender keeps ownership, the borrower gets a scoped right of use. While lent, the card cannot be listed, transferred, or re-lent — but XP still accumulates.
 
 ```typescript
-// Lender lends a card to a teammate (signed with lender's posting key)
+// Lender lends a card to a teammate (signed with lender's active key)
 async function lend(owner: string, instanceId: string, borrower: string) {
 	const result = buildNftLend({ owner, instanceId, borrower });
 	if (!result.success) throw new Error(JSON.stringify(result.errors));
-	return broadcast(result.operations, POSTING);
+	return broadcast(result.operations, ACTIVE);
 }
 
-// Borrower returns it when done (signed with borrower's posting key)
+// Borrower returns it when done (signed with borrower's active key)
 async function returnCard(borrower: string, instanceId: string) {
 	const result = buildNftReturn({ owner: borrower, instanceId });
 	if (!result.success) throw new Error(JSON.stringify(result.errors));
-	return broadcast(result.operations, POSTING);
+	return broadcast(result.operations, ACTIVE);
 }
 ```
 

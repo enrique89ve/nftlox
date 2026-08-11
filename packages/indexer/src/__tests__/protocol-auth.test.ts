@@ -79,6 +79,27 @@ describe("protocol auth parser", () => {
 		expect(result.ops[0]?.authLevel).toBe("posting");
 	});
 
+	test("accepts custody actions with exactly one active signer", () => {
+		const result = parseHafAHOperations([
+			makeCustomJsonOperation(ACTION_TRANSFER, ["alice"], []),
+		]);
+
+		expect(result.rejected).toEqual([]);
+		expect(result.ops).toHaveLength(1);
+		expect(result.ops[0]?.signer).toBe("alice");
+		expect(result.ops[0]?.authLevel).toBe("active");
+	});
+
+	test("parses custody actions signed with posting authority for router rejection", () => {
+		const result = parseHafAHOperations([
+			makeCustomJsonOperation(ACTION_TRANSFER, [], ["alice"]),
+		]);
+
+		expect(result.rejected).toEqual([]);
+		expect(result.ops).toHaveLength(1);
+		expect(result.ops[0]?.authLevel).toBe("posting");
+	});
+
 	test("rejects custom_json with both authority arrays populated", () => {
 		const result = parseHafAHOperations([
 			makeCustomJsonOperation(ACTION_TRANSFER, ["alice"], ["alice"]),

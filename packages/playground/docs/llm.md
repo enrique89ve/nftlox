@@ -57,13 +57,13 @@ type KeychainResult<T> =
 - Always check `success` before using any other field.
 - `operations` is already in Hive tuple format `["custom_json", {...}]` or `["transfer", {...}]`.
 - `keyType` is authoritative — never hardcode key types.
-- Active key only for `create_collection` and `buy`. Everything else is posting.
+- Active key for collection creation, marketplace settlement, and custody/delegation (`transfer`, `list`, `unlist`, approvals, and lending). Non-custodial supply, data, schema, and node actions use posting.
 
 ---
 
 ## Three signer flows
 
-### Flow 1 — Posting single-signer (17 of 20 actions)
+### Flow 1 — Posting single-signer (non-custodial actions)
 
 ```typescript
 import { buildTransfer } from "nftlox-sdk";
@@ -512,7 +512,7 @@ Validation errors never throw — they live in `result.errors[]`.
 ```typescript
 import {
   PROTOCOL_ID,              // "nftlox_testnet"
-  PROTOCOL_VERSION,         // "0.10.0"
+  PROTOCOL_VERSION,         // "0.11.0"
   PROTOCOL_FEE_BPS,         // 100 (1%)
   MAX_ROYALTY_PCT,          // 50
   BUY_COMMITMENT_TTL_BLOCKS, // 40 (~120 s @ 3 s/block)

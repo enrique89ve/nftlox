@@ -13,7 +13,7 @@ import {
  * Transfer builder input.
  *
  * `from` is the signer of the Hive operation (carried by the auth array
- * selected via ACTION_AUTH_LEVEL — posting for transfer). It is intentionally
+ * selected via ACTION_AUTH_LEVEL — active for transfer). It is intentionally
  * NOT emitted in the protocol payload: the indexer derives the owner from
  * `op.signer` (Hive is the source of truth for who signed the op). Any payload
  * that ships a `from` field is rejected by the transfer handler.

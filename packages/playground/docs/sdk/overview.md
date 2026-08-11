@@ -24,7 +24,7 @@ Every `build*` function returns a `KeychainResult<T>` discriminated union. Three
 
 1. **Narrow on `success` before touching anything else.** Errors are strongly typed (`{ field, message, code }`) and safe to surface directly in a form.
 2. **`operations` is ready to sign.** Already in Hive's tuple format `["custom_json", { … }]` / `["transfer", { … }]`. Hand it straight to `hive-tx`, `@hiveio/wax`, or `@hiveio/dhive`.
-3. **`keyType` tells you which key.** `"Active"` only for `create_collection` and `buy`; `"Posting"` for everything else.
+3. **`keyType` tells you which key.** Custody/delegation actions return `"Active"`; non-custodial supply, data, schema, and node operations return `"Posting"`.
 
 For the full type definition see [SDK Reference — KeychainResult](reference.md#the-keychainresultt-contract).
 
@@ -34,7 +34,8 @@ Every action falls into one of three shapes — recognizing which one changes ho
 
 | Flow | Triggered by | Signers |
 |---|---|---|
-| **Posting, single-signer** | 18 of 20 builders | You, posting key |
+| **Posting, single-signer** | Non-custodial builders | You, posting key |
+| **Active, single-signer** | Custody/delegation builders | You, active key |
 | **Node-last buy** | `buildBuy` | You sign the full tx (active); node validates, broadcasts a `buy_commitment`, co-signs, and broadcasts the settled buy via `/api/multisig/buy` |
 | **Active + dual-signer** | `buildCollection` | You (active) + node via `/api/multisig/collection` |
 

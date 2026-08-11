@@ -77,12 +77,12 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.10.0",
+								version: "0.11.0",
 								action: ACTION_TRANSFER,
 								data: params.data,
 							}),
-							required_auths: params.requiredAuths ?? [],
-							required_posting_auths: params.requiredPostingAuths ?? [params.signer],
+							required_auths: params.requiredAuths ?? [params.signer],
+							required_posting_auths: params.requiredPostingAuths ?? [],
 						},
 					},
 					block: 105212166,
@@ -134,15 +134,15 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.10.0",
+								version: "0.11.0",
 								action: ACTION_TRANSFER,
 								data: {
 									nftId: "nft_1",
 									to: "bob",
 								},
 							}),
-							required_auths: [],
-							required_posting_auths: ["alice"],
+							required_auths: ["alice"],
+							required_posting_auths: [],
 						},
 					},
 					block: 105212166,
@@ -234,8 +234,8 @@ describe("verifyNftOwnership", () => {
 			previousOwner: "alice",
 			operationId: "451882812111325102",
 			signer: "alice",
-			requiredAuths: ["alice"],
-			requiredPostingAuths: [],
+			requiredAuths: [],
+			requiredPostingAuths: ["alice"],
 			data: {
 				nftId: "nft_auth_1",
 				to: "bob",
@@ -250,7 +250,7 @@ describe("verifyNftOwnership", () => {
 		});
 
 		expect(result.status).toBe("error");
-		expect(result.message).toContain("requires posting key authority");
+		expect(result.message).toContain("requires active key authority");
 	});
 
 	test("rejects batch transfer proofs because handler commits the whole batch atomically", async () => {
@@ -394,7 +394,7 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.10.0",
+								version: "0.11.0",
 								action: ACTION_BUY,
 								data: {
 									nftId: "nft_buy_1",
@@ -437,7 +437,7 @@ describe("verifyNftOwnership", () => {
 								id: "nftlox_testnet",
 								json: JSON.stringify({
 									protocol: "nftlox_testnet",
-									version: "0.10.0",
+									version: "0.11.0",
 									action: ACTION_CREATE_COLLECTION,
 									data: {
 										id: collectionId,
@@ -477,7 +477,7 @@ describe("verifyNftOwnership", () => {
 								id: "nftlox_testnet",
 								json: JSON.stringify({
 									protocol: "nftlox_testnet",
-									version: "0.10.0",
+									version: "0.11.0",
 									action: ACTION_LIST,
 									data: {
 										nftId: "nft_buy_1",
@@ -487,8 +487,8 @@ describe("verifyNftOwnership", () => {
 										expiresAt: listingExpiresAt,
 									},
 								}),
-								required_auths: [],
-								required_posting_auths: [seller],
+								required_auths: [seller],
+								required_posting_auths: [],
 							},
 						},
 					],
@@ -531,7 +531,7 @@ describe("verifyNftOwnership", () => {
 											id: "nftlox_testnet",
 											json: JSON.stringify({
 												protocol: "nftlox_testnet",
-												version: "0.10.0",
+												version: "0.11.0",
 												action: ACTION_BUY_COMMITMENT,
 												data: {
 													txHash: "other_buy_tx",
@@ -559,7 +559,7 @@ describe("verifyNftOwnership", () => {
 									id: "nftlox_testnet",
 									json: JSON.stringify({
 										protocol: "nftlox_testnet",
-										version: "0.10.0",
+										version: "0.11.0",
 										action: ACTION_BUY_COMMITMENT,
 										data: {
 											txHash: "buy_tx_1",
@@ -733,15 +733,15 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.10.0",
+								version: "0.11.0",
 								action: ACTION_TRANSFER,
 								data: {
 									nftId: "nft_2",
 									to: "bob",
 								},
 							}),
-							required_auths: [],
-							required_posting_auths: ["alice"],
+							required_auths: ["alice"],
+							required_posting_auths: [],
 						},
 					},
 					block: 105212201,

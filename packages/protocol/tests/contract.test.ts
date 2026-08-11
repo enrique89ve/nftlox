@@ -26,10 +26,10 @@ describe("protocol contract integrity", () => {
 		expect(PROTOCOL_ID).toMatch(/^nftlox(_[a-z]+)?$/);
 	});
 
-	test("21 actions, 3 active + 18 posting, no overlap", () => {
+	test("21 actions, 11 active + 10 posting, no overlap", () => {
 		expect(ALL_ACTIONS.length).toBe(21);
-		expect(ACTIVE_AUTH_ACTIONS.length).toBe(3);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(18);
+		expect(ACTIVE_AUTH_ACTIONS.length).toBe(11);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(10);
 
 		const activeSet = new Set<string>(ACTIVE_AUTH_ACTIONS);
 		const overlap = POSTING_AUTH_ACTIONS.filter((a) => activeSet.has(a));
@@ -41,9 +41,9 @@ describe("protocol contract integrity", () => {
 	});
 
 	test("ALL_ACTIONS contains no pack-prefixed actions (packs are owned by packs-engine)", () => {
-		// Pack actions like `pack_buy` / `pack_open` were removed from the
-		// indexer protocol when packs moved into the standalone packs-engine
-		// package. This guard prevents accidental re-introduction.
+		// Pack actions are outside the native protocol and belong to the
+		// standalone packs-engine package. This guard prevents accidental
+		// re-introduction of a pack-prefixed protocol action.
 		for (const action of ALL_ACTIONS) {
 			expect(action).not.toContain("pack");
 		}

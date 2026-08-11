@@ -151,7 +151,10 @@ ceremony().catch(err => {
 
 - **Atomic planning.** One call validates every seed, rejects duplicate artIds, and pre-computes every `seed_<…>` id.
 - **Right-sized batches.** The orchestrator measures the first seed's payload with `calculateMaxOperationsPerTx` and splits the catalogue so each Hive tx stays below 90% of the 8 KiB cap and under `MAX_OPERATIONS_PER_TX = 5`.
-- **One-shot key model.** The active key is only exposed once (for the collection step). Every seed batch uses the posting key — loss of the posting key is recoverable; loss of the active key is not.
+- **Separated key model.** The active key signs the collection step and later
+  custody/delegation actions; every seed batch uses the posting key. Keep the
+  active key out of the game server and request it explicitly from the owner
+  when a custody operation is required.
 
 ## Distributing instances after the ceremony
 

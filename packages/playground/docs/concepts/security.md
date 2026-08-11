@@ -12,21 +12,23 @@ This guide covers the NFTLox permission model, recommended account architecture 
 |------|---------|-------------|
 | **Collection creator** | `create_collection` | Active (node co-sign + fee transfer) |
 | **Collection creator** | `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting |
-| **Seed owner** | `bulk_distribute`, `transfer` (only if `distributed === 0`), `burn`, `list` (only if `distributed === 0`), `unlist` | Posting |
-| **NFT/Instance owner** | `transfer`, burn helper (`transfer` to `null`), `list`, `unlist`, `nft_approve`, `nft_lend` | Posting |
+| **Seed owner** | `bulk_distribute`, `transfer` (only if `distributed === 0`), `burn`, `list` (only if `distributed === 0`), `unlist` | Active for custody; posting for `bulk_distribute` |
+| **NFT/Instance owner** | `transfer`, burn helper (`transfer` to `null`), `list`, `unlist`, `nft_approve`, `nft_lend` | Active |
 | **Approved operator** | `set_data_from` | Posting |
-| **Approved spender** | `nft_transfer_from` | Posting |
+| **Approved spender** | `nft_transfer_from` | Active |
 
 **Key distinction**: The collection creator controls the **schema and metadata**. The seed owner controls **custody and distribution exclusively** -- the collection creator has NO distribution rights over seeds they don't own. Seeds with distributed instances (`distributed > 0`) cannot be transferred, listed, sold, delegated, or lent. For the full cascade, see [Ownership Model](ownership-model.md).
 
 ### Key Types
 
-The SDK emits active-key `custom_json` for node-cosigned `create_collection` and `buy`. Other SDK protocol `custom_json` operations use posting keys.
+The SDK emits active-key `custom_json` for collection creation, marketplace
+settlement, and every custody/delegation action. Non-custodial supply, data,
+schema, and node operations use posting keys.
 
 | Key required | Actions |
 |---|---|
-| **Active key** | `create_collection`, `buy` |
-| **Posting key** | `mint`, `bulk_distribute`, `transfer`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `list`, `unlist`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `data_operator_approve`, `set_data_from`, `nft_lend`, `nft_return` |
+| **Active key** | `create_collection`, `transfer`, `list`, `unlist`, `buy_commitment`, `buy`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `nft_lend`, `nft_return` |
+| **Posting key** | `mint`, `bulk_distribute`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `node_heartbeat`, `node_state_checkpoint`, `data_operator_approve`, `set_data_from` |
 
 Active-key actions use `required_auths` while posting-key actions use `required_posting_auths` in the `custom_json` operation.
 
@@ -68,23 +70,26 @@ The creator retains seed ownership and handles distribution. Only the seed owner
 
 | Key | Where | Used For |
 |-----|-------|----------|
-| **Active key** | Secure vault, offline | Marketplace buys and Hive/HBD account operations. Never on a server. |
-| **Posting key** | Game server (env var) | Recurring protocol ops: `bulk_distribute`, `set_data`, `set_data_from`, `mint` |
+| **Active key** | Secure vault, offline | Custody/delegation, marketplace buys, and Hive/HBD account operations. Never on a server. |
+| **Posting key** | Game server (env var) | Recurring non-custodial ops: `bulk_distribute`, `set_data`, `set_data_from`, `mint` |
 | **Owner/Master key** | Cold storage only | Account recovery. Never used in game operations. |
 
 ### Risk Matrix
 
 | If compromised... | Active key | Posting key |
 |-------------------|-----------|-------------|
-| Can transfer NFTs owned by that account? | Yes, if custom payloads are built | Yes |
-| Can list NFTs owned by that account? | Yes, if custom payloads are built | Yes |
+| Can transfer NFTs owned by that account? | Yes | No |
+| Can list NFTs owned by that account? | Yes | No |
 | Can modify game data? | Yes | Yes |
 | Can distribute instances? | Yes | Yes |
+| Can approve transfer operators? | Yes | No |
 | Can approve data operators? | Yes, if custom payloads are built | Yes |
 | Can move HIVE/HBD? | Yes | No |
 | **Blast radius** | **Native-token loss plus protocol actions** | **Protocol actions for assets owned by that account** |
 
-**Best practice**: Only the posting key should exist on a running server. Keep the active key offline unless you are signing a buy flow or native Hive/HBD account operation.
+**Best practice**: Only the posting key should exist on a running server. Keep
+the active key offline and require explicit user signing for custody/delegation
+and marketplace operations.
 
 ### Security Recommendations
 

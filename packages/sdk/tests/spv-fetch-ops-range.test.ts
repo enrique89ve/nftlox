@@ -36,7 +36,7 @@ function recordsOpsResponse(): Response {
 						type: "custom_json_operation",
 						value: {
 							id: "nftlox_testnet",
-							json: JSON.stringify({ protocol: "nftlox_testnet", version: "0.10.0", action: "noop", data: {} }),
+							json: JSON.stringify({ protocol: "nftlox_testnet", version: "0.11.0", action: "noop", data: {} }),
 							required_auths: ["alice"],
 							required_posting_auths: [],
 						},

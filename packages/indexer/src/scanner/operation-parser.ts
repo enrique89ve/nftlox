@@ -11,6 +11,7 @@ import {
 } from "@/protocol/index.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { prototypePollutionReviver } from "@/utils/json-safety.ts";
+import { normalizeHiveTimestampToUtc } from "@/utils/hive-timestamp.ts";
 import type { HafAHOperation, TransferDetail } from "./hive-client.ts";
 import type { PaymentMatch } from "@/processor/payment.ts";
 
@@ -54,43 +55,9 @@ export interface ParsedOperation {
 }
 
 const protocolId = config.protocolId;
-const HAFAH_UTC_TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z?$/;
 
 function normalizeHafahTimestampToUtc(raw: unknown): string {
-	if (typeof raw !== "string") {
-		throw new Error(`HAFAH timestamp must be a string, got ${typeof raw}`);
-	}
-
-	const match = HAFAH_UTC_TIMESTAMP_RE.exec(raw);
-	if (!match) {
-		throw new Error(`Invalid HAFAH timestamp format: ${raw}`);
-	}
-
-	const year = Number(match[1]);
-	const month = Number(match[2]);
-	const day = Number(match[3]);
-	const hour = Number(match[4]);
-	const minute = Number(match[5]);
-	const second = Number(match[6]);
-	const fraction = match[7] ?? "";
-	const millisecond = fraction.length === 0 ? 0 : Number(fraction.padEnd(3, "0"));
-	const epochMs = Date.UTC(year, month - 1, day, hour, minute, second, millisecond);
-	const date = new Date(epochMs);
-
-	if (
-		!Number.isFinite(epochMs) ||
-		date.getUTCFullYear() !== year ||
-		date.getUTCMonth() !== month - 1 ||
-		date.getUTCDate() !== day ||
-		date.getUTCHours() !== hour ||
-		date.getUTCMinutes() !== minute ||
-		date.getUTCSeconds() !== second ||
-		date.getUTCMilliseconds() !== millisecond
-	) {
-		throw new Error(`Invalid HAFAH timestamp value: ${raw}`);
-	}
-
-	return date.toISOString();
+	return normalizeHiveTimestampToUtc(raw, "HAFAH timestamp");
 }
 
 // ─── Type Guards ────────────────────────────────────

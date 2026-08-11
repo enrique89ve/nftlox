@@ -2,11 +2,14 @@
 
 This guide takes you from zero to a minted NFT on the NFTLox testnet in a single file. Everything runs client-side: the indexer only serves **read** endpoints and the **multisig** co-signing endpoint — it never holds your keys and never builds payloads for you.
 
+The current public-test protocol is `0.11.0`. It is not wire-compatible with
+`0.10.x`: custody and delegation operations require the Hive active key.
+
 ## Prerequisites
 
 - **Hive account** — create one at [signup.hive.io](https://signup.hive.io)
-- **Active key** — required for the two node-cosigned flows: `create_collection` and `buy`
-- **Posting key** — required for every other protocol action (mint, transfer, list, unlist, set_data, approvals, lending, …)
+- **Active key** — required for collection creation, marketplace settlement, and all custody/delegation actions (`transfer`, `list`, `unlist`, approvals, and lending)
+- **Posting key** — required for non-custodial supply, data, schema, and node operations (mint, set_data, extend_schema, …)
 - **Node.js ≥ 18 or Bun ≥ 1.0** — the SDK uses Web Crypto (`crypto.subtle`), available natively in both
 - A Hive signing library of your choice: [`hive-tx`](https://www.npmjs.com/package/hive-tx), [`@hiveio/dhive`](https://www.npmjs.com/package/@hiveio/dhive), or [`@hiveio/wax`](https://www.npmjs.com/package/@hiveio/wax)
 
@@ -44,7 +47,7 @@ curl https://api-nftlox.hivecreators.co/api/status
 
 ```json
 {
-	"protocolVersion": "0.10.0",
+	"protocolVersion": "0.11.0",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -88,7 +91,7 @@ Every `build*` function returns the same discriminated union. Three rules:
 
 1. **Check `success` first** — every other field is only valid on the happy path.
 2. **`operations` is ready to sign** — already in Hive's `["custom_json", {...}]` / `["transfer", {...}]` tuple format.
-3. **`keyType` is authoritative** — `"Active"` only for `create_collection` and `buy`; `"Posting"` for everything else.
+3. **`keyType` is authoritative** — it is `"Active"` for custody/delegation actions and `"Posting"` for non-custodial data, supply, schema, and node operations.
 
 For the full type definition see [SDK Reference](sdk/reference.md#the-keychainresultt-contract).
 
@@ -190,8 +193,8 @@ console.log(`${confirmation.confirmed}/${confirmation.totalOperations} ops confi
 | Property | Value |
 |---|---|
 | Protocol ID | `nftlox_testnet` |
-| Version | `0.10.0` |
-| Minimum supported | `0.10.0` |
+| Version | `0.11.0` |
+| Minimum supported | `0.11.0` |
 | Blockchain | Hive L1 |
 | Finality | ~3 s (block time) |
 | Max ops per custom_json tx | 5 |

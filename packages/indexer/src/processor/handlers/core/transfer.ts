@@ -67,7 +67,6 @@ export async function handleTransfer(
 
   const to = requireUsername(toRaw, "to");
   if (to === op.signer) throw new Error("Cannot transfer NFT to yourself");
-
   for (const nftId of nftIds) {
     await processSingleTransfer(op, nftId, to, txn);
   }

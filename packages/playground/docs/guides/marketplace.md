@@ -5,13 +5,13 @@ Peer-to-peer NFT trading on Hive. Listings are pure on-chain state; buys settle 
 ## Lifecycle
 
 ```
-list           (owner, posting)             → NFT status: listed, listingId/listingNonce recorded
-unlist         (owner, posting)             → clears the listing immediately; blocked while a buy_commitment holds the NFT
+list           (owner, active)              → NFT status: listed, listingId/listingNonce recorded
+unlist         (owner, active)              → clears the listing immediately; blocked while a buy_commitment holds the NFT
 buy_commitment (node,  active, server-side) → reserves the NFT in pending_sale, emitted by the settlement node
 buy            (buyer, active  +  node)     → transfers + custom_json, broadcast by the node after its commitment wins
 ```
 
-- `list`, `unlist` — posting key. Cheap, single-signer.
+- `list`, `unlist` — **active key**. Cheap, single-signer, but protected from posting-key compromise.
 - `buy` — **active key** (HIVE/HBD transfers, signed locally by the buyer) + **node active** on the trailing `custom_json` (`required_auths: [nodeAccount]`). The buyer POSTs the already-signed transaction to `/api/multisig/buy`; the node drives the remainder of settlement.
 - `buy_commitment` — **node-only**, active-auth. Not a client-facing operation: the settlement node emits it on chain to reserve the NFT before co-signing the `buy`.
 - Supported currencies: `HIVE`, `HBD`.
@@ -38,7 +38,7 @@ if (!result.success) throw new Error(JSON.stringify(result.errors));
 
 const tx = new hive.Transaction();
 await tx.create(result.operations as [string, object][]);
-tx.sign(hive.PrivateKey.from(process.env.HIVE_POSTING_KEY!));
+tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
 await tx.broadcast();
 
 // result.generatedIds = { listingId, listingNonce }
@@ -185,7 +185,7 @@ In a browser UI, swap the local active-key sign step for Hive Keychain's `reques
 | `NODE_NOT_ACTIVE` | Node missed too many heartbeats and no longer serves settlement. Use a different indexer. |
 | `SIGNING_QUEUE_FULL` / `SIGNING_TIMEOUT` | Beekeeper queue saturated or timed out. Transient. |
 | `MULTISIG_DISABLED` | Node has no `ACTIVE_KEY` configured or is in clock-drift safeguard. Use a different indexer. |
-| `NODE_DIVERGENT` | This node's state-root disagrees with peers' on-chain `node_state_checkpoint`. The divergence gate refuses to co-sign anything until an operator clears the flag manually. **Not transient** — switch to a different indexer. |
+| `NODE_DIVERGENT` | This node's local integrity interlock was set after a verified local failure or explicit operator action. **Not transient** — switch to a different indexer while the operator audits and clears it. Peer checkpoint mismatches alone are advisory and do not activate this gate. |
 | `POW_REQUIRED` / `INVALID_POW` / `POW_EXPIRED` / `POW_REPLAYED` | PoW token missing, invalid, stale, or reused. SDK handles this automatically. |
 
 The node's checklist before broadcasting its commitment:

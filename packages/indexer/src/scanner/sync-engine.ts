@@ -26,6 +26,7 @@ import {
   getCustomJsonInRange,
   getHafAHBlockRange,
   getTransfersInTransaction,
+  lookupHiveAccounts,
   checkClockDrift,
 } from "./hive-client.ts";
 import {
@@ -37,6 +38,7 @@ import {
   type ParsedOperation,
 } from "./operation-parser.ts";
 import { routeOperationDetailed } from "@/processor/action-router.ts";
+import { prepareAccountValidation } from "@/processor/account-validation.ts";
 import { markSyncActivity, setSynced, updateSyncProgress } from "./sync-state.ts";
 import { ChainAnchorMismatchError, verifyChainAnchors } from "./chain-anchors.ts";
 import { createLogger } from "@/utils/logger.ts";
@@ -390,6 +392,14 @@ export async function syncCycle(): Promise<void> {
       (b) => b.ops.length > 0 || b.rejected.length > 0,
     );
 
+    // Historical account existence is external read-only preparation. It must complete
+    // before the DB transaction opens, so a slow/failing Hive endpoint cannot
+    // hold PostgreSQL locks or create a partially applied block.
+    const accountValidation = await prepareAccountValidation(
+      batches.flatMap((batch) => batch.ops),
+      { lookup: lookupHiveAccounts },
+    );
+
     // Fast-fail fence: if the session HA lock is obviously gone, bail before
     // starting a transaction. This is cheap diagnostic gating — the authoritative
     // race-prevention is the xact-level advisory lock taken inside
@@ -434,6 +444,29 @@ export async function syncCycle(): Promise<void> {
               await sweepExpiredBuyCommitments(op.blockNum, txn);
               sweptThrough = op.blockNum;
             }
+
+            const accountDecision = accountValidation.get(op.operationId);
+            if (!accountDecision) {
+              throw new Error(
+                `Account validation missing for operation ${op.operationId}`,
+              );
+            }
+            if (accountDecision.kind === "rejected") {
+              await insertInvalidOperation(
+                {
+                  blockNum: op.blockNum,
+                  txId: op.txId,
+                  operationId: op.operationId,
+                  signer: op.signer,
+                  action: op.action,
+                  reason: accountDecision.reason,
+                  rawPayload: op.data,
+                },
+                txn,
+              );
+              continue;
+            }
+
             const routeResult = await routeOperationDetailed(op, txn);
             switch (routeResult.kind) {
               case "applied":

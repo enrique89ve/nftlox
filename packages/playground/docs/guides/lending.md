@@ -38,7 +38,7 @@ if (!result.success) throw new Error(JSON.stringify(result.errors));
 
 const tx = new hive.Transaction();
 await tx.create(result.operations as [string, object][]);
-tx.sign(hive.PrivateKey.from(process.env.HIVE_POSTING_KEY!));
+tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
 await tx.broadcast();
 ```
 
@@ -57,14 +57,14 @@ const result = buildNftReturn({
 	instanceId: "nft_abc…_7",
 });
 if (!result.success) throw new Error(JSON.stringify(result.errors));
-// sign with Bob's posting key, broadcast
+// sign with Bob's active key, broadcast
 
 // Or the lender reclaims unilaterally (same builder):
 const reclaim = buildNftReturn({
 	owner: "alice",                 // the lender reclaiming
 	instanceId: "nft_abc…_7",
 });
-// sign with Alice's posting key, broadcast
+// sign with Alice's active key, broadcast
 ```
 
 After the return lands, `status` flips back to `active` and all normal actions (transfer, list, approve) resume for the lender.

@@ -13,13 +13,13 @@ import {
 
 describe("PROTOCOL_VERSION_REGEX", () => {
 	test("accepts strict numeric semver", () => {
-		expect(PROTOCOL_VERSION_REGEX.test("0.10.0")).toBe(true);
+		expect(PROTOCOL_VERSION_REGEX.test("0.11.0")).toBe(true);
 		expect(PROTOCOL_VERSION_REGEX.test("1.0.0")).toBe(true);
 		expect(PROTOCOL_VERSION_REGEX.test("12.34.567")).toBe(true);
 	});
 
 	test("rejects leading zeros, prereleases, build metadata, garbage", () => {
-		for (const bad of ["01.0.0", "0.01.0", "0.10.0-rc1", "1.0.0+abc", "1", "1.0", "abc", ""]) {
+		for (const bad of ["01.0.0", "0.01.0", "0.11.0-rc1", "1.0.0+abc", "1", "1.0", "abc", ""]) {
 			expect(PROTOCOL_VERSION_REGEX.test(bad)).toBe(false);
 		}
 	});
@@ -27,7 +27,7 @@ describe("PROTOCOL_VERSION_REGEX", () => {
 
 describe("parseProtocolVersion", () => {
 	test("returns the [major, minor, patch] triplet for valid input", () => {
-		expect(parseProtocolVersion("0.10.0")).toEqual([0, 10, 0]);
+		expect(parseProtocolVersion("0.11.0")).toEqual([0, 11, 0]);
 		expect(parseProtocolVersion("12.34.567")).toEqual([12, 34, 567]);
 	});
 
@@ -40,12 +40,12 @@ describe("parseProtocolVersion", () => {
 
 describe("isValidProtocolVersion / assertValidProtocolVersion", () => {
 	test("predicate narrows to string", () => {
-		const v: unknown = "0.10.0";
+		const v: unknown = "0.11.0";
 		if (isValidProtocolVersion(v)) {
 			// Type-only assertion — compile-time narrowing.
 			expect(v.split(".")).toHaveLength(3);
 		}
-		expect(isValidProtocolVersion("0.10.0")).toBe(true);
+		expect(isValidProtocolVersion("0.11.0")).toBe(true);
 		expect(isValidProtocolVersion("foo")).toBe(false);
 		expect(isValidProtocolVersion(null)).toBe(false);
 	});
@@ -53,7 +53,7 @@ describe("isValidProtocolVersion / assertValidProtocolVersion", () => {
 	test("assert throws with a useful message", () => {
 		expect(() => assertValidProtocolVersion("foo")).toThrow(/Invalid protocol version/);
 		expect(() => assertValidProtocolVersion(123)).toThrow(/expected strict semver/);
-		expect(() => assertValidProtocolVersion("0.10.0")).not.toThrow();
+		expect(() => assertValidProtocolVersion("0.11.0")).not.toThrow();
 	});
 });
 
@@ -81,6 +81,8 @@ describe("isAcceptedProtocolVersion", () => {
 
 	test("rejects below-min", () => {
 		expect(isAcceptedProtocolVersion("0.0.1")).toBe(false);
+		expect(isAcceptedProtocolVersion("0.10.0")).toBe(false);
+		expect(() => assertAcceptedProtocolVersion("0.10.0")).toThrow(/below MIN_PROTOCOL_VERSION/);
 	});
 
 	test("rejects malformed without throwing", () => {

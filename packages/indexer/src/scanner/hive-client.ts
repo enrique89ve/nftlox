@@ -5,6 +5,10 @@ import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { selectConsensusSample } from "./head-consensus.ts";
 import {
+  createHiveAccountClient,
+  type HiveAccountLookupResult,
+} from "./account-client.ts";
+import {
   classifyError,
   createEndpointHealthPool,
   getBackoffMs,
@@ -17,6 +21,7 @@ const log = createLogger("hive-client");
 // should not reset HafAH failures for the same host.
 const rpcHealth = createEndpointHealthPool(config.hiveEndpoints);
 const hafahHealth = createEndpointHealthPool(config.hiveEndpoints);
+const hiveAccountClient = createHiveAccountClient({ endpoints: config.hiveEndpoints });
 
 // ============ FETCH ERROR ============
 
@@ -873,6 +878,13 @@ export async function getTransfersInTransaction(
 export interface AccountLiquidBalance {
   readonly hive: number;
   readonly hbd: number;
+}
+
+/** Batch account lookup for the sync preparation stage. */
+export async function lookupHiveAccounts(
+	accounts: readonly string[],
+): Promise<HiveAccountLookupResult> {
+	return hiveAccountClient.lookup(accounts);
 }
 
 interface HiveAccountRow {

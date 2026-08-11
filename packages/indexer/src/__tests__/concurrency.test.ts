@@ -89,6 +89,15 @@ mock.module("@/scanner/hive-client.ts", () => ({
 	getCustomJsonInRange: mockGetCustomJsonInRange,
 	getHafAHBlockRange: mockGetHafAHBlockRange,
 	getTransfersInTransaction: mockGetTransfersInTransaction,
+	lookupHiveAccounts: mock(async (accounts: readonly string[]) => ({
+		requested: accounts,
+		accounts: new Map(accounts.map((name) => [
+			name,
+			{ name, createdAt: "2020-01-01T00:00:00.000Z" },
+		])),
+		missing: new Set<string>(),
+		attemptedEndpoints: ["mock"],
+	})),
 	checkClockDrift: mock(() => Promise.resolve()),
 	// Stub keeps chain-anchors.test.ts mock shape complete under bun's
 	// process-wide mock registry.
@@ -222,7 +231,7 @@ function fakeHafOp(block: number, action = ACTION_TRANSFER): HafAHOperation {
 		},
 		block,
 		trx_id: `tx_${block}`,
-		timestamp: "2024-01-01T00:00:00",
+		timestamp: "2024-01-01T00:00:00.000Z",
 		operation_id: `${block}`,
 		virtual_op: false,
 	};
@@ -231,14 +240,14 @@ function fakeHafOp(block: number, action = ACTION_TRANSFER): HafAHOperation {
 function fakeParsedOp(block: number, action = ACTION_TRANSFER): ParsedOperation {
 	return {
 		blockNum: block,
-		timestamp: "2024-01-01T00:00:00",
+		timestamp: "2024-01-01T00:00:00.000Z",
 		txId: `tx_${block}`,
 		operationId: `op_${block}`,
 		signer: "alice",
 		authLevel: ACTIVE_SET.has(action) ? "active" : "posting",
 		action: action as ParsedOperation["action"],
 		version: "0.2.1",
-		data: {},
+		data: action === ACTION_TRANSFER ? { to: "bob" } : {},
 	};
 }
 
@@ -296,7 +305,10 @@ describe("block processing never stops", () => {
 		setupChainHead(6000);
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
-		mockParseHafAHOperations.mockReturnValue(wrapOps([fakeParsedOp(1001)]));
+		let parseCall = 0;
+		mockParseHafAHOperations.mockImplementation(() =>
+			wrapOps([fakeParsedOp(1001 + parseCall++)]),
+		);
 
 		let routeCalls = 0;
 		mockRouteOperationDetailed.mockImplementation(async () => {

@@ -6,9 +6,10 @@ import {
 	setDivergentAtBlock,
 } from "@/db/queries/state-root.ts";
 import { tickDivergenceCheck } from "@/services/heartbeat-daemon.ts";
+import { assertNodeNotDivergent } from "@/api/services/multisig/divergence-gate.ts";
 import { config } from "@/config.ts";
 
-// F3.B — divergence detection.
+// F3.B — advisory peer-mismatch detection and local integrity interlock.
 //
 // The comparator is a pure read over (state_root_checkpoints JOIN
 // l2_node_checkpoints) → it doesn't need the daemon's polling loop, the Hive
@@ -85,7 +86,7 @@ async function clearAllDivergenceState(): Promise<void> {
 	await sql`UPDATE state_meta SET divergent_at_block = NULL WHERE id = 1`;
 }
 
-describe("F3.B divergence detection", () => {
+describe("F3.B peer mismatch detection", () => {
 	useSingletonLock();
 
 	beforeAll(async () => {
@@ -219,7 +220,7 @@ describe("F3.B divergence detection", () => {
 			}
 		});
 
-		test("on disagreement: sets the flag AND emits log.error with all four fields", async () => {
+		test("one untrusted peer mismatch is logged but cannot set the multisig interlock", async () => {
 			const errSpy = spyOn(console, "error").mockImplementation(() => {});
 			try {
 				await insertOurSnapshot(BLOCK_A, ROOT_OURS_HEX);
@@ -227,14 +228,15 @@ describe("F3.B divergence detection", () => {
 
 				await tickDivergenceCheck();
 
-				expect(await readDivergentFlag()).toBe(BLOCK_A);
+				expect(await readDivergentFlag()).toBeNull();
+				await expect(assertNodeNotDivergent(sql)).resolves.toBeUndefined();
 				expect(errSpy).toHaveBeenCalled();
 
 				// Check the structured log carries the diagnostic payload that an
 				// operator grepping the logs needs.
 				const calls = errSpy.mock.calls;
 				const joined = calls.map((args) => args.map((a) => String(a)).join(" ")).join("\n");
-				expect(joined).toContain("STATE-ROOT DIVERGENCE DETECTED");
+				expect(joined).toContain("UNTRUSTED PEER CHECKPOINT MISMATCH (ADVISORY)");
 				expect(joined).toContain(String(BLOCK_A));
 				expect(joined).toContain(ROOT_OURS_FORMATTED);
 				expect(joined).toContain(PEER_BYZANTINE);
@@ -255,7 +257,7 @@ describe("F3.B divergence detection", () => {
 			expect(await readDivergentFlag()).toBe(BLOCK_B);
 		});
 
-		test("a more recent divergence raises the flag past an older operator-untouched value", async () => {
+		test("a peer mismatch cannot advance an interlock already set by the operator", async () => {
 			await setDivergentAtBlock(BLOCK_A);
 			await insertOurSnapshot(BLOCK_C, ROOT_OURS_HEX);
 			await insertPeerCheckpoint(PEER_BYZANTINE, BLOCK_C, ROOT_PEER_FORMATTED);
@@ -263,7 +265,7 @@ describe("F3.B divergence detection", () => {
 			const errSpy = spyOn(console, "error").mockImplementation(() => {});
 			try {
 				await tickDivergenceCheck();
-				expect(await readDivergentFlag()).toBe(BLOCK_C);
+				expect(await readDivergentFlag()).toBe(BLOCK_A);
 			} finally {
 				errSpy.mockRestore();
 			}

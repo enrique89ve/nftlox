@@ -1,6 +1,8 @@
 # Allowances & Operators
 
-NFTLox ships two separate delegation systems. Both run entirely on posting auth — you never need to hand out your active key to authorize automated flows.
+NFTLox ships two separate delegation systems. Granting or using ownership
+delegation requires active auth; mutable-data delegation remains posting-only.
+Never hand an active key to an automated data operator.
 
 | System | Grantor | Scope | What the delegate can do |
 |---|---|---|---|
@@ -42,7 +44,7 @@ Scope: every instance Alice owns in that collection while the approval remains a
 
 ## Operator-initiated transfer — `buildNftTransferFrom`
 
-Called by the spender, not the owner. The spender's posting key is the only signature needed.
+Called by the spender, not the owner. The spender's active key is the required signature.
 
 ```typescript
 import { buildNftTransferFrom } from "nftlox-sdk";

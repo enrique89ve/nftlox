@@ -58,12 +58,12 @@ describe("Authority exhaustiveness", () => {
 			expect(isProtocolAction(action)).toBe(true);
 		}
 
-		expect(isProtocolAction("pack_buy")).toBe(false);
+		expect(isProtocolAction("unsupported_action")).toBe(false);
 		expect(isProtocolAction("burn")).toBe(false);
 		expect(isProtocolAction("set_owner_data")).toBe(false);
 		expect(isProtocolAction(null)).toBe(false);
-		expect(() => getAuthLevel("pack_buy" as ProtocolAction)).toThrow("Unsupported protocol action: pack_buy");
-		expect(() => getKeyType("pack_buy" as ProtocolAction)).toThrow("Unsupported protocol action: pack_buy");
+		expect(() => getAuthLevel("unsupported_action" as ProtocolAction)).toThrow("Unsupported protocol action: unsupported_action");
+		expect(() => getKeyType("unsupported_action" as ProtocolAction)).toThrow("Unsupported protocol action: unsupported_action");
 	});
 
 	test("no action appears in both ACTIVE and POSTING", () => {
@@ -73,9 +73,9 @@ describe("Authority exhaustiveness", () => {
 		}
 	});
 
-	test("counts match: 3 active + 18 posting = 21 total", () => {
-		expect(ACTIVE_AUTH_ACTIONS.length).toBe(3);
-		expect(POSTING_AUTH_ACTIONS.length).toBe(18);
+	test("counts match: 11 active + 10 posting = 21 total", () => {
+		expect(ACTIVE_AUTH_ACTIONS.length).toBe(11);
+		expect(POSTING_AUTH_ACTIONS.length).toBe(10);
 		expect(ALL_ACTIONS.length).toBe(21);
 	});
 });
@@ -111,13 +111,13 @@ describe("Active key operations use required_auths", () => {
 
 });
 
-// ============ POSTING KEY OPERATIONS ============
+// ============ AUTHORITY FIELD EMISSION ============
 
-describe("Posting key operations use required_posting_auths", () => {
+describe("Action authority fields follow ACTION_AUTH_LEVEL", () => {
 	test("transfer", () => {
 		const op = buildOp(ACTION_TRANSFER, "alice", { nftId: "nft_1", to: "bob" });
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
+		expect(op[1].required_auths).toEqual(["alice"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("node_register", () => {
@@ -130,8 +130,8 @@ describe("Posting key operations use required_posting_auths", () => {
 
 	test("burn (transfer to null)", () => {
 		const op = buildOp(ACTION_TRANSFER, "alice", { nftId: "nft_1", to: "null" });
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
+		expect(op[1].required_auths).toEqual(["alice"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("list", () => {
@@ -141,8 +141,8 @@ describe("Posting key operations use required_posting_auths", () => {
 			listingNonce: "nonce_1",
 			price: { amount: "10.000", currency: "HIVE" },
 		});
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
+		expect(op[1].required_auths).toEqual(["alice"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("nft_approve", () => {
@@ -151,8 +151,8 @@ describe("Posting key operations use required_posting_auths", () => {
 			instanceId: "nft_1",
 			approved: true,
 		});
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
+		expect(op[1].required_auths).toEqual(["alice"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("nft_approve_all", () => {
@@ -161,8 +161,8 @@ describe("Posting key operations use required_posting_auths", () => {
 			collectionId: "col_1",
 			approved: true,
 		});
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
+		expect(op[1].required_auths).toEqual(["alice"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("data_operator_approve", () => {
@@ -203,8 +203,8 @@ describe("Posting key operations use required_posting_auths", () => {
 
 	test("unlist", () => {
 		const op = buildOp(ACTION_UNLIST, "alice", { nftId: "nft_1" });
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
+		expect(op[1].required_auths).toEqual(["alice"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("nft_transfer_from", () => {
@@ -213,20 +213,20 @@ describe("Posting key operations use required_posting_auths", () => {
 			to: "bob",
 			instanceId: "nft_1",
 		});
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["charlie"]);
+		expect(op[1].required_auths).toEqual(["charlie"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("nft_lend", () => {
 		const op = buildOp(ACTION_NFT_LEND, "alice", { instanceId: "nft_1", borrower: "bob" });
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
+		expect(op[1].required_auths).toEqual(["alice"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("nft_return", () => {
 		const op = buildOp(ACTION_NFT_RETURN, "alice", { instanceId: "nft_1" });
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
+		expect(op[1].required_auths).toEqual(["alice"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("buy (node active auth)", () => {

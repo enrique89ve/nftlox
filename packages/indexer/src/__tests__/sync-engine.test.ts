@@ -81,6 +81,15 @@ const mockInsertInvalidOperation = mock(() => Promise.resolve());
 const mockWithTransaction = mock(async (fn: (txn: unknown) => Promise<void>) => {
 	await fn(mockTxn);
 });
+const mockLookupHiveAccounts = mock(async (accounts: readonly string[]) => ({
+	requested: accounts,
+	accounts: new Map(accounts.map((name) => [
+		name,
+		{ name, createdAt: "2020-01-01T00:00:00.000Z" },
+	])),
+	missing: new Set<string>(),
+	attemptedEndpoints: ["mock"],
+}));
 
 // Returns a postgres.js-like Result: an Array with `.count` and `.command`.
 // Every txn`...` call needs this shape so callers can read .count, destructure
@@ -137,6 +146,7 @@ mock.module("@/scanner/hive-client.ts", () => ({
 	getCustomJsonInRange: mockGetCustomJsonInRange,
 	getHafAHBlockRange: mockGetHafAHBlockRange,
 	getTransfersInTransaction: mockGetTransfersInTransaction,
+	lookupHiveAccounts: mockLookupHiveAccounts,
 	checkClockDrift: mock(() => Promise.resolve()),
 	// Kept so chain-anchors mock shape stays complete across test files.
 	getBlockIdFromAllEndpoints: mock((blockNum: number) =>
@@ -247,7 +257,7 @@ function fakeHafOp(block: number): HafAHOperation {
 		},
 		block,
 		trx_id: `tx_${block}`,
-		timestamp: "2024-01-01T00:00:00",
+		timestamp: "2024-01-01T00:00:00.000Z",
 		operation_id: `${block}`,
 		virtual_op: false,
 	};
@@ -256,14 +266,14 @@ function fakeHafOp(block: number): HafAHOperation {
 function fakeParsedOp(block: number, action = ACTION_TRANSFER): ParsedOperation {
 	return {
 		blockNum: block,
-		timestamp: "2024-01-01T00:00:00",
+		timestamp: "2024-01-01T00:00:00.000Z",
 		txId: `tx_${block}`,
 		operationId: `op_${block}`,
 		signer: "alice",
-		authLevel: "posting",
+		authLevel: action === ACTION_TRANSFER ? "active" : "posting",
 		action: action as ParsedOperation["action"],
 		version: "0.2.1",
-		data: {},
+		data: action === ACTION_TRANSFER ? { to: "bob" } : {},
 	};
 }
 
@@ -291,6 +301,7 @@ function resetAllMocks(): void {
 	mockRouteOperationDetailed.mockReset();
 	mockInsertInvalidOperation.mockReset();
 	mockWithTransaction.mockReset();
+	mockLookupHiveAccounts.mockReset();
 
 	// Restore default implementations with shared state
 	mockGetLastBlock.mockImplementation(() => Promise.resolve(trackedLastBlock));
@@ -307,6 +318,15 @@ function resetAllMocks(): void {
 	mockWithTransaction.mockImplementation(async (fn: (txn: unknown) => Promise<void>) => {
 		await fn(mockTxn);
 	});
+	mockLookupHiveAccounts.mockImplementation(async (accounts: readonly string[]) => ({
+		requested: accounts,
+		accounts: new Map(accounts.map((name) => [
+			name,
+			{ name, createdAt: "2020-01-01T00:00:00.000Z" },
+		])),
+		missing: new Set<string>(),
+		attemptedEndpoints: ["mock"],
+	}));
 
 	// Reset sync state
 	setSyncReporter({
@@ -384,6 +404,105 @@ describe("syncCycle", () => {
 		expect(mockRouteOperationDetailed).toHaveBeenCalledTimes(2);
 		// Should run inside a transaction
 		expect(mockWithTransaction).toHaveBeenCalled();
+	});
+
+	test("rejects only operations whose explicit Hive recipient is missing", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(1001);
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
+		const valid = fakeParsedOp(1001);
+		const missing = {
+			...fakeParsedOp(1002),
+			data: { to: "missing-account" },
+		};
+		mockParseHafAHOperations.mockReturnValue(wrapOps([valid, missing]));
+		mockLookupHiveAccounts.mockResolvedValue({
+			requested: ["bob", "missing-account"],
+			accounts: new Map([
+				["bob", { name: "bob", createdAt: "2020-01-01T00:00:00.000Z" }],
+			]),
+			missing: new Set(["missing-account"]),
+			attemptedEndpoints: ["mock"],
+		});
+
+		await syncCycle();
+
+		expect(mockLookupHiveAccounts).toHaveBeenCalledWith(["bob", "missing-account"]);
+		expect(mockRouteOperationDetailed).toHaveBeenCalledTimes(1);
+		expect(mockRouteOperationDetailed).toHaveBeenCalledWith(valid, expect.anything());
+		expect(mockInsertInvalidOperation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				operationId: missing.operationId,
+				action: ACTION_TRANSFER,
+				reason: "Hive account does not exist: missing-account",
+			}),
+			expect.anything(),
+		);
+	});
+
+	test("rejects an account created after the operation without blocking cursor advancement", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(1001);
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
+		const op = fakeParsedOp(1001);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([op]));
+		mockLookupHiveAccounts.mockResolvedValue({
+			requested: ["bob"],
+			accounts: new Map([
+				["bob", { name: "bob", createdAt: "2025-01-01T00:00:00.000Z" }],
+			]),
+			missing: new Set<string>(),
+			attemptedEndpoints: ["mock"],
+		});
+
+		await syncCycle();
+
+		expect(mockRouteOperationDetailed).not.toHaveBeenCalled();
+		expect(mockInsertInvalidOperation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				operationId: op.operationId,
+				reason: expect.stringContaining("did not exist before operation timestamp"),
+			}),
+			expect.anything(),
+		);
+		expect(trackedLastBlock).toBe(1001);
+	});
+
+	test("rejects an empty transfer recipient without an account RPC call", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(1001);
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
+		const invalid = { ...fakeParsedOp(1001), data: { to: "" } };
+		mockParseHafAHOperations.mockReturnValue(wrapOps([invalid]));
+
+		await syncCycle();
+
+		expect(mockLookupHiveAccounts).not.toHaveBeenCalled();
+		expect(mockRouteOperationDetailed).not.toHaveBeenCalled();
+		expect(mockInsertInvalidOperation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				operationId: invalid.operationId,
+				reason: expect.stringContaining("to"),
+			}),
+			expect.anything(),
+		);
+	});
+
+	test("does not open a DB transaction when account lookup is unavailable", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(1001);
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
+		mockParseHafAHOperations.mockReturnValue(wrapOps([fakeParsedOp(1001)]));
+		mockLookupHiveAccounts.mockRejectedValue(new Error("Hive RPC unavailable"));
+
+		await expect(syncCycle()).rejects.toThrow("Hive RPC unavailable");
+
+		expect(mockWithTransaction).not.toHaveBeenCalled();
+		expect(trackedLastBlock).toBe(1000);
 	});
 
 	test("advances cursor inside the shared materializer tx when no ops", async () => {
@@ -600,9 +719,16 @@ describe("syncCycle", () => {
 		mockGetHafAHBlockRange.mockReturnValue(2000);
 
 		const failingOps = Array.from({ length: 12 }, (_, i) => fakeParsedOp(1001 + i));
+		let parseCall = 0;
 
 		mockGetCustomJsonInRange.mockResolvedValue([fakeHafOp(1001)]);
-		mockParseHafAHOperations.mockReturnValue(wrapOps(failingOps));
+		mockParseHafAHOperations.mockImplementation(() => {
+			const suffix = parseCall++;
+			return wrapOps(failingOps.map((op) => ({
+				...op,
+				operationId: `${op.operationId}_${suffix}`,
+			})));
+		});
 		mockRouteOperationDetailed.mockResolvedValue(rejectedRouteResult("invalid payload"));
 
 		await syncCycle();

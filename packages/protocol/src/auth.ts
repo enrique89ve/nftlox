@@ -36,7 +36,10 @@ export type KeyType = "Active" | "Posting";
 const ACTION_AUTH_LEVEL_MAP = {
 	[ACTION_CREATE_COLLECTION]: "active",
 	[ACTION_MINT]: "posting",
-	[ACTION_TRANSFER]: "posting",
+	// Ownership, marketplace custody, approvals, and lending are protected by
+	// Hive active authority. A compromised posting key must never be sufficient
+	// to move, burn, list, delegate, or lend a user's NFT.
+	[ACTION_TRANSFER]: "active",
 	[ACTION_BULK_DISTRIBUTE]: "posting",
 	[ACTION_SET_DATA]: "posting",
 	[ACTION_EXTEND_SCHEMA]: "posting",
@@ -44,8 +47,8 @@ const ACTION_AUTH_LEVEL_MAP = {
 	[ACTION_NODE_REGISTER]: "posting",
 	[ACTION_NODE_HEARTBEAT]: "posting",
 	[ACTION_NODE_STATE_CHECKPOINT]: "posting",
-	[ACTION_LIST]: "posting",
-	[ACTION_UNLIST]: "posting",
+	[ACTION_LIST]: "active",
+	[ACTION_UNLIST]: "active",
 	// buy_commitment: the node broadcasts this on-chain with its own active key
 	// before co-signing a `buy` tx, reserving the NFT for the committed buyer.
 	// Ordering of commitments in a Hive block is the network-wide consensus on
@@ -54,13 +57,13 @@ const ACTION_AUTH_LEVEL_MAP = {
 	// buy: the node co-signs the trailing custom_json with active while the
 	// buyer authorizes the paired transfers in the same transaction.
 	[ACTION_BUY]: "active",
-	[ACTION_NFT_APPROVE]: "posting",
-	[ACTION_NFT_APPROVE_ALL]: "posting",
-	[ACTION_NFT_TRANSFER_FROM]: "posting",
+	[ACTION_NFT_APPROVE]: "active",
+	[ACTION_NFT_APPROVE_ALL]: "active",
+	[ACTION_NFT_TRANSFER_FROM]: "active",
 	[ACTION_DATA_OPERATOR_APPROVE]: "posting",
 	[ACTION_SET_DATA_FROM]: "posting",
-	[ACTION_NFT_LEND]: "posting",
-	[ACTION_NFT_RETURN]: "posting",
+	[ACTION_NFT_LEND]: "active",
+	[ACTION_NFT_RETURN]: "active",
 } as const satisfies Record<ProtocolAction, AuthLevel>;
 
 export const ACTION_AUTH_LEVEL = Object.freeze(ACTION_AUTH_LEVEL_MAP);

@@ -5,6 +5,7 @@ import { insertNft, nftExists, isBurnedId } from "@/db/queries/nfts.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	requireBoundedString,
+	requireString,
 	requireUsername,
 	optionalString,
 	optionalBoundedString,
@@ -103,7 +104,9 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	const edition = optionalNumber(d.edition) ?? 1;
 	const imageHash = optionalString(metadata.imageHash) ?? "";
 	const nftDna = await generateSeedDna(canonicalId, collection.origin_dna, edition, imageHash);
-	const ownerRaw = optionalString(d.owner);
+	const ownerRaw = Object.prototype.hasOwnProperty.call(d, "owner")
+		? requireString(d.owner, "owner")
+		: null;
 	const owner = ownerRaw ? requireUsername(ownerRaw, "owner") : op.signer;
 
 	const maxSupply = optionalNumber(d.maxSupply) ?? 1;

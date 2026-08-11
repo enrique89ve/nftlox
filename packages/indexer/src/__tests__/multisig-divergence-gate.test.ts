@@ -1,9 +1,10 @@
 // F3.C — Multisig API gate.
 //
-// When the heartbeat daemon flags `state_meta.divergent_at_block`, this node
-// must refuse to co-sign new buy or collection-creation requests. Reads stay
-// open (a divergent node serves potentially-stale data, but signing locks in
-// new state and is the catastrophic action).
+// When an independently verified local integrity failure or explicit operator
+// action sets `state_meta.divergent_at_block`, this node must refuse to co-sign
+// new buy or collection-creation requests. Untrusted peer checkpoints are
+// advisory and cannot set this interlock. Reads stay open because signing is
+// the state-changing action.
 //
 // The gate must be the FIRST DB read in each entry function — even garbage
 // input should be rejected with NODE_DIVERGENT instead of a parsing error.

@@ -33,8 +33,8 @@ specification. If prose and code diverge, this package wins.
 | Property | Value |
 |---|---|
 | Protocol id | `nftlox_testnet` |
-| Protocol version | `0.10.0` |
-| Minimum accepted version | `0.10.0` |
+| Protocol version | `0.11.0` |
+| Minimum accepted version | `0.11.0` |
 | Transport | Hive `custom_json` |
 | Max JSON payload | `8000` bytes |
 | Hive hard cap | `8192` bytes |
@@ -42,10 +42,18 @@ specification. If prose and code diverge, this package wins.
 | Max Hive ops per transaction | `5` |
 | Hive block time | `3000` ms |
 | Hive native-asset decimals | `3` |
-| Accepted actions | `20` |
+| Accepted actions | `21` |
 
 NFTLox has no smart contract. State is reconstructed by deterministic indexers
 that replay accepted Hive operations from the configured genesis block.
+
+### 0.11.0 activation boundary
+
+Version `0.11.0` is a protocol hard fork for the public test phase: custody
+and delegation actions now require Hive `active` authority, and `0.10.x`
+payloads are below `MIN_PROTOCOL_VERSION`. Deploy the SDK and indexer as one
+release and perform a clean testnet reindex (or an explicitly coordinated
+migration) before accepting public traffic.
 
 ## Wire Envelope
 
@@ -68,16 +76,23 @@ that map outside this package.
 
 ## Authority Model
 
-Three actions require active authority:
+Eleven actions require active authority. This boundary protects custody and
+delegation from a compromised posting key:
 
 | Action | Why |
 |---|---|
 | `create_collection` | Collection creation includes a native-token fee transfer and node multisig custom_json |
 | `buy_commitment` | Broadcast by the settlement node's own active key to reserve the listing on chain before co-signing the buy |
 | `buy` | Marketplace settlement moves native HIVE/HBD and requires node multisig protection |
+| `transfer` | Moves or burns NFT ownership |
+| `list` / `unlist` | Creates or removes a marketplace custody commitment |
+| `nft_approve` / `nft_approve_all` | Grants transfer authority over owned NFTs |
+| `nft_transfer_from` | Executes a transfer using a prior approval |
+| `nft_lend` / `nft_return` | Delegates or restores NFT custody |
 
-Every other action uses posting authority. The signer is derived from the Hive
-operation authority, not from a payload field.
+The remaining ten actions use posting authority for non-custodial data and node
+directory operations. The signer is derived from the Hive operation authority,
+not from a payload field.
 
 A subset of active-auth actions additionally require that the signer **be a
 registered active settlement node at processing time** — this rule is encoded
@@ -96,19 +111,19 @@ These are the actions currently accepted by `ALL_ACTIONS`.
 | Collections | `archive_collection` | Posting | Freezes new mints and distributions for a collection |
 | Supply | `mint` | Posting | Creates a seed NFT, the reusable template for future instances |
 | Supply | `bulk_distribute` | Posting | Creates instance NFTs from one or more seeds |
-| Ownership | `transfer` | Posting | Moves one or more NFTs, or burns them by setting `to` to `BURN_RECIPIENT` |
+| Ownership | `transfer` | Active | Moves one or more NFTs, or burns them by setting `to` to `BURN_RECIPIENT` |
 | Data | `set_data` | Posting | Lets the NFT owner update mutable data |
 | Data | `data_operator_approve` | Posting | Lets a collection creator approve or revoke a data operator |
 | Data | `set_data_from` | Posting | Lets an approved data operator update mutable data |
-| Marketplace | `list` | Posting | Lists an NFT for sale |
-| Marketplace | `unlist` | Posting | Starts the deterministic unlist delay before a listing becomes inactive |
+| Marketplace | `list` | Active | Lists an NFT for sale |
+| Marketplace | `unlist` | Active | Starts the deterministic unlist delay before a listing becomes inactive |
 | Marketplace | `buy_commitment` | Active (node) | Server-side commitment broadcast by a settlement node before co-signing the buyer's `buy` transaction; Hive block ordering makes the first-landed commitment the cross-node winner |
 | Marketplace | `buy` | Active | Settles a listed NFT after payment transfers and node co-signature are valid |
-| Approvals | `nft_approve` | Posting | Grants or revokes transfer authority for one instance |
-| Approvals | `nft_approve_all` | Posting | Grants or revokes collection-wide transfer authority for one owner |
-| Approvals | `nft_transfer_from` | Posting | Transfers an instance using prior approval |
-| Lending | `nft_lend` | Posting | Lends an instance without changing ownership |
-| Lending | `nft_return` | Posting | Returns a lent instance to active custody |
+| Approvals | `nft_approve` | Active | Grants or revokes transfer authority for one instance |
+| Approvals | `nft_approve_all` | Active | Grants or revokes collection-wide transfer authority for one owner |
+| Approvals | `nft_transfer_from` | Active | Transfers an instance using prior approval |
+| Lending | `nft_lend` | Active | Lends an instance without changing ownership |
+| Lending | `nft_return` | Active | Returns a lent instance to active custody |
 | Nodes | `node_register` | Posting | Registers a public indexer node in the discovery directory |
 | Nodes | `node_heartbeat` | Posting | Publishes indexed head and ownership state-root liveness data |
 

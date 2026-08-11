@@ -31,7 +31,7 @@ function makeCheckpointOp(
 		signer: TEST_ACCOUNT,
 		authLevel: "posting",
 		action: ACTION_NODE_STATE_CHECKPOINT as ParsedOperation["action"],
-		version: "0.10.0",
+		version: "0.11.0",
 		data,
 		...overrides,
 	};

@@ -54,12 +54,12 @@ describe("createPayload", () => {
 });
 
 describe("createHiveOperation", () => {
-	test("posting action uses required_posting_auths", () => {
+	test("transfer uses active required_auths", () => {
 		const payload = createPayload("transfer", { nftId: "nft_1", to: "bob" });
 		const op = createHiveOperation(payload, "alice");
 		expect(op[0]).toBe("custom_json");
-		expect(op[1].required_auths).toEqual([]);
-		expect(op[1].required_posting_auths).toEqual(["alice"]);
+		expect(op[1].required_auths).toEqual(["alice"]);
+		expect(op[1].required_posting_auths).toEqual([]);
 		expect(op[1].id).toBe(PROTOCOL_ID);
 	});
 

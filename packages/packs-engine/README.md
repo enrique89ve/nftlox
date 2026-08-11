@@ -4,6 +4,10 @@
 
 Packs are **not** part of the native NFTLox protocol. This package lives outside the protocol surface to keep the core minimal — anyone building a pack-opening flow uses this engine (or rolls their own) on top of `nftlox-sdk`.
 
+There is no native pack-purchase or pack-opening wire action. The engine resolves
+the opening off-chain and only prepares the `bulk_distribute` operation that the
+game backend signs and broadcasts through `nftlox-sdk`.
+
 ## What it does
 
 - Validates pack definitions (drop tables, weights, items per pack).
@@ -130,6 +134,11 @@ The package supports **Node.js ≥18 and Bun** — server-side only. `determinis
 ## Pack metadata
 
 The engine deliberately does **not** model `description`, `imageUrl`, `price`, or other presentation data. Packs are external to the protocol — your backend owns its own pack catalog, UI copy, and pricing. Pass only what the engine needs: `collectionId`, `name`, `dropTable`, `itemsPerPack`, `maxSupply`.
+
+`buildPackOpenPlan()` is an off-chain planning function. It does not sign,
+broadcast, or persist a pack purchase/opening. The backend must perform those
+steps, enforce payment and inventory rules, and use `plan.items` as the input to
+`buildBulkDistribute()`.
 
 ## Documentation
 

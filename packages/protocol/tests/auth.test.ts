@@ -46,12 +46,28 @@ describe("auth", () => {
 			}
 		});
 
-		it("has exactly 3 active actions", () => {
-			expect(ACTIVE_AUTH_ACTIONS.length).toBe(3);
+		it("has exactly 11 active actions", () => {
+			expect(ACTIVE_AUTH_ACTIONS.length).toBe(11);
 		});
 
-		it("has exactly 18 posting actions", () => {
-			expect(POSTING_AUTH_ACTIONS.length).toBe(18);
+		it("has exactly 10 posting actions", () => {
+			expect(POSTING_AUTH_ACTIONS.length).toBe(10);
+		});
+
+		it("keeps every custody and delegation action on active authority", () => {
+			expect(new Set(ACTIVE_AUTH_ACTIONS)).toEqual(new Set([
+				"create_collection",
+				"transfer",
+				"list",
+				"unlist",
+				"buy_commitment",
+				"buy",
+				"nft_approve",
+				"nft_approve_all",
+				"nft_transfer_from",
+				"nft_lend",
+				"nft_return",
+			]));
 		});
 	});
 
@@ -68,8 +84,8 @@ describe("auth", () => {
 			expect(getAuthLevel(ACTION_MINT)).toBe("posting");
 		});
 
-		it("returns 'posting' for transfer", () => {
-			expect(getAuthLevel(ACTION_TRANSFER)).toBe("posting");
+		it("returns 'active' for transfer", () => {
+			expect(getAuthLevel(ACTION_TRANSFER)).toBe("active");
 		});
 	});
 
@@ -78,9 +94,9 @@ describe("auth", () => {
 			expect(getKeyType(ACTION_CREATE_COLLECTION)).toBe("Active");
 		});
 
-		it("returns 'Posting' (capitalised) for posting actions", () => {
+		it("returns Keychain strings for posting and custody actions", () => {
 			expect(getKeyType(ACTION_MINT)).toBe("Posting");
-			expect(getKeyType(ACTION_TRANSFER)).toBe("Posting");
+			expect(getKeyType(ACTION_TRANSFER)).toBe("Active");
 		});
 
 		it("returns 'Active' for buy", () => {

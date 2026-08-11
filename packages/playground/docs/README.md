@@ -10,7 +10,7 @@ The protocol takes the opposite stance:
 
 - **Your keys, your asset — always.** Every state transition is a `custom_json` you sign with your own Hive key. No protocol contract holds your NFT in escrow. Listings, lending, and approvals are scoped *rights*, never custody transfers.
 - **The chain is the source of truth, the indexer is just a projection.** Anyone can run an indexer from Hive L1 and re-derive the entire state. The public indexer is a convenience, not an authority — every endpoint that accepts a write co-signs from the same deterministic rules anyone else's indexer would apply.
-- **Verification is a single-byte comparison.** A protocol-wide `state_root` and on-chain `node_state_checkpoint`s let any third party detect a divergent or compromised indexer in O(1). Settlement nodes that diverge from peers refuse to co-sign. SPV verifiers (`verifyNftOwnership`, `verifyListingPrice`) bypass the indexer entirely and resolve against Hive L1 + HafAH.
+- **Verification is a single-byte comparison.** A protocol-wide `state_root` and on-chain `node_state_checkpoint`s let any third party detect a divergent or compromised indexer in O(1). Peer mismatches are advisory because permissionless node identities are not a Sybil-resistant quorum; only a verified local integrity failure or explicit operator action blocks settlement signing. SPV verifiers (`verifyNftOwnership`, `verifyListingPrice`) bypass the indexer entirely and resolve against Hive L1 + HafAH.
 - **The marketplace cannot eat your sale.** `buy` is an atomic Hive transaction the buyer signs in full; the node only adds a co-signature after broadcasting an on-chain `buy_commitment` that pins the sale. There is no escrow contract that could be drained, frozen, or upgraded.
 - **Economic rules are deterministic and protocol-coded.** Fees are constants in source, not parameters in a database. The schedule cannot drift between nodes; changing it is a hardfork. See [Ecosystem Economy](concepts/economy.md).
 
@@ -29,7 +29,7 @@ Traditional NFT protocols force you into rigid smart-contract environments. NFTL
 - **Zero transaction fees.** Hive uses Resource Credits; end users pay nothing.
 - **3-second finality.** One block to confirm.
 - **Non-custodial lending.** The lender never loses ownership; the borrower gets a scoped right of use.
-- **Approval system.** Instance approvals, collection-wide approvals, and data operators — all posting-key, never active.
+- **Approval system.** Instance and collection-wide transfer approvals use the active key; mutable-data operators remain posting-key only.
 - **Protected marketplace.** `buy` is a node-multisig transaction so the buyer's HIVE can never leave their account without the NFT ownership changing atomically.
 - **Client-side SPV.** A wallet or UI can verify ownership, listing price, and any NFTLox operation directly against Hive L1.
 
@@ -98,10 +98,10 @@ Then follow [Getting Started](getting-started.md) to make your first transaction
 | Property | Value |
 |---|---|
 | Protocol ID | `nftlox_testnet` |
-| Protocol version | `0.10.0` |
+| Protocol version | `0.11.0` |
 | Blockchain | Hive L1 |
 | Finality | ~3 seconds |
-| Active-key actions | `create_collection`, `buy` |
+| Active-key actions | `create_collection`, custody/delegation, `buy_commitment`, `buy` |
 | Posting-key actions | All other protocol actions |
 | Multisig endpoints | `POST /api/multisig/buy` (node-last buy settlement), `POST /api/multisig/collection` (create co-sign) |
 
@@ -112,7 +112,7 @@ Then follow [Getting Started](getting-started.md) to make your first transaction
 ---
 
 <div class="nftlox-footer">
-	<span class="version-badge">v0.10.0</span>
+	<span class="version-badge">v0.11.0</span>
 	<br>
 	NFTLox Protocol — Built on Hive L1
 </div>
