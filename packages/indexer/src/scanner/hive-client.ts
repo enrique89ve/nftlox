@@ -166,6 +166,13 @@ export interface HafAHOperation {
   virtual_op: boolean;
 }
 
+export type HafahEndpoint = string;
+
+export type HafahRange = Readonly<{
+  fromBlock: number;
+  toBlock: number;
+}>;
+
 interface HafAHResponse {
   ops: HafAHOperation[];
   next_block_range_begin: number | null;
@@ -227,7 +234,7 @@ function readOperationIdField(
   context: string,
 ): string | number {
   const value = record.operation_id;
-  if (typeof value === "string") return value;
+  if (typeof value === "string" && /^\d+$/.test(value)) return value;
   if (typeof value === "number" && Number.isSafeInteger(value)) return value;
   throw new Error(
     `${context}: expected operation_id to be a numeric string or safe integer`,
@@ -304,9 +311,12 @@ function readHafAHResponse(raw: unknown, endpoint: string): HafAHResponse {
   }
 
   const nextOperationBegin = raw.next_operation_begin;
-  if (nextOperationBegin !== null && typeof nextOperationBegin !== "string") {
+  if (
+    nextOperationBegin !== null &&
+    (typeof nextOperationBegin !== "string" || !isValidHafAHCursor(nextOperationBegin))
+  ) {
     throw new Error(
-      `Invalid HafAH response from ${endpoint}: next_operation_begin must be string or null`,
+      `Invalid HafAH response from ${endpoint}: next_operation_begin has an invalid cursor`,
     );
   }
 
@@ -332,18 +342,55 @@ function readHafAHResponse(raw: unknown, endpoint: string): HafAHResponse {
   };
 }
 
-async function hafahFetch(
-  endpoint: string,
+const INITIAL_HAFAH_CURSOR = "-1";
+const FINAL_HAFAH_CURSOR = "0";
+const HAFAH_CURSOR_PATTERN = /^(?:-1|0|[1-9]\d*)$/;
+const HAFAH_MAX_PAGES = 100;
+
+function isValidHafAHCursor(cursor: string): boolean {
+  return HAFAH_CURSOR_PATTERN.test(cursor);
+}
+
+function assertHafAHRange(
+  endpoint: HafahEndpoint,
   fromBlock: number,
   toBlock: number,
-  operationBegin: string,
+  pageSize: number,
+): void {
+  if (typeof endpoint !== "string" || endpoint.trim().length === 0) {
+    throw new Error("HafAH endpoint must not be empty");
+  }
+  if (
+    !Number.isSafeInteger(fromBlock) ||
+    !Number.isSafeInteger(toBlock) ||
+    fromBlock < 0 ||
+    toBlock < fromBlock
+  ) {
+    throw new Error(`Invalid HafAH block range: ${fromBlock}-${toBlock}`);
+  }
+  if (!Number.isSafeInteger(pageSize) || pageSize <= 0) {
+    throw new Error(`Invalid HafAH page size: ${pageSize}`);
+  }
+}
+
+/** Fetch exactly one page from the explicitly selected endpoint. */
+export async function hafahFetchPage(
+  endpoint: HafahEndpoint,
+  fromBlock: number,
+  toBlock: number,
+  cursor: string,
   pageSize: number,
 ): Promise<HafAHResponse> {
+  assertHafAHRange(endpoint, fromBlock, toBlock, pageSize);
+  if (!isValidHafAHCursor(cursor)) {
+    throw new Error(`Invalid HafAH cursor: ${cursor}`);
+  }
+
   // Adaptive timeout: larger pages need more time but 10-15s is plenty
   // (benchmarks show 2-4s for 2000 blocks with pageSize 5000)
   const timeoutMs = pageSize > HAFAH_PAGE_SIZE_NORMAL ? 15_000 : 10_000;
 
-  const url = `${endpoint}/hafah-api/operations?from-block=${fromBlock}&to-block=${toBlock}&operation-types=${CUSTOM_JSON_OP_TYPE}&page-size=${pageSize}&operation-begin=${operationBegin}`;
+  const url = `${endpoint}/hafah-api/operations?from-block=${fromBlock}&to-block=${toBlock}&operation-types=${CUSTOM_JSON_OP_TYPE}&page-size=${pageSize}&operation-begin=${cursor}`;
 
   const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
 
@@ -362,34 +409,129 @@ async function hafahFetch(
   return readHafAHResponse(data, endpoint);
 }
 
-async function hafahWithFailover(
+function operationIdKey(operationId: string | number): string {
+  return String(operationId).replace(/^0+(?=\d)/, "");
+}
+
+function validateHafAHPage(
+  page: HafAHResponse,
+  range: HafahRange,
+  seenOperationIds: Set<string>,
+): void {
+  for (const operation of page.ops) {
+    if (operation.block < range.fromBlock || operation.block > range.toBlock) {
+      throw new Error(
+        `HafAH returned operation ${operation.operation_id} at block ${operation.block} ` +
+          `outside requested range ${range.fromBlock}-${range.toBlock}`,
+      );
+    }
+
+    const operationKey = operationIdKey(operation.operation_id);
+    if (seenOperationIds.has(operationKey)) {
+      throw new Error(
+        `HafAH returned duplicate operation_id ${operation.operation_id} ` +
+          `within range ${range.fromBlock}-${range.toBlock}`,
+      );
+    }
+    seenOperationIds.add(operationKey);
+  }
+}
+
+/** Read a complete range from one endpoint. It never performs failover. */
+export async function fetchRangeFromEndpoint(
+  endpoint: HafahEndpoint,
   fromBlock: number,
   toBlock: number,
-  operationBegin: string,
+  protocolId: string,
   pageSize: number,
-): Promise<HafAHResponse> {
-  const maxAttempts = config.hiveEndpoints.length * 2;
+): Promise<HafAHOperation[]> {
+  assertHafAHRange(endpoint, fromBlock, toBlock, pageSize);
+
+  const range: HafahRange = { fromBlock, toBlock };
+  const allOps: HafAHOperation[] = [];
+  const seenCursors = new Set<string>();
+  const seenOperationIds = new Set<string>();
+  let cursor = INITIAL_HAFAH_CURSOR;
+  let completed = false;
+  let pages = 0;
+
+  while (pages < HAFAH_MAX_PAGES) {
+    if (seenCursors.has(cursor)) {
+      throw new Error(`HafAH cursor cycle detected at ${cursor}`);
+    }
+    seenCursors.add(cursor);
+
+    const result = await hafahFetchPage(
+      endpoint,
+      fromBlock,
+      toBlock,
+      cursor,
+      pageSize,
+    );
+    validateHafAHPage(result, range, seenOperationIds);
+    allOps.push(...result.ops.filter((op) => op.op.value.id === protocolId));
+    pages++;
+
+    const nextCursor = result.next_operation_begin;
+    if (nextCursor === null || nextCursor === FINAL_HAFAH_CURSOR) {
+      completed = true;
+      break;
+    }
+    if (nextCursor === cursor) {
+      throw new Error(`HafAH cursor did not advance: ${cursor}`);
+    }
+    if (seenCursors.has(nextCursor)) {
+      throw new Error(`HafAH cursor cycle detected: ${nextCursor}`);
+    }
+    cursor = nextCursor;
+  }
+
+  if (!completed) {
+    throw new Error(
+      `HafAH pagination overflow: range ${fromBlock}-${toBlock} exceeded ${HAFAH_MAX_PAGES} pages ` +
+        `× ${pageSize} ops/page. Reduce HAFAH_BLOCK_RANGE or investigate custom_json density.`,
+    );
+  }
+
+  return allOps;
+}
+
+/** Retry a complete range, restarting at the initial cursor after every failure. */
+export async function fetchRangeWithFailover(
+  fromBlock: number,
+  toBlock: number,
+  protocolId: string,
+  pageSize: number,
+): Promise<HafAHOperation[]> {
+  const maxAttempts = Math.max(config.hiveEndpoints.length * 2, 1);
+  const attemptedEndpoints = new Set<string>();
+  let lastError: unknown;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const endpoint = hafahHealth.selectEndpoint();
+    if (attemptedEndpoints.size >= config.hiveEndpoints.length) {
+      attemptedEndpoints.clear();
+    }
+    const endpoint = hafahHealth.selectEndpoint(attemptedEndpoints);
+    attemptedEndpoints.add(endpoint);
     const start = performance.now();
     try {
-      const result = await hafahFetch(
+      const result = await fetchRangeFromEndpoint(
         endpoint,
         fromBlock,
         toBlock,
-        operationBegin,
+        protocolId,
         pageSize,
       );
       hafahHealth.recordSuccess(endpoint, performance.now() - start);
       return result;
     } catch (err) {
+      lastError = err;
       const category = classifyError(err);
       const retryAfterMs =
         err instanceof FetchError ? err.retryAfterMs : undefined;
       hafahHealth.recordFailure(endpoint, category, retryAfterMs);
       logRetryFailure(
-        "HafAH failed",
+        "HafAH range failed",
         endpoint,
         attempt,
         maxAttempts,
@@ -398,7 +540,6 @@ async function hafahWithFailover(
         {
           fromBlock,
           toBlock,
-          operationBegin,
           pageSize,
         },
       );
@@ -407,7 +548,8 @@ async function hafahWithFailover(
     }
   }
 
-  throw new Error("All HafAH endpoints exhausted");
+  if (lastError instanceof Error) throw lastError;
+  throw new Error("All HafAH endpoints exhausted", { cause: lastError });
 }
 
 // ============ PUBLIC API ============
@@ -624,9 +766,10 @@ export async function getHeadBlockNum(): Promise<number> {
 }
 
 /**
- * Fetch ALL custom_json operations in a block range using HafAH.
- * Handles cursor pagination automatically.
- * Returns operations grouped by block for compatibility with existing parser.
+ * Fetch ALL custom_json operations in a complete block range using HafAH.
+ * Each failover attempt pins one endpoint for every page and restarts at the
+ * initial cursor when that endpoint cannot complete the range.
+ * Returns operations flat for compatibility with the existing parser.
  */
 export async function getCustomJsonInRange(
   fromBlock: number,
@@ -641,61 +784,26 @@ export async function getCustomJsonInRange(
         ? HAFAH_PAGE_SIZE_NORMAL
         : HAFAH_PAGE_SIZE_LIVE;
 
-  const allOps: HafAHOperation[] = [];
-  let operationBegin = "-1";
-  let pages = 0;
-  const maxPages = 100;
-
-  while (pages < maxPages) {
-    const result = await hafahWithFailover(
-      fromBlock,
-      toBlock,
-      operationBegin,
-      pageSize,
-    );
-    const ops = result.ops;
-
-    // Filter to only our protocol operations
-    const ours = ops.filter((op) => op.op.value.id === protocolId);
-    allOps.push(...ours);
-    pages++;
-
-    // Trust ONLY the cursor for termination. Using `ops.length < pageSize` as an
-    // early-exit heuristic is unsafe: some HAF nodes return fewer ops than requested
-    // while still offering `next_operation_begin`, which would silently drop the
-    // remaining pages.
-    // End-of-stream signals from HafAH: `null` OR the string sentinel "0".
-    // The non-advancing-cursor guard is a defensive backstop against future server
-    // quirks — without it a stuck cursor would re-read the same page until maxPages.
-    if (
-      result.next_operation_begin === null ||
-      result.next_operation_begin === "0" ||
-      result.next_operation_begin === operationBegin
-    )
-      break;
-    operationBegin = result.next_operation_begin;
-  }
-
-  if (pages >= maxPages) {
-    // MUST throw — returning a partial set would let the sync engine commit those ops
-    // and advance `last_block` past blocks whose ops were silently dropped, breaking
-    // the completeness invariant for ownership data. The sync loop will retry; if the
-    // overflow is real, the operator must reduce HAFAH_BLOCK_RANGE.
-    throw new Error(
-      `HafAH pagination overflow: range ${fromBlock}-${toBlock} exceeded ${maxPages} pages ` +
-        `× ${pageSize} ops/page. Reduce HAFAH_BLOCK_RANGE or investigate custom_json density.`,
-    );
-  }
+  const allOps = await fetchRangeWithFailover(
+    fromBlock,
+    toBlock,
+    protocolId,
+    pageSize,
+  );
   if (allOps.length > 0) {
     log.debug("HafAH found", {
       fromBlock,
       toBlock,
-      pages,
       protocolOps: allOps.length,
     });
   }
 
   return allOps;
+}
+
+/** @internal — resets only the HafAH pool for isolated unit tests. */
+export function resetHafAHHealth(): void {
+  hafahHealth.init(config.hiveEndpoints);
 }
 
 /** Optimal block range for HafAH queries */

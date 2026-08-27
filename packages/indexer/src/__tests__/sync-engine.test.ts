@@ -505,6 +505,18 @@ describe("syncCycle", () => {
 		expect(trackedLastBlock).toBe(1000);
 	});
 
+	test("does not advance the DB cursor when a HafAH range fails", async () => {
+		trackedLastBlock = 1000;
+		setupChainHead(1001);
+		mockGetHafAHBlockRange.mockReturnValue(2000);
+		mockGetCustomJsonInRange.mockRejectedValue(new Error("HafAH range failed"));
+
+		await expect(syncCycle()).rejects.toThrow("HafAH range failed");
+
+		expect(mockWithTransaction).not.toHaveBeenCalled();
+		expect(trackedLastBlock).toBe(1000);
+	});
+
 	test("advances cursor inside the shared materializer tx when no ops", async () => {
 		trackedLastBlock = 1000;
 		setupChainHead(1020);

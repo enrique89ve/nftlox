@@ -145,6 +145,12 @@ describe("selectEndpoint", () => {
 		expect(new Set(selected).size).toBe(3);
 	});
 
+	test("can exclude endpoints already attempted for the current range", () => {
+		initEndpointHealth([EP_A, EP_B]);
+
+		expect(selectEndpoint(new Set([EP_A]))).toBe(EP_B);
+	});
+
 	test("prefers closed over half_open", () => {
 		initEndpointHealth([EP_A, EP_B]);
 

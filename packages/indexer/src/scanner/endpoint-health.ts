@@ -18,7 +18,7 @@ export interface EndpointHealthSnapshot {
 
 export interface EndpointHealthPool {
 	readonly init: (urls: readonly string[]) => void;
-	readonly selectEndpoint: () => string;
+	readonly selectEndpoint: (excluded?: ReadonlySet<string>) => string;
 	readonly recordSuccess: (endpoint: string, latencyMs: number) => void;
 	readonly recordFailure: (endpoint: string, category: ErrorCategory, retryAfterMs?: number) => void;
 	readonly getHealthSnapshot: () => readonly EndpointHealthSnapshot[];
@@ -117,23 +117,25 @@ export function createEndpointHealthPool(initialUrls: readonly string[] = []): E
 	 * Select the best available endpoint. Never throws — always returns a URL.
 	 * Priority: closed (round-robin by latency) > half_open (probe) > open (least-bad).
 	 */
-	function selectEndpoint(): string {
+	function selectEndpoint(excluded: ReadonlySet<string> = new Set()): string {
 		if (endpoints.length === 0) {
 			throw new Error("No endpoints configured — call initEndpointHealth() first");
 		}
 
 		const now = Date.now();
+		const eligible = endpoints.filter(ep => !excluded.has(ep.endpoint));
+		const selectionPool = eligible.length > 0 ? eligible : endpoints;
 
 		// Transition expired open circuits to half_open
-		for (const ep of endpoints) {
+		for (const ep of selectionPool) {
 			if (ep.state === "open" && now >= ep.openUntil) {
 				ep.state = "half_open";
 			}
 		}
 
-		if (endpoints.length === 1) {
+		if (selectionPool.length === 1) {
 			// Single endpoint: force open → half_open for probe even before cooldown
-			const ep = endpoints[0]!;
+			const ep = selectionPool[0]!;
 			if (ep.state === "open") {
 				ep.state = "half_open";
 			}
@@ -141,8 +143,8 @@ export function createEndpointHealthPool(initialUrls: readonly string[] = []): E
 		}
 
 		// Filter out rate-limited endpoints (unless all are rate-limited)
-		const notRateLimited = endpoints.filter(ep => ep.rateLimitedUntil <= now);
-		const candidates = notRateLimited.length > 0 ? notRateLimited : endpoints;
+		const notRateLimited = selectionPool.filter(ep => ep.rateLimitedUntil <= now);
+		const candidates = notRateLimited.length > 0 ? notRateLimited : selectionPool;
 
 		// Prefer closed, then half_open, then open
 		const closed = candidates.filter(ep => ep.state === "closed");
