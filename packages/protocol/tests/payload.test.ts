@@ -10,15 +10,15 @@ import {
 
 describe("createPayload", () => {
 	test("wraps data in protocol envelope with defaults", () => {
-		const payload = createPayload("transfer", { nftId: "nft_1", to: "bob" });
+		const payload = createPayload("transfer", { assetId: "asset_1", to: "bob" });
 		expect(payload.protocol).toBe(PROTOCOL_ID);
 		expect(payload.version).toBe(PROTOCOL_VERSION);
 		expect(payload.action).toBe("transfer");
-		expect(payload.data).toEqual({ nftId: "nft_1", to: "bob" });
+		expect(payload.data).toEqual({ assetId: "asset_1", to: "bob" });
 	});
 
 	test("accepts explicit protocol/version override", () => {
-		const payload = createPayload("transfer", { nftId: "nft_1", to: "bob" }, {
+		const payload = createPayload("transfer", { assetId: "asset_1", to: "bob" }, {
 			protocol: "nftlox_mainnet",
 			version: "1.0.0",
 		});
@@ -27,35 +27,35 @@ describe("createPayload", () => {
 	});
 
 	test("rejects invalid action", () => {
-		expect(() => createPayload("invalid_action" as "transfer", { nftId: "nft_1", to: "bob" }))
+		expect(() => createPayload("invalid_action" as "transfer", { assetId: "asset_1", to: "bob" }))
 			.toThrow("Unsupported protocol action");
 	});
 
 	test("rejects malformed version override", () => {
-		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: "abc" }))
+		expect(() => createPayload("transfer", { assetId: "asset_1", to: "bob" }, { version: "abc" }))
 			.toThrow(/Invalid protocol version/);
-		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: "1.0" }))
+		expect(() => createPayload("transfer", { assetId: "asset_1", to: "bob" }, { version: "1.0" }))
 			.toThrow(/Invalid protocol version/);
-		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: "" }))
+		expect(() => createPayload("transfer", { assetId: "asset_1", to: "bob" }, { version: "" }))
 			.toThrow(/Invalid protocol version/);
 	});
 
 	test("rejects version override below MIN_PROTOCOL_VERSION", () => {
-		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: "0.0.1" }))
+		expect(() => createPayload("transfer", { assetId: "asset_1", to: "bob" }, { version: "0.0.1" }))
 			.toThrow(/below MIN_PROTOCOL_VERSION/);
 	});
 
 	test("accepts version override at or above MIN", () => {
-		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: PROTOCOL_VERSION }))
+		expect(() => createPayload("transfer", { assetId: "asset_1", to: "bob" }, { version: PROTOCOL_VERSION }))
 			.not.toThrow();
-		expect(() => createPayload("transfer", { nftId: "nft_1", to: "bob" }, { version: "99.0.0" }))
+		expect(() => createPayload("transfer", { assetId: "asset_1", to: "bob" }, { version: "99.0.0" }))
 			.not.toThrow();
 	});
 });
 
 describe("createHiveOperation", () => {
 	test("transfer uses active required_auths", () => {
-		const payload = createPayload("transfer", { nftId: "nft_1", to: "bob" });
+		const payload = createPayload("transfer", { assetId: "asset_1", to: "bob" });
 		const op = createHiveOperation(payload, "alice");
 		expect(op[0]).toBe("custom_json");
 		expect(op[1].required_auths).toEqual(["alice"]);
@@ -80,7 +80,7 @@ describe("createHiveOperation", () => {
 	});
 
 	test("json field is valid JSON matching payload", () => {
-		const payload = createPayload("transfer", { nftId: "nft_1", to: "b" });
+		const payload = createPayload("transfer", { assetId: "asset_1", to: "b" });
 		const op = createHiveOperation(payload, "alice");
 		const parsed = JSON.parse(op[1].json);
 		expect(parsed).toEqual(payload);

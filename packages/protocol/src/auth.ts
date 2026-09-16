@@ -17,13 +17,13 @@ import {
 	ACTION_UNLIST,
 	ACTION_BUY_COMMITMENT,
 	ACTION_BUY,
-	ACTION_NFT_APPROVE,
-	ACTION_NFT_APPROVE_ALL,
-	ACTION_NFT_TRANSFER_FROM,
+	ACTION_ASSET_APPROVE,
+	ACTION_ASSET_APPROVE_ALL,
+	ACTION_ASSET_TRANSFER_FROM,
 	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_SET_DATA_FROM,
-	ACTION_NFT_LEND,
-	ACTION_NFT_RETURN,
+	ACTION_ASSET_LEND,
+	ACTION_ASSET_RETURN,
 	isProtocolAction,
 	type ProtocolAction,
 } from "./constants";
@@ -38,7 +38,7 @@ const ACTION_AUTH_LEVEL_MAP = {
 	[ACTION_MINT]: "posting",
 	// Ownership, marketplace custody, approvals, and lending are protected by
 	// Hive active authority. A compromised posting key must never be sufficient
-	// to move, burn, list, delegate, or lend a user's NFT.
+	// to move, burn, list, delegate, or lend a user's ASSET.
 	[ACTION_TRANSFER]: "active",
 	[ACTION_BULK_DISTRIBUTE]: "posting",
 	[ACTION_SET_DATA]: "posting",
@@ -50,20 +50,20 @@ const ACTION_AUTH_LEVEL_MAP = {
 	[ACTION_LIST]: "active",
 	[ACTION_UNLIST]: "active",
 	// buy_commitment: the node broadcasts this on-chain with its own active key
-	// before co-signing a `buy` tx, reserving the NFT for the committed buyer.
+	// before co-signing a `buy` tx, reserving the ASSET for the committed buyer.
 	// Ordering of commitments in a Hive block is the network-wide consensus on
 	// who gets to settle, closing the cross-node race without off-chain coord.
 	[ACTION_BUY_COMMITMENT]: "active",
 	// buy: the node co-signs the trailing custom_json with active while the
 	// buyer authorizes the paired transfers in the same transaction.
 	[ACTION_BUY]: "active",
-	[ACTION_NFT_APPROVE]: "active",
-	[ACTION_NFT_APPROVE_ALL]: "active",
-	[ACTION_NFT_TRANSFER_FROM]: "active",
+	[ACTION_ASSET_APPROVE]: "active",
+	[ACTION_ASSET_APPROVE_ALL]: "active",
+	[ACTION_ASSET_TRANSFER_FROM]: "active",
 	[ACTION_DATA_OPERATOR_APPROVE]: "posting",
 	[ACTION_SET_DATA_FROM]: "posting",
-	[ACTION_NFT_LEND]: "active",
-	[ACTION_NFT_RETURN]: "active",
+	[ACTION_ASSET_LEND]: "active",
+	[ACTION_ASSET_RETURN]: "active",
 } as const satisfies Record<ProtocolAction, AuthLevel>;
 
 export const ACTION_AUTH_LEVEL = Object.freeze(ACTION_AUTH_LEVEL_MAP);

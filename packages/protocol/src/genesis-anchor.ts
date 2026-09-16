@@ -1,10 +1,10 @@
 import { PROTOCOL_ID } from "./constants";
 
-export const PROTOCOL_GENESIS_BLOCK = 107_124_293;
+export const PROTOCOL_GENESIS_BLOCK = 109_974_058;
 // Anchor hash for PROTOCOL_GENESIS_BLOCK. Verified against ≥2 Hive endpoints at
 // startup so a hostile HafAH cannot hand us a fabricated chain from scratch.
 export const PROTOCOL_GENESIS_BLOCK_ID =
-  "06629645d21a46bb69db61a7c36f4825689e61fa";
+  "068e122af76dc3673550c386fbe167afd2ef2484";
 
 export type GenesisBlockValidationInput = {
   readonly genesisBlock: number;

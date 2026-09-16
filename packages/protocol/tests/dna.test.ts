@@ -48,9 +48,9 @@ describe("DNA generation", () => {
 	test("generateDeterministicInstanceId format", async () => {
 		const seedId = await generateDeterministicSeedId("col_test", "art-001");
 		const id = await generateDeterministicInstanceId(seedId, 1);
-		expect(id.startsWith("nft_")).toBe(true);
+		expect(id.startsWith("asset_")).toBe(true);
 		expect(id.endsWith("_1")).toBe(true);
-		expect(id).toMatch(/^nft_[a-f0-9]{20}_\d+$/);
+		expect(id).toMatch(/^asset_[a-f0-9]{20}_\d+$/);
 	});
 
 	test("isSeedId / isInstanceId guards", async () => {
@@ -64,7 +64,7 @@ describe("DNA generation", () => {
 
 	test("isListingId guard", async () => {
 		const listingId = await generateListingId({
-			nftId: "nft_aaaaaaaaaaaaaaaaaaaa_1",
+			assetId: "asset_aaaaaaaaaaaaaaaaaaaa_1",
 			owner: "alice",
 			marketplace: "nftlox",
 			priceAmount: "1.000",
@@ -84,7 +84,7 @@ describe("DNA generation", () => {
 	test("isSymbol guard", () => {
 		// Canonical: 3-10 uppercase chars, leading letter, A-Z0-9 in tail.
 		expect(isSymbol("CARD")).toBe(true);
-		expect(isSymbol("NFT01")).toBe(true);
+		expect(isSymbol("ASSET01")).toBe(true);
 		expect(isSymbol("ABC")).toBe(true);
 		expect(isSymbol("A1B2C3D4E5")).toBe(true);
 		// Rejects: lowercase, leading digit, too short, too long, empty, bad chars.
@@ -217,7 +217,7 @@ describe("DNA helpers normalize Unicode inputs", () => {
 
 	test("NFC and NFD marketplace strings map to the same listing id", async () => {
 		const baseParams = {
-			nftId: "nft_aaaaaaaaaaaaaaaaaaaa_1",
+			assetId: "asset_aaaaaaaaaaaaaaaaaaaa_1",
 			owner: "alice",
 			priceAmount: "1.000",
 			priceCurrency: "HIVE",
@@ -237,7 +237,7 @@ describe("DNA helpers normalize Unicode inputs", () => {
 // re-normalization on the consumer side and silently changes the listing id.
 describe("generateListingId marketplace cap", () => {
 	const baseParams = {
-		nftId: "nft_aaaaaaaaaaaaaaaaaaaa_1",
+		assetId: "asset_aaaaaaaaaaaaaaaaaaaa_1",
 		owner: "alice",
 		priceAmount: "1.000",
 		priceCurrency: "HIVE",

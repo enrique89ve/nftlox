@@ -9,14 +9,14 @@ describe("castPayloadByAction", () => {
 			version: "0.11.0",
 			action: ACTION_BUY,
 			data: {
-				nftId: "inst_x",
+				assetId: "inst_x",
 				listingId: "list_y",
 				listTxId: "t",
 			},
 		} as const;
 		const narrowed = castPayloadByAction(p, ACTION_BUY);
 		expect(narrowed).not.toBeNull();
-		expect(narrowed?.data.nftId).toBe("inst_x");
+		expect(narrowed?.data.assetId).toBe("inst_x");
 	});
 
 	test("returns null when action does not match", () => {

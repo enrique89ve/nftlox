@@ -62,11 +62,11 @@ describe("auth", () => {
 				"unlist",
 				"buy_commitment",
 				"buy",
-				"nft_approve",
-				"nft_approve_all",
-				"nft_transfer_from",
-				"nft_lend",
-				"nft_return",
+				"asset_approve",
+				"asset_approve_all",
+				"asset_transfer_from",
+				"asset_lend",
+				"asset_return",
 			]));
 		});
 	});

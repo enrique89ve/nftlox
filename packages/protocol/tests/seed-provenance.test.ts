@@ -8,7 +8,7 @@ import {
 describe("readDeclaredProvenance", () => {
 	test("returns undefined when both fields are absent", () => {
 		expect(readDeclaredProvenance({})).toBeUndefined();
-		expect(readDeclaredProvenance({ nftId: "nft_1", to: "bob" })).toBeUndefined();
+		expect(readDeclaredProvenance({ assetId: "asset_1", to: "bob" })).toBeUndefined();
 	});
 
 	test("treats explicit undefined / null as absent", () => {
@@ -39,7 +39,7 @@ describe("readDeclaredProvenance", () => {
 		expect(
 			readDeclaredProvenance({
 				seedId: "seed_abc",
-				nftId: "nft_1",
+				assetId: "asset_1",
 				extra: { nested: true },
 			}),
 		).toEqual({ seedId: "seed_abc" });
@@ -80,27 +80,27 @@ describe("readDeclaredProvenance", () => {
 });
 
 describe("assertProvenanceTarget", () => {
-	test("accepts attestation on instance NFTs", () => {
+	test("accepts attestation on instance ASSETs", () => {
 		expect(() =>
 			assertProvenanceTarget({ seedId: "seed_abc" }, "instance"),
 		).not.toThrow();
 	});
 
-	test("rejects any attestation on a seed NFT", () => {
+	test("rejects any attestation on a seed ASSET", () => {
 		expect(() =>
 			assertProvenanceTarget({ seedId: "seed_abc" }, "seed"),
-		).toThrow("Seed provenance cannot be declared on a seed NFT");
+		).toThrow("Seed provenance cannot be declared on a seed ASSET");
 
 		expect(() =>
 			assertProvenanceTarget({ seedTxId: "tx123" }, "seed"),
-		).toThrow("Seed provenance cannot be declared on a seed NFT");
+		).toThrow("Seed provenance cannot be declared on a seed ASSET");
 
 		expect(() =>
 			assertProvenanceTarget(
 				{ seedId: "seed_abc", seedTxId: "tx123" },
 				"seed",
 			),
-		).toThrow("Seed provenance cannot be declared on a seed NFT");
+		).toThrow("Seed provenance cannot be declared on a seed ASSET");
 	});
 });
 
@@ -162,7 +162,7 @@ describe("matchProvenance", () => {
 				{ seedTxId: "tx1" },
 				{ seedId: null, seedCreatedTxId: null },
 			),
-		).toThrow("Cannot validate seedTxId: NFT has no parent seed");
+		).toThrow("Cannot validate seedTxId: ASSET has no parent seed");
 	});
 
 	test("validates both fields independently when both declared", () => {

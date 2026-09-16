@@ -13,7 +13,7 @@ import {
 	INSTANCE_ID_PREFIX,
 	IMAGE_ID_PREFIX,
 	ORIGIN_DNA_PREFIX,
-	NFT_DNA_PREFIX,
+	ASSET_DNA_PREFIX,
 	LISTING_ID_PREFIX,
 	LISTING_NONCE_LENGTH,
 	LISTING_HASH_LENGTH,
@@ -51,19 +51,19 @@ export async function generateOriginDna(collectionId: string): Promise<string> {
 }
 
 // Seed DNA — hashed from (seedId, originDna, edition, imageHash). The only
-// caller is `handleMint` / the SDK's `buildSeed` to produce a seed NFT's
-// identity. Stored in the `nfts.nft_dna` column (one DNA per row, seed or
+// caller is `handleMint` / the SDK's `buildSeed` to produce a seed ASSET's
+// identity. Stored in the `assets.asset_dna` column (one DNA per row, seed or
 // instance). Uses HASH_DOMAIN_SEED_DNA; instance DNA uses the distinct
 // HASH_DOMAIN_DNA salt below to prevent cross-kind collisions by construction.
 export async function generateSeedDna(
-	nftId: string,
+	assetId: string,
 	originDna: string,
 	edition: number,
 	imageHash: string,
 ): Promise<string> {
-	const input = `${HASH_DOMAIN_SEED_DNA}${nftId}:${originDna}:${edition}:${imageHash}`;
+	const input = `${HASH_DOMAIN_SEED_DNA}${assetId}:${originDna}:${edition}:${imageHash}`;
 	const fullHash = await generateHash(input);
-	return NFT_DNA_PREFIX + fullHash.slice(0, INSTANCE_DNA_LENGTH - NFT_DNA_PREFIX.length).toUpperCase();
+	return ASSET_DNA_PREFIX + fullHash.slice(0, INSTANCE_DNA_LENGTH - ASSET_DNA_PREFIX.length).toUpperCase();
 }
 
 // Image Hash
@@ -220,15 +220,15 @@ export async function generateInstanceDna(
 ): Promise<string> {
 	const input = `${HASH_DOMAIN_DNA}${seedId}:${instanceNumber}:${txId}:${blockNum}`;
 	const fullHash = await generateHash(input);
-	return NFT_DNA_PREFIX + fullHash.slice(0, INSTANCE_DNA_LENGTH - NFT_DNA_PREFIX.length).toUpperCase();
+	return ASSET_DNA_PREFIX + fullHash.slice(0, INSTANCE_DNA_LENGTH - ASSET_DNA_PREFIX.length).toUpperCase();
 }
 
 export async function generateDeterministicAccessKey(
-	nftDna: string,
+	assetDna: string,
 	owner: string,
 	txId: string,
 ): Promise<string> {
-	const input = `${HASH_DOMAIN_KEY}${nftDna}:${owner}:${txId}`;
+	const input = `${HASH_DOMAIN_KEY}${assetDna}:${owner}:${txId}`;
 	const fullHash = await generateHash(input);
 	return fullHash.slice(0, ACCESS_KEY_LENGTH).toUpperCase();
 }
@@ -240,7 +240,7 @@ export function generateListingNonce(): string {
 }
 
 export async function generateListingId(params: {
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly owner: string;
 	readonly marketplace: string;
 	readonly priceAmount: string;
@@ -265,7 +265,7 @@ export async function generateListingId(params: {
 			`marketplace exceeds protocol cap of ${MAX_MARKETPLACE_LENGTH} chars (got ${marketplace.length} after NFC normalization)`,
 		);
 	}
-	const input = `${HASH_DOMAIN_LISTING}${params.nftId}:${params.owner}:${marketplace}:${params.priceAmount}:${params.priceCurrency}:${params.expiresAt}:${params.nonce}`;
+	const input = `${HASH_DOMAIN_LISTING}${params.assetId}:${params.owner}:${marketplace}:${params.priceAmount}:${params.priceCurrency}:${params.expiresAt}:${params.nonce}`;
 	const hash = await generateHash(input);
 	return LISTING_ID_PREFIX + hash.slice(0, LISTING_HASH_LENGTH);
 }

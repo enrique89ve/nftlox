@@ -8,7 +8,7 @@ import type {
 	SchemaField,
 	SeedProvenance,
 } from "./types";
-import type { NftKind } from "./constants";
+import type { AssetKind } from "./constants";
 
 // Collection
 
@@ -57,16 +57,16 @@ export type ExtendSchemaData = {
 	readonly newMutableFields?: readonly SchemaField[] | undefined;
 };
 
-// NFT (mint / seed)
+// ASSET (mint / seed)
 
-export type NFTMetadata = {
+export type AssetMetadata = {
 	readonly name: string;
 	readonly description?: string | undefined;
 	readonly imageUrl: string;
 	readonly imageHash: string;
 };
 
-export type NFTData = {
+export type AssetData = {
 	readonly id: string;
 	readonly collectionId: string;
 	// Creator-chosen per-seed asset identifier. Required for `mint` (indexer
@@ -76,16 +76,16 @@ export type NFTData = {
 	readonly artId?: string | undefined;
 	readonly edition: number;
 	readonly owner: string;
-	// Intentionally required: every custom_json must declare the NFT kind
+	// Intentionally required: every custom_json must declare the ASSET kind
 	// explicitly so an auditor reading the operation on-chain can recreate
 	// ownership via the Hive API without relying on the indexer to infer it.
-	readonly nftType: NftKind;
+	readonly assetType: AssetKind;
 	readonly originDna: string;
-	readonly nftDna: string;
+	readonly assetDna: string;
 	readonly uniqueAccessKey?: string | undefined;
 	readonly mintedBy: string;
 	readonly collectionBlock?: number | undefined;
-	readonly metadata: NFTMetadata;
+	readonly metadata: AssetMetadata;
 	readonly maxSupply: number;
 	readonly immutableData?: Record<string, unknown> | undefined;
 	readonly mutableData?: Record<string, unknown> | undefined;
@@ -115,20 +115,20 @@ export type BulkDistributeData = {
 // `from` is intentionally absent: the owner is derived from `op.signer` (the
 // Hive custom_json authority), which is the cryptographic source of truth.
 // Any payload that ships a `from` field is rejected by the transfer handler.
-// The allowance action (see NftTransferFromData below) is the only protocol
+// The allowance action (see AssetTransferFromData below) is the only protocol
 // op where `from` legitimately appears in the payload.
 
 export type TransferData = SeedProvenance & {
-	readonly nftId?: string | undefined;
-	readonly nftIds?: readonly string[] | undefined;
+	readonly assetId?: string | undefined;
+	readonly assetIds?: readonly string[] | undefined;
 	readonly to: string;
 };
 
 // Set data
 
 export type SetDataData = SeedProvenance & {
-	readonly nftId: string;
-	readonly nftDna: string;
+	readonly assetId: string;
+	readonly assetDna: string;
 	readonly mutableData?: Record<string, unknown> | undefined;
 };
 
@@ -141,14 +141,14 @@ export type DataOperatorApproveData = {
 };
 
 export type SetDataFromData = SeedProvenance & {
-	readonly nftId: string;
-	readonly nftDna: string;
+	readonly assetId: string;
+	readonly assetDna: string;
 	readonly mutableData?: Record<string, unknown> | undefined;
 };
 
 // Marketplace
 
-// Listings resolve image metadata via FK (listing → nft → seed → collection).
+// Listings resolve image metadata via FK (listing → asset → seed → collection).
 // Seeds are immutable, so a snapshot on the listing payload would add
 // duplication without protecting against any real mutation.
 //
@@ -157,7 +157,7 @@ export type SetDataFromData = SeedProvenance & {
 // `MIN_LISTING_TTL_MS` / `MAX_LISTING_TTL_MS` against the listing block
 // timestamp; the indexer rejects values outside that window.
 export type ListingData = SeedProvenance & {
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listingNonce: string;
 	readonly price: Price;
@@ -166,7 +166,7 @@ export type ListingData = SeedProvenance & {
 };
 
 export type UnlistData = SeedProvenance & {
-	readonly nftId: string;
+	readonly assetId: string;
 };
 
 // Emitted on-chain by a settlement node as its active-key custom_json BEFORE
@@ -178,7 +178,7 @@ export type UnlistData = SeedProvenance & {
 // hash matches the committed one.
 export type BuyCommitmentData = {
 	readonly txHash: string;
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
 	readonly buyer: string;
@@ -189,26 +189,26 @@ export type BuyCommitmentData = {
 // AFTER the node has observed its own `buy_commitment` winning the cross-node
 // ordering race. `handleBuy` enforces that the reserving commitment matches.
 export type BuyData = {
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
 };
 
 // Approve & transfer_from
 
-export type NftApproveData = {
+export type AssetApproveData = {
 	readonly spender: string;
 	readonly instanceId: string;
 	readonly approved: boolean;
 };
 
-export type NftApproveAllData = {
+export type AssetApproveAllData = {
 	readonly spender: string;
 	readonly collectionId: string;
 	readonly approved: boolean;
 };
 
-export type NftTransferFromData = SeedProvenance & {
+export type AssetTransferFromData = SeedProvenance & {
 	readonly from: string;
 	readonly to: string;
 	readonly instanceId: string;
@@ -216,12 +216,12 @@ export type NftTransferFromData = SeedProvenance & {
 
 // Lending
 
-export type NftLendData = SeedProvenance & {
+export type AssetLendData = SeedProvenance & {
 	readonly instanceId: string;
 	readonly borrower: string;
 };
 
-export type NftReturnData = SeedProvenance & {
+export type AssetReturnData = SeedProvenance & {
 	readonly instanceId: string;
 };
 
@@ -277,7 +277,7 @@ export type BuyMultisigRequest = {
 export type MultisigRequest = CreateCollectionMultisigRequest | BuyMultisigRequest;
 
 export type PaymentInfo = {
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
 	readonly seller: string;

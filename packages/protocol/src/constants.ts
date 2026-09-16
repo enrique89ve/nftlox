@@ -21,8 +21,8 @@
 export const PROTOCOL_ID = "nftlox_testnet";
 // 0.11.0 hard fork: custody/delegation actions moved from posting to active.
 // MIN tracks the release because 0.10.x payloads use the old authority map.
-export const PROTOCOL_VERSION = "0.11.0";
-export const MIN_PROTOCOL_VERSION = "0.11.0";
+export const PROTOCOL_VERSION = "1.0.0";
+export const MIN_PROTOCOL_VERSION = "1.0.0";
 export const HASH_VERSION = "v1";
 
 // ============================================================================
@@ -115,12 +115,12 @@ export const RECOMMENDED_BUY_TX_EXPIRATION_MS = MULTISIG_TX_MAX_EXPIRATION_MS;
 
 // Block-denominated TTL for `buy_commitment` reservations. A node that emits
 // a commitment has this many blocks to get its `buy` transaction included on
-// chain; after that the commitment is swept and the NFT returns to `listed`.
+// chain; after that the commitment is swept and the ASSET returns to `listed`.
 // Derived from BUY_TX_TTL_MS so the two windows stay aligned by construction.
 export const BUY_COMMITMENT_TTL_BLOCKS = BUY_TX_TTL_MS / HIVE_BLOCK_TIME_MS;
 
 // Per-node cap on concurrently active `buy_commitment` reservations. A single
-// node cannot hold more than this many NFTs in `pending_sale` at any block,
+// node cannot hold more than this many Assets in `pending_sale` at any block,
 // limiting the grief a rogue node can cause.
 export const MAX_ACTIVE_COMMITMENTS_PER_NODE = 10;
 
@@ -226,21 +226,21 @@ export const IMAGE_ID_HASH_LENGTH = 16;
 // id stops matching.
 export const COLLECTION_ID_PREFIX = "col_";
 export const SEED_ID_PREFIX = "seed_";
-export const INSTANCE_ID_PREFIX = "nft_";
+export const INSTANCE_ID_PREFIX = "asset_";
 export const IMAGE_ID_PREFIX = "img_";
 export const ORIGIN_DNA_PREFIX = "o";
-// Every NFT DNA (seed or instance) starts with this letter. Seed vs instance
+// Every ASSET DNA (seed or instance) starts with this letter. Seed vs instance
 // are distinguished by the hash-domain salt on the preimage
 // (HASH_DOMAIN_SEED_DNA vs HASH_DOMAIN_DNA), not by the textual prefix —
 // collisions between the two are cryptographically prevented regardless of
 // prefix, so the prefix stays a single shared letter.
-export const NFT_DNA_PREFIX = "i";
+export const ASSET_DNA_PREFIX = "i";
 
 // Canonical textual form for SHA-256 digests — shared by data hashes
 // (schema.ts::computeDataHash) and ownership state roots (indexer).
 export const HASH_FORMAT_PREFIX = "sha256:";
 
-// Hive reserves the `null` account for native burns. Transferring an NFT to
+// Hive reserves the `null` account for native burns. Transferring an ASSET to
 // this account is how the protocol records a burn.
 export const BURN_RECIPIENT = "null";
 
@@ -348,13 +348,13 @@ export const ACTION_BUY_COMMITMENT = "buy_commitment" as const;
 export const ACTION_BUY = "buy" as const;
 
 // Approve & TransferFrom
-export const ACTION_NFT_APPROVE = "nft_approve";
-export const ACTION_NFT_APPROVE_ALL = "nft_approve_all";
-export const ACTION_NFT_TRANSFER_FROM = "nft_transfer_from";
+export const ACTION_ASSET_APPROVE = "asset_approve";
+export const ACTION_ASSET_APPROVE_ALL = "asset_approve_all";
+export const ACTION_ASSET_TRANSFER_FROM = "asset_transfer_from";
 
 // Lending
-export const ACTION_NFT_LEND = "nft_lend";
-export const ACTION_NFT_RETURN = "nft_return";
+export const ACTION_ASSET_LEND = "asset_lend";
+export const ACTION_ASSET_RETURN = "asset_return";
 
 // Data operators
 export const ACTION_DATA_OPERATOR_APPROVE = "data_operator_approve";
@@ -382,14 +382,14 @@ export const MARKETPLACE_ACTIONS = [
 ] as const;
 
 export const APPROVE_ACTIONS = [
-	ACTION_NFT_APPROVE,
-	ACTION_NFT_APPROVE_ALL,
-	ACTION_NFT_TRANSFER_FROM,
+	ACTION_ASSET_APPROVE,
+	ACTION_ASSET_APPROVE_ALL,
+	ACTION_ASSET_TRANSFER_FROM,
 ] as const;
 
 export const LENDING_ACTIONS = [
-	ACTION_NFT_LEND,
-	ACTION_NFT_RETURN,
+	ACTION_ASSET_LEND,
+	ACTION_ASSET_RETURN,
 ] as const;
 
 export const DATA_OPERATOR_ACTIONS = [
@@ -432,7 +432,7 @@ export type LendingAction = (typeof LENDING_ACTIONS)[number];
 export type DataOperatorAction = (typeof DATA_OPERATOR_ACTIONS)[number];
 export type ProtocolAction = (typeof ALL_ACTIONS)[number];
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
-export type NftKind = "seed" | "instance";
+export type AssetKind = "seed" | "instance";
 
 /** Runtime guard: returns true if value is a known ProtocolAction string. */
 export function isProtocolAction(value: unknown): value is ProtocolAction {

@@ -1,6 +1,6 @@
 // Pure validators for the optional `seedId` / `seedTxId` provenance attestation
 // carried by 8 protocol actions (transfer, list, unlist, set_data, set_data_from,
-// nft_transfer_from, nft_lend, nft_return).
+// asset_transfer_from, asset_lend, asset_return).
 //
 // The trust model — see protocol README §"SeedProvenance Attestation" — is
 // "opt-in, verified-if-present": a payload may omit both fields, but anything
@@ -18,7 +18,7 @@
 // state without further context.
 
 import type { SeedProvenance } from "./types";
-import type { NftKind } from "./constants";
+import type { AssetKind } from "./constants";
 
 /**
  * Reads the optional `seedId` / `seedTxId` attestation from a payload data
@@ -53,23 +53,23 @@ export function readDeclaredProvenance(
 
 /**
  * Asserts that a declared provenance attestation is allowed on the target
- * NFT kind. Seeds have no parent seed by construction, so any provenance
+ * ASSET kind. Seeds have no parent seed by construction, so any provenance
  * declared on a seed is rejected.
  */
 export function assertProvenanceTarget(
 	declared: SeedProvenance,
-	nftType: NftKind,
+	assetType: AssetKind,
 ): void {
-	if (nftType === "seed") {
+	if (assetType === "seed") {
 		throw new Error(
-			"Seed provenance cannot be declared on a seed NFT — seeds have no parent seed",
+			"Seed provenance cannot be declared on a seed ASSET — seeds have no parent seed",
 		);
 	}
 }
 
 /**
  * Authoritative view of an instance's parent-seed provenance, supplied by the
- * indexer. `seedCreatedTxId` is the `nfts.created_tx_id` of the parent seed,
+ * indexer. `seedCreatedTxId` is the `assets.created_tx_id` of the parent seed,
  * or `null` when the caller did not load it (only required when the declared
  * attestation includes `seedTxId`).
  */
@@ -103,7 +103,7 @@ export function matchProvenance(
 
 	if (declared.seedTxId !== undefined) {
 		if (actual.seedCreatedTxId === null) {
-			throw new Error("Cannot validate seedTxId: NFT has no parent seed");
+			throw new Error("Cannot validate seedTxId: ASSET has no parent seed");
 		}
 		if (actual.seedCreatedTxId !== declared.seedTxId) {
 			throw new Error(

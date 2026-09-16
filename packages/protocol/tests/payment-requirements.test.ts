@@ -36,7 +36,7 @@ describe("ACTION_PAYMENT registry", () => {
 		expect(r.kind).toBe("split");
 		if (r.kind !== "split") throw new Error("impossible");
 		expect(r.protocolFeeBps).toBe(PROTOCOL_FEE_BPS);
-		expect(r.memoKey).toBe("nftId");
+		expect(r.memoKey).toBe("assetId");
 		expect(r.memoTags).toEqual({ seller: "BUY", royalty: "ROY", fee: "FEE" });
 	});
 

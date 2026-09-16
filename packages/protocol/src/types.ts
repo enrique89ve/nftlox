@@ -9,11 +9,11 @@ import {
 	ACTION_EXTEND_SCHEMA,
 	ACTION_LIST,
 	ACTION_MINT,
-	ACTION_NFT_APPROVE,
-	ACTION_NFT_APPROVE_ALL,
-	ACTION_NFT_LEND,
-	ACTION_NFT_RETURN,
-	ACTION_NFT_TRANSFER_FROM,
+	ACTION_ASSET_APPROVE,
+	ACTION_ASSET_APPROVE_ALL,
+	ACTION_ASSET_LEND,
+	ACTION_ASSET_RETURN,
+	ACTION_ASSET_TRANSFER_FROM,
 	ACTION_NODE_HEARTBEAT,
 	ACTION_NODE_REGISTER,
 	ACTION_NODE_STATE_CHECKPOINT,
@@ -31,12 +31,12 @@ import type {
 	DataOperatorApproveData,
 	ExtendSchemaData,
 	ListingData,
-	NFTData,
-	NftApproveAllData,
-	NftApproveData,
-	NftLendData,
-	NftReturnData,
-	NftTransferFromData,
+	AssetData,
+	AssetApproveAllData,
+	AssetApproveData,
+	AssetLendData,
+	AssetReturnData,
+	AssetTransferFromData,
 	NodeHeartbeatData,
 	NodeRegisterData,
 	NodeStateCheckpointData,
@@ -143,15 +143,15 @@ export type ProtocolPayload<T = unknown> = {
 // Multisig Types
 
 export type MultisigErrorCode =
-	| "NFT_LOCKED"
+	| "ASSET_LOCKED"
 	| "COLLECTION_LOCKED"
 	| "RATE_LIMITED"
 	| "INVALID_TX_STRUCTURE"
-	| "NFT_NOT_FOUND"
-	| "NFT_NOT_LISTED"
-	| "NFT_NOT_INSTANCE"
-	| "NFT_NOT_TRANSFERABLE"
-	| "NFT_EXPIRED_LISTING"
+	| "ASSET_NOT_FOUND"
+	| "ASSET_NOT_LISTED"
+	| "ASSET_NOT_INSTANCE"
+	| "ASSET_NOT_TRANSFERABLE"
+	| "ASSET_EXPIRED_LISTING"
 	| "CANNOT_BUY_OWN"
 	| "SEED_HAS_INSTANCES"
 	| "INVALID_PAYMENT_SPLIT"
@@ -204,7 +204,7 @@ export type BuyMultisigResponse =
 			readonly ok: true;
 			/** tx_id of the broadcasted buy transaction. */
 			readonly txId: string;
-			/** tx_id of the buy_commitment op the node used to reserve the NFT. */
+			/** tx_id of the buy_commitment op the node used to reserve the ASSET. */
 			readonly commitmentOpTxId: string;
 	  }
 	| {
@@ -220,7 +220,7 @@ export type BuyMultisigResponse =
 
 export type PayloadDataByAction = {
 	readonly [ACTION_CREATE_COLLECTION]: CollectionData;
-	readonly [ACTION_MINT]: NFTData;
+	readonly [ACTION_MINT]: AssetData;
 	readonly [ACTION_BULK_DISTRIBUTE]: BulkDistributeData;
 	readonly [ACTION_TRANSFER]: TransferData;
 	readonly [ACTION_SET_DATA]: SetDataData;
@@ -233,13 +233,13 @@ export type PayloadDataByAction = {
 	readonly [ACTION_UNLIST]: UnlistData;
 	readonly [ACTION_BUY_COMMITMENT]: BuyCommitmentData;
 	readonly [ACTION_BUY]: BuyData;
-	readonly [ACTION_NFT_APPROVE]: NftApproveData;
-	readonly [ACTION_NFT_APPROVE_ALL]: NftApproveAllData;
-	readonly [ACTION_NFT_TRANSFER_FROM]: NftTransferFromData;
+	readonly [ACTION_ASSET_APPROVE]: AssetApproveData;
+	readonly [ACTION_ASSET_APPROVE_ALL]: AssetApproveAllData;
+	readonly [ACTION_ASSET_TRANSFER_FROM]: AssetTransferFromData;
 	readonly [ACTION_DATA_OPERATOR_APPROVE]: DataOperatorApproveData;
 	readonly [ACTION_SET_DATA_FROM]: SetDataFromData;
-	readonly [ACTION_NFT_LEND]: NftLendData;
-	readonly [ACTION_NFT_RETURN]: NftReturnData;
+	readonly [ACTION_ASSET_LEND]: AssetLendData;
+	readonly [ACTION_ASSET_RETURN]: AssetReturnData;
 };
 
 export type TypedProtocolPayload<A extends ProtocolAction = ProtocolAction> = {

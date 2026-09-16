@@ -13,11 +13,11 @@ import {
 	ACTION_EXTEND_SCHEMA,
 	ACTION_LIST,
 	ACTION_MINT,
-	ACTION_NFT_APPROVE,
-	ACTION_NFT_APPROVE_ALL,
-	ACTION_NFT_LEND,
-	ACTION_NFT_RETURN,
-	ACTION_NFT_TRANSFER_FROM,
+	ACTION_ASSET_APPROVE,
+	ACTION_ASSET_APPROVE_ALL,
+	ACTION_ASSET_LEND,
+	ACTION_ASSET_RETURN,
+	ACTION_ASSET_TRANSFER_FROM,
 	ACTION_NODE_HEARTBEAT,
 	ACTION_NODE_REGISTER,
 	ACTION_NODE_STATE_CHECKPOINT,
@@ -41,7 +41,7 @@ import {
 export type PayerSource = "signer" | "transfer:from" | "payload:buyer";
 
 /** Which natural key from the payload forms the memo suffix. */
-export type MemoKey = "collectionId" | "nftId" | "seedId" | "opDigest";
+export type MemoKey = "collectionId" | "assetId" | "seedId" | "opDigest";
 
 /**
  * Where the protocol fee is sent. `action:signer` means the recipient is read
@@ -51,7 +51,7 @@ export type MemoKey = "collectionId" | "nftId" | "seedId" | "opDigest";
 export type PaymentRecipient = "action:signer";
 
 /** How the amount is computed at validation time. */
-export type PriceSource = "nft.listing";
+export type PriceSource = "asset.listing";
 
 export type PaymentRequirement =
 	| { readonly kind: "none" }
@@ -68,7 +68,7 @@ export type PaymentRequirement =
 		readonly priceSource: PriceSource;
 		readonly protocolFeeBps: number;
 		readonly payer: "payload:buyer";
-		readonly memoKey: "nftId";
+		readonly memoKey: "assetId";
 		readonly memoTags: {
 			readonly seller: string;
 			readonly royalty: string;
@@ -154,10 +154,10 @@ const ACTION_PAYMENT_MAP = {
 	[ACTION_CREATE_COLLECTION]: COLLECTION_PAYMENT_REQUIREMENT,
 	[ACTION_BUY]: {
 		kind: "split",
-		priceSource: "nft.listing",
+		priceSource: "asset.listing",
 		protocolFeeBps: PROTOCOL_FEE_BPS,
 		payer: "payload:buyer",
-		memoKey: "nftId",
+		memoKey: "assetId",
 		memoTags: { seller: MEMO_TAG_BUY, royalty: MEMO_TAG_ROYALTY, fee: MEMO_TAG_FEE },
 	},
 	[ACTION_MINT]: { kind: "none" },
@@ -172,13 +172,13 @@ const ACTION_PAYMENT_MAP = {
 	[ACTION_LIST]: { kind: "none" },
 	[ACTION_UNLIST]: { kind: "none" },
 	[ACTION_BUY_COMMITMENT]: { kind: "none" },
-	[ACTION_NFT_APPROVE]: { kind: "none" },
-	[ACTION_NFT_APPROVE_ALL]: { kind: "none" },
-	[ACTION_NFT_TRANSFER_FROM]: { kind: "none" },
+	[ACTION_ASSET_APPROVE]: { kind: "none" },
+	[ACTION_ASSET_APPROVE_ALL]: { kind: "none" },
+	[ACTION_ASSET_TRANSFER_FROM]: { kind: "none" },
 	[ACTION_DATA_OPERATOR_APPROVE]: { kind: "none" },
 	[ACTION_SET_DATA_FROM]: { kind: "none" },
-	[ACTION_NFT_LEND]: { kind: "none" },
-	[ACTION_NFT_RETURN]: { kind: "none" },
+	[ACTION_ASSET_LEND]: { kind: "none" },
+	[ACTION_ASSET_RETURN]: { kind: "none" },
 } as const satisfies Record<ProtocolAction, PaymentRequirement>;
 
 export const ACTION_PAYMENT = Object.freeze(ACTION_PAYMENT_MAP);
