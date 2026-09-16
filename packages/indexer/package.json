@@ -11,7 +11,7 @@
 		"start:monolith": "INDEXER_ROLE=both bun run src/index.ts",
 		"test": "./scripts/test.sh",
 		"test:filter": "./scripts/test.sh",
-		"typecheck": "bunx tsc --noEmit"
+		"typecheck": "bun x tsc --noEmit"
 	},
 	"engines": {
 		"bun": ">=1.1"
