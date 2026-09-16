@@ -109,7 +109,7 @@ export type BulkDistributeData = {
 // Transfer (burn = transfer to "null")
 //
 // Image metadata is intentionally absent: seeds carry their own imageUrl/hash
-// in the `nfts` row (written at mint), and instances inherit via the
+// in the `assets` row (written at mint), and instances inherit via the
 // seed→collection FK chain. Duplicating it on transfer would reintroduce drift.
 //
 // `from` is intentionally absent: the owner is derived from `op.signer` (the

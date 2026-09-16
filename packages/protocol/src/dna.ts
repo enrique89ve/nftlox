@@ -51,7 +51,7 @@ export async function generateOriginDna(collectionId: string): Promise<string> {
 }
 
 // Seed DNA — hashed from (seedId, originDna, edition, imageHash). The only
-// caller is `handleMint` / the SDK's `buildSeed` to produce a seed ASSET's
+// caller is `handleMint` / the SDK's `buildSeed` to produce a seed Asset's
 // identity. Stored in the `assets.asset_dna` column (one DNA per row, seed or
 // instance). Uses HASH_DOMAIN_SEED_DNA; instance DNA uses the distinct
 // HASH_DOMAIN_DNA salt below to prevent cross-kind collisions by construction.

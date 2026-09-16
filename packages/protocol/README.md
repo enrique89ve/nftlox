@@ -33,8 +33,8 @@ specification. If prose and code diverge, this package wins.
 | Property | Value |
 |---|---|
 | Protocol id | `nftlox_testnet` |
-| Protocol version | `0.11.0` |
-| Minimum accepted version | `0.11.0` |
+| Protocol version | `1.0.0` |
+| Minimum accepted version | `1.0.0` |
 | Transport | Hive `custom_json` |
 | Max JSON payload | `8000` bytes |
 | Hive hard cap | `8192` bytes |
@@ -47,10 +47,10 @@ specification. If prose and code diverge, this package wins.
 NFTLox has no smart contract. State is reconstructed by deterministic indexers
 that replay accepted Hive operations from the configured genesis block.
 
-### 0.11.0 activation boundary
+### 1.0.0 activation boundary
 
-Version `0.11.0` is a protocol hard fork for the public test phase: custody
-and delegation actions now require Hive `active` authority, and `0.10.x`
+Version `1.0.0` is a protocol hard fork for the public test phase: custody
+and delegation actions now require Hive `active` authority, and `0.11.x`
 payloads are below `MIN_PROTOCOL_VERSION`. Deploy the SDK and indexer as one
 release and perform a clean testnet reindex (or an explicitly coordinated
 migration) before accepting public traffic.
@@ -84,11 +84,11 @@ delegation from a compromised posting key:
 | `create_collection` | Collection creation includes a native-token fee transfer and node multisig custom_json |
 | `buy_commitment` | Broadcast by the settlement node's own active key to reserve the listing on chain before co-signing the buy |
 | `buy` | Marketplace settlement moves native HIVE/HBD and requires node multisig protection |
-| `transfer` | Moves or burns NFT ownership |
+| `transfer` | Moves or burns Asset ownership |
 | `list` / `unlist` | Creates or removes a marketplace custody commitment |
-| `nft_approve` / `nft_approve_all` | Grants transfer authority over owned NFTs |
-| `nft_transfer_from` | Executes a transfer using a prior approval |
-| `nft_lend` / `nft_return` | Delegates or restores NFT custody |
+| `asset_approve` / `asset_approve_all` | Grants transfer authority over owned Assets |
+| `asset_transfer_from` | Executes a transfer using a prior approval |
+| `asset_lend` / `asset_return` | Delegates or restores Asset custody |
 
 The remaining ten actions use posting authority for non-custodial data and node
 directory operations. The signer is derived from the Hive operation authority,
@@ -109,21 +109,21 @@ These are the actions currently accepted by `ALL_ACTIONS`.
 | Collections | `create_collection` | Active | Creates a collection after the fee transfer and node co-signature are valid |
 | Collections | `extend_schema` | Posting | Appends immutable or mutable fields to an existing collection schema |
 | Collections | `archive_collection` | Posting | Freezes new mints and distributions for a collection |
-| Supply | `mint` | Posting | Creates a seed NFT, the reusable template for future instances |
-| Supply | `bulk_distribute` | Posting | Creates instance NFTs from one or more seeds |
-| Ownership | `transfer` | Active | Moves one or more NFTs, or burns them by setting `to` to `BURN_RECIPIENT` |
-| Data | `set_data` | Posting | Lets the NFT owner update mutable data |
+| Supply | `mint` | Posting | Creates a seed Asset, the reusable template for future instances |
+| Supply | `bulk_distribute` | Posting | Creates instance Assets from one or more seeds |
+| Ownership | `transfer` | Active | Moves one or more Assets, or burns them by setting `to` to `BURN_RECIPIENT` |
+| Data | `set_data` | Posting | Lets the Asset owner update mutable data |
 | Data | `data_operator_approve` | Posting | Lets a collection creator approve or revoke a data operator |
 | Data | `set_data_from` | Posting | Lets an approved data operator update mutable data |
-| Marketplace | `list` | Active | Lists an NFT for sale |
+| Marketplace | `list` | Active | Lists an Asset for sale |
 | Marketplace | `unlist` | Active | Starts the deterministic unlist delay before a listing becomes inactive |
 | Marketplace | `buy_commitment` | Active (node) | Server-side commitment broadcast by a settlement node before co-signing the buyer's `buy` transaction; Hive block ordering makes the first-landed commitment the cross-node winner |
-| Marketplace | `buy` | Active | Settles a listed NFT after payment transfers and node co-signature are valid |
-| Approvals | `nft_approve` | Active | Grants or revokes transfer authority for one instance |
-| Approvals | `nft_approve_all` | Active | Grants or revokes collection-wide transfer authority for one owner |
-| Approvals | `nft_transfer_from` | Active | Transfers an instance to an ordinary account using prior approval; the reserved burn account is not a valid delegated destination |
-| Lending | `nft_lend` | Active | Lends an instance without changing ownership |
-| Lending | `nft_return` | Active | Returns a lent instance to active custody |
+| Marketplace | `buy` | Active | Settles a listed Asset after payment transfers and node co-signature are valid |
+| Approvals | `asset_approve` | Active | Grants or revokes transfer authority for one instance |
+| Approvals | `asset_approve_all` | Active | Grants or revokes collection-wide transfer authority for one owner |
+| Approvals | `asset_transfer_from` | Active | Transfers an instance to an ordinary account using prior approval; the reserved burn account is not a valid delegated destination |
+| Lending | `asset_lend` | Active | Lends an instance without changing ownership |
+| Lending | `asset_return` | Active | Returns a lent instance to active custody |
 | Nodes | `node_register` | Posting | Registers a public indexer node in the discovery directory |
 | Nodes | `node_heartbeat` | Posting | Publishes indexed head and ownership state-root liveness data |
 | Nodes | `node_state_checkpoint` | Posting | Publishes an aligned state-root snapshot for peer comparison |
@@ -133,7 +133,7 @@ users. The settlement node broadcasts it with its own active key as part of
 the node-last buy flow.
 
 Approvals delegate ordinary instance transfers only. They do not grant an
-alternate burn path: `nft_transfer_from` must reject `BURN_RECIPIENT` (`null`)
+alternate burn path: `asset_transfer_from` must reject `BURN_RECIPIENT` (`null`)
 regardless of the collection's `burnable` rule. Burning remains available only
 through the owner's direct `transfer` action, which enforces ownership,
 active authority, and `burnable`.
@@ -145,8 +145,8 @@ the base protocol and ultimately emits normal `bulk_distribute` operations.
 
 Only `mint` carries image metadata on the wire. Instances are never self-describing:
 
-- A **seed** stores its own `imageUrl` / `imageHash` in the `nfts` row written
-  at mint time (via `NFTMetadata` in `NFTData`).
+- A **seed** stores its own `imageUrl` / `imageHash` in the `assets` row written
+  at mint time (via `AssetMetadata` in `AssetData`).
 - An **instance** (created by `bulk_distribute`) has `image_url = NULL` and
   inherits name, image, and origin-DNA via the `instance → seed → collection`
   foreign-key chain resolved at read time.
@@ -162,7 +162,7 @@ duplication that the database would have to reconcile on every read.
 
 Eight actions accept an optional `SeedProvenance` block in their payload:
 `transfer`, `list`, `unlist`, `set_data`, `set_data_from`,
-`nft_transfer_from`, `nft_lend`, `nft_return`.
+`asset_transfer_from`, `asset_lend`, `asset_return`.
 
 ```typescript
 type SeedProvenance = {
@@ -175,9 +175,9 @@ Semantics — **opt-in, verified-if-present**:
 
 - **Both absent** → op processes normally. Backwards-compatible default.
 - **Either declared** → the indexer validates the declared field(s) against
-  the authoritative NFT row (and the seed's `created_tx_id`). Any mismatch
+  the authoritative Asset row (and the seed's `created_tx_id`). Any mismatch
   rejects the whole op and no state mutation occurs.
-- **Declared on a seed NFT** → rejected. Seeds have no parent seed.
+- **Declared on a seed Asset** → rejected. Seeds have no parent seed.
 - **Declared with a non-string type** (e.g. `seedId: 123`) → rejected. A
   malformed attestation is semantically different from an absent one.
 - **Declared as an empty string** (`seedId: ""`) → rejected. An attestation
@@ -189,7 +189,7 @@ helpers reusable by any L1 reader:
 | Helper | Purpose |
 |---|---|
 | `readDeclaredProvenance(data)` | Parses payload data; returns the declared shape or `undefined`; throws on malformed values. |
-| `assertProvenanceTarget(declared, nftType)` | Rejects any attestation declared on a seed NFT. |
+| `assertProvenanceTarget(declared, assetType)` | Rejects any attestation declared on a seed Asset. |
 | `matchProvenance(declared, actual)` | Compares the declared attestation against the authoritative `seedId` / parent-seed `created_tx_id`. |
 
 Because the indexer filters out false attestations at write time, apps that
@@ -209,7 +209,7 @@ package root:
 ```typescript
 import type {
 	CollectionData,
-	NFTData,
+	AssetData,
 	BulkDistributeData,
 	TransferData,
 	ListingData,
@@ -238,7 +238,7 @@ base operations instead of a second copy of the type system.
   effects; `buy_commitment` is the node-side reservation op that precedes `buy`.
 - Hash domain separators are permanent historical commitments.
 - Id/DNA prefixes (`COLLECTION_ID_PREFIX`, `SEED_ID_PREFIX`, `INSTANCE_ID_PREFIX`,
-  `IMAGE_ID_PREFIX`, `ORIGIN_DNA_PREFIX`, `NFT_DNA_PREFIX`) are single sources
+  `IMAGE_ID_PREFIX`, `ORIGIN_DNA_PREFIX`, `ASSET_DNA_PREFIX`) are single sources
   of truth: raw literals outside `constants.ts` are rejected by
   `tests/no-magic-prefixes.test.ts`.
 - Free-form string inputs to every deterministic-id helper in `src/dna.ts`

@@ -86,21 +86,21 @@ describe("assertProvenanceTarget", () => {
 		).not.toThrow();
 	});
 
-	test("rejects any attestation on a seed ASSET", () => {
+	test("rejects any attestation on a seed Asset", () => {
 		expect(() =>
 			assertProvenanceTarget({ seedId: "seed_abc" }, "seed"),
-		).toThrow("Seed provenance cannot be declared on a seed ASSET");
+		).toThrow("Seed provenance cannot be declared on a seed Asset");
 
 		expect(() =>
 			assertProvenanceTarget({ seedTxId: "tx123" }, "seed"),
-		).toThrow("Seed provenance cannot be declared on a seed ASSET");
+		).toThrow("Seed provenance cannot be declared on a seed Asset");
 
 		expect(() =>
 			assertProvenanceTarget(
 				{ seedId: "seed_abc", seedTxId: "tx123" },
 				"seed",
 			),
-		).toThrow("Seed provenance cannot be declared on a seed ASSET");
+		).toThrow("Seed provenance cannot be declared on a seed Asset");
 	});
 });
 
@@ -162,7 +162,7 @@ describe("matchProvenance", () => {
 				{ seedTxId: "tx1" },
 				{ seedId: null, seedCreatedTxId: null },
 			),
-		).toThrow("Cannot validate seedTxId: ASSET has no parent seed");
+		).toThrow("Cannot validate seedTxId: Asset has no parent seed");
 	});
 
 	test("validates both fields independently when both declared", () => {

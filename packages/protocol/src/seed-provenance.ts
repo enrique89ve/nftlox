@@ -62,7 +62,7 @@ export function assertProvenanceTarget(
 ): void {
 	if (assetType === "seed") {
 		throw new Error(
-			"Seed provenance cannot be declared on a seed ASSET — seeds have no parent seed",
+			"Seed provenance cannot be declared on a seed Asset — seeds have no parent seed",
 		);
 	}
 }
@@ -103,7 +103,7 @@ export function matchProvenance(
 
 	if (declared.seedTxId !== undefined) {
 		if (actual.seedCreatedTxId === null) {
-			throw new Error("Cannot validate seedTxId: ASSET has no parent seed");
+			throw new Error("Cannot validate seedTxId: Asset has no parent seed");
 		}
 		if (actual.seedCreatedTxId !== declared.seedTxId) {
 			throw new Error(
