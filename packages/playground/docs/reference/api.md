@@ -31,7 +31,7 @@ Sync status and node information.
 {
 	"protocolVersion": "1.0.0",
 	"protocolId": "nftlox_testnet",
-	"genesisBlock": 12345678,
+	"genesisBlock": 109974058,
 	"nodeAccount": "nftlox",
 	"nodeUrl": "https://api-nftlox.hivecreators.co",
 	"multisigEnabled": true,

@@ -49,7 +49,7 @@ curl https://api-nftlox.hivecreators.co/api/status
 {
 	"protocolVersion": "1.0.0",
 	"protocolId": "nftlox_testnet",
-	"genesisBlock": 12345678,
+	"genesisBlock": 109974058,
 	"nodeAccount": "nftlox",
 	"multisigEnabled": true,
 	"multisigSignerReady": true,
