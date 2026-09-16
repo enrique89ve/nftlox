@@ -6,6 +6,7 @@ import {
 	ACTION_CREATE_COLLECTION,
 	ACTION_BUY,
 	ACTION_MINT,
+	PROTOCOL_VERSION,
 } from "@/protocol/index.ts";
 
 function opFor(
@@ -21,7 +22,7 @@ function opFor(
 		signer: "alice",
 		authLevel: "posting",
 		action,
-		version: "0.6.3",
+		version: PROTOCOL_VERSION,
 		data,
 		pairedTransfers: transfers,
 		transferPool: { consumed: new Set<number>() },

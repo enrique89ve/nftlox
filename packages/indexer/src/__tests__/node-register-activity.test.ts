@@ -6,6 +6,7 @@ import { getSettlementNodeSnapshot } from "@/db/queries/nodes.ts";
 import {
 	ACTION_NODE_REGISTER,
 	MAX_NODE_HEARTBEAT_STALENESS_BLOCKS,
+	PROTOCOL_VERSION,
 } from "@/protocol/index.ts";
 
 const TEST_ACCOUNT = "register-node";
@@ -23,7 +24,7 @@ function makeRegisterOp(blockNum: number, overrides: Partial<ParsedOperation> = 
 		signer: TEST_ACCOUNT,
 		authLevel: "posting",
 		action: ACTION_NODE_REGISTER as ParsedOperation["action"],
-		version: "0.6.3",
+		version: PROTOCOL_VERSION,
 		data: { endpoint: NODE_ENDPOINT },
 		...overrides,
 	};

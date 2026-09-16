@@ -7,6 +7,7 @@ import {
 	buildSeed,
 	buildSeedBatch,
 	resolveNodeAccountFromStatus,
+	PROTOCOL_VERSION,
 	type CreateCollectionInput,
 	type HiveOperation,
 } from "../src/index";
@@ -27,7 +28,7 @@ async function withMockFetch<T>(mockFetch: MockFetch, run: () => Promise<T>): Pr
 }
 
 const readyStatus = {
-	protocolVersion: "0.6.3",
+	protocolVersion: PROTOCOL_VERSION,
 	protocolId: "nftlox_testnet",
 	nodeAccount: "nftlox-node",
 	nodeUrl: "https://indexer.test",

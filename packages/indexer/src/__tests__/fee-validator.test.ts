@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { validateFixedFee } from "@/utils/fee-validator.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import { PROTOCOL_VERSION } from "@/protocol/index.ts";
 
 function opWith(transfers: Array<{
 	from: string;
@@ -17,7 +18,7 @@ function opWith(transfers: Array<{
 		signer: "alice",
 		authLevel: "posting",
 		action: "create_collection",
-		version: "0.6.3",
+		version: PROTOCOL_VERSION,
 		data: {},
 		pairedTransfers: transfers,
 		transferPool: { consumed: new Set<number>() },
