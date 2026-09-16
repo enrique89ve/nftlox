@@ -40,7 +40,7 @@ for production configuration, Docker modes, proxies, and database options.
 
 ## API
 
-The indexer exposes read endpoints for collections, NFTs, users, marketplace
+The indexer exposes read endpoints for collections, Assets, users, marketplace
 listings, health, status, and state roots. It also exposes exactly two narrow
 multisig endpoints:
 

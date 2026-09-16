@@ -61,7 +61,7 @@ async function buildBuyTx(): Promise<Transaction> {
 			version: PROTOCOL_VERSION,
 			action: "buy",
 			data: {
-				nftId: "test-nft-id",
+				assetId: "test-asset-id",
 				listingId: "L1",
 				listTxId: "abc123deadbeef",
 			},
@@ -144,7 +144,7 @@ async function runCases(): Promise<void> {
 			},
 		},
 		{
-			name: "D · node rewrites nftId inside custom_json payload",
+			name: "D · node rewrites assetId inside custom_json payload",
 			expect: "reject",
 			build: async () => {
 				const tx = await buildBuyTx();
@@ -156,7 +156,7 @@ async function runCases(): Promise<void> {
 					action: string;
 					data: Record<string, string>;
 				};
-				payload.data.nftId = "different-nft";
+				payload.data.assetId = "different-asset";
 				customJson.json = JSON.stringify(payload);
 				return addNodeSigToModifiedTx(withBuyer);
 			},

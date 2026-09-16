@@ -8,7 +8,7 @@ ARG GIT_COMMIT_SHA
 ARG GIT_CURRENT_BRANCH
 
 LABEL org.opencontainers.image.title="NFTLox Indexer"
-LABEL org.opencontainers.image.description="Hive blockchain NFT indexer and API"
+LABEL org.opencontainers.image.description="Hive blockchain Asset indexer and API"
 LABEL org.opencontainers.image.source="https://github.com/nftlox/nftlox"
 LABEL org.opencontainers.image.created="${BUILD_TIME}"
 LABEL org.opencontainers.image.revision="${GIT_COMMIT_SHA}"

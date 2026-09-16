@@ -163,7 +163,7 @@ function buildFixture(mix: OpMix, seed = 42): HafAHOperation[] {
 	return ops;
 }
 
-// ─── Permissive baseline parser (nft-tracker style) ───
+// ─── Permissive baseline parser (asset-tracker style) ───
 // Only checks that the op is custom_json, matches protocol id, and the JSON
 // parses to an object with an `action` string. No txId / opId / version /
 // prototype-pollution / auth validation. Equivalent to a SQL `_json->>'action'`

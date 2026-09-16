@@ -559,7 +559,7 @@ describe("Handlers (integration)", () => {
 			await seedCollection();
 			const { op, id: dnaSeedId } = await makeMintOp("dna_test", {
 				originDna: "FAKE_ORIGIN_DNA",
-				assetDna: "FAKE_Asset_DNA",
+				assetDna: "FAKE_ASSET_DNA",
 				uniqueAccessKey: "FAKEKEY1",
 				metadata: { name: "DNA Test", imageHash: "hash_abc" },
 			});
@@ -575,7 +575,7 @@ describe("Handlers (integration)", () => {
 			// Must NOT be the fake values — origin_dna is derived from collection
 			// id on create_collection; asset_dna is derived on mint.
 			expect(asset!.origin_dna).not.toBe("FAKE_ORIGIN_DNA");
-			expect(asset!.asset_dna).not.toBe("FAKE_Asset_DNA");
+			expect(asset!.asset_dna).not.toBe("FAKE_ASSET_DNA");
 			// Must be non-null (computed)
 			expect(asset!.origin_dna).toBeTruthy();
 			expect(asset!.asset_dna).toBeTruthy();

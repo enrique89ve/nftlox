@@ -9,7 +9,7 @@
  *   TEST_BUYER_ACCOUNT          (buyer account)
  *   TEST_BUYER_ACTIVE_KEY       (buyer active WIF)
  *
- * Pass the target NFT id as argv[2] (default: the one listed during smoke
+ * Pass the target Asset id as argv[2] (default: the one listed during smoke
  * bootstrap).
  */
 import { Transaction, PrivateKey, config as hiveConfig } from "hive-tx";
@@ -24,7 +24,7 @@ import { PROTOCOL_ID, PROTOCOL_VERSION } from "@nftlox/protocol";
 const INDEXER = process.env.INDEXER_URL ?? "http://localhost:3050";
 const BUYER = requireEnv("TEST_BUYER_ACCOUNT");
 const BUYER_KEY = requireEnv("TEST_BUYER_ACTIVE_KEY");
-const NFT_ID = process.argv[2] ?? "nft_838eb4d40542257c43e3_1";
+const ASSET_ID = process.argv[2] ?? "asset_838eb4d40542257c43e3_1";
 
 hiveConfig.nodes = ["https://rpc.mahdiyari.info", "https://api.hive.blog"];
 
@@ -35,8 +35,8 @@ type BuyResponse =
   | { ok: false; code: string; message: string; retryAfterMs?: number };
 
 async function main(): Promise<void> {
-  console.log(`[smoke] buyer=${BUYER} nft=${NFT_ID} indexer=${INDEXER}`);
-  const info = await fetchPaymentInfo(INDEXER, NFT_ID);
+  console.log(`[smoke] buyer=${BUYER} asset=${ASSET_ID} indexer=${INDEXER}`);
+  const info = await fetchPaymentInfo(INDEXER, ASSET_ID);
   console.log("[smoke] payment-info:", {
     listingId: info.listingId,
     totalPrice: info.totalPrice,
@@ -94,14 +94,14 @@ async function buildUnsignedBuyTx(info: PaymentInfo): Promise<Transaction> {
     from: BUYER,
     to: info.seller,
     amount: `${info.sellerAmount.toFixed(3)} ${info.currency}`,
-    memo: `NFTLox BUY:${NFT_ID}`,
+    memo: `NFTLox BUY:${ASSET_ID}`,
   });
   if (info.royaltyAmount > 0 && info.royaltyRecipient) {
     await tx.addOperation("transfer", {
       from: BUYER,
       to: info.royaltyRecipient,
       amount: `${info.royaltyAmount.toFixed(3)} ${info.currency}`,
-      memo: `NFTLox ROY:${NFT_ID}`,
+      memo: `NFTLox ROY:${ASSET_ID}`,
     });
   }
   if (info.feeAmount > 0) {
@@ -109,7 +109,7 @@ async function buildUnsignedBuyTx(info: PaymentInfo): Promise<Transaction> {
       from: BUYER,
       to: info.feeAccount,
       amount: `${info.feeAmount.toFixed(3)} ${info.currency}`,
-      memo: `NFTLox FEE:${NFT_ID}`,
+      memo: `NFTLox FEE:${ASSET_ID}`,
     });
   }
   await tx.addOperation("custom_json", {
@@ -121,7 +121,7 @@ async function buildUnsignedBuyTx(info: PaymentInfo): Promise<Transaction> {
       version: PROTOCOL_VERSION,
       action: "buy",
       data: {
-        nftId: NFT_ID,
+        assetId: ASSET_ID,
         listingId: info.listingId,
         listTxId: info.listTxId,
       },

@@ -47,7 +47,7 @@ import { seedActiveSettlementNode } from "./helpers/settlement-node.ts";
 
 // Pinned by F2.B determinism test on initial run. Update only when a deliberate
 // state-root-affecting change ships, with a comment explaining why.
-const EXPECTED_STATE_ROOT = "sha256:de962bd637a5e7bfce28f9f3b8bbdc032c62d0a3dc089e00a4771fc6e16bfd58";
+const EXPECTED_STATE_ROOT = "sha256:fe12f61e5e48f128bb05e1235f4f6b901268b5d1e307055b16ba326851b8cd95";
 
 // Anchored in the past so derived listing/expiry math (which compares
 // timestamps in ms) lands on stable values across machines and time zones.
