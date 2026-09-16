@@ -1,7 +1,21 @@
 import { test, expect, describe } from "bun:test";
-import { buildTransfer, buildList } from "../src/builders";
+import { buildNftTransferFrom, buildTransfer, buildList } from "../src/builders";
 
 describe("Builder username validation", () => {
+	test("buildNftTransferFrom rejects the reserved burn account", () => {
+		const result = buildNftTransferFrom({
+			from: "alice",
+			to: "null",
+			instanceId: "nft_test123",
+			operator: "gameshop",
+		});
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.errors.map((error) => error.field)).toContain("to");
+		}
+	});
+
 	describe("buildTransfer rejects invalid Hive usernames", () => {
 		test("rejects segment too short (a.b)", () => {
 			const result = buildTransfer({

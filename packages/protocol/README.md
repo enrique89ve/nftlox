@@ -121,7 +121,7 @@ These are the actions currently accepted by `ALL_ACTIONS`.
 | Marketplace | `buy` | Active | Settles a listed NFT after payment transfers and node co-signature are valid |
 | Approvals | `nft_approve` | Active | Grants or revokes transfer authority for one instance |
 | Approvals | `nft_approve_all` | Active | Grants or revokes collection-wide transfer authority for one owner |
-| Approvals | `nft_transfer_from` | Active | Transfers an instance using prior approval |
+| Approvals | `nft_transfer_from` | Active | Transfers an instance to an ordinary account using prior approval; the reserved burn account is not a valid delegated destination |
 | Lending | `nft_lend` | Active | Lends an instance without changing ownership |
 | Lending | `nft_return` | Active | Returns a lent instance to active custody |
 | Nodes | `node_register` | Posting | Registers a public indexer node in the discovery directory |
@@ -131,6 +131,12 @@ These are the actions currently accepted by `ALL_ACTIONS`.
 `buy_commitment` is **node-only**: it is never emitted by the SDK or by end
 users. The settlement node broadcasts it with its own active key as part of
 the node-last buy flow.
+
+Approvals delegate ordinary instance transfers only. They do not grant an
+alternate burn path: `nft_transfer_from` must reject `BURN_RECIPIENT` (`null`)
+regardless of the collection's `burnable` rule. Burning remains available only
+through the owner's direct `transfer` action, which enforces ownership,
+active authority, and `burnable`.
 
 There are no native pack actions in the protocol. Pack planning lives outside
 the base protocol and ultimately emits normal `bulk_distribute` operations.

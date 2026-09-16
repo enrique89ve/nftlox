@@ -1998,6 +1998,65 @@ describe("Handlers (integration)", () => {
 			expect(allowance).toBeUndefined();
 		});
 
+		test("individual approval cannot use transferFrom as a burn path", async () => {
+			await seedCollection();
+			await seedMint();
+			const instId = await seedInstance();
+
+			await withTransaction((txn) => handleNftApprove(makeOp(ACTION_NFT_APPROVE, {
+				spender: "gameshop", instanceId: instId, approved: true,
+			}), txn));
+			const [beforeNft] = await sql`SELECT owner, status, owner_action, owner_operation_id FROM nfts WHERE id = ${instId}`;
+			const [beforeAllowance] = await sql`SELECT approved_spender FROM nft_allowances WHERE nft_id = ${instId}`;
+			const [beforeRoot] = await sql`SELECT state_root FROM state_meta WHERE id = 1`;
+
+			await expect(
+				withTransaction((txn) => handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
+					from: "alice", to: "null", instanceId: instId,
+				}, "gameshop"), txn)),
+			).rejects.toThrow("Delegated NFT transfers cannot target the burn account");
+
+			const [afterNft] = await sql`SELECT owner, status, owner_action, owner_operation_id FROM nfts WHERE id = ${instId}`;
+			const [afterAllowance] = await sql`SELECT approved_spender FROM nft_allowances WHERE nft_id = ${instId}`;
+			const [afterRoot] = await sql`SELECT state_root FROM state_meta WHERE id = 1`;
+			expect(afterNft).toEqual(beforeNft);
+			expect(afterAllowance).toEqual(beforeAllowance);
+			expect(Buffer.from(afterRoot!.state_root).equals(Buffer.from(beforeRoot!.state_root))).toBe(true);
+		});
+
+		test("collection approval cannot burn even when the collection is not burnable", async () => {
+			const { id: noBurnCollectionId, data: noBurnCollection } = await makeCanonicalCollection(
+				"alice", "Delegated No Burn", "DNB",
+				{ rules: { transferable: true, burnable: false, royaltyPct: 0 } },
+			);
+			const createOp = await makeCreateCollectionOp(noBurnCollection, "alice");
+			await withTransaction((txn) => handleCreateCollection(createOp, txn));
+			const { op: mintOp, id: seedId } = await makeMintOp("delegated-no-burn", {
+				collectionId: noBurnCollectionId,
+			});
+			await withTransaction((txn) => handleMint(mintOp, txn));
+			const instId = await seedInstanceFrom(seedId);
+
+			await withTransaction((txn) => handleNftApproveAll(makeOp(ACTION_NFT_APPROVE_ALL, {
+				spender: "gameshop", collectionId: noBurnCollectionId, approved: true,
+			}), txn));
+			const [before] = await sql`SELECT owner, status FROM nfts WHERE id = ${instId}`;
+
+			await expect(
+				withTransaction((txn) => handleNftTransferFrom(makeOp(ACTION_NFT_TRANSFER_FROM, {
+					from: "alice", to: "null", instanceId: instId,
+				}, "gameshop"), txn)),
+			).rejects.toThrow("Delegated NFT transfers cannot target the burn account");
+
+			const [after] = await sql`SELECT owner, status FROM nfts WHERE id = ${instId}`;
+			const [allowance] = await sql`
+				SELECT 1 FROM collection_allowances
+				WHERE collection_id = ${noBurnCollectionId} AND owner = 'alice' AND spender = 'gameshop'
+			`;
+			expect(after).toEqual(before);
+			expect(allowance).toBeDefined();
+		});
+
 		test("transferFrom rejected without approval", async () => {
 			await seedCollection();
 			await seedMint();

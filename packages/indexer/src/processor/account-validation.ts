@@ -14,6 +14,7 @@ import type {
 	HiveAccountObservation,
 } from "@/scanner/account-client.ts";
 import { accountCreatedBeforeOperation } from "@/utils/hive-timestamp.ts";
+import { DELEGATED_BURN_REJECTION_REASON } from "@/processor/protocol-rejection.ts";
 
 export type AccountValidationDecision =
 	| Readonly<{ readonly kind: "not-required" }>
@@ -52,12 +53,17 @@ function accountTarget(
 	field: string,
 	signer: string,
 	allowSigner: boolean,
+	allowBurnRecipient: boolean,
 	operationAt: string,
 ): AccountTarget {
 	if (typeof value !== "string" || value.length === 0) {
 		return invalidAccountField(field);
 	}
-	if (value === BURN_RECIPIENT) return { kind: "not-required" };
+	if (value === BURN_RECIPIENT) {
+		return allowBurnRecipient
+			? { kind: "not-required" }
+			: { kind: "rejected", reason: DELEGATED_BURN_REJECTION_REASON };
+	}
 
 	const usernameError = validateHiveUsername(value);
 	if (usernameError) {
@@ -77,7 +83,7 @@ function targetForOperation(op: ParsedOperation): AccountTarget {
 	const data = op.data;
 
 	if (op.action === ACTION_TRANSFER) {
-		const target = accountTarget(data.to, "to", op.signer, false, op.timestamp);
+		const target = accountTarget(data.to, "to", op.signer, false, true, op.timestamp);
 		if (target.kind === "lookup" && target.account === op.signer) {
 			return {
 				kind: "rejected",
@@ -89,20 +95,22 @@ function targetForOperation(op: ParsedOperation): AccountTarget {
 
 	if (op.action === ACTION_MINT) {
 		if (!hasOwnField(data, "owner")) return { kind: "not-required" };
-		return accountTarget(data.owner, "owner", op.signer, true, op.timestamp);
+		// Preserve the existing no-RPC treatment of the reserved recipient for
+		// legacy mint payloads; this hardening is scoped to delegated transfers.
+		return accountTarget(data.owner, "owner", op.signer, true, true, op.timestamp);
 	}
 
 	if (op.action === ACTION_BULK_DISTRIBUTE) {
 		if (!hasOwnField(data, "to")) return { kind: "not-required" };
-		return accountTarget(data.to, "to", op.signer, true, op.timestamp);
+		return accountTarget(data.to, "to", op.signer, true, true, op.timestamp);
 	}
 
 	if (op.action === ACTION_NFT_TRANSFER_FROM) {
-		return accountTarget(data.to, "to", op.signer, true, op.timestamp);
+		return accountTarget(data.to, "to", op.signer, true, false, op.timestamp);
 	}
 
 	if (op.action === ACTION_NFT_LEND) {
-		return accountTarget(data.borrower, "borrower", op.signer, true, op.timestamp);
+		return accountTarget(data.borrower, "borrower", op.signer, true, true, op.timestamp);
 	}
 
 	return { kind: "not-required" };

@@ -13,7 +13,11 @@ import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertOwnershipChangeable, assertNotPendingSale, assertNotSeed } from "@/utils/status-checks.ts";
 import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
 import { createLogger } from "@/utils/logger.ts";
-import { ACTION_NFT_TRANSFER_FROM } from "@/protocol/index.ts";
+import { BURN_RECIPIENT, ACTION_NFT_TRANSFER_FROM } from "@/protocol/index.ts";
+import {
+	DELEGATED_BURN_REJECTION_REASON,
+	protocolReject,
+} from "@/processor/protocol-rejection.ts";
 
 const log = createLogger("handler:nft-transfer-from");
 
@@ -21,11 +25,14 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 	const from = requireUsername(op.data.from, "from");
 	const to = requireUsername(op.data.to, "to");
 	const instanceId = requireString(op.data.instanceId, "instanceId");
+	if (to === BURN_RECIPIENT) {
+		throw protocolReject(DELEGATED_BURN_REJECTION_REASON, "BURN_RECIPIENT_DELEGATION_FORBIDDEN");
+	}
 
-	if (from === to) throw new Error("Cannot transfer to yourself");
+	if (from === to) throw protocolReject("Cannot transfer to yourself");
 
 	const nft = await getNftForProcessingForUpdate(instanceId, txn);
-	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
+	if (!nft) throw protocolReject(`NFT not found: ${instanceId}`);
 
 	await validateSeedProvenance(op, nft, txn);
 
@@ -40,11 +47,11 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 	}
 	assertNotSeed(nft, instanceId);
 
-	if (nft.owner !== from) throw new Error(`Account ${from} is not owner of ${instanceId}`);
+	if (nft.owner !== from) throw protocolReject(`Account ${from} is not owner of ${instanceId}`);
 
 	const rules = await getCollectionRules(nft.collection_id, txn);
 	if (rules && !rules.transferable) {
-		throw new Error(`Collection ${nft.collection_id} is not transferable`);
+		throw protocolReject(`Collection ${nft.collection_id} is not transferable`);
 	}
 
 	// Spender authorization: individual NFT approval OR collection-wide approval
@@ -55,7 +62,7 @@ export async function handleNftTransferFrom(op: ParsedOperation, txn: Queryable)
 	);
 
 	if (!hasIndividualApproval && !hasCollectionApproval) {
-		throw new Error(`Signer ${op.signer} is not approved to transfer ${instanceId}`);
+		throw protocolReject(`Signer ${op.signer} is not approved to transfer ${instanceId}`);
 	}
 
 	const ctx: OwnerChangeCtx = {

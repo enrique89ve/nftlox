@@ -19,6 +19,7 @@ import {
 	MAX_LISTING_TTL_MS,
 	normalizeNodeEndpoint,
 	validateNodeEndpoint,
+	BURN_RECIPIENT,
 } from "@nftlox/protocol";
 
 // Safe URL: only http:// and https:// protocols (blocks javascript:, data:, etc.)
@@ -265,7 +266,10 @@ export type NftApproveAllInput = z.infer<typeof nftApproveAllInputSchema>;
 
 export const nftTransferFromInputSchema = seedProvenanceSchema.extend({
 	from: usernameSchema,
-	to: usernameSchema,
+	to: usernameSchema.refine(
+		(value) => value !== BURN_RECIPIENT,
+		{ message: "Delegated NFT transfers cannot target the burn account" },
+	),
 	instanceId: z.string().min(1),
 });
 export type NftTransferFromInput = z.infer<typeof nftTransferFromInputSchema>;

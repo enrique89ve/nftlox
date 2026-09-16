@@ -71,6 +71,23 @@ describe("account validation preparation", () => {
 		]);
 	});
 
+	test("rejects burn recipient for delegated transfers before any account lookup", () => {
+		const delegatedBurn = makeOperation(
+			ACTION_NFT_TRANSFER_FROM,
+			{ from: "alice", to: "null", instanceId: "nft_1" },
+			"gameshop",
+			"op-delegated-burn",
+		);
+
+		const plan = buildAccountValidationPlan([delegatedBurn]);
+
+		expect(plan.accounts).toEqual([]);
+		expect(plan.targets.get(delegatedBurn.operationId)).toEqual({
+			kind: "rejected",
+			reason: "Delegated NFT transfers cannot target the burn account",
+		});
+	});
+
 	test("groups only distinct external recipients", () => {
 		const ops = [
 			makeOperation(ACTION_TRANSFER, { to: "bob" }, "alice", "op-transfer"),
