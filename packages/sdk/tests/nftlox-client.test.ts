@@ -5,9 +5,7 @@ import {
 	MIN_PROTOCOL_VERSION,
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
-	buildUnlist,
 } from "../src";
-import { resetProtocolState } from "../src/protocol-state";
 
 const INDEXER_URL = "https://indexer.test.example";
 
@@ -121,30 +119,29 @@ describe("createNftloxClient", () => {
 		}
 	});
 
-	test("connect() configures subsequent builders with the live protocol contract", async () => {
+	test("connect() rejects an indexer on a different protocol version", async () => {
 		const client = createNftloxClient({
 			indexerUrl: INDEXER_URL,
 			http: {
 				fetch: (async () => new Response(JSON.stringify({
 					protocolVersion: "1.1.0",
+					protocolId: PROTOCOL_ID,
+				}), { status: 200 })) as unknown as typeof fetch,
+			},
+		});
+		await expect(client.connect()).rejects.toThrow(/expected version '1\.0\.0', got '1\.1\.0'/);
+	});
+
+	test("connect() rejects an indexer on a different protocol id", async () => {
+		const client = createNftloxClient({
+			indexerUrl: INDEXER_URL,
+			http: {
+				fetch: (async () => new Response(JSON.stringify({
+					protocolVersion: PROTOCOL_VERSION,
 					protocolId: "nftlox_live_protocol",
 				}), { status: 200 })) as unknown as typeof fetch,
 			},
 		});
-		try {
-			await client.connect();
-			const result = buildUnlistForSyncTest();
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.payload.version).toBe("1.1.0");
-				expect(result.payload.protocol).toBe("nftlox_live_protocol");
-			}
-		} finally {
-			resetProtocolState();
-		}
+		await expect(client.connect()).rejects.toThrow(/expected protocol 'nftlox_testnet'/);
 	});
 });
-
-function buildUnlistForSyncTest() {
-	return buildUnlist({ assetId: "asset_" + "a".repeat(20) + "_1", owner: "alice" });
-}

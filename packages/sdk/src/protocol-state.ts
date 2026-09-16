@@ -1,7 +1,7 @@
-// Runtime protocol state — initialized from the indexer API.
-// Falls back to constants if not initialized (offline mode).
+// Runtime protocol state — initialized from the indexer API when requested.
+// Bundled constants remain active until a compatible indexer is verified.
 
-import { PROTOCOL_VERSION, PROTOCOL_ID } from "@nftlox/protocol";
+import { PROTOCOL_VERSION, PROTOCOL_ID, isValidProtocolVersion } from "@nftlox/protocol";
 import { resolveFetch, type HttpOptions } from "./http";
 
 type ProtocolState = {
@@ -23,10 +23,16 @@ type StatusResponse = {
 	protocolId: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
 /**
  * Initialize the SDK protocol state from the indexer API.
- * Must be called before creating payloads to ensure correct version.
- * Falls back to built-in constants on failure.
+ * Must be called before creating payloads to ensure the configured indexer
+ * serves the exact wire contract bundled by this SDK. A different protocol
+ * id or version is rejected because the indexer validates both fields and
+ * emitting a negotiated mismatch would create an operation it cannot accept.
  */
 export async function initProtocol(baseUrl?: string, http?: HttpOptions): Promise<ProtocolState> {
 	const url = baseUrl
@@ -39,14 +45,22 @@ export async function initProtocol(baseUrl?: string, http?: HttpOptions): Promis
 	}
 
 	const raw: unknown = await res.json();
-	if (
-		typeof raw !== "object" || raw === null ||
-		typeof (raw as Record<string, unknown>).protocolVersion !== "string" ||
-		typeof (raw as Record<string, unknown>).protocolId !== "string"
-	) {
+	if (!isRecord(raw) || typeof raw.protocolVersion !== "string" || typeof raw.protocolId !== "string") {
 		throw new Error("Protocol status response malformed");
 	}
-	const data = raw as StatusResponse;
+	const data: StatusResponse = {
+		protocolVersion: raw.protocolVersion,
+		protocolId: raw.protocolId,
+	};
+	if (!isValidProtocolVersion(data.protocolVersion)) {
+		throw new Error(`Protocol status incompatible: invalid protocol version '${data.protocolVersion}'`);
+	}
+	if (data.protocolId !== PROTOCOL_ID) {
+		throw new Error(`Protocol status incompatible: expected protocol '${PROTOCOL_ID}', got '${data.protocolId}'`);
+	}
+	if (data.protocolVersion !== PROTOCOL_VERSION) {
+		throw new Error(`Protocol status incompatible: expected version '${PROTOCOL_VERSION}', got '${data.protocolVersion}'`);
+	}
 	state.version = data.protocolVersion;
 	state.protocolId = data.protocolId;
 	state.initialized = true;

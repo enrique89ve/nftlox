@@ -87,10 +87,12 @@ export type NftloxClient = {
 		readonly minVersion: string;
 	};
 	/**
-	 * Fetches `/api/status` from the indexer and updates the SDK protocol
-	 * state so that `createPayload(...)` emits the live indexer's version.
+	 * Fetches `/api/status` from the indexer and verifies that it serves the
+	 * exact protocol contract bundled by this SDK before enabling live state.
 	 *
-	 * Optional: skip it if you trust the bundled constants (offline mode).
+	 * Optional: skip it if you trust the bundled constants (offline mode). A
+	 * different protocol id or version is rejected instead of producing a
+	 * payload the target indexer cannot accept.
 	 */
 	connect(): Promise<{ readonly version: string; readonly protocolId: string }>;
 };
