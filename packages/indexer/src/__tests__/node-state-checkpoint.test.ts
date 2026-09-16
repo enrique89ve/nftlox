@@ -5,6 +5,7 @@ import { handleNodeStateCheckpoint } from "@/processor/handlers/core/node_state_
 import {
 	ACTION_NODE_STATE_CHECKPOINT,
 	STATE_CHECKPOINT_INTERVAL_BLOCKS,
+	PROTOCOL_VERSION,
 } from "@/protocol/index.ts";
 
 const VALID_STATE_ROOT = `sha256:${"a".repeat(64)}`;
@@ -31,7 +32,7 @@ function makeCheckpointOp(
 		signer: TEST_ACCOUNT,
 		authLevel: "posting",
 		action: ACTION_NODE_STATE_CHECKPOINT as ParsedOperation["action"],
-		version: "0.11.0",
+		version: PROTOCOL_VERSION,
 		data,
 		...overrides,
 	};

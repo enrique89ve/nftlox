@@ -179,7 +179,7 @@ A verifier that skips any of these steps opts into a weaker model — the publis
 
 ## Compression strategy
 
-Postgres dumps of NFTLox-shaped data (heavy JSONB in `assets.data`, `assets.schema_snapshot`, `collections.schema`, `invalid_operations.raw_payload`) compress very well with modern algorithms.
+Postgres dumps of NFTLox-shaped data (heavy JSONB in `assets.immutable_data`, `collections.schema`, and `invalid_operations.raw_payload`) compress very well with modern algorithms.
 
 | Algo | Level | Target size ratio | Decompress speed | When to use |
 |---|---|---|---|---|

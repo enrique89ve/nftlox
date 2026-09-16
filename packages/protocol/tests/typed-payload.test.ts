@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { castPayloadByAction } from "../src/payload-assertions";
-import { ACTION_BUY, ACTION_MINT } from "../src/constants";
+import { ACTION_BUY, ACTION_MINT, PROTOCOL_VERSION } from "../src/constants";
 
 describe("castPayloadByAction", () => {
 	test("returns the payload when action matches", () => {
 		const p = {
 			protocol: "nftlox_testnet",
-			version: "0.11.0",
+			version: PROTOCOL_VERSION,
 			action: ACTION_BUY,
 			data: {
 				assetId: "inst_x",
@@ -22,7 +22,7 @@ describe("castPayloadByAction", () => {
 	test("returns null when action does not match", () => {
 		const p = {
 			protocol: "nftlox_testnet",
-			version: "0.11.0",
+			version: PROTOCOL_VERSION,
 			action: ACTION_MINT,
 			data: {},
 		} as const;

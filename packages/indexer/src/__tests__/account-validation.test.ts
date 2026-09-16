@@ -6,6 +6,7 @@ import {
 	ACTION_ASSET_TRANSFER_FROM,
 	ACTION_TRANSFER,
 	getAuthLevel,
+	PROTOCOL_VERSION,
 } from "@/protocol/index.ts";
 import type { ParsedOperation } from "../scanner/operation-parser.ts";
 import {
@@ -27,7 +28,7 @@ function makeOperation(
 		signer,
 		authLevel: getAuthLevel(action),
 		action: action as ParsedOperation["action"],
-		version: "0.11.0",
+		version: PROTOCOL_VERSION,
 		data,
 	};
 }

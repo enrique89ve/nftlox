@@ -19,8 +19,8 @@
 // ============================================================================
 
 export const PROTOCOL_ID = "nftlox_testnet";
-// 0.11.0 hard fork: custody/delegation actions moved from posting to active.
-// MIN tracks the release because 0.10.x payloads use the old authority map.
+// 1.0.0 hard fork: custody/delegation actions moved from posting to active.
+// MIN tracks the release because 0.x payloads use the old authority map.
 export const PROTOCOL_VERSION = "1.0.0";
 export const MIN_PROTOCOL_VERSION = "1.0.0";
 export const HASH_VERSION = "v1";
