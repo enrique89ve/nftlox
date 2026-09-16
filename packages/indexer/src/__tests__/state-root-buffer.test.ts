@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { createStateRootBuffer } from "@/utils/state-root-buffer.ts";
 import type { NftStateRow } from "@/utils/state-root-hash.ts";
+import type { BufferedMutation, NetEntry } from "@/utils/state-root-buffer.ts";
 
 const row = (id: string, owner: string, block = 100): NftStateRow => ({
 	id,
@@ -12,6 +13,22 @@ const row = (id: string, owner: string, block = 100): NftStateRow => ({
 });
 
 describe("StateRootBuffer", () => {
+	function applyReference(entries: Map<string, NetEntry>, mutation: BufferedMutation): void {
+		const id = mutation.type === "delete" ? mutation.oldRow.id : mutation.newRow.id;
+		const existing = entries.get(id);
+		const incomingOld = mutation.type === "insert" ? null : mutation.oldRow;
+		const incomingNew = mutation.type === "delete" ? null : mutation.newRow;
+		if (!existing) {
+			entries.set(id, { firstOld: incomingOld, lastNew: incomingNew, blockNum: mutation.blockNum });
+			return;
+		}
+		entries.set(id, {
+			firstOld: existing.firstOld,
+			lastNew: incomingNew,
+			blockNum: Math.max(existing.blockNum, mutation.blockNum),
+		});
+	}
+
 	it("is empty initially", () => {
 		const buf = createStateRootBuffer();
 		expect(buf.isEmpty()).toBe(true);
@@ -129,5 +146,55 @@ describe("StateRootBuffer", () => {
 		expect(buf.size()).toBe(0);
 		expect([...buf.iter()]).toEqual([]);
 		expect(buf.maxBlockNum()).toBe(0);
+	});
+
+	it("rolls back only changes after a checkpoint", () => {
+		const buf = createStateRootBuffer();
+		const first = row("nft-1", "alice");
+		const second = row("nft-2", "bob");
+		buf.queue({ type: "insert", newRow: first, blockNum: 100 });
+		const checkpoint = buf.checkpoint();
+		buf.queue({ type: "insert", newRow: second, blockNum: 101 });
+		buf.queue({ type: "update", oldRow: first, newRow: row("nft-1", "carol"), blockNum: 102 });
+
+		buf.rollbackTo(checkpoint);
+
+		expect([...buf.iter()]).toEqual([{
+			firstOld: null,
+			lastNew: first,
+			blockNum: 100,
+		}]);
+	});
+
+	it("matches a simple reference model across mixed mutations and rollback", () => {
+		const buf = createStateRootBuffer();
+		const reference = new Map<string, NetEntry>();
+		const mutations: BufferedMutation[] = [
+			{ type: "insert", newRow: row("nft-1", "alice"), blockNum: 100 },
+			{ type: "insert", newRow: row("nft-2", "bob"), blockNum: 101 },
+			{ type: "update", oldRow: row("nft-1", "alice"), newRow: row("nft-1", "carol"), blockNum: 102 },
+			{ type: "delete", oldRow: row("nft-2", "bob"), blockNum: 103 },
+		];
+
+		for (const mutation of mutations) {
+			buf.queue(mutation);
+			applyReference(reference, mutation);
+		}
+		expect([...buf.iter()]).toEqual([...reference.values()]);
+
+		const checkpoint = buf.checkpoint();
+		const beforeRollback = new Map(reference);
+		const rollbackMutations: BufferedMutation[] = [
+			{ type: "update", oldRow: row("nft-1", "carol"), newRow: row("nft-1", "diana"), blockNum: 104 },
+			{ type: "insert", newRow: row("nft-3", "erin"), blockNum: 105 },
+		];
+		for (const mutation of rollbackMutations) {
+			buf.queue(mutation);
+			applyReference(reference, mutation);
+		}
+		buf.rollbackTo(checkpoint);
+		reference.clear();
+		for (const [id, entry] of beforeRollback) reference.set(id, entry);
+		expect([...buf.iter()]).toEqual([...reference.values()]);
 	});
 });

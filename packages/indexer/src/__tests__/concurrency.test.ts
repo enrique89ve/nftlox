@@ -186,7 +186,7 @@ const mockStateRootBuffer = Object.freeze({
 	isEmpty: () => true,
 	iter: function* () {},
 	maxBlockNum: () => 0,
-	checkpoint: () => new Map(),
+	checkpoint: () => 0,
 	rollbackTo: (_snap: unknown) => {},
 });
 

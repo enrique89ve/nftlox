@@ -20,6 +20,8 @@ export type NetEntry = Readonly<{
 	blockNum: number;
 }>;
 
+export type StateRootCheckpoint = number;
+
 // Public shape consumed by callers. No class, no `this` — a frozen object
 // of closure-bound pure methods over the captured `entries` Map.
 export type StateRootBuffer = Readonly<{
@@ -28,8 +30,8 @@ export type StateRootBuffer = Readonly<{
 	isEmpty: () => boolean;
 	iter: () => IterableIterator<NetEntry>;
 	maxBlockNum: () => number;
-	checkpoint: () => Map<string, NetEntry>;
-	rollbackTo: (snap: Map<string, NetEntry>) => void;
+	checkpoint: () => StateRootCheckpoint;
+	rollbackTo: (checkpoint: StateRootCheckpoint) => void;
 	clear: () => void;
 }>;
 
@@ -55,10 +57,12 @@ function narrow(
 
 export function createStateRootBuffer(): StateRootBuffer {
 	const entries = new Map<string, NetEntry>();
+	const changes: Array<Readonly<{ readonly id: string; readonly previous: NetEntry | undefined }>> = [];
 
 	function queue(mutation: BufferedMutation): void {
 		const { id, incomingOld, incomingNew } = narrow(mutation);
 		const existing = entries.get(id);
+		changes.push({ id, previous: existing });
 		if (!existing) {
 			entries.set(id, {
 				firstOld: incomingOld,
@@ -94,19 +98,25 @@ export function createStateRootBuffer(): StateRootBuffer {
 		return max;
 	}
 
-	function checkpoint(): Map<string, NetEntry> {
-		return new Map(entries);
+	function checkpoint(): StateRootCheckpoint {
+		return changes.length;
 	}
 
-	function rollbackTo(snap: Map<string, NetEntry>): void {
-		entries.clear();
-		for (const [k, v] of snap) {
-			entries.set(k, v);
+	function rollbackTo(checkpoint: StateRootCheckpoint): void {
+		if (!Number.isSafeInteger(checkpoint) || checkpoint < 0 || checkpoint > changes.length) {
+			throw new Error(`StateRootBuffer: invalid checkpoint ${checkpoint}`);
+		}
+		while (changes.length > checkpoint) {
+			const change = changes.pop();
+			if (!change) throw new Error("StateRootBuffer: checkpoint log underflow");
+			if (change.previous === undefined) entries.delete(change.id);
+			else entries.set(change.id, change.previous);
 		}
 	}
 
 	function clear(): void {
 		entries.clear();
+		changes.length = 0;
 	}
 
 	return Object.freeze({ queue, size, isEmpty, iter, maxBlockNum, checkpoint, rollbackTo, clear });

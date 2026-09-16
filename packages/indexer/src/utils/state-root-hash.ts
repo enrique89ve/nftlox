@@ -19,6 +19,7 @@
 //   not a proof of correctness.
 
 import { HASH_FORMAT_PREFIX, canonicalJson } from "@/protocol/index.ts";
+import { createHash } from "node:crypto";
 
 // ============ ROW SHAPE ============
 
@@ -76,8 +77,12 @@ export function xorInto(target: Uint8Array, operand: Uint8Array): Uint8Array {
 export async function hashRow(row: NftStateRow): Promise<Uint8Array> {
 	const canonical = canonicalJson(row as unknown as Record<string, unknown>);
 	const encoded = new TextEncoder().encode(canonical);
-	const digest = await crypto.subtle.digest("SHA-256", encoded);
-	return new Uint8Array(digest);
+	// The indexer is a server-side Bun/Node process. Keeping the Promise API
+	// preserves the existing state-root contract, while the synchronous native
+	// implementation avoids WebCrypto's per-call scheduling overhead on the hot
+	// per-NFT path. The algorithm, canonical bytes, and 32-byte output are
+	// unchanged.
+	return new Uint8Array(createHash("sha256").update(encoded).digest());
 }
 
 // ============ DELTA APPLICATION ============

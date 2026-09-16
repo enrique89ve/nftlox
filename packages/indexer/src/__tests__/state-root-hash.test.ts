@@ -55,6 +55,14 @@ describe("xorInto", () => {
 });
 
 describe("hashRow", () => {
+	test("preserves the canonical SHA-256 vector", async () => {
+		// Fixed vector guards canonical field selection, UTF-8 encoding, and the
+		// native hash implementation independently of the Promise wrapper.
+		expect(Buffer.from(await hashRow(makeRow())).toString("hex")).toBe(
+			"5e9959d2bce4d398db7507e5e076cc76aeb9515f805378a5faacdbe04d5c5517",
+		);
+	});
+
 	test("is deterministic for identical input", async () => {
 		const row = makeRow();
 		const h1 = await hashRow(row);
