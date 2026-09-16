@@ -7,7 +7,7 @@ Every mutation in NFTLox is a Hive operation whose payload is a `ProtocolPayload
 ```typescript
 type ProtocolPayload<T> = {
 	readonly protocol: string;         // "nftlox_testnet"
-	readonly version: string;          // "0.11.0"
+	readonly version: string;          // "1.0.0"
 	readonly action: ProtocolAction;
 	readonly data: T;                  // shape depends on action
 };
@@ -20,7 +20,7 @@ Emitted as a Hive `custom_json`:
 	"required_auths": ["alice"],             // active-auth actions
 	"required_posting_auths": [],            // or the inverse for posting-auth actions
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.11.0\",\"action\":\"mint\",\"data\":{…}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"1.0.0\",\"action\":\"mint\",\"data\":{…}}"
 }]
 ```
 
@@ -50,8 +50,8 @@ SDK consumers never see the wire form: builders apply `toWireUrl` before emittin
 ## Action → auth level
 
 Custody actions sit in `required_auths` (active key): `create_collection`,
-`transfer`, `list`, `unlist`, `buy_commitment`, `buy`, `nft_approve`,
-`nft_approve_all`, `nft_transfer_from`, `nft_lend`, and `nft_return`. The
+`transfer`, `list`, `unlist`, `buy_commitment`, `buy`, `asset_approve`,
+`asset_approve_all`, `asset_transfer_from`, `asset_lend`, and `asset_return`. The
 remaining non-custodial actions use `required_posting_auths` (posting key).
 The mapping is enforced by `ACTION_AUTH_LEVEL` in
 `packages/protocol/src/auth.ts` — there is no ambiguity and no override.
@@ -67,7 +67,7 @@ A subset of those active-auth actions additionally require the signer to be a **
 | Max ops per Hive tx | 5 |
 | Max seeds per `bulk_distribute` | 50 |
 | Max instances per `bulk_distribute` | 250 |
-| Max NFT ids per bulk `transfer` / burn | 50 |
+| Max Asset ids per bulk `transfer` / burn | 50 |
 
 Exceeding `SAFE_PAYLOAD_MAX_BYTES` throws `PayloadTooLargeError` with a suggested batch size.
 
@@ -80,10 +80,10 @@ self-attested provenance reference (the `SeedProvenance` type in
 `@nftlox/protocol`):
 
 - **Affected**: `transfer`, `list`, `unlist`, `set_data`, `set_data_from`,
-  `nft_transfer_from`, `nft_lend`, `nft_return`.
-- **If declared**: the indexer validates each field against the NFT's
+  `asset_transfer_from`, `asset_lend`, `asset_return`.
+- **If declared**: the indexer validates each field against the Asset's
   canonical `seed_id` and the seed's `created_tx_id`. Any mismatch, any
-  wrong-type value, or any attempt to attach provenance to a seed NFT
+  wrong-type value, or any attempt to attach provenance to a seed Asset
   rejects the whole op before state mutation.
 - **If absent**: the op processes normally (backwards-compatible).
 
@@ -143,7 +143,7 @@ op[1] = ["custom_json", { required_auths: ["<nodeAccount>"],
 type ArchiveCollectionData = { readonly collectionId: string };
 ```
 
-Freezes the collection — new mints and `bulk_distribute` calls are rejected. Existing NFTs keep trading.
+Freezes the collection — new mints and `bulk_distribute` calls are rejected. Existing Assets keep trading.
 
 ### `extend_schema`
 
@@ -166,15 +166,15 @@ Append-only: existing fields are immutable. `name` must be a lowercase identifie
 **Auth:** Posting.
 
 ```typescript
-type NFTData = {
+type AssetData = {
 	readonly id: string;                     // seed_<20 hex>, deterministic from (collectionId, artId)
 	readonly collectionId: string;
 	readonly artId?: string;                 // required for seed mints; indexer recomputes the id and rejects mismatches
 	readonly edition: number;                // integer ≥ 1
 	readonly owner: string;
-	readonly nftType?: "seed" | "instance";  // "seed" for mint; instances come from bulk_distribute
+	readonly assetType?: "seed" | "instance";  // "seed" for mint; instances come from bulk_distribute
 	readonly originDna: string;              // inherited from the collection
-	readonly nftDna: string;            // "i<19 upper-hex>", deterministic
+	readonly assetDna: string;            // "i<19 upper-hex>", deterministic
 	readonly uniqueAccessKey?: string;       // reserved for future use
 	readonly mintedBy: string;
 	readonly collectionBlock?: number;
@@ -210,7 +210,7 @@ type BulkDistributeItem = {
 
 Cap: 50 distinct seeds per call. Duplicate `seedId`s are rejected.
 
-Instance IDs are computed server-side as `generateDeterministicInstanceId(seedId, instanceNumber)` = `nft_<seedSuffix>_<n>`; instance DNAs follow `generateInstanceDna(seedId, n, txId, blockNum)`.
+Instance IDs are computed server-side as `generateDeterministicInstanceId(seedId, instanceNumber)` = `asset_<seedSuffix>_<n>`; instance DNAs follow `generateInstanceDna(seedId, n, txId, blockNum)`.
 
 ### `transfer` / burn
 
@@ -218,24 +218,24 @@ Instance IDs are computed server-side as `generateDeterministicInstanceId(seedId
 
 ```typescript
 type TransferData = {
-	readonly nftId?: string;                 // single
-	readonly nftIds?: readonly string[];     // bulk (≤50)
+	readonly assetId?: string;                 // single
+	readonly assetIds?: readonly string[];     // bulk (≤50)
 	readonly to: string;                     // BURN_RECIPIENT ("null") = burn
 	readonly seedId?: string;                // optional provenance reference
 	readonly seedTxId?: string;
 };
 ```
 
-Either `nftId` or `nftIds` must be present. The sender is the Hive `custom_json` signer, not a payload field. Burning is a transfer with `to` set to the exported `BURN_RECIPIENT` constant — its literal value is `"null"`, Hive's reserved burn account.
+Either `assetId` or `assetIds` must be present. The sender is the Hive `custom_json` signer, not a payload field. Burning is a transfer with `to` set to the exported `BURN_RECIPIENT` constant — its literal value is `"null"`, Hive's reserved burn account.
 
 ### `set_data`
 
-**Auth:** Posting (NFT owner).
+**Auth:** Posting (Asset owner).
 
 ```typescript
 type SetDataData = {
-	readonly nftId: string;
-	readonly nftDna: string;            // owner-bound guard; prevents cross-NFT replays
+	readonly assetId: string;
+	readonly assetDna: string;            // owner-bound guard; prevents cross-Asset replays
 	readonly mutableData?: Record<string, unknown>;
 	readonly seedId?: string;
 	readonly seedTxId?: string;
@@ -250,8 +250,8 @@ If the collection has a schema, payload fields are validated against the `mutabl
 
 ```typescript
 type SetDataFromData = {
-	readonly nftId: string;
-	readonly nftDna: string;
+	readonly assetId: string;
+	readonly assetDna: string;
 	readonly mutableData?: Record<string, unknown>;
 	readonly seedId?: string;
 	readonly seedTxId?: string;
@@ -278,8 +278,8 @@ type DataOperatorApproveData = {
 
 ```typescript
 type ListingData = {
-	readonly nftId: string;
-	readonly listingId: string;              // "list_<32 hex>", deterministic over (nftId, owner, marketplace, price, expiresAt, nonce)
+	readonly assetId: string;
+	readonly listingId: string;              // "list_<32 hex>", deterministic over (assetId, owner, marketplace, price, expiresAt, nonce)
 	readonly listingNonce: string;           // 12 random chars — de-duplicates identical relistings
 	readonly price: { readonly amount: string; readonly currency: "HIVE" | "HBD" };
 	readonly expiresAt?: number;             // unix millis
@@ -297,13 +297,13 @@ Prices are 3-decimal strings, minimum `0.100`. Currency is `"HIVE"` or `"HBD"`.
 
 ```typescript
 type UnlistData = {
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly seedId?: string;
 	readonly seedTxId?: string;
 };
 ```
 
-Unlist is instantaneous: the listing row is cleared in the same block. In-flight buy settlements are protected by the `buy_commitment` gate — a node that has already broadcast a commitment for the NFT holds it as `status = "pending_sale"`, and `handleUnlist` refuses to touch any `pending_sale` row. Once the commitment resolves (either the `buy` lands or the TTL expires), the NFT returns to `active`.
+Unlist is instantaneous: the listing row is cleared in the same block. In-flight buy settlements are protected by the `buy_commitment` gate — a node that has already broadcast a commitment for the Asset holds it as `status = "pending_sale"`, and `handleUnlist` refuses to touch any `pending_sale` row. Once the commitment resolves (either the `buy` lands or the TTL expires), the Asset returns to `active`.
 
 ### `buy` — buyer-signed, node-settled
 
@@ -311,7 +311,7 @@ Unlist is instantaneous: the listing row is cleared in the same block. In-flight
 
 ```typescript
 type BuyData = {
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listTxId: string;               // tx_id of the originating `list`
 };
@@ -333,49 +333,49 @@ The indexer reconciles each transfer against the listing using the `listingId` e
 ```typescript
 type BuyCommitmentData = {
 	readonly txHash: string;                 // hash of the unsigned buyer tx the node will settle
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
 	readonly buyer: string;                  // derived from the buyer tx's first transfer `from`
 };
 ```
 
-The network-wide block ordering of `buy_commitment` ops is the consensus on "which node settles this listing". First to land wins; other nodes with a competing commitment for the same `nftId` abort with `CROSS_NODE_RESERVATION`. Reservations expire after `BUY_COMMITMENT_TTL_BLOCKS` (~120 s, 40 blocks @ 3 s/block) if the matching `buy` does not follow. The HTTP-side observation budget the local node waits (`BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS = 60 s`) is shorter; on `COMMITMENT_INCLUSION_TIMEOUT` the commitment may already be in Hive and the response carries `commitmentOpTxId` for reconciliation.
+The network-wide block ordering of `buy_commitment` ops is the consensus on "which node settles this listing". First to land wins; other nodes with a competing commitment for the same `assetId` abort with `CROSS_NODE_RESERVATION`. Reservations expire after `BUY_COMMITMENT_TTL_BLOCKS` (~120 s, 40 blocks @ 3 s/block) if the matching `buy` does not follow. The HTTP-side observation budget the local node waits (`BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS = 60 s`) is shorter; on `COMMITMENT_INCLUSION_TIMEOUT` the commitment may already be in Hive and the response carries `commitmentOpTxId` for reconciliation.
 
 > The legacy `sale_lock` op (pre-0.7.0) is deprecated. Historical `sale_lock` ops on chain surface as `invalid_operations` for audit; there is no active handler.
 
-### `nft_approve`
+### `asset_approve`
 
 **Auth:** Posting (owner).
 
 ```typescript
-type NftApproveData = {
+type AssetApproveData = {
 	readonly spender: string;
 	readonly instanceId: string;
 	readonly approved: boolean;
 };
 ```
 
-### `nft_approve_all`
+### `asset_approve_all`
 
 **Auth:** Posting (owner).
 
 ```typescript
-type NftApproveAllData = {
+type AssetApproveAllData = {
 	readonly spender: string;
 	readonly collectionId: string;
 	readonly approved: boolean;
 };
 ```
 
-Scope: every instance in `collectionId` owned by the signer while the approval remains active. Future acquisitions are covered only if the signer never dropped to zero owned NFTs in that collection; if they do, the approval is automatically removed. Seeds are not covered.
+Scope: every instance in `collectionId` owned by the signer while the approval remains active. Future acquisitions are covered only if the signer never dropped to zero owned Assets in that collection; if they do, the approval is automatically removed. Seeds are not covered.
 
-### `nft_transfer_from`
+### `asset_transfer_from`
 
-**Auth:** Posting (operator previously approved via `nft_approve` or `nft_approve_all`).
+**Auth:** Posting (operator previously approved via `asset_approve` or `asset_approve_all`).
 
 ```typescript
-type NftTransferFromData = {
+type AssetTransferFromData = {
 	readonly from: string;
 	readonly to: string;
 	readonly instanceId: string;
@@ -384,12 +384,12 @@ type NftTransferFromData = {
 };
 ```
 
-### `nft_lend`
+### `asset_lend`
 
 **Auth:** Posting (owner).
 
 ```typescript
-type NftLendData = {
+type AssetLendData = {
 	readonly instanceId: string;
 	readonly borrower: string;               // must differ from owner
 	readonly seedId?: string;
@@ -397,14 +397,14 @@ type NftLendData = {
 };
 ```
 
-Lending is instance-only. While lent, `transfer`/`list`/`nft_approve` are rejected for that instance.
+Lending is instance-only. While lent, `transfer`/`list`/`asset_approve` are rejected for that instance.
 
-### `nft_return`
+### `asset_return`
 
 **Auth:** Posting (current borrower **or** lender — either party may end the loan).
 
 ```typescript
-type NftReturnData = {
+type AssetReturnData = {
 	readonly instanceId: string;
 	readonly seedId?: string;
 	readonly seedTxId?: string;
@@ -478,10 +478,10 @@ Rules:
 | `col_<20 hex>` | collection | `sha256("nftlox:col:" + creator + ":" + name + ":" + symbol)` |
 | `o<15 upper-hex>` | collection origin DNA | `sha256("nftlox:origin:" + collectionId)` |
 | `seed_<20 hex>` | seed | `sha256("nftlox:seed:" + collectionId + ":" + artId.lower())` |
-| `nft_<20 hex>_<n>` | instance | `seed_<suffix>_<instanceNumber>` |
-| `i<19 upper-hex>` | NFT DNA (seed or instance) | `sha256("nftlox:seed-dna:" + nftId + ":" + originDna + ":" + edition + ":" + imageHash)` (seeds) / `sha256("nftlox:dna:" + seedId + ":" + n + ":" + txId + ":" + blockNum)` (bulk-distributed instances). Both share `NFT_DNA_PREFIX = "i"`; the distinct hash-domain salts prevent cross-kind collisions. |
+| `asset_<20 hex>_<n>` | instance | `seed_<suffix>_<instanceNumber>` |
+| `i<19 upper-hex>` | Asset DNA (seed or instance) | `sha256("nftlox:seed-dna:" + assetId + ":" + originDna + ":" + edition + ":" + imageHash)` (seeds) / `sha256("nftlox:dna:" + seedId + ":" + n + ":" + txId + ":" + blockNum)` (bulk-distributed instances). Both share `ASSET_DNA_PREFIX = "i"`; the distinct hash-domain salts prevent cross-kind collisions. |
 | `img_<16 hex>` | image hash | `sha256("nftlox:img:" + imageUrl)` |
-| `list_<32 hex>` | listing | `sha256("nftlox:listing:v1:" + nftId + ":" + owner + ":" + marketplace + ":" + priceAmount + ":" + priceCurrency + ":" + expiresAt + ":" + nonce)` |
+| `list_<32 hex>` | listing | `sha256("nftlox:listing:v1:" + assetId + ":" + owner + ":" + marketplace + ":" + priceAmount + ":" + priceCurrency + ":" + expiresAt + ":" + nonce)` |
 
 Domain separators (`nftlox:col:`, `nftlox:seed:`, …) are immutable — changing them would fork every historical ID.
 

@@ -2,12 +2,12 @@
 import {
 	PROTOCOL_VERSION,
 	validateArtIdArray,
-	type SeedNFTWithArtId,
+	type SeedAssetWithArtId,
 } from "nftlox-sdk";
 import {
 	createTestCollection,
 	createDeterministicSeedMintOperations,
-	loadSampleNFTsWithArtId,
+	loadSampleAssetsWithArtId,
 	previewBatchMint,
 	splitOperationsIntoBatches,
 	validateOperationsVersion,
@@ -26,21 +26,21 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 		POST: async (req: Request) => {
 			try {
 				const body = await req.json() as {
-					nfts?: SeedNFTWithArtId[];
+					assets?: SeedAssetWithArtId[];
 					sampleFile?: string;
 					collectionName: string;
 				};
 
-				let nfts: SeedNFTWithArtId[];
+				let assets: SeedAssetWithArtId[];
 				if (body.sampleFile) {
-					nfts = await loadSampleNFTsWithArtId(body.sampleFile);
-				} else if (body.nfts) {
-					nfts = body.nfts;
+					assets = await loadSampleAssetsWithArtId(body.sampleFile);
+				} else if (body.assets) {
+					assets = body.assets;
 				} else {
-					return json({ error: "Provide 'nfts' array or 'sampleFile' path" }, 400);
+					return json({ error: "Provide 'assets' array or 'sampleFile' path" }, 400);
 				}
 
-				const preview = previewBatchMint(nfts, body.collectionName);
+				const preview = previewBatchMint(assets, body.collectionName);
 				return json({ protocolVersion: PROTOCOL_VERSION, preview });
 			} catch (e) {
 				return json({ error: String(e) }, 500);
@@ -91,7 +91,7 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 		POST: async (req: Request) => {
 			try {
 				const body = await req.json() as {
-					nfts?: SeedNFTWithArtId[];
+					assets?: SeedAssetWithArtId[];
 					sampleFile?: string;
 					collectionId: string;
 					owner: string;
@@ -101,16 +101,16 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 					return json({ error: "Missing required fields: collectionId, owner" }, 400);
 				}
 
-				let nfts: SeedNFTWithArtId[];
+				let assets: SeedAssetWithArtId[];
 				if (body.sampleFile) {
-					nfts = await loadSampleNFTsWithArtId(body.sampleFile);
-				} else if (body.nfts) {
-					nfts = body.nfts;
+					assets = await loadSampleAssetsWithArtId(body.sampleFile);
+				} else if (body.assets) {
+					assets = body.assets;
 				} else {
-					return json({ error: "Provide 'nfts' array or 'sampleFile' path" }, 400);
+					return json({ error: "Provide 'assets' array or 'sampleFile' path" }, 400);
 				}
 
-				const artIds = nfts.map(n => n.artId || "");
+				const artIds = assets.map(n => n.artId || "");
 				const validation = validateArtIdArray(artIds);
 				if (!validation.valid) {
 					return json({
@@ -120,7 +120,7 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 					}, 400);
 				}
 
-				const result = await createDeterministicSeedMintOperations(nfts, body.collectionId, body.owner);
+				const result = await createDeterministicSeedMintOperations(assets, body.collectionId, body.owner);
 				const opValidation = validateOperationsVersion(result.seeds.map(s => s.operation));
 				const batches = splitOperationsIntoBatches(result.seeds.map(s => s.operation));
 

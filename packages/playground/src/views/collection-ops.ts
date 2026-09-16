@@ -11,7 +11,7 @@ interface SeedItem {
 	seedTxId: string;
 }
 
-let loadedSeeds: Array<{ nft_id: string; tx_id: string; name?: string }> = [];
+let loadedSeeds: Array<{ asset_id: string; tx_id: string; name?: string }> = [];
 
 function addDistributeItemRow() {
 	const container = $("bulk-dist-items");
@@ -25,7 +25,7 @@ function addDistributeItemRow() {
 
 	const seedOptions = loadedSeeds.length > 0
 		? loadedSeeds.map(s =>
-			`<option value="${escapeHtml(s.nft_id)}" data-txid="${escapeHtml(s.tx_id)}">${escapeHtml(s.name || s.nft_id)}</option>`
+			`<option value="${escapeHtml(s.asset_id)}" data-txid="${escapeHtml(s.tx_id)}">${escapeHtml(s.name || s.asset_id)}</option>`
 		).join("")
 		: "";
 
@@ -89,7 +89,7 @@ async function loadSeedsForDistribute() {
 	}
 
 	try {
-		const response = await fetch(`/api/collection/${encodeURIComponent(collectionId)}/nfts`);
+		const response = await fetch(`/api/collections/${encodeURIComponent(collectionId)}/assets`);
 		const data = await response.json();
 
 		if (!response.ok) {
@@ -98,7 +98,7 @@ async function loadSeedsForDistribute() {
 		}
 
 		const seeds: any[] = data.seeds?.items || [];
-		loadedSeeds = seeds.map((s: any) => ({ nft_id: s.id, tx_id: s.originDna || "", name: s.name }));
+		loadedSeeds = seeds.map((s: any) => ({ asset_id: s.id, tx_id: s.originDna || "", name: s.name }));
 
 		if (loadedSeeds.length === 0) {
 			log("No seeds found in this collection", "error");
@@ -119,7 +119,7 @@ function refreshSeedSelects() {
 	if (!container) return;
 
 	const options = loadedSeeds.map(s =>
-		`<option value="${escapeHtml(s.nft_id)}" data-txid="${escapeHtml(s.tx_id)}">${escapeHtml(s.name || s.nft_id)}</option>`
+		`<option value="${escapeHtml(s.asset_id)}" data-txid="${escapeHtml(s.tx_id)}">${escapeHtml(s.name || s.asset_id)}</option>`
 	).join("");
 
 	for (const select of Array.from(container.querySelectorAll(".bulk-dist-seed-select"))) {
@@ -273,7 +273,7 @@ async function loadCurrentSchema() {
 	}
 
 	try {
-		const response = await fetch(`/api/collection/${encodeURIComponent(collectionId)}`);
+		const response = await fetch(`/api/collections/${encodeURIComponent(collectionId)}`);
 		const data = await response.json();
 
 		if (!response.ok || data.error) {

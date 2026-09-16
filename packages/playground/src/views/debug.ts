@@ -33,20 +33,20 @@ async function directServerTransfer() {
 // === Server-side buy smoke test ===
 
 async function multisigBuyFlow() {
-	const nftIdInput = $("multisig-nft-id") as HTMLInputElement | null;
-	const nftId = nftIdInput?.value.trim();
-	if (!nftId) {
-		log("Enter an NFT ID to buy", "error");
+	const assetIdInput = $("multisig-asset-id") as HTMLInputElement | null;
+	const assetId = assetIdInput?.value.trim();
+	if (!assetId) {
+		log("Enter an Asset ID to buy", "error");
 		return;
 	}
 
-	log(`Submitting server-side buy smoke test for ${nftId}...`);
+	log(`Submitting server-side buy smoke test for ${assetId}...`);
 
 	try {
 		const res = await fetch("/api/debug/multisig-buy", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ nftId }),
+			body: JSON.stringify({ assetId }),
 		});
 		const data = await res.json();
 

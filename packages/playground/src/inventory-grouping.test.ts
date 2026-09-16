@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import {
 	groupInstancesBySeed,
-	type GroupableNft,
+	type GroupableAsset,
 } from "./inventory-grouping";
 
-const make = (overrides: Partial<GroupableNft>): GroupableNft => ({
+const make = (overrides: Partial<GroupableAsset>): GroupableAsset => ({
 	id: overrides.id ?? "id",
 	collectionId: overrides.collectionId ?? "col",
 	edition: overrides.edition ?? 1,

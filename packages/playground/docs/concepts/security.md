@@ -13,9 +13,9 @@ This guide covers the NFTLox permission model, recommended account architecture 
 | **Collection creator** | `create_collection` | Active (node co-sign + fee transfer) |
 | **Collection creator** | `mint`, `extend_schema`, `set_data`, `data_operator_approve` | Posting |
 | **Seed owner** | `bulk_distribute`, `transfer` (only if `distributed === 0`), `burn`, `list` (only if `distributed === 0`), `unlist` | Active for custody; posting for `bulk_distribute` |
-| **NFT/Instance owner** | `transfer`, burn helper (`transfer` to `null`), `list`, `unlist`, `nft_approve`, `nft_lend` | Active |
+| **Asset/Instance owner** | `transfer`, burn helper (`transfer` to `null`), `list`, `unlist`, `asset_approve`, `asset_lend` | Active |
 | **Approved operator** | `set_data_from` | Posting |
-| **Approved spender** | `nft_transfer_from` | Active |
+| **Approved spender** | `asset_transfer_from` | Active |
 
 **Key distinction**: The collection creator controls the **schema and metadata**. The seed owner controls **custody and distribution exclusively** -- the collection creator has NO distribution rights over seeds they don't own. Seeds with distributed instances (`distributed > 0`) cannot be transferred, listed, sold, delegated, or lent. For the full cascade, see [Ownership Model](ownership.md).
 
@@ -27,7 +27,7 @@ schema, and node operations use posting keys.
 
 | Key required | Actions |
 |---|---|
-| **Active key** | `create_collection`, `transfer`, `list`, `unlist`, `buy_commitment`, `buy`, `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `nft_lend`, `nft_return` |
+| **Active key** | `create_collection`, `transfer`, `list`, `unlist`, `buy_commitment`, `buy`, `asset_approve`, `asset_approve_all`, `asset_transfer_from`, `asset_lend`, `asset_return` |
 | **Posting key** | `mint`, `bulk_distribute`, `set_data`, `extend_schema`, `archive_collection`, `node_register`, `node_heartbeat`, `node_state_checkpoint`, `data_operator_approve`, `set_data_from` |
 
 Active-key actions use `required_auths` while posting-key actions use `required_posting_auths` in the `custom_json` operation.
@@ -78,8 +78,8 @@ The creator retains seed ownership and handles distribution. Only the seed owner
 
 | If compromised... | Active key | Posting key |
 |-------------------|-----------|-------------|
-| Can transfer NFTs owned by that account? | Yes | No |
-| Can list NFTs owned by that account? | Yes | No |
+| Can transfer Assets owned by that account? | Yes | No |
+| Can list Assets owned by that account? | Yes | No |
 | Can modify game data? | Yes | Yes |
 | Can distribute instances? | Yes | Yes |
 | Can approve transfer operators? | Yes | No |

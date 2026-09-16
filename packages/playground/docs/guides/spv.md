@@ -1,6 +1,6 @@
 # SPV Verification
 
-NFTLox ships a client-side verification layer so a wallet, game client, or marketplace UI can re-derive NFT ownership edges from Hive L1 operation anchors (via public Hive RPC + HafAH). The current verifier checks the operation the indexer points at; for full trust minimization, compare the same NFT across independent indexers or state-root snapshots before accepting the current pointer.
+NFTLox ships a client-side verification layer so a wallet, game client, or marketplace UI can re-derive Asset ownership edges from Hive L1 operation anchors (via public Hive RPC + HafAH). The current verifier checks the operation the indexer points at; for full trust minimization, compare the same Asset across independent indexers or state-root snapshots before accepting the current pointer.
 
 Source: `packages/sdk/src/spv/`.
 
@@ -8,10 +8,10 @@ Source: `packages/sdk/src/spv/`.
 
 | Verifier | Proves |
 |---|---|
-| `verifyNftOwnership` | The indexer's current-owner claim matches the referenced on-chain ownership operation. |
-| `verifyListingPrice` | An active listing's seller/amount/currency/nftId match the `list` tx on Hive L1. |
+| `verifyAssetOwnership` | The indexer's current-owner claim matches the referenced on-chain ownership operation. |
+| `verifyListingPrice` | An active listing's seller/amount/currency/assetId match the `list` tx on Hive L1. |
 | `verifyOperationOnChain` | A given tx_id + block contains an NFTLox `custom_json` with the expected `action` and `signer`. |
-| `verifyDeterministicDerivation` | Recomputes `instanceId` / `nftDna` / `accessKey` from their domain-separated inputs. Pure; no network. |
+| `verifyDeterministicDerivation` | Recomputes `instanceId` / `assetDna` / `accessKey` from their domain-separated inputs. Pure; no network. |
 | `resolveOperationById` | Looks up a specific operation by `operationId` (for UI deep-links from indexer rows to L1 proofs). |
 | `resolveMutableData` | Resolves an operation whose `custom_json` committed a content-hash, checks the hash matches. |
 
@@ -44,10 +44,10 @@ Use your own Hive RPC if you depend on a specific node for rate limits or latenc
 The canonical "does the indexer's current owner pointer resolve to Alice on L1?" check.
 
 ```typescript
-import { createDefaultL1Config, verifyNftOwnership } from "nftlox-sdk";
+import { createDefaultL1Config, verifyAssetOwnership } from "nftlox-sdk";
 
-const result = await verifyNftOwnership({
-	nftId: "nft_abc…_7",
+const result = await verifyAssetOwnership({
+	assetId: "asset_abc…_7",
 	expectedOwner: "alice",
 	indexerBaseUrl: "https://api-nftlox.hivecreators.co",
 	l1Config: createDefaultL1Config(),
@@ -61,7 +61,7 @@ if (result.status !== "verified") {
 
 **What runs under the hood:**
 
-1. `GET /api/nfts/{nftId}/proof` — indexer returns the ownership edge plus creation and collection anchors.
+1. `GET /api/assets/{assetId}/proof` — indexer returns the ownership edge plus creation and collection anchors.
 2. The SDK resolves `owner_operation_id` on HafAH and parses the ownership `custom_json`.
 3. For `buy`, the SDK also resolves the listing transaction, the collection `create_collection` transaction, the payment transfers, and the prior `buy_commitment`.
 4. The derived owner from L1 is compared to both `reportedOwner` (indexer) and `expectedOwner` (your call).
@@ -72,7 +72,7 @@ if (result.status !== "verified") {
 ```typescript
 interface OwnershipVerificationResult {
 	status: "verified" | "mismatch" | "error" | "not_found";
-	nftId: string;
+	assetId: string;
 	reportedOwner: string;          // what the indexer claimed
 	expectedOwner: string;          // what you claimed
 	proofsChecked: number;
@@ -108,10 +108,10 @@ const result = await verifyListingPrice({
 	listTxId: "abc…1234",                          // from client.getPaymentInfo().listTxId
 	expectedPrice: { amount: 25, currency: "HIVE" },
 	expectedSeller: "alice",
-	expectedNftId: "nft_abc…_7",
+	expectedAssetId: "asset_abc…_7",
 	l1Config: createDefaultL1Config(),
 });
-// result = { status, listTxId, blockNum, onChainPrice, onChainSeller, onChainNftId, message }
+// result = { status, listTxId, blockNum, onChainPrice, onChainSeller, onChainAssetId, message }
 ```
 
 If `status === "verified"`, the listing on chain matches the four expected fields byte-for-byte. A mismatch means either the indexer lied, the listing was replaced, or the UI read a stale cache.
@@ -147,10 +147,10 @@ const derived = await verifyDeterministicDerivation({
 	blockNum: 92_345_678,
 	signer: "alice",
 });
-// { instanceId, nftDna, accessKey }
+// { instanceId, assetDna, accessKey }
 ```
 
-These three IDs are the same ones the indexer writes to its tables when it processes the original `bulk_distribute`. Computing them locally lets a client anchor a deep-link (e.g. `/nft/{instanceId}`) before the indexer has even returned.
+These three IDs are the same ones the indexer writes to its tables when it processes the original `bulk_distribute`. Computing them locally lets a client anchor a deep-link (e.g. `/asset/{instanceId}`) before the indexer has even returned.
 
 ## Resolving operations by ID
 
@@ -174,8 +174,8 @@ For mutable-data commitments (large off-chain blobs with an on-chain content has
 SPV isn't free — each verifier costs 1–3 RPC calls. Use it where the decision is high-value:
 
 - A marketplace UI rendering a sale above a threshold ("verify before buying").
-- A wallet showing a new incoming NFT ("verify sender is who the indexer says").
-- A game client admitting an NFT into a competitive mode ("verify ownership + mint provenance").
+- A wallet showing a new incoming Asset ("verify sender is who the indexer says").
+- A game client admitting an Asset into a competitive mode ("verify ownership + mint provenance").
 - Any flow where the next step would be irreversible (HIVE transfer, on-chain sign).
 
 For cheap reads (gallery listings, search results), trust the indexer and verify lazily on interaction.

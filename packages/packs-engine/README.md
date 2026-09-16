@@ -70,9 +70,9 @@ const demand = computeReservedSupply(pack);
 // reservations yet.
 const seedSnapshots = await Promise.all(
 	["seed_common", "seed_rare", "seed_legendary"].map(async (id) => {
-		const res = await fetch(`https://api-nftlox.hivecreators.co/api/nfts/${id}`);
-		const nft = await res.json();
-		return snapshotFromIndexerSeed(nft, myBackend.getReservedFor(id));
+		const res = await fetch(`https://api-nftlox.hivecreators.co/api/assets/${id}`);
+		const asset = await res.json();
+		return snapshotFromIndexerSeed(asset, myBackend.getReservedFor(id));
 	}),
 );
 

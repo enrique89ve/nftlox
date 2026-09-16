@@ -1,6 +1,6 @@
 # Collections
 
-A collection is the top-level container in NFTLox. Every NFT (seed or instance) belongs to exactly one collection. This page covers the full lifecycle: creation, schema definition, schema extension, and archival.
+A collection is the top-level container in NFTLox. Every Asset (seed or instance) belongs to exactly one collection. This page covers the full lifecycle: creation, schema definition, schema extension, and archival.
 
 ```
 create_collection ──► ACTIVE ──► extend_schema (repeatable)
@@ -44,7 +44,7 @@ The node's signature is requested via `requestCreateCollectionMultisig(indexerBa
 | Field | Type | Description |
 |---|---|---|
 | `metadata.externalUrl` | string | Project website URL |
-| `schema` | object | Typed schema for NFT data ([section 3](#3-schema-definition)) |
+| `schema` | object | Typed schema for Asset data ([section 3](#3-schema-definition)) |
 
 ### Schema versioning at creation
 
@@ -126,14 +126,14 @@ Set once at creation, frozen forever. Cannot be changed — not even by `extend_
 
 | Rule | Type | Default | Description |
 |---|---|---|---|
-| `transferable` | bool | `true` | If `false`, NFTs are soulbound to the owner set at mint/distribute. |
-| `burnable` | bool | `true` | If `false`, NFTs are permanent (credentials, proofs-of-attendance). |
+| `transferable` | bool | `true` | If `false`, Assets are soulbound to the owner set at mint/distribute. |
+| `burnable` | bool | `true` | If `false`, Assets are permanent (credentials, proofs-of-attendance). |
 | `royaltyPct` | number | `0` | Royalty % on marketplace sales. Range 0–50. Warning emitted above 25. |
 | `royaltyRecipient` | string | — | Hive account receiving royalties. Required if `royaltyPct > 0`. |
 
 ## 3. Schema definition
 
-A schema declares **typed fields** for NFT data. Two sections:
+A schema declares **typed fields** for Asset data. Two sections:
 
 | Section | Behaviour | Written by | Read by |
 |---|---|---|---|
@@ -175,7 +175,7 @@ import { GAMING_SCHEMA, ART_SCHEMA, COLLECTIBLE_SCHEMA, MUSIC_SCHEMA } from "nft
 | `GAMING_SCHEMA` | rarity, element, base_power, class | level, xp, health, wins, losses, equipped | RPG items |
 | `ART_SCHEMA` | artist, medium, year, edition_of, dimensions | exhibition, certificate_url | Digital art |
 | `COLLECTIBLE_SCHEMA` | rarity, series, card_number, total_in_series | condition, grade | Trading cards |
-| `MUSIC_SCHEMA` | artist, album, track_number, duration_seconds, genre | play_count, license_url | Music NFTs |
+| `MUSIC_SCHEMA` | artist, album, track_number, duration_seconds, genre | play_count, license_url | Music Assets |
 
 Pass a template directly as `schema:` in `buildCollection`. Combine with the builder if you want to add fields on top.
 
@@ -219,9 +219,9 @@ Anyone can recompute the hash locally and compare — a tampered historical sche
 - At least one new field per call.
 - **Immutable namespace freezes at first mint.** Once any seed has been minted in the collection, `newImmutableFields` is rejected — even if all those seeds are later burned. Before the first mint the creator may iterate freely (design phase); after it the immutable shape is sealed so downstream consumers (marketplace, lending, rarity engines) can trust that on-chain commitments (rarity, type, edition) never change retroactively. Mutable fields (`newMutableFields`) remain extensible forever — they govern evolving state (XP, level, status), not economic identity.
 
-### NFT birth schemas are immutable
+### Asset birth schemas are immutable
 
-Every NFT records `schema_version` at mint/distribute time. That value never changes. But `set_data` always validates against the **current** schema, which is safe because schemas are append-only: version N is a superset of N-1. An NFT born at v1 can accept v2 fields via `set_data` while its own `schema_version` stays at 1. Client code that wants to render "fields this NFT was born knowing" reads the `schema_versions` row for its version.
+Every Asset records `schema_version` at mint/distribute time. That value never changes. But `set_data` always validates against the **current** schema, which is safe because schemas are append-only: version N is a superset of N-1. An Asset born at v1 can accept v2 fields via `set_data` while its own `schema_version` stays at 1. Client code that wants to render "fields this Asset was born knowing" reads the `schema_versions` row for its version.
 
 ## 5. Archiving a collection — `buildArchiveCollection`
 
@@ -231,11 +231,11 @@ Every NFT records `schema_version` at mint/distribute time. That value never cha
 
 - Signer is the collection creator.
 - Collection is not already archived.
-- Collection has **zero live NFTs** (everything burned).
+- Collection has **zero live Assets** (everything burned).
 
 ### Effects
 
-1. All NFT approvals and data-operator approvals tied to the collection are deleted.
+1. All Asset approvals and data-operator approvals tied to the collection are deleted.
 2. `status` becomes `archived` with the archive block, tx, and timestamp recorded.
 3. Irreversible.
 
@@ -274,10 +274,10 @@ Each seed caps its own instances via its `maxSupply`. Total instances possible i
 
 Full cascade: [Ownership Model](ownership.md).
 
-Every NFT row carries `owner`, `previous_owner`, and `owner_operation_id` (the HafAH op that established the current owner). That triple is enough to walk any single ownership step back to L1 without the indexer needing to store an ownership history table.
+Every Asset row carries `owner`, `previous_owner`, and `owner_operation_id` (the HafAH op that established the current owner). That triple is enough to walk any single ownership step back to L1 without the indexer needing to store an ownership history table.
 
 ```typescript
-const nft = await client.getNft("nft_…");
+const asset = await client.getAsset("asset_…");
 // {
 //   owner:               "alice",
 //   previous_owner:      "bob",
@@ -301,8 +301,8 @@ const cols = await client.getCollections({ creator: "ragnarok-studio", limit: 20
 // Full collection details
 const col = await client.getCollection("col_…");
 
-// NFTs in a collection (filter by type: "seed" | "instance")
-const seeds = await client.getCollectionNfts("col_…", { type: "seed", limit: 50 });
+// Assets in a collection (filter by type: "seed" | "instance")
+const seeds = await client.getCollectionAssets("col_…", { type: "seed", limit: 50 });
 
 // Schema history (full hash chain)
 const history = await client.getCollectionSchemaHistory("col_…");

@@ -98,7 +98,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 	// ── Index: list all scenarios ──────────────────────────────────
 	"/api/scenarios": () => json({
 		title: "NFTLox Game Scenarios",
-		description: "Step-by-step operation sequences for common game use cases. All scenarios use a custodial model where the game server (game-server) owns all NFTs on-chain.",
+		description: "Step-by-step operation sequences for common game use cases. All scenarios use a custodial model where the game server (game-server) owns all Assets on-chain.",
 		gameAccount: GAME_ACCOUNT,
 		collectionId: COLLECTION_ID,
 		seedIds: SEED_IDS,
@@ -181,7 +181,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 			{
 				step: 2,
 				action: "mint (seeds)",
-				description: "Mint each card type as a seed NFT. Seeds define the template; instances are the actual cards players hold.",
+				description: "Mint each card type as a seed Asset. Seeds define the template; instances are the actual cards players hold.",
 				endpoint: "POST /api/build/seeds",
 				payload: {
 					collectionId: COLLECTION_ID,
@@ -249,8 +249,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				endpoint: "POST /api/build/set-data",
 				payload: {
 					issuer: GAME_ACCOUNT,
-					nftId: INSTANCE_IDS.fireDragon1,
-					nftDna: "will-be-filled-by-indexer",
+					assetId: INSTANCE_IDS.fireDragon1,
+					assetDna: "will-be-filled-by-indexer",
 					mutableData: {
 						game_owner: PLAYERS.player1,
 					},
@@ -268,15 +268,15 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				endpoint: "POST /api/build/set-data",
 				payload: {
 					issuer: GAME_ACCOUNT,
-					nftId: INSTANCE_IDS.starterWolf1,
-					nftDna: "will-be-filled-by-indexer",
+					assetId: INSTANCE_IDS.starterWolf1,
+					assetDna: "will-be-filled-by-indexer",
 					mutableData: {
 						game_owner: PLAYERS.player2,
 					},
 				},
 				notes: [
 					"The game server just flips game_owner from '' to the player's hash ID",
-					"Player thinks they 'got a free card' — they don't know it's an NFT on Hive",
+					"Player thinks they 'got a free card' — they don't know it's an Asset on Hive",
 				],
 			},
 			{
@@ -287,20 +287,20 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				payloads: [
 					{
 						issuer: GAME_ACCOUNT,
-						nftId: INSTANCE_IDS.starterWolf1,
-						nftDna: "will-be-filled-by-indexer",
+						assetId: INSTANCE_IDS.starterWolf1,
+						assetDna: "will-be-filled-by-indexer",
 						mutableData: { game_owner: PLAYERS.player3 },
 					},
 					{
 						issuer: GAME_ACCOUNT,
-						nftId: INSTANCE_IDS.starterWolf2,
-						nftDna: "will-be-filled-by-indexer",
+						assetId: INSTANCE_IDS.starterWolf2,
+						assetDna: "will-be-filled-by-indexer",
 						mutableData: { game_owner: PLAYERS.player3 },
 					},
 					{
 						issuer: GAME_ACCOUNT,
-						nftId: INSTANCE_IDS.starterWolf3,
-						nftDna: "will-be-filled-by-indexer",
+						assetId: INSTANCE_IDS.starterWolf3,
+						assetDna: "will-be-filled-by-indexer",
 						mutableData: { game_owner: PLAYERS.player3 },
 					},
 				],
@@ -316,7 +316,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 	"/api/scenarios/lend-cards": () => json({
 		scenario: "Lend Starter Cards",
 		description: "The game lends free starter cards to new players so they can try the game. Lending is tracked via mutableData — NO on-chain lending needed since the game owns everything.",
-		keyInsight: "In custodial mode, 'lending' is just a mutableData flag. The game owns the NFT on-chain, so it controls everything via set_data.",
+		keyInsight: "In custodial mode, 'lending' is just a mutableData flag. The game owns the Asset on-chain, so it controls everything via set_data.",
 		steps: [
 			{
 				step: 1,
@@ -326,8 +326,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				payloads: [
 					{
 						issuer: GAME_ACCOUNT,
-						nftId: INSTANCE_IDS.starterWolf1,
-						nftDna: "will-be-filled-by-indexer",
+						assetId: INSTANCE_IDS.starterWolf1,
+						assetDna: "will-be-filled-by-indexer",
 						mutableData: {
 							game_owner: "",
 							lent_to: PLAYERS.player1,
@@ -335,8 +335,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					},
 					{
 						issuer: GAME_ACCOUNT,
-						nftId: INSTANCE_IDS.starterWolf2,
-						nftDna: "will-be-filled-by-indexer",
+						assetId: INSTANCE_IDS.starterWolf2,
+						assetDna: "will-be-filled-by-indexer",
 						mutableData: {
 							game_owner: "",
 							lent_to: PLAYERS.player1,
@@ -358,16 +358,16 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				payloads: [
 					{
 						issuer: GAME_ACCOUNT,
-						nftId: INSTANCE_IDS.starterWolf1,
-						nftDna: "will-be-filled-by-indexer",
+						assetId: INSTANCE_IDS.starterWolf1,
+						assetDna: "will-be-filled-by-indexer",
 						mutableData: {
 							lent_to: "",
 						},
 					},
 					{
 						issuer: GAME_ACCOUNT,
-						nftId: INSTANCE_IDS.starterWolf2,
-						nftDna: "will-be-filled-by-indexer",
+						assetId: INSTANCE_IDS.starterWolf2,
+						assetDna: "will-be-filled-by-indexer",
 						mutableData: {
 							lent_to: "",
 						},
@@ -387,8 +387,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				payloads: [
 					{
 						issuer: GAME_ACCOUNT,
-						nftId: INSTANCE_IDS.starterWolf3,
-						nftDna: "will-be-filled-by-indexer",
+						assetId: INSTANCE_IDS.starterWolf3,
+						assetDna: "will-be-filled-by-indexer",
 						mutableData: {
 							game_owner: PLAYERS.player1,
 							lent_to: "",
@@ -427,8 +427,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					{
 						_label: "Transfer Inferno Drake: Player 1 → Player 2",
 						issuer: GAME_ACCOUNT,
-						nftId: INSTANCE_IDS.fireDragon1,
-						nftDna: "will-be-filled-by-indexer",
+						assetId: INSTANCE_IDS.fireDragon1,
+						assetDna: "will-be-filled-by-indexer",
 						mutableData: {
 							game_owner: PLAYERS.player2,
 						},
@@ -436,8 +436,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					{
 						_label: "Transfer Ice Golem: Player 2 → Player 1",
 						issuer: GAME_ACCOUNT,
-						nftId: INSTANCE_IDS.iceGolem1,
-						nftDna: "will-be-filled-by-indexer",
+						assetId: INSTANCE_IDS.iceGolem1,
+						assetDna: "will-be-filled-by-indexer",
 						mutableData: {
 							game_owner: PLAYERS.player1,
 						},
@@ -445,7 +445,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				],
 				notes: [
 					"Both set_data operations go in the SAME Hive transaction",
-					"Since both update mutableData on NFTs owned by the game server, both will succeed or the game server has a bug in its own payload construction",
+					"Since both update mutableData on Assets owned by the game server, both will succeed or the game server has a bug in its own payload construction",
 					"On-chain owner (game-server) never changes — only mutableData.game_owner changes",
 					"Players just see 'Trade complete!' in the game UI",
 					"Note: Hive transactions are NOT atomic at the NFTLox protocol level — if the second operation has invalid data, the first may still be applied. The game server should validate payloads before broadcasting.",
@@ -459,8 +459,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				payload: {
 					_label: "Transfer Starter Wolf: Player 2 → Player 3",
 					issuer: GAME_ACCOUNT,
-					nftId: INSTANCE_IDS.starterWolf1,
-					nftDna: "will-be-filled-by-indexer",
+					assetId: INSTANCE_IDS.starterWolf1,
+					assetDna: "will-be-filled-by-indexer",
 					mutableData: {
 						game_owner: PLAYERS.player3,
 					},
@@ -473,10 +473,10 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 			},
 		],
 		atomicSwaps: {
-			description: "Both set_data calls go in one Hive transaction (max 5 operations per tx). Since the game server owns all NFTs and controls the payloads, failures should only happen due to bugs in payload construction. Validate payloads before broadcasting.",
+			description: "Both set_data calls go in one Hive transaction (max 5 operations per tx). Since the game server owns all Assets and controls the payloads, failures should only happen due to bugs in payload construction. Validate payloads before broadcasting.",
 			example: buildCustomJson(GAME_ACCOUNT, "set_data", {
-				nftId: "<instance_id>",
-				nftDna: "<dna>",
+				assetId: "<instance_id>",
+				assetDna: "<dna>",
 				mutableData: { game_owner: "<new_player_hash>" },
 			}),
 		},
@@ -494,8 +494,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				endpoint: "POST /api/build/set-data",
 				payload: {
 					issuer: GAME_ACCOUNT,
-					nftId: INSTANCE_IDS.fireDragon1,
-					nftDna: "will-be-filled-by-indexer",
+					assetId: INSTANCE_IDS.fireDragon1,
+					assetDna: "will-be-filled-by-indexer",
 					mutableData: {
 						level: 5,
 						xp: 2450,
@@ -515,8 +515,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				endpoint: "POST /api/build/set-data",
 				payload: {
 					issuer: GAME_ACCOUNT,
-					nftId: INSTANCE_IDS.fireDragon1,
-					nftDna: "will-be-filled-by-indexer",
+					assetId: INSTANCE_IDS.fireDragon1,
+					assetDna: "will-be-filled-by-indexer",
 					mutableData: {
 						equipped: true,
 						custom_name: "Blaze King",
@@ -529,11 +529,11 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				description: "Tournament ends — game updates multiple cards at once",
 				endpoint: "POST /api/build/set-data (batch of 5)",
 				payloads: [
-					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.fireDragon1, nftDna: "from-indexer", mutableData: { wins: 20, xp: 5000, level: 8 } },
-					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.iceGolem1, nftDna: "from-indexer", mutableData: { wins: 15, xp: 3800, level: 6 } },
-					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.starterWolf1, nftDna: "from-indexer", mutableData: { wins: 8, xp: 1200, level: 3 } },
-					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.starterWolf2, nftDna: "from-indexer", mutableData: { wins: 5, xp: 800, level: 2 } },
-					{ issuer: GAME_ACCOUNT, nftId: INSTANCE_IDS.starterWolf3, nftDna: "from-indexer", mutableData: { wins: 3, xp: 400, level: 2 } },
+					{ issuer: GAME_ACCOUNT, assetId: INSTANCE_IDS.fireDragon1, assetDna: "from-indexer", mutableData: { wins: 20, xp: 5000, level: 8 } },
+					{ issuer: GAME_ACCOUNT, assetId: INSTANCE_IDS.iceGolem1, assetDna: "from-indexer", mutableData: { wins: 15, xp: 3800, level: 6 } },
+					{ issuer: GAME_ACCOUNT, assetId: INSTANCE_IDS.starterWolf1, assetDna: "from-indexer", mutableData: { wins: 8, xp: 1200, level: 3 } },
+					{ issuer: GAME_ACCOUNT, assetId: INSTANCE_IDS.starterWolf2, assetDna: "from-indexer", mutableData: { wins: 5, xp: 800, level: 2 } },
+					{ issuer: GAME_ACCOUNT, assetId: INSTANCE_IDS.starterWolf3, assetDna: "from-indexer", mutableData: { wins: 3, xp: 400, level: 2 } },
 				],
 				notes: [
 					"5 set_data operations fit in 1 Hive transaction",
@@ -547,12 +547,12 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 	// ── Scenario 6: Player Graduation to Web3 ─────────────────────
 	"/api/scenarios/graduation": () => json({
 		scenario: "Player Graduation to Web3",
-		description: "A player discovers their cards are real NFTs, creates a Hive account, and receives on-chain ownership. They can then delegate operations back to the game to keep playing seamlessly.",
+		description: "A player discovers their cards are real Assets, creates a Hive account, and receives on-chain ownership. They can then delegate operations back to the game to keep playing seamlessly.",
 		phases: [
 			{
 				phase: "A",
 				name: "Transfer Ownership",
-				description: "Game transfers the NFT to the player's Hive account",
+				description: "Game transfers the Asset to the player's Hive account",
 				steps: [
 					{
 						step: 1,
@@ -560,13 +560,13 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						description: "Game transfers Inferno Drake to the player's new Hive account",
 						endpoint: "POST /api/build/transfer",
 						payload: {
-							nftId: INSTANCE_IDS.fireDragon1,
+							assetId: INSTANCE_IDS.fireDragon1,
 							from: GAME_ACCOUNT,
 							to: "player1-hive",
 						},
 						notes: [
 							"On-chain owner changes: game-server → player1-hive",
-							"This is a REAL transfer — the player now controls the NFT",
+							"This is a REAL transfer — the player now controls the Asset",
 							"mutableData is preserved (level, xp, wins all stay)",
 						],
 					},
@@ -575,13 +575,13 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 			{
 				phase: "B",
 				name: "Delegate Back to Game",
-				description: "Player approves the game server to operate their NFTs, keeping the seamless experience",
+				description: "Player approves the game server to operate their Assets, keeping the seamless experience",
 				steps: [
 					{
 						step: 2,
-						action: "nft_approve_all",
+						action: "asset_approve_all",
 						description: "Player approves the game server for their entire collection",
-						endpoint: "POST /api/build/nft-approve-all",
+						endpoint: "POST /api/build/asset-approve-all",
 						signedBy: "player1-hive (the player signs this ONE time)",
 						payload: {
 							collectionId: COLLECTION_ID,
@@ -609,8 +609,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						},
 						notes: [
 							"This is usually done ONCE during game setup",
-							"Allows the game to call set_data_from on any NFT in the collection",
-							"Even NFTs owned by graduated players can have their data updated",
+							"Allows the game to call set_data_from on any Asset in the collection",
+							"Even Assets owned by graduated players can have their data updated",
 						],
 					},
 				],
@@ -618,13 +618,13 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 			{
 				phase: "C",
 				name: "Game Continues Operating",
-				description: "Game server operates the graduated player's NFTs via delegation",
+				description: "Game server operates the graduated player's Assets via delegation",
 				steps: [
 					{
 						step: 4,
-						action: "nft_transfer_from",
+						action: "asset_transfer_from",
 						description: "Game trades the player's card to another player (via delegation)",
-						endpoint: "POST /api/build/nft-transfer-from",
+						endpoint: "POST /api/build/asset-transfer-from",
 						signedBy: "game-server (as approved spender)",
 						payload: {
 							from: "player1-hive",
@@ -640,8 +640,8 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						endpoint: "POST /api/build/set-data-from",
 						signedBy: "game-server (as data operator)",
 						payload: {
-							nftId: INSTANCE_IDS.fireDragon1,
-							nftDna: "will-be-filled-by-indexer",
+							assetId: INSTANCE_IDS.fireDragon1,
+							assetDna: "will-be-filled-by-indexer",
 							operator: GAME_ACCOUNT,
 							mutableData: {
 								level: 10,
@@ -655,7 +655,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 			{
 				phase: "D",
 				name: "Player Takes Full Control",
-				description: "Player can always operate their own NFTs directly — the delegation doesn't remove their rights",
+				description: "Player can always operate their own Assets directly — the delegation doesn't remove their rights",
 				steps: [
 					{
 						step: 6,
@@ -664,24 +664,24 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						signedBy: "player1-hive (direct, no game involved)",
 						endpoint: "POST /api/build/transfer",
 						payload: {
-							nftId: INSTANCE_IDS.iceGolem1,
+							assetId: INSTANCE_IDS.iceGolem1,
 							from: "player1-hive",
 							to: "buyer-account",
 						},
 						notes: [
-							"Player can ALWAYS transfer their own NFTs — delegation is additive",
+							"Player can ALWAYS transfer their own Assets — delegation is additive",
 							"Game server and player can both operate — no conflicts",
-							"Player can revoke delegation anytime with nft_approve_all(approved: false)",
+							"Player can revoke delegation anytime with asset_approve_all(approved: false)",
 						],
 					},
 				],
 			},
 		],
 		summary: {
-			playerActions: "Player only needs to sign ONE transaction (nft_approve_all) to keep playing seamlessly",
-			gameActions: "Game uses nft_transfer_from + set_data_from for everything else",
+			playerActions: "Player only needs to sign ONE transaction (asset_approve_all) to keep playing seamlessly",
+			gameActions: "Game uses asset_transfer_from + set_data_from for everything else",
 			playerRights: "Player retains full ownership and can operate independently at any time",
-			revocation: "Player can revoke game's access with nft_approve_all(approved: false)",
+			revocation: "Player can revoke game's access with asset_approve_all(approved: false)",
 		},
 	}),
 };

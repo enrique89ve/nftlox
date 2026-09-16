@@ -5,7 +5,7 @@ import {
 	generateHash,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
-	type SeedNFTWithArtId,
+	type SeedAssetWithArtId,
 	type MintingSession,
 } from "nftlox-sdk";
 
@@ -106,9 +106,9 @@ export async function createSession(
 	creator: string,
 	collectionName: string,
 	collectionSymbol: string,
-	nfts: SeedNFTWithArtId[],
+	assets: SeedAssetWithArtId[],
 ): Promise<MintingSession> {
-	const artIds = nfts.map(n => n.artId);
+	const artIds = assets.map(n => n.artId);
 	const sessionId = await generateSessionId(creator, collectionName, artIds);
 
 	const collectionId = await generateDeterministicCollectionId(
@@ -117,9 +117,9 @@ export async function createSession(
 		collectionSymbol,
 	);
 
-	const seedMapping = await Promise.all(nfts.map(async (nft) => ({
-		artId: nft.artId,
-		seedId: await generateDeterministicSeedId(collectionId, nft.artId),
+	const seedMapping = await Promise.all(assets.map(async (asset) => ({
+		artId: asset.artId,
+		seedId: await generateDeterministicSeedId(collectionId, asset.artId),
 		status: "new" as const,
 	})));
 
@@ -129,7 +129,7 @@ export async function createSession(
 		creator,
 		collectionName,
 		collectionSymbol,
-		nfts,
+		assets,
 		collectionId,
 		seedMapping,
 		collectionBroadcast: { status: "pending" },

@@ -60,7 +60,7 @@ export function deterministicRng(seed: string, index: number): number {
  * without reimplementing the canonical layout.
  *
  * Fields are joined with `:` — safe today because none of the expected
- * values (hex txIds, `seed_…`/`nft_…` ids, `pack_…` ids, Hive usernames,
+ * values (hex txIds, `seed_…`/`asset_…` ids, `pack_…` ids, Hive usernames,
  * integers) contain a literal colon. Changing this format breaks
  * reproducibility of any previously published pack opening.
  */

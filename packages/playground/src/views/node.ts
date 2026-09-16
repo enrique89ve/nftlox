@@ -72,7 +72,7 @@ type IndexedNodeOperation = Readonly<{
   reason: string | null;
   blockNum: number;
   timestamp: string;
-  nftIds: ReadonlyArray<string>;
+  assetIds: ReadonlyArray<string>;
 }>;
 
 type IndexedNodeOperationsPage = Readonly<{
@@ -389,7 +389,7 @@ function renderIndexedOperations(page: IndexedNodeOperationsPage): void {
 						<td>
 							<details>
 								<summary class="node-detail-toggle">View</summary>
-								<div class="node-detail-body">${escapeHtml(op.reason ?? (op.nftIds.length > 0 ? `NFT ids: ${op.nftIds.join(", ")}` : "No extra details"))}</div>
+								<div class="node-detail-body">${escapeHtml(op.reason ?? (op.assetIds.length > 0 ? `Asset ids: ${op.assetIds.join(", ")}` : "No extra details"))}</div>
 							</details>
 						</td>
 					</tr>

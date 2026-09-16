@@ -29,13 +29,13 @@ import {
 	buildBuy,
 	buildNodeRegister,
 	buildSetData,
-	buildNftApprove,
-	buildNftApproveAll,
-	buildNftTransferFrom,
+	buildAssetApprove,
+	buildAssetApproveAll,
+	buildAssetTransferFrom,
 	buildDataOperatorApprove,
 	buildSetDataFrom,
-	buildNftLend,
-	buildNftReturn,
+	buildAssetLend,
+	buildAssetReturn,
 	// For preview-ids (inline replacement)
 	generateDeterministicCollectionId,
 	generateOriginDna,
@@ -449,8 +449,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 
 	// --- Allowances (3) ---
 
-	"/api/build/nft-approve": buildRoute((body) => {
-		const result = buildNftApprove(body);
+	"/api/build/asset-approve": buildRoute((body) => {
+		const result = buildAssetApprove(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -460,8 +460,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	"/api/build/nft-approve-all": buildRoute((body) => {
-		const result = buildNftApproveAll(body);
+	"/api/build/asset-approve-all": buildRoute((body) => {
+		const result = buildAssetApproveAll(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -471,8 +471,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	"/api/build/nft-transfer-from": buildRoute((body) => {
-		const result = buildNftTransferFrom({ ...body, operator: body.spender });
+	"/api/build/asset-transfer-from": buildRoute((body) => {
+		const result = buildAssetTransferFrom({ ...body, operator: body.spender });
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -484,8 +484,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 
 	// --- Lending (2) ---
 
-	"/api/build/nft-lend": buildRoute((body) => {
-		const result = buildNftLend(body);
+	"/api/build/asset-lend": buildRoute((body) => {
+		const result = buildAssetLend(body);
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,
@@ -495,8 +495,8 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 		});
 	}),
 
-	"/api/build/nft-return": buildRoute((body) => {
-		const result = buildNftReturn({ ...body, owner: body.signer });
+	"/api/build/asset-return": buildRoute((body) => {
+		const result = buildAssetReturn({ ...body, owner: body.signer });
 		if (!result.success) return json({ success: false, errors: result.errors }, 400);
 		return json({
 			success: true,

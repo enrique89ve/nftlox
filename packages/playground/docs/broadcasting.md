@@ -22,7 +22,7 @@ Every builder returns Hive-native tuples:
 	"required_auths": [],
 	"required_posting_auths": ["alice"],
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"0.11.0\",\"action\":\"mint\",\"data\":{…}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"1.0.0\",\"action\":\"mint\",\"data\":{…}}"
 }]
 ```
 
@@ -149,11 +149,11 @@ hive_keychain.requestBroadcast(
 
 Canonical sequence:
 
-1. `client.getPaymentInfo(nftId)` → exact split (seller + royalty + fee).
+1. `client.getPaymentInfo(assetId)` → exact split (seller + royalty + fee).
 2. `buildBuy({ buyer, seller, nodeAccount, …paymentSplit })` → `[...transfers, custom_json]`.
 3. Wrap in a Hive transaction and **sign it with the buyer's active key**.
 4. POST the buyer-signed transaction to `/api/multisig/buy` (via `client.requestBuyMultisig` / `requestBuyMultisig`). The SDK solves the PoW token automatically.
-5. The indexer validates, broadcasts a `buy_commitment` on Hive to reserve the NFT, waits for that commitment to win the cross-node ordering race, appends its own active signature, and broadcasts the settled buy transaction itself.
+5. The indexer validates, broadcasts a `buy_commitment` on Hive to reserve the Asset, waits for that commitment to win the cross-node ordering race, appends its own active signature, and broadcasts the settled buy transaction itself.
 6. On `{ ok: true }`, the response carries the settled `txId` and the `commitmentOpTxId`. You **do not broadcast** the buy — it is already on chain.
 
 ```typescript
@@ -173,12 +173,12 @@ const RPC = "https://api.hive.blog";
 hive.config.set("node", RPC);
 
 const client = createIndexerClient(INDEXER);
-const payment = await client.getPaymentInfo("nft_…");
+const payment = await client.getPaymentInfo("asset_…");
 
 const result = buildBuy({
 	buyer: "alice",
 	seller: payment.seller,
-	nftId: payment.nftId,
+	assetId: payment.assetId,
 	listingId: payment.listingId,
 	listTxId: payment.listTxId,
 	txId: payment.txId,
@@ -230,7 +230,7 @@ try {
 } catch (err) {
 	if (err instanceof MultisigError) {
 		switch (err.code) {
-			case "NFT_LOCKED":                    // another buy is in flight on this node
+			case "Asset_LOCKED":                    // another buy is in flight on this node
 			case "CROSS_NODE_RESERVATION":        // another settlement node won the commitment race
 			case "COMMITMENT_INCLUSION_TIMEOUT":  // our commitment never made it into a block
 			case "RATE_LIMITED":                  // back off err.retryAfterMs
@@ -340,10 +340,10 @@ for (const op of status.operations) {
 | `broadcast.error` with `missing_authority` | Wrong key type for the action. Check `result.keyType`. |
 | `/api/multisig/buy` returns `BUYER_SIGNATURE_MISSING` | You POSTed an unsigned transaction. Sign it with the buyer's active key **before** calling `requestBuyMultisig`. |
 | Indexer returns `invalid` with `SCHEMA_MISMATCH` | `immutableData`/`mutableData` has extra keys or wrong types. Validate against `client.getCollection(id).schema`. |
-| Indexer `invalid` with `NFT_NOT_FOUND` | Using a seed before it is indexed — poll `getOperationStatus` first. |
+| Indexer `invalid` with `Asset_NOT_FOUND` | Using a seed before it is indexed — poll `getOperationStatus` first. |
 | Multisig returns `INVALID_PAYMENT_SPLIT` | You computed the split instead of using `getPaymentInfo`. |
 | Multisig returns `INDEXER_LAGGED` | Indexer is more than `BUY_API_LAG_MAX_BLOCKS` (3 blocks) behind Hive head. Retry or switch indexer. |
-| Multisig returns `CROSS_NODE_RESERVATION` | Another settlement node won the `buy_commitment` ordering race for this NFT. Retry — by then the listing has already been sold (and `NFT_NOT_LISTED` will follow) or the commitment window expired. |
+| Multisig returns `CROSS_NODE_RESERVATION` | Another settlement node won the `buy_commitment` ordering race for this Asset. Retry — by then the listing has already been sold (and `Asset_NOT_LISTED` will follow) or the commitment window expired. |
 
 ## See also
 

@@ -1,6 +1,6 @@
 # Game Development with NFTLox
 
-Build games with on-chain NFTs that have functional DNA, mutable stats, and provable ownership — all without smart contracts, gas fees, or oracles.
+Build games with on-chain Assets that have functional DNA, mutable stats, and provable ownership — all without smart contracts, gas fees, or oracles.
 
 ---
 
@@ -18,7 +18,7 @@ Game Server              Hive L1              NFTLox Indexer
     │                       │                ← Store state
     │                       │                      │
     │◄─ Query API ──────────────────────────────────┤
-    │ (collections, NFTs,                          │
+    │ (collections, Assets,                          │
     │  marketplace, ownership)                     │
 ```
 
@@ -41,8 +41,8 @@ import {
 	buildBuy,
 	buildSetDataFrom,
 	buildDataOperatorApprove,
-	buildNftLend,
-	buildNftReturn,
+	buildAssetLend,
+	buildAssetReturn,
 	createSchemaBuilder,
 	createIndexerClient,
 	requestCreateCollectionMultisig,
@@ -74,7 +74,7 @@ async function broadcast(ops: readonly unknown[], key: hive.PrivateKey) {
 
 ## 1. Collection & Schema Design
 
-Define your NFT types upfront with **typed schemas** — immutable stats (rarity, class) are locked forever; mutable stats (level, xp, wins) update throughout gameplay.
+Define your Asset types upfront with **typed schemas** — immutable stats (rarity, class) are locked forever; mutable stats (level, xp, wins) update throughout gameplay.
 
 ```typescript
 const HEROES = [
@@ -168,7 +168,7 @@ async function openPack(player: string) {
 }
 ```
 
-Each instance gets a unique `nftDna` and `instanceNumber`. The player owns distinct NFTs that can be transferred, listed, or lent independently. Cap per call: `MAX_BULK_DISTRIBUTE_ITEMS = 50` seeds and `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY = 250` instances.
+Each instance gets a unique `assetDna` and `instanceNumber`. The player owns distinct Assets that can be transferred, listed, or lent independently. Cap per call: `MAX_BULK_DISTRIBUTE_ITEMS = 50` seeds and `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY = 250` instances.
 
 ---
 
@@ -178,10 +178,10 @@ Listings require the owner's **active key**. Buys require the buyer's **active k
 
 ```typescript
 // Player lists a card (active key, single-signer)
-async function listCard(owner: string, nftId: string, priceHive: string) {
+async function listCard(owner: string, assetId: string, priceHive: string) {
 	const result = await buildList({
 		owner,
-		nftId,
+		assetId,
 		price: { amount: priceHive, currency: "HIVE" }, // 3-decimal string, e.g. "10.000"
 		expiresAt: Date.now() + 7 * 24 * 3600 * 1000,  // 7 days
 		marketplace: "ragnarok",                         // optional scope tag
@@ -191,12 +191,12 @@ async function listCard(owner: string, nftId: string, priceHive: string) {
 }
 
 // Another player buys it (active key + node multisig)
-async function buyCard(buyer: string, nftId: string) {
-	const payment = await client.getPaymentInfo(nftId);
+async function buyCard(buyer: string, assetId: string) {
+	const payment = await client.getPaymentInfo(assetId);
 	const result = buildBuy({
 		buyer,
 		seller: payment.seller,
-		nftId: payment.nftId,
+		assetId: payment.assetId,
 		listingId: payment.listingId,
 		listTxId: payment.listTxId,
 		txId: payment.txId,
@@ -216,7 +216,7 @@ async function buyCard(buyer: string, nftId: string) {
 	const tx = new hive.Transaction();
 	await tx.create(result.operations as [string, object][]);
 	const resp = await client.multisig({
-		buyer, nftId, listingId: payment.listingId, listTxId: payment.listTxId,
+		buyer, assetId, listingId: payment.listingId, listTxId: payment.listTxId,
 		transaction: tx.transaction,
 	});
 	if (!resp.ok) throw new MultisigError({ message: resp.message, code: resp.code, url: INDEXER });
@@ -235,16 +235,16 @@ async function buyCard(buyer: string, nftId: string) {
 The game server updates stats with its own posting key using `buildSetDataFrom`. No player key is ever exposed to the server.
 
 ```typescript
-async function recordWin(nftId: string, xpEarned: number) {
-	const nft   = await client.getNft(nftId);
-	const wins  = (nft.mutable_data?.wins  as number ?? 0) + 1;
-	const xp    = (nft.mutable_data?.xp    as number ?? 0) + xpEarned;
+async function recordWin(assetId: string, xpEarned: number) {
+	const asset   = await client.getAsset(assetId);
+	const wins  = (asset.mutable_data?.wins  as number ?? 0) + 1;
+	const xp    = (asset.mutable_data?.xp    as number ?? 0) + xpEarned;
 	const level = Math.min(100, Math.floor(xp / 1000) + 1);
 
 	const result = buildSetDataFrom({
 		operator: SERVER,
-		nftId,
-		nftDna: nft.nft_dna!,      // required — binds write to current NFT state
+		assetId,
+		assetDna: asset.asset_dna!,      // required — binds write to current Asset state
 		mutableData: { xp, level, wins },
 	});
 	if (!result.success) throw new Error(JSON.stringify(result.errors));
@@ -256,7 +256,7 @@ async function recordWin(nftId: string, xpEarned: number) {
 
 Revoke the data operator approval any time by broadcasting `buildDataOperatorApprove` with `approved: false` — effective from the next block.
 
-For the owner updating their own NFT, use `buildSetData` with `owner:` instead of `operator:`. See [Mutable Data](mutable-data.md) for a complete guide.
+For the owner updating their own Asset, use `buildSetData` with `owner:` instead of `operator:`. See [Mutable Data](mutable-data.md) for a complete guide.
 
 ---
 
@@ -267,24 +267,24 @@ Non-custodial lending: the lender keeps ownership, the borrower gets a scoped ri
 ```typescript
 // Lender lends a card to a teammate (signed with lender's active key)
 async function lend(owner: string, instanceId: string, borrower: string) {
-	const result = buildNftLend({ owner, instanceId, borrower });
+	const result = buildAssetLend({ owner, instanceId, borrower });
 	if (!result.success) throw new Error(JSON.stringify(result.errors));
 	return broadcast(result.operations, ACTIVE);
 }
 
 // Borrower returns it when done (signed with borrower's active key)
 async function returnCard(borrower: string, instanceId: string) {
-	const result = buildNftReturn({ owner: borrower, instanceId });
+	const result = buildAssetReturn({ owner: borrower, instanceId });
 	if (!result.success) throw new Error(JSON.stringify(result.errors));
 	return broadcast(result.operations, ACTIVE);
 }
 ```
 
-Only the current borrower can call `buildNftReturn`. The lender's rights are restored immediately — no cooldown. `LEND_TO_SELF` is rejected by the builder; lending an already-lent NFT is rejected by the indexer (`NFT_LOCKED`).
+Only the current borrower can call `buildAssetReturn`. The lender's rights are restored immediately — no cooldown. `LEND_TO_SELF` is rejected by the builder; lending an already-lent Asset is rejected by the indexer (`Asset_LOCKED`).
 
 **Common patterns:**
 - Guild banks: lend gear to new recruits with social trust.
-- Paid rentals: borrower pays off-chain; your backend calls `buildNftReturn` at expiry.
+- Paid rentals: borrower pays off-chain; your backend calls `buildAssetReturn` at expiry.
 - Tournament whitelist: lend a legendary card for the weekend; XP earned accrues to the owner.
 
 ---
@@ -294,10 +294,10 @@ Only the current borrower can call `buildNftReturn`. The lender's rights are res
 Let players verify the referenced ownership edge on their client against Hive L1.
 
 ```typescript
-import { verifyNftOwnership, createDefaultL1Config } from "nftlox-sdk";
+import { verifyAssetOwnership, createDefaultL1Config } from "nftlox-sdk";
 
-const proof = await verifyNftOwnership({
-	nftId: "nft_hero_001",
+const proof = await verifyAssetOwnership({
+	assetId: "asset_hero_001",
 	expectedOwner: "player-alice",
 	indexerBaseUrl: INDEXER,
 	l1Config: createDefaultL1Config(),
@@ -318,10 +318,10 @@ if (proof.status === "verified") {
 |---|---|---|---|
 | **Direct ownership** | Player gets item from pack | Posting | `buildBulkDistribute` |
 | **Data operator** | Game server updates stats at scale | Posting | `buildSetDataFrom` |
-| **Lending** | Guild bank, tournament rentals | Posting | `buildNftLend` / `buildNftReturn` |
+| **Lending** | Guild bank, tournament rentals | Posting | `buildAssetLend` / `buildAssetReturn` |
 | **Marketplace** | Player-to-player trading | Active (`buy`) + Posting | `buildList` / `buildBuy` |
-| **Approval** | Delegate transfer to a contract | Posting | `buildNftApprove` |
-| **SPV** | L1-anchored client-side check | None (client-side) | `verifyNftOwnership` |
+| **Approval** | Delegate transfer to a contract | Posting | `buildAssetApprove` |
+| **SPV** | L1-anchored client-side check | None (client-side) | `verifyAssetOwnership` |
 
 ---
 

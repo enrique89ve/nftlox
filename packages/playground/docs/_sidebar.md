@@ -15,7 +15,7 @@
 - **Guides**
 	- [Marketplace Trading](guides/marketplace.md)
 	- [Allowances & Operators](guides/allowances.md)
-	- [NFT Lending](guides/lending.md)
+	- [Asset Lending](guides/lending.md)
 	- [SPV Verification](guides/spv.md)
 	- [Game Bot Testing](guides/game-bot-testing.md)
 

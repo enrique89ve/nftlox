@@ -27,7 +27,7 @@ const PAGE_IDS = [
 	"create",
 	"inventory",
 	"collection-detail",
-	"nft-detail",
+	"asset-detail",
 	"seed-group",
 	"advanced",
 	"marketplace",
@@ -87,7 +87,7 @@ const MIME_TYPES: Record<string, string> = {
 const ALLOWED_SAMPLE_FILES = new Set([
 	"sample-bulls.json",
 	"sample-seeds.json",
-	"sample-nfts.json",
+	"sample-assets.json",
 	"sample-game-cards.json",
 	"template-seeds.json",
 	"sample-satoshi.json",
@@ -199,13 +199,13 @@ Debug Routes: ${playgroundConfig.debugRoutesEnabled ? "enabled" : "disabled"}
 Query API (via Indexer):
   GET  /api/user/:username
   GET  /api/user/:username/collections
-  GET  /api/nft/:nftId
-  GET  /api/nft/:nftId/details
+  GET  /api/assets/:assetId
+  GET  /api/assets/:assetId/details
   GET  /api/collections
-  GET  /api/collection/:id
-  GET  /api/collection/:id/nfts
-  GET  /api/collection/:id/stats
-  GET  /api/collection/:id/exists
+  GET  /api/collections/:id
+  GET  /api/collections/:id/assets
+  GET  /api/collections/:id/stats
+  GET  /api/collections/:id/exists
   GET  /api/seed/:seedId/instances
   GET  /api/seed/:id/exists
   GET  /api/marketplace/listings
@@ -222,9 +222,9 @@ Build API (20 endpoints):
   POST /api/build/list             POST /api/build/unlist
   POST /api/build/burn             POST /api/build/buy
   POST /api/build/preview-ids
-  POST /api/build/set-data         POST /api/build/nft-approve
-  POST /api/build/nft-approve-all  POST /api/build/nft-transfer-from
-  POST /api/build/nft-lend         POST /api/build/nft-return
+  POST /api/build/set-data         POST /api/build/asset-approve
+  POST /api/build/asset-approve-all  POST /api/build/asset-transfer-from
+  POST /api/build/asset-lend         POST /api/build/asset-return
   POST /api/build/data-operator-approve
   POST /api/build/set-data-from
   POST /api/build/archive-collection
@@ -256,7 +256,7 @@ Game Scenarios (custodial examples):
 Sample Collections (unified format):
   GET  /playground/sample-bulls.json
   GET  /playground/sample-seeds.json
-  GET  /playground/sample-nfts.json
+  GET  /playground/sample-assets.json
   GET  /playground/sample-game-cards.json
 
 Protocol Info:

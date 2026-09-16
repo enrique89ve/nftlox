@@ -1,6 +1,6 @@
 // SPV verification routes — server-side proxy to avoid CORS
 import {
-	verifyNftOwnership,
+	verifyAssetOwnership,
 	verifyOperationOnChain,
 	createDefaultL1Config,
 } from "nftlox-sdk";
@@ -34,15 +34,15 @@ export const spvRoutes: Record<string, { POST: RouteHandler }> = {
 					return json({ error: "Invalid JSON body" }, 400);
 				}
 
-				const nftId = asNonEmptyString(body.nftId);
+				const assetId = asNonEmptyString(body.assetId);
 				const expectedOwner = asNonEmptyString(body.expectedOwner)?.toLowerCase();
 
-				if (!nftId || !expectedOwner) {
-					return json({ error: "Missing required fields: nftId, expectedOwner" }, 400);
+				if (!assetId || !expectedOwner) {
+					return json({ error: "Missing required fields: assetId, expectedOwner" }, 400);
 				}
 
-				const result = await verifyNftOwnership({
-					nftId,
+				const result = await verifyAssetOwnership({
+					assetId,
 					expectedOwner,
 					indexerBaseUrl: INDEXER_URL,
 					l1Config: createDefaultL1Config(),

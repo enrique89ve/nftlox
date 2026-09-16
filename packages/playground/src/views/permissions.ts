@@ -1,15 +1,15 @@
-// Permissions view — NFT approvals, lending, data operators
+// Permissions view — Asset approvals, lending, data operators
 import { $, log } from "../shared/dom";
 import { getConnectedUser } from "../shared/state";
 import { broadcastOperation } from "../shared/keychain";
 
 export function initPermissions() {
 	// Form submit handlers
-	$("btn-nft-approve")?.addEventListener("click", () => submitPermission("nft-approve"));
-	$("btn-nft-approve-all")?.addEventListener("click", () => submitPermission("nft-approve-all"));
-	$("btn-nft-transfer-from")?.addEventListener("click", () => submitPermission("nft-transfer-from"));
-	$("btn-nft-lend")?.addEventListener("click", () => submitPermission("nft-lend"));
-	$("btn-nft-return")?.addEventListener("click", () => submitPermission("nft-return"));
+	$("btn-asset-approve")?.addEventListener("click", () => submitPermission("asset-approve"));
+	$("btn-asset-approve-all")?.addEventListener("click", () => submitPermission("asset-approve-all"));
+	$("btn-asset-transfer-from")?.addEventListener("click", () => submitPermission("asset-transfer-from"));
+	$("btn-asset-lend")?.addEventListener("click", () => submitPermission("asset-lend"));
+	$("btn-asset-return")?.addEventListener("click", () => submitPermission("asset-return"));
 	$("btn-data-operator-approve")?.addEventListener("click", () => submitPermission("data-operator-approve"));
 	$("btn-set-data-from")?.addEventListener("click", () => submitPermission("set-data-from"));
 }
@@ -19,34 +19,34 @@ function getFormData(action: string): Record<string, unknown> | null {
 	const checked = (id: string) => ($(id) as HTMLInputElement)?.checked ?? false;
 
 	switch (action) {
-		case "nft-approve":
+		case "asset-approve":
 			return {
-				instanceId: val("perm-nft-approve-instance"),
-				spender: val("perm-nft-approve-spender"),
-				approved: checked("perm-nft-approve-approved"),
+				instanceId: val("perm-asset-approve-instance"),
+				spender: val("perm-asset-approve-spender"),
+				approved: checked("perm-asset-approve-approved"),
 				owner: getConnectedUser(),
 			};
-		case "nft-approve-all":
+		case "asset-approve-all":
 			return {
-				collectionId: val("perm-nft-approve-all-collection"),
-				spender: val("perm-nft-approve-all-spender"),
-				approved: checked("perm-nft-approve-all-approved"),
+				collectionId: val("perm-asset-approve-all-collection"),
+				spender: val("perm-asset-approve-all-spender"),
+				approved: checked("perm-asset-approve-all-approved"),
 				owner: getConnectedUser(),
 			};
-		case "nft-transfer-from":
+		case "asset-transfer-from":
 			return {
-				from: val("perm-nft-xfer-from"),
-				to: val("perm-nft-xfer-to"),
-				instanceId: val("perm-nft-xfer-instance"),
+				from: val("perm-asset-xfer-from"),
+				to: val("perm-asset-xfer-to"),
+				instanceId: val("perm-asset-xfer-instance"),
 				spender: getConnectedUser(),
 			};
-		case "nft-lend":
+		case "asset-lend":
 			return {
 				instanceId: val("perm-lend-instance"),
 				borrower: val("perm-lend-borrower"),
 				owner: getConnectedUser(),
 			};
-		case "nft-return":
+		case "asset-return":
 			return {
 				instanceId: val("perm-return-instance"),
 				signer: getConnectedUser(),
@@ -66,8 +66,8 @@ function getFormData(action: string): Record<string, unknown> | null {
 				catch { log("Invalid JSON in data field", "error"); return null; }
 			}
 			return {
-				nftId: val("perm-set-data-from-nft"),
-				nftDna: val("perm-set-data-from-dna"),
+				assetId: val("perm-set-data-from-asset"),
+				assetDna: val("perm-set-data-from-dna"),
 				data,
 				operator: getConnectedUser(),
 			};

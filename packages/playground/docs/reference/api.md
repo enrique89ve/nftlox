@@ -29,7 +29,7 @@ Sync status and node information.
 
 ```json
 {
-	"protocolVersion": "0.11.0",
+	"protocolVersion": "1.0.0",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -79,7 +79,7 @@ Health check endpoint. Returns `200` if the indexer is healthy, `503` if unhealt
 
 ### GET /api/state-root
 
-Public commitment to this indexer's projected NFT-ownership state. Two indexers on the same Hive block stream MUST converge on the same value — divergence is a single byte comparison.
+Public commitment to this indexer's projected Asset-ownership state. Two indexers on the same Hive block stream MUST converge on the same value — divergence is a single byte comparison.
 
 **Parameters:** none
 
@@ -88,13 +88,13 @@ Public commitment to this indexer's projected NFT-ownership state. Two indexers 
 ```json
 {
 	"state_root": "sha256:b7c3…",
-	"nft_count": 12483,
+	"asset_count": 12483,
 	"last_block_num": 98765432,
 	"updated_at": "2026-04-25T12:00:00.000Z"
 }
 ```
 
-The hash is the incremental XOR over a fixed subset of per-NFT SPV fields (`owner`, `previous_owner`, `owner_action`, `owner_operation_id`, `owner_block_num`, `id`). Endpoint is O(1) — it reads the singleton `state_meta` row, no recomputation. The same value is what registered nodes publish on chain via `node_state_checkpoint` at every `STATE_CHECKPOINT_INTERVAL_BLOCKS` boundary; clients can cross-check this endpoint against on-chain checkpoints from independent nodes.
+The hash is the incremental XOR over a fixed subset of per-Asset SPV fields (`owner`, `previous_owner`, `owner_action`, `owner_operation_id`, `owner_block_num`, `id`). Endpoint is O(1) — it reads the singleton `state_meta` row, no recomputation. The same value is what registered nodes publish on chain via `node_state_checkpoint` at every `STATE_CHECKPOINT_INTERVAL_BLOCKS` boundary; clients can cross-check this endpoint against on-chain checkpoints from independent nodes.
 
 ```bash
 curl https://api-nftlox.hivecreators.co/api/state-root
@@ -136,7 +136,7 @@ Aggregate protocol statistics.
 ```json
 {
 	"total_collections": 42,
-	"total_nfts": 15000,
+	"total_assets": 15000,
 	"total_seeds": 500,
 	"total_instances": 14000,
 	"total_listed": 120,
@@ -199,7 +199,7 @@ Check the status of a broadcast transaction. Returns one entry per NFTLox operat
 			"reason": "Signer alice is not the owner of seed seed_abc123",
 			"blockNum": 90000150,
 			"timestamp": "2026-03-30T15:00:00Z",
-			"nftIds": []
+			"assetIds": []
 		}
 	]
 }
@@ -212,7 +212,7 @@ Check the status of a broadcast transaction. Returns one entry per NFTLox operat
 | `orphaned` | Buy operation failed but HIVE transfers were already broadcast |
 | `unknown` | Transaction not found (not yet processed or record expired) |
 
-> `nftIds` is intentionally bounded. Bulk creation operations such as `bulk_distribute` can return an empty array because each created NFT row stores its own creation and owner anchors.
+> `assetIds` is intentionally bounded. Bulk creation operations such as `bulk_distribute` can return an empty array because each created Asset row stores its own creation and owner anchors.
 
 > Invalid and orphaned records are retained for 24 hours, then automatically cleaned up. After cleanup, the endpoint returns `unknown`.
 
@@ -264,9 +264,9 @@ curl https://api-nftlox.hivecreators.co/api/collections/abc123def456
 
 ---
 
-### GET /api/collections/:id/nfts
+### GET /api/collections/:id/assets
 
-List NFTs belonging to a collection.
+List Assets belonging to a collection.
 
 **Path parameters:**
 
@@ -278,17 +278,17 @@ List NFTs belonging to a collection.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `type` | string | -- | Filter by NFT type: `seed`, `instance` |
+| `type` | string | -- | Filter by Asset type: `seed`, `instance` |
 | `limit` | number | 50 | Results per page (1-200) |
 | `offset` | number | 0 | Pagination offset |
 
 **Example:**
 
 ```bash
-curl "https://api-nftlox.hivecreators.co/api/collections/abc123def456/nfts?type=seed&limit=20"
+curl "https://api-nftlox.hivecreators.co/api/collections/abc123def456/assets?type=seed&limit=20"
 ```
 
-**Response:** Paginated array of NFT objects.
+**Response:** Paginated array of Asset objects.
 
 ---
 
@@ -361,49 +361,49 @@ curl https://api-nftlox.hivecreators.co/api/collections/abc123def456/schema-hist
 
 ---
 
-## NFTs
+## Assets
 
-### GET /api/nfts/:id
+### GET /api/assets/:id
 
-Get full details for a single NFT.
+Get full details for a single Asset.
 
 **Path parameters:**
 
 | Parameter | Description |
 |---|---|
-| `id` | NFT ID |
+| `id` | Asset ID |
 
-**Response:** Complete NFT object including:
+**Response:** Complete Asset object including:
 - `id`, `name`, `image_url`
-- `collection_id`, `edition`, `nft_type` (seed/instance)
+- `collection_id`, `edition`, `asset_type` (seed/instance)
 - `owner`, `status` (active/listed/lent)
-- `origin_dna`, `nft_dna`, `immutable_data`, `data_hash`
+- `origin_dna`, `asset_dna`, `immutable_data`, `data_hash`
 - `max_supply`, `distributed`, `supply_exhausted`, `seed_id`, `instance_number`
 - `listing_id`, `listing_tx_id`, `listing_price`, `listing_currency`, `listing_expires_at`, `listing_marketplace`, `listing_expired`
 - `schema_version`, `previous_owner`, `owner_operation_id`, `owner_action`, `owner_block_num`
 - `tx_id`, `created_at`, `seed_tx_id`
 
-> All NFT list endpoints (collection NFTs, user NFTs, marketplace listings) also include `schema_version`, `previous_owner`, `owner_operation_id`, `owner_action`, and `owner_block_num` in each NFT object.
+> All Asset list endpoints (collection Assets, user Assets, marketplace listings) also include `schema_version`, `previous_owner`, `owner_operation_id`, `owner_action`, and `owner_block_num` in each Asset object.
 
-**Error:** `404` if the NFT does not exist.
+**Error:** `404` if the Asset does not exist.
 
 **Example:**
 
 ```bash
-curl https://api-nftlox.hivecreators.co/api/nfts/my-nft-id
+curl https://api-nftlox.hivecreators.co/api/assets/my-asset-id
 ```
 
 ---
 
-### GET /api/nfts/:id/owner
+### GET /api/assets/:id/owner
 
-Fast current-owner claim for a single NFT. This is the lightweight route for UI reads and high-throughput checks.
+Fast current-owner claim for a single Asset. This is the lightweight route for UI reads and high-throughput checks.
 
 **Response:**
 
 ```json
 {
-	"id": "my-nft-id",
+	"id": "my-asset-id",
 	"owner": "alice",
 	"previous_owner": "bob",
 	"owner_action": "buy",
@@ -418,12 +418,12 @@ Fast current-owner claim for a single NFT. This is the lightweight route for UI 
 **Example:**
 
 ```bash
-curl https://api-nftlox.hivecreators.co/api/nfts/my-nft-id/owner
+curl https://api-nftlox.hivecreators.co/api/assets/my-asset-id/owner
 ```
 
 ---
 
-### GET /api/nfts/:id/ownership
+### GET /api/assets/:id/ownership
 
 Canonical ownership proof. Returns the current owner claim plus creation anchors needed by SPV verification.
 
@@ -434,10 +434,10 @@ Canonical ownership proof. Returns the current owner claim plus creation anchors
 	"created_operation_id": "89999999:2:0",
 	"created_block_num": 89999999,
 	"created_tx_id": "1234567890abcdef1234567890abcdef12345678",
-	"nft_type": "instance",
+	"asset_type": "instance",
 	"seed_id": "seed-id",
 	"instance_number": 42,
-	"nft_dna": "4fc2...",
+	"asset_dna": "4fc2...",
 	"collection_id": "col_...",
 	"collection_created_block_num": 89999000,
 	"collection_created_tx_id": "abcdef1234567890abcdef1234567890abcdef12"
@@ -449,29 +449,29 @@ Canonical ownership proof. Returns the current owner claim plus creation anchors
 **Example:**
 
 ```bash
-curl https://api-nftlox.hivecreators.co/api/nfts/my-nft-id/ownership
+curl https://api-nftlox.hivecreators.co/api/assets/my-asset-id/ownership
 ```
 
 ---
 
-### GET /api/nfts/:id/proof
+### GET /api/assets/:id/proof
 
 Compatibility alias for the ownership proof contract. New integrations should prefer `/ownership`; existing SDK SPV clients can keep using `/proof`.
 
 ---
 
-### GET /api/nfts/:id/loan
+### GET /api/assets/:id/loan
 
-Return active loan custody for an NFT without changing ownership semantics.
+Return active loan custody for an Asset without changing ownership semantics.
 
 **Response when lent:**
 
 ```json
 {
-	"nft_id": "my-nft-id",
+	"asset_id": "my-asset-id",
 	"active": true,
 	"loan": {
-		"nft_id": "my-nft-id",
+		"asset_id": "my-asset-id",
 		"owner": "alice",
 		"lender": "alice",
 		"borrower": "bob",
@@ -487,7 +487,7 @@ Return active loan custody for an NFT without changing ownership semantics.
 
 ```json
 {
-	"nft_id": "my-nft-id",
+	"asset_id": "my-asset-id",
 	"active": false,
 	"loan": null
 }
@@ -496,20 +496,20 @@ Return active loan custody for an NFT without changing ownership semantics.
 **Example:**
 
 ```bash
-curl https://api-nftlox.hivecreators.co/api/nfts/my-nft-id/loan
+curl https://api-nftlox.hivecreators.co/api/assets/my-asset-id/loan
 ```
 
 ---
 
-### GET /api/nfts/:id/instances
+### GET /api/assets/:id/instances
 
-List instances distributed from a seed NFT.
+List instances distributed from a seed Asset.
 
 **Path parameters:**
 
 | Parameter | Description |
 |---|---|
-| `id` | Seed NFT ID |
+| `id` | Seed Asset ID |
 
 **Query parameters:**
 
@@ -519,12 +519,12 @@ List instances distributed from a seed NFT.
 | `offset` | number | 0 | Pagination offset |
 | `compact` | boolean | false | Return the seed once plus instance deltas for lower payload size |
 
-**Response:** Paginated array of instance NFT objects.
+**Response:** Paginated array of instance Asset objects.
 
 **Example:**
 
 ```bash
-curl "https://api-nftlox.hivecreators.co/api/nfts/seed-id/instances?limit=20"
+curl "https://api-nftlox.hivecreators.co/api/assets/seed-id/instances?limit=20"
 ```
 
 ---
@@ -541,7 +541,7 @@ Dashboard-oriented asset overview. This route is for frontend and SDK overview s
 |---|---|---|---|
 | `previewLimit` | number | 6 | Max preview items per section (1-20) |
 
-**Response:** Counts plus preview arrays for owned NFTs, seeds, lent-out NFTs, borrowed NFTs, and created collections.
+**Response:** Counts plus preview arrays for owned Assets, seeds, lent-out Assets, borrowed Assets, and created collections.
 
 **Example:**
 
@@ -551,9 +551,9 @@ curl "https://api-nftlox.hivecreators.co/api/users/alice/assets?previewLimit=6"
 
 ---
 
-### GET /api/users/:username/nfts
+### GET /api/users/:username/assets
 
-Get NFTs owned by a user with aggregate counts. This route means real ownership (`nfts.owner = username`), not borrowed custody.
+Get Assets owned by a user with aggregate counts. This route means real ownership (`assets.owner = username`), not borrowed custody.
 
 **Path parameters:**
 
@@ -570,19 +570,19 @@ Get NFTs owned by a user with aggregate counts. This route means real ownership 
 | `limit` | number | 50 | Results per page (1-200) |
 | `offset` | number | 0 | Pagination offset |
 
-**Response:** Object containing `nfts` array, `counts` breakdown, `offset`, and `limit`.
+**Response:** Object containing `assets` array, `counts` breakdown, `offset`, and `limit`.
 
 **Example:**
 
 ```bash
-curl "https://api-nftlox.hivecreators.co/api/users/alice/nfts?status=active&limit=20"
+curl "https://api-nftlox.hivecreators.co/api/users/alice/assets?status=active&limit=20"
 ```
 
 ---
 
-### GET /api/users/:username/nfts/count
+### GET /api/users/:username/assets/count
 
-Get NFT count breakdown for a user.
+Get Asset count breakdown for a user.
 
 **Path parameters:**
 
@@ -590,19 +590,19 @@ Get NFT count breakdown for a user.
 |---|---|
 | `username` | Hive username |
 
-**Response:** Counts by type (seeds, instances), excluding burned NFTs.
+**Response:** Counts by type (seeds, instances), excluding burned Assets.
 
 **Example:**
 
 ```bash
-curl https://api-nftlox.hivecreators.co/api/users/alice/nfts/count
+curl https://api-nftlox.hivecreators.co/api/users/alice/assets/count
 ```
 
 ---
 
 ### GET /api/users/:username/loans
 
-Get active NFT loans for a user by role.
+Get active Asset loans for a user by role.
 
 **Query parameters:**
 
@@ -614,7 +614,7 @@ Get active NFT loans for a user by role.
 
 **Response:** Object containing `loans`, `total`, `role`, `offset`, and `limit`.
 
-Use `role=lender` for NFTs the user has lent out, and `role=borrower` for NFTs temporarily usable by the user.
+Use `role=lender` for Assets the user has lent out, and `role=borrower` for Assets temporarily usable by the user.
 
 **Example:**
 
@@ -655,7 +655,7 @@ curl "https://api-nftlox.hivecreators.co/api/users/alice/collections?limit=10"
 
 ### GET /api/marketplace/listings
 
-Browse NFTs currently listed for sale.
+Browse Assets currently listed for sale.
 
 **Query parameters:**
 
@@ -666,7 +666,7 @@ Browse NFTs currently listed for sale.
 | `limit` | number | 50 | Results per page (1-200) |
 | `offset` | number | 0 | Pagination offset |
 
-**Response:** Paginated array of listed NFT objects including listing price, currency, and seller info.
+**Response:** Paginated array of listed Asset objects including listing price, currency, and seller info.
 
 **Example:**
 
@@ -684,7 +684,7 @@ Sales history with financial split breakdown. Without filters, returns recent sa
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `nftId` | string | -- | Filter by NFT ID |
+| `assetId` | string | -- | Filter by Asset ID |
 | `collectionId` | string | -- | Filter by collection ID |
 | `seller` | string | -- | Filter by seller Hive username |
 | `buyer` | string | -- | Filter by buyer Hive username |
@@ -696,7 +696,7 @@ Sales history with financial split breakdown. Without filters, returns recent sa
 ```json
 [
 	{
-		"nft_id": "abc123",
+		"asset_id": "abc123",
 		"collection_id": "col_xyz",
 		"seller": "alice",
 		"buyer": "bob",
@@ -761,7 +761,7 @@ curl "https://api-nftlox.hivecreators.co/api/marketplace/volume?collectionId=col
 
 ## Multisig
 
-### GET /api/payment-info/:nftId
+### GET /api/payment-info/:assetId
 
 Get the payment split needed to build a buy transaction. Returns the exact amounts for seller, royalty, and protocol fee.
 
@@ -769,13 +769,13 @@ Get the payment split needed to build a buy transaction. Returns the exact amoun
 
 | Parameter | Description |
 |---|---|
-| `nftId` | ID of the listed NFT |
+| `assetId` | ID of the listed Asset |
 
 **Response:**
 
 ```json
 {
-	"nftId": "abc123",
+	"assetId": "abc123",
 	"listingId": "list_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
 	"listTxId": "abcdef1234567890abcdef1234567890abcdef12",
 	"seller": "alice",
@@ -795,20 +795,20 @@ Get the payment split needed to build a buy transaction. Returns the exact amoun
 > **Fee model**: Protocol fee is 1.0%, always paid to the co-signing node. Marketplace fees are handled off-chain by marketplace frontends.
 
 **Errors:**
-- `404` -- NFT not found
-- `400` -- NFT not listed or has no valid price
+- `404` -- Asset not found
+- `400` -- Asset not listed or has no valid price
 
 **Example:**
 
 ```bash
-curl https://api-nftlox.hivecreators.co/api/payment-info/my-nft-id
+curl https://api-nftlox.hivecreators.co/api/payment-info/my-asset-id
 ```
 
 ---
 
 ### POST /api/multisig/buy
 
-Submit a buyer-signed `buy` transaction for **node-last** settlement. The node validates it against the current listing, broadcasts a `buy_commitment` custom_json on chain to reserve the NFT, waits for that commitment to win the cross-node ordering race, appends its own active signature, and broadcasts the completed buy transaction. The caller does **not** broadcast.
+Submit a buyer-signed `buy` transaction for **node-last** settlement. The node validates it against the current listing, broadcasts a `buy_commitment` custom_json on chain to reserve the Asset, waits for that commitment to win the cross-node ordering race, appends its own active signature, and broadcasts the completed buy transaction. The caller does **not** broadcast.
 
 **Request body:**
 
@@ -819,9 +819,9 @@ Submit a buyer-signed `buy` transaction for **node-last** settlement. The node v
 		"ref_block_prefix": 67890,
 		"expiration": "2026-04-22T12:00:00",
 		"operations": [
-			["transfer",    { "from": "bob", "to": "alice",  "amount": "24.500 HIVE", "memo": "NFTLox BUY:nft_…" }],
-			["transfer",    { "from": "bob", "to": "artist", "amount": "0.250 HIVE",  "memo": "NFTLox ROY:nft_…" }],
-			["transfer",    { "from": "bob", "to": "nftlox", "amount": "0.250 HIVE",  "memo": "NFTLox FEE:nft_…" }],
+			["transfer",    { "from": "bob", "to": "alice",  "amount": "24.500 HIVE", "memo": "NFTLox BUY:asset_…" }],
+			["transfer",    { "from": "bob", "to": "artist", "amount": "0.250 HIVE",  "memo": "NFTLox ROY:asset_…" }],
+			["transfer",    { "from": "bob", "to": "nftlox", "amount": "0.250 HIVE",  "memo": "NFTLox FEE:asset_…" }],
 			["custom_json", { "required_auths": ["nftlox"], "required_posting_auths": [], "id": "nftlox_testnet", "json": "…" }]
 		],
 		"signatures": ["<buyer active signature>"]
@@ -841,7 +841,7 @@ Submit a buyer-signed `buy` transaction for **node-last** settlement. The node v
 }
 ```
 
-`txId` is the Hive `tx_id` of the fully settled buy transaction (already on chain). `commitmentOpTxId` is the `tx_id` of the `buy_commitment` custom_json the node used to reserve the NFT — keep it for auditing cross-node race outcomes.
+`txId` is the Hive `tx_id` of the fully settled buy transaction (already on chain). `commitmentOpTxId` is the `tx_id` of the `buy_commitment` custom_json the node used to reserve the Asset — keep it for auditing cross-node race outcomes.
 
 **Error codes:** See [errors.md](errors.md) for the full `MultisigErrorCode` surface. Notable codes specific to the node-last flow: `BUYER_SIGNATURE_MISSING`, `INVALID_BUYER_SIGNATURE`, `INSUFFICIENT_BALANCE`, `CROSS_NODE_RESERVATION`, `COMMITMENT_BROADCAST_FAILED`, `COMMITMENT_INCLUSION_TIMEOUT` (HTTP **202** — the buyer's `buy_commitment` may already be on Hive; the response carries `commitmentOpTxId` for reconciliation), `BUY_BROADCAST_FAILED`, `NODE_NOT_ACTIVE`, `INDEXER_LAGGED`, `NODE_DIVERGENT` (HTTP 503 — this node's local integrity interlock is set after a verified local fault or operator action; route to a different indexer while the operator audits it). Peer checkpoint mismatches are advisory because registered node identities are not Sybil-resistant. The failure body always has `{ ok: false, code, message }` and may additionally carry `retryAfterMs` (transient back-off) and `commitmentOpTxId` (when the commitment was already broadcast).
 
@@ -935,11 +935,11 @@ The indexer does not expose a transaction-building HTTP surface. Every NFTLox ac
 | `archive_collection` | `buildArchiveCollection` | Posting | Creator single-signer |
 | `list`, `unlist` | `buildList`, `buildUnlist` | Posting | Owner single-signer |
 | `buy` | `buildBuy` | Active | Buyer signs full tx, node settles node-last (`POST /api/multisig/buy`) |
-| `nft_approve`, `nft_approve_all` | `buildNftApprove`, `buildNftApproveAll` | Posting | Owner single-signer |
-| `nft_transfer_from` | `buildNftTransferFrom` | Posting | Approved spender single-signer |
+| `asset_approve`, `asset_approve_all` | `buildAssetApprove`, `buildAssetApproveAll` | Posting | Owner single-signer |
+| `asset_transfer_from` | `buildAssetTransferFrom` | Posting | Approved spender single-signer |
 | `data_operator_approve` | `buildDataOperatorApprove` | Posting | Collection creator single-signer |
-| `nft_lend` | `buildNftLend` | Posting | Owner single-signer |
-| `nft_return` | `buildNftReturn` | Posting | Lender **or** borrower single-signer |
+| `asset_lend` | `buildAssetLend` | Posting | Owner single-signer |
+| `asset_return` | `buildAssetReturn` | Posting | Lender **or** borrower single-signer |
 
 Every builder returns a `KeychainResult<T>` — a discriminated union of `{ success: true, operations, keyType, signer, payload, generatedIds?, coSigners?, warnings? }` or `{ success: false, errors }`. Feed `operations` into `hive-tx`, `@hiveio/dhive`, `@hiveio/wax`, or `hive_keychain.requestBroadcast` — whatever your runtime uses.
 

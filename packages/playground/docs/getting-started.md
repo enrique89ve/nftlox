@@ -1,8 +1,8 @@
 # Getting Started
 
-This guide takes you from zero to a minted NFT on the NFTLox testnet in a single file. Everything runs client-side: the indexer only serves **read** endpoints and the **multisig** co-signing endpoint — it never holds your keys and never builds payloads for you.
+This guide takes you from zero to a minted Asset on the NFTLox testnet in a single file. Everything runs client-side: the indexer only serves **read** endpoints and the **multisig** co-signing endpoint — it never holds your keys and never builds payloads for you.
 
-The current public-test protocol is `0.11.0`. It is not wire-compatible with
+The current public-test protocol is `1.0.0`. It is not wire-compatible with
 `0.10.x`: custody and delegation operations require the Hive active key.
 
 ## Prerequisites
@@ -47,7 +47,7 @@ curl https://api-nftlox.hivecreators.co/api/status
 
 ```json
 {
-	"protocolVersion": "0.11.0",
+	"protocolVersion": "1.0.0",
 	"protocolId": "nftlox_testnet",
 	"genesisBlock": 12345678,
 	"nodeAccount": "nftlox",
@@ -163,7 +163,7 @@ const client = createIndexerClient("https://api-nftlox.hivecreators.co");
 const status = await client.getStatus();
 const stats = await client.getStats();
 
-const { nfts, counts } = await client.getUserNfts("alice", {
+const { assets, counts } = await client.getUserAssets("alice", {
 	status: "active",
 	type: "seed",
 	limit: 50,
@@ -186,15 +186,15 @@ console.log(`${confirmation.confirmed}/${confirmation.totalOperations} ops confi
 | Exact shape of every on-chain payload | [Data Formats](data-formats.md) |
 | The 20 builders in one table | [SDK Reference](sdk/reference.md) |
 | Mint a full collection with dozens of seeds, end-to-end | [Seed Ceremony](use-cases/seed-ceremony.md) |
-| Update `mutableData` on a live NFT | [Mutable Data](use-cases/mutable-data.md) |
+| Update `mutableData` on a live Asset | [Mutable Data](use-cases/mutable-data.md) |
 
 ## Protocol info
 
 | Property | Value |
 |---|---|
 | Protocol ID | `nftlox_testnet` |
-| Version | `0.11.0` |
-| Minimum supported | `0.11.0` |
+| Version | `1.0.0` |
+| Minimum supported | `1.0.0` |
 | Blockchain | Hive L1 |
 | Finality | ~3 s (block time) |
 | Max ops per custom_json tx | 5 |

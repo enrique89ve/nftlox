@@ -54,7 +54,7 @@ import {
 
 const colId  = await generateDeterministicCollectionId("alice", "Heroes", "HERO");
 const seedId = await generateDeterministicSeedId(colId, "warrior");
-const nftId  = await generateDeterministicInstanceId(seedId, 1);
+const assetId  = await generateDeterministicInstanceId(seedId, 1);
 ```
 
 Use cases:
@@ -91,10 +91,10 @@ import { createIndexerClient } from "nftlox-sdk";
 const client = createIndexerClient("https://api-nftlox.hivecreators.co");
 
 const status   = await client.getStatus();
-const userNfts = await client.getUserNfts("alice", { status: "active", type: "seed" });
+const userAssets = await client.getUserAssets("alice", { status: "active", type: "seed" });
 const listings = await client.getListings({ sort: "price_asc", currency: "HIVE" });
-const nft      = await client.getNft("nft_…");
-const proof    = await client.getNftProof("nft_…");
+const asset      = await client.getAsset("asset_…");
+const proof    = await client.getAssetProof("asset_…");
 
 // Wait for a broadcast tx to be indexed:
 const opStatus = await client.getOperationStatus(broadcastTxId);
@@ -142,7 +142,7 @@ All SDK errors extend `NftloxError`. Validation errors never throw — they live
 
 | Need | Use |
 |---|---|
-| Read protocol state (nfts, listings, stats, proofs) | `createIndexerClient` (GET) |
+| Read protocol state (assets, listings, stats, proofs) | `createIndexerClient` (GET) |
 | Compute a deterministic ID off-line | `generate*` helpers |
 | Build a signable Hive operation | `build*` builders |
 | Settle a `buy` (node-last) | `client.requestBuyMultisig(…)` or `requestBuyMultisig` |

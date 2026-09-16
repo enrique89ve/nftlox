@@ -1,6 +1,6 @@
-# NFT Lending
+# Asset Lending
 
-Non-custodial, escrow-free NFT lending for instances. The lender keeps ownership; the borrower gets a scoped right to use the NFT until they return it. The protocol guarantees the lender can always reclaim — there is no collateral, no time lock, no liquidation.
+Non-custodial, escrow-free Asset lending for instances. The lender keeps ownership; the borrower gets a scoped right to use the Asset until they return it. The protocol guarantees the lender can always reclaim — there is no collateral, no time lock, no liquidation.
 
 Lending applies only to **instances**. Seeds are templates and cannot be lent.
 
@@ -13,25 +13,25 @@ A lent instance has exactly two on-chain properties that differ from a plain own
 
 While `status = "lent"`:
 
-- **Ownership does not transfer.** `client.getNftOwner(id)` keeps returning the lender.
-- **Transfers are blocked.** `transfer`, `nft_transfer_from`, `buy` → rejected.
+- **Ownership does not transfer.** `client.getAssetOwner(id)` keeps returning the lender.
+- **Transfers are blocked.** `transfer`, `asset_transfer_from`, `buy` → rejected.
 - **Listings are blocked.** `list` → rejected.
-- **Approvals are frozen.** New `nft_approve`/`nft_approve_all` cannot be created; existing ones cannot be acted on.
+- **Approvals are frozen.** New `asset_approve`/`asset_approve_all` cannot be created; existing ones cannot be acted on.
 - **Mutable data writes remain allowed** (for both owner and approved operators). Games want borrowers to accumulate XP on a rented card.
 
-Only `nft_return` can exit the `lent` state. Either the lender **or** the current borrower may sign it — the lender always retains the ability to reclaim unilaterally, and the borrower can end the loan at any time by returning the NFT.
+Only `asset_return` can exit the `lent` state. Either the lender **or** the current borrower may sign it — the lender always retains the ability to reclaim unilaterally, and the borrower can end the loan at any time by returning the Asset.
 
-## Lending — `buildNftLend`
+## Lending — `buildAssetLend`
 
 ```typescript
-import { buildNftLend } from "nftlox-sdk";
+import { buildAssetLend } from "nftlox-sdk";
 import hive from "hive-tx";
 
 hive.config.set("node", "https://api.hive.blog");
 
-const result = buildNftLend({
+const result = buildAssetLend({
 	owner: "alice",
-	instanceId: "nft_abc…_7",
+	instanceId: "asset_abc…_7",
 	borrower: "bob",                // must differ from owner
 });
 if (!result.success) throw new Error(JSON.stringify(result.errors));
@@ -42,27 +42,27 @@ tx.sign(hive.PrivateKey.from(process.env.HIVE_ACTIVE_KEY!));
 await tx.broadcast();
 ```
 
-`owner === borrower` is rejected by the builder with code `LEND_TO_SELF`. Lending an already-lent NFT is rejected by the indexer (`NFT_LOCKED`).
+`owner === borrower` is rejected by the builder with code `LEND_TO_SELF`. Lending an already-lent Asset is rejected by the indexer (`Asset_LOCKED`).
 
-## Returning — `buildNftReturn`
+## Returning — `buildAssetReturn`
 
-Signed by either the **current borrower** (voluntary return) or the **lender** (unilateral reclaim). Both paths go through the same `nft_return` action; the indexer accepts the signature if it matches either the loan's `borrower` or `lender`.
+Signed by either the **current borrower** (voluntary return) or the **lender** (unilateral reclaim). Both paths go through the same `asset_return` action; the indexer accepts the signature if it matches either the loan's `borrower` or `lender`.
 
 ```typescript
-import { buildNftReturn } from "nftlox-sdk";
+import { buildAssetReturn } from "nftlox-sdk";
 
 // Borrower returns voluntarily:
-const result = buildNftReturn({
+const result = buildAssetReturn({
 	owner: "bob",                   // the borrower returning it
-	instanceId: "nft_abc…_7",
+	instanceId: "asset_abc…_7",
 });
 if (!result.success) throw new Error(JSON.stringify(result.errors));
 // sign with Bob's active key, broadcast
 
 // Or the lender reclaims unilaterally (same builder):
-const reclaim = buildNftReturn({
+const reclaim = buildAssetReturn({
 	owner: "alice",                 // the lender reclaiming
-	instanceId: "nft_abc…_7",
+	instanceId: "asset_abc…_7",
 });
 // sign with Alice's active key, broadcast
 ```
@@ -76,9 +76,9 @@ Because lender-side reclaim is built into the protocol, any off-chain rental con
 ```typescript
 const client = createIndexerClient(INDEXER);
 
-// Status of a specific NFT
-const loanStatus = await client.getNftLoan("nft_…");
-// { nft_id, active: true | false, loan: IndexerNftLoan | null }
+// Status of a specific Asset
+const loanStatus = await client.getAssetLoan("asset_…");
+// { asset_id, active: true | false, loan: IndexerAssetLoan | null }
 
 // Everything a user is currently lending or borrowing
 const lending = await client.getUserLoans("alice", { role: "lender" });
@@ -86,7 +86,7 @@ const borrowing = await client.getUserLoans("bob", { role: "borrower" });
 const all = await client.getUserLoans("alice", { role: "all" });
 ```
 
-`IndexerNftLoan` carries the originating tx_id, block number, and the lender/borrower pair. Use it for UI rendering, dispute timestamps, or off-chain rental-contract bookkeeping.
+`IndexerAssetLoan` carries the originating tx_id, block number, and the lender/borrower pair. Use it for UI rendering, dispute timestamps, or off-chain rental-contract bookkeeping.
 
 ## Designing around lending
 
@@ -95,32 +95,32 @@ The protocol gives you a safe primitive. Pricing, duration, and reputation are u
 Typical patterns:
 
 - **Free rentals for guilds.** Social trust, no off-chain contract. Lender can reclaim any time; borrower is expected to return on request.
-- **Paid rentals via off-chain contract.** Borrower pays in HIVE/HBD upfront; your backend records the rental period and automatically calls `nft_return` if the borrower forgets. Because the lender can reclaim at any moment regardless of contract, your off-chain terms can include a penalty clause for early reclaim.
-- **Tournament whitelist.** Lend a legendary card to a teammate for the weekend; the card keeps earning XP under the borrower, which all ends up on the owner's NFT after return.
+- **Paid rentals via off-chain contract.** Borrower pays in HIVE/HBD upfront; your backend records the rental period and automatically calls `asset_return` if the borrower forgets. Because the lender can reclaim at any moment regardless of contract, your off-chain terms can include a penalty clause for early reclaim.
+- **Tournament whitelist.** Lend a legendary card to a teammate for the weekend; the card keeps earning XP under the borrower, which all ends up on the owner's Asset after return.
 
 What the protocol **doesn't** give you:
 
-- **Duration enforcement.** The lender can reclaim at any time by signing `nft_return` directly (no borrower cooperation needed). If you need hard-time-lock lending, layer it off-chain with a payment that is refunded on successful return — the protocol will not block a lender from reclaiming before the agreed date.
-- **Automatic payments.** Charge the borrower off-chain; the chain only tracks the NFT state.
+- **Duration enforcement.** The lender can reclaim at any time by signing `asset_return` directly (no borrower cooperation needed). If you need hard-time-lock lending, layer it off-chain with a payment that is refunded on successful return — the protocol will not block a lender from reclaiming before the agreed date.
+- **Automatic payments.** Charge the borrower off-chain; the chain only tracks the Asset state.
 - **Dispute resolution.** If a borrower refuses to return, the lender's remedy is social (reputation) and legal (off-chain contract), not protocol-level.
 
 ## Interactions with approvals
 
-An NFT that is currently lent **cannot** be the subject of a new `nft_approve` or be transferred by an existing `nft_approve_all`. When you return the NFT, your prior approvals are still in place — approvals outlive lending, they just can't be acted on during it.
+An Asset that is currently lent **cannot** be the subject of a new `asset_approve` or be transferred by an existing `asset_approve_all`. When you return the Asset, your prior approvals are still in place — approvals outlive lending, they just can't be acted on during it.
 
 ## Failure modes
 
 | Broadcast rejection | Cause |
 |---|---|
 | `LEND_TO_SELF` | Builder: `owner === borrower`. |
-| `NFT_LOCKED` | Indexer: instance is already lent, or in-flight on another lock (buy, transfer). |
-| `NFT_NOT_INSTANCE` | Trying to lend a seed. |
+| `Asset_LOCKED` | Indexer: instance is already lent, or in-flight on another lock (buy, transfer). |
+| `Asset_NOT_INSTANCE` | Trying to lend a seed. |
 | Builder `ValidationError` | Missing `instanceId`, invalid Hive usernames. |
 
 On broadcast failure, poll `getOperationStatus(txId)` — the indexer populates `reason` on `invalid` ops.
 
 ## See also
 
-- [Data Formats — `nft_lend`, `nft_return`](../data-formats.md#nft_lend)
+- [Data Formats — `asset_lend`, `asset_return`](../data-formats.md#asset_lend)
 - [SDK Reference — lending builders](../sdk/reference.md#lending)
 - [Allowances & Operators](allowances.md) — why approvals and lending coexist without conflict.

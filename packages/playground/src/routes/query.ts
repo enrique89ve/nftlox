@@ -44,34 +44,34 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			const username = url.pathname.split("/api/user/")[1]!.split("/")[0]!.toLowerCase();
 			const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10), 200);
 			const offset = parseInt(url.searchParams.get("offset") || "0", 10);
-			const result = await indexer.getUserNfts(username, { limit, offset });
-			const nfts = result.nfts || [];
-			const hasMore = nfts.length >= limit;
+			const result = await indexer.getUserAssets(username, { limit, offset });
+			const assets = result.assets || [];
+			const hasMore = assets.length >= limit;
 			return json({
 				user: username,
-				count: nfts.length,
+				count: assets.length,
 				hasMore,
 				offset,
 				counts: result.counts,
-				nfts: nfts.map((nft) => ({
-					id: nft.id,
-					collectionId: nft.collection_id,
-					nftType: nft.nft_type,
-					status: nft.status,
-					edition: nft.edition,
-					owner: nft.owner,
-					name: nft.name,
-					imageUrl: nft.image_url,
-					originDna: nft.origin_dna,
-					nftDna: nft.nft_dna,
-					seedId: nft.seed_id,
-					seedTxId: nft.seed_tx_id ?? null,
-					instanceNumber: nft.instance_number,
-					maxSupply: nft.max_supply,
-					distributed: nft.distributed,
-					listingPrice: nft.listing_price,
-					listingCurrency: nft.listing_currency,
-					isSeed: nft.nft_type === "seed",
+				assets: assets.map((asset) => ({
+					id: asset.id,
+					collectionId: asset.collection_id,
+					assetType: asset.asset_type,
+					status: asset.status,
+					edition: asset.edition,
+					owner: asset.owner,
+					name: asset.name,
+					imageUrl: asset.image_url,
+					originDna: asset.origin_dna,
+					assetDna: asset.asset_dna,
+					seedId: asset.seed_id,
+					seedTxId: asset.seed_tx_id ?? null,
+					instanceNumber: asset.instance_number,
+					maxSupply: asset.max_supply,
+					distributed: asset.distributed,
+					listingPrice: asset.listing_price,
+					listingCurrency: asset.listing_currency,
+					isSeed: asset.asset_type === "seed",
 				})),
 			});
 		}),
@@ -93,63 +93,63 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			});
 		}),
 
-	"/api/nft/:nftId": (req: Request) =>
+	"/api/assets/:assetId": (req: Request) =>
 		safeHandler(async () => {
-			const nftId = new URL(req.url).pathname.split("/api/nft/")[1]!.split("/")[0]!;
-			const nft = await indexer.getNft(nftId);
-			return json(nft);
+			const assetId = new URL(req.url).pathname.split("/api/assets/")[1]!.split("/")[0]!;
+			const asset = await indexer.getAsset(assetId);
+			return json(asset);
 		}),
 
-	"/api/nft/:nftId/details": (req: Request) =>
+	"/api/assets/:assetId/details": (req: Request) =>
 		safeHandler(async () => {
-			const nftId = new URL(req.url).pathname.split("/api/nft/")[1]!.split("/")[0]!;
-			const nft = await indexer.getNft(nftId);
+			const assetId = new URL(req.url).pathname.split("/api/assets/")[1]!.split("/")[0]!;
+			const asset = await indexer.getAsset(assetId);
 
 			const [collectionCreator, instances] = await Promise.all([
-				getCollectionCreator(nft.collection_id),
-				nft.nft_type === "seed"
-					? indexer.getNftInstances(nftId, { limit: 50 })
+				getCollectionCreator(asset.collection_id),
+				asset.asset_type === "seed"
+					? indexer.getAssetInstances(assetId, { limit: 50 })
 					: Promise.resolve([]),
 			]);
-			const mintedBy = nft.minted_by ?? collectionCreator;
+			const mintedBy = asset.minted_by ?? collectionCreator;
 
 			// Fetch parent if this is an instance.
 			let original = null;
-			const parentId = nft.seed_id;
+			const parentId = asset.seed_id;
 			if (parentId) {
 				try {
-					original = await indexer.getNft(parentId);
+					original = await indexer.getAsset(parentId);
 				} catch { /* parent may not exist */ }
 			}
 
 			return json({
-				id: nft.id,
-				origin_dna: nft.origin_dna,
-				nft_dna: nft.nft_dna,
-				tx_id: nft.tx_id,
-				nft: {
-					id: nft.id,
-					name: nft.name,
-					imageUrl: nft.image_url,
-					owner: nft.owner,
-					collectionId: nft.collection_id,
-					edition: nft.edition,
-					originDna: nft.origin_dna,
-					nftDna: nft.nft_dna,
+				id: asset.id,
+				origin_dna: asset.origin_dna,
+				asset_dna: asset.asset_dna,
+				tx_id: asset.tx_id,
+				asset: {
+					id: asset.id,
+					name: asset.name,
+					imageUrl: asset.image_url,
+					owner: asset.owner,
+					collectionId: asset.collection_id,
+					edition: asset.edition,
+					originDna: asset.origin_dna,
+					assetDna: asset.asset_dna,
 					mintedBy,
-					mintedAt: nft.created_at,
-					burned: nft.status === "burned",
-					listed: nft.status === "listed",
-					lent: nft.status === "lent",
-					listingPrice: nft.listing_price ? { amount: nft.listing_price, currency: nft.listing_currency } : undefined,
-					isSeed: nft.nft_type === "seed",
-					maxSupply: nft.max_supply,
-					distributed: nft.distributed,
-					seedId: nft.seed_id,
-					seedTxId: nft.seed_tx_id ?? null,
-					instanceNumber: nft.instance_number,
-					dataHash: nft.data_hash,
-					txId: nft.tx_id,
+					mintedAt: asset.created_at,
+					burned: asset.status === "burned",
+					listed: asset.status === "listed",
+					lent: asset.status === "lent",
+					listingPrice: asset.listing_price ? { amount: asset.listing_price, currency: asset.listing_currency } : undefined,
+					isSeed: asset.asset_type === "seed",
+					maxSupply: asset.max_supply,
+					distributed: asset.distributed,
+					seedId: asset.seed_id,
+					seedTxId: asset.seed_tx_id ?? null,
+					instanceNumber: asset.instance_number,
+					dataHash: asset.data_hash,
+					txId: asset.tx_id,
 				},
 				original: original ? {
 					id: original.id,
@@ -186,61 +186,61 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 			});
 		}),
 
-	"/api/collection/:id": (req: Request) =>
+	"/api/collections/:id": (req: Request) =>
 		safeHandler(async () => {
-			const id = new URL(req.url).pathname.split("/api/collection/")[1]!.split("/")[0]!;
+			const id = new URL(req.url).pathname.split("/api/collections/")[1]!.split("/")[0]!;
 			const col = await indexer.getCollection(id);
 			return json(col);
 		}),
 
-	"/api/collection/:id/nfts": (req: Request) =>
+	"/api/collections/:id/assets": (req: Request) =>
 		safeHandler(async () => {
 			const url = new URL(req.url);
-			const id = url.pathname.split("/api/collection/")[1]!.split("/")[0]!;
+			const id = url.pathname.split("/api/collections/")[1]!.split("/")[0]!;
 			const [seeds, instances] = await Promise.all([
-				indexer.getCollectionNfts(id, { type: "seed", limit: 200 }),
-				indexer.getCollectionNfts(id, { type: "instance", limit: 200 }),
+				indexer.getCollectionAssets(id, { type: "seed", limit: 200 }),
+				indexer.getCollectionAssets(id, { type: "instance", limit: 200 }),
 			]);
 			return json({
 				collectionId: id,
 				totalCount: seeds.length + instances.length,
 				seeds: {
 					count: seeds.length,
-					items: seeds.map(nft => ({
-						id: nft.id,
-						name: nft.name,
-						imageUrl: nft.image_url,
-						owner: nft.owner,
-						maxSupply: nft.max_supply,
-						distributed: nft.distributed || 0,
-						originDna: nft.origin_dna,
-						nftDna: nft.nft_dna,
+					items: seeds.map(asset => ({
+						id: asset.id,
+						name: asset.name,
+						imageUrl: asset.image_url,
+						owner: asset.owner,
+						maxSupply: asset.max_supply,
+						distributed: asset.distributed || 0,
+						originDna: asset.origin_dna,
+						assetDna: asset.asset_dna,
 					})),
 				},
 				instances: {
 					count: instances.length,
-					items: instances.map(nft => ({
-						id: nft.id,
-						name: nft.name,
-						imageUrl: nft.image_url,
-						owner: nft.owner,
-						seedId: nft.seed_id,
-						instanceNumber: nft.instance_number,
+					items: instances.map(asset => ({
+						id: asset.id,
+						name: asset.name,
+						imageUrl: asset.image_url,
+						owner: asset.owner,
+						seedId: asset.seed_id,
+						instanceNumber: asset.instance_number,
 					})),
 				},
 			});
 		}),
 
-	"/api/collection/:id/stats": (req: Request) =>
+	"/api/collections/:id/stats": (req: Request) =>
 		safeHandler(async () => {
-			const id = new URL(req.url).pathname.split("/api/collection/")[1]!.split("/")[0]!;
+			const id = new URL(req.url).pathname.split("/api/collections/")[1]!.split("/")[0]!;
 			const stats = await indexer.getCollectionStats(id);
 			return json(stats);
 		}),
 
-	"/api/collection/:id/exists": (req: Request) =>
+	"/api/collections/:id/exists": (req: Request) =>
 		safeHandler(async () => {
-			const id = new URL(req.url).pathname.split("/api/collection/")[1]!.split("/")[0]!;
+			const id = new URL(req.url).pathname.split("/api/collections/")[1]!.split("/")[0]!;
 			try {
 				await indexer.getCollection(id);
 				return json({ collectionId: id, exists: true });
@@ -255,7 +255,7 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 	"/api/seed/:seedId/instances": (req: Request) =>
 		safeHandler(async () => {
 			const seedId = new URL(req.url).pathname.split("/api/seed/")[1]!.split("/")[0]!;
-			const instances = await indexer.getNftInstances(seedId, { compact: true });
+			const instances = await indexer.getAssetInstances(seedId, { compact: true });
 			return json({ seedId, count: instances.length, instances });
 		}),
 
@@ -263,8 +263,8 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 		safeHandler(async () => {
 			const id = new URL(req.url).pathname.split("/api/seed/")[1]!.split("/")[0]!;
 			try {
-				const nft = await indexer.getNft(id);
-				return json({ seedId: id, exists: nft.nft_type === "seed" });
+				const asset = await indexer.getAsset(id);
+				return json({ seedId: id, exists: asset.asset_type === "seed" });
 			} catch (e) {
 				if (e instanceof IndexerError && e.statusCode === 404) {
 					return json({ seedId: id, exists: false });

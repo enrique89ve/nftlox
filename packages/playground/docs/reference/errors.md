@@ -22,21 +22,21 @@ The `MultisigErrorCode` type (defined in `packages/protocol/src/types.ts`) repre
 
 | Code | HTTP Status | `retryAfterMs` | `commitmentOpTxId` | Description |
 |------|-------------|----------------|--------------------|-------------|
-| `NFT_LOCKED` | 409 | = `multisig_buy_locks.expires_at − now` | — | Another buy for this NFT is already in flight on **this** node (process-local `buyLock`). The lock TTL equals `BUY_TX_TTL_MS`. |
+| `Asset_LOCKED` | 409 | = `multisig_buy_locks.expires_at − now` | — | Another buy for this Asset is already in flight on **this** node (process-local `buyLock`). The lock TTL equals `BUY_TX_TTL_MS`. |
 | `COLLECTION_LOCKED` | 409 | ✔ | — | A concurrent `create_collection` for the same `{creator, symbol}` is already being signed. |
-| `CROSS_NODE_RESERVATION` | 409 | = `BUY_TX_TTL_MS` | — | A different settlement node's `buy_commitment` landed first for this NFT. `retryAfterMs` aligns with the lock TTL so a retry waits the full commitment window. The listing is effectively taken — refresh payment info before retrying. |
+| `CROSS_NODE_RESERVATION` | 409 | = `BUY_TX_TTL_MS` | — | A different settlement node's `buy_commitment` landed first for this Asset. `retryAfterMs` aligns with the lock TTL so a retry waits the full commitment window. The listing is effectively taken — refresh payment info before retrying. |
 
 ### Resource state
 
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
-| `NFT_NOT_FOUND` | 404 | The `nftId` does not exist in the indexer database. |
-| `NFT_NOT_LISTED` | 409 | The NFT is not currently listed for sale. |
-| `NFT_NOT_INSTANCE` | 409 | Only instances can be bought through the marketplace; seeds are not sellable. |
-| `NFT_NOT_TRANSFERABLE` | 409 | The NFT belongs to a collection with `rules.transferable: false`. |
-| `NFT_EXPIRED_LISTING` | 409 | The listing has expired (past its `expiresAt` timestamp). |
+| `Asset_NOT_FOUND` | 404 | The `assetId` does not exist in the indexer database. |
+| `Asset_NOT_LISTED` | 409 | The Asset is not currently listed for sale. |
+| `Asset_NOT_INSTANCE` | 409 | Only instances can be bought through the marketplace; seeds are not sellable. |
+| `Asset_NOT_TRANSFERABLE` | 409 | The Asset belongs to a collection with `rules.transferable: false`. |
+| `Asset_EXPIRED_LISTING` | 409 | The listing has expired (past its `expiresAt` timestamp). |
 | `CANNOT_BUY_OWN` | 409 | Buyer and seller are the same account. |
-| `SEED_HAS_INSTANCES` | 409 | The NFT is a seed with `distributed > 0`. Seeds lock to their owner once instances exist. |
+| `SEED_HAS_INSTANCES` | 409 | The Asset is a seed with `distributed > 0`. Seeds lock to their owner once instances exist. |
 | `INSUFFICIENT_BALANCE` | 409 | Pre-check failed: the buyer's liquid HIVE/HBD cannot cover the transfers. Cached responses are discarded on a 409 so a top-up + retry is re-evaluated against fresh state. |
 
 ### Client-shape errors
@@ -45,7 +45,7 @@ The `MultisigErrorCode` type (defined in `packages/protocol/src/types.ts`) repre
 |------|-------------|-------------|
 | `INVALID_TX_STRUCTURE` | 400 | Malformed Hive transaction: wrong op count/order, expiration outside `[MULTISIG_TX_MIN_EXPIRATION_MS, MULTISIG_TX_MAX_EXPIRATION_MS]` (90–120 s), missing fields. |
 | `INVALID_PROTOCOL_PAYLOAD` | 400 | `listingId`/`listTxId` don't match the active listing, or the `custom_json` payload is malformed. |
-| `INVALID_PAYMENT_SPLIT` | 400 | A transfer amount (or its memo) drifts from the node's computed split. Re-fetch `GET /api/payment-info/:nftId`. Memos MUST be `NFTLox BUY:{nftId}` / `NFTLox ROY:{nftId}` / `NFTLox FEE:{nftId}`. |
+| `INVALID_PAYMENT_SPLIT` | 400 | A transfer amount (or its memo) drifts from the node's computed split. Re-fetch `GET /api/payment-info/:assetId`. Memos MUST be `NFTLox BUY:{assetId}` / `NFTLox ROY:{assetId}` / `NFTLox FEE:{assetId}`. |
 | `NODE_ACCOUNT_MISMATCH` | 400 | `custom_json.required_auths` does not contain this node's account. |
 | `MISSING_BUYER_AUTH` | 400 | First transfer's `from` is absent, empty, or not a valid Hive username. |
 | `BUYER_SIGNATURE_MISSING` | 400 | The transaction POSTed to `/api/multisig/buy` does not yet carry the buyer's active signature. The buyer must sign **before** submitting. |
@@ -78,7 +78,7 @@ The `MultisigErrorCode` type (defined in `packages/protocol/src/types.ts`) repre
 |------|-------------|-------------|
 | `INTERNAL_ERROR` | 500 | Unexpected server-side error. Captured in logs — file an issue with the `tx_id` if persistent. |
 
-Additionally, the `GET /api/payment-info/:nftId` endpoint returns:
+Additionally, the `GET /api/payment-info/:assetId` endpoint returns:
 
 | Status | Meaning |
 |--------|---------|
@@ -96,10 +96,10 @@ Errors encountered during normal protocol operations (handler validation, Build 
 |---------------|-------|-----|
 | `Supply limit reached for seed <seedId>: N/N distributed` | All instances of a seed have been distributed; `bulk_distribute` rejects the entire operation (not just the exhausted seed). | Remove exhausted seeds from your distribution set. Monitor supply levels proactively. Optionally mint a new seed with additional supply. |
 | `Seed not found` | The `seedId` does not exist or has not been indexed yet. | Verify the `seedId` is correct. If recently minted, wait for the indexer to catch up. |
-| `Seed is burned` | The seed NFT was permanently destroyed via `burn`. | Remove the seed from your distribution set entirely. |
+| `Seed is burned` | The seed Asset was permanently destroyed via `burn`. | Remove the seed from your distribution set entirely. |
 | `Signer is not the owner of seed` | The account signing the `bulk_distribute` operation is not the current owner of the seed. Only the owner can distribute — collection creators no longer have implicit distribution rights. | Use the seed owner's posting key. If ownership was transferred, only the new owner can distribute. |
 | `Seed has N distributed instance(s) — ownership transfer blocked` | A seed with distributed instances cannot be transferred, listed, sold, or delegated. Following AtomicAssets pattern. | Seeds with `distributed > 0` are permanently locked to their owner. Only seeds with `distributed === 0` can be transferred. |
-| `Seeds cannot be delegated` | Seeds cannot be approved (`nft_approve`) or lent (`nft_lend`) regardless of distribution count. | Use instances for delegation, not seeds. |
+| `Seeds cannot be delegated` | Seeds cannot be approved (`asset_approve`) or lent (`asset_lend`) regardless of distribution count. | Use instances for delegation, not seeds. |
 | `maxSupply must be >= 1 for seeds` | Seeds require at least 1 max supply at mint time. | Set `maxSupply` to a positive integer when minting seeds. |
 | `Payload too large` | The `custom_json` payload exceeds `SAFE_PAYLOAD_MAX_BYTES` (7,372 bytes). | Split into multiple operations. For `bulk_distribute`, reduce the number of items per call. |
 | `Seed {seedId} insufficient supply: needs {N}, available {M}` | `bulk_distribute` requests more instances than the seed has remaining. | Reduce the requested quantity or mint a new seed with additional supply. |
@@ -109,9 +109,9 @@ Errors encountered during normal protocol operations (handler validation, Build 
 
 | Error Message | Cause | Fix |
 |---------------|-------|-----|
-| `NFT is burned: {nftId}` | The NFT was permanently destroyed via `burn`. | Remove the NFT from any active workflows. |
-| `NFT is lent and cannot be modified: {nftId}` | The NFT is currently lent to another user. | Return the NFT first via `nft_return`, then retry the operation. |
-| `NFT is listed and must be unlisted first: {nftId}` | The NFT is on the marketplace. Transfer, burn, lend, and approve operations are blocked while listed. | Call `unlist` first, then retry the operation. |
+| `Asset is burned: {assetId}` | The Asset was permanently destroyed via `burn`. | Remove the Asset from any active workflows. |
+| `Asset is lent and cannot be modified: {assetId}` | The Asset is currently lent to another user. | Return the Asset first via `asset_return`, then retry the operation. |
+| `Asset is listed and must be unlisted first: {assetId}` | The Asset is on the marketplace. Transfer, burn, lend, and approve operations are blocked while listed. | Call `unlist` first, then retry the operation. |
 
 ### Schema and Data Errors
 
@@ -124,11 +124,11 @@ Errors encountered during normal protocol operations (handler validation, Build 
 
 | Error Message | Cause | Fix |
 |---------------|-------|-----|
-| `NFT not listed` | Attempting to buy or unlist an NFT that is not currently on the marketplace. | Verify the NFT's status is `listed` before attempting the operation. |
-| `NFT not found` | The NFT ID does not exist. | Double-check the `nftId`. |
-| `NFT not listed or has no valid price` | The NFT exists but either is not listed or its listing price is invalid. | Fetch fresh payment info via `GET /api/payment-info/:nftId` before building a buy transaction. |
+| `Asset not listed` | Attempting to buy or unlist an Asset that is not currently on the marketplace. | Verify the Asset's status is `listed` before attempting the operation. |
+| `Asset not found` | The Asset ID does not exist. | Double-check the `assetId`. |
+| `Asset not listed or has no valid price` | The Asset exists but either is not listed or its listing price is invalid. | Fetch fresh payment info via `GET /api/payment-info/:assetId` before building a buy transaction. |
 | `listingId mismatch` / `listTxId mismatch` | The listing reference in the multisig request does not match the current listing (stale data). | Re-fetch payment info and rebuild the buy transaction with fresh listing data. |
-| `Invalid Hive amount format` | The HIVE transfer amount in the multisig request is malformed or does not have exactly 3 decimal places. | Use the exact amount format from `GET /api/payment-info/:nftId` (e.g., `"10.000 HIVE"`). |
+| `Invalid Hive amount format` | The HIVE transfer amount in the multisig request is malformed or does not have exactly 3 decimal places. | Use the exact amount format from `GET /api/payment-info/:assetId` (e.g., `"10.000 HIVE"`). |
 
 ### Builder validation errors
 
@@ -159,7 +159,7 @@ Never broadcast when `success: false` — `operations` is not present on the fai
 | `200` | Success |
 | `400` | Bad request (validation error, malformed tx, missing buyer signature) |
 | `404` | Resource not found |
-| `409` | Conflict (NFT locked on this node, state conflict, or cross-node reservation lost) |
+| `409` | Conflict (Asset locked on this node, state conflict, or cross-node reservation lost) |
 | `429` | Rate limited |
 | `500` | Internal server error |
 | `503` | Indexer syncing, multisig disabled, or node-last orchestration transient failure |
@@ -168,9 +168,9 @@ Never broadcast when `success: false` — `operations` is not present on the fai
 
 ## Retry Safety
 
-`bulk_distribute` is **idempotent** -- deterministic instance IDs mean duplicate broadcasts are silently skipped. It is safe to retry on network errors without risk of creating duplicate NFTs.
+`bulk_distribute` is **idempotent** -- deterministic instance IDs mean duplicate broadcasts are silently skipped. It is safe to retry on network errors without risk of creating duplicate Assets.
 
-For other operations, retry logic should verify the current state before re-broadcasting (e.g., check if the NFT is still listed before retrying a buy).
+For other operations, retry logic should verify the current state before re-broadcasting (e.g., check if the Asset is still listed before retrying a buy).
 
 ---
 
@@ -196,4 +196,4 @@ See [Marketplace — Why listings need a minimum TTL](../guides/marketplace.md#w
 | Error message | When | Fix |
 |---|---|---|
 | `Listing expiresAt is too soon for safe settlement: must be more than 240s after the listing block timestamp` | `handleList` rejected a `list` op whose `expiresAt` falls inside the settlement window. | Pick `expiresAt > Date.now() + MIN_LISTING_TTL_MS` before signing. |
-| `Listing has already expired` (`NFT_EXPIRED_LISTING`) | `/api/multisig/buy` refused to process the buy because `listing.expiresAt` is already in the past. | Ask the seller to relist with a longer `expiresAt`, or fetch a fresh `/api/payment-info/:nftId` if the listing was recently refreshed. |
+| `Listing has already expired` (`Asset_EXPIRED_LISTING`) | `/api/multisig/buy` refused to process the buy because `listing.expiresAt` is already in the past. | Ask the seller to relist with a longer `expiresAt`, or fetch a fresh `/api/payment-info/:assetId` if the listing was recently refreshed. |

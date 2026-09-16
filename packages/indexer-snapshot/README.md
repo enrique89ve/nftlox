@@ -107,7 +107,7 @@ Then:
 - `pg_dump -Fc` (custom format, parallelisable on restore).
 - Piped through `zstd -19 --long=27` (long-range mode, ~60–75% size reduction for Postgres dumps with heavy JSON).
 - Computes SHA-256 during the stream (no second pass).
-- Captures `(at_block, block_id, state_root, nft_count, collection_count, schema_version)` from the same txn that started the dump — coherent with the byte output.
+- Captures `(at_block, block_id, state_root, asset_count, collection_count, schema_version)` from the same txn that started the dump — coherent with the byte output.
 
 ### 4. Storage adapters
 
@@ -131,8 +131,8 @@ Each publish emits a signed JSON manifest:
 	"at_block": 106000000,
 	"block_id": "0650a3c0…",             // verifiable against Hive
 	"state_root": "sha256:…",             // matches /api/state-root at at_block
-	"schema_version": "0.11.0",
-	"nft_count": 152340,
+	"schema_version": "1.0.0",
+	"asset_count": 152340,
 	"collection_count": 1217,
 	"format": "pg_dump-custom+zstd",
 	"compression": { "algo": "zstd", "level": 19, "long": 27 },
@@ -179,7 +179,7 @@ A verifier that skips any of these steps opts into a weaker model — the publis
 
 ## Compression strategy
 
-Postgres dumps of NFTLox-shaped data (heavy JSONB in `nfts.data`, `nfts.schema_snapshot`, `collections.schema`, `invalid_operations.raw_payload`) compress very well with modern algorithms.
+Postgres dumps of NFTLox-shaped data (heavy JSONB in `assets.data`, `assets.schema_snapshot`, `collections.schema`, `invalid_operations.raw_payload`) compress very well with modern algorithms.
 
 | Algo | Level | Target size ratio | Decompress speed | When to use |
 |---|---|---|---|---|

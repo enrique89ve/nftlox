@@ -11,9 +11,9 @@ import {
 	type CreateCollectionInput,
 	type CollectionData,
 	type HiveOperation,
-	type ImportedNFT,
+	type ImportedAsset,
 	type ProtocolPayload,
-	type SeedNFTWithArtId,
+	type SeedAssetWithArtId,
 } from "nftlox-sdk";
 
 // ============ TYPES ============
@@ -53,7 +53,7 @@ function buildCollectionInput(
 		maxInstances: 0,
 		metadata: {
 			description: options?.description || `${name} - NFTLox Protocol Collection`,
-			image: options?.image || "https://placehold.co/400x400?text=NFT",
+			image: options?.image || "https://placehold.co/400x400?text=Asset",
 		},
 		rules: {
 			transferable: true,
@@ -154,17 +154,17 @@ export function validateOperationsVersion(
 // ============ SAMPLE DATA LOADER ============
 
 /**
- * Carga y parsea un archivo JSON de NFTs de muestra.
+ * Carga y parsea un archivo JSON de Assets de muestra.
  */
-export async function loadSampleNFTs(filePath: string): Promise<SeedNFTWithArtId[]> {
+export async function loadSampleAssets(filePath: string): Promise<SeedAssetWithArtId[]> {
 	const file = Bun.file(filePath);
 	const raw = await file.json();
 
 	// Support unified format { collection, seeds } or plain array
 	const data = Array.isArray(raw) ? raw : raw.seeds;
 
-	return data.map((item: ImportedNFT & { maxSupply?: number }) => ({
-		nftId: item.nftId,
+	return data.map((item: ImportedAsset & { maxSupply?: number }) => ({
+		assetId: item.assetId,
 		name: item.name,
 		brief: item.brief,
 		imageUrl: item.imageUrl,
@@ -178,14 +178,14 @@ export async function loadSampleNFTs(filePath: string): Promise<SeedNFTWithArtId
  * Genera un preview de las operaciones sin ejecutarlas.
  */
 export function previewBatchMint(
-	nfts: SeedNFTWithArtId[],
+	assets: SeedAssetWithArtId[],
 	collectionName: string,
 ): {
 	collection: { name: string; symbol: string; totalPotential: number };
 	seeds: Array<{ name: string; maxSupply: number }>;
 	summary: { totalSeeds: number; totalPotentialInstances: number };
 } {
-	const totalPotential = nfts.reduce((sum, nft) => sum + nft.maxSupply, 0);
+	const totalPotential = assets.reduce((sum, asset) => sum + asset.maxSupply, 0);
 	const symbol = collectionName.slice(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 	return {
@@ -194,12 +194,12 @@ export function previewBatchMint(
 			symbol: symbol.length >= 3 ? symbol : symbol.padEnd(3, "X"),
 			totalPotential,
 		},
-		seeds: nfts.map((nft) => ({
-			name: nft.name,
-			maxSupply: nft.maxSupply,
+		seeds: assets.map((asset) => ({
+			name: asset.name,
+			maxSupply: asset.maxSupply,
 		})),
 		summary: {
-			totalSeeds: nfts.length,
+			totalSeeds: assets.length,
 			totalPotentialInstances: totalPotential,
 		},
 	};
@@ -224,34 +224,34 @@ export interface DeterministicBatchMintResult {
  * Same collectionId + artId always produces the same seedId.
  */
 export async function createDeterministicSeedMintOperations(
-	nfts: SeedNFTWithArtId[],
+	assets: SeedAssetWithArtId[],
 	collectionId: string,
 	owner: string,
 ): Promise<DeterministicBatchMintResult> {
 	const seeds: DeterministicBatchMintResult["seeds"] = [];
 
-	for (let i = 0; i < nfts.length; i++) {
-		const nft = nfts[i]!;
+	for (let i = 0; i < assets.length; i++) {
+		const asset = assets[i]!;
 		const result = await buildSeed({
-			artId: nft.artId,
+			artId: asset.artId,
 			collectionId,
 			signer: owner,
 			owner,
 			edition: i + 1,
-			name: nft.name,
-			imageUrl: nft.imageUrl,
-			maxSupply: nft.maxSupply,
-			...(nft.brief !== undefined && { brief: nft.brief }),
+			name: asset.name,
+			imageUrl: asset.imageUrl,
+			maxSupply: asset.maxSupply,
+			...(asset.brief !== undefined && { brief: asset.brief }),
 		});
 		if (!result.success) {
-			throw new Error(`Seed build failed for artId=${nft.artId}: ${result.errors.map((e) => e.message).join(", ")}`);
+			throw new Error(`Seed build failed for artId=${asset.artId}: ${result.errors.map((e) => e.message).join(", ")}`);
 		}
 
 		seeds.push({
-			artId: nft.artId,
+			artId: asset.artId,
 			seedId: result.generatedIds!.seedId!,
-			name: nft.name,
-			maxSupply: nft.maxSupply,
+			name: asset.name,
+			maxSupply: asset.maxSupply,
 			operation: findCustomJsonOperation(result.operations),
 		});
 	}
@@ -264,16 +264,16 @@ export async function createDeterministicSeedMintOperations(
 }
 
 /**
- * Loads and parses a JSON file of NFTs with artId.
+ * Loads and parses a JSON file of Assets with artId.
  */
-export async function loadSampleNFTsWithArtId(filePath: string): Promise<SeedNFTWithArtId[]> {
+export async function loadSampleAssetsWithArtId(filePath: string): Promise<SeedAssetWithArtId[]> {
 	const file = Bun.file(filePath);
 	const raw = await file.json();
 
 	// Support unified format { collection, seeds } or plain array
 	const data = Array.isArray(raw) ? raw : raw.seeds;
 
-	return data.map((item: ImportedNFT & { artId?: string; maxSupply?: number }) => ({
+	return data.map((item: ImportedAsset & { artId?: string; maxSupply?: number }) => ({
 		artId: item.artId || "",
 		name: item.name,
 		brief: item.brief,
@@ -286,7 +286,7 @@ export async function loadSampleNFTsWithArtId(filePath: string): Promise<SeedNFT
  * Generates a preview with artId information.
  */
 export async function previewBatchMintWithArtId(
-	nfts: SeedNFTWithArtId[],
+	assets: SeedAssetWithArtId[],
 	collectionName: string,
 	creator: string,
 	symbol: string,
@@ -295,7 +295,7 @@ export async function previewBatchMintWithArtId(
 	seeds: Array<{ artId: string; seedId: string; name: string; maxSupply: number }>;
 	summary: { totalSeeds: number; totalPotentialInstances: number };
 }> {
-	const totalPotential = nfts.reduce((sum, nft) => sum + nft.maxSupply, 0);
+	const totalPotential = assets.reduce((sum, asset) => sum + asset.maxSupply, 0);
 	const normalizedSymbol = symbol.toUpperCase().replace(/[^A-Z0-9]/g, "");
 	const finalSymbol = normalizedSymbol.length >= 3 ? normalizedSymbol : normalizedSymbol.padEnd(3, "X");
 
@@ -308,14 +308,14 @@ export async function previewBatchMintWithArtId(
 			totalPotential,
 			collectionId,
 		},
-		seeds: await Promise.all(nfts.map(async (nft) => ({
-			artId: nft.artId,
-			seedId: await generateDeterministicSeedId(collectionId, nft.artId),
-			name: nft.name,
-			maxSupply: nft.maxSupply,
+		seeds: await Promise.all(assets.map(async (asset) => ({
+			artId: asset.artId,
+			seedId: await generateDeterministicSeedId(collectionId, asset.artId),
+			name: asset.name,
+			maxSupply: asset.maxSupply,
 		}))),
 		summary: {
-			totalSeeds: nfts.length,
+			totalSeeds: assets.length,
 			totalPotentialInstances: totalPotential,
 		},
 	};

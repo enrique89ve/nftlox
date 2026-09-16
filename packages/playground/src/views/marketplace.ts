@@ -57,9 +57,9 @@ interface HiveKeychain {
 }
 
 interface MarketplaceWindow extends Window {
-	loadNftDetail?: (nftId: string) => void;
+	loadAssetDetail?: (assetId: string) => void;
 	loadListings?: () => Promise<void>;
-	buyFromMarketplace?: (nftId: string) => Promise<void>;
+	buyFromMarketplace?: (assetId: string) => Promise<void>;
 	hive_keychain?: HiveKeychain;
 }
 
@@ -141,27 +141,27 @@ function renderListings() {
 	}
 
 	const currentUser = getConnectedUser();
-	container.innerHTML = listings.map((nft) => {
-		const owner = getListingOwner(nft);
+	container.innerHTML = listings.map((asset) => {
+		const owner = getListingOwner(asset);
 		const isOwn = Boolean(currentUser && currentUser === owner.toLowerCase());
-		const price = getListingPrice(nft);
-		const currency = getListingCurrency(nft);
-		const collectionId = getListingCollectionId(nft);
+		const price = getListingPrice(asset);
+		const currency = getListingCurrency(asset);
+		const collectionId = getListingCollectionId(asset);
 
 		const actionHtml = getListingActionHtml({
 			currentUser,
 			isOwn,
-			nftId: nft.id,
+			assetId: asset.id,
 		});
 
 		return `
-			<article class="nft-card js-listing-card" data-id="${escapeHtml(nft.id)}">
-				<img class="nft-image" src="${escapeHtml(getListingImage(nft))}" onerror="this.src='${PLACEHOLDER_SM}'" alt="${escapeHtml(getListingName(nft))}">
-				<div class="nft-card-body">
-					<div class="nft-name">${escapeHtml(getListingName(nft))}</div>
-					<div class="nft-owner">@${escapeHtml(owner || "unknown")}</div>
+			<article class="asset-card js-listing-card" data-id="${escapeHtml(asset.id)}">
+				<img class="asset-image" src="${escapeHtml(getListingImage(asset))}" onerror="this.src='${PLACEHOLDER_SM}'" alt="${escapeHtml(getListingName(asset))}">
+				<div class="asset-card-body">
+					<div class="asset-name">${escapeHtml(getListingName(asset))}</div>
+					<div class="asset-owner">@${escapeHtml(owner || "unknown")}</div>
 					<div class="collection-meta" style="margin-top: 6px;">${escapeHtml(collectionId || "No collection")}</div>
-					<div class="nft-card-footer">
+					<div class="asset-card-footer">
 						<div class="marketplace-price">
 							<span class="marketplace-price-label">Price</span>
 							<span class="marketplace-price-value">${escapeHtml(price)} ${escapeHtml(currency)}</span>
@@ -179,7 +179,7 @@ function renderListings() {
 function getListingActionHtml(input: {
 	currentUser: string | null;
 	isOwn: boolean;
-	nftId: string;
+	assetId: string;
 }): string {
 	if (!input.currentUser) {
 		return '<span style="color: var(--text-dim); font-size: 12px;">Connect to buy</span>';
@@ -189,14 +189,14 @@ function getListingActionHtml(input: {
 		return '<span style="color: var(--text-dim); font-size: 12px;">Your listing</span>';
 	}
 
-	return `<button class="btn btn-primary btn-sm js-buy-listing" data-id="${escapeHtml(input.nftId)}">Buy now</button>`;
+	return `<button class="btn btn-primary btn-sm js-buy-listing" data-id="${escapeHtml(input.assetId)}">Buy now</button>`;
 }
 
 function bindListingEvents(container: HTMLElement) {
 	container.querySelectorAll<HTMLElement>(".js-listing-card").forEach((card) => {
 		card.addEventListener("click", () => {
 			const id = card.dataset.id;
-			if (id) (window as MarketplaceWindow).loadNftDetail?.(id);
+			if (id) (window as MarketplaceWindow).loadAssetDetail?.(id);
 		});
 	});
 
@@ -257,7 +257,7 @@ function getListingSearchText(listing: MarketplaceListing): string {
 }
 
 function getListingName(listing: MarketplaceListing): string {
-	return listing.name || "Untitled NFT";
+	return listing.name || "Untitled Asset";
 }
 
 function getListingOwner(listing: MarketplaceListing): string {
@@ -340,7 +340,7 @@ function clearListingFilters() {
 	void loadListings();
 }
 
-async function buyFromMarketplace(nftId: string) {
+async function buyFromMarketplace(assetId: string) {
 	const user = getConnectedUser();
 	if (!user) {
 		log("Connect wallet first", "error");
@@ -353,13 +353,13 @@ async function buyFromMarketplace(nftId: string) {
 		return;
 	}
 
-	log(`Preparing buy tx for ${nftId}...`);
+	log(`Preparing buy tx for ${assetId}...`);
 
 	try {
 		const res = await fetch("/api/marketplace/buy", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ buyer: user, nftId }),
+			body: JSON.stringify({ buyer: user, assetId }),
 		});
 		if (!res.ok && res.status === 404) {
 			log("Buy endpoint not available", "error");
@@ -398,7 +398,7 @@ async function buyFromMarketplace(nftId: string) {
 
 			transaction.signatures = [buyerSig];
 
-			log("Reserving NFT on-chain via buy_commitment...");
+			log("Reserving Asset on-chain via buy_commitment...");
 			let multisigData: BuyMultisigResponse;
 			try {
 				multisigData = await requestBuyMultisig(
@@ -418,7 +418,7 @@ async function buyFromMarketplace(nftId: string) {
 				const retry = multisigData.retryAfterMs
 					? ` (retry in ${Math.ceil(multisigData.retryAfterMs / 1000)}s)` : "";
 				if (multisigData.code === "CROSS_NODE_RESERVATION") {
-					log(`Another buyer reserved this NFT first${retry}. Try again in a moment.`, "error");
+					log(`Another buyer reserved this Asset first${retry}. Try again in a moment.`, "error");
 				} else {
 					log(`Buy failed [${multisigData.code}]: ${multisigData.message}${retry}`, "error");
 				}

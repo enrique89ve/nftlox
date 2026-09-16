@@ -1,6 +1,6 @@
 # Mutable Data
 
-How to update the `mutableData` of a live NFT instance: level-ups, XP gain, win counts, in-game state. Works for both the owner (`set_data`) and an approved game server (`set_data_from`).
+How to update the `mutableData` of a live Asset instance: level-ups, XP gain, win counts, in-game state. Works for both the owner (`set_data`) and an approved game server (`set_data_from`).
 
 ## The schema contract
 
@@ -18,9 +18,9 @@ const schema = createSchemaBuilder()
 	.build();
 ```
 
-## Owner updates their own NFT — `buildSetData`
+## Owner updates their own Asset — `buildSetData`
 
-Uses posting auth. `nftDna` is required — it binds the update to the exact NFT state and prevents cross-NFT replays. Read it from `client.getNft(nftId).nft_dna`.
+Uses posting auth. `assetDna` is required — it binds the update to the exact Asset state and prevents cross-Asset replays. Read it from `client.getAsset(assetId).asset_dna`.
 
 ```typescript
 import { buildSetData, createIndexerClient } from "nftlox-sdk";
@@ -29,13 +29,13 @@ import hive from "hive-tx";
 const client = createIndexerClient(process.env.INDEXER!);
 hive.config.set("node", "https://api.hive.blog");
 
-async function levelUp(nftId: string, newXp: number, newLevel: number) {
-	const nft = await client.getNft(nftId);
+async function levelUp(assetId: string, newXp: number, newLevel: number) {
+	const asset = await client.getAsset(assetId);
 
 	const result = buildSetData({
-		owner: nft.owner,
-		nftId,
-		nftDna: nft.nft_dna!,
+		owner: asset.owner,
+		assetId,
+		assetDna: asset.asset_dna!,
 		mutableData: { xp: newXp, level: newLevel },
 	});
 	if (!result.success) throw new Error(JSON.stringify(result.errors));
@@ -58,16 +58,16 @@ A game server should never ask players for their posting keys. Instead, the **co
 ```typescript
 import { buildSetDataFrom } from "nftlox-sdk";
 
-async function recordMatchResult(nftId: string, win: boolean) {
-	const nft = await client.getNft(nftId);
+async function recordMatchResult(assetId: string, win: boolean) {
+	const asset = await client.getAsset(assetId);
 
 	const result = buildSetDataFrom({
 		operator: "ragnarok-server",
-		nftId,
-		nftDna: nft.nft_dna!,
+		assetId,
+		assetDna: asset.asset_dna!,
 		mutableData: {
-			xp: (nft.mutable_data?.xp as number ?? 0) + (win ? 100 : 25),
-			wins: (nft.mutable_data?.wins as number ?? 0) + (win ? 1 : 0),
+			xp: (asset.mutable_data?.xp as number ?? 0) + (win ? 100 : 25),
+			wins: (asset.mutable_data?.wins as number ?? 0) + (win ? 1 : 0),
 		},
 	});
 	if (!result.success) throw new Error(JSON.stringify(result.errors));
@@ -83,12 +83,12 @@ For the one-time approval setup (`buildDataOperatorApprove`) and the full securi
 
 ## Race conditions & read-modify-write
 
-Two concurrent updates to the same NFT land in block order. If both read `xp = 100` and both write `xp + 100`, the second commit wins — you lose the first increment. Two options:
+Two concurrent updates to the same Asset land in block order. If both read `xp = 100` and both write `xp + 100`, the second commit wins — you lose the first increment. Two options:
 
 1. **Use absolute values from the source of truth.** If the server owns the XP state in its own database, broadcast the new absolute value. On-chain state is the broadcast layer; the server is the authority.
-2. **Guard with `nftDna`.** `set_data` rejects writes whose `nftDna` no longer matches the current one. This is not an atomic CAS, but it catches stale reads.
+2. **Guard with `assetDna`.** `set_data` rejects writes whose `assetDna` no longer matches the current one. This is not an atomic CAS, but it catches stale reads.
 
-`mutableData` is for state that must be publicly verifiable and portable across games. For per-session gameplay state (unit positions, cooldowns), keep the data off-chain and only write to NFTs at meaningful checkpoints.
+`mutableData` is for state that must be publicly verifiable and portable across games. For per-session gameplay state (unit positions, cooldowns), keep the data off-chain and only write to Assets at meaningful checkpoints.
 
 ## Size budget
 

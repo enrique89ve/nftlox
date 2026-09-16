@@ -322,7 +322,7 @@ const requireSeedTxId = (seedId: string): string => {
 // snapshot shape. The `reserved` argument is what YOUR backend has reserved
 // internally — there is no on-chain reservation action.
 const fetchSeed = async (seedId: string) => {
-	const res = await fetch(`${indexerBaseUrl}/nfts/${seedId}`);
+	const res = await fetch(`${indexerBaseUrl}/assets/${seedId}`);
 	if (!res.ok) throw new Error(`Seed ${seedId} not found on indexer`);
 	return res.json() as Promise<{ id: string; max_supply: number; distributed: number; tx_id: string }>;
 };

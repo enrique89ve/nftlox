@@ -54,8 +54,8 @@ The following actions carry **no monetary fee** at the protocol layer (RC still 
 | Core | `mint`, `transfer`, `bulk_distribute`, `set_data`, `extend_schema`, `archive_collection` |
 | Node directory | `node_register`, `node_heartbeat`, `node_state_checkpoint` |
 | Marketplace | `list`, `unlist`, `buy_commitment` |
-| Allowances | `nft_approve`, `nft_approve_all`, `nft_transfer_from`, `data_operator_approve`, `set_data_from` |
-| Lending | `nft_lend`, `nft_return` |
+| Allowances | `asset_approve`, `asset_approve_all`, `asset_transfer_from`, `data_operator_approve`, `set_data_from` |
+| Lending | `asset_lend`, `asset_return` |
 
 The authoritative registry is [`payment-requirements.ts`](../../../protocol/src/payment-requirements.ts) — any action mapped to `{ kind: "none" }` is free.
 
@@ -114,9 +114,9 @@ Each transfer in a `buy` carries a strictly-formatted memo so the indexer and th
 
 | Transfer | Memo | Constant |
 |---|---|---|
-| Seller payment | `NFTLox BUY:{nftId}` | `MEMO_PREFIX_BUY` |
-| Royalty | `NFTLox ROY:{nftId}` | `MEMO_PREFIX_ROYALTY` |
-| Protocol fee | `NFTLox FEE:{nftId}` | `MEMO_PREFIX_FEE` |
+| Seller payment | `NFTLox BUY:{assetId}` | `MEMO_PREFIX_BUY` |
+| Royalty | `NFTLox ROY:{assetId}` | `MEMO_PREFIX_ROYALTY` |
+| Protocol fee | `NFTLox FEE:{assetId}` | `MEMO_PREFIX_FEE` |
 
 ### Self-collapse rules
 
@@ -130,7 +130,7 @@ The minimum a `buy` can produce is **1 transfer + 1 custom_json** (2 ops); the m
 
 ### Why the buyer trusts the math
 
-`buildBuy` does not recompute listing economics, but it rejects internally inconsistent splits whose transfer legs do not add up to `totalPrice`. The settlement node and the indexer still recompute the canonical split independently against `nft.listing` and reject any drift with `INVALID_PAYMENT_SPLIT`. Always read the canonical split from the indexer (`getNftBuyInfo`) and forward it verbatim.
+`buildBuy` does not recompute listing economics, but it rejects internally inconsistent splits whose transfer legs do not add up to `totalPrice`. The settlement node and the indexer still recompute the canonical split independently against `asset.listing` and reject any drift with `INVALID_PAYMENT_SPLIT`. Always read the canonical split from the indexer (`getAssetBuyInfo`) and forward it verbatim.
 
 ## 5. Determinism — what is **not** in the fee schedule
 

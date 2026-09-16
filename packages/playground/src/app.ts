@@ -3,7 +3,7 @@ import {
   buildBulkDistribute,
   PROTOCOL_ID,
   PROTOCOL_COLLECTION_FEE_HBD,
-  type SeedNFTWithArtId,
+  type SeedAssetWithArtId,
   type HiveOperation,
   ACTION_AUTH_LEVEL,
 } from "nftlox-sdk";
@@ -32,7 +32,7 @@ import {
 
 let connectedUser: string | null = null;
 let _currentStep = 1;
-let uploadedSeeds: SeedNFTWithArtId[] = [];
+let uploadedSeeds: SeedAssetWithArtId[] = [];
 let previewData: any = null;
 let broadcastPhase = 0;
 let validationPassed = false;
@@ -129,20 +129,20 @@ type CollectionsResponse = {
   collections: CollectionSummary[];
 }
 
-type UserNftCounts = {
+type UserAssetCounts = {
   total: number;
   seeds: number;
   instances: number;
 }
 
-type NftCardData = {
+type AssetCardData = {
   id: string;
   collectionId?: string | null;
   edition?: string | number | null;
   owner?: string | null;
   name?: string | null;
   imageUrl?: string | null;
-  nftDna?: string | null;
+  assetDna?: string | null;
   distributed?: number | null;
   maxSupply?: number | null;
   instanceNumber?: number | null;
@@ -153,22 +153,22 @@ type NftCardData = {
   isSeed?: boolean;
 }
 
-type UserNftsResponse = {
-  counts?: Partial<UserNftCounts>;
-  nfts?: NftCardData[];
+type UserAssetsResponse = {
+  counts?: Partial<UserAssetCounts>;
+  assets?: AssetCardData[];
 }
 
-type UserNftsResult = {
-  counts: UserNftCounts;
-  nfts: NftCardData[];
+type UserAssetsResult = {
+  counts: UserAssetCounts;
+  assets: AssetCardData[];
 }
 
-type NftDetailListingPrice = {
+type AssetDetailListingPrice = {
   amount: string;
   currency: string | null;
 }
 
-type NftDetailNft = {
+type AssetDetailAsset = {
   id: string;
   name: string;
   imageUrl: string | null;
@@ -176,13 +176,13 @@ type NftDetailNft = {
   collectionId: string;
   edition: number;
   originDna: string | null;
-  nftDna: string | null;
+  assetDna: string | null;
   mintedBy: string | null;
   mintedAt: string | null;
   burned: boolean;
   listed: boolean;
   lent: boolean;
-  listingPrice?: NftDetailListingPrice;
+  listingPrice?: AssetDetailListingPrice;
   isSeed: boolean;
   maxSupply: number;
   distributed: number;
@@ -193,27 +193,27 @@ type NftDetailNft = {
   txId: string;
 }
 
-type NftDetailOriginal = {
+type AssetDetailOriginal = {
   id: string;
   name: string;
   imageUrl: string | null;
   owner: string;
 }
 
-type NftDetailInstance = {
+type AssetDetailInstance = {
   id: string;
   name: string;
   owner: string;
   instanceNumber: number | null;
 }
 
-type NftDetailResponse = {
+type AssetDetailResponse = {
   error?: string;
-  nft?: NftDetailNft;
-  original?: NftDetailOriginal | null;
+  asset?: AssetDetailAsset;
+  original?: AssetDetailOriginal | null;
   instances?: {
     count: number;
-    items: NftDetailInstance[];
+    items: AssetDetailInstance[];
   };
 }
 
@@ -279,15 +279,15 @@ async function fetchJsonOrThrow<T>(
   return data as T;
 }
 
-function normalizeNftCounts(data: UserNftsResponse): UserNftCounts {
-  const nfts = data.nfts ?? [];
+function normalizeAssetCounts(data: UserAssetsResponse): UserAssetCounts {
+  const assets = data.assets ?? [];
   return {
-    total: data.counts?.total ?? nfts.length,
+    total: data.counts?.total ?? assets.length,
     seeds:
-      data.counts?.seeds ?? nfts.filter((nft) => nft.isSeed === true).length,
+      data.counts?.seeds ?? assets.filter((asset) => asset.isSeed === true).length,
     instances:
       data.counts?.instances ??
-      nfts.filter((nft) => nft.isSeed !== true).length,
+      assets.filter((asset) => asset.isSeed !== true).length,
   };
 }
 
@@ -304,38 +304,38 @@ function formatDisplayDate(value: string | null | undefined): string {
   });
 }
 
-async function getNFTsByOwner(
+async function getAssetsByOwner(
   owner: string,
   limit = 200,
   offset = 0,
-): Promise<UserNftsResult> {
-  const firstData = await fetchJsonOrThrow<UserNftsResponse>(
+): Promise<UserAssetsResult> {
+  const firstData = await fetchJsonOrThrow<UserAssetsResponse>(
     `/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${offset}`,
   );
-  const counts = normalizeNftCounts(firstData);
-  const allNfts: NftCardData[] = firstData.nfts ?? [];
+  const counts = normalizeAssetCounts(firstData);
+  const allAssets: AssetCardData[] = firstData.assets ?? [];
 
   if (counts.total > limit) {
     const totalPages = Math.ceil(counts.total / limit);
     const pages = await Promise.all(
       Array.from({ length: totalPages - 1 }, async (_, index) => {
         const page = index + 1;
-        const data = await fetchJsonOrThrow<UserNftsResponse>(
+        const data = await fetchJsonOrThrow<UserAssetsResponse>(
           `/api/user/${encodeURIComponent(owner)}?limit=${limit}&offset=${page * limit}`,
         );
-        return data.nfts ?? [];
+        return data.assets ?? [];
       }),
     );
-    for (const nfts of pages) allNfts.push(...nfts);
+    for (const assets of pages) allAssets.push(...assets);
   }
 
-  return { nfts: allNfts, counts };
+  return { assets: allAssets, counts };
 }
 
-async function validateTransfer(nftId: string, currentUser: string) {
+async function validateTransfer(assetId: string, currentUser: string) {
   try {
     const response = await fetch(
-      `/api/nft/${encodeURIComponent(nftId)}/details`,
+      `/api/assets/${encodeURIComponent(assetId)}/details`,
     );
     const data = await response.json();
 
@@ -343,28 +343,28 @@ async function validateTransfer(nftId: string, currentUser: string) {
       return { valid: false as const, error: data.error };
     }
 
-    const nft = data.nft;
+    const asset = data.asset;
 
-    if (nft.burned) {
-      return { valid: false as const, error: "NFT has been burned" };
+    if (asset.burned) {
+      return { valid: false as const, error: "Asset has been burned" };
     }
 
-    if (nft.owner.toLowerCase() !== currentUser.toLowerCase()) {
+    if (asset.owner.toLowerCase() !== currentUser.toLowerCase()) {
       return {
         valid: false as const,
-        error: `You are not the owner (@${nft.owner})`,
+        error: `You are not the owner (@${asset.owner})`,
       };
     }
 
-    if (nft.listed) {
+    if (asset.listed) {
       return {
         valid: true as const,
-        warning: "Warning: Transfer will unlist NFT from marketplace",
-        nft,
+        warning: "Warning: Transfer will unlist Asset from marketplace",
+        asset,
       };
     }
 
-    return { valid: true as const, nft };
+    return { valid: true as const, asset };
   } catch (e) {
     return { valid: false as const, error: String(e) };
   }
@@ -374,7 +374,7 @@ async function validateTransfer(nftId: string, currentUser: string) {
 
 let navigationStack: string[] = ["collections"];
 let currentCollectionId: string | null = null;
-let currentNftId: string | null = null;
+let currentAssetId: string | null = null;
 let currentSeedGroupId: string | null = null;
 
 function navigateTo(pageId: string) {
@@ -713,9 +713,9 @@ async function loadCollectionDetail(collectionId: string) {
   updateCollectionArchiveActions(null);
 
   try {
-    const [collection, nftsData] = await Promise.all([
-      fetchJsonOrThrow<any>(`/api/collection/${collectionId}`),
-      fetchJsonOrThrow<any>(`/api/collection/${collectionId}/nfts`),
+    const [collection, assetsData] = await Promise.all([
+      fetchJsonOrThrow<any>(`/api/collections/${collectionId}`),
+      fetchJsonOrThrow<any>(`/api/collections/${collectionId}/assets`),
     ]);
 
     // Update header
@@ -741,29 +741,29 @@ async function loadCollectionDetail(collectionId: string) {
     const seedsCount = $("detail-seeds-count");
     const instancesCount = $("detail-instances-count");
     const totalCount = $("detail-total-count");
-    if (seedsCount) seedsCount.textContent = String(nftsData.seeds?.count || 0);
+    if (seedsCount) seedsCount.textContent = String(assetsData.seeds?.count || 0);
     if (instancesCount)
-      instancesCount.textContent = String(nftsData.instances?.count || 0);
-    if (totalCount) totalCount.textContent = String(nftsData.totalCount || 0);
+      instancesCount.textContent = String(assetsData.instances?.count || 0);
+    if (totalCount) totalCount.textContent = String(assetsData.totalCount || 0);
 
     // Render seeds
     if (seedsContainer) {
-      const seeds = nftsData.seeds?.items || [];
+      const seeds = assetsData.seeds?.items || [];
       if (seeds.length === 0) {
         seedsContainer.innerHTML =
           '<div class="empty-state"><p class="empty-state-text">No seeds in this collection</p></div>';
       } else {
         seedsContainer.innerHTML = seeds
           .map(
-            (nft: any) => `
-					<div class="nft-card" data-id="${escapeHtml(nft.id)}">
-						<img class="nft-image" src="${escapeHtml(nft.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
-						<div class="nft-card-body">
-							<div class="nft-name">${escapeHtml(nft.name)}</div>
-							<div class="nft-owner">@${escapeHtml(nft.owner)}</div>
-							<div class="nft-meta">
-								<span class="nft-meta-supply">${nft.distributed || 0}/${nft.maxSupply}</span>
-								<span class="nft-type-badge seed">SEED</span>
+            (asset: any) => `
+					<div class="asset-card" data-id="${escapeHtml(asset.id)}">
+						<img class="asset-image" src="${escapeHtml(asset.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
+						<div class="asset-card-body">
+							<div class="asset-name">${escapeHtml(asset.name)}</div>
+							<div class="asset-owner">@${escapeHtml(asset.owner)}</div>
+							<div class="asset-meta">
+								<span class="asset-meta-supply">${asset.distributed || 0}/${asset.maxSupply}</span>
+								<span class="asset-type-badge seed">SEED</span>
 							</div>
 						</div>
 					</div>
@@ -772,10 +772,10 @@ async function loadCollectionDetail(collectionId: string) {
           .join("");
 
         // Add click handlers
-        seedsContainer.querySelectorAll(".nft-card").forEach((card) => {
+        seedsContainer.querySelectorAll(".asset-card").forEach((card) => {
           card.addEventListener("click", () => {
             const id = (card as HTMLElement).dataset.id;
-            if (id) loadNftDetail(id);
+            if (id) loadAssetDetail(id);
           });
         });
       }
@@ -783,22 +783,22 @@ async function loadCollectionDetail(collectionId: string) {
 
     // Render instances
     if (instancesContainer) {
-      const instances = nftsData.instances?.items || [];
+      const instances = assetsData.instances?.items || [];
       if (instances.length === 0) {
         instancesContainer.innerHTML =
           '<div class="empty-state"><p class="empty-state-text">No instances yet</p></div>';
       } else {
         instancesContainer.innerHTML = instances
           .map(
-            (nft: any) => `
-					<div class="nft-card" data-id="${escapeHtml(nft.id)}">
-						<img class="nft-image" src="${escapeHtml(nft.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
-						<div class="nft-card-body">
-							<div class="nft-name">${escapeHtml(nft.name)}</div>
-							<div class="nft-owner">@${escapeHtml(nft.owner)}</div>
-							<div class="nft-meta">
-								<span class="nft-meta-supply">#${nft.instanceNumber || 1}</span>
-								<span class="nft-type-badge instance">INSTANCE</span>
+            (asset: any) => `
+					<div class="asset-card" data-id="${escapeHtml(asset.id)}">
+						<img class="asset-image" src="${escapeHtml(asset.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
+						<div class="asset-card-body">
+							<div class="asset-name">${escapeHtml(asset.name)}</div>
+							<div class="asset-owner">@${escapeHtml(asset.owner)}</div>
+							<div class="asset-meta">
+								<span class="asset-meta-supply">#${asset.instanceNumber || 1}</span>
+								<span class="asset-type-badge instance">INSTANCE</span>
 							</div>
 						</div>
 					</div>
@@ -807,10 +807,10 @@ async function loadCollectionDetail(collectionId: string) {
           .join("");
 
         // Add click handlers
-        instancesContainer.querySelectorAll(".nft-card").forEach((card) => {
+        instancesContainer.querySelectorAll(".asset-card").forEach((card) => {
           card.addEventListener("click", () => {
             const id = (card as HTMLElement).dataset.id;
-            if (id) loadNftDetail(id);
+            if (id) loadAssetDetail(id);
           });
         });
       }
@@ -899,101 +899,101 @@ async function archiveCurrentCollection() {
 
 (window as any).archiveCurrentCollection = archiveCurrentCollection;
 
-// ============ NFT DETAIL ============
+// ============ Asset DETAIL ============
 
-async function loadNftDetail(nftId: string) {
-  currentNftId = nftId;
-  navigationStack.push("nft-detail");
-  navigateTo("nft-detail");
+async function loadAssetDetail(assetId: string) {
+  currentAssetId = assetId;
+  navigationStack.push("asset-detail");
+  navigateTo("asset-detail");
 
   // Reset sections
   const parentSection = $("parent-section");
   const instancesSection = $("instances-section");
   const seedInfoSection = $("seed-info-section");
-  const burnSection = $("nft-burn-section");
-  const setDataSection = $("nft-set-data-section");
+  const burnSection = $("asset-burn-section");
+  const setDataSection = $("asset-set-data-section");
   if (parentSection) parentSection.style.display = "none";
   if (instancesSection) instancesSection.style.display = "none";
   if (seedInfoSection) seedInfoSection.style.display = "none";
   if (burnSection) burnSection.style.display = "none";
   if (setDataSection) setDataSection.style.display = "none";
-  const lendForm = $("nft-action-lend-form");
-  const returnForm = $("nft-action-return-form");
+  const lendForm = $("asset-action-lend-form");
+  const returnForm = $("asset-action-return-form");
   if (lendForm) lendForm.style.display = "none";
   if (returnForm) returnForm.style.display = "none";
 
   try {
-    const data = await fetchJsonOrThrow<NftDetailResponse>(
-      `/api/nft/${encodeURIComponent(nftId)}/details`,
+    const data = await fetchJsonOrThrow<AssetDetailResponse>(
+      `/api/assets/${encodeURIComponent(assetId)}/details`,
     );
 
-    if (data.error || !data.nft) {
-      log(`NFT not found: ${data.error}`, "error");
+    if (data.error || !data.asset) {
+      log(`Asset not found: ${data.error}`, "error");
       return;
     }
 
-    const nft = data.nft;
+    const asset = data.asset;
 
     // Update basic info
-    const imageEl = $("nft-detail-image") as HTMLImageElement;
-    const nameEl = $("nft-detail-name");
-    const ownerEl = $("nft-detail-owner");
+    const imageEl = $("asset-detail-image") as HTMLImageElement;
+    const nameEl = $("asset-detail-name");
+    const ownerEl = $("asset-detail-owner");
     if (imageEl) {
-      imageEl.src = escapeHtml(nft.imageUrl);
+      imageEl.src = escapeHtml(asset.imageUrl);
       imageEl.onerror = () => {
         imageEl.src = PLACEHOLDER_LG;
       };
     }
-    if (nameEl) nameEl.textContent = nft.name;
-    if (ownerEl) ownerEl.textContent = `@${nft.owner}`;
+    if (nameEl) nameEl.textContent = asset.name;
+    if (ownerEl) ownerEl.textContent = `@${asset.owner}`;
 
     // Update badges
-    const badgesEl = $("nft-detail-badges");
+    const badgesEl = $("asset-detail-badges");
     if (badgesEl) {
       const badges: string[] = [];
-      if (nft.isSeed) badges.push('<span class="nft-badge seed">SEED</span>');
-      if (nft.seedId)
+      if (asset.isSeed) badges.push('<span class="asset-badge seed">SEED</span>');
+      if (asset.seedId)
         badges.push(
-          '<span class="nft-badge instance">INSTANCE #' +
-            (nft.instanceNumber || 1) +
+          '<span class="asset-badge instance">INSTANCE #' +
+            (asset.instanceNumber || 1) +
             "</span>",
         );
-      if (nft.listed)
-        badges.push('<span class="nft-badge listed">LISTED</span>');
-      if (nft.lent)
-        badges.push('<span class="nft-badge posting">LENT</span>');
+      if (asset.listed)
+        badges.push('<span class="asset-badge listed">LISTED</span>');
+      if (asset.lent)
+        badges.push('<span class="asset-badge posting">LENT</span>');
       badgesEl.innerHTML = badges.join("");
     }
 
     // Update DNA info
-    const originDnaEl = $("nft-detail-origin-dna");
-    const nftDnaEl = $("nft-detail-nft-dna");
-    const idEl = $("nft-detail-id");
-    const collectionIdEl = $("nft-detail-collection-id");
-    if (originDnaEl) originDnaEl.textContent = nft.originDna || "-";
-    if (nftDnaEl) nftDnaEl.textContent = nft.nftDna || "-";
-    if (idEl) idEl.textContent = nft.id;
-    if (collectionIdEl) collectionIdEl.textContent = nft.collectionId;
+    const originDnaEl = $("asset-detail-origin-dna");
+    const assetDnaEl = $("asset-detail-asset-dna");
+    const idEl = $("asset-detail-id");
+    const collectionIdEl = $("asset-detail-collection-id");
+    if (originDnaEl) originDnaEl.textContent = asset.originDna || "-";
+    if (assetDnaEl) assetDnaEl.textContent = asset.assetDna || "-";
+    if (idEl) idEl.textContent = asset.id;
+    if (collectionIdEl) collectionIdEl.textContent = asset.collectionId;
 
     // Seed-specific info
-    if (nft.isSeed && seedInfoSection) {
+    if (asset.isSeed && seedInfoSection) {
       seedInfoSection.style.display = "block";
-      const maxSupplyEl = $("nft-detail-max-supply");
-      const distributedEl = $("nft-detail-distributed");
-      if (maxSupplyEl) maxSupplyEl.textContent = String(nft.maxSupply || 0);
+      const maxSupplyEl = $("asset-detail-max-supply");
+      const distributedEl = $("asset-detail-distributed");
+      if (maxSupplyEl) maxSupplyEl.textContent = String(asset.maxSupply || 0);
       if (distributedEl)
-        distributedEl.textContent = String(nft.distributed || 0);
+        distributedEl.textContent = String(asset.distributed || 0);
     }
 
     // Parent seed for an instance.
     if (data.original && parentSection) {
       const original = data.original;
       parentSection.style.display = "block";
-      const parentItem = $("nft-parent-item");
-      const parentName = $("nft-parent-name");
+      const parentItem = $("asset-parent-item");
+      const parentName = $("asset-parent-name");
       if (parentName) parentName.textContent = original.name;
       if (parentItem) {
-        parentItem.onclick = () => loadNftDetail(original.id);
+        parentItem.onclick = () => loadAssetDetail(original.id);
       }
     }
 
@@ -1001,7 +1001,7 @@ async function loadNftDetail(nftId: string) {
     if (data.instances && data.instances.count > 0 && instancesSection) {
       instancesSection.style.display = "block";
       const countEl = $("instances-count");
-      const listEl = $("nft-instances-list");
+      const listEl = $("asset-instances-list");
       if (countEl) countEl.textContent = String(data.instances.count);
       if (listEl) {
         listEl.innerHTML = data.instances.items
@@ -1019,30 +1019,30 @@ async function loadNftDetail(nftId: string) {
         listEl.querySelectorAll(".instance-item").forEach((item) => {
           item.addEventListener("click", () => {
             const id = (item as HTMLElement).dataset.id;
-            if (id) loadNftDetail(id);
+            if (id) loadAssetDetail(id);
           });
         });
       }
     }
 
     // Actions section (visible when owner)
-    const actionsSection = $("nft-actions-section");
-    const actionSeedButtons = $("nft-action-seed-buttons");
-    const actionInstanceButtons = $("nft-action-instance-buttons");
-    const actionQuantityGroup = $("nft-action-quantity-group");
+    const actionsSection = $("asset-actions-section");
+    const actionSeedButtons = $("asset-action-seed-buttons");
+    const actionInstanceButtons = $("asset-action-instance-buttons");
+    const actionQuantityGroup = $("asset-action-quantity-group");
     const isOwner =
-      connectedUser && nft.owner.toLowerCase() === connectedUser.toLowerCase();
+      connectedUser && asset.owner.toLowerCase() === connectedUser.toLowerCase();
 
     if (actionsSection) {
       if (isOwner) {
         actionsSection.style.display = "block";
-        if (nft.isSeed) {
-          const remaining = (nft.maxSupply || 0) - (nft.distributed || 0);
+        if (asset.isSeed) {
+          const remaining = (asset.maxSupply || 0) - (asset.distributed || 0);
           if (actionSeedButtons) actionSeedButtons.style.display = "block";
           if (actionInstanceButtons)
             actionInstanceButtons.style.display = "none";
-          const quantityInput = $("nft-action-quantity") as HTMLInputElement;
-          const remainingEl = $("nft-action-remaining");
+          const quantityInput = $("asset-action-quantity") as HTMLInputElement;
+          const remainingEl = $("asset-action-remaining");
           if (quantityInput) {
             quantityInput.max = String(remaining);
             quantityInput.value = "1";
@@ -1052,21 +1052,21 @@ async function loadNftDetail(nftId: string) {
           if (actionSeedButtons) actionSeedButtons.style.display = "none";
           if (actionInstanceButtons)
             actionInstanceButtons.style.display = "block";
-          const listForm = $("nft-action-list-form");
-          const unlistForm = $("nft-action-unlist-form");
-          const listingInfo = $("nft-action-listing-info");
-          if (nft.listed) {
+          const listForm = $("asset-action-list-form");
+          const unlistForm = $("asset-action-unlist-form");
+          const listingInfo = $("asset-action-listing-info");
+          if (asset.listed) {
             if (listForm) listForm.style.display = "none";
             if (unlistForm) unlistForm.style.display = "block";
-            if (listingInfo && nft.listingPrice) {
-              listingInfo.textContent = `Currently listed for ${nft.listingPrice.amount} ${nft.listingPrice.currency}`;
+            if (listingInfo && asset.listingPrice) {
+              listingInfo.textContent = `Currently listed for ${asset.listingPrice.amount} ${asset.listingPrice.currency}`;
             }
           } else {
             if (listForm) listForm.style.display = "block";
             if (unlistForm) unlistForm.style.display = "none";
           }
 
-          if (nft.lent) {
+          if (asset.lent) {
             if (lendForm) lendForm.style.display = "none";
             if (returnForm) returnForm.style.display = "block";
           } else {
@@ -1087,32 +1087,32 @@ async function loadNftDetail(nftId: string) {
     // Set Mutable Data section (visible when user is the creator)
     const isCreator =
       connectedUser &&
-      nft.mintedBy &&
-      nft.mintedBy.toLowerCase() === connectedUser.toLowerCase();
+      asset.mintedBy &&
+      asset.mintedBy.toLowerCase() === connectedUser.toLowerCase();
     if (setDataSection && isCreator) {
       setDataSection.style.display = "block";
-      const setDataIdEl = $("nft-set-data-id") as HTMLInputElement;
-      if (setDataIdEl) setDataIdEl.value = nft.id;
+      const setDataIdEl = $("asset-set-data-id") as HTMLInputElement;
+      if (setDataIdEl) setDataIdEl.value = asset.id;
     }
 
     // Provenance
-    const mintedByEl = $("nft-detail-minted-by");
-    const mintedAtEl = $("nft-detail-minted-at");
+    const mintedByEl = $("asset-detail-minted-by");
+    const mintedAtEl = $("asset-detail-minted-at");
     if (mintedByEl)
-      mintedByEl.textContent = nft.mintedBy ? `@${nft.mintedBy}` : "-";
-    if (mintedAtEl) mintedAtEl.textContent = formatDisplayDate(nft.mintedAt);
+      mintedByEl.textContent = asset.mintedBy ? `@${asset.mintedBy}` : "-";
+    if (mintedAtEl) mintedAtEl.textContent = formatDisplayDate(asset.mintedAt);
 
-    log(`Loaded NFT: ${nft.name}`, "success");
+    log(`Loaded Asset: ${asset.name}`, "success");
   } catch (e) {
     log(`Error: ${(e as Error).message}`, "error");
   }
 }
 
-(window as any).loadNftDetail = loadNftDetail;
+(window as any).loadAssetDetail = loadAssetDetail;
 
 // ============ NAVIGATION HELPERS ============
 
-function goBackFromNft() {
+function goBackFromAsset() {
   navigationStack.pop();
   const prevPage = navigationStack[navigationStack.length - 1] || "collections";
 
@@ -1125,7 +1125,7 @@ function goBackFromNft() {
   }
 }
 
-(window as any).goBackFromNft = goBackFromNft;
+(window as any).goBackFromAsset = goBackFromAsset;
 
 function goBackToCollections() {
   currentCollectionId = null;
@@ -1159,16 +1159,16 @@ async function loadInventory() {
     '<div class="empty-state"><p class="empty-state-text">Loading...</p></div>';
 
   try {
-    const result = await getNFTsByOwner(connectedUser, 200);
+    const result = await getAssetsByOwner(connectedUser, 200);
     const counts = result.counts;
-    const seeds = result.nfts.filter((n) => n.isSeed === true);
-    const instances = result.nfts.filter((n) => n.isSeed !== true);
+    const seeds = result.assets.filter((n) => n.isSeed === true);
+    const instances = result.assets.filter((n) => n.isSeed !== true);
     const totalCount = counts.total;
-    renderInventorySummary(counts, result.nfts);
+    renderInventorySummary(counts, result.assets);
 
     if (totalCount === 0) {
       container.innerHTML =
-        '<div class="empty-state"><p class="empty-state-text">No NFTs found</p></div>';
+        '<div class="empty-state"><p class="empty-state-text">No Assets found</p></div>';
     } else {
       let html = "";
 
@@ -1179,7 +1179,7 @@ async function loadInventory() {
 							<span class="inventory-section-title" style="color: var(--accent);">Seeds</span>
 							<span class="inventory-section-count" style="background: var(--accent-dim); color: var(--accent);">${counts.seeds}</span>
 						</div>
-						<div class="nft-grid" id="inventory-seeds"></div>
+						<div class="asset-grid" id="inventory-seeds"></div>
 					</div>
 				`;
       }
@@ -1191,14 +1191,14 @@ async function loadInventory() {
 							<span class="inventory-section-title" style="color: #3b82f6;">Instances</span>
 							<span class="inventory-section-count" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6;">${counts.instances}</span>
 						</div>
-						<div class="nft-grid" id="inventory-instances"></div>
+						<div class="asset-grid" id="inventory-instances"></div>
 					</div>
 				`;
       }
 
       container.innerHTML = html;
 
-      if (seeds.length > 0) renderNfts(seeds, "inventory-seeds", true);
+      if (seeds.length > 0) renderAssets(seeds, "inventory-seeds", true);
       if (instances.length > 0) {
         const groups = groupInstancesBySeed(instances);
         renderInstanceGroups(groups, "inventory-instances");
@@ -1206,7 +1206,7 @@ async function loadInventory() {
     }
 
     log(
-      `Loaded ${totalCount} NFTs (${counts.seeds} seeds, ${counts.instances} instances)`,
+      `Loaded ${totalCount} Assets (${counts.seeds} seeds, ${counts.instances} instances)`,
       "success",
     );
   } catch (e) {
@@ -1240,13 +1240,13 @@ async function loadSeedGroup(seedId: string) {
 
   try {
     const [seedData, ownerData] = await Promise.all([
-      fetchJsonOrThrow<NftDetailResponse>(
-        `/api/nft/${encodeURIComponent(seedId)}/details`,
+      fetchJsonOrThrow<AssetDetailResponse>(
+        `/api/assets/${encodeURIComponent(seedId)}/details`,
       ),
-      getNFTsByOwner(connectedUser, 200),
+      getAssetsByOwner(connectedUser, 200),
     ]);
 
-    if (seedData.error || !seedData.nft) {
+    if (seedData.error || !seedData.asset) {
       if (titleEl) titleEl.textContent = "Seed not found";
       if (tableContainer) {
         tableContainer.innerHTML = `
@@ -1258,8 +1258,8 @@ async function loadSeedGroup(seedId: string) {
       return;
     }
 
-    const seed = seedData.nft;
-    const owned = ownerData.nfts.filter(
+    const seed = seedData.asset;
+    const owned = ownerData.assets.filter(
       (n) => n.isSeed !== true && instanceGroupKey(n) === seedId,
     );
 
@@ -1310,7 +1310,7 @@ async function loadSeedGroup(seedId: string) {
   }
 }
 
-function renderSeedGroupTable(owned: NftCardData[]) {
+function renderSeedGroupTable(owned: AssetCardData[]) {
   const tableContainer = $("seed-group-table-container");
   if (!tableContainer) return;
 
@@ -1319,23 +1319,23 @@ function renderSeedGroupTable(owned: NftCardData[]) {
   );
 
   const rows = sorted
-    .map((nft) => {
-      const isLent = (nft.status ?? "").toLowerCase() === "lent";
-      const isListed = Boolean(nft.listingPrice);
+    .map((asset) => {
+      const isLent = (asset.status ?? "").toLowerCase() === "lent";
+      const isListed = Boolean(asset.listingPrice);
       const statusText = isLent
         ? "Lent"
         : isListed
-          ? `Listed @ ${escapeHtml(nft.listingPrice ?? "")} ${escapeHtml(nft.listingCurrency ?? "")}`
+          ? `Listed @ ${escapeHtml(asset.listingPrice ?? "")} ${escapeHtml(asset.listingCurrency ?? "")}`
           : "Owned";
-      const idAttr = escapeHtml(nft.id);
+      const idAttr = escapeHtml(asset.id);
       const disabled = isLent ? "disabled" : "";
       const lentTip = isLent ? 'title="Lent — cannot modify"' : "";
       const listAction = isListed
         ? `<button class="btn btn-secondary" data-action="unlist" ${disabled} ${lentTip}>Unlist</button>`
         : `<button class="btn btn-secondary" data-action="list" ${disabled} ${lentTip}>List</button>`;
       return `
-				<tr data-nft-id="${idAttr}">
-					<td>#${nft.instanceNumber ?? "?"}</td>
+				<tr data-asset-id="${idAttr}">
+					<td>#${asset.instanceNumber ?? "?"}</td>
 					<td><span class="seed-group-id">${idAttr}</span></td>
 					<td>${statusText}</td>
 					<td class="seed-group-actions">
@@ -1368,7 +1368,7 @@ function renderSeedGroupTable(owned: NftCardData[]) {
     (btn as HTMLButtonElement).onclick = () => {
       if ((btn as HTMLButtonElement).disabled) return;
       const row = btn.closest("tr") as HTMLElement | null;
-      const id = row?.dataset.nftId;
+      const id = row?.dataset.assetId;
       if (!id) return;
       const action = (btn as HTMLElement).dataset.action;
       if (action === "open") (window as any).seedGroupOpen?.(id);
@@ -1381,30 +1381,30 @@ function renderSeedGroupTable(owned: NftCardData[]) {
 
 (window as any).loadSeedGroup = loadSeedGroup;
 
-function seedGroupOpen(nftId: string) {
-  loadNftDetail(nftId);
+function seedGroupOpen(assetId: string) {
+  loadAssetDetail(assetId);
 }
 
-async function seedGroupTransferPrompt(nftId: string) {
+async function seedGroupTransferPrompt(assetId: string) {
   if (!connectedUser) {
     log("Connect wallet first", "error");
     return;
   }
   const to = window
-    .prompt(`Transfer ${nftId} to which Hive account?`)
+    .prompt(`Transfer ${assetId} to which Hive account?`)
     ?.trim()
     .toLowerCase();
   if (!to) return;
 
-  log(`Validating transfer of ${nftId}…`);
-  const validation = await validateTransfer(nftId, connectedUser);
+  log(`Validating transfer of ${assetId}…`);
+  const validation = await validateTransfer(assetId, connectedUser);
   if (!validation.valid) {
     log(`Cannot transfer: ${validation.error}`, "error");
     return;
   }
-  const nft = validation.nft!;
+  const asset = validation.asset!;
   const buildResult = buildTransfer({
-    nftId: nft.id,
+    assetId: asset.id,
     from: connectedUser,
     to,
   });
@@ -1413,7 +1413,7 @@ async function seedGroupTransferPrompt(nftId: string) {
     return;
   }
 
-  log(`Transferring ${nftId} to @${to}…`);
+  log(`Transferring ${assetId} to @${to}…`);
   (window as any).hive_keychain.requestBroadcast(
     connectedUser,
     [buildResult.operations[0]],
@@ -1431,12 +1431,12 @@ async function seedGroupTransferPrompt(nftId: string) {
   );
 }
 
-async function seedGroupListPrompt(nftId: string) {
+async function seedGroupListPrompt(assetId: string) {
   if (!connectedUser) {
     log("Connect wallet first", "error");
     return;
   }
-  const rawPrice = window.prompt(`List ${nftId} for what price?`)?.trim();
+  const rawPrice = window.prompt(`List ${assetId} for what price?`)?.trim();
   if (!rawPrice) return;
   const parsed = parseFloat(rawPrice);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -1466,7 +1466,7 @@ async function seedGroupListPrompt(nftId: string) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        nftId,
+        assetId,
         owner: connectedUser,
         price: { amount: price, currency },
         expiresAt,
@@ -1478,7 +1478,7 @@ async function seedGroupListPrompt(nftId: string) {
       return;
     }
 
-    log(`Listing ${nftId} for ${price} ${currency}…`);
+    log(`Listing ${assetId} for ${price} ${currency}…`);
     (window as any).hive_keychain.requestBroadcast(
       connectedUser,
       [result.operation],
@@ -1501,18 +1501,18 @@ async function seedGroupListPrompt(nftId: string) {
   }
 }
 
-async function seedGroupUnlist(nftId: string) {
+async function seedGroupUnlist(assetId: string) {
   if (!connectedUser) {
     log("Connect wallet first", "error");
     return;
   }
-  if (!window.confirm(`Unlist ${nftId}?`)) return;
+  if (!window.confirm(`Unlist ${assetId}?`)) return;
 
   try {
     const response = await fetch("/api/build/unlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nftId, owner: connectedUser }),
+      body: JSON.stringify({ assetId, owner: connectedUser }),
     });
     const result = await response.json();
     if (!result.success) {
@@ -1520,7 +1520,7 @@ async function seedGroupUnlist(nftId: string) {
       return;
     }
 
-    log(`Unlisting ${nftId}…`);
+    log(`Unlisting ${assetId}…`);
     (window as any).hive_keychain.requestBroadcast(
       connectedUser,
       [result.operation],
@@ -1558,11 +1558,11 @@ function scheduleSeedGroupReload() {
 (window as any).seedGroupListPrompt = seedGroupListPrompt;
 (window as any).seedGroupUnlist = seedGroupUnlist;
 
-function renderInventorySummary(counts: UserNftCounts, nfts: NftCardData[]) {
+function renderInventorySummary(counts: UserAssetCounts, assets: AssetCardData[]) {
   const summary = $("inventory-summary");
   if (!summary) return;
 
-  const listedCount = nfts.filter((nft) => Boolean(nft.listingPrice)).length;
+  const listedCount = assets.filter((asset) => Boolean(asset.listingPrice)).length;
   summary.style.display = "grid";
   summary.innerHTML = `
 		<div class="inventory-summary-card">
@@ -1601,9 +1601,9 @@ async function searchUser() {
     '<div class="empty-state"><p class="empty-state-text">Searching...</p></div>';
 
   try {
-    const result = await getNFTsByOwner(user);
-    renderNfts(result.nfts, "search-results");
-    log(`Found ${result.nfts.length} NFTs for @${user}`, "success");
+    const result = await getAssetsByOwner(user);
+    renderAssets(result.assets, "search-results");
+    log(`Found ${result.assets.length} Assets for @${user}`, "success");
   } catch (e) {
     log(`Error: ${(e as Error).message}`, "error");
   }
@@ -1611,44 +1611,44 @@ async function searchUser() {
 
 (window as any).searchUser = searchUser;
 
-// ============ RENDER NFTS ============
+// ============ RENDER AssetS ============
 
-function renderNfts(
-  nfts: NftCardData[],
+function renderAssets(
+  assets: AssetCardData[],
   containerId: string,
   selectable = false,
 ) {
   const container = $(containerId);
   if (!container) return;
 
-  if (nfts.length === 0) {
+  if (assets.length === 0) {
     container.innerHTML = `
 			<div class="empty-state">
-				<p class="empty-state-text">No NFTs found</p>
+				<p class="empty-state-text">No Assets found</p>
 			</div>
 		`;
     return;
   }
 
-  container.innerHTML = nfts
-    .map((nft) => {
-      const isSeed = nft.isSeed === true;
+  container.innerHTML = assets
+    .map((asset) => {
+      const isSeed = asset.isSeed === true;
       const typeLabel = isSeed ? "SEED" : "INSTANCE";
       const typeCls = isSeed ? "seed" : "instance";
       const supplyText = isSeed
-        ? `${nft.distributed || 0}/${nft.maxSupply || 0}`
-        : `#${nft.instanceNumber || 1}`;
+        ? `${asset.distributed || 0}/${asset.maxSupply || 0}`
+        : `#${asset.instanceNumber || 1}`;
 
       return `
-			<div class="nft-card" data-id="${escapeHtml(nft.id)}" data-collection="${escapeHtml(nft.collectionId)}"
-				 data-edition="${escapeHtml(String(nft.edition ?? ""))}" data-dna="${escapeHtml(nft.nftDna)}">
-				<img class="nft-image" src="${escapeHtml(nft.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
-				<div class="nft-card-body">
-					<div class="nft-name">${escapeHtml(nft.name ?? "Untitled NFT")}</div>
-					<div class="nft-owner">@${escapeHtml(nft.owner ?? "unknown")}</div>
-					<div class="nft-meta">
-						<span class="nft-meta-supply">${supplyText}</span>
-						<span class="nft-type-badge ${typeCls}">${typeLabel}</span>
+			<div class="asset-card" data-id="${escapeHtml(asset.id)}" data-collection="${escapeHtml(asset.collectionId)}"
+				 data-edition="${escapeHtml(String(asset.edition ?? ""))}" data-dna="${escapeHtml(asset.assetDna)}">
+				<img class="asset-image" src="${escapeHtml(asset.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
+				<div class="asset-card-body">
+					<div class="asset-name">${escapeHtml(asset.name ?? "Untitled Asset")}</div>
+					<div class="asset-owner">@${escapeHtml(asset.owner ?? "unknown")}</div>
+					<div class="asset-meta">
+						<span class="asset-meta-supply">${supplyText}</span>
+						<span class="asset-type-badge ${typeCls}">${typeLabel}</span>
 					</div>
 				</div>
 			</div>
@@ -1657,10 +1657,10 @@ function renderNfts(
     .join("");
 
   if (selectable) {
-    container.querySelectorAll(".nft-card").forEach((card) => {
+    container.querySelectorAll(".asset-card").forEach((card) => {
       (card as HTMLElement).onclick = () => {
         const id = (card as HTMLElement).dataset.id;
-        if (id) loadNftDetail(id);
+        if (id) loadAssetDetail(id);
       };
     });
   }
@@ -1676,7 +1676,7 @@ function renderInstanceGroups(
   if (groups.length === 0) {
     container.innerHTML = `
 				<div class="empty-state">
-					<p class="empty-state-text">No NFTs found</p>
+					<p class="empty-state-text">No Assets found</p>
 				</div>
 			`;
     return;
@@ -1690,24 +1690,24 @@ function renderInstanceGroups(
           ? `<span class="seed-group-status-chip">${g.listedCount} listed</span>`
           : "";
       return `
-				<div class="nft-card" data-seed="${escapeHtml(g.seedId)}">
-					${showCount ? `<span class="nft-card-group-badge">x${g.count}</span>` : ""}
-					<img class="nft-image" src="${escapeHtml(g.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
-					<div class="nft-card-body">
-						<div class="nft-name">${escapeHtml(g.name)}</div>
-						<div class="nft-owner">@${escapeHtml(connectedUser ?? "")}</div>
-						<div class="nft-meta">
-							<span class="nft-meta-supply">${g.count} owned</span>
-							<span class="nft-type-badge instance">INSTANCE</span>
+				<div class="asset-card" data-seed="${escapeHtml(g.seedId)}">
+					${showCount ? `<span class="asset-card-group-badge">x${g.count}</span>` : ""}
+					<img class="asset-image" src="${escapeHtml(g.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
+					<div class="asset-card-body">
+						<div class="asset-name">${escapeHtml(g.name)}</div>
+						<div class="asset-owner">@${escapeHtml(connectedUser ?? "")}</div>
+						<div class="asset-meta">
+							<span class="asset-meta-supply">${g.count} owned</span>
+							<span class="asset-type-badge instance">INSTANCE</span>
 						</div>
-						${listedChip ? `<div class="nft-meta">${listedChip}</div>` : ""}
+						${listedChip ? `<div class="asset-meta">${listedChip}</div>` : ""}
 					</div>
 				</div>
 			`;
     })
     .join("");
 
-  container.querySelectorAll(".nft-card").forEach((card) => {
+  container.querySelectorAll(".asset-card").forEach((card) => {
     (card as HTMLElement).onclick = () => {
       const seedId = (card as HTMLElement).dataset.seed;
       if (seedId) loadSeedGroup(seedId);
@@ -1728,7 +1728,7 @@ async function distributeFromSeed(
   }
 
   log(`Fetching seed info...`);
-  const response = await fetch(`/api/nft/${seedId}/details`);
+  const response = await fetch(`/api/assets/${seedId}/details`);
   const data = await response.json();
 
   if (data.error) {
@@ -1736,23 +1736,23 @@ async function distributeFromSeed(
     return;
   }
 
-  const nft = data.nft;
-  if (!nft.isSeed) {
+  const asset = data.asset;
+  if (!asset.isSeed) {
     log("This is not a seed, cannot distribute", "error");
     return;
   }
 
-  if (nft.owner.toLowerCase() !== connectedUser.toLowerCase()) {
-    log(`You don't own this seed. Owner: @${nft.owner}`, "error");
+  if (asset.owner.toLowerCase() !== connectedUser.toLowerCase()) {
+    log(`You don't own this seed. Owner: @${asset.owner}`, "error");
     return;
   }
 
-  if (!nft.txId) {
+  if (!asset.txId) {
     log("Seed is missing transaction ID", "error");
     return;
   }
 
-  const remaining = (nft.maxSupply || 0) - (nft.distributed || 0);
+  const remaining = (asset.maxSupply || 0) - (asset.distributed || 0);
   if (quantity > remaining) {
     log(`Cannot distribute ${quantity}. Only ${remaining} remaining.`, "error");
     return;
@@ -1766,7 +1766,7 @@ async function distributeFromSeed(
       {
         seedId,
         quantity,
-        seedTxId: nft.txId,
+        seedTxId: asset.txId,
       },
     ],
   });
@@ -2030,7 +2030,7 @@ function getArtIdSuffix(): string {
   return ($("artid-suffix") as HTMLInputElement)?.value.trim() || "";
 }
 
-function applySuffix(seeds: SeedNFTWithArtId[]): SeedNFTWithArtId[] {
+function applySuffix(seeds: SeedAssetWithArtId[]): SeedAssetWithArtId[] {
   const suffix = getArtIdSuffix();
   if (!suffix) return seeds;
   return seeds.map((s) => ({
@@ -2122,7 +2122,7 @@ async function validateSeeds() {
         creator,
         collectionName: colName,
         collectionSymbol: colSymbol,
-        nfts: seedsWithSuffix,
+        assets: seedsWithSuffix,
       }),
     });
     const result = await response.json();
@@ -2965,27 +2965,27 @@ function resetMinting() {
 (window as any).broadcastBatch = broadcastBatch;
 (window as any).resetMinting = resetMinting;
 
-// ============ NFT DETAIL ACTIONS ============
+// ============ Asset DETAIL ACTIONS ============
 
-async function nftDetailTransfer() {
-  const to = ($("nft-action-instance-to") as HTMLInputElement)?.value
+async function assetDetailTransfer() {
+  const to = ($("asset-action-instance-to") as HTMLInputElement)?.value
     .trim()
     .toLowerCase();
-  if (!to || !connectedUser || !currentNftId) {
+  if (!to || !connectedUser || !currentAssetId) {
     log("Fill recipient and ensure you're connected", "error");
     return;
   }
 
-  log(`Validating transfer of ${currentNftId}...`);
-  const validation = await validateTransfer(currentNftId, connectedUser);
+  log(`Validating transfer of ${currentAssetId}...`);
+  const validation = await validateTransfer(currentAssetId, connectedUser);
   if (!validation.valid) {
     log(`Cannot transfer: ${validation.error}`, "error");
     return;
   }
 
-  const nft = validation.nft!;
+  const asset = validation.asset!;
   const buildResult = buildTransfer({
-    nftId: nft.id,
+    assetId: asset.id,
     from: connectedUser,
     to,
   });
@@ -3003,7 +3003,7 @@ async function nftDetailTransfer() {
     (res: any) => {
       if (res.success) {
         log(`Transfer successful!`, "success");
-        loadNftDetail(currentNftId!);
+        loadAssetDetail(currentAssetId!);
         loadInventory();
       } else {
         const err =
@@ -3014,57 +3014,57 @@ async function nftDetailTransfer() {
   );
 }
 
-async function nftDetailDistribute() {
-  const to = ($("nft-action-to") as HTMLInputElement)?.value
+async function assetDetailDistribute() {
+  const to = ($("asset-action-to") as HTMLInputElement)?.value
     .trim()
     .toLowerCase();
   const quantity = parseInt(
-    ($("nft-action-quantity") as HTMLInputElement)?.value || "1",
+    ($("asset-action-quantity") as HTMLInputElement)?.value || "1",
     10,
   );
-  if (!to || !connectedUser || !currentNftId) {
+  if (!to || !connectedUser || !currentAssetId) {
     log("Fill recipient and ensure you're connected", "error");
     return;
   }
-  const success = await distributeFromSeed(currentNftId, to, quantity);
+  const success = await distributeFromSeed(currentAssetId, to, quantity);
   if (success) {
     // Wait for indexer to process the transaction
     setTimeout(() => {
-      loadNftDetail(currentNftId!);
+      loadAssetDetail(currentAssetId!);
       loadInventory();
     }, 5000);
   }
 }
 
-async function nftDetailTransferSeed() {
-  const to = ($("nft-action-seed-transfer-to") as HTMLInputElement)?.value
+async function assetDetailTransferSeed() {
+  const to = ($("asset-action-seed-transfer-to") as HTMLInputElement)?.value
     .trim()
     .toLowerCase();
-  if (!to || !connectedUser || !currentNftId) {
+  if (!to || !connectedUser || !currentAssetId) {
     log("Fill recipient and ensure you're connected", "error");
     return;
   }
 
   log(`Fetching seed info...`);
-  const response = await fetch(`/api/nft/${currentNftId}/details`);
+  const response = await fetch(`/api/assets/${currentAssetId}/details`);
   const data = await response.json();
 
   if (data.error) {
     log(`Seed not found: ${data.error}`, "error");
     return;
   }
-  const nft = data.nft;
-  if (!nft.isSeed) {
+  const asset = data.asset;
+  if (!asset.isSeed) {
     log("This is not a seed", "error");
     return;
   }
-  if (nft.owner.toLowerCase() !== connectedUser.toLowerCase()) {
-    log(`You don't own this seed. Owner: @${nft.owner}`, "error");
+  if (asset.owner.toLowerCase() !== connectedUser.toLowerCase()) {
+    log(`You don't own this seed. Owner: @${asset.owner}`, "error");
     return;
   }
 
   const buildResult = buildTransfer({
-    nftId: nft.id,
+    assetId: asset.id,
     from: connectedUser,
     to,
   });
@@ -3082,7 +3082,7 @@ async function nftDetailTransferSeed() {
     (res: any) => {
       if (res.success) {
         log(`Seed transferred to @${to}!`, "success");
-        loadNftDetail(currentNftId!);
+        loadAssetDetail(currentAssetId!);
       } else {
         const err =
           typeof res.error === "object" ? JSON.stringify(res.error) : res.error;
@@ -3092,22 +3092,22 @@ async function nftDetailTransferSeed() {
   );
 }
 
-(window as any).nftDetailTransfer = nftDetailTransfer;
-(window as any).nftDetailDistribute = nftDetailDistribute;
-(window as any).nftDetailTransferSeed = nftDetailTransferSeed;
+(window as any).assetDetailTransfer = assetDetailTransfer;
+(window as any).assetDetailDistribute = assetDetailDistribute;
+(window as any).assetDetailTransferSeed = assetDetailTransferSeed;
 
-async function nftDetailList() {
-  const rawPrice = ($("nft-action-price") as HTMLInputElement)?.value.trim();
-  const currency = ($("nft-action-currency") as HTMLSelectElement)?.value as
+async function assetDetailList() {
+  const rawPrice = ($("asset-action-price") as HTMLInputElement)?.value.trim();
+  const currency = ($("asset-action-currency") as HTMLSelectElement)?.value as
     | "HIVE"
     | "HBD";
-  if (!rawPrice || !connectedUser || !currentNftId) {
+  if (!rawPrice || !connectedUser || !currentAssetId) {
     log("Fill price and ensure you're connected", "error");
     return;
   }
 
   const price = parseFloat(rawPrice).toFixed(3);
-  const rawDuration = ($("nft-action-duration") as HTMLInputElement)?.value.trim();
+  const rawDuration = ($("asset-action-duration") as HTMLInputElement)?.value.trim();
   const durationDays = parseInt(rawDuration || "30", 10);
   if (!Number.isFinite(durationDays) || durationDays < 7 || durationDays > 60) {
     log("Duration must be between 7 and 60 days", "error");
@@ -3120,7 +3120,7 @@ async function nftDetailList() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        nftId: currentNftId,
+        assetId: currentAssetId,
         owner: connectedUser,
         price: { amount: price, currency },
         expiresAt,
@@ -3132,7 +3132,7 @@ async function nftDetailList() {
       return;
     }
 
-    log(`Listing ${currentNftId} for ${price} ${currency}...`);
+    log(`Listing ${currentAssetId} for ${price} ${currency}...`);
     (window as any).hive_keychain.requestBroadcast(
       connectedUser,
       [result.operation],
@@ -3140,7 +3140,7 @@ async function nftDetailList() {
       (res: any) => {
         if (res.success) {
           log(`Listed for ${price} ${currency}!`, "success");
-          setTimeout(() => loadNftDetail(currentNftId!), 5000);
+          setTimeout(() => loadAssetDetail(currentAssetId!), 5000);
         } else {
           const err =
             typeof res.error === "object"
@@ -3155,8 +3155,8 @@ async function nftDetailList() {
   }
 }
 
-async function nftDetailUnlist() {
-  if (!connectedUser || !currentNftId) {
+async function assetDetailUnlist() {
+  if (!connectedUser || !currentAssetId) {
     log("Connect wallet first", "error");
     return;
   }
@@ -3166,7 +3166,7 @@ async function nftDetailUnlist() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        nftId: currentNftId,
+        assetId: currentAssetId,
         owner: connectedUser,
       }),
     });
@@ -3176,7 +3176,7 @@ async function nftDetailUnlist() {
       return;
     }
 
-    log(`Unlisting ${currentNftId}...`);
+    log(`Unlisting ${currentAssetId}...`);
     (window as any).hive_keychain.requestBroadcast(
       connectedUser,
       [result.operation],
@@ -3184,7 +3184,7 @@ async function nftDetailUnlist() {
       (res: any) => {
         if (res.success) {
           log("Unlisted!", "success");
-          setTimeout(() => loadNftDetail(currentNftId!), 5000);
+          setTimeout(() => loadAssetDetail(currentAssetId!), 5000);
         } else {
           const err =
             typeof res.error === "object"
@@ -3199,17 +3199,17 @@ async function nftDetailUnlist() {
   }
 }
 
-(window as any).nftDetailList = nftDetailList;
-(window as any).nftDetailUnlist = nftDetailUnlist;
+(window as any).assetDetailList = assetDetailList;
+(window as any).assetDetailUnlist = assetDetailUnlist;
 
-async function nftDetailBurn() {
-  if (!connectedUser || !currentNftId) {
+async function assetDetailBurn() {
+  if (!connectedUser || !currentAssetId) {
     log("Connect wallet first", "error");
     return;
   }
 
   const confirmed = confirm(
-    `Are you sure you want to burn NFT ${currentNftId}?\n\nThis action is IRREVERSIBLE. The NFT will be permanently destroyed.`,
+    `Are you sure you want to burn Asset ${currentAssetId}?\n\nThis action is IRREVERSIBLE. The Asset will be permanently destroyed.`,
   );
   if (!confirmed) return;
 
@@ -3217,7 +3217,7 @@ async function nftDetailBurn() {
     const response = await fetch("/api/build/burn", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nftId: currentNftId, owner: connectedUser }),
+      body: JSON.stringify({ assetId: currentAssetId, owner: connectedUser }),
     });
     const result = await response.json();
     if (!result.success) {
@@ -3225,14 +3225,14 @@ async function nftDetailBurn() {
       return;
     }
 
-    log(`Burning ${currentNftId}...`);
+    log(`Burning ${currentAssetId}...`);
     (window as any).hive_keychain.requestBroadcast(
       connectedUser,
       [result.operation],
       "Posting",
       (res: any) => {
         if (res.success) {
-          log("NFT burned successfully!", "success");
+          log("Asset burned successfully!", "success");
           loadInventory();
         } else {
           const err =
@@ -3248,16 +3248,16 @@ async function nftDetailBurn() {
   }
 }
 
-async function nftDetailSetData() {
-  if (!connectedUser || !currentNftId) {
+async function assetDetailSetData() {
+  if (!connectedUser || !currentAssetId) {
     log("Connect wallet first", "error");
     return;
   }
 
   const jsonInput = (
-    $("nft-set-data-json") as HTMLTextAreaElement
+    $("asset-set-data-json") as HTMLTextAreaElement
   )?.value.trim();
-  const errorEl = $("nft-set-data-error");
+  const errorEl = $("asset-set-data-error");
 
   if (!jsonInput) {
     showSetDataError(errorEl, "Please enter JSON data");
@@ -3288,7 +3288,7 @@ async function nftDetailSetData() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        nftId: currentNftId,
+        assetId: currentAssetId,
         issuer: connectedUser,
         data: parsedData,
       }),
@@ -3299,7 +3299,7 @@ async function nftDetailSetData() {
       return;
     }
 
-    log(`Setting mutable data on ${currentNftId}...`);
+    log(`Setting mutable data on ${currentAssetId}...`);
     (window as any).hive_keychain.requestBroadcast(
       connectedUser,
       [result.operation],
@@ -3307,7 +3307,7 @@ async function nftDetailSetData() {
       (res: any) => {
         if (res.success) {
           log("Mutable data updated!", "success");
-          setTimeout(() => loadNftDetail(currentNftId!), 5000);
+          setTimeout(() => loadAssetDetail(currentAssetId!), 5000);
         } else {
           const err =
             typeof res.error === "object"
@@ -3333,24 +3333,24 @@ function hideSetDataError(el: HTMLElement | null) {
   el.style.display = "none";
 }
 
-(window as any).nftDetailBurn = nftDetailBurn;
-(window as any).nftDetailSetData = nftDetailSetData;
+(window as any).assetDetailBurn = assetDetailBurn;
+(window as any).assetDetailSetData = assetDetailSetData;
 
-// ============ NFT DETAIL — LENDING ============
+// ============ Asset DETAIL — LENDING ============
 
-async function nftDetailLend() {
-  const borrower = ($("nft-action-lend-borrower") as HTMLInputElement)?.value
+async function assetDetailLend() {
+  const borrower = ($("asset-action-lend-borrower") as HTMLInputElement)?.value
     .trim()
     .toLowerCase();
-  if (!borrower || !connectedUser || !currentNftId) {
+  if (!borrower || !connectedUser || !currentAssetId) {
     log("Fill borrower and ensure you're connected", "error");
     return;
   }
 
-  const res = await fetch(`/api/build/nft-lend`, {
+  const res = await fetch(`/api/build/asset-lend`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instanceId: currentNftId, borrower, owner: connectedUser }),
+    body: JSON.stringify({ instanceId: currentAssetId, borrower, owner: connectedUser }),
   });
   const result = await res.json();
   if (!result.success) {
@@ -3358,15 +3358,15 @@ async function nftDetailLend() {
     return;
   }
 
-  log(`Lending ${currentNftId} to @${borrower}...`);
+  log(`Lending ${currentAssetId} to @${borrower}...`);
   (window as any).hive_keychain.requestBroadcast(
     connectedUser,
     [result.operation],
     "Posting",
     (r: any) => {
       if (r.success) {
-        log(`Lend successful! @${borrower} can now use the NFT.`, "success");
-        setTimeout(() => { loadNftDetail(currentNftId!); loadInventory(); }, 4000);
+        log(`Lend successful! @${borrower} can now use the Asset.`, "success");
+        setTimeout(() => { loadAssetDetail(currentAssetId!); loadInventory(); }, 4000);
       } else {
         const err = typeof r.error === "object" ? JSON.stringify(r.error) : r.error;
         log(`Lend failed: ${err}`, "error");
@@ -3375,16 +3375,16 @@ async function nftDetailLend() {
   );
 }
 
-async function nftDetailReturn() {
-  if (!connectedUser || !currentNftId) {
+async function assetDetailReturn() {
+  if (!connectedUser || !currentAssetId) {
     log("Connect wallet first", "error");
     return;
   }
 
-  const res = await fetch(`/api/build/nft-return`, {
+  const res = await fetch(`/api/build/asset-return`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instanceId: currentNftId, signer: connectedUser }),
+    body: JSON.stringify({ instanceId: currentAssetId, signer: connectedUser }),
   });
   const result = await res.json();
   if (!result.success) {
@@ -3392,15 +3392,15 @@ async function nftDetailReturn() {
     return;
   }
 
-  log(`Returning ${currentNftId}...`);
+  log(`Returning ${currentAssetId}...`);
   (window as any).hive_keychain.requestBroadcast(
     connectedUser,
     [result.operation],
     "Posting",
     (r: any) => {
       if (r.success) {
-        log(`Return successful! NFT is active again.`, "success");
-        setTimeout(() => { loadNftDetail(currentNftId!); loadInventory(); }, 4000);
+        log(`Return successful! Asset is active again.`, "success");
+        setTimeout(() => { loadAssetDetail(currentAssetId!); loadInventory(); }, 4000);
       } else {
         const err = typeof r.error === "object" ? JSON.stringify(r.error) : r.error;
         log(`Return failed: ${err}`, "error");
@@ -3409,8 +3409,8 @@ async function nftDetailReturn() {
   );
 }
 
-(window as any).nftDetailLend = nftDetailLend;
-(window as any).nftDetailReturn = nftDetailReturn;
+(window as any).assetDetailLend = assetDetailLend;
+(window as any).assetDetailReturn = assetDetailReturn;
 
 // ============ ADVANCED TABS ============
 
@@ -3452,7 +3452,7 @@ async function loadDashboardStats() {
 
     container.innerHTML = `
 			<div class="stat-box"><div class="stat-label">Collections</div><div class="stat-value">${stats.total_collections ?? 0}</div></div>
-			<div class="stat-box"><div class="stat-label">NFTs</div><div class="stat-value">${stats.total_nfts ?? 0}</div></div>
+			<div class="stat-box"><div class="stat-label">Assets</div><div class="stat-value">${stats.total_assets ?? 0}</div></div>
 			<div class="stat-box"><div class="stat-label">Seeds</div><div class="stat-value">${stats.total_seeds ?? 0}</div></div>
 			<div class="stat-box"><div class="stat-label">Instances</div><div class="stat-value">${stats.total_instances ?? 0}</div></div>
 			<div class="stat-box"><div class="stat-label">Listed</div><div class="stat-value">${stats.total_listed ?? 0}</div></div>

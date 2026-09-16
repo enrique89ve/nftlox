@@ -3,7 +3,7 @@ import {
 	validateArtIdArray,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
-	type SeedNFTWithArtId,
+	type SeedAssetWithArtId,
 	IndexerError,
 } from "nftlox-sdk";
 import { indexer } from "../shared/indexer";
@@ -24,7 +24,7 @@ export const validationRoutes: Record<string, { POST: RouteHandler }> = {
 					creator: string;
 					collectionName: string;
 					collectionSymbol: string;
-					nfts: SeedNFTWithArtId[];
+					assets: SeedAssetWithArtId[];
 				};
 
 				if (!body.creator || !body.collectionName || !body.collectionSymbol) {
@@ -35,16 +35,16 @@ export const validationRoutes: Record<string, { POST: RouteHandler }> = {
 					}, 400);
 				}
 
-				if (!body.nfts || !Array.isArray(body.nfts) || body.nfts.length === 0) {
+				if (!body.assets || !Array.isArray(body.assets) || body.assets.length === 0) {
 					return json({
 						valid: false,
 						stage: "format",
-						error: "nfts array is required and must not be empty",
+						error: "assets array is required and must not be empty",
 					}, 400);
 				}
 
 				// 1. Validate artId format
-				const artIds = body.nfts.map(n => n.artId || "");
+				const artIds = body.assets.map(n => n.artId || "");
 				const artIdValidation = validateArtIdArray(artIds);
 
 				if (artIdValidation.formatErrors.length > 0) {
@@ -54,7 +54,7 @@ export const validationRoutes: Record<string, { POST: RouteHandler }> = {
 						errors: artIdValidation.formatErrors.map(e => ({
 							index: e.index,
 							artId: e.artId,
-							name: body.nfts[e.index]?.name || "Unknown",
+							name: body.assets[e.index]?.name || "Unknown",
 							error: e.error,
 						})),
 					});
@@ -76,8 +76,8 @@ export const validationRoutes: Record<string, { POST: RouteHandler }> = {
 					body.collectionName,
 					body.collectionSymbol,
 				);
-				const seedIds = await Promise.all(body.nfts.map(nft =>
-					generateDeterministicSeedId(collectionId, nft.artId),
+				const seedIds = await Promise.all(body.assets.map(asset =>
+					generateDeterministicSeedId(collectionId, asset.artId),
 				));
 
 				// 4. Check indexer for existing IDs
@@ -93,11 +93,11 @@ export const validationRoutes: Record<string, { POST: RouteHandler }> = {
 					}
 				}
 
-				// Check seeds existence via individual getNft calls
+				// Check seeds existence via individual getAsset calls
 				const seedExistence = new Map<string, boolean>();
 				const seedChecks = seedIds.map(async (seedId) => {
 					try {
-						await indexer.getNft(seedId);
+						await indexer.getAsset(seedId);
 						seedExistence.set(seedId, true);
 					} catch {
 						seedExistence.set(seedId, false);
@@ -106,10 +106,10 @@ export const validationRoutes: Record<string, { POST: RouteHandler }> = {
 				await Promise.all(seedChecks);
 
 				const seedStatus = seedIds.map((seedId, i) => ({
-					artId: body.nfts[i]!.artId,
+					artId: body.assets[i]!.artId,
 					seedId,
 					exists: seedExistence.get(seedId) || false,
-					name: body.nfts[i]!.name,
+					name: body.assets[i]!.name,
 				}));
 
 				const newSeeds = seedStatus.filter(s => !s.exists);
@@ -120,7 +120,7 @@ export const validationRoutes: Record<string, { POST: RouteHandler }> = {
 					collectionId,
 					collectionExists: colExists,
 					summary: {
-						total: body.nfts.length,
+						total: body.assets.length,
 						new: newSeeds.length,
 						existing: existingSeeds.length,
 					},

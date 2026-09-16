@@ -88,13 +88,13 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 					return json({ success: false, error: "HIVE_ACCOUNT or ACTIVE_KEY not configured" }, 500);
 				}
 
-				const body = await req.json() as { nftId: string };
-				if (!body.nftId) {
-					return json({ success: false, error: "nftId is required" }, 400);
+				const body = await req.json() as { assetId: string };
+				if (!body.assetId) {
+					return json({ success: false, error: "assetId is required" }, 400);
 				}
 				const buyer = SERVER_ACCOUNT;
 
-				const info: PaymentInfo = await fetchPaymentInfo(INDEXER_URL, body.nftId);
+				const info: PaymentInfo = await fetchPaymentInfo(INDEXER_URL, body.assetId);
 
 				const tx = new Transaction({ expiration: TX_EXPIRATION_MS });
 				if (info.sellerAmount > 0) {
@@ -102,7 +102,7 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 						from: buyer,
 						to: info.seller,
 						amount: `${info.sellerAmount.toFixed(3)} ${info.currency}`,
-						memo: `${MEMO_PREFIX_BUY}${body.nftId}`,
+						memo: `${MEMO_PREFIX_BUY}${body.assetId}`,
 					});
 				}
 				if (info.royaltyAmount > 0 && info.royaltyRecipient) {
@@ -110,7 +110,7 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 						from: buyer,
 						to: info.royaltyRecipient,
 						amount: `${info.royaltyAmount.toFixed(3)} ${info.currency}`,
-						memo: `${MEMO_PREFIX_ROYALTY}${body.nftId}`,
+						memo: `${MEMO_PREFIX_ROYALTY}${body.assetId}`,
 					});
 				}
 				if (info.feeAmount > 0) {
@@ -118,7 +118,7 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 						from: buyer,
 						to: info.feeAccount,
 						amount: `${info.feeAmount.toFixed(3)} ${info.currency}`,
-						memo: `${MEMO_PREFIX_FEE}${body.nftId}`,
+						memo: `${MEMO_PREFIX_FEE}${body.assetId}`,
 					});
 				}
 
@@ -131,7 +131,7 @@ export const debugRoutes: Record<string, { POST: RouteHandler }> = {
 						version: PROTOCOL_VERSION,
 						action: ACTION_BUY,
 						data: {
-							nftId: body.nftId,
+							assetId: body.assetId,
 							listingId: info.listingId,
 							listTxId: info.listTxId,
 						},

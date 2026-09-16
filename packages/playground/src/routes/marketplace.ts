@@ -15,7 +15,7 @@ import { INDEXER_URL } from "../shared/indexer";
 
 const buyRequestSchema = z.object({
 	buyer: usernameSchema,
-	nftId: z.string().min(1),
+	assetId: z.string().min(1),
 });
 
 const json = (data: unknown, status = 200) =>
@@ -46,9 +46,9 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 				if (!parse.success) {
 					return json({ success: false, error: parse.error.issues }, 400);
 				}
-				const { buyer, nftId } = parse.data;
+				const { buyer, assetId } = parse.data;
 
-				const info = await fetchPaymentInfo(INDEXER_URL, nftId);
+				const info = await fetchPaymentInfo(INDEXER_URL, assetId);
 
 				const tx = new Transaction({ expiration: TX_EXPIRATION_MS });
 				if (info.sellerAmount > 0) {
@@ -56,7 +56,7 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 						from: buyer,
 						to: info.seller,
 						amount: `${info.sellerAmount.toFixed(3)} ${info.currency}`,
-						memo: `${MEMO_PREFIX_BUY}${nftId}`,
+						memo: `${MEMO_PREFIX_BUY}${assetId}`,
 					});
 				}
 				if (info.royaltyAmount > 0 && info.royaltyRecipient) {
@@ -64,7 +64,7 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 						from: buyer,
 						to: info.royaltyRecipient,
 						amount: `${info.royaltyAmount.toFixed(3)} ${info.currency}`,
-						memo: `${MEMO_PREFIX_ROYALTY}${nftId}`,
+						memo: `${MEMO_PREFIX_ROYALTY}${assetId}`,
 					});
 				}
 				if (info.feeAmount > 0) {
@@ -72,7 +72,7 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 						from: buyer,
 						to: info.feeAccount,
 						amount: `${info.feeAmount.toFixed(3)} ${info.currency}`,
-						memo: `${MEMO_PREFIX_FEE}${nftId}`,
+						memo: `${MEMO_PREFIX_FEE}${assetId}`,
 					});
 				}
 
@@ -85,7 +85,7 @@ export const marketplaceRoutes: Record<string, { POST: RouteHandler }> = {
 						version: PROTOCOL_VERSION,
 						action: ACTION_BUY,
 						data: {
-							nftId,
+							assetId,
 							listingId: info.listingId,
 							listTxId: info.listTxId,
 						},

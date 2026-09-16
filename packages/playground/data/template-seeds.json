@@ -1,8 +1,8 @@
 [
 	{
-		"artId": "my-nft-001",
-		"name": "My First NFT",
-		"brief": "Description of this NFT seed",
+		"artId": "my-asset-001",
+		"name": "My First Asset",
+		"brief": "Description of this Asset seed",
 		"imageUrl": "https://example.com/image.png",
 		"maxSupply": 100,
 		"immutableData": {

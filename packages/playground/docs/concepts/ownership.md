@@ -10,7 +10,7 @@ NFTLox separates collection authority, seed custody, instance origin, and curren
 create_collection
   -> mint seed
   -> bulk_distribute instances from seed
-  -> transfer / buy / nft_transfer_from instances between owners
+  -> transfer / buy / asset_transfer_from instances between owners
 ```
 
 `mint` creates seeds only. Instances are created by `bulk_distribute`.
@@ -23,11 +23,11 @@ create_collection
 |---|---|---|---|
 | Collection creator | `collections.creator` | No | Account that created the collection and controls schema-level authority |
 | Seed creator | Inherited from `collections.creator` through `mint` authorization | No | The collection creator is the only account allowed to mint seeds |
-| Seed owner | `nfts.owner` where `nft_type = "seed"` | Yes, before distribution lock | Current custodian of the seed and the only account allowed to distribute from it |
-| Instance origin | `nfts.seed_id` | No | Parent seed that gives the instance its art identity and immutable data |
-| Instance distributor | `nfts.created_operation_id -> confirmed_operations.signer` | No | Account that created the instance through `bulk_distribute` |
-| Instance owner | `nfts.owner` where `nft_type = "instance"` | Yes | Current owner of the instance |
-| Previous owner | `nfts.previous_owner` | Yes | Owner immediately before the latest ownership change |
+| Seed owner | `assets.owner` where `asset_type = "seed"` | Yes, before distribution lock | Current custodian of the seed and the only account allowed to distribute from it |
+| Instance origin | `assets.seed_id` | No | Parent seed that gives the instance its art identity and immutable data |
+| Instance distributor | `assets.created_operation_id -> confirmed_operations.signer` | No | Account that created the instance through `bulk_distribute` |
+| Instance owner | `assets.owner` where `asset_type = "instance"` | Yes | Current owner of the instance |
+| Previous owner | `assets.previous_owner` | Yes | Owner immediately before the latest ownership change |
 
 ---
 
@@ -73,12 +73,12 @@ Do not infer the creator of an old instance from the seed's current owner. Seed 
 | `mint` | Yes | Sets the initial seed owner |
 | `bulk_distribute` | Yes | Sets the initial instance owner to `to` or signer |
 | `transfer` | Yes | Moves current ownership |
-| `nft_transfer_from` | Yes | Moves current ownership through approval |
+| `asset_transfer_from` | Yes | Moves current ownership through approval |
 | `buy` | Yes | Moves ownership after marketplace settlement |
 | `list` | No | Only changes listing state |
 | `unlist` | No | Only clears listing state |
-| `nft_lend` | No | Changes custody, not ownership |
-| `nft_return` | No | Ends loan custody, not ownership |
+| `asset_lend` | No | Changes custody, not ownership |
+| `asset_return` | No | Ends loan custody, not ownership |
 
 On each ownership change, the indexer updates:
 
@@ -94,7 +94,7 @@ On each ownership change, the indexer updates:
 
 ## Provenance Anchors
 
-Each NFT has two different anchor groups:
+Each Asset has two different anchor groups:
 
 | Field | Purpose |
 |---|---|
@@ -105,7 +105,7 @@ Each NFT has two different anchor groups:
 | `owner_action` | Protocol action that established the current owner |
 | `owner_block_num` | Block where the current owner was established |
 
-For a newly created NFT, the creation anchor and owner anchor point to the same operation. After a transfer, sale, or approved transfer, the creation anchor stays fixed while the owner anchor moves forward.
+For a newly created Asset, the creation anchor and owner anchor point to the same operation. After a transfer, sale, or approved transfer, the creation anchor stays fixed while the owner anchor moves forward.
 
 ---
 

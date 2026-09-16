@@ -183,8 +183,8 @@ The distribution can reference any tx_id in the seed's lineage — the indexer v
 Seed IDs are deterministic. Re-running the script with the same `(collectionId, artId)` pairs produces the same IDs; the indexer will reject duplicate seeds with `SEED_ALREADY_EXISTS`. To **resume** a partial ceremony, skip batches whose seeds are already indexed:
 
 ```typescript
-const { nfts } = await client.getUserNfts(CREATOR, { type: "seed" });
-const existing  = new Set(nfts.map(n => n.id));
+const { assets } = await client.getUserAssets(CREATOR, { type: "seed" });
+const existing  = new Set(assets.map(n => n.id));
 const remaining = plan.seedBatches.filter(b => b.seeds.some(s => !existing.has(s.seedId)));
 ```
 

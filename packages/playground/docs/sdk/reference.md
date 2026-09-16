@@ -15,7 +15,7 @@ import {
 	// constants (re-exported from @nftlox/protocol)
 	PROTOCOL_ID, PROTOCOL_VERSION, MAX_OPERATIONS_PER_TX, PROTOCOL_COLLECTION_FEE_HBD,
 	// types
-	type KeychainResult, type CollectionData, type NFTData,
+	type KeychainResult, type CollectionData, type AssetData,
 } from "nftlox-sdk";
 ```
 
@@ -70,7 +70,7 @@ Every builder validates its input with a Zod schema; the schema is exported alon
 | Builder | Signature | Auth | Ops | Notes |
 |---|---|---|---|---|
 | `buildCollection` | `(input, options) => Promise<KeychainResult<CollectionData>>` | Active + node multisig | `[transfer, custom_json]` | Two-op flow: fee transfer (creator → nodeAccount) + protocol payload signed by node. |
-| `buildArchiveCollection` | `(input) => KeychainResult<ArchiveCollectionData>` | Posting | `[custom_json]` | Freezes a collection. Prevents further mints; existing NFTs keep trading. |
+| `buildArchiveCollection` | `(input) => KeychainResult<ArchiveCollectionData>` | Posting | `[custom_json]` | Freezes a collection. Prevents further mints; existing Assets keep trading. |
 | `buildExtendSchema` | `(input) => KeychainResult<ExtendSchemaData>` | Posting | `[custom_json]` | Append-only: add new `immutable` and/or `mutable` fields. Existing fields are immutable post-create. |
 | `buildCollectionWithSeeds` | `(input, options) => Promise<CollectionCreationPlan>` | mixed | multi-batch | Orchestrator: returns the collection step + N posting-only seed batches sized by `calculateMaxOperationsPerTx`. |
 
@@ -111,7 +111,7 @@ A **seed** is the non-distributable template. It carries the visual asset, max s
 
 | Builder | Signature | Auth | Ops |
 |---|---|---|---|
-| `buildSeed` | `(input) => Promise<KeychainResult<NFTData>>` | Posting | `[custom_json]` |
+| `buildSeed` | `(input) => Promise<KeychainResult<AssetData>>` | Posting | `[custom_json]` |
 | `buildSeedBatch` | `(input) => Promise<SeedBatchPlan>` | — (plan only) | — |
 | `buildBulkDistribute` | `(input) => KeychainResult<BulkDistributeData>` | Posting | `[custom_json]` |
 
@@ -137,7 +137,7 @@ A **seed** is the non-distributable template. It carries the visual asset, max s
 
 **`buildSeedBatch`** validates a list of seeds in one pass (catches duplicate or malformed `artId`s) and returns a plan with resolved seed IDs. It does **not** build operations — it is the pre-flight that `buildCollectionWithSeeds` uses internally, exposed for consumers that want to validate before constructing transactions.
 
-**`buildBulkDistribute`** produces instance NFTs from an existing seed:
+**`buildBulkDistribute`** produces instance Assets from an existing seed:
 
 ```typescript
 {
@@ -159,7 +159,7 @@ Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_T
 | `buildTransfer` | `(input) => KeychainResult<TransferData>` | Active | `[custom_json]` |
 | `buildBurn` | `(input) => KeychainResult<TransferData>` | Active | `[custom_json]` |
 
-`buildBurn` is a thin wrapper that emits a `transfer` whose `to` is the exported `BURN_RECIPIENT` constant (Hive's reserved `"null"` account). It accepts either a single `nftId` or a `nftIds` array for bulk burn.
+`buildBurn` is a thin wrapper that emits a `transfer` whose `to` is the exported `BURN_RECIPIENT` constant (Hive's reserved `"null"` account). It accepts either a single `assetId` or a `assetIds` array for bulk burn.
 
 ### Marketplace
 
@@ -169,33 +169,33 @@ Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_T
 | `buildUnlist` | `(input) => KeychainResult<UnlistData>` | Active | `[custom_json]` |
 | `buildBuy` | `(input) => KeychainResult<BuyData>` | Active + node multisig | `[...transfers, custom_json]` |
 
-**`buildList`** generates a deterministic `listingId` and a random `listingNonce`. The nonce is what distinguishes re-listings of the same NFT at the same price — without it, relisting would collide with the previous ID.
+**`buildList`** generates a deterministic `listingId` and a random `listingNonce`. The nonce is what distinguishes re-listings of the same Asset at the same price — without it, relisting would collide with the previous ID.
 
 ```typescript
 {
 	owner: string;
-	nftId: string;
+	assetId: string;
 	price: { amount: string; currency: "HIVE" | "HBD" };   // amount in 3-decimal string, ≥ 0.001
 	expiresAt?: number;              // unix millis, must be > now
 	marketplace?: string;            // namespacing tag; empty ⇒ global listing
 }
 ```
 
-Listings do not carry image metadata. Explorers and marketplaces resolve imagery via the `listing → nft → seed` FK chain — seeds are immutable, so there is no snapshot to preserve on the listing.
+Listings do not carry image metadata. Explorers and marketplaces resolve imagery via the `listing → asset → seed` FK chain — seeds are immutable, so there is no snapshot to preserve on the listing.
 
-**`buildBuy`** produces an ordered sequence of transfers (seller payout, optional royalty, protocol fee) followed by the `buy` custom_json. The custom_json is co-signed by the node. The transfers use fixed memo prefixes (`MEMO_PREFIX_BUY`, `MEMO_PREFIX_ROYALTY`, `MEMO_PREFIX_FEE`) so the indexer can reconcile each transfer against its listing unambiguously. Get the `paymentSplit` object from `client.getPaymentInfo(nftId)`.
+**`buildBuy`** produces an ordered sequence of transfers (seller payout, optional royalty, protocol fee) followed by the `buy` custom_json. The custom_json is co-signed by the node. The transfers use fixed memo prefixes (`MEMO_PREFIX_BUY`, `MEMO_PREFIX_ROYALTY`, `MEMO_PREFIX_FEE`) so the indexer can reconcile each transfer against its listing unambiguously. Get the `paymentSplit` object from `client.getPaymentInfo(assetId)`.
 
 ### Approvals & Delegation
 
 | Builder | Purpose |
 |---|---|
-| `buildNftApprove` | Grant/revoke a single-instance spender. |
-| `buildNftApproveAll` | Grant/revoke spender for a whole collection's instances owned by signer. |
-| `buildNftTransferFrom` | Operator-initiated transfer of an instance previously approved. |
+| `buildAssetApprove` | Grant/revoke a single-instance spender. |
+| `buildAssetApproveAll` | Grant/revoke spender for a whole collection's instances owned by signer. |
+| `buildAssetTransferFrom` | Operator-initiated transfer of an instance previously approved. |
 | `buildDataOperatorApprove` | Collection creator grants an operator rights to call `set_data_from`. |
 | `buildSetDataFrom` | Operator updates `mutableData` on an instance they are approved for. |
 
-`buildNftApprove`, `buildNftApproveAll`, and `buildNftTransferFrom` require
+`buildAssetApprove`, `buildAssetApproveAll`, and `buildAssetTransferFrom` require
 Active auth. `buildDataOperatorApprove` and `buildSetDataFrom` remain Posting
 auth. The approval builders operate on **instances** only — seeds are never
 approvable (they are templates, not tradable assets).
@@ -204,8 +204,8 @@ approvable (they are templates, not tradable assets).
 
 | Builder | Caller | Notes |
 |---|---|---|
-| `buildNftLend` | Owner | Lends an instance to a borrower. Owner and borrower must differ. |
-| `buildNftReturn` | Borrower | Returns the instance. Signer must be the current borrower. |
+| `buildAssetLend` | Owner | Lends an instance to a borrower. Owner and borrower must differ. |
+| `buildAssetReturn` | Borrower | Returns the instance. Signer must be the current borrower. |
 
 Lending only applies to instances. Seeds cannot be lent.
 
@@ -215,7 +215,7 @@ Both lending builders require Active auth because they change custody rights.
 
 | Builder | Caller | Notes |
 |---|---|---|
-| `buildSetData` | NFT owner | Updates `mutableData` on an instance. Validated against the `mutable` section of the collection schema. |
+| `buildSetData` | Asset owner | Updates `mutableData` on an instance. Validated against the `mutable` section of the collection schema. |
 | `buildSetDataFrom` | Approved operator | Same effect, but authorized via `data_operator_approve`. |
 
 ### Node operations (optional for running an indexer)
@@ -251,9 +251,9 @@ All re-exported from `@nftlox/protocol`. They are pure, async (Web Crypto SHA-25
 ```typescript
 generateDeterministicCollectionId(creator, name, symbol)   // "col_<20 hex>"
 generateDeterministicSeedId(collectionId, artId)           // "seed_<20 hex>"
-generateDeterministicInstanceId(seedId, instanceNumber)    // "nft_<20 hex>_<n>"
+generateDeterministicInstanceId(seedId, instanceNumber)    // "asset_<20 hex>_<n>"
 generateOriginDna(collectionId)                            // "o<15 upper-hex>"
-generateSeedDna(nftId, originDna, edition, imageHash)      // "i<19 upper-hex>" — seed DNA (mint / buildSeed)
+generateSeedDna(assetId, originDna, edition, imageHash)      // "i<19 upper-hex>" — seed DNA (mint / buildSeed)
 generateInstanceDna(seedId, n, txId, blockNum)             // "i<19 upper-hex>" — instance DNA (bulk_distribute)
 generateImageHash(imageUrl)                                // "img_<16 hex>"
 generateListingNonce()                                     // 12-char random
@@ -282,10 +282,10 @@ validateArtId(artId)                    // { valid: boolean, error?: string }
 validateArtIdArray(artIds)              // { valid, duplicates, formatErrors[] }
 ```
 
-### Pre-broadcast NFT state validation
+### Pre-broadcast Asset state validation
 
 ```typescript
-validateNftOperation(op, nftState)
+validateAssetOperation(op, assetState)
 ```
 
 Cheap local check before broadcasting — detects the common "already listed / not owner / locked" cases so the UI can fail fast instead of eating a broadcast + wait cycle.
@@ -305,7 +305,7 @@ Every Hive `custom_json` is capped at 8 KiB. The SDK uses 90% of that (`SAFE_PAY
 resolveInstance(instance, seed)
 ```
 
-Projects an `IndexerNftSummary` for a bare instance onto its seed, merging `immutableData`, visual metadata, and schema references — so a UI can render an instance with full context from a single seed lookup.
+Projects an `IndexerAssetSummary` for a bare instance onto its seed, merging `immutableData`, visual metadata, and schema references — so a UI can render an instance with full context from a single seed lookup.
 
 ## Indexer client
 
@@ -324,22 +324,22 @@ await client.getMultisigNodeAccount();  // same, but requires multisigSignerRead
 // Collections
 await client.getCollections({ creator, limit, offset });
 await client.getCollection(id);
-await client.getCollectionNfts(id, { type: "seed", limit });
+await client.getCollectionAssets(id, { type: "seed", limit });
 await client.getCollectionStats(id);
 await client.getCollectionSchemaHistory(id);
 
-// NFTs
-await client.getNft(id);
-await client.getNftOwner(id);
-await client.getNftOwnership(id);    // ownership proof
-await client.getNftProof(id);        // SPV-style lineage proof
-await client.getNftLoan(id);
-await client.getNftInstances(seedId, { compact: true });
+// Assets
+await client.getAsset(id);
+await client.getAssetOwner(id);
+await client.getAssetOwnership(id);    // ownership proof
+await client.getAssetProof(id);        // SPV-style lineage proof
+await client.getAssetLoan(id);
+await client.getAssetInstances(seedId, { compact: true });
 
 // Users
 await client.getUserAssets(username);
-await client.getUserNfts(username, { status: "active", type: "seed" });
-await client.getUserNftCounts(username);
+await client.getUserAssets(username, { status: "active", type: "seed" });
+await client.getUserAssetCounts(username);
 await client.getUserCollections(username);
 await client.getUserLoans(username, { role: "lender" });
 
@@ -352,7 +352,7 @@ await client.getSalesVolume({ collectionId });
 await client.getOperationStatus(txId);   // { indexed, confirmed, invalid, orphaned, operations[] }
 
 // Multisig
-await client.getPaymentInfo(nftId);         // PaymentInfo with full payment split
+await client.getPaymentInfo(assetId);         // PaymentInfo with full payment split
 await client.requestBuyMultisig(buyRequest); // node-last buy settlement (POSTs to /api/multisig/buy)
 await client.multisig(collectionRequest);   // create_collection co-sign (POSTs to /api/multisig/collection)
 ```
@@ -374,14 +374,14 @@ requestCreateCollectionMultisig(baseUrl, { transaction }, options?)
 // → { ok: true, signature, digest, expiration } | { ok: false, code, message, retryAfterMs? }
 ```
 
-Both solve the required Proof-of-Work token automatically (default `DEFAULT_MULTISIG_POW_BITS = 16`). Override difficulty via `options.powBits` (max `MAX_MULTISIG_POW_BITS = 24`). Failure payloads share the typed `MultisigErrorCode` surface (`NFT_LOCKED`, `CROSS_NODE_RESERVATION`, `RATE_LIMITED`, `INDEXER_LAGGED`, `BUYER_SIGNATURE_MISSING`, …). See [Error Codes](../reference/errors.md#multisig-errors) for the full list.
+Both solve the required Proof-of-Work token automatically (default `DEFAULT_MULTISIG_POW_BITS = 16`). Override difficulty via `options.powBits` (max `MAX_MULTISIG_POW_BITS = 24`). Failure payloads share the typed `MultisigErrorCode` surface (`Asset_LOCKED`, `CROSS_NODE_RESERVATION`, `RATE_LIMITED`, `INDEXER_LAGGED`, `BUYER_SIGNATURE_MISSING`, …). See [Error Codes](../reference/errors.md#multisig-errors) for the full list.
 
 Supporting utilities:
 
 ```typescript
 fetchNodeAccount(baseUrl, options?)           // resolves + optionally gates on multisigSignerReady
 resolveNodeAccountFromStatus(status, options?)
-fetchPaymentInfo(baseUrl, nftId)
+fetchPaymentInfo(baseUrl, assetId)
 ```
 
 ## PoW primitives
@@ -421,14 +421,14 @@ Re-exported from `@nftlox/protocol`:
 | Constant | Value | Meaning |
 |---|---|---|
 | `PROTOCOL_ID` | `"nftlox_testnet"` | The `id` field on every `custom_json`. |
-| `PROTOCOL_VERSION` | `"0.11.0"` | The `version` field in every payload. |
-| `MIN_PROTOCOL_VERSION` | `"0.11.0"` | Lowest protocol version the indexer still accepts. |
+| `PROTOCOL_VERSION` | `"1.0.0"` | The `version` field in every payload. |
+| `MIN_PROTOCOL_VERSION` | `"1.0.0"` | Lowest protocol version the indexer still accepts. |
 | `HIVE_BLOCK_TIME_MS` | `3000` | Hive block cadence. Every `*_BLOCKS` window converts to wall time through this. |
 | `HIVE_DECIMALS` / `HIVE_PRECISION` | `3` / `1000` | Decimals and micro-unit multiplier for HIVE/HBD amounts. |
 | `MAX_OPERATIONS_PER_TX` | `5` | Hard cap per Hive transaction. |
 | `MAX_BULK_DISTRIBUTE_ITEMS` | `50` | Max distinct seeds per `bulk_distribute`. |
 | `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY` | `250` | Max created instances per `bulk_distribute`. |
-| `MAX_TRANSFER_BATCH_SIZE` | `50` | Max `nftIds` per bulk transfer/burn. |
+| `MAX_TRANSFER_BATCH_SIZE` | `50` | Max `assetIds` per bulk transfer/burn. |
 | `MAX_INSTANCES_PER_COLLECTION` | `1_000_000` | Hard upper bound on creator-declared `maxInstances`. |
 | `SAFE_PAYLOAD_MAX_BYTES` | `7372` | 90% of Hive's 8 KiB custom_json ceiling. |
 | `PROTOCOL_COLLECTION_FEE_HBD` | `"0.100"` | Default fee for `create_collection`. |
@@ -440,15 +440,15 @@ Re-exported from `@nftlox/protocol`:
 | `MULTISIG_TX_MAX_EXPIRATION_MS` | `120_000` | Upper bound on a buy transaction's L1 `expiration`. Equals `BUY_TX_TTL_MS` so the signed buy cannot remain broadcastable after the reservation window has ended. |
 | `RECOMMENDED_BUY_TX_EXPIRATION_MS` | `120_000` | SDK default — equals `MULTISIG_TX_MAX_EXPIRATION_MS`. First-class SDK callers get the full finality-safe orchestration window. Lower it toward `MULTISIG_TX_MIN_EXPIRATION_MS` only when minimizing the orphan-risk profile. |
 | `BUY_TX_TTL_MS` | `120_000` | Settlement-internal TTL (`alias BUY_COMMITMENT_TTL_BLOCKS × HIVE_BLOCK_TIME_MS`). The on-chain `buy_commitment` reservation and the local `buyLock` row both use this value. |
-| `BUY_COMMITMENT_TTL_BLOCKS` | `40` | Blocks (`= BUY_TX_TTL_MS / HIVE_BLOCK_TIME_MS`, ≈ 120 s @ 3 s/block) a `buy_commitment` stays valid before the NFT is released back to `listed`. |
+| `BUY_COMMITMENT_TTL_BLOCKS` | `40` | Blocks (`= BUY_TX_TTL_MS / HIVE_BLOCK_TIME_MS`, ≈ 120 s @ 3 s/block) a `buy_commitment` stays valid before the Asset is released back to `listed`. |
 | `BUY_COMMITMENT_OBSERVATION_TIMEOUT_MS` | `60_000` | HTTP-side observation budget — the local node waits at most this long for its own `buy_commitment` to be indexed. Shorter than `BUY_TX_TTL_MS` by design; on `COMMITMENT_INCLUSION_TIMEOUT` the on-chain commitment and the local `buyLock` may still be live and the response carries `commitmentOpTxId` for reconciliation. |
 | `BUY_API_LAG_MAX_BLOCKS` | `3` | Max indexer-vs-irreversible-cursor lag (blocks) that still allows `/api/multisig/buy` to serve requests. |
 | `BUY_API_HEAD_STALENESS_MAX_MS` | `30_000` | Max wall-clock staleness for the indexer's view of Hive HEAD. Catches RPC outages where lag math stays healthy but the timestamp reference becomes stale. |
-| `MAX_ACTIVE_COMMITMENTS_PER_NODE` | `10` | Per-node cap on concurrently active `buy_commitment` reservations. Limits the grief a rogue node can cause by holding too many NFTs in `pending_sale`. |
+| `MAX_ACTIVE_COMMITMENTS_PER_NODE` | `10` | Per-node cap on concurrently active `buy_commitment` reservations. Limits the grief a rogue node can cause by holding too many Assets in `pending_sale`. |
 | `MAX_NODE_HEARTBEAT_STALENESS_BLOCKS` | `10_000` | Block gap (2 × `MIN_HEARTBEAT_INTERVAL_BLOCKS`) after which a settlement node is no longer considered active for buy co-signing. |
 | `BURN_RECIPIENT` | `"null"` | Hive's reserved burn account; `buildBurn` transfers `to` this value. |
 | `HASH_FORMAT_PREFIX` | `"sha256:"` | Canonical textual form for protocol hashes (data hashes, state roots). |
-| `COLLECTION_ID_PREFIX` / `SEED_ID_PREFIX` / `INSTANCE_ID_PREFIX` / `IMAGE_ID_PREFIX` | `"col_"` / `"seed_"` / `"nft_"` / `"img_"` | Id classification prefixes — use these instead of raw string literals. |
+| `COLLECTION_ID_PREFIX` / `SEED_ID_PREFIX` / `INSTANCE_ID_PREFIX` / `IMAGE_ID_PREFIX` | `"col_"` / `"seed_"` / `"asset_"` / `"img_"` | Id classification prefixes — use these instead of raw string literals. |
 
 ## Type re-exports
 
@@ -459,10 +459,10 @@ Every builder data type, action string, and validator type is re-exported. Key o
 type ProtocolPayload<T> = { protocol: string; version: string; action: ProtocolAction; data: T };
 
 // Action data types (one per ProtocolAction)
-type CollectionData, NFTData, BulkDistributeData, TransferData, SetDataData,
+type CollectionData, AssetData, BulkDistributeData, TransferData, SetDataData,
      SetDataFromData, ListingData, UnlistData, BuyData,
-     NftApproveData, NftApproveAllData, NftTransferFromData,
-     DataOperatorApproveData, NftLendData, NftReturnData,
+     AssetApproveData, AssetApproveAllData, AssetTransferFromData,
+     DataOperatorApproveData, AssetLendData, AssetReturnData,
      NodeRegisterData, NodeHeartbeatData,
      ArchiveCollectionData, ExtendSchemaData;
 
@@ -472,12 +472,12 @@ type ProtocolAction =
 	| "set_data" | "extend_schema" | "archive_collection"
 	| "node_register" | "node_heartbeat"
 	| "list" | "unlist" | "buy_commitment" | "buy"
-	| "nft_approve" | "nft_approve_all" | "nft_transfer_from"
-	| "nft_lend" | "nft_return"
+	| "asset_approve" | "asset_approve_all" | "asset_transfer_from"
+	| "asset_lend" | "asset_return"
 	| "data_operator_approve" | "set_data_from";
 
 type SupportedCurrency = "HIVE" | "HBD";
-type NftKind = "seed" | "instance";
+type AssetKind = "seed" | "instance";
 ```
 
 See [Data Formats](../data-formats.md) for the on-chain shape of every payload.

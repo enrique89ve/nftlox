@@ -709,14 +709,14 @@
         color: var(--warning);
       }
 
-      /* NFT grid */
-      .nft-grid {
+      /* Asset grid */
+      .asset-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
         gap: 16px;
       }
 
-      .nft-card {
+      .asset-card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 8px;
@@ -728,20 +728,20 @@
         box-shadow: var(--shadow-sm);
       }
 
-      .nft-card:hover {
+      .asset-card:hover {
         border-color: var(--border-hover);
         transform: translateY(-3px);
         box-shadow: var(--shadow-md);
       }
 
-      .nft-card.selected {
+      .asset-card.selected {
         border-color: var(--accent);
         box-shadow:
           0 0 0 1px var(--accent),
           0 8px 24px rgba(34, 197, 94, 0.15);
       }
 
-      .nft-image {
+      .asset-image {
         width: 100%;
         aspect-ratio: 1;
         object-fit: cover;
@@ -749,11 +749,11 @@
         display: block;
       }
 
-      .nft-card-body {
+      .asset-card-body {
         padding: 12px 14px 14px;
       }
 
-      .nft-name {
+      .asset-name {
         font-size: 13px;
         font-weight: 600;
         white-space: nowrap;
@@ -763,13 +763,13 @@
         color: var(--text);
       }
 
-      .nft-owner {
+      .asset-owner {
         font-family: var(--mono);
         font-size: 11px;
         color: var(--accent);
       }
 
-      .nft-meta {
+      .asset-meta {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -780,11 +780,11 @@
         font-size: 11px;
       }
 
-      .nft-meta-supply {
+      .asset-meta-supply {
         color: var(--text-muted);
       }
 
-      .nft-type-badge {
+      .asset-type-badge {
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 0;
@@ -792,12 +792,12 @@
         border-radius: 3px;
       }
 
-      .nft-type-badge.seed {
+      .asset-type-badge.seed {
         background: var(--accent-dim);
         color: var(--accent);
       }
 
-      .nft-type-badge.instance {
+      .asset-type-badge.instance {
         background: rgba(59, 130, 246, 0.15);
         color: #3b82f6;
       }
@@ -830,8 +830,8 @@
         border-radius: 4px;
       }
 
-      /* Legacy compat for .nft-id used in collection detail */
-      .nft-id {
+      /* Legacy compat for .asset-id used in collection detail */
+      .asset-id {
         font-family: var(--mono);
         font-size: 10px;
         color: var(--text-dim);
@@ -866,15 +866,15 @@
         font-weight: 500;
       }
 
-      /* NFT Detail */
-      .nft-detail {
+      /* Asset Detail */
+      .asset-detail {
         display: grid;
         grid-template-columns: 400px 1fr;
         gap: 40px;
         align-items: start;
       }
 
-      .nft-detail-image {
+      .asset-detail-image {
         width: 100%;
         aspect-ratio: 1;
         object-fit: cover;
@@ -886,13 +886,13 @@
         box-shadow: var(--shadow-md);
       }
 
-      .nft-detail-info {
+      .asset-detail-info {
         display: flex;
         flex-direction: column;
         gap: 24px;
       }
 
-      .nft-detail-title {
+      .asset-detail-title {
         font-size: 32px;
         font-weight: 600;
         letter-spacing: 0;
@@ -900,7 +900,7 @@
         margin-bottom: -10px;
       }
 
-      .nft-detail-owner {
+      .asset-detail-owner {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -912,24 +912,24 @@
         margin-bottom: 8px;
       }
 
-      .nft-detail-owner-label {
+      .asset-detail-owner-label {
         font-size: 12px;
         color: var(--text-dim);
       }
 
-      .nft-detail-owner-name {
+      .asset-detail-owner-name {
         font-family: var(--mono);
         color: var(--accent);
         font-weight: 500;
       }
 
-      .nft-badges {
+      .asset-badges {
         display: flex;
         gap: 8px;
         margin-bottom: -15px;
       }
 
-      .nft-badge {
+      .asset-badge {
         display: inline-flex;
         align-items: center;
         gap: 4px;
@@ -941,31 +941,31 @@
         letter-spacing: 0;
       }
 
-      .nft-badge.seed {
+      .asset-badge.seed {
         background: var(--accent-dim);
         color: var(--accent);
         border: 1px solid rgba(34, 197, 94, 0.2);
       }
 
-      .nft-badge.instance {
+      .asset-badge.instance {
         background: rgba(59, 130, 246, 0.1);
         color: #60a5fa;
         border: 1px solid rgba(59, 130, 246, 0.2);
       }
 
-      .nft-badge.auth {
+      .asset-badge.auth {
         background: rgba(20, 184, 166, 0.1);
         color: #5eead4;
         border: 1px solid rgba(20, 184, 166, 0.2);
       }
 
-      .nft-badge.posting {
+      .asset-badge.posting {
         background: rgba(139, 92, 246, 0.1);
         color: #a78bfa;
         border: 1px solid rgba(139, 92, 246, 0.2);
       }
 
-      .nft-badge.listed {
+      .asset-badge.listed {
         background: rgba(245, 158, 11, 0.1);
         color: var(--warning);
         border: 1px solid rgba(245, 158, 11, 0.2);
@@ -1115,10 +1115,10 @@
       }
 
       @media (max-width: 900px) {
-        .nft-detail {
+        .asset-detail {
           grid-template-columns: 1fr;
         }
-        .nft-detail-image {
+        .asset-detail-image {
           max-width: 400px;
         }
       }
@@ -1589,7 +1589,7 @@
         font-weight: 700;
       }
 
-      .nft-card-footer {
+      .asset-card-footer {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -1812,7 +1812,7 @@
           <div class="page-header">
             <h1 class="page-title">NFTLox Playground</h1>
             <p class="page-desc">
-              Create seeds, distribute instances, and manage NFT ownership on
+              Create seeds, distribute instances, and manage Asset ownership on
               Hive.
             </p>
           </div>
@@ -1884,12 +1884,12 @@
                 onclick="searchUser()"
                 style="height: 42px"
               >
-                Find NFTs
+                Find Assets
               </button>
             </div>
             <div
               id="search-results"
-              class="nft-grid"
+              class="asset-grid"
               style="margin-top: 16px"
             ></div>
           </div>
@@ -1962,7 +1962,7 @@
         <div class="page" id="page-create">
           <div class="page-header">
             <h1 class="page-title">Create Collection</h1>
-            <p class="page-desc">Create a new collection and mint seed NFTs</p>
+            <p class="page-desc">Create a new collection and mint seed Assets</p>
           </div>
 
           <!-- Stepper -->
@@ -2004,7 +2004,7 @@
                 <option value="playground/sample-seeds.json">
                   Genesis Seeds (5 seeds, tiered rarity)
                 </option>
-                <option value="playground/sample-nfts.json">
+                <option value="playground/sample-assets.json">
                   Cosmic Collection (10 seeds, art)
                 </option>
                 <option value="playground/sample-game-cards.json">
@@ -2117,7 +2117,7 @@
 
           <!-- Step 2: Upload Seeds -->
           <div class="card" id="step-2-content" style="display: none">
-            <div class="card-title">Upload Seed NFTs</div>
+            <div class="card-title">Upload Seed Assets</div>
 
             <div class="upload-area" id="upload-area" style="margin-top: 16px">
               <svg
@@ -2456,7 +2456,7 @@
 
           <div class="btn-group" style="margin-bottom: 24px">
             <button class="btn btn-secondary" onclick="loadInventory()">
-              Refresh NFTs
+              Refresh Assets
             </button>
           </div>
 
@@ -2547,7 +2547,7 @@
               <div class="stat-value" id="detail-instances-count">0</div>
             </div>
             <div class="stat-box">
-              <div class="stat-label">Total NFTs</div>
+              <div class="stat-label">Total Assets</div>
               <div class="stat-value" id="detail-total-count">0</div>
             </div>
           </div>
@@ -2556,23 +2556,23 @@
             <div class="card-header">
               <span class="card-title">Seeds</span>
             </div>
-            <div id="collection-seeds" class="nft-grid"></div>
+            <div id="collection-seeds" class="asset-grid"></div>
           </div>
 
           <div class="card" style="margin-top: 20px">
             <div class="card-header">
               <span class="card-title">Instances</span>
             </div>
-            <div id="collection-instances" class="nft-grid"></div>
+            <div id="collection-instances" class="asset-grid"></div>
           </div>
         </div>
 
-        <!-- NFT Detail Page -->
-        <div class="page" id="page-nft-detail">
+        <!-- Asset Detail Page -->
+        <div class="page" id="page-asset-detail">
           <button
             class="btn-back"
-            id="nft-detail-back"
-            onclick="goBackFromNft()"
+            id="asset-detail-back"
+            onclick="goBackFromAsset()"
           >
             <svg
               width="16"
@@ -2587,21 +2587,21 @@
             Back
           </button>
 
-          <div class="nft-detail">
+          <div class="asset-detail">
             <div>
               <img
-                class="nft-detail-image"
-                id="nft-detail-image"
+                class="asset-detail-image"
+                id="asset-detail-image"
                 src=""
-                alt="NFT"
+                alt="Asset"
               />
             </div>
-            <div class="nft-detail-info">
-              <div class="nft-badges" id="nft-detail-badges"></div>
-              <h1 class="nft-detail-title" id="nft-detail-name">NFT Name</h1>
-              <div class="nft-detail-owner">
-                <span class="nft-detail-owner-label">Owned by</span>
-                <span class="nft-detail-owner-name" id="nft-detail-owner"
+            <div class="asset-detail-info">
+              <div class="asset-badges" id="asset-detail-badges"></div>
+              <h1 class="asset-detail-title" id="asset-detail-name">Asset Name</h1>
+              <div class="asset-detail-owner">
+                <span class="asset-detail-owner-label">Owned by</span>
+                <span class="asset-detail-owner-name" id="asset-detail-owner"
                   >@owner</span
                 >
               </div>
@@ -2644,7 +2644,7 @@
                       </svg>
                       Origin DNA
                     </div>
-                    <div class="detail-item-value" id="nft-detail-origin-dna">
+                    <div class="detail-item-value" id="asset-detail-origin-dna">
                       -
                     </div>
                   </div>
@@ -2666,7 +2666,7 @@
                       </svg>
                       Instance DNA
                     </div>
-                    <div class="detail-item-value" id="nft-detail-instance-dna">
+                    <div class="detail-item-value" id="asset-detail-instance-dna">
                       -
                     </div>
                   </div>
@@ -2686,9 +2686,9 @@
                         <path d="M4 9h16" />
                         <path d="M9 4v16" />
                       </svg>
-                      NFT ID
+                      Asset ID
                     </div>
-                    <div class="detail-item-value" id="nft-detail-id">-</div>
+                    <div class="detail-item-value" id="asset-detail-id">-</div>
                   </div>
                   <div class="detail-item">
                     <div class="detail-item-label">
@@ -2710,7 +2710,7 @@
                     </div>
                     <div
                       class="detail-item-value"
-                      id="nft-detail-collection-id"
+                      id="asset-detail-collection-id"
                     >
                       -
                     </div>
@@ -2727,13 +2727,13 @@
                 <div class="detail-grid">
                   <div class="detail-item">
                     <div class="detail-item-label">Max Supply</div>
-                    <div class="detail-item-value" id="nft-detail-max-supply">
+                    <div class="detail-item-value" id="asset-detail-max-supply">
                       -
                     </div>
                   </div>
                   <div class="detail-item">
                     <div class="detail-item-label">Distributed</div>
-                    <div class="detail-item-value" id="nft-detail-distributed">
+                    <div class="detail-item-value" id="asset-detail-distributed">
                       -
                     </div>
                   </div>
@@ -2763,11 +2763,11 @@
                       d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
                     />
                   </svg>
-                  Parent NFT
+                  Parent Asset
                 </div>
-                <div class="instance-item" id="nft-parent-item" onclick="">
+                <div class="instance-item" id="asset-parent-item" onclick="">
                   <span class="instance-num">SEED</span>
-                  <span class="instance-owner" id="nft-parent-name">-</span>
+                  <span class="instance-owner" id="asset-parent-name">-</span>
                 </div>
               </div>
 
@@ -2779,13 +2779,13 @@
                 <div class="detail-section-title">
                   Instances (<span id="instances-count">0</span>)
                 </div>
-                <div class="instances-list" id="nft-instances-list"></div>
+                <div class="instances-list" id="asset-instances-list"></div>
               </div>
 
               <!-- Actions Section (visible when owner) -->
               <div
                 class="detail-section"
-                id="nft-actions-section"
+                id="asset-actions-section"
                 style="display: none"
               >
                 <div class="detail-section-title">
@@ -2810,7 +2810,7 @@
                 </div>
 
                 <!-- Seed actions -->
-                <div id="nft-action-seed-buttons" style="display: none">
+                <div id="asset-action-seed-buttons" style="display: none">
                   <div style="display: flex; flex-direction: column; gap: 14px">
                     <div
                       style="
@@ -2852,14 +2852,14 @@
                         <input
                           type="text"
                           class="form-input"
-                          id="nft-action-to"
+                          id="asset-action-to"
                           placeholder="Recipient username"
                           style="background: var(--surface)"
                         />
                       </div>
                       <div
                         class="form-group"
-                        id="nft-action-quantity-group"
+                        id="asset-action-quantity-group"
                         style="margin-bottom: 12px"
                       >
                         <div
@@ -2868,13 +2868,13 @@
                           <input
                             type="number"
                             class="form-input"
-                            id="nft-action-quantity"
+                            id="asset-action-quantity"
                             value="1"
                             min="1"
                             style="width: 80px; background: var(--surface)"
                           />
                           <span
-                            id="nft-action-remaining"
+                            id="asset-action-remaining"
                             style="
                               color: var(--text-dim);
                               font-size: 12px;
@@ -2886,7 +2886,7 @@
                       </div>
                       <button
                         class="btn btn-primary"
-                        onclick="nftDetailDistribute()"
+                        onclick="assetDetailDistribute()"
                         style="
                           width: 100%;
                           box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
@@ -2929,14 +2929,14 @@
                         <input
                           type="text"
                           class="form-input"
-                          id="nft-action-seed-transfer-to"
+                          id="asset-action-seed-transfer-to"
                           placeholder="Recipient username"
                           style="background: var(--surface)"
                         />
                       </div>
                       <button
                         class="btn btn-secondary"
-                        onclick="nftDetailTransferSeed()"
+                        onclick="assetDetailTransferSeed()"
                         style="width: 100%"
                       >
                         Transfer Seed
@@ -2957,11 +2957,11 @@
                 </div>
 
                 <!-- Instance actions -->
-                <div id="nft-action-instance-buttons" style="display: none">
+                <div id="asset-action-instance-buttons" style="display: none">
                   <div style="display: flex; flex-direction: column; gap: 14px">
                     <!-- Sell -->
                     <div
-                      id="nft-action-list-form"
+                      id="asset-action-list-form"
                       style="
                         background: rgba(245, 158, 11, 0.08);
                         border: 1px solid rgba(245, 158, 11, 0.3);
@@ -3002,13 +3002,13 @@
                         <input
                           type="text"
                           class="form-input"
-                          id="nft-action-price"
+                          id="asset-action-price"
                           placeholder="10.000"
                           style="flex: 1; background: var(--surface)"
                         />
                         <select
                           class="form-input"
-                          id="nft-action-currency"
+                          id="asset-action-currency"
                           style="width: 90px; background: var(--surface)"
                         >
                           <option value="HIVE">HIVE</option>
@@ -3017,7 +3017,7 @@
                       </div>
                       <button
                         class="btn btn-primary"
-                        onclick="nftDetailList()"
+                        onclick="assetDetailList()"
                         style="
                           width: 100%;
                           background: var(--warning);
@@ -3043,7 +3043,7 @@
                     </div>
                     <!-- Unlist (shown when listed) -->
                     <div
-                      id="nft-action-unlist-form"
+                      id="asset-action-unlist-form"
                       style="
                         display: none;
                         background: rgba(245, 158, 11, 0.05);
@@ -3070,11 +3070,11 @@
                           margin-bottom: 12px;
                           font-weight: 500;
                         "
-                        id="nft-action-listing-info"
+                        id="asset-action-listing-info"
                       ></p>
                       <button
                         class="btn btn-secondary"
-                        onclick="nftDetailUnlist()"
+                        onclick="assetDetailUnlist()"
                         style="
                           width: 100%;
                           border-color: var(--warning);
@@ -3126,14 +3126,14 @@
                         <input
                           type="text"
                           class="form-input"
-                          id="nft-action-instance-to"
+                          id="asset-action-instance-to"
                           placeholder="Recipient username"
                           style="background: var(--surface)"
                         />
                       </div>
                       <button
                         class="btn btn-secondary"
-                        onclick="nftDetailTransfer()"
+                        onclick="assetDetailTransfer()"
                         style="width: 100%"
                       >
                         Transfer Instance
@@ -3157,7 +3157,7 @@
               <!-- Set Mutable Data (visible when creator) -->
               <div
                 class="detail-section"
-                id="nft-set-data-section"
+                id="asset-set-data-section"
                 style="display: none"
               >
                 <div class="detail-section-title">
@@ -3190,12 +3190,12 @@
                     <label
                       class="form-label"
                       style="color: var(--text-dim); font-size: 12px"
-                      >NFT ID</label
+                      >Asset ID</label
                     >
                     <input
                       type="text"
                       class="form-input"
-                      id="nft-set-data-id"
+                      id="asset-set-data-id"
                       readonly
                       style="background: var(--surface); opacity: 0.7"
                     />
@@ -3208,7 +3208,7 @@
                     >
                     <textarea
                       class="form-input"
-                      id="nft-set-data-json"
+                      id="asset-set-data-json"
                       rows="5"
                       placeholder='{"level": 5, "xp": 1200}'
                       style="
@@ -3219,14 +3219,14 @@
                       "
                     ></textarea>
                     <div
-                      id="nft-set-data-error"
+                      id="asset-set-data-error"
                       class="field-error"
                       style="display: none; margin-top: 6px"
                     ></div>
                   </div>
                   <button
                     class="btn btn-primary"
-                    onclick="nftDetailSetData()"
+                    onclick="assetDetailSetData()"
                     style="width: 100%"
                   >
                     Update Mutable Data
@@ -3246,10 +3246,10 @@
                 </div>
               </div>
 
-              <!-- Burn NFT (visible when owner) -->
+              <!-- Burn Asset (visible when owner) -->
               <div
                 class="detail-section"
-                id="nft-burn-section"
+                id="asset-burn-section"
                 style="display: none"
               >
                 <div class="detail-section-title" style="color: var(--error)">
@@ -3284,12 +3284,12 @@
                       margin-bottom: 12px;
                     "
                   >
-                    Burning permanently destroys this NFT. This action is
+                    Burning permanently destroys this Asset. This action is
                     irreversible.
                   </p>
                   <button
                     class="btn btn-secondary"
-                    onclick="nftDetailBurn()"
+                    onclick="assetDetailBurn()"
                     style="
                       width: 100%;
                       border-color: rgba(239, 68, 68, 0.5);
@@ -3297,7 +3297,7 @@
                       font-weight: 600;
                     "
                   >
-                    Burn NFT
+                    Burn Asset
                   </button>
                   <small
                     style="
@@ -3318,13 +3318,13 @@
                 <div class="detail-grid">
                   <div class="detail-item">
                     <div class="detail-item-label">Minted By</div>
-                    <div class="detail-item-value" id="nft-detail-minted-by">
+                    <div class="detail-item-value" id="asset-detail-minted-by">
                       -
                     </div>
                   </div>
                   <div class="detail-item">
                     <div class="detail-item-label">Minted At</div>
-                    <div class="detail-item-value" id="nft-detail-minted-at">
+                    <div class="detail-item-value" id="asset-detail-minted-at">
                       -
                     </div>
                   </div>
@@ -3356,11 +3356,11 @@
 
           <!-- ===== Tab: Permissions ===== -->
           <div class="advanced-tab-content active" id="tab-permissions">
-            <!-- NFT Approve -->
+            <!-- Asset Approve -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">NFT Approve</span>
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="card-title">Asset Approve</span>
+                <span class="asset-badge auth">ACTIVE KEY</span>
               </div>
               <p
                 style="
@@ -3369,7 +3369,7 @@
                   margin-bottom: 12px;
                 "
               >
-                Approve a spender to transfer a specific NFT instance on your
+                Approve a spender to transfer a specific Asset instance on your
                 behalf.
               </p>
               <div class="form-row">
@@ -3377,7 +3377,7 @@
                   <label class="form-label">Instance ID</label>
                   <input
                     class="form-input"
-                    id="perm-nft-approve-instance"
+                    id="perm-asset-approve-instance"
                     placeholder="inst_abc123_1"
                   />
                 </div>
@@ -3385,7 +3385,7 @@
                   <label class="form-label">Spender</label>
                   <input
                     class="form-input"
-                    id="perm-nft-approve-spender"
+                    id="perm-asset-approve-spender"
                     placeholder="bob"
                   />
                 </div>
@@ -3394,23 +3394,23 @@
                 class="form-group"
                 style="display: flex; align-items: center; gap: 8px"
               >
-                <input type="checkbox" id="perm-nft-approve-approved" checked />
-                <label for="perm-nft-approve-approved" style="font-size: 13px"
+                <input type="checkbox" id="perm-asset-approve-approved" checked />
+                <label for="perm-asset-approve-approved" style="font-size: 13px"
                   >Approved</label
                 >
               </div>
-              <button class="btn btn-primary" id="btn-nft-approve">
+              <button class="btn btn-primary" id="btn-asset-approve">
                 Approve via Keychain
               </button>
             </div>
 
-            <!-- NFT Approve All -->
+            <!-- Asset Approve All -->
             <div class="card">
               <div class="card-header">
                 <span class="card-title"
-                  >NFT Approve All (Collection-wide)</span
+                  >Asset Approve All (Collection-wide)</span
                 >
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="asset-badge auth">ACTIVE KEY</span>
               </div>
               <p
                 style="
@@ -3419,14 +3419,14 @@
                   margin-bottom: 12px;
                 "
               >
-                Approve a spender for all your NFTs in a collection.
+                Approve a spender for all your Assets in a collection.
               </p>
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Collection ID</label>
                   <input
                     class="form-input"
-                    id="perm-nft-approve-all-collection"
+                    id="perm-asset-approve-all-collection"
                     placeholder="col_abc123"
                   />
                 </div>
@@ -3434,7 +3434,7 @@
                   <label class="form-label">Spender</label>
                   <input
                     class="form-input"
-                    id="perm-nft-approve-all-spender"
+                    id="perm-asset-approve-all-spender"
                     placeholder="bob"
                   />
                 </div>
@@ -3445,25 +3445,25 @@
               >
                 <input
                   type="checkbox"
-                  id="perm-nft-approve-all-approved"
+                  id="perm-asset-approve-all-approved"
                   checked
                 />
                 <label
-                  for="perm-nft-approve-all-approved"
+                  for="perm-asset-approve-all-approved"
                   style="font-size: 13px"
                   >Approved</label
                 >
               </div>
-              <button class="btn btn-primary" id="btn-nft-approve-all">
+              <button class="btn btn-primary" id="btn-asset-approve-all">
                 Approve All via Keychain
               </button>
             </div>
 
-            <!-- NFT Transfer From -->
+            <!-- Asset Transfer From -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">NFT Transfer From</span>
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="card-title">Asset Transfer From</span>
+                <span class="asset-badge auth">ACTIVE KEY</span>
               </div>
               <p
                 style="
@@ -3472,14 +3472,14 @@
                   margin-bottom: 12px;
                 "
               >
-                Transfer an NFT you have approval for (as spender).
+                Transfer an Asset you have approval for (as spender).
               </p>
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">From (owner)</label>
                   <input
                     class="form-input"
-                    id="perm-nft-xfer-from"
+                    id="perm-asset-xfer-from"
                     placeholder="alice"
                   />
                 </div>
@@ -3487,7 +3487,7 @@
                   <label class="form-label">To</label>
                   <input
                     class="form-input"
-                    id="perm-nft-xfer-to"
+                    id="perm-asset-xfer-to"
                     placeholder="charlie"
                   />
                 </div>
@@ -3496,11 +3496,11 @@
                 <label class="form-label">Instance ID</label>
                 <input
                   class="form-input"
-                  id="perm-nft-xfer-instance"
+                  id="perm-asset-xfer-instance"
                   placeholder="inst_abc123_1"
                 />
               </div>
-              <button class="btn btn-primary" id="btn-nft-transfer-from">
+              <button class="btn btn-primary" id="btn-asset-transfer-from">
                 Transfer From via Keychain
               </button>
             </div>
@@ -3508,8 +3508,8 @@
             <!-- Lending -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Lend NFT</span>
-                <span class="nft-badge posting">POSTING KEY</span>
+                <span class="card-title">Lend Asset</span>
+                <span class="asset-badge posting">POSTING KEY</span>
               </div>
               <div class="form-row">
                 <div class="form-group">
@@ -3529,7 +3529,7 @@
                   />
                 </div>
               </div>
-              <button class="btn btn-primary" id="btn-nft-lend">
+              <button class="btn btn-primary" id="btn-asset-lend">
                 Lend via Keychain
               </button>
             </div>
@@ -3537,8 +3537,8 @@
             <!-- Return -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Return NFT</span>
-                <span class="nft-badge posting">POSTING KEY</span>
+                <span class="card-title">Return Asset</span>
+                <span class="asset-badge posting">POSTING KEY</span>
               </div>
               <div class="form-group">
                 <label class="form-label">Instance ID</label>
@@ -3548,7 +3548,7 @@
                   placeholder="inst_abc123_1"
                 />
               </div>
-              <button class="btn btn-secondary" id="btn-nft-return">
+              <button class="btn btn-secondary" id="btn-asset-return">
                 Return via Keychain
               </button>
             </div>
@@ -3557,7 +3557,7 @@
             <div class="card">
               <div class="card-header">
                 <span class="card-title">Data Operator Approve</span>
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="asset-badge auth">ACTIVE KEY</span>
               </div>
               <p
                 style="
@@ -3566,7 +3566,7 @@
                   margin-bottom: 12px;
                 "
               >
-                Allow an operator to set data on NFTs in your collection.
+                Allow an operator to set data on Assets in your collection.
               </p>
               <div class="form-row">
                 <div class="form-group">
@@ -3604,14 +3604,14 @@
             <div class="card">
               <div class="card-header">
                 <span class="card-title">Set Data From (as Operator)</span>
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="asset-badge auth">ACTIVE KEY</span>
               </div>
               <div class="form-row">
                 <div class="form-group">
-                  <label class="form-label">NFT ID</label>
+                  <label class="form-label">Asset ID</label>
                   <input
                     class="form-input"
-                    id="perm-set-data-from-nft"
+                    id="perm-set-data-from-asset"
                     placeholder="seed_abc123"
                   />
                 </div>
@@ -3665,7 +3665,7 @@
             <!-- Verify Ownership -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Verify NFT Ownership</span>
+                <span class="card-title">Verify Asset Ownership</span>
               </div>
               <p
                 style="
@@ -3675,14 +3675,14 @@
                 "
               >
                 Checks the current ownership proof against Hive L1 using the
-                NFT's canonical ownership operation.
+                Asset's canonical ownership operation.
               </p>
               <div class="form-row">
                 <div class="form-group">
-                  <label class="form-label">NFT ID</label>
+                  <label class="form-label">Asset ID</label>
                   <input
                     class="form-input"
-                    id="spv-ownership-nft"
+                    id="spv-ownership-asset"
                     placeholder="seed_abc123"
                   />
                 </div>
@@ -3771,7 +3771,7 @@
             <div class="card">
               <div class="card-header">
                 <span class="card-title">Bulk Distribute</span>
-                <span class="nft-badge auth">POSTING KEY</span>
+                <span class="asset-badge auth">POSTING KEY</span>
               </div>
               <p
                 style="
@@ -3780,7 +3780,7 @@
                   margin-bottom: 12px;
                 "
               >
-                Distribute NFT instances from seeds to multiple recipients at
+                Distribute Asset instances from seeds to multiple recipients at
                 once.
               </p>
 
@@ -3874,7 +3874,7 @@
             <div class="card">
               <div class="card-header">
                 <span class="card-title">Extend Schema</span>
-                <span class="nft-badge auth">POSTING KEY</span>
+                <span class="asset-badge auth">POSTING KEY</span>
               </div>
               <p
                 style="
@@ -3996,7 +3996,7 @@
 
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Buy NFT (Smoke Test)</span>
+                <span class="card-title">Buy Asset (Smoke Test)</span>
               </div>
               <p
                 style="
@@ -4011,11 +4011,11 @@
                 posting, active-cosigns tx2, then broadcasts settlement.
               </p>
               <div style="margin-bottom: 12px">
-                <label class="form-label" for="multisig-nft-id">NFT ID</label>
+                <label class="form-label" for="multisig-asset-id">Asset ID</label>
                 <input
                   type="text"
-                  id="multisig-nft-id"
-                  placeholder="NFT ID (e.g. abc123-...)"
+                  id="multisig-asset-id"
+                  placeholder="Asset ID (e.g. abc123-...)"
                   class="form-input"
                   style="width: 100%; max-width: 400px"
                 />
@@ -4110,7 +4110,7 @@
           ></div>
 
           <!-- Listings grid -->
-          <div class="nft-grid" id="listings-container">
+          <div class="asset-grid" id="listings-container">
             <div class="empty-state">
               <p class="empty-state-text">
                 Refresh listings to start browsing.

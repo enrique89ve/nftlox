@@ -19,11 +19,11 @@
 
           <!-- ===== Tab: Permissions ===== -->
           <div class="advanced-tab-content active" id="tab-permissions">
-            <!-- NFT Approve -->
+            <!-- Asset Approve -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">NFT Approve</span>
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="card-title">Asset Approve</span>
+                <span class="asset-badge auth">ACTIVE KEY</span>
               </div>
               <p
                 style="
@@ -32,7 +32,7 @@
                   margin-bottom: 12px;
                 "
               >
-                Approve a spender to transfer a specific NFT instance on your
+                Approve a spender to transfer a specific Asset instance on your
                 behalf.
               </p>
               <div class="form-row">
@@ -40,7 +40,7 @@
                   <label class="form-label">Instance ID</label>
                   <input
                     class="form-input"
-                    id="perm-nft-approve-instance"
+                    id="perm-asset-approve-instance"
                     placeholder="inst_abc123_1"
                   />
                 </div>
@@ -48,7 +48,7 @@
                   <label class="form-label">Spender</label>
                   <input
                     class="form-input"
-                    id="perm-nft-approve-spender"
+                    id="perm-asset-approve-spender"
                     placeholder="bob"
                   />
                 </div>
@@ -57,23 +57,23 @@
                 class="form-group"
                 style="display: flex; align-items: center; gap: 8px"
               >
-                <input type="checkbox" id="perm-nft-approve-approved" checked />
-                <label for="perm-nft-approve-approved" style="font-size: 13px"
+                <input type="checkbox" id="perm-asset-approve-approved" checked />
+                <label for="perm-asset-approve-approved" style="font-size: 13px"
                   >Approved</label
                 >
               </div>
-              <button class="btn btn-primary" id="btn-nft-approve">
+              <button class="btn btn-primary" id="btn-asset-approve">
                 Approve via Keychain
               </button>
             </div>
 
-            <!-- NFT Approve All -->
+            <!-- Asset Approve All -->
             <div class="card">
               <div class="card-header">
                 <span class="card-title"
-                  >NFT Approve All (Collection-wide)</span
+                  >Asset Approve All (Collection-wide)</span
                 >
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="asset-badge auth">ACTIVE KEY</span>
               </div>
               <p
                 style="
@@ -82,14 +82,14 @@
                   margin-bottom: 12px;
                 "
               >
-                Approve a spender for all your NFTs in a collection.
+                Approve a spender for all your Assets in a collection.
               </p>
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Collection ID</label>
                   <input
                     class="form-input"
-                    id="perm-nft-approve-all-collection"
+                    id="perm-asset-approve-all-collection"
                     placeholder="col_abc123"
                   />
                 </div>
@@ -97,7 +97,7 @@
                   <label class="form-label">Spender</label>
                   <input
                     class="form-input"
-                    id="perm-nft-approve-all-spender"
+                    id="perm-asset-approve-all-spender"
                     placeholder="bob"
                   />
                 </div>
@@ -108,25 +108,25 @@
               >
                 <input
                   type="checkbox"
-                  id="perm-nft-approve-all-approved"
+                  id="perm-asset-approve-all-approved"
                   checked
                 />
                 <label
-                  for="perm-nft-approve-all-approved"
+                  for="perm-asset-approve-all-approved"
                   style="font-size: 13px"
                   >Approved</label
                 >
               </div>
-              <button class="btn btn-primary" id="btn-nft-approve-all">
+              <button class="btn btn-primary" id="btn-asset-approve-all">
                 Approve All via Keychain
               </button>
             </div>
 
-            <!-- NFT Transfer From -->
+            <!-- Asset Transfer From -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">NFT Transfer From</span>
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="card-title">Asset Transfer From</span>
+                <span class="asset-badge auth">ACTIVE KEY</span>
               </div>
               <p
                 style="
@@ -135,14 +135,14 @@
                   margin-bottom: 12px;
                 "
               >
-                Transfer an NFT you have approval for (as spender).
+                Transfer an Asset you have approval for (as spender).
               </p>
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">From (owner)</label>
                   <input
                     class="form-input"
-                    id="perm-nft-xfer-from"
+                    id="perm-asset-xfer-from"
                     placeholder="alice"
                   />
                 </div>
@@ -150,7 +150,7 @@
                   <label class="form-label">To</label>
                   <input
                     class="form-input"
-                    id="perm-nft-xfer-to"
+                    id="perm-asset-xfer-to"
                     placeholder="charlie"
                   />
                 </div>
@@ -159,11 +159,11 @@
                 <label class="form-label">Instance ID</label>
                 <input
                   class="form-input"
-                  id="perm-nft-xfer-instance"
+                  id="perm-asset-xfer-instance"
                   placeholder="inst_abc123_1"
                 />
               </div>
-              <button class="btn btn-primary" id="btn-nft-transfer-from">
+              <button class="btn btn-primary" id="btn-asset-transfer-from">
                 Transfer From via Keychain
               </button>
             </div>
@@ -171,8 +171,8 @@
             <!-- Lending -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Lend NFT</span>
-                <span class="nft-badge posting">POSTING KEY</span>
+                <span class="card-title">Lend Asset</span>
+                <span class="asset-badge posting">POSTING KEY</span>
               </div>
               <div class="form-row">
                 <div class="form-group">
@@ -192,7 +192,7 @@
                   />
                 </div>
               </div>
-              <button class="btn btn-primary" id="btn-nft-lend">
+              <button class="btn btn-primary" id="btn-asset-lend">
                 Lend via Keychain
               </button>
             </div>
@@ -200,8 +200,8 @@
             <!-- Return -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Return NFT</span>
-                <span class="nft-badge posting">POSTING KEY</span>
+                <span class="card-title">Return Asset</span>
+                <span class="asset-badge posting">POSTING KEY</span>
               </div>
               <div class="form-group">
                 <label class="form-label">Instance ID</label>
@@ -211,7 +211,7 @@
                   placeholder="inst_abc123_1"
                 />
               </div>
-              <button class="btn btn-secondary" id="btn-nft-return">
+              <button class="btn btn-secondary" id="btn-asset-return">
                 Return via Keychain
               </button>
             </div>
@@ -220,7 +220,7 @@
             <div class="card">
               <div class="card-header">
                 <span class="card-title">Data Operator Approve</span>
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="asset-badge auth">ACTIVE KEY</span>
               </div>
               <p
                 style="
@@ -229,7 +229,7 @@
                   margin-bottom: 12px;
                 "
               >
-                Allow an operator to set data on NFTs in your collection.
+                Allow an operator to set data on Assets in your collection.
               </p>
               <div class="form-row">
                 <div class="form-group">
@@ -267,14 +267,14 @@
             <div class="card">
               <div class="card-header">
                 <span class="card-title">Set Data From (as Operator)</span>
-                <span class="nft-badge auth">ACTIVE KEY</span>
+                <span class="asset-badge auth">ACTIVE KEY</span>
               </div>
               <div class="form-row">
                 <div class="form-group">
-                  <label class="form-label">NFT ID</label>
+                  <label class="form-label">Asset ID</label>
                   <input
                     class="form-input"
-                    id="perm-set-data-from-nft"
+                    id="perm-set-data-from-asset"
                     placeholder="seed_abc123"
                   />
                 </div>
@@ -328,7 +328,7 @@
             <!-- Verify Ownership -->
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Verify NFT Ownership</span>
+                <span class="card-title">Verify Asset Ownership</span>
               </div>
               <p
                 style="
@@ -338,14 +338,14 @@
                 "
               >
                 Checks the current ownership proof against Hive L1 using the
-                NFT's canonical ownership operation.
+                Asset's canonical ownership operation.
               </p>
               <div class="form-row">
                 <div class="form-group">
-                  <label class="form-label">NFT ID</label>
+                  <label class="form-label">Asset ID</label>
                   <input
                     class="form-input"
-                    id="spv-ownership-nft"
+                    id="spv-ownership-asset"
                     placeholder="seed_abc123"
                   />
                 </div>
@@ -434,7 +434,7 @@
             <div class="card">
               <div class="card-header">
                 <span class="card-title">Bulk Distribute</span>
-                <span class="nft-badge auth">POSTING KEY</span>
+                <span class="asset-badge auth">POSTING KEY</span>
               </div>
               <p
                 style="
@@ -443,7 +443,7 @@
                   margin-bottom: 12px;
                 "
               >
-                Distribute NFT instances from seeds to multiple recipients at
+                Distribute Asset instances from seeds to multiple recipients at
                 once.
               </p>
 
@@ -537,7 +537,7 @@
             <div class="card">
               <div class="card-header">
                 <span class="card-title">Extend Schema</span>
-                <span class="nft-badge auth">POSTING KEY</span>
+                <span class="asset-badge auth">POSTING KEY</span>
               </div>
               <p
                 style="
@@ -659,7 +659,7 @@
 
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Buy NFT (Smoke Test)</span>
+                <span class="card-title">Buy Asset (Smoke Test)</span>
               </div>
               <p
                 style="
@@ -674,11 +674,11 @@
                 posting, active-cosigns tx2, then broadcasts settlement.
               </p>
               <div style="margin-bottom: 12px">
-                <label class="form-label" for="multisig-nft-id">NFT ID</label>
+                <label class="form-label" for="multisig-asset-id">Asset ID</label>
                 <input
                   type="text"
-                  id="multisig-nft-id"
-                  placeholder="NFT ID (e.g. abc123-...)"
+                  id="multisig-asset-id"
+                  placeholder="Asset ID (e.g. abc123-...)"
                   class="form-input"
                   style="width: 100%; max-width: 400px"
                 />

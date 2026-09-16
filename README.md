@@ -1,6 +1,6 @@
 # NFTLox
 
-NFTLox is a self-custodial NFT protocol on Hive L1. Applications build typed,
+NFTLox is a self-custodial digital-asset protocol on Hive L1. Applications build typed,
 deterministic `custom_json` operations, users sign them with their own Hive
 keys, and indexers reconstruct queryable state from the chain.
 
