@@ -146,8 +146,8 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 
 	test("buildBuy — buyer signs transfers with active, node cosigns custom_json with active", () => {
 		const r = buildBuy({
-			nftId: "nft_1",
-			listingId: "list_1",
+			nftId: "nft_" + "a".repeat(20) + "_1",
+			listingId: "list_" + "b".repeat(32),
 			listTxId: "a".repeat(40),
 			buyer: "alice",
 			seller: "bob",

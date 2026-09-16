@@ -5,7 +5,9 @@ import {
 	MIN_PROTOCOL_VERSION,
 	PROTOCOL_ID,
 	PROTOCOL_VERSION,
+	buildUnlist,
 } from "../src";
+import { resetProtocolState } from "../src/protocol-state";
 
 const INDEXER_URL = "https://indexer.test.example";
 
@@ -118,4 +120,31 @@ describe("createNftloxClient", () => {
 			globalThis.fetch = original;
 		}
 	});
+
+	test("connect() configures subsequent builders with the live protocol contract", async () => {
+		const client = createNftloxClient({
+			indexerUrl: INDEXER_URL,
+			http: {
+				fetch: (async () => new Response(JSON.stringify({
+					protocolVersion: "0.12.0",
+					protocolId: "nftlox_live_protocol",
+				}), { status: 200 })) as unknown as typeof fetch,
+			},
+		});
+		try {
+			await client.connect();
+			const result = buildUnlistForSyncTest();
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.payload.version).toBe("0.12.0");
+				expect(result.payload.protocol).toBe("nftlox_live_protocol");
+			}
+		} finally {
+			resetProtocolState();
+		}
+	});
 });
+
+function buildUnlistForSyncTest() {
+	return buildUnlist({ nftId: "nft_" + "a".repeat(20) + "_1", owner: "alice" });
+}

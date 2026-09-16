@@ -95,8 +95,8 @@ describe("SDK input schemas", () => {
 });
 
 describe("buildBuy transfer generation", () => {
-	const NFT_ID = "nft_buy_test_001";
-	const LISTING_ID = "list_buy_test_001";
+	const NFT_ID = "nft_" + "a".repeat(20) + "_1";
+	const LISTING_ID = "list_" + "b".repeat(32);
 	const LIST_TX_ID = "b".repeat(40);
 	const BUYER = "buyeraccount";
 	const SELLER = "selleraccount";
