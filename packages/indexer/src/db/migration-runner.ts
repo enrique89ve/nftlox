@@ -77,11 +77,6 @@ export async function runMigrations(): Promise<void> {
 		await sql.unsafe(schemaText);
 		log.info("Database schema initialized successfully");
 	} catch (err) {
-		const isAlreadyExists = err instanceof Error && err.message.includes("already exists");
-		if (isAlreadyExists) {
-			log.info("Schema already initialized, skipping");
-			return;
-		}
 		log.error("Failed to initialize schema", err);
 		throw err;
 	}
