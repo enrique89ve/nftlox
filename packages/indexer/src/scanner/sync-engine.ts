@@ -42,6 +42,7 @@ import { prepareAccountValidation } from "@/processor/account-validation.ts";
 import { markSyncActivity, setSynced, updateSyncProgress } from "./sync-state.ts";
 import { ChainAnchorMismatchError, verifyChainAnchors } from "./chain-anchors.ts";
 import { createLogger } from "@/utils/logger.ts";
+import { isTransientExecutionError } from "@/processor/protocol-rejection.ts";
 
 const log = createLogger("sync");
 
@@ -156,6 +157,17 @@ export async function stopSync(): Promise<void> {
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const CLOCK_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const LOCK_RETRY_INTERVAL_MS = 10_000;
+const MAX_EXECUTION_RETRY_DELAY_MS = 30_000;
+
+/** @internal — kept pure so retry backoff remains bounded and testable. */
+export function getExecutionRetryDelay(
+	syncIntervalMs: number,
+	attempt: number,
+	transient: boolean,
+): number {
+	if (!transient) return syncIntervalMs * 2;
+	return Math.min(syncIntervalMs * 2 ** attempt, MAX_EXECUTION_RETRY_DELAY_MS);
+}
 
 let lastCleanup = 0;
 let lastClockCheck = 0;
@@ -190,10 +202,12 @@ async function waitForLock(): Promise<boolean> {
 
 async function syncLoop(): Promise<void> {
   if (!(await waitForLock())) return;
+  let executionRetryAttempt = 0;
 
   while (running) {
     try {
       await syncCycle();
+      executionRetryAttempt = 0;
 
       if (Date.now() - lastCleanup > CLEANUP_INTERVAL_MS) {
         lastCleanup = Date.now();
@@ -219,8 +233,15 @@ async function syncLoop(): Promise<void> {
         continue;
       }
       const message = err instanceof Error ? err.message : String(err);
-      log.error("Sync cycle error", { error: message });
-      await sleep(config.syncIntervalMs * 2);
+      const transient = isTransientExecutionError(err);
+      const retryDelay = getExecutionRetryDelay(config.syncIntervalMs, executionRetryAttempt, transient);
+      if (transient) executionRetryAttempt++;
+      log.error("Sync cycle error — cursor remains unchanged", {
+        error: message,
+        transient,
+        retryDelayMs: retryDelay,
+      });
+      await sleep(retryDelay);
     }
   }
 }
@@ -478,6 +499,7 @@ export async function syncCycle(): Promise<void> {
                 // make that missing indexed data permanent.
                 throw new Error(
                   `Fatal route failure at block ${op.blockNum} tx ${op.txId}: ${routeResult.reason}`,
+                  { cause: routeResult.cause },
                 );
               default: {
                 const exhaustive: never = routeResult;

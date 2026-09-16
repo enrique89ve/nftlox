@@ -3,18 +3,19 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
 import { upsertDataOperator, deleteDataOperator } from "@/db/queries/allowances.ts";
 import { requireString, requireBoolean, requireUsername } from "@/utils/validation.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 export async function handleDataOperatorApprove(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const collectionId = requireString(op.data.collectionId, "collectionId");
 	const operator = requireUsername(op.data.operator, "operator");
 	const approved = requireBoolean(op.data.approved, "approved");
 
-	if (operator === op.signer) throw new Error("Cannot approve yourself as operator");
+	if (operator === op.signer) throw protocolReject("Cannot approve yourself as operator");
 
 	const collection = await getCollectionRules(collectionId, txn);
-	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
+	if (!collection) throw protocolReject(`Collection not found: ${collectionId}`);
 	if (collection.creator !== op.signer) {
-		throw new Error(`Signer ${op.signer} is not creator of collection ${collectionId}`);
+		throw protocolReject(`Signer ${op.signer} is not creator of collection ${collectionId}`);
 	}
 
 	if (approved) {

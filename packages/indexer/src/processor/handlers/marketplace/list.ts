@@ -15,20 +15,21 @@ import {
 	MAX_LISTING_TTL_MS,
 	MIN_PRICE_AMOUNT,
 } from "@/protocol/index.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 function validateExpiresAt(expiresAt: number, blockTimestamp: string, nftId: string): void {
 	const blockTimestampMs = new Date(blockTimestamp).getTime();
 	if (Number.isNaN(blockTimestampMs)) {
-		throw new Error(`Invalid block timestamp for listing: ${blockTimestamp}`);
+		throw protocolReject(`Invalid block timestamp for listing: ${blockTimestamp}`);
 	}
 	if (expiresAt <= blockTimestampMs) {
-		throw new Error(`Listing expiresAt must be in the future for NFT: ${nftId}`);
+		throw protocolReject(`Listing expiresAt must be in the future for NFT: ${nftId}`);
 	}
 
 	const minimumExpiresAt = blockTimestampMs + MIN_LISTING_TTL_MS;
 	if (expiresAt < minimumExpiresAt) {
 		const minDays = MIN_LISTING_TTL_MS / 86_400_000;
-		throw new Error(
+		throw protocolReject(
 			`Listing expiresAt is too soon: must be at least ${minDays} days (${MIN_LISTING_TTL_MS} ms) after the listing block timestamp`,
 		);
 	}
@@ -36,7 +37,7 @@ function validateExpiresAt(expiresAt: number, blockTimestamp: string, nftId: str
 	const maximumExpiresAt = blockTimestampMs + MAX_LISTING_TTL_MS;
 	if (expiresAt > maximumExpiresAt) {
 		const maxDays = MAX_LISTING_TTL_MS / 86_400_000;
-		throw new Error(
+		throw protocolReject(
 			`Listing expiresAt is too far in the future: must be at most ${maxDays} days (${MAX_LISTING_TTL_MS} ms) after the listing block timestamp`,
 		);
 	}
@@ -54,11 +55,11 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 	const marketplace = optionalBoundedString(op.data.marketplace, "marketplace", MAX_MARKETPLACE_LENGTH);
 
 	if (!listingId.startsWith(LISTING_ID_PREFIX)) {
-		throw new Error(`Invalid listingId format: must start with '${LISTING_ID_PREFIX}'`);
+		throw protocolReject(`Invalid listingId format: must start with '${LISTING_ID_PREFIX}'`);
 	}
 
 	const nft = await getNftForProcessingForUpdate(nftId, txn);
-	if (!nft) throw new Error(`NFT not found: ${nftId}`);
+	if (!nft) throw protocolReject(`NFT not found: ${nftId}`);
 
 	await validateSeedProvenance(op, nft, txn);
 
@@ -69,16 +70,16 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 
 	const rules = await getCollectionRules(nft.collection_id, txn);
 	if (rules && !rules.transferable) {
-		throw new Error(`Collection ${nft.collection_id} is not transferable — listing blocked`);
+		throw protocolReject(`Collection ${nft.collection_id} is not transferable — listing blocked`);
 	}
 
 	const hadExpiredListing = nft.status === NFT_STATUS_LISTED && isListingExpired(nft.listing_expires_at, op.timestamp);
 
 	if (nft.status === NFT_STATUS_LISTED && !hadExpiredListing) {
-		throw new Error(`NFT is already listed. Unlist first: ${nftId}`);
+		throw protocolReject(`NFT is already listed. Unlist first: ${nftId}`);
 	}
 
-	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${nftId}`);
+	if (nft.owner !== op.signer) throw protocolReject(`Signer ${op.signer} is not owner of ${nftId}`);
 
 	// Verify listingId is correctly computed from the payload fields
 	const expectedListingId = await generateListingId({
@@ -92,13 +93,13 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 	});
 
 	if (listingId !== expectedListingId) {
-		throw new Error(`listingId mismatch: expected '${expectedListingId}', got '${listingId}'`);
+		throw protocolReject(`listingId mismatch: expected '${expectedListingId}', got '${listingId}'`);
 	}
 
 	const priceAmount = parseFloat(price.amount);
 	const minPrice = parseFloat(MIN_PRICE_AMOUNT);
 	if (priceAmount < minPrice) {
-		throw new Error(`Price ${price.amount} ${price.currency} is below minimum ${MIN_PRICE_AMOUNT}`);
+		throw protocolReject(`Price ${price.amount} ${price.currency} is below minimum ${MIN_PRICE_AMOUNT}`);
 	}
 
 	const ctx: ListingCtx = {

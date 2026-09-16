@@ -14,6 +14,7 @@ import {
 	isInstanceId,
 	isListingId,
 } from "@/protocol/index.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 /**
  * Projects a settlement node's on-chain reservation of a listed NFT. The node
@@ -53,7 +54,7 @@ export async function handleBuyCommitment(
 	const settlementNode = requireUsername(op.signer, "settlementNode");
 
 	const nft = await getNftForProcessingForUpdate(nftId, txn);
-	if (!nft) throw new Error(`NFT not found: ${nftId}`);
+	if (!nft) throw protocolReject(`NFT not found: ${nftId}`);
 	assertActionable(nft, nftId);
 
 	const activeReservation = nft.status === NFT_STATUS_PENDING_SALE
@@ -61,18 +62,18 @@ export async function handleBuyCommitment(
 		&& nft.sale_expires_block >= op.blockNum;
 
 	if (activeReservation) {
-		throw new Error(
+		throw protocolReject(
 			`NFT ${nftId} already committed by ${nft.sale_settlement_node} (expires block ${nft.sale_expires_block})`,
 		);
 	}
 	if (nft.status !== NFT_STATUS_LISTED && !isExpiredPendingSale(nft, op.blockNum)) {
-		throw new Error(`NFT ${nftId} is not committable (status=${nft.status})`);
+		throw protocolReject(`NFT ${nftId} is not committable (status=${nft.status})`);
 	}
 	if (nft.listing_id !== listingId) {
-		throw new Error(`listingId mismatch: expected '${nft.listing_id}', got '${listingId}'`);
+		throw protocolReject(`listingId mismatch: expected '${nft.listing_id}', got '${listingId}'`);
 	}
 	if (nft.listing_tx_id !== listTxId) {
-		throw new Error(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
+		throw protocolReject(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
 	}
 	// A commitment on an expired listing is rejected: `handleBuy` would also
 	// reject (listing expired there), but without this gate a byzantine node
@@ -80,10 +81,10 @@ export async function handleBuyCommitment(
 	// the owner from calling `unlist` (which refuses on pending_sale). Uses
 	// the same block timestamp as the router, so every indexer agrees.
 	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
-		throw new Error(`Listing expired for NFT: ${nftId}`);
+		throw protocolReject(`Listing expired for NFT: ${nftId}`);
 	}
 	if (nft.owner === buyer) {
-		throw new Error(`Cannot reserve own NFT: ${nftId}`);
+		throw protocolReject(`Cannot reserve own NFT: ${nftId}`);
 	}
 
 	const [{ count }] = await txn<[{ count: string }]>`
@@ -95,7 +96,7 @@ export async function handleBuyCommitment(
 	`;
 	const activeForNode = Number(count);
 	if (activeForNode >= MAX_ACTIVE_COMMITMENTS_PER_NODE) {
-		throw new Error(
+		throw protocolReject(
 			`Node ${settlementNode} at commitment cap (${activeForNode}/${MAX_ACTIVE_COMMITMENTS_PER_NODE})`,
 		);
 	}

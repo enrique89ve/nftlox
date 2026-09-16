@@ -7,29 +7,30 @@ import { deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireUsername } from "@/utils/validation.ts";
 import { assertNotSeed } from "@/utils/status-checks.ts";
 import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 export async function handleNftLend(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 	const borrower = requireUsername(op.data.borrower, "borrower");
 
-	if (borrower === op.signer) throw new Error("Cannot lend to yourself");
+	if (borrower === op.signer) throw protocolReject("Cannot lend to yourself");
 
 	const nft = await getNftForProcessingForUpdate(instanceId, txn);
-	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
+	if (!nft) throw protocolReject(`NFT not found: ${instanceId}`);
 
 	await validateSeedProvenance(op, nft, txn);
 
-	if (nft.status !== NFT_STATUS_ACTIVE) throw new Error(`NFT must be active to lend, current status: ${nft.status}`);
+	if (nft.status !== NFT_STATUS_ACTIVE) throw protocolReject(`NFT must be active to lend, current status: ${nft.status}`);
 	assertNotSeed(nft, instanceId);
-	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${instanceId}`);
+	if (nft.owner !== op.signer) throw protocolReject(`Signer ${op.signer} is not owner of ${instanceId}`);
 
 	const rules = await getCollectionRules(nft.collection_id, txn);
 	if (rules && !rules.transferable) {
-		throw new Error(`Collection ${nft.collection_id} is not transferable — lending not allowed`);
+		throw protocolReject(`Collection ${nft.collection_id} is not transferable — lending not allowed`);
 	}
 
 	const existingLoan = await getLoan(instanceId, txn);
-	if (existingLoan) throw new Error(`NFT already lent: ${instanceId}`);
+	if (existingLoan) throw protocolReject(`NFT already lent: ${instanceId}`);
 
 	await updateNftStatus(instanceId, NFT_STATUS_LENT, txn);
 	await insertLoan({

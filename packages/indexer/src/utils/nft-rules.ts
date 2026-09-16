@@ -1,5 +1,6 @@
 // Pure business rules for NFT operations.
 // Zero I/O, zero side-effects — testable with plain values.
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 export const validateSeedCap = (
 	collectionId: string,
@@ -7,7 +8,7 @@ export const validateSeedCap = (
 	totalPotential: number,
 ): void => {
 	if (totalPotential > 0 && seedCount >= totalPotential) {
-		throw new Error(
+		throw protocolReject(
 			`Collection ${collectionId} reached its seed cap: ${seedCount}/${totalPotential}`,
 		);
 	}
@@ -45,7 +46,7 @@ export const validateTransferCount = (
 		return;
 	}
 	if (transfers.length !== expected) {
-		throw new Error(
+		throw protocolReject(
 			`Expected exactly ${expected} transfers, got ${transfers.length}`,
 		);
 	}
@@ -66,7 +67,7 @@ export const validateSeedSupplyForDistribution = (
 	if (maxSupply > 0) {
 		const available = maxSupply - baseDistributed - reservedSupply;
 		if (requestedQuantity > available) {
-			throw new Error(
+		throw protocolReject(
 				`Seed ${seedId} insufficient supply: needs ${requestedQuantity}, available ${available}`,
 			);
 		}

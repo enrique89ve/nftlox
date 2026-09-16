@@ -7,6 +7,7 @@
 // re-create the consensus footgun this module was rewritten to remove.
 
 import { getLimit, type LimitDimension } from "@/protocol/index.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 export type { LimitDimension };
 
@@ -30,7 +31,7 @@ export function assertWithinLimit(
 ): void {
 	const max = getLimit(dimension, blockNum);
 	if (max > 0 && currentCount + increment > max) {
-		throw new Error(
+		throw protocolReject(
 			`Limit reached for ${dimension} (${scopeKey}): ${currentCount + increment}/${max}`,
 		);
 	}

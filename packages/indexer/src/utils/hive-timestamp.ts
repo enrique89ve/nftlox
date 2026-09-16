@@ -1,4 +1,5 @@
 const HIVE_UTC_TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z?$/;
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 /**
  * Validates a Hive timestamp and returns a fixed-width ISO UTC representation.
@@ -7,11 +8,11 @@ const HIVE_UTC_TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(
  */
 export function normalizeHiveTimestampToUtc(raw: unknown, label: string): string {
 	if (typeof raw !== "string") {
-		throw new Error(`${label} must be a string, got ${typeof raw}`);
+		throw protocolReject(`${label} must be a string, got ${typeof raw}`);
 	}
 
 	const match = HIVE_UTC_TIMESTAMP_RE.exec(raw);
-	if (!match) throw new Error(`Invalid ${label} format: ${raw}`);
+	if (!match) throw protocolReject(`Invalid ${label} format: ${raw}`);
 
 	const year = Number(match[1]);
 	const month = Number(match[2]);
@@ -34,7 +35,7 @@ export function normalizeHiveTimestampToUtc(raw: unknown, label: string): string
 		date.getUTCSeconds() !== second ||
 		date.getUTCMilliseconds() !== millisecond
 	) {
-		throw new Error(`Invalid ${label} value: ${raw}`);
+		throw protocolReject(`Invalid ${label} value: ${raw}`);
 	}
 
 	return date.toISOString();

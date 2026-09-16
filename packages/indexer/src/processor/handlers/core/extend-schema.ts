@@ -7,7 +7,7 @@ import {
 import { getLatestSchemaVersion, insertSchemaVersion } from "@/db/queries/schema-versions.ts";
 import {
 	requireString,
-	optionalCollectionSchema,
+	optionalStoredCollectionSchema,
 	optionalSchemaFieldArray,
 	collectionSchemaToRecord,
 } from "@/utils/validation.ts";
@@ -18,14 +18,15 @@ import {
 	computeDataHash,
 	type CollectionSchema,
 } from "@/protocol/index.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const collectionId = requireString(op.data.collectionId, "collectionId");
 
 	const collection = await getCollectionRules(collectionId, txn);
-	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
+	if (!collection) throw protocolReject(`Collection not found: ${collectionId}`);
 	if (collection.creator !== op.signer) {
-		throw new Error(`Signer ${op.signer} is not the creator of collection ${collectionId}`);
+		throw protocolReject(`Signer ${op.signer} is not the creator of collection ${collectionId}`);
 	}
 
 	const newImmutableFields = optionalSchemaFieldArray(
@@ -46,18 +47,18 @@ export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): P
 		newImmutableFields !== undefined &&
 		newImmutableFields.length > 0
 	) {
-		throw new Error(
+		throw protocolReject(
 			`Cannot extend immutable schema after first mint (collection ${collectionId}). Immutable namespace is frozen permanently once minting begins — even if the minted seeds are later burned. Only mutable fields can be added.`,
 		);
 	}
 
-	const existingSchema = optionalCollectionSchema(collection.schema);
+	const existingSchema = optionalStoredCollectionSchema(collection.schema);
 	let finalSchema: CollectionSchema;
 
 	if (existingSchema) {
 		const { merged, errors } = mergeSchemas(existingSchema, { newImmutableFields, newMutableFields });
 		if (errors.length > 0) {
-			throw new Error(`Schema extension failed: ${formatSchemaErrors(errors)}`);
+			throw protocolReject(`Schema extension failed: ${formatSchemaErrors(errors)}`);
 		}
 		finalSchema = merged;
 	} else {
@@ -67,7 +68,7 @@ export async function handleExtendSchema(op: ParsedOperation, txn: Queryable): P
 		};
 		const errors = validateSchemaDefinition(finalSchema);
 		if (errors.length > 0) {
-			throw new Error(`Schema validation failed: ${formatSchemaErrors(errors)}`);
+			throw protocolReject(`Schema validation failed: ${formatSchemaErrors(errors)}`);
 		}
 	}
 

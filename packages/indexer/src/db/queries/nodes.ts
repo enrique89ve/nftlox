@@ -1,5 +1,6 @@
 import { sql, type Queryable } from "@/db/client.ts";
 import { MAX_NODE_HEARTBEAT_STALENESS_BLOCKS } from "@/protocol/index.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 type NodeStatus = "active" | "banned";
 
@@ -166,10 +167,10 @@ export async function assertActiveSettlementNode(
 ): Promise<SettlementNodeSnapshot> {
 	const snapshot = await getSettlementNodeSnapshot(account, evaluationBlock, txn);
 	if (!snapshot) {
-		throw new Error(`Settlement node '${account}' is not registered in l2_nodes`);
+		throw protocolReject(`Settlement node '${account}' is not registered in l2_nodes`);
 	}
 	if (!snapshot.activeForSettlement) {
-		throw new Error(
+		throw protocolReject(
 			`Settlement node '${account}' is not active for buy settlement: ${snapshot.reason}`,
 		);
 	}

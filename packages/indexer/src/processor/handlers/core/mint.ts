@@ -11,7 +11,7 @@ import {
 	optionalBoundedString,
 	optionalNumber,
 	optionalObject,
-	optionalCollectionSchema,
+	optionalStoredCollectionSchema,
 } from "@/utils/validation.ts";
 import { validateSeedCap } from "@/utils/nft-rules.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
@@ -27,6 +27,7 @@ import {
 	MAX_NAME_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
 } from "@/protocol/index.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 const log = createLogger("mint");
 
@@ -42,7 +43,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	// itself is a pure function of that tuple, so clients cannot choose it.
 	const canonicalId = await generateDeterministicSeedId(collectionId, artId);
 	if (payloadId !== canonicalId) {
-		throw new Error(
+		throw protocolReject(
 			`Non-canonical seedId: expected ${canonicalId} for (collection ${collectionId}, artId ${artId}), got ${payloadId}`,
 		);
 	}
@@ -53,7 +54,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	// re-created under the same identity with different immutableData — breaking
 	// every downstream cache that treated the id as permanent.
 	if (await isBurnedId(canonicalId, txn)) {
-		throw new Error(
+		throw protocolReject(
 			`Mint rejected: id ${canonicalId} was previously burned. Seed ids are not reusable after burn.`,
 		);
 	}
@@ -63,8 +64,8 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 		return [];
 	}
 	const collection = await getCollectionRules(collectionId, txn);
-	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
-	if (collection.creator !== op.signer) throw new Error(`Only the collection creator can mint in ${collectionId}`);
+	if (!collection) throw protocolReject(`Collection not found: ${collectionId}`);
+	if (collection.creator !== op.signer) throw protocolReject(`Only the collection creator can mint in ${collectionId}`);
 
 	const metadata = optionalObject(d.metadata) ?? {};
 	// Payload must declare nftType explicitly — we never infer it from id prefix
@@ -72,7 +73,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	// auditor can recreate ownership from the Hive API without the indexer.
 	const nftType = requireBoundedString(d.nftType, "nftType", 16);
 	if (nftType !== "seed") {
-		throw new Error(
+		throw protocolReject(
 			`mint requires nftType="seed" (got "${nftType}"). Instances are created via bulk_distribute.`,
 		);
 	}
@@ -85,14 +86,14 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	const seedsByCreator = await countSeedsByCreator(op.signer, txn);
 	assertWithinLimit("seedsPerCreator", op.signer, seedsByCreator, op.blockNum);
 
-	const schema = optionalCollectionSchema(collection.schema);
+	const schema = optionalStoredCollectionSchema(collection.schema);
 	const immutableData = optionalObject(d.immutableData) as Record<string, unknown> | null;
 	const mutableData = optionalObject(d.mutableData);
 
 	if (schema) {
 		const errors = validateMintData(schema, immutableData ?? undefined, mutableData ?? undefined);
 		if (errors.length > 0) {
-			throw new Error(`Schema validation failed: ${formatSchemaErrors(errors)}`);
+			throw protocolReject(`Schema validation failed: ${formatSchemaErrors(errors)}`);
 		}
 	}
 
@@ -111,7 +112,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 
 	const maxSupply = optionalNumber(d.maxSupply) ?? 1;
 	if (maxSupply < 1) {
-		throw new Error(`maxSupply must be >= 1 for seeds, got ${maxSupply}`);
+		throw protocolReject(`maxSupply must be >= 1 for seeds, got ${maxSupply}`);
 	}
 
 	await insertNft({

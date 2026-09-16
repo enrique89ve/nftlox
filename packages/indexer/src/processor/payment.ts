@@ -5,6 +5,7 @@
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { PaymentRequirement, PaymentSplit } from "@/protocol/index.ts";
 import { validateFixedFee } from "@/utils/fee-validator.ts";
+import { protocolReject } from "./protocol-rejection.ts";
 
 // Compute the prepaid scaled fee in HBD for a given declared `count` against a
 // `scaled` requirement. Mirrors the SDK `computeCollectionFeeHbd` helper so the
@@ -33,7 +34,7 @@ function readScalingCount(
 		case "payload:maxInstances": {
 			const raw = op.data.maxInstances;
 			if (typeof raw !== "number" || !Number.isFinite(raw) || !Number.isInteger(raw) || raw < 0) {
-				throw new Error(
+				throw protocolReject(
 					`validateScaled: payload.maxInstances must be a non-negative integer, got ${String(raw)}`,
 				);
 			}
@@ -41,7 +42,7 @@ function readScalingCount(
 		}
 		default: {
 			const _exhaustive: never = countFrom;
-			throw new Error(`validateScaled: unhandled countFrom: ${String(_exhaustive)}`);
+			throw protocolReject(`validateScaled: unhandled countFrom: ${String(_exhaustive)}`);
 		}
 	}
 }
@@ -89,7 +90,7 @@ const validateNone: Validator<"none"> = () => ({
 
 const validateFixed: Validator<"fixed"> = (op, req, ctx) => {
 	if (!ctx.expectedMemo) {
-		throw new Error("validateFixed: expectedMemo required");
+		throw protocolReject("validateFixed: expectedMemo required");
 	}
 	const match = validateFixedFee({
 		op,
@@ -108,7 +109,7 @@ const validateFixed: Validator<"fixed"> = (op, req, ctx) => {
 
 const validateScaled: Validator<"scaled"> = (op, req, ctx) => {
 	if (!ctx.expectedMemo) {
-		throw new Error("validateScaled: expectedMemo required");
+		throw protocolReject("validateScaled: expectedMemo required");
 	}
 	const count = readScalingCount(op, req.countFrom);
 	const requiredHbd = computeScaledRequiredHbd(req, count);
@@ -128,7 +129,7 @@ const validateScaled: Validator<"scaled"> = (op, req, ctx) => {
 };
 
 const validateSplit: Validator<"split"> = () => {
-	throw new Error(
+	throw protocolReject(
 		"validateSplit: split payment is validated in the handler, not the router",
 	);
 };

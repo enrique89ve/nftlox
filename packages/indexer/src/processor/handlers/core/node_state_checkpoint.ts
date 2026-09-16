@@ -2,6 +2,7 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { Queryable } from "@/db/client.ts";
 import { HASH_FORMAT_PREFIX, STATE_CHECKPOINT_INTERVAL_BLOCKS } from "@/protocol/index.ts";
 import { requireExactLengthString } from "@/utils/validation.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 // Mirrors `formatStateRoot()` / `stateRootSchema` shared with node_heartbeat.
 // Kept local (rather than imported from the heartbeat handler) so the two
@@ -13,7 +14,7 @@ const STATE_ROOT_LENGTH = HASH_FORMAT_PREFIX.length + 64;
 
 function requirePositiveInt(value: unknown, fieldName: string): number {
 	if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-		throw new Error(`Missing or invalid '${fieldName}' parameter: expected positive integer`);
+		throw protocolReject(`Missing or invalid '${fieldName}' parameter: expected positive integer`);
 	}
 	return value;
 }
@@ -21,7 +22,7 @@ function requirePositiveInt(value: unknown, fieldName: string): number {
 function requireStateRoot(value: unknown): string {
 	const str = requireExactLengthString(value, "stateRoot", STATE_ROOT_LENGTH);
 	if (!STATE_ROOT_REGEX.test(str)) {
-		throw new Error("Invalid 'stateRoot' parameter: expected 'sha256:<64 lowercase hex chars>'");
+		throw protocolReject("Invalid 'stateRoot' parameter: expected 'sha256:<64 lowercase hex chars>'");
 	}
 	return str;
 }
@@ -58,7 +59,7 @@ export async function handleNodeStateCheckpoint(
 ): Promise<ReadonlyArray<string>> {
 	const blockNum = requirePositiveInt(op.data.blockNum, "blockNum");
 	if (blockNum % STATE_CHECKPOINT_INTERVAL_BLOCKS !== 0) {
-		throw new Error(
+		throw protocolReject(
 			`Invalid 'blockNum' parameter: ${blockNum} is not aligned to STATE_CHECKPOINT_INTERVAL_BLOCKS=${STATE_CHECKPOINT_INTERVAL_BLOCKS}`,
 		);
 	}
@@ -66,7 +67,7 @@ export async function handleNodeStateCheckpoint(
 
 	const registered = await loadRegisteredAccount(op.signer, txn);
 	if (!registered) {
-		throw new Error(
+		throw protocolReject(
 			`Account '${op.signer}' is not registered in l2_nodes — checkpoints require a prior node_register`,
 		);
 	}

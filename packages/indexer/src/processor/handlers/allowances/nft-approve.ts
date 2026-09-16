@@ -4,16 +4,17 @@ import { getNftForProcessing } from "@/db/queries/nfts.ts";
 import { upsertNftAllowance, deleteNftAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireBoolean, requireUsername } from "@/utils/validation.ts";
 import { assertActionable, assertNotSeed, assertNotListed, assertNotPendingSale } from "@/utils/status-checks.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const spender = requireUsername(op.data.spender, "spender");
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 	const approved = requireBoolean(op.data.approved, "approved");
 
-	if (spender === op.signer) throw new Error("Cannot approve yourself");
+	if (spender === op.signer) throw protocolReject("Cannot approve yourself");
 
 	const nft = await getNftForProcessing(instanceId, txn);
-	if (!nft) throw new Error(`NFT not found: ${instanceId}`);
+	if (!nft) throw protocolReject(`NFT not found: ${instanceId}`);
 
 	assertActionable(nft, instanceId);
 	assertNotSeed(nft, instanceId);
@@ -31,7 +32,7 @@ export async function handleNftApprove(op: ParsedOperation, txn: Queryable): Pro
 	// expires without settling. Reject for the same hygiene reason as `listed`.
 	assertNotPendingSale(nft, instanceId);
 
-	if (nft.owner !== op.signer) throw new Error(`Signer ${op.signer} is not owner of ${instanceId}`);
+	if (nft.owner !== op.signer) throw protocolReject(`Signer ${op.signer} is not owner of ${instanceId}`);
 
 	if (approved) {
 		await upsertNftAllowance(instanceId, op.signer, spender, op.blockNum, op.txId, txn);

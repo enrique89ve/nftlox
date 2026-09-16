@@ -6,6 +6,7 @@ import {
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { NftProcessingRow } from "@/db/queries/nft-types.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 // Narrowed shape of the NFT row needed by `validateSeedProvenance`. Handlers
 // typically already fetch the full `NftProcessingRow` via
@@ -45,13 +46,13 @@ export async function validateSeedProvenance(
 	let seedCreatedTxId: string | null = null;
 	if (declared.seedTxId !== undefined) {
 		if (nft.seed_id === null) {
-			throw new Error("Cannot validate seedTxId: NFT has no parent seed");
+			throw protocolReject("Cannot validate seedTxId: NFT has no parent seed");
 		}
 		const [row] = await txn<SeedCreatedTxRow[]>`
 			SELECT created_tx_id FROM nfts WHERE id = ${nft.seed_id}
 		`;
 		if (!row) {
-			throw new Error(
+			throw protocolReject(
 				`Seed not found while validating seedTxId: ${nft.seed_id}`,
 			);
 		}

@@ -1,4 +1,5 @@
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 // ----------------------------------------------------------------------------
 // Protocol fee validation. HBD-only — deterministic because HBD is pegged.
@@ -27,7 +28,7 @@ function hbdAmountMatches(paid: number, required: number): boolean {
 function parseRequiredHbd(requiredHbd: string): number {
 	const required = Number.parseFloat(requiredHbd);
 	if (!Number.isFinite(required)) {
-		throw new Error(`Invalid required HBD format: ${requiredHbd}`);
+		throw protocolReject(`Invalid required HBD format: ${requiredHbd}`);
 	}
 	return required;
 }
@@ -71,12 +72,12 @@ export function validateFixedFee(params: {
 	}
 
 	if (candidates.length === 0) {
-		throw new Error(
+		throw protocolReject(
 			`No fee transfer found matching memo '${expectedMemo}' to @${targetAccount}`,
 		);
 	}
 	if (candidates.length > 1) {
-		throw new Error(
+		throw protocolReject(
 			`Ambiguous fee transfers — ${candidates.length} memo matches for '${expectedMemo}'`,
 		);
 	}
@@ -87,12 +88,12 @@ export function validateFixedFee(params: {
 	// t.currency is L1-authoritative (parsed from NAI / asset-string in
 	// hive-client.ts), so the signer cannot declare "HBD" while paying HIVE.
 	if (t.currency !== "HBD") {
-		throw new Error(
+		throw protocolReject(
 			`Protocol fees must be paid in HBD, got ${t.currency}. Required: ${requiredHbd} HBD`,
 		);
 	}
 	if (!hbdAmountMatches(t.amount, required)) {
-		throw new Error(
+		throw protocolReject(
 			`Fee amount mismatch — HBD payment must equal ${requiredHbd}, got ${t.amount.toFixed(3)}`,
 		);
 	}

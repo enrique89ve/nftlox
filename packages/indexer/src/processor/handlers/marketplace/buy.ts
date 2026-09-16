@@ -8,10 +8,11 @@ import {
 import type { OwnerChangeCtx } from "@/db/queries/nfts.ts";
 import { deleteNftAllowance, cleanupCollectionAllowancesIfEmpty } from "@/db/queries/allowances.ts";
 import { insertSale } from "@/db/queries/marketplace-history.ts";
-import { requireShapedString, requireUsername, verifyTransfers, requireSupportedCurrency } from "@/utils/validation.ts";
+import { requireShapedString, requireUsername, verifyTransfers, requireStoredSupportedCurrency } from "@/utils/validation.ts";
 import { validateTransferCount } from "@/utils/nft-rules.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
 import { ACTION_BUY, MAX_ROYALTY_PCT, isHiveTxId, isInstanceId, isListingId } from "@/protocol/index.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 /**
  * Settles a `buy` action against the on-chain reservation projected by the
@@ -40,16 +41,16 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	const transfers = op.pairedTransfers ?? [];
 
 	const nft = await getNftWithCollectionRulesForUpdate(nftId, txn);
-	if (!nft) throw new Error(`NFT not found: ${nftId}`);
+	if (!nft) throw protocolReject(`NFT not found: ${nftId}`);
 	assertActionable(nft, nftId);
 	assertMarketplaceInstance(nft, nftId);
 
 	if (nft.status !== NFT_STATUS_PENDING_SALE) {
-		throw new Error(`NFT ${nftId} is not reserved (status=${nft.status}) — buy rejected`);
+		throw protocolReject(`NFT ${nftId} is not reserved (status=${nft.status}) — buy rejected`);
 	}
 	const expectedBuyTxHash = nft.sale_commitment_buy_tx_hash;
 	if (!expectedBuyTxHash || expectedBuyTxHash.toLowerCase() !== op.txId.toLowerCase()) {
-		throw new Error(
+		throw protocolReject(
 			`Buy tx_id ${op.txId} does not match committed hash ${expectedBuyTxHash ?? "<none>"} for NFT ${nftId}`,
 		);
 	}
@@ -60,34 +61,34 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 	// in the multisig digest path would surface here instead of allowing an
 	// unrelated active node to settle the commitment.
 	if (nft.sale_settlement_node !== op.signer) {
-		throw new Error(
+		throw protocolReject(
 			`Settlement node mismatch for NFT ${nftId}: committed by '${nft.sale_settlement_node ?? "<none>"}', `
 			+ `buy signed by '${op.signer}'`,
 		);
 	}
 	if (nft.sale_expires_block !== null && op.blockNum > nft.sale_expires_block) {
-		throw new Error(
+		throw protocolReject(
 			`Commitment for NFT ${nftId} expired at block ${nft.sale_expires_block} (current ${op.blockNum})`,
 		);
 	}
 	if (nft.listing_id !== listingId) {
-		throw new Error(`listingId mismatch: expected '${nft.listing_id}', got '${listingId}'`);
+		throw protocolReject(`listingId mismatch: expected '${nft.listing_id}', got '${listingId}'`);
 	}
 	if (nft.listing_tx_id !== listTxId) {
-		throw new Error(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
+		throw protocolReject(`listTxId mismatch: expected '${nft.listing_tx_id}', got '${listTxId}'`);
 	}
 	if (isListingExpired(nft.listing_expires_at, op.timestamp)) {
-		throw new Error(`Listing has expired for NFT: ${nftId}`);
+		throw protocolReject(`Listing has expired for NFT: ${nftId}`);
 	}
 	if (!nft.transferable) {
-		throw new Error(`Collection ${nft.collection_id} is not transferable — buy blocked`);
+		throw protocolReject(`Collection ${nft.collection_id} is not transferable — buy blocked`);
 	}
 
 	const totalPrice = Number(nft.listing_price);
 	if (Number.isNaN(totalPrice) || totalPrice <= 0 || !nft.listing_currency) {
-		throw new Error("NFT has no valid listing price");
+		throw protocolReject("NFT has no valid listing price");
 	}
-	const currency = requireSupportedCurrency(nft.listing_currency, "listing_currency");
+	const currency = requireStoredSupportedCurrency(nft.listing_currency, "listing_currency");
 
 	const royaltyPct = Number(nft.royalty_pct ?? 0);
 	if (royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
@@ -107,9 +108,9 @@ export async function handleBuy(op: ParsedOperation, txn: Queryable): Promise<Re
 		consumedIndices: op.transferPool?.consumed,
 	});
 	const buyer = requireUsername(buyerFromTransfer, "buyer");
-	if (nft.owner === buyer) throw new Error(`Cannot buy own NFT: ${nftId}`);
+	if (nft.owner === buyer) throw protocolReject(`Cannot buy own NFT: ${nftId}`);
 	if (nft.sale_buyer !== buyer) {
-		throw new Error(
+		throw protocolReject(
 			`Buyer ${buyer} does not match committed buyer ${nft.sale_buyer} for NFT ${nftId}`,
 		);
 	}

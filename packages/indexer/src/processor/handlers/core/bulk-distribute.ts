@@ -15,10 +15,10 @@ import {
 	requirePositiveInt,
 	requireObject,
 	requireArray,
-	requireNonNegativeInt,
+	requireStoredNonNegativeInt,
 	optionalString,
 	optionalObject,
-	optionalCollectionSchema,
+	optionalStoredCollectionSchema,
 } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { computeInstanceBaseline, validateSeedSupplyForDistribution } from "@/utils/nft-rules.ts";
@@ -32,6 +32,7 @@ import {
 	computeDataHash,
 	validateMutableUpdate,
 } from "@/protocol/index.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const toRaw = Object.prototype.hasOwnProperty.call(op.data, "to")
@@ -39,7 +40,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		: null;
 	if (toRaw) {
 		const error = validateHiveUsername(toRaw);
-		if (error) throw new Error(`Invalid Hive username for to ("${toRaw}"): ${error}`);
+		if (error) throw protocolReject(`Invalid Hive username for to ("${toRaw}"): ${error}`);
 	}
 	const to = toRaw ?? op.signer;
 	const items = requireArray(op.data.items, "items");
@@ -47,9 +48,9 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 	const dataHash = mutableData ? await computeDataHash(mutableData) : null;
 
-	if (items.length === 0) throw new Error("Items array is empty");
+	if (items.length === 0) throw protocolReject("Items array is empty");
 	if (items.length > MAX_BULK_DISTRIBUTE_ITEMS) {
-		throw new Error(`Too many distinct seeds: ${items.length} exceeds max ${MAX_BULK_DISTRIBUTE_ITEMS}`);
+		throw protocolReject(`Too many distinct seeds: ${items.length} exceeds max ${MAX_BULK_DISTRIBUTE_ITEMS}`);
 	}
 
 	const parsedItems: Array<{ seedId: string; quantity: number; seedTxId: string }> = [];
@@ -62,13 +63,13 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const quantity = requirePositiveInt(raw.quantity, "quantity");
 		const seedTxId = requireString(raw.seedTxId, "seedTxId");
 		totalQuantity += quantity;
-		if (seenSeeds.has(seedId)) throw new Error(`Duplicate seedId in items: ${seedId}`);
+		if (seenSeeds.has(seedId)) throw protocolReject(`Duplicate seedId in items: ${seedId}`);
 		seenSeeds.add(seedId);
 		parsedItems.push({ seedId, quantity, seedTxId });
 	}
 
 	if (totalQuantity > MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY) {
-		throw new Error(
+		throw protocolReject(
 			`Too many instances: ${totalQuantity} exceeds max ${MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY}`,
 		);
 	}
@@ -92,16 +93,16 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 	for (const { seedId, quantity, seedTxId } of parsedItems) {
 		const seed = await getSeedWithSchemaForUpdate(seedId, txn);
-		if (!seed) throw new Error(`Seed not found: ${seedId}`);
+		if (!seed) throw protocolReject(`Seed not found: ${seedId}`);
 		assertActionable(seed, seedId);
-		if (seed.nft_type !== "seed") throw new Error(`${seedId} is not a seed`);
+		if (seed.nft_type !== "seed") throw protocolReject(`${seedId} is not a seed`);
 
 		if (seed.created_tx_id !== seedTxId) {
-			throw new Error(`Invalid seedTxId for ${seedId}: expected ${seed.created_tx_id}, got ${seedTxId}`);
+			throw protocolReject(`Invalid seedTxId for ${seedId}: expected ${seed.created_tx_id}, got ${seedTxId}`);
 		}
 
 		if (seed.owner !== op.signer) {
-			throw new Error(`Signer ${op.signer} is not the owner of seed ${seedId}`);
+			throw protocolReject(`Signer ${op.signer} is not the owner of seed ${seedId}`);
 		}
 
 		let budget = creatorInstanceBudget.get(seed.creator);
@@ -127,7 +128,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 			}
 			collectionBudget.planned += quantity;
 			if (collectionBudget.baseline + collectionBudget.planned > collectionBudget.cap) {
-				throw new Error(
+				throw protocolReject(
 					`bulk_distribute exceeds collection cap: collection ${seed.collection_id} ` +
 						`would reach ${collectionBudget.baseline + collectionBudget.planned} ` +
 						`instances, max_instances=${collectionBudget.cap}`,
@@ -137,17 +138,17 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 		if (!validatedSchemas.has(seed.collection_id)) {
 			validatedSchemas.add(seed.collection_id);
-			const schema = optionalCollectionSchema(seed.schema);
+			const schema = optionalStoredCollectionSchema(seed.schema);
 			if (schema && mutableData) {
 				const errors = validateMutableUpdate(schema, mutableData);
 				if (errors.length > 0) {
-					throw new Error(`Schema validation failed for bulk_distribute mutableData: ${formatSchemaErrors(errors)}`);
+					throw protocolReject(`Schema validation failed for bulk_distribute mutableData: ${formatSchemaErrors(errors)}`);
 				}
 			}
 		}
 
-		const distributed = requireNonNegativeInt(seed.distributed, "seed.distributed");
-		const maxSupply = requireNonNegativeInt(seed.max_supply, "seed.max_supply");
+		const distributed = requireStoredNonNegativeInt(seed.distributed, "seed.distributed");
+		const maxSupply = requireStoredNonNegativeInt(seed.max_supply, "seed.max_supply");
 
 		// Idempotency: count instances already created by THIS operation.
 		const [existingFromOp] = await txn`
@@ -158,7 +159,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const alreadyMintedThisOp = existingFromOp?.count ?? 0;
 		const baseDistributed = computeInstanceBaseline(distributed, alreadyMintedThisOp);
 
-		const reservedSupply = requireNonNegativeInt(seed.reserved_supply, "seed.reserved_supply");
+		const reservedSupply = requireStoredNonNegativeInt(seed.reserved_supply, "seed.reserved_supply");
 		validateSeedSupplyForDistribution(seedId, maxSupply, baseDistributed, quantity, reservedSupply);
 
 		let minted = 0;
@@ -176,7 +177,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 			// below a prior burn, or a future code change that decrements
 			// distributed. Cheap O(1) check — always worth paying.
 			if (await isBurnedId(instanceId, txn)) {
-				throw new Error(
+				throw protocolReject(
 					`bulk_distribute rejected: instance id ${instanceId} was previously burned`,
 				);
 			}

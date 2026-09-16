@@ -6,6 +6,7 @@ import {
 	requireExactLengthString,
 	requireNonNegativeInt,
 } from "@/utils/validation.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 // Mirrors `formatStateRoot()` / `stateRootSchema` in the SDK. The SHA-256 hex
 // payload is exactly 64 chars and the `sha256:` prefix adds 7 — total wire
@@ -17,7 +18,7 @@ const MAX_INDEXER_VERSION_LENGTH = 32;
 function requireStateRoot(value: unknown): string {
 	const str = requireExactLengthString(value, "stateRoot", STATE_ROOT_LENGTH);
 	if (!STATE_ROOT_REGEX.test(str)) {
-		throw new Error("Invalid 'stateRoot' parameter: expected 'sha256:<64 lowercase hex chars>'");
+		throw protocolReject("Invalid 'stateRoot' parameter: expected 'sha256:<64 lowercase hex chars>'");
 	}
 	return str;
 }
@@ -25,7 +26,7 @@ function requireStateRoot(value: unknown): string {
 function requireIndexerVersion(value: unknown): string {
 	const str = requireBoundedString(value, "indexerVersion", MAX_INDEXER_VERSION_LENGTH).trim();
 	if (str === "") {
-		throw new Error("Missing or invalid 'indexerVersion' parameter");
+		throw protocolReject("Missing or invalid 'indexerVersion' parameter");
 	}
 	return str;
 }
@@ -74,14 +75,14 @@ export async function handleNodeHeartbeat(
 
 	const node = await loadNodeRow(op.signer, txn);
 	if (!node) {
-		throw new Error(
+		throw protocolReject(
 			`Account '${op.signer}' is not registered in l2_nodes — heartbeats require a prior node_register`,
 		);
 	}
 
 	const last = node.last_heartbeat_block;
 	if (last !== null && op.blockNum - last < MIN_HEARTBEAT_INTERVAL_BLOCKS) {
-		throw new Error(
+		throw protocolReject(
 			`Heartbeat from '${op.signer}' too soon: ${op.blockNum - last} blocks since last, minimum ${MIN_HEARTBEAT_INTERVAL_BLOCKS}`,
 		);
 	}

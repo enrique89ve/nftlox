@@ -36,6 +36,10 @@ import {
 	type ProtocolAction,
 } from "@/protocol/index.ts";
 import { PAYMENT_VALIDATORS, type PaymentMatch } from "./payment.ts";
+import {
+	classifyExecutionError,
+	type ProtocolRejectionCode,
+} from "./protocol-rejection.ts";
 
 // Core
 import { handleCreateCollection } from "./handlers/core/create-collection.ts";
@@ -75,8 +79,17 @@ type Handler = (op: ParsedOperation, txn: Queryable) => Promise<ReadonlyArray<st
 
 export type RouteOperationResult =
 	| Readonly<{ readonly kind: "applied" }>
-	| Readonly<{ readonly kind: "rejected"; readonly reason: string }>
-	| Readonly<{ readonly kind: "fatal"; readonly reason: string }>;
+	| Readonly<{
+			readonly kind: "rejected";
+			readonly code: ProtocolRejectionCode;
+			readonly reason: string;
+		}>
+	| Readonly<{
+			readonly kind: "fatal";
+			readonly reason: string;
+			readonly transient: boolean;
+			readonly cause: unknown;
+		}>;
 
 function confirmedOperationNftIds(action: ProtocolAction, nftIds: ReadonlyArray<string>): ReadonlyArray<string> {
 	if (action === ACTION_BULK_DISTRIBUTE) return [];
@@ -199,9 +212,10 @@ const handlers: Record<ProtocolAction, Handler> = {
 };
 
 /**
- * Routes an operation to its handler. This function is INFALLIBLE — it never throws.
- * If a handler fails, the error is recorded in invalid_operations and processing continues.
- * This guarantees that a single bad operation can never stall the sync loop or cause block gaps.
+ * Routes an operation to its handler. This function is INFALLIBLE — it returns
+ * a typed result instead of throwing. Deterministic protocol failures are
+ * recorded in invalid_operations and processing continues; execution failures
+ * return `fatal` so the sync loop can roll back the batch and retry.
  *
  * Returns a discriminated outcome so the sync engine can distinguish
  * consensus-invalid operations ("rejected") from infrastructure failures
@@ -236,7 +250,7 @@ export async function routeOperationDetailed(
 				reason: authCheck.message,
 				rawPayload: op.data,
 			}, txn);
-			return { kind: "rejected", reason: authCheck.message };
+			return { kind: "rejected", code: "PROTOCOL_REJECTION", reason: authCheck.message };
 		}
 
 		try {
@@ -317,8 +331,24 @@ export async function routeOperationDetailed(
 			}, txn);
 			return { kind: "applied" };
 		} catch (err) {
-			const reason = err instanceof Error ? err.message : String(err);
-			log.warn(`Handler failed: ${op.action}`, { blockNum: op.blockNum, txId: op.txId, reason });
+			const classification = classifyExecutionError(err);
+			if (classification.kind === "fatal") {
+				log.error(`Handler execution failed: ${op.action}`, {
+					blockNum: op.blockNum,
+					txId: op.txId,
+					reason: classification.message,
+					transient: classification.transient,
+				});
+				return {
+					kind: "fatal",
+					reason: classification.message,
+					transient: classification.transient,
+					cause: err,
+				};
+			}
+
+			const reason = classification.message;
+			log.warn(`Protocol operation rejected: ${op.action}`, { blockNum: op.blockNum, txId: op.txId, reason });
 
 			await insertInvalidOperation({
 				blockNum: op.blockNum,
@@ -352,7 +382,7 @@ export async function routeOperationDetailed(
 					transfers,
 				}, txn);
 			}
-			return { kind: "rejected", reason };
+			return { kind: "rejected", code: classification.code, reason };
 		}
 	} catch (fatal) {
 		// Last-resort catch: even insertInvalidOperation/insertOrphanedBuy failed.
@@ -365,7 +395,13 @@ export async function routeOperationDetailed(
 			action: op.action,
 			error: reason,
 		});
-		return { kind: "fatal", reason };
+		const classification = classifyExecutionError(fatal);
+		return {
+			kind: "fatal",
+			reason,
+			transient: classification.kind === "fatal" && classification.transient,
+			cause: fatal,
+		};
 	}
 }
 

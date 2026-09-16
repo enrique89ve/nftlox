@@ -5,16 +5,17 @@ import {
 	getCollectionArchiveSnapshot,
 } from "@/db/queries/collections.ts";
 import { requireString } from "@/utils/validation.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 export async function handleArchiveCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const collectionId = requireString(op.data.collectionId, "collectionId");
 	const collection = await getCollectionArchiveSnapshot(collectionId, txn);
-	if (!collection) throw new Error(`Collection not found: ${collectionId}`);
+	if (!collection) throw protocolReject(`Collection not found: ${collectionId}`);
 	if (collection.creator !== op.signer) {
-		throw new Error(`Signer ${op.signer} is not creator of collection ${collectionId}`);
+		throw protocolReject(`Signer ${op.signer} is not creator of collection ${collectionId}`);
 	}
 	if (collection.nft_count > 0) {
-		throw new Error(
+		throw protocolReject(
 			`Collection ${collectionId} cannot be deleted: ${collection.nft_count} NFTs still exist`,
 		);
 	}

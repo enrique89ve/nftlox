@@ -33,6 +33,7 @@ import {
 	MAX_INSTANCES_PER_COLLECTION,
 	ORIGIN_DNA_LENGTH,
 } from "@/protocol/index.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 export async function handleCreateCollection(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	// Signer authorization is enforced by the router: it calls
@@ -66,7 +67,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	// the fee is anchored to the creator-name-symbol triple.
 	const canonicalId = await generateDeterministicCollectionId(creator, name, symbol);
 	if (payloadId !== canonicalId) {
-		throw new Error(
+		throw protocolReject(
 			`Non-canonical collectionId: expected ${canonicalId}, got ${payloadId}`,
 		);
 	}
@@ -77,7 +78,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	assertWithinLimit("collectionsPerCreator", creator, creatorCollectionCount, op.blockNum);
 
 	if (await symbolTakenByCreator(creator, symbol, txn)) {
-		throw new Error(`Symbol ${symbol} already used by @${creator}`);
+		throw protocolReject(`Symbol ${symbol} already used by @${creator}`);
 	}
 
 	// H3: Require metadata with mandatory fields
@@ -91,7 +92,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const burnable = requireBoolean(rules.burnable, "rules.burnable");
 	const royaltyPct = requireNumber(rules.royaltyPct, "rules.royaltyPct");
 	if (royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
-		throw new Error(`royaltyPct must be between 0 and ${MAX_ROYALTY_PCT}, got ${royaltyPct}`);
+		throw protocolReject(`royaltyPct must be between 0 and ${MAX_ROYALTY_PCT}, got ${royaltyPct}`);
 	}
 
 	// Validate royaltyRecipient as a real Hive username at creation time. Buy-time
@@ -101,12 +102,12 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	// but any provided value must still be a well-formed username — no silent accept.
 	const royaltyRecipient = optionalUsername(rules.royaltyRecipient, "rules.royaltyRecipient");
 	if (royaltyPct > 0 && !royaltyRecipient) {
-		throw new Error("rules.royaltyRecipient is required when rules.royaltyPct > 0");
+		throw protocolReject("rules.royaltyRecipient is required when rules.royaltyPct > 0");
 	}
 
 	const totalPotential = requireNumber(d.totalPotential, "totalPotential");
 	if (totalPotential < 0 || !Number.isInteger(totalPotential)) {
-		throw new Error(`totalPotential must be a non-negative integer, got ${totalPotential}`);
+		throw protocolReject(`totalPotential must be a non-negative integer, got ${totalPotential}`);
 	}
 
 	// `maxInstances` caps the total instances that can be distributed across
@@ -117,17 +118,17 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	// trigger `prevent_collection_immutable_update`).
 	const maxInstances = requireNumber(d.maxInstances, "maxInstances");
 	if (maxInstances < 0 || !Number.isInteger(maxInstances)) {
-		throw new Error(`maxInstances must be a non-negative integer, got ${maxInstances}`);
+		throw protocolReject(`maxInstances must be a non-negative integer, got ${maxInstances}`);
 	}
 	// Defense-in-depth cap. Enforced before the modulo check so the failure
 	// message is unambiguous when a creator declares an absurd ceiling.
 	if (maxInstances > MAX_INSTANCES_PER_COLLECTION) {
-		throw new Error(
+		throw protocolReject(
 			`maxInstances exceeds protocol cap of ${MAX_INSTANCES_PER_COLLECTION}, got ${maxInstances}`,
 		);
 	}
 	if (maxInstances > 0 && maxInstances % INSTANCE_FEE_PER_N !== 0) {
-		throw new Error(
+		throw protocolReject(
 			`maxInstances must be 0 (unlimited) or a positive multiple of ${INSTANCE_FEE_PER_N}, got ${maxInstances}`,
 		);
 	}
@@ -140,7 +141,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	const originDna = await generateOriginDna(canonicalId);
 	const payloadOriginDna = requireExactLengthString(d.originDna, "originDna", ORIGIN_DNA_LENGTH);
 	if (payloadOriginDna !== originDna) {
-		throw new Error(
+		throw protocolReject(
 			`Non-canonical originDna: expected ${originDna} for collection ${canonicalId}, got ${payloadOriginDna}`,
 		);
 	}
@@ -150,7 +151,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	if (rawSchema) {
 		const schemaErrors = validateSchemaDefinition(rawSchema);
 		if (schemaErrors.length > 0) {
-			throw new Error(`Invalid schema: ${formatSchemaErrors(schemaErrors)}`);
+			throw protocolReject(`Invalid schema: ${formatSchemaErrors(schemaErrors)}`);
 		}
 	}
 

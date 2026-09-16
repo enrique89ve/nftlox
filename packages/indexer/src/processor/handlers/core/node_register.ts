@@ -2,15 +2,16 @@ import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { Queryable } from "@/db/client.ts";
 import { MAX_URL_LENGTH, normalizeNodeEndpoint } from "@/protocol/index.ts";
 import { requireBoundedString } from "@/utils/validation.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 function requireNodeEndpoint(value: unknown): string {
 	try {
 		return normalizeNodeEndpoint(requireBoundedString(value, "endpoint", MAX_URL_LENGTH));
 	} catch (error) {
 		if (error instanceof Error) {
-			throw new Error(`Invalid 'endpoint' parameter: ${error.message}`);
+			throw protocolReject(`Invalid 'endpoint' parameter: ${error.message}`);
 		}
-		throw new Error("Invalid 'endpoint' parameter");
+		throw protocolReject("Invalid 'endpoint' parameter");
 	}
 }
 

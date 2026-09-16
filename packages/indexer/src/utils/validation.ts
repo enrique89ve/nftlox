@@ -18,6 +18,7 @@ import {
 	type SchemaFieldType,
 } from "@/protocol/index.ts";
 import type { TransferDetail } from "@/scanner/operation-parser.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 // ============ TRANSFER VERIFICATION (source-agnostic) ============
 
@@ -28,15 +29,31 @@ export function requireSupportedCurrency(
 	fieldName: string = "currency",
 ): SupportedCurrency {
 	if (typeof value !== "string") {
-		throw new Error(`${fieldName} must be a string, got ${typeof value}`);
+		throw protocolReject(`${fieldName} must be a string, got ${typeof value}`);
 	}
 	const upper = value.toUpperCase();
 	if (!SUPPORTED_CURRENCIES_SET.has(upper)) {
-		throw new Error(
+		throw protocolReject(
 			`${fieldName} must be one of ${SUPPORTED_CURRENCIES.join(", ")}, got "${value}"`,
 		);
 	}
 	return upper as SupportedCurrency;
+}
+
+/**
+ * Parses a currency read from projected state. A malformed stored value is an
+ * internal projection invariant failure, not a user rejection that may be
+ * persisted as invalid_operations.
+ */
+export function requireStoredSupportedCurrency(
+	value: unknown,
+	fieldName = "currency",
+): SupportedCurrency {
+	try {
+		return requireSupportedCurrency(value, fieldName);
+	} catch (cause) {
+		throw new Error(`Invalid stored ${fieldName}`, { cause });
+	}
 }
 
 export interface VerifyTransfersParams {
@@ -101,10 +118,10 @@ function findUniqueTransferIndex(params: {
 	}
 
 	if (candidates.length === 0) {
-		throw new Error(missingMessage);
+		throw protocolReject(missingMessage);
 	}
 	if (candidates.length > 1) {
-		throw new Error(ambiguousMessage(candidates.length));
+		throw protocolReject(ambiguousMessage(candidates.length));
 	}
 
 	return candidates[0]!;
@@ -114,7 +131,7 @@ export function planVerifiedTransfers(params: VerifyTransfersParams): VerifyTran
 	const { transfers, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, nftId, consumedIndices } = params;
 
 	if (transfers.length === 0) {
-		throw new Error("No transfers found. Payment split is required.");
+		throw protocolReject("No transfers found. Payment split is required.");
 	}
 
 	const split = calculatePaymentSplit(totalPrice, currency, royaltyPct, royaltyRecipient, seller, feeAccount);
@@ -128,7 +145,7 @@ export function planVerifiedTransfers(params: VerifyTransfersParams): VerifyTran
 	// the full predicate; a same-memo transfer that fails on amount/to/currency
 	// no longer causes a false rejection.
 	if (split.sellerAmount <= 0) {
-		throw new Error(
+		throw protocolReject(
 			`verifyTransfers: non-positive seller payment (${split.sellerAmount}) — invalid listing`,
 		);
 	}
@@ -197,7 +214,7 @@ export function verifyTransfers(params: VerifyTransfersParams): VerifyTransfersR
 
 export function requireString(value: unknown, fieldName: string): string {
 	if (typeof value !== "string" || value === "") {
-		throw new Error(`Missing or invalid ${fieldName}: expected non-empty string`);
+		throw protocolReject(`Missing or invalid ${fieldName}: expected non-empty string`);
 	}
 	return value;
 }
@@ -205,7 +222,7 @@ export function requireString(value: unknown, fieldName: string): string {
 export function requireSymbol(value: unknown, fieldName: string): string {
 	const str = requireString(value, fieldName);
 	if (!isSymbol(str)) {
-		throw new Error(
+		throw protocolReject(
 			`Invalid ${fieldName}: "${str}" must be 3-10 uppercase chars, start with letter (e.g. "CARD", "NFT01")`,
 		);
 	}
@@ -215,7 +232,7 @@ export function requireSymbol(value: unknown, fieldName: string): string {
 export function requireBoundedString(value: unknown, fieldName: string, maxLength: number): string {
 	const str = requireString(value, fieldName);
 	if (str.length > maxLength) {
-		throw new Error(`${fieldName} exceeds max length: ${str.length} > ${maxLength}`);
+		throw protocolReject(`${fieldName} exceeds max length: ${str.length} > ${maxLength}`);
 	}
 	return str;
 }
@@ -227,7 +244,7 @@ export function requireBoundedString(value: unknown, fieldName: string, maxLengt
 export function requireExactLengthString(value: unknown, fieldName: string, length: number): string {
 	const str = requireString(value, fieldName);
 	if (str.length !== length) {
-		throw new Error(`${fieldName} must be exactly ${length} characters, got ${str.length}`);
+		throw protocolReject(`${fieldName} must be exactly ${length} characters, got ${str.length}`);
 	}
 	return str;
 }
@@ -245,7 +262,7 @@ export function requireShapedString(
 ): string {
 	const str = requireString(value, fieldName);
 	if (!predicate(str)) {
-		throw new Error(`${fieldName} does not match the canonical shape ${shapeDescription}`);
+		throw protocolReject(`${fieldName} does not match the canonical shape ${shapeDescription}`);
 	}
 	return str;
 }
@@ -254,7 +271,7 @@ export function requireUsername(value: unknown, fieldName: string): string {
 	const str = requireString(value, fieldName);
 	const error = validateHiveUsername(str);
 	if (error) {
-		throw new Error(`Invalid Hive username for ${fieldName} ("${str}"): ${error}`);
+		throw protocolReject(`Invalid Hive username for ${fieldName} ("${str}"): ${error}`);
 	}
 	return str;
 }
@@ -268,11 +285,11 @@ export function requireUsername(value: unknown, fieldName: string): string {
 export function optionalUsername(value: unknown, fieldName: string): string | null {
 	if (value === undefined || value === null || value === "") return null;
 	if (typeof value !== "string") {
-		throw new Error(`Invalid ${fieldName}: expected string username, got ${typeof value}`);
+		throw protocolReject(`Invalid ${fieldName}: expected string username, got ${typeof value}`);
 	}
 	const error = validateHiveUsername(value);
 	if (error) {
-		throw new Error(`Invalid Hive username for ${fieldName} ("${value}"): ${error}`);
+		throw protocolReject(`Invalid Hive username for ${fieldName} ("${value}"): ${error}`);
 	}
 	return value;
 }
@@ -311,18 +328,18 @@ const SCHEMA_FIELD_TYPE_LOOKUP: Readonly<Record<SchemaFieldType, true>> = {
 export function requireHiveAmount(value: unknown, fieldName: string): { amount: string; currency: HiveCurrency } {
 	const price = requirePrice(value, fieldName);
 	if (!HIVE_DECIMAL_REGEX.test(price.amount)) {
-		throw new Error(`Invalid Hive decimal format for ${fieldName}.amount: "${price.amount}" (expected 3 decimal places, e.g. "1.000")`);
+		throw protocolReject(`Invalid Hive decimal format for ${fieldName}.amount: "${price.amount}" (expected 3 decimal places, e.g. "1.000")`);
 	}
 	const currency = price.currency.toUpperCase();
 	if (currency !== "HIVE" && currency !== "HBD") {
-		throw new Error(`Invalid currency for ${fieldName}: "${price.currency}" (expected "HIVE" or "HBD")`);
+		throw protocolReject(`Invalid currency for ${fieldName}: "${price.currency}" (expected "HIVE" or "HBD")`);
 	}
 	return { amount: price.amount, currency };
 }
 
 export function requireNumber(value: unknown, fieldName: string): number {
 	if (typeof value !== "number" || !Number.isFinite(value)) {
-		throw new Error(`Missing or invalid ${fieldName}: expected finite number`);
+		throw protocolReject(`Missing or invalid ${fieldName}: expected finite number`);
 	}
 	return value;
 }
@@ -330,14 +347,22 @@ export function requireNumber(value: unknown, fieldName: string): number {
 export function requirePositiveInt(value: unknown, fieldName: string): number {
 	const n = requireNumber(value, fieldName);
 	if (!Number.isInteger(n) || n < 1) {
-		throw new Error(`${fieldName} must be a positive integer, got ${n}`);
+		throw protocolReject(`${fieldName} must be a positive integer, got ${n}`);
 	}
 	return n;
 }
 
 export function requireNonNegativeInt(value: unknown, fieldName: string): number {
 	if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-		throw new Error(`Missing or invalid '${fieldName}' parameter: expected non-negative integer`);
+		throw protocolReject(`Missing or invalid '${fieldName}' parameter: expected non-negative integer`);
+	}
+	return value;
+}
+
+/** Stored counters must fail closed as internal corruption, never as protocol spam. */
+export function requireStoredNonNegativeInt(value: unknown, fieldName: string): number {
+	if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+		throw new Error(`Invalid stored ${fieldName}: expected non-negative integer, got ${String(value)}`);
 	}
 	return value;
 }
@@ -351,7 +376,7 @@ export function optionalString(value: unknown): string | null {
 export function optionalBoundedString(value: unknown, fieldName: string, maxLength: number): string | null {
 	const str = optionalString(value);
 	if (str && str.length > maxLength) {
-		throw new Error(`${fieldName} exceeds max length: ${str.length} > ${maxLength}`);
+		throw protocolReject(`${fieldName} exceeds max length: ${str.length} > ${maxLength}`);
 	}
 	return str;
 }
@@ -369,7 +394,7 @@ export function optionalBoolean(value: unknown, fallback: boolean): boolean {
 
 export function requireObject(value: unknown, fieldName: string): Record<string, unknown> {
 	if (!value || typeof value !== "object" || Array.isArray(value)) {
-		throw new Error(`Missing or invalid ${fieldName}: expected object`);
+		throw protocolReject(`Missing or invalid ${fieldName}: expected object`);
 	}
 	return value as Record<string, unknown>;
 }
@@ -381,14 +406,14 @@ export function optionalObject(value: unknown): Record<string, unknown> | null {
 
 export function requireBoolean(value: unknown, fieldName: string): boolean {
 	if (typeof value !== "boolean") {
-		throw new Error(`Missing or invalid ${fieldName}: expected boolean`);
+		throw protocolReject(`Missing or invalid ${fieldName}: expected boolean`);
 	}
 	return value;
 }
 
 export function requireArray(value: unknown, fieldName: string): unknown[] {
 	if (!Array.isArray(value)) {
-		throw new Error(`Missing or invalid ${fieldName}: expected array`);
+		throw protocolReject(`Missing or invalid ${fieldName}: expected array`);
 	}
 	return value;
 }
@@ -396,10 +421,10 @@ export function requireArray(value: unknown, fieldName: string): unknown[] {
 export function requireBoundedArray(value: unknown, fieldName: string, maxLength: number): unknown[] {
 	const arr = requireArray(value, fieldName);
 	if (arr.length === 0) {
-		throw new Error(`${fieldName} cannot be empty`);
+		throw protocolReject(`${fieldName} cannot be empty`);
 	}
 	if (arr.length > maxLength) {
-		throw new Error(`${fieldName} exceeds maximum length: ${arr.length} > ${maxLength}`);
+		throw protocolReject(`${fieldName} exceeds maximum length: ${arr.length} > ${maxLength}`);
 	}
 	return arr;
 }
@@ -419,7 +444,7 @@ function isSchemaFieldType(value: string): value is SchemaFieldType {
 function requireSchemaFieldType(value: unknown, fieldName: string): SchemaFieldType {
 	const fieldType = requireString(value, fieldName);
 	if (!isSchemaFieldType(fieldType)) {
-		throw new Error(`Invalid ${fieldName}: "${fieldType}" is not a supported schema field type`);
+		throw protocolReject(`Invalid ${fieldName}: "${fieldType}" is not a supported schema field type`);
 	}
 	return fieldType;
 }
@@ -458,6 +483,19 @@ export function optionalCollectionSchema(value: unknown): CollectionSchema | nul
 		immutable: requireSchemaFieldArray(schema.immutable, "schema.immutable"),
 		mutable: requireSchemaFieldArray(schema.mutable, "schema.mutable"),
 	};
+}
+
+/**
+ * The same schema parser for projected JSONB. Invalid persisted schema data is
+ * an internal execution failure and must not be downgraded to a protocol
+ * rejection by the router.
+ */
+export function optionalStoredCollectionSchema(value: unknown): CollectionSchema | null {
+	try {
+		return optionalCollectionSchema(value);
+	} catch (cause) {
+		throw new Error("Invalid stored collection schema", { cause });
+	}
 }
 
 export function collectionSchemaToRecord(schema: CollectionSchema): Record<string, unknown> {

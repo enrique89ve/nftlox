@@ -3,6 +3,7 @@
 
 import type { NftStatus, NftKind } from "@/db/queries/nfts.ts";
 import { NFT_KIND_INSTANCE, NFT_STATUS_LENT, NFT_STATUS_LISTED, NFT_STATUS_PENDING_SALE } from "@/db/queries/nfts.ts";
+import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 /** Minimal shape needed for status assertions — any row with status qualifies. */
 type HasStatus = { readonly status: NftStatus };
@@ -21,13 +22,13 @@ export function isListingExpired(expiresAt: string | null, blockTimestamp: strin
 
 export function assertNotLent(nft: HasStatus, nftId: string): void {
 	if (nft.status === NFT_STATUS_LENT) {
-		throw new Error(`NFT is lent and cannot be modified: ${nftId}`);
+		throw protocolReject(`NFT is lent and cannot be modified: ${nftId}`);
 	}
 }
 
 export function assertNotListed(nft: HasStatus, nftId: string): void {
 	if (nft.status === NFT_STATUS_LISTED) {
-		throw new Error(`NFT is listed and must be unlisted first: ${nftId}`);
+		throw protocolReject(`NFT is listed and must be unlisted first: ${nftId}`);
 	}
 }
 
@@ -41,7 +42,7 @@ export function assertNotListed(nft: HasStatus, nftId: string): void {
  */
 export function assertNotPendingSale(nft: HasStatus, nftId: string): void {
 	if (nft.status === NFT_STATUS_PENDING_SALE) {
-		throw new Error(`NFT ${nftId} is pending_sale — cannot mutate while a buy_commitment is active`);
+		throw protocolReject(`NFT ${nftId} is pending_sale — cannot mutate while a buy_commitment is active`);
 	}
 }
 
@@ -52,13 +53,13 @@ export function assertNotPendingSale(nft: HasStatus, nftId: string): void {
  */
 export function assertNotSeed(nft: HasKind, nftId: string): void {
 	if (nft.nft_type === "seed") {
-		throw new Error(`Seeds cannot be delegated: ${nftId}`);
+		throw protocolReject(`Seeds cannot be delegated: ${nftId}`);
 	}
 }
 
 export function assertMarketplaceInstance(nft: HasKind, nftId: string): void {
 	if (nft.nft_type !== NFT_KIND_INSTANCE) {
-		throw new Error(`Only instances can be listed or bought: ${nftId}`);
+		throw protocolReject(`Only instances can be listed or bought: ${nftId}`);
 	}
 }
 
@@ -69,7 +70,7 @@ export function assertMarketplaceInstance(nft: HasKind, nftId: string): void {
  */
 export function assertSeedNotDistributed(nft: HasKindAndDistributed, nftId: string): void {
 	if (nft.nft_type === "seed" && nft.distributed > 0) {
-		throw new Error(
+		throw protocolReject(
 			`Seed ${nftId} has ${nft.distributed} distributed instance(s) — ownership transfer blocked`,
 		);
 	}
@@ -81,7 +82,7 @@ export function assertSeedNotDistributed(nft: HasKindAndDistributed, nftId: stri
  */
 export function assertSeedNotReserved(nft: { readonly nft_type: NftKind; readonly reserved_supply?: number }, nftId: string): void {
 	if (nft.nft_type === "seed" && (nft.reserved_supply ?? 0) > 0) {
-		throw new Error(`Seed ${nftId} has reserved supply — cannot transfer`);
+		throw protocolReject(`Seed ${nftId} has reserved supply — cannot transfer`);
 	}
 }
 
@@ -104,7 +105,7 @@ export function assertTransferable(nft: HasListingExpiry, nftId: string, blockTi
 
 	if (nft.status === NFT_STATUS_LISTED) {
 		if (!isListingExpired(nft.listing_expires_at, blockTimestamp)) {
-			throw new Error(`NFT is listed for sale and must be unlisted first: ${nftId}`);
+			throw protocolReject(`NFT is listed for sale and must be unlisted first: ${nftId}`);
 		}
 		return { hadExpiredListing: true };
 	}

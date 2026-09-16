@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { withTransaction, sql } from "@/db/client.ts";
-import { routeOperation } from "@/processor/action-router.ts";
+import { routeOperation, routeOperationDetailed } from "@/processor/action-router.ts";
 import { handleCreateCollection } from "@/processor/handlers/core/create-collection.ts";
 import { handleMint } from "@/processor/handlers/core/mint.ts";
 import { handleTransfer } from "@/processor/handlers/core/transfer.ts";
@@ -9,6 +9,7 @@ import {
 	ACTION_CREATE_COLLECTION,
 	ACTION_MINT,
 	ACTION_TRANSFER,
+	getAuthLevel,
 	PROTOCOL_VERSION,
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
@@ -40,10 +41,6 @@ function makeOp(
 	} = {},
 ): ParsedOperation {
 	const signer = overrides.signer ?? "alice";
-	const authLevelMap: Record<string, "posting" | "active"> = {
-		[ACTION_CREATE_COLLECTION]: "active",
-		[ACTION_MINT]: "active",
-	};
 	return {
 		blockNum: overrides.blockNum ?? 1,
 		timestamp: new Date().toISOString(),
@@ -51,7 +48,7 @@ function makeOp(
 		txId: overrides.txId ?? `tx_sp_iso_${Date.now()}_${Math.random()}`,
 		operationId: overrides.operationId ?? `op_sp_iso_${Date.now()}_${Math.random()}`,
 		signer,
-		authLevel: authLevelMap[action] ?? "posting",
+		authLevel: getAuthLevel(action),
 		action: action as ParsedOperation["action"],
 		data,
 		pairedTransfers: overrides.pairedTransfers,
@@ -143,18 +140,17 @@ describe("handler savepoint isolation", () => {
 		);
 
 		await withTransaction(async (txn) => {
-			const success = await routeOperation(transferOp, txn);
-			expect(success).toBe(false); // Handler failed
+			const result = await routeOperationDetailed(transferOp, txn);
+			expect(result.kind).toBe("fatal"); // Counter corruption is infrastructure failure
 		});
 
 		// Verify NFT owner is still "alice" (savepoint rolled back the mutation)
 		const nftAfter = await sql`SELECT owner FROM nfts WHERE id = ${seedIdA}`;
 		expect(nftAfter[0]?.owner).toBe("alice");
 
-		// Verify invalid_operations has the error
+		// Fatal infrastructure errors must not be downgraded to protocol-invalid.
 		const invalid = await sql`SELECT reason FROM invalid_operations WHERE operation_id = ${"test-sp-iso-partial-mutation"}`;
-		expect(invalid).toHaveLength(1);
-		expect(invalid[0]?.reason).toContain("Owner NFT count missing");
+		expect(invalid).toHaveLength(0);
 	});
 
 	it("should allow successful handler mutations to persist", async () => {
@@ -270,24 +266,27 @@ describe("handler savepoint isolation", () => {
 			{ signer: "charlie", operationId: "test-sp-iso-batch-succeeding" },
 		);
 
-		await withTransaction(async (txn) => {
-			const result1 = await routeOperation(failingOp, txn);
-			const result2 = await routeOperation(succeedingOp, txn);
-
-			expect(result1).toBe(false); // First should fail
-			expect(result2).toBe(true); // Second should succeed
-		});
+		await expect(
+			withTransaction(async (txn) => {
+				const result1 = await routeOperationDetailed(failingOp, txn);
+				expect(result1.kind).toBe("fatal");
+				// The sync engine aborts the shared transaction on fatal results. Mirror
+				// that boundary here so the next operation cannot commit in this batch.
+				if (result1.kind === "fatal") throw new Error(result1.reason);
+				await routeOperationDetailed(succeedingOp, txn);
+			}),
+		).rejects.toThrow("Owner NFT count missing");
 
 		// Verify NFT_A still owned by alice (no contamination from failed handler)
 		const nftA = await sql`SELECT owner FROM nfts WHERE id = ${seedIdA}`;
 		expect(nftA[0]?.owner).toBe("alice");
 
-		// Verify NFT_B ownership changed (second op succeeded)
+		// Verify NFT_B ownership did not change after the batch abort
 		const nftB = await sql`SELECT owner FROM nfts WHERE id = ${seedIdB}`;
-		expect(nftB[0]?.owner).toBe("diana");
+		expect(nftB[0]?.owner).toBe("charlie");
 
-		// Verify both operations are recorded
+		// Neither the fatal operation nor the unprocessed successor is protocol-invalid.
 		const invalid = await sql`SELECT operation_id FROM invalid_operations WHERE operation_id = ${"test-sp-iso-batch-failing"}`;
-		expect(invalid).toHaveLength(1);
+		expect(invalid).toHaveLength(0);
 	});
 });
