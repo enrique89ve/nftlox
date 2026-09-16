@@ -128,6 +128,23 @@ Mientras no haya despliegue público, los cambios de DB se pliegan al baseline.
 Después de desplegar testnet/mainnet, los cambios incompatibles deberán ir en
 migraciones explícitas para preservar datos.
 
+### Migración NFT → Asset durante desarrollo
+
+El cambio a la capa única `assets` es un corte de esquema: no hay conversión
+automática de las tablas `nfts`, `nft_allowances`, `nft_loans` ni de sus
+contadores. El indexador detecta esas tablas antes de ejecutar DDL y termina
+con un mensaje que indica el reset requerido, en lugar de reintentar el arranque
+indefinidamente.
+
+En desarrollo/testnet, ejecuta:
+
+```bash
+./scripts/reset_db.sh
+```
+
+Después inicia el indexador para reconstruir la proyección desde el génesis
+`109974058`.
+
 ---
 
 ## Troubleshooting

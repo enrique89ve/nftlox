@@ -1,5 +1,5 @@
 import { testConnection, sql, withTransaction } from "./db/client.ts";
-import { runMigrations } from "./db/migration-runner.ts";
+import { isSchemaMigrationError, runMigrations } from "./db/migration-runner.ts";
 import { bootstrapStateRootFromFullScan, getStateMeta } from "./db/queries/state-root.ts";
 import { emptyStateRoot, rootsEqual } from "./utils/state-root-hash.ts";
 import { createLogger } from "./utils/logger.ts";
@@ -188,6 +188,12 @@ export async function connectWithRetry(): Promise<void> {
 			await ensureStateRootBootstrapped();
 			return;
 		} catch (err) {
+			if (isSchemaMigrationError(err)) {
+				log.error("Database schema is incompatible with this indexer build", {
+					error: err.message,
+				});
+				throw err;
+			}
 			if (attempt === 1) log.info("Waiting for database...");
 			const delay = Math.min(30_000, 1000 * 2 ** (attempt - 1));
 			log.error(`Database connection failed (attempt ${attempt}), retrying in ${delay}ms`, {

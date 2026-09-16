@@ -16,6 +16,7 @@ import { getSyncStatus } from "@/db/queries/sync.ts";
 import { isSynced as _isSynced, getSyncProgress } from "@/scanner/sync-state.ts";
 import { getBlockchainHead } from "@/scanner/hive-client.ts";
 import { SYNC_TOLERANCE_BLOCKS } from "@/scanner/sync-engine.ts";
+import { PROTOCOL_VERSION } from "@/protocol/index.ts";
 
 const log = createLogger("api");
 
@@ -139,7 +140,7 @@ export function startApiServer(): void {
 			documentation: {
 				info: {
 					title: "NFTLox Indexer API",
-					version: "0.1.0",
+					version: PROTOCOL_VERSION,
 					description: "REST API for the NFTLox Protocol blockchain indexer. Provides queryable state for collections, Assets, marketplace, and user activity on Hive blockchain.",
 				},
 				tags: [
