@@ -171,7 +171,7 @@ describe("txIdSchema", () => {
 
 describe("listInputSchema expiresAt", () => {
 	const validBaseInput = {
-		nftId: "nft_abc123",
+		assetId: "asset_abc123",
 		price: { amount: "1.000", currency: "HIVE" as const },
 	};
 
@@ -223,7 +223,7 @@ describe("listInputSchema expiresAt", () => {
 		expect(result2.success).toBe(false);
 	});
 
-	test("rejects listing without expiresAt (mandatory in 0.11.0+)", () => {
+	test("rejects listing without expiresAt (mandatory in 1.0.0+)", () => {
 		const result = listInputSchema.safeParse(validBaseInput);
 		expect(result.success).toBe(false);
 	});
@@ -254,8 +254,8 @@ describe("mintInputSchema collectionBlock", () => {
 		collectionId: "col_test",
 		edition: 1,
 		owner: "testuser",
-		name: "NFT #1",
-		imageUrl: "https://example.com/nft.png",
+		name: "Asset #1",
+		imageUrl: "https://example.com/asset.png",
 		collectionBlock: 90000000,
 	};
 

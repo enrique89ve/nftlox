@@ -34,7 +34,7 @@ describe("multisig Proof of Work", () => {
 	test("solves a valid low-difficulty token for a payload", async () => {
 		const payload = {
 			buyer: "alice",
-			nftId: "nft-1",
+			assetId: "asset-1",
 			transaction: { operations: [], extensions: [], signatures: [] },
 		};
 

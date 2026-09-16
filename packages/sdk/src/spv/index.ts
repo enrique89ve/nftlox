@@ -42,7 +42,7 @@ export {
 export {
 	verifyDeterministicDerivation,
 	verifyOperationOnChain,
-	verifyNftOwnership,
+	verifyAssetOwnership,
 	verifyListingPrice,
 	type DeterministicDerivationParams,
 	type DeterministicDerivationResult,

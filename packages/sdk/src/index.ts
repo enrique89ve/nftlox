@@ -4,7 +4,7 @@
 
 import * as artid from "./artid";
 import * as protocolState from "./protocol-state";
-import * as nftOperationValidation from "./validate";
+import * as assetOperationValidation from "./validate";
 import * as schemaTemplates from "./schema-templates";
 import * as multisigClient from "./multisig";
 import * as pow from "./pow";
@@ -22,7 +22,7 @@ export const validateArtIdArray = artid.validateArtIdArray;
 export type { ArtIdValidationResult, ArtIdArrayValidation } from "./artid";
 
 // ============ SDK-ONLY: SESSION TYPES ============
-export type { SeedNFTWithArtId, MintingSession } from "./types";
+export type { SeedAssetWithArtId, MintingSession } from "./types";
 
 // ============ SDK-ONLY: ZOD SCHEMAS ============
 export * from "./schemas";
@@ -36,9 +36,9 @@ export const getProtocolVersion = protocolState.getProtocolVersion;
 export const getProtocolId = protocolState.getProtocolId;
 export const isInitialized = protocolState.isInitialized;
 
-// ============ SDK-ONLY: NFT OPERATION PRE-VALIDATION ============
-export const validateNftOperation = nftOperationValidation.validateNftOperation;
-export type { NftState, PreValidationResult } from "./validate";
+// ============ SDK-ONLY: Asset OPERATION PRE-VALIDATION ============
+export const validateAssetOperation = assetOperationValidation.validateAssetOperation;
+export type { AssetState, PreValidationResult } from "./validate";
 
 // ============ SDK-ONLY: SCHEMA TEMPLATES ============
 export const GAMING_SCHEMA = schemaTemplates.GAMING_SCHEMA;
@@ -95,23 +95,23 @@ export type {
 	IndexedNodeOperationsPage,
 	IndexerCollection,
 	CollectionStats,
-	IndexerNft,
-	IndexerNftOwner,
-	IndexerNftProof,
-	IndexerNftLoan,
-	IndexerNftLoanStatus,
-	IndexerNftSummary,
+	IndexerAsset,
+	IndexerAssetOwner,
+	IndexerAssetProof,
+	IndexerAssetLoan,
+	IndexerAssetLoanStatus,
+	IndexerAssetSummary,
 	IndexerOwnershipAction,
 	LoanRole,
 	ListingSort,
 	NodeOperationsQueryParams,
 	UserAssetsOverview,
+	UserAssetsOverviewQueryParams,
 	UserAssetsQueryParams,
 	UserLoansPage,
 	UserLoansQueryParams,
-	UserNftCounts,
-	UserNftsPage,
-	UserNftsQueryParams,
+	UserAssetCounts,
+	UserAssetsPage,
 	StateRootStatus,
 } from "./client";
 

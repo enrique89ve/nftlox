@@ -165,11 +165,11 @@ export const ACTION_LIST = protocol.ACTION_LIST;
 export const ACTION_UNLIST = protocol.ACTION_UNLIST;
 export const ACTION_BUY_COMMITMENT = protocol.ACTION_BUY_COMMITMENT;
 export const ACTION_BUY = protocol.ACTION_BUY;
-export const ACTION_NFT_APPROVE = protocol.ACTION_NFT_APPROVE;
-export const ACTION_NFT_APPROVE_ALL = protocol.ACTION_NFT_APPROVE_ALL;
-export const ACTION_NFT_TRANSFER_FROM = protocol.ACTION_NFT_TRANSFER_FROM;
-export const ACTION_NFT_LEND = protocol.ACTION_NFT_LEND;
-export const ACTION_NFT_RETURN = protocol.ACTION_NFT_RETURN;
+export const ACTION_ASSET_APPROVE = protocol.ACTION_ASSET_APPROVE;
+export const ACTION_ASSET_APPROVE_ALL = protocol.ACTION_ASSET_APPROVE_ALL;
+export const ACTION_ASSET_TRANSFER_FROM = protocol.ACTION_ASSET_TRANSFER_FROM;
+export const ACTION_ASSET_LEND = protocol.ACTION_ASSET_LEND;
+export const ACTION_ASSET_RETURN = protocol.ACTION_ASSET_RETURN;
 export const ACTION_DATA_OPERATOR_APPROVE = protocol.ACTION_DATA_OPERATOR_APPROVE;
 export const ACTION_SET_DATA_FROM = protocol.ACTION_SET_DATA_FROM;
 
@@ -382,8 +382,8 @@ export type {
 	CollectionData,
 	ArchiveCollectionData,
 	ExtendSchemaData,
-	NFTMetadata,
-	NFTData,
+	AssetMetadata,
+	AssetData,
 	BulkDistributeItem,
 	BulkDistributeData,
 	TransferData,
@@ -393,11 +393,11 @@ export type {
 	ListingData,
 	UnlistData,
 	BuyData,
-	NftApproveData,
-	NftApproveAllData,
-	NftTransferFromData,
-	NftLendData,
-	NftReturnData,
+	AssetApproveData,
+	AssetApproveAllData,
+	AssetTransferFromData,
+	AssetLendData,
+	AssetReturnData,
 	NodeRegisterData,
 	NodeHeartbeatData,
 	NodeStateCheckpointData,

@@ -10,7 +10,7 @@ import {
 	calculatePaymentSplitFromUnits,
 	generateDeterministicCollectionId,
 	generateListingId,
-	verifyNftOwnership,
+	verifyAssetOwnership,
 	type HiveL1Config,
 } from "../src/index";
 
@@ -34,9 +34,9 @@ afterEach(() => {
 	globalThis.fetch = originalFetch;
 });
 
-describe("verifyNftOwnership", () => {
+describe("verifyAssetOwnership", () => {
 	type TransferOwnershipMockParams = Readonly<{
-		nftId: string;
+		assetId: string;
 		owner: string;
 		previousOwner: string | null;
 		operationId: string;
@@ -50,16 +50,16 @@ describe("verifyNftOwnership", () => {
 		globalThis.fetch = (async (input: string | URL | Request): Promise<Response> => {
 			const url = String(input);
 
-			if (url === `https://indexer.test/api/nfts/${params.nftId}/proof`) {
+			if (url === `https://indexer.test/api/assets/${params.assetId}/proof`) {
 				return new Response(JSON.stringify({
-					id: params.nftId,
+					id: params.assetId,
 					owner: params.owner,
 					previous_owner: params.previousOwner,
 					owner_operation_id: params.operationId,
 					created_tx_id: "mint_tx_1",
 					seed_id: null,
 					instance_number: null,
-					nft_dna: null,
+					asset_dna: null,
 					collection_id: "col_test_1",
 					collection_created_block_num: 105212100,
 					collection_created_tx_id: "c".repeat(40),
@@ -77,7 +77,7 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.11.0",
+								version: "1.0.0",
 								action: ACTION_TRANSFER,
 								data: params.data,
 							}),
@@ -107,16 +107,16 @@ describe("verifyNftOwnership", () => {
 			const url = String(input);
 			urls.push(url);
 
-			if (url === "https://indexer.test/api/nfts/nft_1/proof") {
+			if (url === "https://indexer.test/api/assets/asset_1/proof") {
 				return new Response(JSON.stringify({
-					id: "nft_1",
+					id: "asset_1",
 					owner: "bob",
 					previous_owner: "alice",
 					owner_operation_id: "451882812111324178",
 					created_tx_id: "mint_tx_1",
 					seed_id: null,
 					instance_number: null,
-					nft_dna: null,
+					asset_dna: null,
 					collection_id: "col_test_1",
 					collection_created_block_num: 105212100,
 					collection_created_tx_id: "c".repeat(40),
@@ -134,10 +134,10 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.11.0",
+								version: "1.0.0",
 								action: ACTION_TRANSFER,
 								data: {
-									nftId: "nft_1",
+									assetId: "asset_1",
 									to: "bob",
 								},
 							}),
@@ -159,8 +159,8 @@ describe("verifyNftOwnership", () => {
 			throw new Error(`Unexpected fetch URL: ${url}`);
 		}) as unknown as typeof fetch;
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_1",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_1",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
@@ -179,20 +179,20 @@ describe("verifyNftOwnership", () => {
 
 	test("rejects direct transfer payloads that include from", async () => {
 		installTransferOwnershipMock({
-			nftId: "nft_from_1",
+			assetId: "asset_from_1",
 			owner: "bob",
 			previousOwner: "alice",
 			operationId: "451882812111325100",
 			signer: "alice",
 			data: {
-				nftId: "nft_from_1",
+				assetId: "asset_from_1",
 				from: "alice",
 				to: "bob",
 			},
 		});
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_from_1",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_from_1",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
@@ -202,34 +202,34 @@ describe("verifyNftOwnership", () => {
 		expect(result.message).toContain("must not include from");
 	});
 
-	test("uses nftIds precedence over nftId for direct transfer parity", async () => {
+	test("uses assetIds precedence over assetId for direct transfer parity", async () => {
 		installTransferOwnershipMock({
-			nftId: "nft_shadowed",
+			assetId: "asset_shadowed",
 			owner: "bob",
 			previousOwner: "alice",
 			operationId: "451882812111325101",
 			signer: "alice",
 			data: {
-				nftId: "nft_shadowed",
-				nftIds: ["nft_other"],
+				assetId: "asset_shadowed",
+				assetIds: ["asset_other"],
 				to: "bob",
 			},
 		});
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_shadowed",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_shadowed",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
 		});
 
 		expect(result.status).toBe("mismatch");
-		expect(result.message).toContain("does not include NFT nft_shadowed");
+		expect(result.message).toContain("does not include Asset asset_shadowed");
 	});
 
 	test("rejects direct transfer proofs whose auth level differs from the handler", async () => {
 		installTransferOwnershipMock({
-			nftId: "nft_auth_1",
+			assetId: "asset_auth_1",
 			owner: "bob",
 			previousOwner: "alice",
 			operationId: "451882812111325102",
@@ -237,13 +237,13 @@ describe("verifyNftOwnership", () => {
 			requiredAuths: [],
 			requiredPostingAuths: ["alice"],
 			data: {
-				nftId: "nft_auth_1",
+				assetId: "asset_auth_1",
 				to: "bob",
 			},
 		});
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_auth_1",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_auth_1",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
@@ -255,19 +255,19 @@ describe("verifyNftOwnership", () => {
 
 	test("rejects batch transfer proofs because handler commits the whole batch atomically", async () => {
 		installTransferOwnershipMock({
-			nftId: "nft_batch_ok",
+			assetId: "asset_batch_ok",
 			owner: "bob",
 			previousOwner: "alice",
 			operationId: "451882812111325103",
 			signer: "alice",
 			data: {
-				nftIds: ["nft_batch_ok", "nft_missing"],
+				assetIds: ["asset_batch_ok", "asset_missing"],
 				to: "bob",
 			},
 		});
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_batch_ok",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_batch_ok",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
@@ -306,7 +306,7 @@ describe("verifyNftOwnership", () => {
 		const listingNonce = "nonce-buy-1";
 		const listingExpiresAt = 1_800_000_000_000;
 			const listingId = await generateListingId({
-			nftId: "nft_buy_1",
+			assetId: "asset_buy_1",
 			owner: seller,
 			marketplace: "",
 			priceAmount: "1.000",
@@ -336,7 +336,7 @@ describe("verifyNftOwnership", () => {
 					from: "bob",
 					to: seller,
 					amount: `${unitsToWire(split.sellerUnits)} HIVE`,
-					memo: `NFTLox BUY:nft_buy_1`,
+					memo: `NFTLox BUY:asset_buy_1`,
 				},
 			},
 		];
@@ -347,7 +347,7 @@ describe("verifyNftOwnership", () => {
 					from: "bob",
 					to: split.effectiveRoyaltyRecipient,
 					amount: `${unitsToWire(split.royaltyUnits)} HIVE`,
-					memo: `NFTLox ROY:nft_buy_1`,
+					memo: `NFTLox ROY:asset_buy_1`,
 				},
 			});
 		}
@@ -358,7 +358,7 @@ describe("verifyNftOwnership", () => {
 					from: "bob",
 					to: settlementNode,
 					amount: `${unitsToWire(split.feeUnits)} HIVE`,
-					memo: `NFTLox FEE:nft_buy_1`,
+					memo: `NFTLox FEE:asset_buy_1`,
 				},
 			});
 		}
@@ -367,16 +367,16 @@ describe("verifyNftOwnership", () => {
 		globalThis.fetch = (async (input: string | URL | Request): Promise<Response> => {
 			const url = String(input);
 
-			if (url === "https://indexer.test/api/nfts/nft_buy_1/proof") {
+			if (url === "https://indexer.test/api/assets/asset_buy_1/proof") {
 				return new Response(JSON.stringify({
-					id: "nft_buy_1",
+					id: "asset_buy_1",
 					owner: "bob",
 					previous_owner: seller,
 					owner_operation_id: "451882812111324999",
 					created_tx_id: "mint_tx_buy_1",
 					seed_id: null,
 					instance_number: null,
-					nft_dna: null,
+					asset_dna: null,
 					collection_id: collectionId,
 					collection_created_block_num: collectionBlockNum,
 					collection_created_tx_id: collectionTxId,
@@ -394,10 +394,10 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.11.0",
+								version: "1.0.0",
 								action: ACTION_BUY,
 								data: {
-									nftId: "nft_buy_1",
+									assetId: "asset_buy_1",
 									listingId,
 									listTxId,
 								},
@@ -437,7 +437,7 @@ describe("verifyNftOwnership", () => {
 								id: "nftlox_testnet",
 								json: JSON.stringify({
 									protocol: "nftlox_testnet",
-									version: "0.11.0",
+									version: "1.0.0",
 									action: ACTION_CREATE_COLLECTION,
 									data: {
 										id: collectionId,
@@ -477,10 +477,10 @@ describe("verifyNftOwnership", () => {
 								id: "nftlox_testnet",
 								json: JSON.stringify({
 									protocol: "nftlox_testnet",
-									version: "0.11.0",
+									version: "1.0.0",
 									action: ACTION_LIST,
 									data: {
-										nftId: "nft_buy_1",
+										assetId: "asset_buy_1",
 										listingId,
 										listingNonce,
 										price: { amount: "1.000", currency: "HIVE" },
@@ -531,11 +531,11 @@ describe("verifyNftOwnership", () => {
 											id: "nftlox_testnet",
 											json: JSON.stringify({
 												protocol: "nftlox_testnet",
-												version: "0.11.0",
+												version: "1.0.0",
 												action: ACTION_BUY_COMMITMENT,
 												data: {
 													txHash: "other_buy_tx",
-													nftId: "nft_buy_1",
+													assetId: "asset_buy_1",
 													listingId,
 													listTxId,
 													buyer: "carol",
@@ -559,11 +559,11 @@ describe("verifyNftOwnership", () => {
 									id: "nftlox_testnet",
 									json: JSON.stringify({
 										protocol: "nftlox_testnet",
-										version: "0.11.0",
+										version: "1.0.0",
 										action: ACTION_BUY_COMMITMENT,
 										data: {
 											txHash: "buy_tx_1",
-											nftId: "nft_buy_1",
+											assetId: "asset_buy_1",
 											listingId,
 											listTxId,
 											buyer: "bob",
@@ -595,8 +595,8 @@ describe("verifyNftOwnership", () => {
 	test("verifies buy ownership using payment memos from the Hive transaction", async () => {
 		const { transferCount } = await installBuyFlowMock();
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_buy_1",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_buy_1",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
@@ -621,8 +621,8 @@ describe("verifyNftOwnership", () => {
 			royaltyRecipient: "creator",
 		});
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_buy_1",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_buy_1",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
@@ -638,8 +638,8 @@ describe("verifyNftOwnership", () => {
 			royaltyRecipient: "alice", // === default seller
 		});
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_buy_1",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_buy_1",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
@@ -658,8 +658,8 @@ describe("verifyNftOwnership", () => {
 			royaltyRecipient: "creator",
 		});
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_buy_1",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_buy_1",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
@@ -677,8 +677,8 @@ describe("verifyNftOwnership", () => {
 		// surfaces as a verification regression instead of a silent accept.
 		await installBuyFlowMock({ commitmentOperationId: "not-a-bigint" });
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_buy_1",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_buy_1",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,
@@ -691,8 +691,8 @@ describe("verifyNftOwnership", () => {
 		test("rejects buy when a prior active commitment won the reservation", async () => {
 			await installBuyFlowMock({ priorWinningCommitment: true });
 
-			const result = await verifyNftOwnership({
-				nftId: "nft_buy_1",
+			const result = await verifyAssetOwnership({
+				assetId: "asset_buy_1",
 				expectedOwner: "bob",
 				indexerBaseUrl: "https://indexer.test",
 				l1Config,
@@ -706,16 +706,16 @@ describe("verifyNftOwnership", () => {
 		globalThis.fetch = (async (input: string | URL | Request): Promise<Response> => {
 			const url = String(input);
 
-			if (url === "https://indexer.test/api/nfts/nft_2/proof") {
+			if (url === "https://indexer.test/api/assets/asset_2/proof") {
 				return new Response(JSON.stringify({
-					id: "nft_2",
+					id: "asset_2",
 					owner: "bob",
 					previous_owner: "charlie",
 					owner_operation_id: "451882812111325000",
 					created_tx_id: "mint_tx_2",
 					seed_id: null,
 					instance_number: null,
-					nft_dna: null,
+					asset_dna: null,
 					collection_id: "col_test_2",
 					collection_created_block_num: 105212100,
 					collection_created_tx_id: "c".repeat(40),
@@ -733,10 +733,10 @@ describe("verifyNftOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "0.11.0",
+								version: "1.0.0",
 								action: ACTION_TRANSFER,
 								data: {
-									nftId: "nft_2",
+									assetId: "asset_2",
 									to: "bob",
 								},
 							}),
@@ -758,8 +758,8 @@ describe("verifyNftOwnership", () => {
 			throw new Error(`Unexpected fetch URL: ${url}`);
 		}) as unknown as typeof fetch;
 
-		const result = await verifyNftOwnership({
-			nftId: "nft_2",
+		const result = await verifyAssetOwnership({
+			assetId: "asset_2",
 			expectedOwner: "bob",
 			indexerBaseUrl: "https://indexer.test",
 			l1Config,

@@ -3,8 +3,8 @@ import {
 	burnInputSchema,
 	setDataInputSchema,
 	setDataFromInputSchema,
-	nftLendInputSchema,
-	nftReturnInputSchema,
+	assetLendInputSchema,
+	assetReturnInputSchema,
 	usernameSchema,
 	nodeRegisterInputSchema,
 	nodeHeartbeatInputSchema,
@@ -19,8 +19,8 @@ import {
 	type TransferData,
 	type SetDataData,
 	type SetDataFromData,
-	type NftLendData,
-	type NftReturnData,
+	type AssetLendData,
+	type AssetReturnData,
 	type NodeRegisterData,
 	type NodeHeartbeatData,
 } from "@nftlox/protocol";
@@ -29,7 +29,7 @@ export const burnBuilderSchema = burnInputSchema;
 export type BurnBuilderInput = z.infer<typeof burnBuilderSchema>;
 
 // Burn = transfer to BURN_RECIPIENT (Hive's native burn account). Supports
-// single nftId or bulk nftIds.
+// single assetId or bulk assetIds.
 export function buildBurn(input: BurnBuilderInput): KeychainResult<TransferData> {
 	const parsed = burnBuilderSchema.safeParse(input);
 	if (!parsed.success) {
@@ -37,9 +37,9 @@ export function buildBurn(input: BurnBuilderInput): KeychainResult<TransferData>
 	}
 	const data = parsed.data;
 
-	const transferData: TransferData = data.nftIds
-		? { nftIds: data.nftIds, to: BURN_RECIPIENT }
-		: { nftId: data.nftId!, to: BURN_RECIPIENT };
+	const transferData: TransferData = data.assetIds
+		? { assetIds: data.assetIds, to: BURN_RECIPIENT }
+		: { assetId: data.assetId!, to: BURN_RECIPIENT };
 
 	const payload = createSdkPayload("transfer", transferData);
 	const operation = createHiveOperation(payload, data.owner);
@@ -66,8 +66,8 @@ export function buildSetData(input: SetDataBuilderInput): KeychainResult<SetData
 	const data = parsed.data;
 
 	const setDataData: SetDataData = {
-		nftId: data.nftId,
-		nftDna: data.nftDna,
+		assetId: data.assetId,
+		assetDna: data.assetDna,
 		...(data.mutableData && { mutableData: data.mutableData }),
 		...withProvenance(data),
 	};
@@ -97,8 +97,8 @@ export function buildSetDataFrom(input: SetDataFromBuilderInput): KeychainResult
 	const data = parsed.data;
 
 	const setDataFromData: SetDataFromData = {
-		nftId: data.nftId,
-		nftDna: data.nftDna,
+		assetId: data.assetId,
+		assetDna: data.assetDna,
 		...(data.mutableData && { mutableData: data.mutableData }),
 		...withProvenance(data),
 	};
@@ -115,13 +115,13 @@ export function buildSetDataFrom(input: SetDataFromBuilderInput): KeychainResult
 	};
 }
 
-export const nftLendBuilderSchema = nftLendInputSchema.extend({
+export const assetLendBuilderSchema = assetLendInputSchema.extend({
 	owner: usernameSchema,
 });
-export type NftLendBuilderInput = z.infer<typeof nftLendBuilderSchema>;
+export type AssetLendBuilderInput = z.infer<typeof assetLendBuilderSchema>;
 
-export function buildNftLend(input: NftLendBuilderInput): KeychainResult<NftLendData> {
-	const parsed = nftLendBuilderSchema.safeParse(input);
+export function buildAssetLend(input: AssetLendBuilderInput): KeychainResult<AssetLendData> {
+	const parsed = assetLendBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
@@ -131,48 +131,48 @@ export function buildNftLend(input: NftLendBuilderInput): KeychainResult<NftLend
 		return { success: false, errors: [{ field: "borrower", message: "Cannot lend to yourself", code: "LEND_TO_SELF" }] };
 	}
 
-	const nftLendData: NftLendData = {
+	const assetLendData: AssetLendData = {
 		instanceId: data.instanceId,
 		borrower: data.borrower,
 		...withProvenance(data),
 	};
 
-	const payload = createSdkPayload("nft_lend", nftLendData);
+	const payload = createSdkPayload("asset_lend", assetLendData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
 		success: true,
 		operations: [operation],
-		keyType: getKeyType("nft_lend"),
+		keyType: getKeyType("asset_lend"),
 		signer: data.owner,
 		payload,
 	};
 }
 
-export const nftReturnBuilderSchema = nftReturnInputSchema.extend({
+export const assetReturnBuilderSchema = assetReturnInputSchema.extend({
 	owner: usernameSchema, // The borrower returning it
 });
-export type NftReturnBuilderInput = z.infer<typeof nftReturnBuilderSchema>;
+export type AssetReturnBuilderInput = z.infer<typeof assetReturnBuilderSchema>;
 
-export function buildNftReturn(input: NftReturnBuilderInput): KeychainResult<NftReturnData> {
-	const parsed = nftReturnBuilderSchema.safeParse(input);
+export function buildAssetReturn(input: AssetReturnBuilderInput): KeychainResult<AssetReturnData> {
+	const parsed = assetReturnBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 	const data = parsed.data;
 
-	const nftReturnData: NftReturnData = {
+	const assetReturnData: AssetReturnData = {
 		instanceId: data.instanceId,
 		...withProvenance(data),
 	};
 
-	const payload = createSdkPayload("nft_return", nftReturnData);
+	const payload = createSdkPayload("asset_return", assetReturnData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
 		success: true,
 		operations: [operation],
-		keyType: getKeyType("nft_return"),
+		keyType: getKeyType("asset_return"),
 		signer: data.owner,
 		payload,
 	};

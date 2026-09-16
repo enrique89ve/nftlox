@@ -149,7 +149,7 @@ export const mintInputSchema = z.object({
 	collectionId: z.string().min(1, "Collection ID is required"),
 	edition: z.number().int().min(1, "Edition must be at least 1"),
 	owner: usernameSchema,
-	nftType: z.literal("seed").default("seed"),
+	assetType: z.literal("seed").default("seed"),
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH),
 	description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
 	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH),
@@ -173,7 +173,7 @@ export type MintInput = z.infer<typeof mintInputSchema>;
 // broadcast. The MIN/MAX bounds come from the protocol package.
 const ttlDays = (ms: number) => Math.round(ms / 86_400_000);
 export const listInputSchema = seedProvenanceSchema.extend({
-	nftId: z.string().min(1, "NFT ID is required"),
+	assetId: z.string().min(1, "Asset ID is required"),
 	price: priceSchema,
 	expiresAt: z.number().int("expiresAt must be an integer Unix timestamp in ms")
 		.refine(
@@ -192,21 +192,21 @@ export const listInputSchema = seedProvenanceSchema.extend({
 export type ListInput = z.infer<typeof listInputSchema>;
 
 export const buyInputSchema = z.object({
-	nftId: z.string().min(1, "NFT ID is required").refine(isInstanceId, "NFT ID has invalid canonical shape"),
+	assetId: z.string().min(1, "Asset ID is required").refine(isInstanceId, "Asset ID has invalid canonical shape"),
 	listingId: z.string().min(1, "Listing ID is required").refine(isListingId, "Listing ID has invalid canonical shape"),
 	listTxId: txIdSchema,
 });
 export type BuyInput = z.infer<typeof buyInputSchema>;
 
-export const importedNftSchema = z.object({
-	nftId: z.string().min(1, "NFT ID is required"),
+export const importedAssetSchema = z.object({
+	assetId: z.string().min(1, "Asset ID is required"),
 	name: z.string().min(1, "Name is required"),
 	brief: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
 	imageUrl: httpUrlSchema,
 	imageHash: z.string().optional(),
 	maxSupply: z.number().int().min(1).default(1),
 });
-export type ImportedNFT = z.infer<typeof importedNftSchema>;
+export type ImportedAsset = z.infer<typeof importedAssetSchema>;
 
 export const bulkDistributeItemSchema = z.object({
 	seedId: z.string().min(1, "seedId is required"),
@@ -238,47 +238,47 @@ export const bulkDistributeInputSchema = z.object({
 export type BulkDistributeInput = z.infer<typeof bulkDistributeInputSchema>;
 
 export const burnInputSchema = z.object({
-	nftId: z.string().min(1).optional(),
-	nftIds: z.array(z.string().min(1)).min(1).optional(),
+	assetId: z.string().min(1).optional(),
+	assetIds: z.array(z.string().min(1)).min(1).optional(),
 	owner: usernameSchema,
 }).refine(
-	(data) => Boolean(data.nftId) || Boolean(data.nftIds),
-	{ message: "Either nftId or nftIds is required" },
+	(data) => Boolean(data.assetId) || Boolean(data.assetIds),
+	{ message: "Either assetId or assetIds is required" },
 );
 export type BurnInput = z.infer<typeof burnInputSchema>;
 
 export const unlistInputSchema = seedProvenanceSchema.extend({
-	nftId: z.string().min(1),
+	assetId: z.string().min(1),
 });
 export type UnlistInput = z.infer<typeof unlistInputSchema>;
 
-export const nftApproveInputSchema = z.object({
+export const assetApproveInputSchema = z.object({
 	spender: usernameSchema,
 	instanceId: z.string().min(1),
 	approved: z.boolean(),
 });
-export type NftApproveInput = z.infer<typeof nftApproveInputSchema>;
+export type AssetApproveInput = z.infer<typeof assetApproveInputSchema>;
 
-export const nftApproveAllInputSchema = z.object({
+export const assetApproveAllInputSchema = z.object({
 	spender: usernameSchema,
 	collectionId: z.string().min(1),
 	approved: z.boolean(),
 });
-export type NftApproveAllInput = z.infer<typeof nftApproveAllInputSchema>;
+export type AssetApproveAllInput = z.infer<typeof assetApproveAllInputSchema>;
 
-export const nftTransferFromInputSchema = seedProvenanceSchema.extend({
+export const assetTransferFromInputSchema = seedProvenanceSchema.extend({
 	from: usernameSchema,
 	to: usernameSchema.refine(
 		(value) => value !== BURN_RECIPIENT,
-		{ message: "Delegated NFT transfers cannot target the burn account" },
+		{ message: "Delegated Asset transfers cannot target the burn account" },
 	),
 	instanceId: z.string().min(1),
 });
-export type NftTransferFromInput = z.infer<typeof nftTransferFromInputSchema>;
+export type AssetTransferFromInput = z.infer<typeof assetTransferFromInputSchema>;
 
 export const setDataInputSchema = seedProvenanceSchema.extend({
-	nftId: z.string().min(1),
-	nftDna: z.string().min(1),
+	assetId: z.string().min(1),
+	assetDna: z.string().min(1),
 	mutableData: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",
@@ -294,8 +294,8 @@ export const dataOperatorApproveInputSchema = z.object({
 export type DataOperatorApproveInput = z.infer<typeof dataOperatorApproveInputSchema>;
 
 export const setDataFromInputSchema = seedProvenanceSchema.extend({
-	nftId: z.string().min(1),
-	nftDna: z.string().min(1),
+	assetId: z.string().min(1),
+	assetDna: z.string().min(1),
 	mutableData: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
 		"Data object cannot exceed 64 fields",
@@ -303,16 +303,16 @@ export const setDataFromInputSchema = seedProvenanceSchema.extend({
 });
 export type SetDataFromInput = z.infer<typeof setDataFromInputSchema>;
 
-export const nftLendInputSchema = seedProvenanceSchema.extend({
+export const assetLendInputSchema = seedProvenanceSchema.extend({
 	instanceId: z.string().min(1),
 	borrower: usernameSchema,
 });
-export type NftLendInput = z.infer<typeof nftLendInputSchema>;
+export type AssetLendInput = z.infer<typeof assetLendInputSchema>;
 
-export const nftReturnInputSchema = seedProvenanceSchema.extend({
+export const assetReturnInputSchema = seedProvenanceSchema.extend({
 	instanceId: z.string().min(1),
 });
-export type NftReturnInput = z.infer<typeof nftReturnInputSchema>;
+export type AssetReturnInput = z.infer<typeof assetReturnInputSchema>;
 
 export const nodeRegisterInputSchema = z.object({
 	endpoint: nodeEndpointSchema,

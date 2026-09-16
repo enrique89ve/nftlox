@@ -58,10 +58,10 @@ export interface SyncStatus {
 	inSync: boolean;
 }
 
-export type IndexerNftType = "seed" | "instance";
-export type IndexerNftStatus = "active" | "listed" | "pending_sale" | "burned" | "lent";
-export type IndexerOwnershipAction = "mint" | "bulk_distribute" | "transfer" | "nft_transfer_from" | "buy";
-export type UserNftFilterStatus = "active" | "listed" | "pending_sale" | "lent";
+export type IndexerAssetType = "seed" | "instance";
+export type IndexerAssetStatus = "active" | "listed" | "pending_sale" | "burned" | "lent";
+export type IndexerOwnershipAction = "mint" | "bulk_distribute" | "transfer" | "asset_transfer_from" | "buy";
+export type UserAssetFilterStatus = "active" | "listed" | "pending_sale" | "lent";
 export type LoanRole = "lender" | "borrower" | "all";
 export type ListingSort = "price_asc" | "price_desc" | "recent";
 
@@ -134,7 +134,7 @@ export interface IndexedNodeOperation {
 	reason: string | null;
 	blockNum: number;
 	timestamp: string;
-	nftIds: ReadonlyArray<string>;
+	assetIds: ReadonlyArray<string>;
 }
 
 export interface IndexedNodeOperationsPage {
@@ -147,7 +147,7 @@ export interface IndexedNodeOperationsPage {
 
 export interface ProtocolStats {
 	total_collections: number;
-	total_nfts: number;
+	total_assets: number;
 	total_seeds: number;
 	total_instances: number;
 	total_listed: number;
@@ -158,15 +158,15 @@ export interface ProtocolStats {
 	sales: MarketplaceVolume[];
 }
 
-export interface UserNftCounts {
+export interface UserAssetCounts {
 	total: number;
 	seeds: number;
 	instances: number;
 }
 
-export interface UserNftsPage {
-	nfts: IndexerNftSummary[];
-	counts: UserNftCounts;
+export interface UserAssetsPage {
+	assets: IndexerAssetSummary[];
+	counts: UserAssetCounts;
 	offset: number;
 	limit: number;
 }
@@ -174,7 +174,7 @@ export interface UserNftsPage {
 export interface UserLoansPage {
 	username: string;
 	role: LoanRole;
-	loans: IndexerNftLoan[];
+	loans: IndexerAssetLoan[];
 	total: number;
 	offset: number;
 	limit: number;
@@ -190,10 +190,10 @@ export interface UserAssetsOverview {
 		borrowed: number;
 	};
 	assets: {
-		owned: IndexerNftSummary[];
-		seeds: IndexerNftSummary[];
-		lentOut: IndexerNftLoan[];
-		borrowed: IndexerNftLoan[];
+		owned: IndexerAssetSummary[];
+		seeds: IndexerAssetSummary[];
+		lentOut: IndexerAssetLoan[];
+		borrowed: IndexerAssetLoan[];
 		collections: IndexerCollectionSummary[];
 	};
 	previewLimit: number;
@@ -240,7 +240,7 @@ export interface CollectionStats {
 
 export interface StateRootStatus {
 	state_root: string;
-	nft_count: number;
+	asset_count: number;
 	last_block_num: number;
 	updated_at: string;
 }
@@ -255,18 +255,18 @@ export interface SchemaHistoryEntry {
 	created_at: string;
 }
 
-export interface IndexerNftSummary {
+export interface IndexerAssetSummary {
 	id: string;
 	collection_id: string;
-	nft_type: IndexerNftType;
-	status: IndexerNftStatus;
+	asset_type: IndexerAssetType;
+	status: IndexerAssetStatus;
 	edition: number;
 	owner: string;
 	name: string;
 	image_url: string | null;
 	origin_dna: string | null;
 	immutable_data: Record<string, unknown> | null;
-	nft_dna: string | null;
+	asset_dna: string | null;
 	seed_id: string | null;
 	seed_tx_id: string | null;
 	instance_number: number | null;
@@ -287,7 +287,7 @@ export interface IndexerNftSummary {
 	created_at: string;
 }
 
-export interface IndexerNft extends IndexerNftSummary {
+export interface IndexerAsset extends IndexerAssetSummary {
 	data_hash: string | null;
 	tx_id: string;
 	minted_by: string | null;
@@ -295,7 +295,7 @@ export interface IndexerNft extends IndexerNftSummary {
 	listing_expired: boolean;
 }
 
-export interface IndexerNftOwner {
+export interface IndexerAssetOwner {
 	id: string;
 	owner: string;
 	previous_owner: string | null;
@@ -305,24 +305,24 @@ export interface IndexerNftOwner {
 	claim_hash: string;
 }
 
-export interface IndexerNftProof extends IndexerNftOwner {
+export interface IndexerAssetProof extends IndexerAssetOwner {
 	created_operation_id: string;
 	created_block_num: number;
 	created_tx_id: string;
-	nft_type: IndexerNftType;
+	asset_type: IndexerAssetType;
 	seed_id: string | null;
 	instance_number: number | null;
-	nft_dna: string | null;
+	asset_dna: string | null;
 	collection_id: string;
 	collection_created_block_num: number;
 	collection_created_tx_id: string;
 }
 
-export interface IndexerNftLoan {
-	nft_id: string;
+export interface IndexerAssetLoan {
+	asset_id: string;
 	collection_id: string;
-	nft_type: IndexerNftType;
-	status: IndexerNftStatus;
+	asset_type: IndexerAssetType;
+	status: IndexerAssetStatus;
 	owner: string;
 	name: string;
 	image_url: string | null;
@@ -340,14 +340,14 @@ export interface IndexerNftLoan {
 	loan_created_at: string;
 }
 
-export interface IndexerNftLoanStatus {
-	nft_id: string;
+export interface IndexerAssetLoanStatus {
+	asset_id: string;
 	active: boolean;
-	loan: IndexerNftLoan | null;
+	loan: IndexerAssetLoan | null;
 }
 
 export interface MarketplaceSale {
-	nft_id: string;
+	asset_id: string;
 	collection_id: string;
 	listing_id: string;
 	seller: string;
@@ -386,7 +386,7 @@ export interface OperationStatusEntry {
 	readonly reason: string | null;
 	readonly blockNum: number | null;
 	readonly timestamp: string | null;
-	readonly nftIds: ReadonlyArray<string>;
+	readonly assetIds: ReadonlyArray<string>;
 }
 
 export interface OperationStatusResult {
@@ -407,15 +407,15 @@ export type CollectionsQueryParams = QueryParams & Readonly<{
 	offset?: number;
 }>;
 
-export type CollectionNftsQueryParams = QueryParams & Readonly<{
-	type?: IndexerNftType;
+export type CollectionAssetsQueryParams = QueryParams & Readonly<{
+	type?: IndexerAssetType;
 	limit?: number;
 	offset?: number;
 }>;
 
-export type UserNftsQueryParams = QueryParams & Readonly<{
-	status?: UserNftFilterStatus;
-	type?: IndexerNftType;
+export type UserAssetsQueryParams = QueryParams & Readonly<{
+	status?: UserAssetFilterStatus;
+	type?: IndexerAssetType;
 	limit?: number;
 	offset?: number;
 }>;
@@ -426,7 +426,7 @@ export type UserLoansQueryParams = QueryParams & Readonly<{
 	offset?: number;
 }>;
 
-export type UserAssetsQueryParams = QueryParams & Readonly<{
+export type UserAssetsOverviewQueryParams = QueryParams & Readonly<{
 	previewLimit?: number;
 }>;
 
@@ -438,7 +438,7 @@ export type ListingsQueryParams = QueryParams & Readonly<{
 }>;
 
 export type SalesQueryParams = QueryParams & Readonly<{
-	nftId?: string;
+	assetId?: string;
 	collectionId?: string;
 	seller?: string;
 	buyer?: string;
@@ -462,8 +462,8 @@ export type NodeOperationsQueryParams = QueryParams & Readonly<{
 
 /** Internal: compact response from the instances endpoint (?compact=true). */
 interface CompactInstancesResponse {
-	seed: IndexerNftSummary;
-	instances: IndexerNftSummary[];
+	seed: IndexerAssetSummary;
+	instances: IndexerAssetSummary[];
 }
 
 // ============ URL DENORMALIZERS ============
@@ -484,20 +484,20 @@ function denormalizeCollection<T extends IndexerCollectionBase>(c: T): T {
 	};
 }
 
-function denormalizeNftSummary<T extends IndexerNftSummary>(n: T): T {
+function denormalizeAssetSummary<T extends IndexerAssetSummary>(n: T): T {
 	return { ...n, image_url: denormalizeOptionalUrl(n.image_url) };
 }
 
-function denormalizeLoan(l: IndexerNftLoan): IndexerNftLoan {
+function denormalizeLoan(l: IndexerAssetLoan): IndexerAssetLoan {
 	return { ...l, image_url: denormalizeOptionalUrl(l.image_url) };
 }
 
-function denormalizeNftLoanStatus(s: IndexerNftLoanStatus): IndexerNftLoanStatus {
+function denormalizeAssetLoanStatus(s: IndexerAssetLoanStatus): IndexerAssetLoanStatus {
 	return { ...s, loan: s.loan === null ? null : denormalizeLoan(s.loan) };
 }
 
-function denormalizeUserNftsPage(page: UserNftsPage): UserNftsPage {
-	return { ...page, nfts: page.nfts.map(denormalizeNftSummary) };
+function denormalizeUserAssetsPage(page: UserAssetsPage): UserAssetsPage {
+	return { ...page, assets: page.assets.map(denormalizeAssetSummary) };
 }
 
 function denormalizeUserLoansPage(page: UserLoansPage): UserLoansPage {
@@ -508,8 +508,8 @@ function denormalizeUserAssetsOverview(o: UserAssetsOverview): UserAssetsOvervie
 	return {
 		...o,
 		assets: {
-			owned: o.assets.owned.map(denormalizeNftSummary),
-			seeds: o.assets.seeds.map(denormalizeNftSummary),
+			owned: o.assets.owned.map(denormalizeAssetSummary),
+			seeds: o.assets.seeds.map(denormalizeAssetSummary),
 			lentOut: o.assets.lentOut.map(denormalizeLoan),
 			borrowed: o.assets.borrowed.map(denormalizeLoan),
 			collections: o.assets.collections.map(denormalizeCollection),
@@ -628,28 +628,28 @@ export interface IndexerClient {
 	getCollections(params?: CollectionsQueryParams): Promise<IndexerCollectionSummary[]>;
 	getCollection(id: string): Promise<IndexerCollection>;
 	getCollectionSchemaHistory(id: string): Promise<ReadonlyArray<SchemaHistoryEntry>>;
-	getCollectionNfts(id: string, params?: CollectionNftsQueryParams): Promise<IndexerNftSummary[]>;
+	getCollectionAssets(id: string, params?: CollectionAssetsQueryParams): Promise<IndexerAssetSummary[]>;
 	getCollectionStats(id: string): Promise<CollectionStats>;
 
-	// NFTs
-	getNft(id: string): Promise<IndexerNft>;
-	getNftOwner(id: string): Promise<IndexerNftOwner>;
-	getNftOwnership(id: string): Promise<IndexerNftProof>;
-	getNftProof(id: string): Promise<IndexerNftProof>;
-	getNftLoan(id: string): Promise<IndexerNftLoanStatus>;
-	getNftInstances(id: string, params?: { limit?: number; offset?: number; compact?: boolean }): Promise<IndexerNftSummary[]>;
-	getNftsByIds(ids: ReadonlyArray<string>): Promise<{ items: IndexerNft[]; missing: string[] }>;
+	// Assets
+	getAsset(id: string): Promise<IndexerAsset>;
+	getAssetOwner(id: string): Promise<IndexerAssetOwner>;
+	getAssetOwnership(id: string): Promise<IndexerAssetProof>;
+	getAssetProof(id: string): Promise<IndexerAssetProof>;
+	getAssetLoan(id: string): Promise<IndexerAssetLoanStatus>;
+	getAssetInstances(id: string, params?: { limit?: number; offset?: number; compact?: boolean }): Promise<IndexerAssetSummary[]>;
+	getAssetsByIds(ids: ReadonlyArray<string>): Promise<{ items: IndexerAsset[]; missing: string[] }>;
 	getStateRoot(): Promise<StateRootStatus>;
 
 	// Users
-	getUserAssets(username: string, params?: UserAssetsQueryParams): Promise<UserAssetsOverview>;
-	getUserNfts(username: string, params?: UserNftsQueryParams): Promise<UserNftsPage>;
-	getUserNftCounts(username: string): Promise<UserNftCounts>;
+	getUserAssetsOverview(username: string, params?: UserAssetsOverviewQueryParams): Promise<UserAssetsOverview>;
+	getUserAssets(username: string, params?: UserAssetsQueryParams): Promise<UserAssetsPage>;
+	getUserAssetCounts(username: string): Promise<UserAssetCounts>;
 	getUserCollections(username: string, params?: Omit<CollectionsQueryParams, "creator">): Promise<IndexerCollectionSummary[]>;
 	getUserLoans(username: string, params?: UserLoansQueryParams): Promise<UserLoansPage>;
 
 	// Marketplace
-	getListings(params?: ListingsQueryParams): Promise<IndexerNftSummary[]>;
+	getListings(params?: ListingsQueryParams): Promise<IndexerAssetSummary[]>;
 	getSales(params?: SalesQueryParams): Promise<ReadonlyArray<MarketplaceSale>>;
 	getSalesVolume(params?: SalesVolumeQueryParams): Promise<ReadonlyArray<MarketplaceVolume>>;
 
@@ -657,8 +657,8 @@ export interface IndexerClient {
 	getOperationStatus(txId: string, params?: OperationStatusQueryParams): Promise<OperationStatusResult>;
 
 	// Buy + Multisig
-	/** Fetch payment split info for buying an NFT */
-	getPaymentInfo(nftId: string): Promise<PaymentInfo>;
+	/** Fetch payment split info for buying an Asset */
+	getPaymentInfo(assetId: string): Promise<PaymentInfo>;
 	/** Node-last buy: node broadcasts commitment, waits, co-signs, broadcasts */
 	requestBuyMultisig(request: BuyMultisigRequest, options?: RequestMultisigOptions): Promise<BuyMultisigResponse>;
 	/** Request multisig cosign for a create_collection transaction (active-auth) */
@@ -704,60 +704,60 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 				.then(denormalizeCollection),
 		getCollectionSchemaHistory: (id) =>
 			get<SchemaHistoryEntry[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/schema-history`, undefined, http),
-		getCollectionNfts: (id, params) =>
-			get<IndexerNftSummary[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/nfts`, params, http)
-				.then((arr) => arr.map(denormalizeNftSummary)),
+		getCollectionAssets: (id, params) =>
+			get<IndexerAssetSummary[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/assets`, params, http)
+				.then((arr) => arr.map(denormalizeAssetSummary)),
 		getCollectionStats: (id) =>
 			get<CollectionStats>(baseUrl, `/api/collections/${encodeURIComponent(id)}/stats`, undefined, http),
 
-		// ---- NFTs ----
-		getNft: (id) =>
-			get<IndexerNft>(baseUrl, `/api/nfts/${encodeURIComponent(id)}`, undefined, http)
-				.then(denormalizeNftSummary),
-		getNftOwner: (id) =>
-			get<IndexerNftOwner>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/owner`, undefined, http),
-		getNftOwnership: (id) =>
-			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/ownership`, undefined, http),
-		getNftProof: (id) =>
-			get<IndexerNftProof>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/proof`, undefined, http),
-		getNftLoan: (id) =>
-			get<IndexerNftLoanStatus>(baseUrl, `/api/nfts/${encodeURIComponent(id)}/loan`, undefined, http)
-				.then(denormalizeNftLoanStatus),
-		getNftInstances: async (id, params) => {
-			const path = `/api/nfts/${encodeURIComponent(id)}/instances`;
+		// ---- Assets ----
+		getAsset: (id) =>
+			get<IndexerAsset>(baseUrl, `/api/assets/${encodeURIComponent(id)}`, undefined, http)
+				.then(denormalizeAssetSummary),
+		getAssetOwner: (id) =>
+			get<IndexerAssetOwner>(baseUrl, `/api/assets/${encodeURIComponent(id)}/owner`, undefined, http),
+		getAssetOwnership: (id) =>
+			get<IndexerAssetProof>(baseUrl, `/api/assets/${encodeURIComponent(id)}/ownership`, undefined, http),
+		getAssetProof: (id) =>
+			get<IndexerAssetProof>(baseUrl, `/api/assets/${encodeURIComponent(id)}/proof`, undefined, http),
+		getAssetLoan: (id) =>
+			get<IndexerAssetLoanStatus>(baseUrl, `/api/assets/${encodeURIComponent(id)}/loan`, undefined, http)
+				.then(denormalizeAssetLoanStatus),
+		getAssetInstances: async (id, params) => {
+			const path = `/api/assets/${encodeURIComponent(id)}/instances`;
 			if (params?.compact) {
 				const { seed, instances } = await get<CompactInstancesResponse>(baseUrl, path, { ...params, compact: true }, http);
-				const denormalizedSeed = denormalizeNftSummary(seed);
+				const denormalizedSeed = denormalizeAssetSummary(seed);
 				return instances
-					.map(denormalizeNftSummary)
+					.map(denormalizeAssetSummary)
 					.map((inst) => resolveInstance(inst, denormalizedSeed));
 			}
-			const arr = await get<IndexerNftSummary[]>(baseUrl, path, params, http);
-			return arr.map(denormalizeNftSummary);
+			const arr = await get<IndexerAssetSummary[]>(baseUrl, path, params, http);
+			return arr.map(denormalizeAssetSummary);
 		},
-		getNftsByIds: async (ids) => {
-			const result = await get<{ items: IndexerNft[]; missing: string[] }>(
+		getAssetsByIds: async (ids) => {
+			const result = await get<{ items: IndexerAsset[]; missing: string[] }>(
 				baseUrl,
-				"/api/nfts",
+				"/api/assets",
 				{ ids: ids.join(",") },
 				http,
 			);
 			return {
-				items: result.items.map(denormalizeNftSummary),
+				items: result.items.map(denormalizeAssetSummary),
 				missing: result.missing,
 			};
 		},
 		getStateRoot: () => get<StateRootStatus>(baseUrl, "/api/state-root", undefined, http),
 
 		// ---- Users ----
-		getUserAssets: (username, params) =>
-			get<UserAssetsOverview>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets`, params, http)
+		getUserAssetsOverview: (username, params) =>
+			get<UserAssetsOverview>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets/overview`, params, http)
 				.then(denormalizeUserAssetsOverview),
-		getUserNfts: (username, params) =>
-			get<UserNftsPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts`, params, http)
-				.then(denormalizeUserNftsPage),
-		getUserNftCounts: (username) =>
-			get<UserNftCounts>(baseUrl, `/api/users/${encodeURIComponent(username)}/nfts/count`, undefined, http),
+		getUserAssets: (username, params) =>
+			get<UserAssetsPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets`, params, http)
+				.then(denormalizeUserAssetsPage),
+		getUserAssetCounts: (username) =>
+			get<UserAssetCounts>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets/count`, undefined, http),
 		getUserCollections: (username, params) =>
 			get<IndexerCollectionSummary[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/collections`, params, http)
 				.then((arr) => arr.map(denormalizeCollection)),
@@ -767,8 +767,8 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 
 		// ---- Marketplace ----
 		getListings: (params) =>
-			get<IndexerNftSummary[]>(baseUrl, "/api/marketplace/listings", params, http)
-				.then((arr) => arr.map(denormalizeNftSummary)),
+			get<IndexerAssetSummary[]>(baseUrl, "/api/marketplace/listings", params, http)
+				.then((arr) => arr.map(denormalizeAssetSummary)),
 		getSales: (params) =>
 			get<MarketplaceSale[]>(baseUrl, "/api/marketplace/sales", params, http),
 		getSalesVolume: (params) =>
@@ -779,8 +779,8 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 			get<OperationStatusResult>(baseUrl, `/api/operation-status/${encodeURIComponent(txId)}`, params, http),
 
 		// ---- Buy + Multisig ----
-		getPaymentInfo: (nftId) =>
-			get<PaymentInfo>(baseUrl, `/api/payment-info/${encodeURIComponent(nftId)}`, undefined, http),
+		getPaymentInfo: (assetId) =>
+			get<PaymentInfo>(baseUrl, `/api/payment-info/${encodeURIComponent(assetId)}`, undefined, http),
 		requestBuyMultisig: (request, multisigOptions) =>
 			requestBuyMultisigFn(baseUrl, request, withMultisigOptions(multisigOptions)),
 		multisig: async (request, multisigOptions) => {

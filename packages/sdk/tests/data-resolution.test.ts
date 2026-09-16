@@ -34,11 +34,11 @@ describe("resolveMutableDataFromOperation", () => {
 						id: "nftlox_testnet",
 						json: JSON.stringify({
 							protocol: "nftlox_testnet",
-							version: "0.11.0",
+							version: "1.0.0",
 							action: ACTION_SET_DATA,
 							data: {
-								nftId: "nft_1",
-								nftDna: "iTESTDNA123",
+								assetId: "asset_1",
+								assetDna: "iTESTDNA123",
 								mutableData,
 							},
 						}),
@@ -83,11 +83,11 @@ describe("resolveMutableDataFromOperation", () => {
 					id: "nftlox_testnet",
 					json: JSON.stringify({
 						protocol: "nftlox_testnet",
-						version: "0.11.0",
+						version: "1.0.0",
 						action: ACTION_SET_DATA,
 						data: {
-							nftId: "nft_1",
-							nftDna: "iTESTDNA123",
+							assetId: "asset_1",
+							assetDna: "iTESTDNA123",
 							mutableData: { level: 3, xp: 100 },
 						},
 					}),
@@ -123,8 +123,8 @@ describe("resolveMutableDataFromOperation", () => {
 						protocol: "nftlox_testnet",
 						action: ACTION_SET_DATA,
 						data: {
-							nftId: "nft_1",
-							nftDna: "iTESTDNA123",
+							assetId: "asset_1",
+							assetDna: "iTESTDNA123",
 							mutableData: { level: 3, xp: 100 },
 						},
 					}),

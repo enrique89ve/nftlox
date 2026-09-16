@@ -1,8 +1,8 @@
 import { z } from "zod";
 import {
-	nftApproveInputSchema,
-	nftApproveAllInputSchema,
-	nftTransferFromInputSchema,
+	assetApproveInputSchema,
+	assetApproveAllInputSchema,
+	assetTransferFromInputSchema,
 	dataOperatorApproveInputSchema,
 	usernameSchema,
 } from "../schemas";
@@ -12,98 +12,98 @@ import type { KeychainResult } from "./types";
 import {
 	createHiveOperation,
 	getKeyType,
-	type NftApproveData,
-	type NftApproveAllData,
-	type NftTransferFromData,
+	type AssetApproveData,
+	type AssetApproveAllData,
+	type AssetTransferFromData,
 	type DataOperatorApproveData,
 } from "@nftlox/protocol";
 
-export const nftApproveBuilderSchema = nftApproveInputSchema.extend({
+export const assetApproveBuilderSchema = assetApproveInputSchema.extend({
 	owner: usernameSchema,
 });
-export type NftApproveBuilderInput = z.infer<typeof nftApproveBuilderSchema>;
+export type AssetApproveBuilderInput = z.infer<typeof assetApproveBuilderSchema>;
 
-export function buildNftApprove(input: NftApproveBuilderInput): KeychainResult<NftApproveData> {
-	const parsed = nftApproveBuilderSchema.safeParse(input);
+export function buildAssetApprove(input: AssetApproveBuilderInput): KeychainResult<AssetApproveData> {
+	const parsed = assetApproveBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 	const data = parsed.data;
 
-	const nftApproveData: NftApproveData = {
+	const assetApproveData: AssetApproveData = {
 		spender: data.spender,
 		instanceId: data.instanceId,
 		approved: data.approved,
 	};
 
-	const payload = createSdkPayload("nft_approve", nftApproveData);
+	const payload = createSdkPayload("asset_approve", assetApproveData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
 		success: true,
 		operations: [operation],
-		keyType: getKeyType("nft_approve"),
+		keyType: getKeyType("asset_approve"),
 		signer: data.owner,
 		payload,
 	};
 }
 
-export const nftApproveAllBuilderSchema = nftApproveAllInputSchema.extend({
+export const assetApproveAllBuilderSchema = assetApproveAllInputSchema.extend({
 	owner: usernameSchema,
 });
-export type NftApproveAllBuilderInput = z.infer<typeof nftApproveAllBuilderSchema>;
+export type AssetApproveAllBuilderInput = z.infer<typeof assetApproveAllBuilderSchema>;
 
-export function buildNftApproveAll(input: NftApproveAllBuilderInput): KeychainResult<NftApproveAllData> {
-	const parsed = nftApproveAllBuilderSchema.safeParse(input);
+export function buildAssetApproveAll(input: AssetApproveAllBuilderInput): KeychainResult<AssetApproveAllData> {
+	const parsed = assetApproveAllBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 	const data = parsed.data;
 
-	const nftApproveAllData: NftApproveAllData = {
+	const assetApproveAllData: AssetApproveAllData = {
 		spender: data.spender,
 		collectionId: data.collectionId,
 		approved: data.approved,
 	};
 
-	const payload = createSdkPayload("nft_approve_all", nftApproveAllData);
+	const payload = createSdkPayload("asset_approve_all", assetApproveAllData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
 		success: true,
 		operations: [operation],
-		keyType: getKeyType("nft_approve_all"),
+		keyType: getKeyType("asset_approve_all"),
 		signer: data.owner,
 		payload,
 	};
 }
 
-export const nftTransferFromBuilderSchema = nftTransferFromInputSchema.extend({
+export const assetTransferFromBuilderSchema = assetTransferFromInputSchema.extend({
 	operator: usernameSchema,
 });
-export type NftTransferFromBuilderInput = z.infer<typeof nftTransferFromBuilderSchema>;
+export type AssetTransferFromBuilderInput = z.infer<typeof assetTransferFromBuilderSchema>;
 
-export function buildNftTransferFrom(input: NftTransferFromBuilderInput): KeychainResult<NftTransferFromData> {
-	const parsed = nftTransferFromBuilderSchema.safeParse(input);
+export function buildAssetTransferFrom(input: AssetTransferFromBuilderInput): KeychainResult<AssetTransferFromData> {
+	const parsed = assetTransferFromBuilderSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
 	}
 	const data = parsed.data;
 
-	const nftTransferFromData: NftTransferFromData = {
+	const assetTransferFromData: AssetTransferFromData = {
 		from: data.from,
 		to: data.to,
 		instanceId: data.instanceId,
 		...withProvenance(data),
 	};
 
-	const payload = createSdkPayload("nft_transfer_from", nftTransferFromData);
+	const payload = createSdkPayload("asset_transfer_from", assetTransferFromData);
 	const operation = createHiveOperation(payload, data.operator);
 
 	return {
 		success: true,
 		operations: [operation],
-		keyType: getKeyType("nft_transfer_from"),
+		keyType: getKeyType("asset_transfer_from"),
 		signer: data.operator,
 		payload,
 	};

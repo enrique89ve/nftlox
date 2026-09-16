@@ -99,7 +99,7 @@ export async function readOnlyDemo(): Promise<void> {
 	if (ref?.listing_tx_id && ref.listing_price && ref.listing_currency) {
 		const check = await client.spv.verifyListingPrice({
 			listTxId: ref.listing_tx_id,
-			expectedNftId: ref.id,
+			expectedAssetId: ref.id,
 			expectedSeller: ref.owner,
 			expectedPrice: {
 				amount: Number(ref.listing_price),
@@ -140,8 +140,8 @@ export async function writeDemo(): Promise<void> {
 	console.log(`Distributed 1 instance in tx ${distTx.txId}`);
 
 	// 2. Find the player's freshly-distributed instance.
-	const inventory = await client.indexer.getUserNfts(PLAYER);
-	const card = inventory.nfts.find((n) => n.seed_id === DEMO_SEED_ID);
+	const inventory = await client.indexer.getUserAssets(PLAYER);
+	const card = inventory.assets.find((n) => n.seed_id === DEMO_SEED_ID);
 	if (!card) {
 		console.log("(player inventory not yet indexed — wait one block and rerun)");
 		return;
@@ -153,7 +153,7 @@ export async function writeDemo(): Promise<void> {
 	const listing = unwrap(
 		"list",
 		await client.builders.list({
-			nftId: card.id,
+			assetId: card.id,
 			owner: PLAYER,
 			price: { amount: "10.000", currency: "HIVE" },
 			expiresAt: expireIn({ days: 14 }),
@@ -166,7 +166,7 @@ export async function writeDemo(): Promise<void> {
 	//    apps that want to display the price without trusting the indexer.
 	const spvCheck = await client.spv.verifyListingPrice({
 		listTxId: listTx.txId,
-		expectedNftId: card.id,
+		expectedAssetId: card.id,
 		expectedSeller: PLAYER,
 		expectedPrice: { amount: 10, currency: "HIVE" },
 	});

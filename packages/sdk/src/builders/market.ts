@@ -37,7 +37,7 @@ export async function buildList(
 
 	const listingNonce = generateListingNonce();
 	const listingId = await generateListingId({
-		nftId: data.nftId,
+		assetId: data.assetId,
 		owner: data.owner,
 		marketplace: data.marketplace ?? "",
 		priceAmount: data.price.amount,
@@ -47,7 +47,7 @@ export async function buildList(
 	});
 
 	const listingData: ListingData = {
-		nftId: data.nftId,
+		assetId: data.assetId,
 		listingId,
 		listingNonce,
 		price: data.price,
@@ -85,7 +85,7 @@ export function buildUnlist(
 	const data = parsed.data;
 
 	const unlistData: UnlistData = {
-		nftId: data.nftId,
+		assetId: data.assetId,
 		...withProvenance(data),
 	};
 
@@ -186,7 +186,7 @@ export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 	const data = parsed.data;
 
 	if (data.buyer === data.seller) {
-		return { success: false, errors: [{ field: "buyer", message: "Cannot buy your own NFT", code: "CANNOT_BUY_OWN" }] };
+		return { success: false, errors: [{ field: "buyer", message: "Cannot buy your own Asset", code: "CANNOT_BUY_OWN" }] };
 	}
 	const paymentSplitErrors = validateBuyPaymentSplit(data.paymentSplit);
 	if (paymentSplitErrors.length > 0) {
@@ -194,7 +194,7 @@ export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 	}
 
 	const buyData: BuyData = {
-		nftId: data.nftId,
+		assetId: data.assetId,
 		listingId: data.listingId,
 		listTxId: data.listTxId,
 	};
@@ -216,7 +216,7 @@ export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 				from: data.buyer,
 				to: data.seller,
 				amount: formatAmount(paymentSplit.sellerAmount),
-				memo: `${MEMO_PREFIX_BUY}${data.nftId}`,
+				memo: `${MEMO_PREFIX_BUY}${data.assetId}`,
 			},
 		]);
 	}
@@ -227,7 +227,7 @@ export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 				from: data.buyer,
 				to: paymentSplit.royaltyRecipient,
 				amount: formatAmount(paymentSplit.royaltyAmount),
-				memo: `${MEMO_PREFIX_ROYALTY}${data.nftId}`,
+				memo: `${MEMO_PREFIX_ROYALTY}${data.assetId}`,
 			},
 		]);
 	}
@@ -238,7 +238,7 @@ export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 				from: data.buyer,
 				to: paymentSplit.feeAccount,
 				amount: formatAmount(paymentSplit.feeAmount),
-				memo: `${MEMO_PREFIX_FEE}${data.nftId}`,
+				memo: `${MEMO_PREFIX_FEE}${data.assetId}`,
 			},
 		]);
 	}

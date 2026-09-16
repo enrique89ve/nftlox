@@ -17,7 +17,7 @@ describe("createNftloxClient", () => {
 
 		expect(typeof client.indexer.getStatus).toBe("function");
 		expect(typeof client.builders.list).toBe("function");
-		expect(typeof client.spv.verifyNftOwnership).toBe("function");
+		expect(typeof client.spv.verifyAssetOwnership).toBe("function");
 		expect(client.protocol).toEqual({
 			id: PROTOCOL_ID,
 			version: PROTOCOL_VERSION,
@@ -51,11 +51,11 @@ describe("createNftloxClient", () => {
 			"setData",
 			"setDataFrom",
 			"dataOperatorApprove",
-			"nftApprove",
-			"nftApproveAll",
-			"nftTransferFrom",
-			"nftLend",
-			"nftReturn",
+			"assetApprove",
+			"assetApproveAll",
+			"assetTransferFrom",
+			"assetLend",
+			"assetReturn",
 			"nodeRegister",
 			"nodeHeartbeat",
 		] as const;
@@ -67,7 +67,7 @@ describe("createNftloxClient", () => {
 	test("builders.list produces a signed-ready operation just like buildList", async () => {
 		const client = createNftloxClient({ indexerUrl: INDEXER_URL });
 		const r = await client.builders.list({
-			nftId: "nft_1",
+			assetId: "asset_1",
 			price: { amount: "10.000", currency: "HIVE" },
 			owner: "alice",
 			expiresAt: expireIn({ days: 14 }),
@@ -77,7 +77,7 @@ describe("createNftloxClient", () => {
 		expect(r.signer).toBe("alice");
 	});
 
-	test("spv.verifyNftOwnership injects the configured indexerUrl and l1Config", async () => {
+	test("spv.verifyAssetOwnership injects the configured indexerUrl and l1Config", async () => {
 		const calls: string[] = [];
 		const fakeFetch = (async (input: string | URL | Request): Promise<Response> => {
 			const url = String(input);
@@ -89,9 +89,9 @@ describe("createNftloxClient", () => {
 		try {
 			const client = createNftloxClient({ indexerUrl: INDEXER_URL });
 			await client.spv
-				.verifyNftOwnership({ nftId: "nft_1", expectedOwner: "alice" })
+				.verifyAssetOwnership({ assetId: "asset_1", expectedOwner: "alice" })
 				.catch(() => undefined);
-			// First touched URL is the indexer (NFT lookup) — confirms baseUrl wiring
+			// First touched URL is the indexer (Asset lookup) — confirms baseUrl wiring
 			expect(calls.some((u) => u.startsWith(INDEXER_URL))).toBe(true);
 		} finally {
 			globalThis.fetch = original;
@@ -126,7 +126,7 @@ describe("createNftloxClient", () => {
 			indexerUrl: INDEXER_URL,
 			http: {
 				fetch: (async () => new Response(JSON.stringify({
-					protocolVersion: "0.12.0",
+					protocolVersion: "1.1.0",
 					protocolId: "nftlox_live_protocol",
 				}), { status: 200 })) as unknown as typeof fetch,
 			},
@@ -136,7 +136,7 @@ describe("createNftloxClient", () => {
 			const result = buildUnlistForSyncTest();
 			expect(result.success).toBe(true);
 			if (result.success) {
-				expect(result.payload.version).toBe("0.12.0");
+				expect(result.payload.version).toBe("1.1.0");
 				expect(result.payload.protocol).toBe("nftlox_live_protocol");
 			}
 		} finally {
@@ -146,5 +146,5 @@ describe("createNftloxClient", () => {
 });
 
 function buildUnlistForSyncTest() {
-	return buildUnlist({ nftId: "nft_" + "a".repeat(20) + "_1", owner: "alice" });
+	return buildUnlist({ assetId: "asset_" + "a".repeat(20) + "_1", owner: "alice" });
 }

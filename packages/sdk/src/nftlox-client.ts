@@ -17,11 +17,11 @@ import {
 	buildBuy,
 	buildDataOperatorApprove,
 	buildList,
-	buildNftApprove,
-	buildNftApproveAll,
-	buildNftLend,
-	buildNftReturn,
-	buildNftTransferFrom,
+	buildAssetApprove,
+	buildAssetApproveAll,
+	buildAssetLend,
+	buildAssetReturn,
+	buildAssetTransferFrom,
 	buildNodeHeartbeat,
 	buildNodeRegister,
 	buildSeed,
@@ -38,7 +38,7 @@ import {
 	createDefaultL1Config,
 	verifyDeterministicDerivation,
 	verifyListingPrice,
-	verifyNftOwnership,
+	verifyAssetOwnership,
 	verifyOperationOnChain,
 	resolveMutableDataFromOperation,
 	resolveOperationById,
@@ -74,7 +74,7 @@ export type NftloxClientOptions = {
 };
 
 export type NftloxClient = {
-	/** REST client for the NFTLox indexer (collections, NFTs, marketplace, multisig). */
+	/** REST client for the NFTLox indexer (collections, Assets, marketplace, multisig). */
 	readonly indexer: IndexerClient;
 	/** Payload builders — preconfigured with no extra plumbing required. */
 	readonly builders: NftloxBuilders;
@@ -111,17 +111,17 @@ export type NftloxBuilders = {
 	setData: typeof buildSetData;
 	setDataFrom: typeof buildSetDataFrom;
 	dataOperatorApprove: typeof buildDataOperatorApprove;
-	nftApprove: typeof buildNftApprove;
-	nftApproveAll: typeof buildNftApproveAll;
-	nftTransferFrom: typeof buildNftTransferFrom;
-	nftLend: typeof buildNftLend;
-	nftReturn: typeof buildNftReturn;
+	assetApprove: typeof buildAssetApprove;
+	assetApproveAll: typeof buildAssetApproveAll;
+	assetTransferFrom: typeof buildAssetTransferFrom;
+	assetLend: typeof buildAssetLend;
+	assetReturn: typeof buildAssetReturn;
 	nodeRegister: typeof buildNodeRegister;
 	nodeHeartbeat: typeof buildNodeHeartbeat;
 };
 
 export type NftloxSpv = {
-	verifyNftOwnership(params: { readonly nftId: string; readonly expectedOwner: string }): Promise<OwnershipVerificationResult>;
+	verifyAssetOwnership(params: { readonly assetId: string; readonly expectedOwner: string }): Promise<OwnershipVerificationResult>;
 	verifyOperationOnChain(params: Omit<OnChainVerifyParams, "l1Config">): Promise<OnChainVerificationResult>;
 	verifyListingPrice(params: Omit<ListingPriceVerifyParams, "l1Config">): Promise<ListingPriceVerificationResult>;
 	verifyDeterministicDerivation(params: DeterministicDerivationParams): Promise<DeterministicDerivationResult>;
@@ -139,12 +139,12 @@ export type NftloxSpv = {
  *   await client.connect();
  *
  *   const tx = await client.builders.list({
- *     nftId, owner, price: { amount: "10.000", currency: "HIVE" },
+ *     assetId, owner, price: { amount: "10.000", currency: "HIVE" },
  *     expiresAt: expireIn({ days: 30 }),
  *   });
  *
- *   const nfts = await client.indexer.getUserNfts("alice");
- *   const proof = await client.spv.verifyNftOwnership({ nftId, expectedOwner: "alice" });
+ *   const assets = await client.indexer.getUserAssets("alice");
+ *   const proof = await client.spv.verifyAssetOwnership({ assetId, expectedOwner: "alice" });
  *
  * SECURITY: When used server-side, `indexerUrl` must point to a trusted host.
  * Do not pass user-controlled URLs (SSRF risk).
@@ -170,18 +170,18 @@ export function createNftloxClient(options: NftloxClientOptions): NftloxClient {
 		setData: buildSetData,
 		setDataFrom: buildSetDataFrom,
 		dataOperatorApprove: buildDataOperatorApprove,
-		nftApprove: buildNftApprove,
-		nftApproveAll: buildNftApproveAll,
-		nftTransferFrom: buildNftTransferFrom,
-		nftLend: buildNftLend,
-		nftReturn: buildNftReturn,
+		assetApprove: buildAssetApprove,
+		assetApproveAll: buildAssetApproveAll,
+		assetTransferFrom: buildAssetTransferFrom,
+		assetLend: buildAssetLend,
+		assetReturn: buildAssetReturn,
 		nodeRegister: buildNodeRegister,
 		nodeHeartbeat: buildNodeHeartbeat,
 	};
 
 	const spv: NftloxSpv = {
-		verifyNftOwnership: ({ nftId, expectedOwner }) =>
-			verifyNftOwnership({ nftId, expectedOwner, indexerBaseUrl: indexerUrl, l1Config: hiveL1 }),
+		verifyAssetOwnership: ({ assetId, expectedOwner }) =>
+			verifyAssetOwnership({ assetId, expectedOwner, indexerBaseUrl: indexerUrl, l1Config: hiveL1 }),
 		verifyOperationOnChain: (params) =>
 			verifyOperationOnChain({ ...params, l1Config: hiveL1 }),
 		verifyListingPrice: (params) =>

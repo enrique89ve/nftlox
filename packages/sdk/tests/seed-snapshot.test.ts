@@ -3,7 +3,7 @@ import { snapshotFromIndexerSeed } from "../src";
 
 describe("snapshotFromIndexerSeed", () => {
 	const indexerSeed = {
-		id: "nft_abcdef0123456789abcd",
+		id: "asset_abcdef0123456789abcd",
 		max_supply: 100,
 		distributed: 12,
 		tx_id: "a".repeat(40),
@@ -12,7 +12,7 @@ describe("snapshotFromIndexerSeed", () => {
 	test("maps indexer fields to the packs-engine snapshot shape", () => {
 		const snapshot = snapshotFromIndexerSeed(indexerSeed);
 		expect(snapshot).toEqual({
-			seedId: "nft_abcdef0123456789abcd",
+			seedId: "asset_abcdef0123456789abcd",
 			seedTxId: "a".repeat(40),
 			maxSupply: 100,
 			distributed: 12,

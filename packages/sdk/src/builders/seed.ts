@@ -16,7 +16,7 @@ import {
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
 	MAX_IMAGE_URL_LENGTH,
-	type NFTData,
+	type AssetData,
 } from "@nftlox/protocol";
 
 const seedDataSchema = z.record(z.string(), z.unknown()).refine(
@@ -44,7 +44,7 @@ export const seedBuilderInputSchema = seedInputSchema.extend({
 
 export async function buildSeed(
 	input: z.infer<typeof seedBuilderInputSchema>,
-): Promise<KeychainResult<NFTData>> {
+): Promise<KeychainResult<AssetData>> {
 	const parsed = seedBuilderInputSchema.safeParse(input);
 	if (!parsed.success) {
 		return { success: false, errors: formatZodError(parsed.error) };
@@ -68,21 +68,21 @@ export async function buildSeed(
 	const originDna = await generateOriginDna(data.collectionId);
 	const owner = data.owner ?? data.signer;
 	const imageHash = await generateImageHash(data.imageUrl);
-	const nftDna = await generateSeedDna(seedId, originDna, data.edition, imageHash);
+	const assetDna = await generateSeedDna(seedId, originDna, data.edition, imageHash);
 
 	// The seed's primary id IS the canonical seedId — not a derived instance id.
-	// Instances minted via bulk_distribute get their own `nft_<seedSuffix>_<n>_<hash>`
+	// Instances minted via bulk_distribute get their own `asset_<seedSuffix>_<n>_<hash>`
 	// id derived from (seedId, instanceNumber). Keeping these two namespaces
 	// separate lets the indexer enforce `isSeedId(id)` invariants downstream.
-	const nftData: NFTData = {
+	const assetData: AssetData = {
 		id: seedId,
 		collectionId: data.collectionId,
 		artId: data.artId,
 		edition: data.edition,
 		owner,
-		nftType: "seed",
+		assetType: "seed",
 		originDna,
-		nftDna,
+		assetDna,
 		mintedBy: data.signer,
 		...(data.collectionBlock !== undefined && { collectionBlock: data.collectionBlock }),
 		metadata: {
@@ -95,7 +95,7 @@ export async function buildSeed(
 		...(data.immutableData !== undefined && { immutableData: data.immutableData }),
 	};
 
-	const payload = createSdkPayload("mint", nftData);
+	const payload = createSdkPayload("mint", assetData);
 	const operation = createHiveOperation(payload, data.signer);
 
 	return {

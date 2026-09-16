@@ -347,11 +347,11 @@ describe("buildSeed consistency", () => {
 		expect(op[1].required_posting_auths).toEqual(["testcreator"]);
 	});
 
-	test("nftType is seed in the payload", async () => {
+	test("assetType is seed in the payload", async () => {
 		const result = await buildSeed(validInput);
 		if (!result.success) throw new Error("Expected success");
 
-		expect(result.payload.data.nftType).toBe("seed");
+		expect(result.payload.data.assetType).toBe("seed");
 	});
 
 	test("buildSeedBatch preserves immutableData per seed", async () => {

@@ -10,10 +10,10 @@ import {
 } from "../src/dna";
 
 describe("Instance ID Generation", () => {
-	test("generateInstanceId returns format nft_[20hex]_[N]", async () => {
+	test("generateInstanceId returns format asset_[20hex]_[N]", async () => {
 		const seedId = await generateDeterministicSeedId("col_test", "dragon-fire");
 		const instanceId = await generateInstanceId(seedId, 1);
-		expect(instanceId).toMatch(/^nft_[a-f0-9]{20}_1$/);
+		expect(instanceId).toMatch(/^asset_[a-f0-9]{20}_1$/);
 	});
 
 	test("generateInstanceId includes instance number", async () => {

@@ -20,12 +20,12 @@ import {
 	ACTION_SET_DATA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_SET_DATA_FROM,
-	ACTION_NFT_APPROVE,
-	ACTION_NFT_APPROVE_ALL,
+	ACTION_ASSET_APPROVE,
+	ACTION_ASSET_APPROVE_ALL,
 	ACTION_DATA_OPERATOR_APPROVE,
-	ACTION_NFT_TRANSFER_FROM,
-	ACTION_NFT_LEND,
-	ACTION_NFT_RETURN,
+	ACTION_ASSET_TRANSFER_FROM,
+	ACTION_ASSET_LEND,
+	ACTION_ASSET_RETURN,
 	type ProtocolAction,
 } from "../src/index";
 
@@ -115,7 +115,7 @@ describe("Active key operations use required_auths", () => {
 
 describe("Action authority fields follow ACTION_AUTH_LEVEL", () => {
 	test("transfer", () => {
-		const op = buildOp(ACTION_TRANSFER, "alice", { nftId: "nft_1", to: "bob" });
+		const op = buildOp(ACTION_TRANSFER, "alice", { assetId: "asset_1", to: "bob" });
 		expect(op[1].required_auths).toEqual(["alice"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
@@ -129,14 +129,14 @@ describe("Action authority fields follow ACTION_AUTH_LEVEL", () => {
 	});
 
 	test("burn (transfer to null)", () => {
-		const op = buildOp(ACTION_TRANSFER, "alice", { nftId: "nft_1", to: "null" });
+		const op = buildOp(ACTION_TRANSFER, "alice", { assetId: "asset_1", to: "null" });
 		expect(op[1].required_auths).toEqual(["alice"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("list", () => {
 		const op = buildOp(ACTION_LIST, "alice", {
-			nftId: "nft_1",
+			assetId: "asset_1",
 			listingId: "list_1",
 			listingNonce: "nonce_1",
 			price: { amount: "10.000", currency: "HIVE" },
@@ -145,18 +145,18 @@ describe("Action authority fields follow ACTION_AUTH_LEVEL", () => {
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
-	test("nft_approve", () => {
-		const op = buildOp(ACTION_NFT_APPROVE, "alice", {
+	test("asset_approve", () => {
+		const op = buildOp(ACTION_ASSET_APPROVE, "alice", {
 			spender: "bob",
-			instanceId: "nft_1",
+			instanceId: "asset_1",
 			approved: true,
 		});
 		expect(op[1].required_auths).toEqual(["alice"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
-	test("nft_approve_all", () => {
-		const op = buildOp(ACTION_NFT_APPROVE_ALL, "alice", {
+	test("asset_approve_all", () => {
+		const op = buildOp(ACTION_ASSET_APPROVE_ALL, "alice", {
 			spender: "bob",
 			collectionId: "col_1",
 			approved: true,
@@ -184,7 +184,7 @@ describe("Action authority fields follow ACTION_AUTH_LEVEL", () => {
 	});
 
 	test("set_data", () => {
-		const op = buildOp(ACTION_SET_DATA, "alice", { nftId: "nft_1", nftDna: "dna_1" });
+		const op = buildOp(ACTION_SET_DATA, "alice", { assetId: "asset_1", assetDna: "dna_1" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
@@ -196,42 +196,42 @@ describe("Action authority fields follow ACTION_AUTH_LEVEL", () => {
 	});
 
 	test("set_data_from", () => {
-		const op = buildOp(ACTION_SET_DATA_FROM, "alice", { nftId: "nft_1", nftDna: "dna_1" });
+		const op = buildOp(ACTION_SET_DATA_FROM, "alice", { assetId: "asset_1", assetDna: "dna_1" });
 		expect(op[1].required_auths).toEqual([]);
 		expect(op[1].required_posting_auths).toEqual(["alice"]);
 	});
 
 	test("unlist", () => {
-		const op = buildOp(ACTION_UNLIST, "alice", { nftId: "nft_1" });
+		const op = buildOp(ACTION_UNLIST, "alice", { assetId: "asset_1" });
 		expect(op[1].required_auths).toEqual(["alice"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
-	test("nft_transfer_from", () => {
-		const op = buildOp(ACTION_NFT_TRANSFER_FROM, "charlie", {
+	test("asset_transfer_from", () => {
+		const op = buildOp(ACTION_ASSET_TRANSFER_FROM, "charlie", {
 			from: "alice",
 			to: "bob",
-			instanceId: "nft_1",
+			instanceId: "asset_1",
 		});
 		expect(op[1].required_auths).toEqual(["charlie"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
-	test("nft_lend", () => {
-		const op = buildOp(ACTION_NFT_LEND, "alice", { instanceId: "nft_1", borrower: "bob" });
+	test("asset_lend", () => {
+		const op = buildOp(ACTION_ASSET_LEND, "alice", { instanceId: "asset_1", borrower: "bob" });
 		expect(op[1].required_auths).toEqual(["alice"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
-	test("nft_return", () => {
-		const op = buildOp(ACTION_NFT_RETURN, "alice", { instanceId: "nft_1" });
+	test("asset_return", () => {
+		const op = buildOp(ACTION_ASSET_RETURN, "alice", { instanceId: "asset_1" });
 		expect(op[1].required_auths).toEqual(["alice"]);
 		expect(op[1].required_posting_auths).toEqual([]);
 	});
 
 	test("buy (node active auth)", () => {
 		const op = buildOp(ACTION_BUY, "node-account", {
-			nftId: "nft_1",
+			assetId: "asset_1",
 			listingId: "list_1",
 			listTxId: "a".repeat(40),
 		});

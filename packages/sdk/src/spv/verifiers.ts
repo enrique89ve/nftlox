@@ -14,7 +14,7 @@ import {
 	ACTION_BUY,
 	ACTION_BUY_COMMITMENT,
 	ACTION_CREATE_COLLECTION,
-	ACTION_NFT_TRANSFER_FROM,
+	ACTION_ASSET_TRANSFER_FROM,
 	BUY_COMMITMENT_TTL_BLOCKS,
 	INSTANCE_FEE_ENABLED,
 	INSTANCE_FEE_PER_N,
@@ -63,7 +63,7 @@ export interface DeterministicDerivationParams {
 
 export interface DeterministicDerivationResult {
 	instanceId: string;
-	nftDna: string;
+	assetDna: string;
 	accessKey: string;
 }
 
@@ -78,18 +78,18 @@ export async function verifyDeterministicDerivation(
 		params.seedId,
 		params.instanceNumber,
 	);
-	const nftDna = await generateInstanceDna(
+	const assetDna = await generateInstanceDna(
 		params.seedId,
 		params.instanceNumber,
 		params.txId,
 		params.blockNum,
 	);
 	const accessKey = await generateDeterministicAccessKey(
-		nftDna,
+		assetDna,
 		params.signer,
 		params.txId,
 	);
-	return { instanceId, nftDna, accessKey };
+	return { instanceId, assetDna, accessKey };
 }
 
 // ============ GENERIC ON-CHAIN VERIFICATION ============
@@ -157,7 +157,7 @@ export async function verifyOperationOnChain(
 	}
 }
 
-// ============ NFT OWNERSHIP VERIFICATION ============
+// ============ Asset OWNERSHIP VERIFICATION ============
 
 type IndexerOwnershipSnapshot = Readonly<{
 	owner: string;
@@ -166,7 +166,7 @@ type IndexerOwnershipSnapshot = Readonly<{
 	createdTxId: string;
 	seedId: string | null;
 	instanceNumber: number | null;
-	nftDna: string | null;
+	assetDna: string | null;
 	collectionId: string;
 	collectionCreatedBlockNum: number;
 	collectionCreatedTxId: string;
@@ -196,21 +196,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseRequiredString(value: unknown, fieldName: string): string {
 	if (typeof value !== "string" || value.length === 0) {
-		throw new Error(`Indexer NFT data missing ${fieldName}`);
+		throw new Error(`Indexer Asset data missing ${fieldName}`);
 	}
 	return value;
 }
 
 function parseRequiredBoolean(value: unknown, fieldName: string): boolean {
 	if (typeof value !== "boolean") {
-		throw new Error(`Indexer NFT data missing ${fieldName}`);
+		throw new Error(`Indexer Asset data missing ${fieldName}`);
 	}
 	return value;
 }
 
 function parseRequiredRecord(value: unknown, fieldName: string): Record<string, unknown> {
 	if (!isRecord(value)) {
-		throw new Error(`Indexer NFT data missing ${fieldName}`);
+		throw new Error(`Indexer Asset data missing ${fieldName}`);
 	}
 	return value;
 }
@@ -218,7 +218,7 @@ function parseRequiredRecord(value: unknown, fieldName: string): Record<string, 
 function parseOptionalString(value: unknown, fieldName: string): string | null {
 	if (value === undefined || value === null) return null;
 	if (typeof value !== "string" || value.length === 0) {
-		throw new Error(`Indexer NFT data has invalid ${fieldName}`);
+		throw new Error(`Indexer Asset data has invalid ${fieldName}`);
 	}
 	return value;
 }
@@ -226,7 +226,7 @@ function parseOptionalString(value: unknown, fieldName: string): string | null {
 function parseNullableString(value: unknown, fieldName: string): string | null {
 	if (value === null) return null;
 	if (typeof value !== "string") {
-		throw new Error(`Indexer NFT data has invalid ${fieldName}`);
+		throw new Error(`Indexer Asset data has invalid ${fieldName}`);
 	}
 	return value;
 }
@@ -234,14 +234,14 @@ function parseNullableString(value: unknown, fieldName: string): string | null {
 function parseNullableInteger(value: unknown, fieldName: string): number | null {
 	if (value === null) return null;
 	if (typeof value !== "number" || !Number.isInteger(value)) {
-		throw new Error(`Indexer NFT data has invalid ${fieldName}`);
+		throw new Error(`Indexer Asset data has invalid ${fieldName}`);
 	}
 	return value;
 }
 
 function parseIndexerOwnershipSnapshot(raw: unknown): IndexerOwnershipSnapshot {
 	if (!isRecord(raw)) {
-		throw new Error("Indexer NFT data is not an object");
+		throw new Error("Indexer Asset data is not an object");
 	}
 
 	return {
@@ -254,58 +254,58 @@ function parseIndexerOwnershipSnapshot(raw: unknown): IndexerOwnershipSnapshot {
 		),
 		seedId: parseNullableString(raw.seed_id, "seed_id"),
 		instanceNumber: parseNullableInteger(raw.instance_number, "instance_number"),
-		nftDna: parseNullableString(raw.nft_dna, "nft_dna"),
+		assetDna: parseNullableString(raw.asset_dna, "asset_dna"),
 		collectionId: parseRequiredString(raw.collection_id, "collection_id"),
 		collectionCreatedBlockNum: parseRequiredNumber(raw.collection_created_block_num, "collection_created_block_num"),
 		collectionCreatedTxId: parseRequiredString(raw.collection_created_tx_id, "collection_created_tx_id"),
 	};
 }
 
-function requireNftIdInTransferPayload(data: Record<string, unknown>, nftId: string): void {
+function requireAssetIdInTransferPayload(data: Record<string, unknown>, assetId: string): void {
 	if (Object.prototype.hasOwnProperty.call(data, "from")) {
 		throw new OwnershipMismatchError(
 			"Transfer payload must not include from; owner is derived from Hive signer",
 		);
 	}
 
-	if (Array.isArray(data.nftIds)) {
-		const ids = data.nftIds;
+	if (Array.isArray(data.assetIds)) {
+		const ids = data.assetIds;
 		if (ids.length === 0) {
-			throw new OwnershipMismatchError("Transfer payload nftIds array is empty");
+			throw new OwnershipMismatchError("Transfer payload assetIds array is empty");
 		}
 		if (ids.length > MAX_TRANSFER_BATCH_SIZE) {
 			throw new OwnershipMismatchError(
-				`Transfer payload has ${ids.length} nftIds, max ${MAX_TRANSFER_BATCH_SIZE}`,
+				`Transfer payload has ${ids.length} assetIds, max ${MAX_TRANSFER_BATCH_SIZE}`,
 			);
 		}
-		const nftIds = ids.map((value, index) => {
+		const assetIds = ids.map((value, index) => {
 			if (typeof value !== "string") {
 				throw new OwnershipMismatchError(
-					`Transfer payload nftIds[${index}] must be a string`,
+					`Transfer payload assetIds[${index}] must be a string`,
 				);
 			}
 			return value;
 		});
-		if (nftIds.length !== 1) {
+		if (assetIds.length !== 1) {
 			throw new OwnershipMismatchError(
-				"Batch transfer ownership proofs are not supported: the handler commits the whole nftIds array atomically",
+				"Batch transfer ownership proofs are not supported: the handler commits the whole assetIds array atomically",
 			);
 		}
-		if (!nftIds.includes(nftId)) {
+		if (!assetIds.includes(assetId)) {
 			throw new OwnershipMismatchError(
-				`Ownership operation does not include NFT ${nftId}`,
+				`Ownership operation does not include Asset ${assetId}`,
 			);
 		}
 		return;
 	}
 
-	if (typeof data.nftId !== "string") {
-		throw new Error("Transfer payload missing nftId or nftIds");
+	if (typeof data.assetId !== "string") {
+		throw new Error("Transfer payload missing assetId or assetIds");
 	}
 
-	if (data.nftId !== nftId) {
+	if (data.assetId !== assetId) {
 		throw new OwnershipMismatchError(
-			`Ownership operation targets NFT ${data.nftId}, expected ${nftId}`,
+			`Ownership operation targets Asset ${data.assetId}, expected ${assetId}`,
 		);
 	}
 }
@@ -357,14 +357,14 @@ function extractTransferEdges(tx: { readonly operations: ReadonlyArray<unknown> 
 		.filter((edge): edge is BuyTransferEdge => edge !== null);
 }
 
-function extractBuyTransfersForNft(
+function extractBuyTransfersForAsset(
 	tx: { operations: ReadonlyArray<unknown> },
-	nftId: string,
+	assetId: string,
 ): ReadonlyArray<BuyTransferEdge> {
 	const expectedMemos = new Set([
-		`${MEMO_PREFIX_BUY}${nftId}`,
-		`${MEMO_PREFIX_ROYALTY}${nftId}`,
-		`${MEMO_PREFIX_FEE}${nftId}`,
+		`${MEMO_PREFIX_BUY}${assetId}`,
+		`${MEMO_PREFIX_ROYALTY}${assetId}`,
+		`${MEMO_PREFIX_FEE}${assetId}`,
 	]);
 
 	return extractTransferEdges(tx)
@@ -373,7 +373,7 @@ function extractBuyTransfersForNft(
 
 function parseRequiredNumber(value: unknown, fieldName: string): number {
 	if (typeof value !== "number" || !Number.isFinite(value)) {
-		throw new Error(`Indexer NFT data missing ${fieldName}`);
+		throw new Error(`Indexer Asset data missing ${fieldName}`);
 	}
 	return value;
 }
@@ -473,7 +473,7 @@ function findCollectionFeeTransfer(params: {
 
 async function resolveBuyListingProof(params: {
 	readonly l1Config: HiveL1Config;
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
 	readonly seller: string;
@@ -482,12 +482,12 @@ async function resolveBuyListingProof(params: {
 	const matchingListOps = parseAllNftloxOperations(tx).filter((op) =>
 		op.action === ACTION_LIST &&
 		op.signer === params.seller &&
-		op.data.nftId === params.nftId &&
+		op.data.assetId === params.assetId &&
 		op.data.listingId === params.listingId
 	);
 	if (matchingListOps.length !== 1) {
 		throw new OwnershipMismatchError(
-			`Listing transaction ${params.listTxId} expected exactly one list op for NFT ${params.nftId}, listing ${params.listingId}, seller ${params.seller}; found ${matchingListOps.length}`,
+			`Listing transaction ${params.listTxId} expected exactly one list op for Asset ${params.assetId}, listing ${params.listingId}, seller ${params.seller}; found ${matchingListOps.length}`,
 		);
 	}
 	const listOp = matchingListOps[0]!;
@@ -497,9 +497,9 @@ async function resolveBuyListingProof(params: {
 		);
 	}
 
-	const listedNftId = parseRequiredString(listOp.data.nftId, "list.data.nftId");
-	if (listedNftId !== params.nftId) {
-		throw new OwnershipMismatchError(`Listing targets NFT ${listedNftId}, expected ${params.nftId}`);
+	const listedAssetId = parseRequiredString(listOp.data.assetId, "list.data.assetId");
+	if (listedAssetId !== params.assetId) {
+		throw new OwnershipMismatchError(`Listing targets Asset ${listedAssetId}, expected ${params.assetId}`);
 	}
 
 	const listedListingId = parseRequiredString(listOp.data.listingId, "list.data.listingId");
@@ -517,7 +517,7 @@ async function resolveBuyListingProof(params: {
 	}
 	const marketplace = typeof listOp.data.marketplace === "string" ? listOp.data.marketplace : "";
 	const expectedListingId = await generateListingId({
-		nftId: params.nftId,
+		assetId: params.assetId,
 		owner: listOp.signer,
 		marketplace,
 		priceAmount: price.amount,
@@ -608,7 +608,7 @@ function assertBuyTransfersMatchListing(params: {
 	readonly buyTransfer: BuyTransferEdge;
 	readonly buyer: string;
 	readonly settlementNode: string;
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listing: BuyListingProof;
 	readonly collectionRules: CollectionBuyRules;
 }): void {
@@ -643,7 +643,7 @@ function assertBuyTransfersMatchListing(params: {
 	const expectedTransferCount = 1 + (hasRoyaltyLeg ? 1 : 0) + (hasFeeLeg ? 1 : 0);
 	if (params.transfers.length !== expectedTransferCount) {
 		throw new OwnershipMismatchError(
-			`Buy transaction has ${params.transfers.length} payment transfers for NFT, expected ${expectedTransferCount}`,
+			`Buy transaction has ${params.transfers.length} payment transfers for Asset, expected ${expectedTransferCount}`,
 		);
 	}
 	findExactTransfer({
@@ -652,7 +652,7 @@ function assertBuyTransfersMatchListing(params: {
 		to: params.listing.seller,
 		amountUnits: split.sellerUnits,
 		currency: params.listing.price.currency,
-		memo: `${MEMO_PREFIX_BUY}${params.nftId}`,
+		memo: `${MEMO_PREFIX_BUY}${params.assetId}`,
 		label: "seller payment",
 	});
 	if (hasRoyaltyLeg) {
@@ -662,7 +662,7 @@ function assertBuyTransfersMatchListing(params: {
 			to: split.effectiveRoyaltyRecipient!,
 			amountUnits: split.royaltyUnits,
 			currency: params.listing.price.currency,
-			memo: `${MEMO_PREFIX_ROYALTY}${params.nftId}`,
+			memo: `${MEMO_PREFIX_ROYALTY}${params.assetId}`,
 			label: "royalty payment",
 		});
 	}
@@ -673,7 +673,7 @@ function assertBuyTransfersMatchListing(params: {
 			to: params.settlementNode,
 			amountUnits: split.feeUnits,
 			currency: params.listing.price.currency,
-			memo: `${MEMO_PREFIX_FEE}${params.nftId}`,
+			memo: `${MEMO_PREFIX_FEE}${params.assetId}`,
 			label: "protocol fee",
 		});
 	}
@@ -693,7 +693,7 @@ function compareOperationIds(left: string, right: string): number | null {
 
 type BuyCommitmentPayload = Readonly<{
 	readonly txHash: string;
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
 	readonly buyer: string;
@@ -718,7 +718,7 @@ function parseCommitmentPayload(rawJson: string, protocolId: string): BuyCommitm
 	const data = parsed.data;
 	if (
 		typeof data.txHash !== "string" ||
-		typeof data.nftId !== "string" ||
+		typeof data.assetId !== "string" ||
 		typeof data.listingId !== "string" ||
 		typeof data.listTxId !== "string" ||
 		typeof data.buyer !== "string"
@@ -728,7 +728,7 @@ function parseCommitmentPayload(rawJson: string, protocolId: string): BuyCommitm
 
 	return {
 		txHash: data.txHash,
-		nftId: data.nftId,
+		assetId: data.assetId,
 		listingId: data.listingId,
 		listTxId: data.listTxId,
 		buyer: data.buyer,
@@ -742,7 +742,7 @@ async function assertMatchingBuyCommitment(params: {
 	readonly buyTxId: string;
 	readonly buyBlockNum: number;
 	readonly settlementNode: string;
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
 	readonly buyer: string;
@@ -780,7 +780,7 @@ async function assertMatchingBuyCommitment(params: {
 		if (!data) continue;
 		const txHash = data.txHash.toLowerCase();
 		if (
-			data.nftId !== params.nftId ||
+			data.assetId !== params.assetId ||
 			data.listingId !== params.listingId ||
 			data.listTxId !== params.listTxId
 		) continue;
@@ -826,13 +826,13 @@ async function assertMatchingBuyCommitment(params: {
 		activeReservation.settlementNode !== params.settlementNode
 	) {
 		throw new OwnershipMismatchError(
-			`buy_commitment ${params.buyTxId} did not win the active reservation for NFT ${params.nftId}`,
+			`buy_commitment ${params.buyTxId} did not win the active reservation for Asset ${params.assetId}`,
 		);
 	}
 }
 
 async function deriveOwnershipProof(
-	nftId: string,
+	assetId: string,
 	snapshot: IndexerOwnershipSnapshot,
 	resolved: ResolvedOperationById,
 	l1Config: HiveL1Config,
@@ -840,8 +840,8 @@ async function deriveOwnershipProof(
 	switch (resolved.action) {
 		case ACTION_MINT: {
 			const mintedId = parseRequiredString(resolved.data.id, "mint.data.id");
-			if (mintedId !== nftId) {
-				throw new OwnershipMismatchError(`Mint operation targets NFT ${mintedId}, expected ${nftId}`);
+			if (mintedId !== assetId) {
+				throw new OwnershipMismatchError(`Mint operation targets Asset ${mintedId}, expected ${assetId}`);
 			}
 			const owner = typeof resolved.data.owner === "string" ? resolved.data.owner : resolved.signer;
 			if (snapshot.createdTxId !== resolved.txId) {
@@ -861,7 +861,7 @@ async function deriveOwnershipProof(
 			};
 		}
 		case ACTION_TRANSFER: {
-			requireNftIdInTransferPayload(resolved.data, nftId);
+			requireAssetIdInTransferPayload(resolved.data, assetId);
 			const to = parseRequiredString(resolved.data.to, "transfer.data.to");
 			const from = resolved.signer;
 			return {
@@ -875,15 +875,15 @@ async function deriveOwnershipProof(
 				message: "Verified current owner from transfer operation",
 			};
 		}
-		case ACTION_NFT_TRANSFER_FROM: {
-			const instanceId = parseRequiredString(resolved.data.instanceId, "nft_transfer_from.data.instanceId");
-			if (instanceId !== nftId) {
+		case ACTION_ASSET_TRANSFER_FROM: {
+			const instanceId = parseRequiredString(resolved.data.instanceId, "asset_transfer_from.data.instanceId");
+			if (instanceId !== assetId) {
 				throw new OwnershipMismatchError(
-					`TransferFrom operation targets NFT ${instanceId}, expected ${nftId}`,
+					`TransferFrom operation targets Asset ${instanceId}, expected ${assetId}`,
 				);
 			}
-			const from = parseRequiredString(resolved.data.from, "nft_transfer_from.data.from");
-			const to = parseRequiredString(resolved.data.to, "nft_transfer_from.data.to");
+			const from = parseRequiredString(resolved.data.from, "asset_transfer_from.data.from");
+			const to = parseRequiredString(resolved.data.to, "asset_transfer_from.data.to");
 			return {
 				txId: resolved.txId,
 				blockNum: resolved.blockNum,
@@ -896,34 +896,34 @@ async function deriveOwnershipProof(
 			};
 		}
 		case ACTION_BUY: {
-			const payloadNftId = parseRequiredString(resolved.data.nftId, "buy.data.nftId");
-			if (payloadNftId !== nftId) {
-				throw new OwnershipMismatchError(`Buy operation targets NFT ${payloadNftId}, expected ${nftId}`);
+			const payloadAssetId = parseRequiredString(resolved.data.assetId, "buy.data.assetId");
+			if (payloadAssetId !== assetId) {
+				throw new OwnershipMismatchError(`Buy operation targets Asset ${payloadAssetId}, expected ${assetId}`);
 			}
 			const listingId = parseRequiredString(resolved.data.listingId, "buy.data.listingId");
 			const listTxId = parseRequiredString(resolved.data.listTxId, "buy.data.listTxId");
 
 			const tx = await fetchTransaction(l1Config, resolved.txId);
-			const transfers = extractBuyTransfersForNft(tx, nftId);
+			const transfers = extractBuyTransfersForAsset(tx, assetId);
 			if (transfers.length === 0) {
-				throw new Error(`Buy transaction ${resolved.txId} does not contain payment transfers for NFT ${nftId}`);
+				throw new Error(`Buy transaction ${resolved.txId} does not contain payment transfers for Asset ${assetId}`);
 			}
 
 			const buyers = new Set(transfers.map(transfer => transfer.from));
 			if (buyers.size !== 1) {
 				throw new OwnershipMismatchError(
-					`Buy transaction ${resolved.txId} has multiple buyer accounts for NFT ${nftId}`,
+					`Buy transaction ${resolved.txId} has multiple buyer accounts for Asset ${assetId}`,
 				);
 			}
 
-			const buyTransfer = transfers.find(transfer => transfer.memo === `${MEMO_PREFIX_BUY}${nftId}`);
+			const buyTransfer = transfers.find(transfer => transfer.memo === `${MEMO_PREFIX_BUY}${assetId}`);
 			if (!buyTransfer) {
-				throw new Error(`Buy transaction ${resolved.txId} is missing seller transfer for NFT ${nftId}`);
+				throw new Error(`Buy transaction ${resolved.txId} is missing seller transfer for Asset ${assetId}`);
 			}
 			const buyer = buyTransfer.from;
 			const listing = await resolveBuyListingProof({
 				l1Config,
-				nftId,
+				assetId,
 				listingId,
 				listTxId,
 				seller: buyTransfer.to,
@@ -939,7 +939,7 @@ async function deriveOwnershipProof(
 				buyTransfer,
 				buyer,
 				settlementNode: resolved.signer,
-				nftId,
+				assetId,
 				listing,
 				collectionRules,
 			});
@@ -950,7 +950,7 @@ async function deriveOwnershipProof(
 				buyTxId: resolved.txId,
 				buyBlockNum: resolved.blockNum,
 				settlementNode: resolved.signer,
-				nftId,
+				assetId,
 				listingId,
 				listTxId,
 				buyer,
@@ -968,9 +968,9 @@ async function deriveOwnershipProof(
 			};
 		}
 		case ACTION_BULK_DISTRIBUTE: {
-			if (!snapshot.seedId || snapshot.instanceNumber === null || !snapshot.nftDna) {
+			if (!snapshot.seedId || snapshot.instanceNumber === null || !snapshot.assetDna) {
 				throw new Error(
-					"Indexer NFT data missing seed_id, instance_number, or nft_dna required for bulk_distribute verification",
+					"Indexer Asset data missing seed_id, instance_number, or asset_dna required for bulk_distribute verification",
 				);
 			}
 
@@ -995,21 +995,21 @@ async function deriveOwnershipProof(
 				snapshot.seedId,
 				snapshot.instanceNumber,
 			);
-			if (derivedInstanceId !== nftId) {
+			if (derivedInstanceId !== assetId) {
 				throw new OwnershipMismatchError(
-					`Deterministic instanceId ${derivedInstanceId} does not match NFT ${nftId}`,
+					`Deterministic instanceId ${derivedInstanceId} does not match Asset ${assetId}`,
 				);
 			}
 
-			const derivedNftDna = await generateInstanceDna(
+			const derivedAssetDna = await generateInstanceDna(
 				snapshot.seedId,
 				snapshot.instanceNumber,
 				resolved.txId,
 				resolved.blockNum,
 			);
-			if (derivedNftDna !== snapshot.nftDna) {
+			if (derivedAssetDna !== snapshot.assetDna) {
 				throw new OwnershipMismatchError(
-					"NFT DNA does not match deterministic bulk_distribute derivation",
+					"Asset DNA does not match deterministic bulk_distribute derivation",
 				);
 			}
 
@@ -1043,25 +1043,25 @@ async function deriveOwnershipProof(
  * dedicated proof endpoint. This checks the exact operation that made the
  * reported owner become the current owner.
  */
-export async function verifyNftOwnership(
+export async function verifyAssetOwnership(
 	params: OwnershipVerifyParams,
 ): Promise<OwnershipVerificationResult> {
 	const startTime = Date.now();
 
 	try {
 		// Step 1: Fetch minimal proof data from indexer
-		const nftResponse = await fetch(
-			`${params.indexerBaseUrl}/api/nfts/${params.nftId}/proof`,
+		const assetResponse = await fetch(
+			`${params.indexerBaseUrl}/api/assets/${params.assetId}/proof`,
 		);
-		if (!nftResponse.ok) {
+		if (!assetResponse.ok) {
 			return buildOwnershipResult("error", startTime, {
-				nftId: params.nftId,
+				assetId: params.assetId,
 				expectedOwner: params.expectedOwner,
-				message: `Indexer returned ${nftResponse.status} for NFT proof ${params.nftId}`,
+				message: `Indexer returned ${assetResponse.status} for Asset proof ${params.assetId}`,
 			});
 		}
 
-		const snapshot = parseIndexerOwnershipSnapshot(await nftResponse.json());
+		const snapshot = parseIndexerOwnershipSnapshot(await assetResponse.json());
 		const resolved = await resolveOperationById({
 			l1Config: params.l1Config,
 			operationId: snapshot.ownerOperationId,
@@ -1069,12 +1069,12 @@ export async function verifyNftOwnership(
 
 		let proof: DerivedOwnershipProof;
 		try {
-			proof = await deriveOwnershipProof(params.nftId, snapshot, resolved, params.l1Config);
+			proof = await deriveOwnershipProof(params.assetId, snapshot, resolved, params.l1Config);
 		} catch (err) {
 			if (err instanceof OwnershipMismatchError) {
 				return {
 					status: "mismatch",
-					nftId: params.nftId,
+					assetId: params.assetId,
 					reportedOwner: snapshot.owner,
 					expectedOwner: params.expectedOwner,
 					proofsChecked: 1,
@@ -1127,7 +1127,7 @@ export async function verifyNftOwnership(
 
 		return {
 			status: verified ? "verified" : "mismatch",
-			nftId: params.nftId,
+			assetId: params.assetId,
 			reportedOwner: snapshot.owner,
 			expectedOwner: params.expectedOwner,
 			proofsChecked: 1,
@@ -1140,7 +1140,7 @@ export async function verifyNftOwnership(
 		};
 	} catch (err) {
 		return buildOwnershipResult("error", startTime, {
-			nftId: params.nftId,
+			assetId: params.assetId,
 			expectedOwner: params.expectedOwner,
 			message: err instanceof Error ? err.message : String(err),
 		});
@@ -1148,7 +1148,7 @@ export async function verifyNftOwnership(
 }
 
 interface BuildOwnershipPartial {
-	nftId: string;
+	assetId: string;
 	expectedOwner: string;
 	reportedOwner?: string;
 	message: string;
@@ -1161,7 +1161,7 @@ function buildOwnershipResult(
 ): OwnershipVerificationResult {
 	return {
 		status,
-		nftId: partial.nftId,
+		assetId: partial.assetId,
 		reportedOwner: partial.reportedOwner ?? "",
 		expectedOwner: partial.expectedOwner,
 		proofsChecked: 0,
@@ -1201,7 +1201,7 @@ type BuildListingPartial = {
 	readonly blockNum: number;
 	readonly onChainPrice?: OnChainPrice | null;
 	readonly onChainSeller?: string | null;
-	readonly onChainNftId?: string | null;
+	readonly onChainAssetId?: string | null;
 	readonly message: string;
 };
 
@@ -1216,7 +1216,7 @@ function buildListingResult(
 		blockNum: partial.blockNum,
 		onChainPrice: partial.onChainPrice ?? null,
 		onChainSeller: partial.onChainSeller ?? null,
-		onChainNftId: partial.onChainNftId ?? null,
+		onChainAssetId: partial.onChainAssetId ?? null,
 		message: partial.message,
 	};
 }
@@ -1226,7 +1226,7 @@ function buildListingResult(
  * Protects the buyer against a malicious node inflating the price.
  *
  * Flow: reads the list tx directly from Hive L1 (public RPC, not the node),
- * extracts price/seller/nftId from the custom_json payload, and compares.
+ * extracts price/seller/assetId from the custom_json payload, and compares.
  */
 export async function verifyListingPrice(
 	params: ListingPriceVerifyParams,
@@ -1251,15 +1251,15 @@ export async function verifyListingPrice(
 		}
 
 		const onChainPrice = parseOnChainPrice(l1Op.data.price);
-		const onChainNftId = typeof l1Op.data.nftId === "string" ? l1Op.data.nftId : null;
+		const onChainAssetId = typeof l1Op.data.assetId === "string" ? l1Op.data.assetId : null;
 		const onChainSeller = l1Op.signer;
 
-		if (!onChainPrice || !onChainNftId) {
+		if (!onChainPrice || !onChainAssetId) {
 			return buildListingResult("error", params.listTxId, {
 				blockNum: tx.block_num,
 				onChainSeller,
-				onChainNftId,
-				message: "On-chain listing payload missing price or nftId",
+				onChainAssetId,
+				message: "On-chain listing payload missing price or assetId",
 			});
 		}
 
@@ -1284,9 +1284,9 @@ export async function verifyListingPrice(
 			);
 		}
 
-		if (onChainNftId !== params.expectedNftId) {
+		if (onChainAssetId !== params.expectedAssetId) {
 			mismatches.push(
-				`nftId: on-chain ${onChainNftId}, expected ${params.expectedNftId}`,
+				`assetId: on-chain ${onChainAssetId}, expected ${params.expectedAssetId}`,
 			);
 		}
 
@@ -1295,7 +1295,7 @@ export async function verifyListingPrice(
 				blockNum: tx.block_num,
 				onChainPrice,
 				onChainSeller,
-				onChainNftId,
+				onChainAssetId,
 				message: `Listing mismatch: ${mismatches.join("; ")}`,
 			});
 		}
@@ -1304,7 +1304,7 @@ export async function verifyListingPrice(
 			blockNum: tx.block_num,
 			onChainPrice,
 			onChainSeller,
-			onChainNftId,
+			onChainAssetId,
 			message: "Listing price verified against L1",
 		});
 	} catch (err) {

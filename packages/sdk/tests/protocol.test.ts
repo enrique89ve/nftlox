@@ -78,8 +78,8 @@ describe("SDK input schemas", () => {
 			collectionId: "col_test",
 			edition: 1,
 			owner: "user",
-			name: "NFT #1",
-			imageUrl: "https://example.com/nft.png",
+			name: "Asset #1",
+			imageUrl: "https://example.com/asset.png",
 			collectionBlock: 90000000,
 		};
 
@@ -95,13 +95,13 @@ describe("SDK input schemas", () => {
 });
 
 describe("buildBuy transfer generation", () => {
-	const NFT_ID = "nft_" + "a".repeat(20) + "_1";
+	const ASSET_ID = "asset_" + "a".repeat(20) + "_1";
 	const LISTING_ID = "list_" + "b".repeat(32);
 	const LIST_TX_ID = "b".repeat(40);
 	const BUYER = "buyeraccount";
 	const SELLER = "selleraccount";
 	const FEE_ACCOUNT = "nftloxfees";
-	const NFT_TX_ID = "c".repeat(40);
+	const Asset_TX_ID = "c".repeat(40);
 
 	const basePaymentSplit = {
 		sellerAmount: 8.9,
@@ -114,10 +114,10 @@ describe("buildBuy transfer generation", () => {
 	};
 
 	const baseInput = {
-		nftId: NFT_ID,
+		assetId: ASSET_ID,
 		listingId: LISTING_ID,
 		listTxId: LIST_TX_ID,
-		txId: NFT_TX_ID,
+		txId: Asset_TX_ID,
 		buyer: BUYER,
 		seller: SELLER,
 		paymentSplit: basePaymentSplit,
@@ -271,13 +271,13 @@ describe("buildBuy transfer generation", () => {
 		const ops = result.operations;
 		const transfers = ops.filter((op): op is HiveTransferOperation => op[0] === "transfer");
 
-		expect(transfers[0]![1].memo).toBe(`NFTLox BUY:${NFT_ID}`);
+		expect(transfers[0]![1].memo).toBe(`NFTLox BUY:${ASSET_ID}`);
 		expect(transfers[0]![1].to).toBe(SELLER);
 
-		expect(transfers[1]![1].memo).toBe(`NFTLox ROY:${NFT_ID}`);
+		expect(transfers[1]![1].memo).toBe(`NFTLox ROY:${ASSET_ID}`);
 		expect(transfers[1]![1].to).toBe("royaltyuser");
 
-		expect(transfers[2]![1].memo).toBe(`NFTLox FEE:${NFT_ID}`);
+		expect(transfers[2]![1].memo).toBe(`NFTLox FEE:${ASSET_ID}`);
 		expect(transfers[2]![1].to).toBe(FEE_ACCOUNT);
 	});
 

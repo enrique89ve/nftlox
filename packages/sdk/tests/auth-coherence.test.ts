@@ -16,11 +16,11 @@ import {
 	buildBuy,
 	buildBulkDistribute,
 	buildSetData,
-	buildNftLend,
-	buildNftReturn,
-	buildNftApprove,
-	buildNftApproveAll,
-	buildNftTransferFrom,
+	buildAssetLend,
+	buildAssetReturn,
+	buildAssetApprove,
+	buildAssetApproveAll,
+	buildAssetTransferFrom,
 	buildDataOperatorApprove,
 	buildNodeRegister,
 	buildNodeHeartbeat,
@@ -115,13 +115,13 @@ function assertAuthCoherent(
 
 describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 	test("buildBurn (was previously hardcoded active — regression guard)", () => {
-		const r = buildBurn({ nftId: "nft_1", owner: "alice" });
+		const r = buildBurn({ assetId: "asset_1", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildTransfer", () => {
-		const r = buildTransfer({ nftId: "nft_1", from: "alice", to: "bob" });
+		const r = buildTransfer({ assetId: "asset_1", from: "alice", to: "bob" });
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 		expect(r.payload.data).not.toHaveProperty("from");
@@ -129,7 +129,7 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 
 	test("buildList", async () => {
 		const r = await buildList({
-			nftId: "nft_1",
+			assetId: "asset_1",
 			price: { amount: "10.000", currency: "HIVE" },
 			owner: "alice",
 			expiresAt: Date.now() + 14 * 86_400_000,
@@ -139,14 +139,14 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 	});
 
 	test("buildUnlist", () => {
-		const r = buildUnlist({ nftId: "nft_1", owner: "alice" });
+		const r = buildUnlist({ assetId: "asset_1", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
 	test("buildBuy — buyer signs transfers with active, node cosigns custom_json with active", () => {
 		const r = buildBuy({
-			nftId: "nft_" + "a".repeat(20) + "_1",
+			assetId: "asset_" + "a".repeat(20) + "_1",
 			listingId: "list_" + "b".repeat(32),
 			listTxId: "a".repeat(40),
 			buyer: "alice",
@@ -186,27 +186,27 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 	});
 
 	test("buildSetData", () => {
-		const r = buildSetData({ nftId: "nft_1", nftDna: "dna_1", owner: "alice" });
+		const r = buildSetData({ assetId: "asset_1", assetDna: "dna_1", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
-	test("buildNftLend", () => {
-		const r = buildNftLend({ instanceId: "nft_1", borrower: "bob", owner: "alice" });
+	test("buildAssetLend", () => {
+		const r = buildAssetLend({ instanceId: "asset_1", borrower: "bob", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
-	test("buildNftReturn", () => {
-		const r = buildNftReturn({ instanceId: "nft_1", owner: "alice" });
+	test("buildAssetReturn", () => {
+		const r = buildAssetReturn({ instanceId: "asset_1", owner: "alice" });
 		if (!r.success) throw new Error("build failed");
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
-	test("buildNftApprove", () => {
-		const r = buildNftApprove({
+	test("buildAssetApprove", () => {
+		const r = buildAssetApprove({
 			spender: "bob",
-			instanceId: "nft_1",
+			instanceId: "asset_1",
 			approved: true,
 			owner: "alice",
 		});
@@ -214,8 +214,8 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
-	test("buildNftApproveAll", () => {
-		const r = buildNftApproveAll({
+	test("buildAssetApproveAll", () => {
+		const r = buildAssetApproveAll({
 			spender: "bob",
 			collectionId: "col_1",
 			approved: true,
@@ -225,11 +225,11 @@ describe("Builders emit auth fields that match ACTION_AUTH_LEVEL", () => {
 		assertAuthCoherent(r.operations[0] as HiveOperation, "alice");
 	});
 
-	test("buildNftTransferFrom", () => {
-		const r = buildNftTransferFrom({
+	test("buildAssetTransferFrom", () => {
+		const r = buildAssetTransferFrom({
 			from: "alice",
 			to: "bob",
-			instanceId: "nft_1",
+			instanceId: "asset_1",
 			operator: "charlie",
 		});
 		if (!r.success) throw new Error("build failed");

@@ -107,7 +107,7 @@ export interface ResolvedOperationById {
 // ============ OWNERSHIP VERIFICATION ============
 
 export interface OwnershipVerifyParams {
-	nftId: string;
+	assetId: string;
 	expectedOwner: string;
 	indexerBaseUrl: string;
 	l1Config: HiveL1Config;
@@ -127,7 +127,7 @@ export interface OwnershipCheckResult {
 
 export interface OwnershipVerificationResult {
 	status: VerificationStatus;
-	nftId: string;
+	assetId: string;
 	reportedOwner: string;
 	expectedOwner: string;
 	proofsChecked: number;
@@ -145,7 +145,7 @@ export type ListingPriceVerifyParams = {
 	readonly listTxId: string;
 	readonly expectedPrice: { readonly amount: number; readonly currency: SupportedCurrency };
 	readonly expectedSeller: string;
-	readonly expectedNftId: string;
+	readonly expectedAssetId: string;
 	readonly l1Config: HiveL1Config;
 };
 
@@ -155,6 +155,6 @@ export type ListingPriceVerificationResult = {
 	readonly blockNum: number;
 	readonly onChainPrice: OnChainPrice | null;
 	readonly onChainSeller: string | null;
-	readonly onChainNftId: string | null;
+	readonly onChainAssetId: string | null;
 	readonly message: string;
 };

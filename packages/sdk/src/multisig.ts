@@ -3,7 +3,7 @@
 // Endpoints exposed:
 //   - POST /api/multisig/buy         → requestBuyMultisig              (node-last buy: broadcast commitment, wait, co-sign, broadcast)
 //   - POST /api/multisig/collection  → requestCreateCollectionMultisig (active-auth cosign)
-//   - GET  /api/payment-info/:nftId  → fetchPaymentInfo
+//   - GET  /api/payment-info/:assetId  → fetchPaymentInfo
 //   - GET  /api/status               → fetchNodeAccount
 
 import type {
@@ -143,7 +143,7 @@ export function fetchMultisigNodeAccount(
 }
 
 const PAYMENT_INFO_STRING_FIELDS = [
-	"nftId",
+	"assetId",
 	"listingId",
 	"listTxId",
 	"seller",
@@ -226,10 +226,10 @@ function safeJsonParse(text: string): unknown {
  */
 export async function fetchPaymentInfo(
 	indexerUrl: string,
-	nftId: string,
+	assetId: string,
 	http?: HttpOptions,
 ): Promise<PaymentInfo> {
-	const url = buildUrl(indexerUrl, `/api/payment-info/${encodeURIComponent(nftId)}`);
+	const url = buildUrl(indexerUrl, `/api/payment-info/${encodeURIComponent(assetId)}`);
 	const fetchImpl = resolveFetch(http);
 	let res: Response;
 	try {
@@ -305,7 +305,7 @@ async function postMultisig(
  * The caller provides a transaction that already carries the buyer's active
  * signature. The node then:
  *   1. Validates the buyer's tx against the current listing.
- *   2. Broadcasts a `buy_commitment` custom_json on-chain reserving the NFT.
+ *   2. Broadcasts a `buy_commitment` custom_json on-chain reserving the Asset.
  *   3. Waits for its commitment to land in a Hive block and observes whether
  *      it won the cross-node ordering race.
  *   4. Appends its own active signature and broadcasts the completed buy.

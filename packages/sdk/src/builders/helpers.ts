@@ -19,7 +19,7 @@ export function formatZodError(error: ZodError): ValidationError[] {
  * pattern uniformly:
  *
  *   const payload: TransferData = {
- *     nftId, to,
+ *     assetId, to,
  *     ...withProvenance(input),
  *   };
  *

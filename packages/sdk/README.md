@@ -32,7 +32,7 @@ const client = createNftloxClient({
 
 const inventory = await client.indexer.getUserNfts("alice");
 const result = await client.builders.list({
-	nftId: inventory.nfts[0]!.id,
+	assetId: inventory.assets[0]!.id,
 	owner: "alice",
 	price: { amount: "10.000", currency: "HIVE" },
 	expiresAt: expireIn({ days: 14 }),

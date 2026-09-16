@@ -260,9 +260,9 @@ describe("deterministic instance ID", () => {
 		expect(id1).not.toBe(id2);
 	});
 
-	test("starts with nft_ prefix", async () => {
+	test("starts with asset_ prefix", async () => {
 		const id = await generateDeterministicInstanceId("seed_abc123", 1);
-		expect(id.startsWith("nft_")).toBe(true);
+		expect(id.startsWith("asset_")).toBe(true);
 	});
 
 	test("ends with instance number", async () => {
@@ -274,7 +274,7 @@ describe("deterministic instance ID", () => {
 		const id = await generateDeterministicInstanceId("seed_abc123", 1);
 		const parts = id.split("_");
 		expect(parts.length).toBe(3);
-		expect(parts[0]).toBe("nft");
+		expect(parts[0]).toBe("asset");
 		expect(parts[2]).toBe("1");
 	});
 });

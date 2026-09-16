@@ -2,10 +2,10 @@
 // Zod input schemas that map 1:1 to protocol data live in `./schemas`.
 
 /**
- * Seed NFT with mandatory artId for deterministic seedId generation.
+ * Seed Asset with mandatory artId for deterministic seedId generation.
  * Used by UIs that pre-collect user-provided artIds before broadcasting.
  */
-export type SeedNFTWithArtId = {
+export type SeedAssetWithArtId = {
 	readonly artId: string;
 	readonly name: string;
 	readonly brief?: string | undefined;
@@ -23,7 +23,7 @@ export type MintingSession = {
 	readonly creator: string;
 	readonly collectionName: string;
 	readonly collectionSymbol: string;
-	readonly nfts: readonly SeedNFTWithArtId[];
+	readonly assets: readonly SeedAssetWithArtId[];
 	readonly collectionId: string;
 	readonly seedMapping: ReadonlyArray<{
 		readonly artId: string;

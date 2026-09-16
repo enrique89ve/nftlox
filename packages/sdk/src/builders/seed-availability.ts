@@ -4,9 +4,9 @@
 // The DB stores `supply_exhausted` as a boolean for fast queries.
 // This helper adds the computed `remaining` count for display purposes.
 //
-//   const nft = await indexer.getNft(seedId);
-//   if (nft.supply_exhausted) { /* fast boolean check */ }
-//   const avail = computeSeedAvailability(nft);
+//   const asset = await indexer.getAsset(seedId);
+//   if (asset.supply_exhausted) { /* fast boolean check */ }
+//   const avail = computeSeedAvailability(asset);
 //   console.log(`${avail.remaining} left of ${avail.maxSupply}`);
 
 type SeedLike = {
@@ -32,7 +32,7 @@ export function computeSeedAvailability(seed: SeedLike): SeedAvailability {
 	return { maxSupply, distributed, remaining, exhausted, unlimited };
 }
 
-// Shape returned by the indexer seed endpoints (`GET /api/nfts/:id` for a seed,
+// Shape returned by the indexer seed endpoints (`GET /api/assets/:id` for a seed,
 // or any listing response that includes `max_supply`, `distributed`, and
 // `tx_id`). Only the fields the packs-engine needs are required.
 export type IndexerSeedLike = {

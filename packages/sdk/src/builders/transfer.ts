@@ -21,7 +21,7 @@ import {
  * Kept as `from` (rather than `signer`) for SDK caller ergonomics.
  */
 export const transferBuilderSchema = seedProvenanceSchema.extend({
-	nftId: z.string().min(1, "Invalid NFT ID format"),
+	assetId: z.string().min(1, "Invalid Asset ID format"),
 	from: usernameSchema,
 	to: usernameSchema,
 }).refine((data) => data.from !== data.to, {
@@ -41,7 +41,7 @@ export function buildTransfer(
 	const data = parsed.data;
 
 	const transferData: TransferData = {
-		nftId: data.nftId,
+		assetId: data.assetId,
 		to: data.to,
 		...withProvenance(data),
 	};
