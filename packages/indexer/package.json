@@ -27,6 +27,7 @@
 	},
 	"devDependencies": {
 		"@types/bun": "latest",
+		"nftlox-sdk": "workspace:*",
 		"typescript": "^5"
 	}
 }
