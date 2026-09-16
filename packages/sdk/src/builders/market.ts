@@ -2,10 +2,10 @@ import { z } from "zod";
 import { usernameSchema, listInputSchema, unlistInputSchema, buyInputSchema } from "../schemas";
 import { formatZodError, withProvenance } from "./helpers";
 import type { KeychainResult, ValidationError } from "./types";
+import { createSdkPayload } from "../sdk-payload";
 import {
 	generateListingNonce,
 	generateListingId,
-	createPayload,
 	createHiveOperation,
 	getKeyType,
 	HIVE_DECIMALS,
@@ -56,7 +56,7 @@ export async function buildList(
 		...(data.marketplace && { marketplace: data.marketplace }),
 	};
 
-	const payload = createPayload("list", listingData);
+	const payload = createSdkPayload("list", listingData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
@@ -89,7 +89,7 @@ export function buildUnlist(
 		...withProvenance(data),
 	};
 
-	const payload = createPayload("unlist", unlistData);
+	const payload = createSdkPayload("unlist", unlistData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
@@ -199,7 +199,7 @@ export function buildBuy(input: BuyBuilderInput): KeychainResult<BuyData> {
 		listTxId: data.listTxId,
 	};
 
-	const payload = createPayload("buy", buyData);
+	const payload = createSdkPayload("buy", buyData);
 	const nodeAccount = data.nodeAccount ?? data.paymentSplit.feeAccount;
 	const buyCustomJson = createHiveOperation(payload, nodeAccount);
 

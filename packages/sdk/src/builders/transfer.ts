@@ -2,8 +2,8 @@ import { z } from "zod";
 import { seedProvenanceSchema, usernameSchema } from "../schemas";
 import { formatZodError, withProvenance } from "./helpers";
 import type { KeychainResult } from "./types";
+import { createSdkPayload } from "../sdk-payload";
 import {
-	createPayload,
 	createHiveOperation,
 	getKeyType,
 	type TransferData,
@@ -46,7 +46,7 @@ export function buildTransfer(
 		...withProvenance(data),
 	};
 
-	const payload = createPayload("transfer", transferData);
+	const payload = createSdkPayload("transfer", transferData);
 	const operation = createHiveOperation(payload, data.from);
 
 	return {

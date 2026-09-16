@@ -20,6 +20,8 @@ import {
 	normalizeNodeEndpoint,
 	validateNodeEndpoint,
 	BURN_RECIPIENT,
+	isInstanceId,
+	isListingId,
 } from "@nftlox/protocol";
 
 // Safe URL: only http:// and https:// protocols (blocks javascript:, data:, etc.)
@@ -190,8 +192,8 @@ export const listInputSchema = seedProvenanceSchema.extend({
 export type ListInput = z.infer<typeof listInputSchema>;
 
 export const buyInputSchema = z.object({
-	nftId: z.string().min(1, "NFT ID is required"),
-	listingId: z.string().min(1, "Listing ID is required"),
+	nftId: z.string().min(1, "NFT ID is required").refine(isInstanceId, "NFT ID has invalid canonical shape"),
+	listingId: z.string().min(1, "Listing ID is required").refine(isListingId, "Listing ID has invalid canonical shape"),
 	listTxId: txIdSchema,
 });
 export type BuyInput = z.infer<typeof buyInputSchema>;

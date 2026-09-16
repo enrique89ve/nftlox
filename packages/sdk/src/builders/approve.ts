@@ -7,9 +7,9 @@ import {
 	usernameSchema,
 } from "../schemas";
 import { formatZodError, withProvenance } from "./helpers";
+import { createSdkPayload } from "../sdk-payload";
 import type { KeychainResult } from "./types";
 import {
-	createPayload,
 	createHiveOperation,
 	getKeyType,
 	type NftApproveData,
@@ -36,7 +36,7 @@ export function buildNftApprove(input: NftApproveBuilderInput): KeychainResult<N
 		approved: data.approved,
 	};
 
-	const payload = createPayload("nft_approve", nftApproveData);
+	const payload = createSdkPayload("nft_approve", nftApproveData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
@@ -66,7 +66,7 @@ export function buildNftApproveAll(input: NftApproveAllBuilderInput): KeychainRe
 		approved: data.approved,
 	};
 
-	const payload = createPayload("nft_approve_all", nftApproveAllData);
+	const payload = createSdkPayload("nft_approve_all", nftApproveAllData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
@@ -97,7 +97,7 @@ export function buildNftTransferFrom(input: NftTransferFromBuilderInput): Keycha
 		...withProvenance(data),
 	};
 
-	const payload = createPayload("nft_transfer_from", nftTransferFromData);
+	const payload = createSdkPayload("nft_transfer_from", nftTransferFromData);
 	const operation = createHiveOperation(payload, data.operator);
 
 	return {
@@ -127,7 +127,7 @@ export function buildDataOperatorApprove(input: DataOperatorApproveBuilderInput)
 		approved: data.approved,
 	};
 
-	const payload = createPayload("data_operator_approve", dataOperatorApproveData);
+	const payload = createSdkPayload("data_operator_approve", dataOperatorApproveData);
 	const operation = createHiveOperation(payload, data.creator);
 
 	return {

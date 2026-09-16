@@ -112,6 +112,7 @@ export type {
 	UserNftCounts,
 	UserNftsPage,
 	UserNftsQueryParams,
+	StateRootStatus,
 } from "./client";
 
 // ============ SDK-ONLY: UTILS ============

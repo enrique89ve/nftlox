@@ -2,6 +2,7 @@
 // Falls back to constants if not initialized (offline mode).
 
 import { PROTOCOL_VERSION, PROTOCOL_ID } from "@nftlox/protocol";
+import { resolveFetch, type HttpOptions } from "./http";
 
 type ProtocolState = {
 	version: string;
@@ -27,12 +28,12 @@ type StatusResponse = {
  * Must be called before creating payloads to ensure correct version.
  * Falls back to built-in constants on failure.
  */
-export async function initProtocol(baseUrl?: string): Promise<ProtocolState> {
+export async function initProtocol(baseUrl?: string, http?: HttpOptions): Promise<ProtocolState> {
 	const url = baseUrl
 		? `${baseUrl.replace(/\/+$/, "")}/api/status`
 		: DEFAULT_STATUS_URL;
 
-	const res = await fetch(url);
+	const res = await resolveFetch(http)(url, { headers: http?.headers, signal: http?.signal });
 	if (!res.ok) {
 		throw new Error(`Failed to fetch protocol status: ${res.status}`);
 	}
@@ -66,4 +67,11 @@ export function getProtocolId(): string {
 /** Whether initProtocol() has been called successfully. */
 export function isInitialized(): boolean {
 	return state.initialized;
+}
+
+/** Restore the bundled contract after an explicit live initialization. */
+export function resetProtocolState(): void {
+	state.version = PROTOCOL_VERSION;
+	state.protocolId = PROTOCOL_ID;
+	state.initialized = false;
 }

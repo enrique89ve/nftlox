@@ -4,12 +4,12 @@ import { formatZodError } from "./helpers";
 import { validateArtId, validateArtIdArray } from "../dna";
 import type { KeychainResult } from "./types";
 import type { ValidationError } from "./types";
+import { createSdkPayload } from "../sdk-payload";
 import {
 	generateDeterministicSeedId,
 	generateOriginDna,
 	generateImageHash,
 	generateSeedDna,
-	createPayload,
 	createHiveOperation,
 	getKeyType,
 	toWireUrl,
@@ -95,7 +95,7 @@ export async function buildSeed(
 		...(data.immutableData !== undefined && { immutableData: data.immutableData }),
 	};
 
-	const payload = createPayload("mint", nftData);
+	const payload = createSdkPayload("mint", nftData);
 	const operation = createHiveOperation(payload, data.signer);
 
 	return {

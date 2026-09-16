@@ -194,7 +194,7 @@ export function createNftloxClient(options: NftloxClientOptions): NftloxClient {
 	};
 
 	const connect = async () => {
-		const state = await initProtocol(indexerUrl);
+		const state = await initProtocol(indexerUrl, options.http);
 		return { version: state.version, protocolId: state.protocolId };
 	};
 

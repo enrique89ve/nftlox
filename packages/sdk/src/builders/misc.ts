@@ -11,9 +11,9 @@ import {
 } from "../schemas";
 import { formatZodError, withProvenance } from "./helpers";
 import type { KeychainResult } from "./types";
+import { createSdkPayload } from "../sdk-payload";
 import {
 	BURN_RECIPIENT,
-	createPayload,
 	createHiveOperation,
 	getKeyType,
 	type TransferData,
@@ -41,7 +41,7 @@ export function buildBurn(input: BurnBuilderInput): KeychainResult<TransferData>
 		? { nftIds: data.nftIds, to: BURN_RECIPIENT }
 		: { nftId: data.nftId!, to: BURN_RECIPIENT };
 
-	const payload = createPayload("transfer", transferData);
+	const payload = createSdkPayload("transfer", transferData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
@@ -72,7 +72,7 @@ export function buildSetData(input: SetDataBuilderInput): KeychainResult<SetData
 		...withProvenance(data),
 	};
 
-	const payload = createPayload("set_data", setDataData);
+	const payload = createSdkPayload("set_data", setDataData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
@@ -103,7 +103,7 @@ export function buildSetDataFrom(input: SetDataFromBuilderInput): KeychainResult
 		...withProvenance(data),
 	};
 
-	const payload = createPayload("set_data_from", setDataFromData);
+	const payload = createSdkPayload("set_data_from", setDataFromData);
 	const operation = createHiveOperation(payload, data.operator);
 
 	return {
@@ -137,7 +137,7 @@ export function buildNftLend(input: NftLendBuilderInput): KeychainResult<NftLend
 		...withProvenance(data),
 	};
 
-	const payload = createPayload("nft_lend", nftLendData);
+	const payload = createSdkPayload("nft_lend", nftLendData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
@@ -166,7 +166,7 @@ export function buildNftReturn(input: NftReturnBuilderInput): KeychainResult<Nft
 		...withProvenance(data),
 	};
 
-	const payload = createPayload("nft_return", nftReturnData);
+	const payload = createSdkPayload("nft_return", nftReturnData);
 	const operation = createHiveOperation(payload, data.owner);
 
 	return {
@@ -194,7 +194,7 @@ export function buildNodeRegister(input: NodeRegisterBuilderInput): KeychainResu
 		endpoint: data.endpoint,
 	};
 
-	const payload = createPayload("node_register", nodeRegisterData);
+	const payload = createSdkPayload("node_register", nodeRegisterData);
 	const operation = createHiveOperation(payload, data.nodeAccount);
 
 	return {
@@ -224,7 +224,7 @@ export function buildNodeHeartbeat(input: NodeHeartbeatBuilderInput): KeychainRe
 		indexerVersion: data.indexerVersion,
 	};
 
-	const payload = createPayload("node_heartbeat", nodeHeartbeatData);
+	const payload = createSdkPayload("node_heartbeat", nodeHeartbeatData);
 	const operation = createHiveOperation(payload, data.nodeAccount);
 
 	return {

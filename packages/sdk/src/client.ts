@@ -206,6 +206,7 @@ export interface IndexerCollectionBase {
 	creator: string;
 	total_potential: number;
 	description: string | null;
+	origin_dna: string;
 	image_url: string | null;
 	external_url: string | null;
 	transferable: boolean;
@@ -213,7 +214,6 @@ export interface IndexerCollectionBase {
 	/** Whole percent value in protocol 0.5.x, serialized from PostgreSQL numeric. */
 	royalty_pct: string;
 	royalty_recipient: string | null;
-	status: "active" | "archived";
 	schema_version: number;
 	tx_id: string;
 	created_at: string;
@@ -236,6 +236,13 @@ export interface CollectionStats {
 	unique_owners: number;
 	/** Decimal Hive asset value serialized from PostgreSQL numeric. */
 	floor_price: string | null;
+}
+
+export interface StateRootStatus {
+	state_root: string;
+	nft_count: number;
+	last_block_num: number;
+	updated_at: string;
 }
 
 export interface SchemaHistoryEntry {
@@ -276,6 +283,7 @@ export interface IndexerNftSummary {
 	listing_price: string | null;
 	listing_currency: string | null;
 	listing_expires_at: string | null;
+	listing_marketplace: string | null;
 	created_at: string;
 }
 
@@ -630,6 +638,8 @@ export interface IndexerClient {
 	getNftProof(id: string): Promise<IndexerNftProof>;
 	getNftLoan(id: string): Promise<IndexerNftLoanStatus>;
 	getNftInstances(id: string, params?: { limit?: number; offset?: number; compact?: boolean }): Promise<IndexerNftSummary[]>;
+	getNftsByIds(ids: ReadonlyArray<string>): Promise<{ items: IndexerNft[]; missing: string[] }>;
+	getStateRoot(): Promise<StateRootStatus>;
 
 	// Users
 	getUserAssets(username: string, params?: UserAssetsQueryParams): Promise<UserAssetsOverview>;
@@ -663,6 +673,11 @@ export interface IndexerClient {
  */
 export function createIndexerClient(baseUrl: string, options?: HttpOptions): IndexerClient {
 	const http = options;
+	const withMultisigOptions = (override?: RequestMultisigOptions): RequestMultisigOptions => ({
+		...http,
+		...override,
+		headers: mergeHeaders(http?.headers, override?.headers),
+	});
 	const getStatus = () => get<SyncStatus>(baseUrl, "/api/status", undefined, http);
 
 	return {
@@ -720,6 +735,19 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 			const arr = await get<IndexerNftSummary[]>(baseUrl, path, params, http);
 			return arr.map(denormalizeNftSummary);
 		},
+		getNftsByIds: async (ids) => {
+			const result = await get<{ items: IndexerNft[]; missing: string[] }>(
+				baseUrl,
+				"/api/nfts",
+				{ ids: ids.join(",") },
+				http,
+			);
+			return {
+				items: result.items.map(denormalizeNftSummary),
+				missing: result.missing,
+			};
+		},
+		getStateRoot: () => get<StateRootStatus>(baseUrl, "/api/state-root", undefined, http),
 
 		// ---- Users ----
 		getUserAssets: (username, params) =>
@@ -754,15 +782,16 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 		getPaymentInfo: (nftId) =>
 			get<PaymentInfo>(baseUrl, `/api/payment-info/${encodeURIComponent(nftId)}`, undefined, http),
 		requestBuyMultisig: (request, multisigOptions) =>
-			requestBuyMultisigFn(baseUrl, request, multisigOptions ?? http ?? {}),
+			requestBuyMultisigFn(baseUrl, request, withMultisigOptions(multisigOptions)),
 		multisig: async (request, multisigOptions) => {
-			const powToken = await solveMultisigPow(request, multisigOptions?.powBits);
+			const mergedOptions = withMultisigOptions(multisigOptions);
+			const powToken = await solveMultisigPow(request, mergedOptions.powBits);
 			return post<MultisigResponse>(
 				baseUrl,
 				"/api/multisig/collection",
 				request,
 				{ [NFTLOX_POW_HEADER]: powToken },
-				http,
+				mergedOptions,
 			);
 		},
 	};

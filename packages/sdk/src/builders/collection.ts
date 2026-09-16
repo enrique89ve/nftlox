@@ -2,10 +2,10 @@ import { z } from "zod";
 import { createCollectionInputSchema, archiveCollectionInputSchema, extendSchemaInputSchema, usernameSchema, type CreateCollectionInput } from "../schemas";
 import { formatZodError } from "./helpers";
 import type { KeychainResult, ValidationError } from "./types";
+import { createSdkPayload } from "../sdk-payload";
 import {
 	generateDeterministicCollectionId,
 	generateOriginDna,
-	createPayload,
 	createHiveOperation,
 	getKeyType,
 	toWireUrl,
@@ -180,7 +180,7 @@ export async function buildCollection(
 		...(data.schema && { schema: data.schema }),
 	};
 
-	const payload = createPayload("create_collection", collectionData);
+	const payload = createSdkPayload("create_collection", collectionData);
 	// The protocol op is co-signed by the node; pass nodeAccount as the signer
 	// so createHiveOperation emits auth fields bound to the node account.
 	const customJsonOp = createHiveOperation(payload, nodeAccount);
@@ -231,7 +231,7 @@ export function buildArchiveCollection(
 	}
 
 	const data = parsed.data;
-	const payload = createPayload("archive_collection", {
+	const payload = createSdkPayload("archive_collection", {
 		collectionId: data.collectionId,
 	} satisfies ArchiveCollectionData);
 	const operation = createHiveOperation(payload, data.creator);
@@ -265,7 +265,7 @@ export function buildExtendSchema(
 		...(data.newMutableFields && { newMutableFields: data.newMutableFields }),
 	};
 
-	const payload = createPayload("extend_schema", extendData);
+	const payload = createSdkPayload("extend_schema", extendData);
 	const operation = createHiveOperation(payload, data.creator);
 
 	return {

@@ -2,8 +2,8 @@ import { z } from "zod";
 import { usernameSchema, bulkDistributeInputSchema } from "../schemas";
 import { formatZodError } from "./helpers";
 import type { KeychainResult } from "./types";
+import { createSdkPayload } from "../sdk-payload";
 import {
-	createPayload,
 	createHiveOperation,
 	getKeyType,
 	type BulkDistributeData,
@@ -33,7 +33,7 @@ export function buildBulkDistribute(
 		...(data.mutableData !== undefined && { mutableData: data.mutableData }),
 	};
 
-	const payload = createPayload("bulk_distribute", bulkData);
+	const payload = createSdkPayload("bulk_distribute", bulkData);
 	const operation = createHiveOperation(payload, data.signer);
 
 	return {
