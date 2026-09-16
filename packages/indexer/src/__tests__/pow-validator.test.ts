@@ -16,7 +16,7 @@ const REPLAY_CACHE_MAX = 100;
 
 const basePayload = {
 	buyer: "alice",
-	nftId: "nft-1",
+	assetId: "asset-1",
 	listingId: "list-1",
 	listTxId: "a".repeat(40),
 	transaction: { operations: [], extensions: [], signatures: [] },

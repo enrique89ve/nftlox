@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_MINT,
-	ACTION_NFT_LEND,
-	ACTION_NFT_TRANSFER_FROM,
+	ACTION_ASSET_LEND,
+	ACTION_ASSET_TRANSFER_FROM,
 	ACTION_TRANSFER,
 	getAuthLevel,
 } from "@/protocol/index.ts";
@@ -73,8 +73,8 @@ describe("account validation preparation", () => {
 
 	test("rejects burn recipient for delegated transfers before any account lookup", () => {
 		const delegatedBurn = makeOperation(
-			ACTION_NFT_TRANSFER_FROM,
-			{ from: "alice", to: "null", instanceId: "nft_1" },
+			ACTION_ASSET_TRANSFER_FROM,
+			{ from: "alice", to: "null", instanceId: "asset_1" },
 			"gameshop",
 			"op-delegated-burn",
 		);
@@ -84,7 +84,7 @@ describe("account validation preparation", () => {
 		expect(plan.accounts).toEqual([]);
 		expect(plan.targets.get(delegatedBurn.operationId)).toEqual({
 			kind: "rejected",
-			reason: "Delegated NFT transfers cannot target the burn account",
+			reason: "Delegated Asset transfers cannot target the burn account",
 		});
 	});
 
@@ -99,10 +99,10 @@ describe("account validation preparation", () => {
 		expect(plan.accounts).toEqual(["bob", "charlie"]);
 	});
 
-	test("groups nft_lend.borrower and nft_transfer_from.to recipients", () => {
-		const lend = makeOperation(ACTION_NFT_LEND, { borrower: "bob" }, "alice", "op-lend");
+	test("groups asset_lend.borrower and asset_transfer_from.to recipients", () => {
+		const lend = makeOperation(ACTION_ASSET_LEND, { borrower: "bob" }, "alice", "op-lend");
 		const transferFrom = makeOperation(
-			ACTION_NFT_TRANSFER_FROM,
+			ACTION_ASSET_TRANSFER_FROM,
 			{ from: "alice", to: "charlie" },
 			"spender",
 			"op-transfer-from",
@@ -146,7 +146,7 @@ describe("account validation preparation", () => {
 		});
 	});
 
-	test("rejects nft_lend when borrower creation equals the operation timestamp", async () => {
+	test("rejects asset_lend when borrower creation equals the operation timestamp", async () => {
 		const sameBlockClient = {
 			lookup: async (accounts: readonly string[]) => ({
 				requested: accounts,
@@ -157,7 +157,7 @@ describe("account validation preparation", () => {
 				attemptedEndpoints: ["test"],
 			}),
 		};
-		const op = makeOperation(ACTION_NFT_LEND, { borrower: "bob" });
+		const op = makeOperation(ACTION_ASSET_LEND, { borrower: "bob" });
 
 		const decisions = await prepareAccountValidation([op], sameBlockClient);
 

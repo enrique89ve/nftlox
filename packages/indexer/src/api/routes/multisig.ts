@@ -9,7 +9,7 @@ import { createMultisigBuyLock } from "@/api/services/multisig-buy-lock.ts";
 import { getMultisigHealth } from "@/api/services/multisig-health.ts";
 import { resolveClientIp } from "@/api/middleware/client-ip.ts";
 import { NFTLOX_POW_HEADER, validateMultisigPow } from "@/api/middleware/pow-validator.ts";
-import { getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
+import { getAssetWithCollectionRules, ASSET_KIND_INSTANCE, ASSET_STATUS_LISTED } from "@/db/queries/assets.ts";
 import { getChainTimeSnapshot } from "@/db/queries/sync.ts";
 import {
 	BUY_TX_TTL_MS,
@@ -61,14 +61,14 @@ const CACHEABLE_STATUSES: ReadonlySet<number> = new Set([200, 400, 422]);
 // added upstream is a compile error here until it gets a mapping.
 const BUY_MULTISIG_STATUS: Record<MultisigErrorCode, number> = {
 	// contention / concurrency
-	NFT_LOCKED: 409,
+	ASSET_LOCKED: 409,
 	COLLECTION_LOCKED: 409,
 	CROSS_NODE_RESERVATION: 409,
 	// resource state conflicts (buy-time invariants the caller can recover)
-	NFT_NOT_LISTED: 409,
-	NFT_NOT_INSTANCE: 409,
-	NFT_NOT_TRANSFERABLE: 409,
-	NFT_EXPIRED_LISTING: 409,
+	ASSET_NOT_LISTED: 409,
+	ASSET_NOT_INSTANCE: 409,
+	ASSET_NOT_TRANSFERABLE: 409,
+	ASSET_EXPIRED_LISTING: 409,
 	CANNOT_BUY_OWN: 409,
 	SEED_HAS_INSTANCES: 409,
 	// Buyer's liquid balance cannot cover the buy transfers. 409 (not 4xx-cached
@@ -76,7 +76,7 @@ const BUY_MULTISIG_STATUS: Record<MultisigErrorCode, number> = {
 	// of returning the cached pre-top-up failure.
 	INSUFFICIENT_BALANCE: 409,
 	// not found
-	NFT_NOT_FOUND: 404,
+	ASSET_NOT_FOUND: 404,
 	// client-shape errors
 	INVALID_TX_STRUCTURE: 400,
 	INVALID_PROTOCOL_PAYLOAD: 400,
@@ -193,22 +193,22 @@ function buildBuyContext() {
 
 export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 
-	// GET /api/payment-info/:nftId — returns payment split for building tx
-	.get("/api/payment-info/:nftId", async ({ params, set }) => {
-		const nft = await getNftWithCollectionRules(params.nftId);
-		if (!nft) {
+	// GET /api/payment-info/:assetId — returns payment split for building tx
+	.get("/api/payment-info/:assetId", async ({ params, set }) => {
+		const asset = await getAssetWithCollectionRules(params.assetId);
+		if (!asset) {
 			set.status = 404;
-			return { error: "NFT not found" };
+			return { error: "Asset not found" };
 		}
-		if (nft.status !== NFT_STATUS_LISTED) {
+		if (asset.status !== ASSET_STATUS_LISTED) {
 			set.status = 400;
-			return { error: "NFT not listed" };
+			return { error: "Asset not listed" };
 		}
-		if (nft.nft_type !== NFT_KIND_INSTANCE) {
+		if (asset.asset_type !== ASSET_KIND_INSTANCE) {
 			set.status = 400;
 			return { error: "Only instances can be bought" };
 		}
-		if (nft.listing_expires_at) {
+		if (asset.listing_expires_at) {
 			const chainTimeSnapshot = await getChainTimeSnapshot();
 				const chainTime = resolveHiveHeadTimeMs(chainTimeSnapshot);
 			if (!chainTime.ok) {
@@ -216,30 +216,30 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 				set.headers["Retry-After"] = String(Math.ceil(CHAIN_TIME_RETRY_AFTER_MS / 1000));
 				return { error: "Indexer chain time unavailable; retry shortly" };
 			}
-			const expiresMs = new Date(nft.listing_expires_at).getTime();
+			const expiresMs = new Date(asset.listing_expires_at).getTime();
 			if (chainTime.referenceTimeMs >= expiresMs) {
 				set.status = 410;
 				return { error: "Listing has expired" };
 			}
 		}
 
-		const totalPrice = Number(nft.listing_price);
-		if (!totalPrice || !nft.listing_currency) {
+		const totalPrice = Number(asset.listing_price);
+		if (!totalPrice || !asset.listing_currency) {
 			set.status = 400;
-			return { error: "NFT has no valid listing price" };
+			return { error: "Asset has no valid listing price" };
 		}
 
-		const royaltyPct = Number(nft.royalty_pct ?? 0);
-		const royaltyRecipient = nft.royalty_recipient ?? null;
-		const currency = requireSupportedCurrency(nft.listing_currency, "listing_currency");
+		const royaltyPct = Number(asset.royalty_pct ?? 0);
+		const royaltyRecipient = asset.royalty_recipient ?? null;
+		const currency = requireSupportedCurrency(asset.listing_currency, "listing_currency");
 
-		const split = calculatePaymentSplit(totalPrice, currency, royaltyPct, royaltyRecipient, nft.owner, config.hiveAccount);
+		const split = calculatePaymentSplit(totalPrice, currency, royaltyPct, royaltyRecipient, asset.owner, config.hiveAccount);
 
 		return {
-			nftId: params.nftId,
-			listingId: nft.listing_id ?? "",
-			listTxId: nft.listing_tx_id ?? "",
-			seller: nft.owner,
+			assetId: params.assetId,
+			listingId: asset.listing_id ?? "",
+			listTxId: asset.listing_tx_id ?? "",
+			seller: asset.owner,
 			totalPrice,
 			currency,
 			sellerAmount: split.sellerAmount,
@@ -248,13 +248,13 @@ export const multisigRoutes = new Elysia({ tags: ["Multisig"] })
 			feeAmount: split.feeAmount,
 			feeAccount: split.feeAccount,
 			nodeAccount: config.hiveAccount,
-			txId: nft.created_tx_id,
-			seedTxId: nft.seed_created_tx_id ?? null,
+			txId: asset.created_tx_id,
+			seedTxId: asset.seed_created_tx_id ?? null,
 		};
 	}, {
-		params: t.Object({ nftId: t.String({ minLength: 1, maxLength: 128 }) }),
+		params: t.Object({ assetId: t.String({ minLength: 1, maxLength: 128 }) }),
 		detail: {
-			summary: "Get payment info for buying an NFT",
+			summary: "Get payment info for buying an Asset",
 			description: "Returns the payment split needed to build a buy transaction. totalPrice, sellerAmount, royaltyAmount, and feeAmount are decimal Hive asset values rounded to 3 decimals. currency is HIVE or HBD. Royalties are derived from the collection royalty_pct field, which remains a whole percent value.",
 		},
 	})

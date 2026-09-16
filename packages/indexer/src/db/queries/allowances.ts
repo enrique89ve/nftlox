@@ -1,9 +1,9 @@
 import { sql, type Queryable } from "@/db/client.ts";
 
-// ============ NFT ALLOWANCES (ERC-721 style) ============
+// ============ Asset ALLOWANCES (ERC-721 style) ============
 
-export async function upsertNftAllowance(
-	nftId: string,
+export async function upsertAssetAllowance(
+	assetId: string,
 	owner: string,
 	approvedSpender: string,
 	blockNum: number,
@@ -11,9 +11,9 @@ export async function upsertNftAllowance(
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
-		INSERT INTO nft_allowances (nft_id, owner, approved_spender, block_num, tx_id)
-		VALUES (${nftId}, ${owner}, ${approvedSpender}, ${blockNum}, ${txId})
-		ON CONFLICT (nft_id)
+		INSERT INTO asset_allowances (asset_id, owner, approved_spender, block_num, tx_id)
+		VALUES (${assetId}, ${owner}, ${approvedSpender}, ${blockNum}, ${txId})
+		ON CONFLICT (asset_id)
 		DO UPDATE SET
 			owner = ${owner},
 			approved_spender = ${approvedSpender},
@@ -23,19 +23,19 @@ export async function upsertNftAllowance(
 	`;
 }
 
-export async function deleteNftAllowance(
-	nftId: string,
+export async function deleteAssetAllowance(
+	assetId: string,
 	txn: Queryable = sql,
 ): Promise<void> {
-	await txn`DELETE FROM nft_allowances WHERE nft_id = ${nftId}`;
+	await txn`DELETE FROM asset_allowances WHERE asset_id = ${assetId}`;
 }
 
-export async function getNftAllowance(
-	nftId: string,
+export async function getAssetAllowance(
+	assetId: string,
 	txn: Queryable = sql,
 ): Promise<string | null> {
 	const [row] = await txn`
-		SELECT approved_spender FROM nft_allowances WHERE nft_id = ${nftId}
+		SELECT approved_spender FROM asset_allowances WHERE asset_id = ${assetId}
 	`;
 	return row?.approved_spender ?? null;
 }
@@ -91,7 +91,7 @@ export async function cleanupCollectionAllowancesIfEmpty(
 	txn: Queryable = sql,
 ): Promise<void> {
 	const [row] = await txn`
-		SELECT 1 FROM nfts
+		SELECT 1 FROM assets
 		WHERE owner = ${owner} AND collection_id = ${collectionId}
 		LIMIT 1
 	`;

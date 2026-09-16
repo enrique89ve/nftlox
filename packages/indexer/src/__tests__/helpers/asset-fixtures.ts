@@ -6,7 +6,7 @@ import {
 	LISTING_HASH_LENGTH,
 } from "@/protocol/index.ts";
 
-// Shape-valid id factories. Fixtures used to use short slugs like "nft_a" or
+// Shape-valid id factories. Fixtures used to use short slugs like "asset_a" or
 // "tx_x" — those are now rejected by the handler/multisig shape guards
 // (isInstanceId / isListingId / isHiveTxId). These helpers pad a free-form
 // slug into the canonical width, preserving readability inside tests while
@@ -26,7 +26,7 @@ function deterministicHex(slug: string, width: number): string {
 	return (hex + "0".repeat(width)).slice(0, width);
 }
 
-export function fixtureNftId(slug: string, instance: number = 1): string {
+export function fixtureAssetId(slug: string, instance: number = 1): string {
 	return `${INSTANCE_ID_PREFIX}${deterministicHex(slug, INSTANCE_ID_HASH_LENGTH)}_${instance}`;
 }
 
@@ -57,7 +57,7 @@ export async function seedCollection(id: string, seller: string): Promise<void> 
 }
 
 export async function insertListedInstance(params: {
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly collectionId: string;
 	readonly seller: string;
 	readonly listingId: string;
@@ -71,19 +71,19 @@ export async function insertListedInstance(params: {
 	readonly expiresAtMs?: number;
 }): Promise<void> {
 	const price = params.price ?? "10.000";
-	const createdTx = `${params.nftId}_mint_tx`.padEnd(40, "0").slice(0, 40);
-	const opId = `op_${params.nftId}`;
+	const createdTx = `${params.assetId}_mint_tx`.padEnd(40, "0").slice(0, 40);
+	const opId = `op_${params.assetId}`;
 	const expiresAtIso = new Date(params.expiresAtMs ?? Date.now() + 3600_000).toISOString();
 	await sql`
-		INSERT INTO nfts (
-			id, collection_id, nft_type, status, edition, owner, name,
-			image_url, nft_dna, max_supply, distributed, reserved_supply,
+		INSERT INTO assets (
+			id, collection_id, asset_type, status, edition, owner, name,
+			image_url, asset_dna, max_supply, distributed, reserved_supply,
 			previous_owner, owner_operation_id, owner_action, owner_block_num,
 			listing_id, listing_tx_id, listing_price, listing_currency,
 			listing_expires_at, listing_marketplace,
 			created_operation_id, created_block_num, created_tx_id, created_at
 		) VALUES (
-			${params.nftId}, ${params.collectionId}, 'instance', 'listed', 1, ${params.seller}, 'test',
+			${params.assetId}, ${params.collectionId}, 'instance', 'listed', 1, ${params.seller}, 'test',
 			'https://img.example/i.png', ${"1".repeat(40)}, 0, 0, 0,
 			NULL, ${opId}, 'mint', 90000001,
 			${params.listingId}, ${params.listTxId}, ${price}, 'HIVE',
@@ -99,7 +99,7 @@ export async function insertListedInstance(params: {
  */
 export async function cleanCommonTables(): Promise<void> {
 	await sql`DELETE FROM sales`;
-	await sql`DELETE FROM nfts`;
+	await sql`DELETE FROM assets`;
 	await sql`DELETE FROM invalid_operations`;
 	await sql`DELETE FROM confirmed_operations`;
 	await sql`DELETE FROM orphaned_buys`;

@@ -8,14 +8,14 @@ import { getExecutionRetryDelay } from "@/scanner/sync-engine.ts";
 describe("execution error classification", () => {
 	test("keeps deterministic protocol rejection typed and stable", () => {
 		const error = protocolReject(
-			"Delegated NFT transfers cannot target the burn account",
+			"Delegated Asset transfers cannot target the burn account",
 			"BURN_RECIPIENT_DELEGATION_FORBIDDEN",
 		);
 
 		expect(classifyExecutionError(error)).toEqual({
 			kind: "rejected",
 			code: "BURN_RECIPIENT_DELEGATION_FORBIDDEN",
-			message: "Delegated NFT transfers cannot target the burn account",
+			message: "Delegated Asset transfers cannot target the burn account",
 		});
 	});
 

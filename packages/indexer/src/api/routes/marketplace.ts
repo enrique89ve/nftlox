@@ -1,10 +1,10 @@
 import { Elysia, t } from "elysia";
-import { queryNfts } from "@/db/queries/nfts.ts";
-import { getSalesByCollection, getSalesByNft, getSalesByAccount, getSalesVolume, getRecentSales } from "@/db/queries/marketplace-history.ts";
+import { queryAssets } from "@/db/queries/assets.ts";
+import { getSalesByCollection, getSalesByAsset, getSalesByAccount, getSalesVolume, getRecentSales } from "@/db/queries/marketplace-history.ts";
 
 export const marketplaceRoutes = new Elysia({ prefix: "/api/marketplace", tags: ["Marketplace"] })
 	.get("/listings", async ({ query }) => {
-		return queryNfts(
+		return queryAssets(
 			{ by: "listed", sort: query.sort, currency: query.currency },
 			{ limit: query.limit, offset: query.offset },
 		);
@@ -19,17 +19,17 @@ export const marketplaceRoutes = new Elysia({ prefix: "/api/marketplace", tags: 
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
-		detail: { summary: "Get active listings", description: "Browse NFTs currently listed for sale" },
+		detail: { summary: "Get active listings", description: "Browse Assets currently listed for sale" },
 	})
 	.get("/sales", async ({ query }) => {
-		if (query.nftId) return getSalesByNft(query.nftId, query.limit, query.offset);
+		if (query.assetId) return getSalesByAsset(query.assetId, query.limit, query.offset);
 		if (query.collectionId) return getSalesByCollection(query.collectionId, query.limit, query.offset);
 		if (query.seller) return getSalesByAccount(query.seller, "seller", query.limit, query.offset);
 		if (query.buyer) return getSalesByAccount(query.buyer, "buyer", query.limit, query.offset);
 		return getRecentSales(query.limit, query.offset);
 	}, {
 		query: t.Object({
-			nftId: t.Optional(t.String({ maxLength: 128, description: "Filter by NFT ID" })),
+			assetId: t.Optional(t.String({ maxLength: 128, description: "Filter by Asset ID" })),
 			collectionId: t.Optional(t.String({ maxLength: 128, description: "Filter by collection ID" })),
 			seller: t.Optional(t.String({ maxLength: 16, description: "Filter by seller account" })),
 			buyer: t.Optional(t.String({ maxLength: 16, description: "Filter by buyer account" })),

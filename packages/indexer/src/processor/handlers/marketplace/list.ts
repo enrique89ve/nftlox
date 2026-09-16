@@ -1,9 +1,9 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessingForUpdate, updateNftListing, NFT_STATUS_LISTED } from "@/db/queries/nfts.ts";
-import type { ListingCtx } from "@/db/queries/nfts.ts";
+import { getAssetForProcessingForUpdate, updateAssetListing, ASSET_STATUS_LISTED } from "@/db/queries/assets.ts";
+import type { ListingCtx } from "@/db/queries/assets.ts";
 import { getCollectionRules } from "@/db/queries/collections.ts";
-import { deleteNftAllowance } from "@/db/queries/allowances.ts";
+import { deleteAssetAllowance } from "@/db/queries/allowances.ts";
 import { requireString, requireHiveAmount, requireNumber, optionalBoundedString } from "@/utils/validation.ts";
 import { assertActionable, assertMarketplaceInstance, isListingExpired } from "@/utils/status-checks.ts";
 import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
@@ -17,13 +17,13 @@ import {
 } from "@/protocol/index.ts";
 import { protocolReject } from "@/processor/protocol-rejection.ts";
 
-function validateExpiresAt(expiresAt: number, blockTimestamp: string, nftId: string): void {
+function validateExpiresAt(expiresAt: number, blockTimestamp: string, assetId: string): void {
 	const blockTimestampMs = new Date(blockTimestamp).getTime();
 	if (Number.isNaN(blockTimestampMs)) {
 		throw protocolReject(`Invalid block timestamp for listing: ${blockTimestamp}`);
 	}
 	if (expiresAt <= blockTimestampMs) {
-		throw protocolReject(`Listing expiresAt must be in the future for NFT: ${nftId}`);
+		throw protocolReject(`Listing expiresAt must be in the future for Asset: ${assetId}`);
 	}
 
 	const minimumExpiresAt = blockTimestampMs + MIN_LISTING_TTL_MS;
@@ -44,7 +44,7 @@ function validateExpiresAt(expiresAt: number, blockTimestamp: string, nftId: str
 }
 
 export async function handleList(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
-	const nftId = requireString(op.data.nftId, "nftId");
+	const assetId = requireString(op.data.assetId, "assetId");
 	const listingId = requireString(op.data.listingId, "listingId");
 	const listingNonce = requireString(op.data.listingNonce, "listingNonce");
 	const price = requireHiveAmount(op.data.price, "price");
@@ -58,32 +58,32 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 		throw protocolReject(`Invalid listingId format: must start with '${LISTING_ID_PREFIX}'`);
 	}
 
-	const nft = await getNftForProcessingForUpdate(nftId, txn);
-	if (!nft) throw protocolReject(`NFT not found: ${nftId}`);
+	const asset = await getAssetForProcessingForUpdate(assetId, txn);
+	if (!asset) throw protocolReject(`Asset not found: ${assetId}`);
 
-	await validateSeedProvenance(op, nft, txn);
+	await validateSeedProvenance(op, asset, txn);
 
-	assertActionable(nft, nftId);
-	assertMarketplaceInstance(nft, nftId);
+	assertActionable(asset, assetId);
+	assertMarketplaceInstance(asset, assetId);
 
-	validateExpiresAt(expiresAt, op.timestamp, nftId);
+	validateExpiresAt(expiresAt, op.timestamp, assetId);
 
-	const rules = await getCollectionRules(nft.collection_id, txn);
+	const rules = await getCollectionRules(asset.collection_id, txn);
 	if (rules && !rules.transferable) {
-		throw protocolReject(`Collection ${nft.collection_id} is not transferable — listing blocked`);
+		throw protocolReject(`Collection ${asset.collection_id} is not transferable — listing blocked`);
 	}
 
-	const hadExpiredListing = nft.status === NFT_STATUS_LISTED && isListingExpired(nft.listing_expires_at, op.timestamp);
+	const hadExpiredListing = asset.status === ASSET_STATUS_LISTED && isListingExpired(asset.listing_expires_at, op.timestamp);
 
-	if (nft.status === NFT_STATUS_LISTED && !hadExpiredListing) {
-		throw protocolReject(`NFT is already listed. Unlist first: ${nftId}`);
+	if (asset.status === ASSET_STATUS_LISTED && !hadExpiredListing) {
+		throw protocolReject(`Asset is already listed. Unlist first: ${assetId}`);
 	}
 
-	if (nft.owner !== op.signer) throw protocolReject(`Signer ${op.signer} is not owner of ${nftId}`);
+	if (asset.owner !== op.signer) throw protocolReject(`Signer ${op.signer} is not owner of ${assetId}`);
 
 	// Verify listingId is correctly computed from the payload fields
 	const expectedListingId = await generateListingId({
-		nftId,
+		assetId,
 		owner: op.signer,
 		marketplace: marketplace ?? "",
 		priceAmount: price.amount,
@@ -103,11 +103,11 @@ export async function handleList(op: ParsedOperation, txn: Queryable): Promise<R
 	}
 
 	const ctx: ListingCtx = {
-		collectionId: nft.collection_id,
+		collectionId: asset.collection_id,
 		wasListed: hadExpiredListing, // re-listing expired → net 0; fresh listing → +1
 	};
-	await updateNftListing(nftId, priceAmount, price.currency, expiresAt, marketplace, listingId, op.txId, ctx, txn);
-	await deleteNftAllowance(nftId, txn);
+	await updateAssetListing(assetId, priceAmount, price.currency, expiresAt, marketplace, listingId, op.txId, ctx, txn);
+	await deleteAssetAllowance(assetId, txn);
 
-	return [nftId];
+	return [assetId];
 }

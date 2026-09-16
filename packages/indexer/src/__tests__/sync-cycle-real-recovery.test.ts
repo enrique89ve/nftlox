@@ -103,11 +103,11 @@ mock.module("@/scanner/sync-lock.ts", () => ({
 const { syncCycle, resetHeadTracker, setRunning } = await import("@/scanner/sync-engine.ts");
 
 async function cleanDb(): Promise<void> {
-	await sql`TRUNCATE nfts, owner_nft_counts, collection_stats, collections,
+	await sql`TRUNCATE assets, owner_asset_counts, collection_stats, collections,
 		invalid_operations, confirmed_operations, orphaned_buys RESTART IDENTITY CASCADE`;
 	await sql`
 		UPDATE state_meta
-		SET state_root = decode(${"0".repeat(64)}, 'hex'), nft_count = 0, last_block_num = 0
+		SET state_root = decode(${"0".repeat(64)}, 'hex'), asset_count = 0, last_block_num = 0
 		WHERE id = 1
 	`;
 	await sql`
@@ -157,7 +157,7 @@ async function seedFixture(): Promise<void> {
 				collectionId,
 				edition: 1,
 				owner: "alice",
-				nftType: "seed",
+				assetType: "seed",
 				maxSupply: 1,
 			}, { operationId }), txn);
 		}
@@ -166,7 +166,7 @@ async function seedFixture(): Promise<void> {
 	// The first valid transfer deletes this approval. Its presence makes the
 	// rollback assertion cover ownership, counters, and allowance state.
 	await sql`
-		INSERT INTO nft_allowances (nft_id, owner, approved_spender, block_num, tx_id)
+		INSERT INTO asset_allowances (asset_id, owner, approved_spender, block_num, tx_id)
 		VALUES (${seedA}, 'alice', 'approved.spender', ${BEFORE_BLOCK}, ${"c".repeat(40)})
 	`;
 }
@@ -177,11 +177,11 @@ describe("syncCycle real PostgreSQL recovery", () => {
 		seedA = await generateDeterministicSeedId(collectionId, ART_A);
 		seedB = await generateDeterministicSeedId(collectionId, ART_B);
 		parsedOps = [
-			makeOp(ACTION_TRANSFER, { nftId: seedA, to: "bob" }, {
+			makeOp(ACTION_TRANSFER, { assetId: seedA, to: "bob" }, {
 				operationId: "op-sync-cycle-transfer-a",
 				txId: "a".repeat(40),
 			}),
-			makeOp(ACTION_TRANSFER, { nftId: seedB, to: "bob" }, {
+			makeOp(ACTION_TRANSFER, { assetId: seedB, to: "bob" }, {
 				operationId: "op-sync-cycle-transfer-b",
 				txId: "b".repeat(40),
 			}),
@@ -197,10 +197,10 @@ describe("syncCycle real PostgreSQL recovery", () => {
 	it("aborts the real sync batch on timeout, then retries from the unchanged cursor", async () => {
 		const before = {
 			root: (await sql`SELECT state_root FROM state_meta WHERE id = 1`)[0]!.state_root,
-			owners: [...await sql`SELECT id, owner FROM nfts WHERE id IN (${seedA}, ${seedB}) ORDER BY id`],
-			ownerCounts: [...await sql`SELECT owner, total, seeds, instances FROM owner_nft_counts ORDER BY owner`],
+			owners: [...await sql`SELECT id, owner FROM assets WHERE id IN (${seedA}, ${seedB}) ORDER BY id`],
+			ownerCounts: [...await sql`SELECT owner, total, seeds, instances FROM owner_asset_counts ORDER BY owner`],
 			collectionStats: [...await sql`SELECT collection_id, total, seeds, instances, listed, burned FROM collection_stats`],
-			allowances: [...await sql`SELECT nft_id, owner, approved_spender FROM nft_allowances`],
+			allowances: [...await sql`SELECT asset_id, owner, approved_spender FROM asset_allowances`],
 		};
 
 		let unlock!: () => void;
@@ -209,7 +209,7 @@ describe("syncCycle real PostgreSQL recovery", () => {
 		const locked = new Promise<void>((resolve) => { signalLocked = resolve; });
 		const lockerPromise = sql.begin(async (rawTxn) => {
 			const txn = rawTxn as unknown as typeof sql;
-			await txn`SELECT id FROM nfts WHERE id = ${seedB} FOR UPDATE`;
+			await txn`SELECT id FROM assets WHERE id = ${seedB} FOR UPDATE`;
 			signalLocked();
 			await release;
 		});
@@ -220,10 +220,10 @@ describe("syncCycle real PostgreSQL recovery", () => {
 
 			expect(Number((await sql`SELECT last_block FROM sync_state WHERE id = 1`)[0]!.last_block)).toBe(BEFORE_BLOCK);
 			expect((await sql`SELECT state_root FROM state_meta WHERE id = 1`)[0]!.state_root).toEqual(before.root);
-			expect([...await sql`SELECT id, owner FROM nfts WHERE id IN (${seedA}, ${seedB}) ORDER BY id`]).toEqual(before.owners);
-			expect([...await sql`SELECT owner, total, seeds, instances FROM owner_nft_counts ORDER BY owner`]).toEqual(before.ownerCounts);
+			expect([...await sql`SELECT id, owner FROM assets WHERE id IN (${seedA}, ${seedB}) ORDER BY id`]).toEqual(before.owners);
+			expect([...await sql`SELECT owner, total, seeds, instances FROM owner_asset_counts ORDER BY owner`]).toEqual(before.ownerCounts);
 			expect([...await sql`SELECT collection_id, total, seeds, instances, listed, burned FROM collection_stats`]).toEqual(before.collectionStats);
-			expect([...await sql`SELECT nft_id, owner, approved_spender FROM nft_allowances`]).toEqual(before.allowances);
+			expect([...await sql`SELECT asset_id, owner, approved_spender FROM asset_allowances`]).toEqual(before.allowances);
 			expect([...await sql`SELECT operation_id FROM confirmed_operations WHERE operation_id LIKE 'op-sync-cycle-%'`]).toHaveLength(0);
 			expect([...await sql`SELECT operation_id FROM invalid_operations WHERE operation_id LIKE 'op-sync-cycle-%'`]).toHaveLength(0);
 
@@ -232,8 +232,8 @@ describe("syncCycle real PostgreSQL recovery", () => {
 			await syncCycle();
 
 			expect(Number((await sql`SELECT last_block FROM sync_state WHERE id = 1`)[0]!.last_block)).toBe(BATCH_BLOCK);
-			expect([...await sql`SELECT owner FROM nfts WHERE id IN (${seedA}, ${seedB}) ORDER BY id`]).toEqual([{ owner: "bob" }, { owner: "bob" }]);
-			expect([...await sql`SELECT nft_id FROM nft_allowances WHERE nft_id = ${seedA}`]).toHaveLength(0);
+			expect([...await sql`SELECT owner FROM assets WHERE id IN (${seedA}, ${seedB}) ORDER BY id`]).toEqual([{ owner: "bob" }, { owner: "bob" }]);
+			expect([...await sql`SELECT asset_id FROM asset_allowances WHERE asset_id = ${seedA}`]).toHaveLength(0);
 			expect([...await sql`SELECT operation_id FROM confirmed_operations WHERE operation_id IN ('op-sync-cycle-transfer-a', 'op-sync-cycle-transfer-b') ORDER BY operation_id`]).toEqual([
 				{ operation_id: "op-sync-cycle-transfer-a" },
 				{ operation_id: "op-sync-cycle-transfer-b" },

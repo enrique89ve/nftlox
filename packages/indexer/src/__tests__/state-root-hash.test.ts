@@ -9,7 +9,7 @@ import {
 	parseStateRoot,
 	rootsEqual,
 	xorInto,
-	type NftStateRow,
+	type AssetStateRow,
 	type StateRootDelta,
 } from "@/utils/state-root-hash.ts";
 
@@ -18,9 +18,9 @@ import {
 // cannot be trusted — the XOR approach would no longer converge between
 // indexers or remain consistent under replay.
 
-function makeRow(override: Partial<NftStateRow> = {}): NftStateRow {
+function makeRow(override: Partial<AssetStateRow> = {}): AssetStateRow {
 	return {
-		id: "nft_0001",
+		id: "asset_0001",
 		owner: "alice",
 		previous_owner: null,
 		owner_action: "mint",
@@ -59,7 +59,7 @@ describe("hashRow", () => {
 		// Fixed vector guards canonical field selection, UTF-8 encoding, and the
 		// native hash implementation independently of the Promise wrapper.
 		expect(Buffer.from(await hashRow(makeRow())).toString("hex")).toBe(
-			"5e9959d2bce4d398db7507e5e076cc76aeb9515f805378a5faacdbe04d5c5517",
+			"058296c234e8ba128f68051a2b6f8ade5811b62ba767b932c68718e7c4289951",
 		);
 	});
 
@@ -71,13 +71,13 @@ describe("hashRow", () => {
 	});
 
 	test("is insensitive to object key order (canonical JSON)", async () => {
-		const rowA: NftStateRow = {
-			id: "nft_1", owner: "alice", previous_owner: "bob",
+		const rowA: AssetStateRow = {
+			id: "asset_1", owner: "alice", previous_owner: "bob",
 			owner_action: "transfer", owner_operation_id: "op1", owner_block_num: 100,
 		};
-		const rowB: NftStateRow = {
+		const rowB: AssetStateRow = {
 			owner_block_num: 100, owner_operation_id: "op1", owner_action: "transfer",
-			previous_owner: "bob", owner: "alice", id: "nft_1",
+			previous_owner: "bob", owner: "alice", id: "asset_1",
 		};
 		expect(rootsEqual(await hashRow(rowA), await hashRow(rowB))).toBe(true);
 	});
@@ -91,7 +91,7 @@ describe("hashRow", () => {
 			{ owner_action: "transfer" } as const,
 			{ owner_operation_id: "other" } as const,
 			{ owner_block_num: 999 } as const,
-			{ id: "nft_other" } as const,
+			{ id: "asset_other" } as const,
 		]) {
 			const mutated = await hashRow(makeRow(override));
 			expect(rootsEqual(h0, mutated)).toBe(false);
@@ -107,9 +107,9 @@ describe("hashRow", () => {
 describe("applyDelta ↔ computeStateRootFullScan equivalence", () => {
 	test("inserts are equivalent to full-scan", async () => {
 		const rows = [
-			makeRow({ id: "nft_1" }),
-			makeRow({ id: "nft_2", owner: "bob" }),
-			makeRow({ id: "nft_3", owner: "carol" }),
+			makeRow({ id: "asset_1" }),
+			makeRow({ id: "asset_2", owner: "bob" }),
+			makeRow({ id: "asset_3", owner: "carol" }),
 		];
 
 		let incremental = emptyStateRoot();
@@ -123,8 +123,8 @@ describe("applyDelta ↔ computeStateRootFullScan equivalence", () => {
 
 	test("updates converge to the post-update full-scan", async () => {
 		const initial = [
-			makeRow({ id: "nft_1", owner: "alice" }),
-			makeRow({ id: "nft_2", owner: "bob" }),
+			makeRow({ id: "asset_1", owner: "alice" }),
+			makeRow({ id: "asset_2", owner: "bob" }),
 		];
 		// Bootstrap.
 		let root = emptyStateRoot();
@@ -132,9 +132,9 @@ describe("applyDelta ↔ computeStateRootFullScan equivalence", () => {
 			root = await applyDelta(root, { type: "insert", newRow: row });
 		}
 
-		// Apply: nft_1 transfers from alice → dave.
+		// Apply: asset_1 transfers from alice → dave.
 		const oldRow = initial[0]!;
-		const newRow: NftStateRow = {
+		const newRow: AssetStateRow = {
 			...oldRow,
 			owner: "dave",
 			previous_owner: "alice",
@@ -151,15 +151,15 @@ describe("applyDelta ↔ computeStateRootFullScan equivalence", () => {
 
 	test("deletes remove rows cleanly (burn)", async () => {
 		const rows = [
-			makeRow({ id: "nft_1" }),
-			makeRow({ id: "nft_2", owner: "bob" }),
+			makeRow({ id: "asset_1" }),
+			makeRow({ id: "asset_2", owner: "bob" }),
 		];
 		let root = emptyStateRoot();
 		for (const row of rows) {
 			root = await applyDelta(root, { type: "insert", newRow: row });
 		}
 
-		// Burn nft_2.
+		// Burn asset_2.
 		root = await applyDelta(root, { type: "delete", oldRow: rows[1]! });
 
 		const fullScan = await computeStateRootFullScan([rows[0]!]);
@@ -170,14 +170,14 @@ describe("applyDelta ↔ computeStateRootFullScan equivalence", () => {
 describe("commutativity — order independence (multi-node parity)", () => {
 	test("two indexers applying the same ops in different orders converge", async () => {
 		const ops: StateRootDelta[] = [
-			{ type: "insert", newRow: makeRow({ id: "nft_1" }) },
-			{ type: "insert", newRow: makeRow({ id: "nft_2", owner: "bob" }) },
+			{ type: "insert", newRow: makeRow({ id: "asset_1" }) },
+			{ type: "insert", newRow: makeRow({ id: "asset_2", owner: "bob" }) },
 			{ type: "update",
-				oldRow: makeRow({ id: "nft_1" }),
-				newRow: makeRow({ id: "nft_1", owner: "dave", previous_owner: "alice", owner_action: "transfer", owner_operation_id: "op_t1", owner_block_num: 105_530_600 }),
+				oldRow: makeRow({ id: "asset_1" }),
+				newRow: makeRow({ id: "asset_1", owner: "dave", previous_owner: "alice", owner_action: "transfer", owner_operation_id: "op_t1", owner_block_num: 105_530_600 }),
 			},
-			{ type: "insert", newRow: makeRow({ id: "nft_3", owner: "carol" }) },
-			{ type: "delete", oldRow: makeRow({ id: "nft_2", owner: "bob" }) },
+			{ type: "insert", newRow: makeRow({ id: "asset_3", owner: "carol" }) },
+			{ type: "delete", oldRow: makeRow({ id: "asset_2", owner: "bob" }) },
 		];
 
 		async function applyAll(order: readonly StateRootDelta[]): Promise<Uint8Array> {
@@ -200,11 +200,11 @@ describe("commutativity — order independence (multi-node parity)", () => {
 describe("reversibility — XORing an op out undoes it", () => {
 	test("insert + delete of the same row returns to the prior root", async () => {
 		const prior = await computeStateRootFullScan([
-			makeRow({ id: "nft_1" }),
-			makeRow({ id: "nft_2", owner: "bob" }),
+			makeRow({ id: "asset_1" }),
+			makeRow({ id: "asset_2", owner: "bob" }),
 		]);
 
-		const ghost = makeRow({ id: "nft_ghost", owner: "mallory" });
+		const ghost = makeRow({ id: "asset_ghost", owner: "mallory" });
 		let root = prior;
 		root = await applyDelta(root, { type: "insert", newRow: ghost });
 		expect(rootsEqual(root, prior)).toBe(false);
@@ -213,9 +213,9 @@ describe("reversibility — XORing an op out undoes it", () => {
 	});
 
 	test("update is invertible (old ↔ new swap returns home)", async () => {
-		const oldRow = makeRow({ id: "nft_1", owner: "alice" });
+		const oldRow = makeRow({ id: "asset_1", owner: "alice" });
 		const newRow = makeRow({
-			id: "nft_1",
+			id: "asset_1",
 			owner: "dave",
 			previous_owner: "alice",
 			owner_action: "transfer",
@@ -267,17 +267,17 @@ describe("no-op invariants", () => {
 });
 
 describe("field semantics are distinct (anti-symmetry)", () => {
-	// If two NFTs have mirrored owner/previous_owner, the root MUST differ from
+	// If two Assets have mirrored owner/previous_owner, the root MUST differ from
 	// the root of the "unmirrored" pair. This guards against accidentally
 	// symmetric canonical encodings that would let a reorg confuse direction.
 	test("swapping owner and previous_owner across two rows yields a different root", async () => {
 		const original = [
-			makeRow({ id: "nft_1", owner: "alice", previous_owner: "bob" }),
-			makeRow({ id: "nft_2", owner: "carol", previous_owner: "dave" }),
+			makeRow({ id: "asset_1", owner: "alice", previous_owner: "bob" }),
+			makeRow({ id: "asset_2", owner: "carol", previous_owner: "dave" }),
 		];
 		const swapped = [
-			makeRow({ id: "nft_1", owner: "bob", previous_owner: "alice" }),
-			makeRow({ id: "nft_2", owner: "dave", previous_owner: "carol" }),
+			makeRow({ id: "asset_1", owner: "bob", previous_owner: "alice" }),
+			makeRow({ id: "asset_2", owner: "dave", previous_owner: "carol" }),
 		];
 		const rootA = await computeStateRootFullScan(original);
 		const rootB = await computeStateRootFullScan(swapped);
@@ -298,12 +298,12 @@ describe("integration-bug guards", () => {
 	// be loud, not silent.
 	test("delete of a row never inserted leaves a divergent root", async () => {
 		const real = [
-			makeRow({ id: "nft_1" }),
-			makeRow({ id: "nft_2", owner: "bob" }),
+			makeRow({ id: "asset_1" }),
+			makeRow({ id: "asset_2", owner: "bob" }),
 		];
 		const baseline = await computeStateRootFullScan(real);
 
-		const ghost = makeRow({ id: "nft_ghost", owner: "mallory" });
+		const ghost = makeRow({ id: "asset_ghost", owner: "mallory" });
 		const corrupted = await applyDelta(baseline, { type: "delete", oldRow: ghost });
 		expect(rootsEqual(corrupted, baseline)).toBe(false);
 	});
@@ -315,10 +315,10 @@ describe("scale smoke test", () => {
 	// but this pins the guarantee against any future refactor regression.
 	test("10k rows: incremental == full-scan, and permuted insert order converges", async () => {
 		const count = 10_000;
-		const rows: NftStateRow[] = [];
+		const rows: AssetStateRow[] = [];
 		for (let i = 0; i < count; i++) {
 			rows.push(makeRow({
-				id: `nft_${i.toString().padStart(6, "0")}`,
+				id: `asset_${i.toString().padStart(6, "0")}`,
 				owner: `acct_${i % 137}`,
 				owner_block_num: 105_530_500 + i,
 				owner_operation_id: `${3_448_000_000_000 + i}`,
@@ -354,12 +354,12 @@ describe("scale smoke test", () => {
 describe("computeStateRootFullScan works with any Iterable", () => {
 	test("accepts a generator, not only arrays", async () => {
 		const rows = [
-			makeRow({ id: "nft_1" }),
-			makeRow({ id: "nft_2", owner: "bob" }),
-			makeRow({ id: "nft_3", owner: "carol" }),
+			makeRow({ id: "asset_1" }),
+			makeRow({ id: "asset_2", owner: "bob" }),
+			makeRow({ id: "asset_3", owner: "carol" }),
 		];
 
-		function* generate(): Generator<NftStateRow> {
+		function* generate(): Generator<AssetStateRow> {
 			for (const row of rows) yield row;
 		}
 
@@ -369,10 +369,10 @@ describe("computeStateRootFullScan works with any Iterable", () => {
 	});
 
 	test("direct order-independence of full-scan over a Set", async () => {
-		const rows: NftStateRow[] = [
-			makeRow({ id: "nft_a" }),
-			makeRow({ id: "nft_b", owner: "bob" }),
-			makeRow({ id: "nft_c", owner: "carol" }),
+		const rows: AssetStateRow[] = [
+			makeRow({ id: "asset_a" }),
+			makeRow({ id: "asset_b", owner: "bob" }),
+			makeRow({ id: "asset_c", owner: "carol" }),
 		];
 		const forward = await computeStateRootFullScan(rows);
 		const reversed = await computeStateRootFullScan([...rows].reverse());

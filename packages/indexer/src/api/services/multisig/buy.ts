@@ -1,4 +1,4 @@
-import { getNftForProcessing, getNftWithCollectionRules, NFT_KIND_INSTANCE, NFT_STATUS_LISTED, NFT_STATUS_PENDING_SALE } from "@/db/queries/nfts.ts";
+import { getAssetForProcessing, getAssetWithCollectionRules, ASSET_KIND_INSTANCE, ASSET_STATUS_LISTED, ASSET_STATUS_PENDING_SALE } from "@/db/queries/assets.ts";
 import { assertActiveSettlementNode } from "@/db/queries/nodes.ts";
 import { getChainTimeSnapshot, type ChainTimeSnapshot } from "@/db/queries/sync.ts";
 import {
@@ -11,7 +11,7 @@ import {
 	type BuyCommitmentData,
 	type BuyMultisigResponse,
 } from "@/protocol/index.ts";
-import { computeExpectedTransferCount } from "@/utils/nft-rules.ts";
+import { computeExpectedTransferCount } from "@/utils/asset-rules.ts";
 import { requireSupportedCurrency, verifyTransfers } from "@/utils/validation.ts";
 import { createMultisigError, isMultisigError } from "@/api/services/multisig/errors.ts";
 import { assertNodeNotDivergent } from "@/api/services/multisig/divergence-gate.ts";
@@ -103,7 +103,7 @@ async function executeBuyRequest(
 
 	// Cryptographic verification of the buyer's signature BEFORE we burn an
 	// on-chain buy_commitment. Without this, any attacker can feed us a random
-	// 130-hex blob and force us to project `pending_sale` for the NFT — see
+	// 130-hex blob and force us to project `pending_sale` for the Asset — see
 	// VUL-001 in AUDITORIA-CIBERSEGURIDAD-NFTLOX.md.
 	await verifyBuyerSignatureOrThrow({ buyer, buyerSignature, digestBytes });
 
@@ -114,7 +114,7 @@ async function executeBuyRequest(
 	await assertBuyerSolvent(buyer, validated.transferOperations, getAccountLiquidBalance);
 
 	const acquisition = await ctx.buyLock.acquire(
-		validated.customJsonOperation.payload.data.nftId,
+		validated.customJsonOperation.payload.data.assetId,
 		validated.customJsonOperation.payload.data.listingId,
 		validated.customJsonOperation.payload.data.listTxId,
 		buyTxId,
@@ -122,8 +122,8 @@ async function executeBuyRequest(
 	);
 	if (!acquisition.acquired) {
 		throw createMultisigError(
-			"NFT_LOCKED",
-			`A buy signing for NFT '${validated.customJsonOperation.payload.data.nftId}' is already in flight. Retry after ${acquisition.retryAfterMs}ms`,
+			"ASSET_LOCKED",
+			`A buy signing for Asset '${validated.customJsonOperation.payload.data.assetId}' is already in flight. Retry after ${acquisition.retryAfterMs}ms`,
 			{ retryAfterMs: acquisition.retryAfterMs },
 		);
 	}
@@ -134,7 +134,7 @@ async function executeBuyRequest(
 
 	try {
 		commitmentOpTxId = await broadcastBuyCommitment({
-			nftId: validated.customJsonOperation.payload.data.nftId,
+			assetId: validated.customJsonOperation.payload.data.assetId,
 			listingId: validated.customJsonOperation.payload.data.listingId,
 			listTxId: validated.customJsonOperation.payload.data.listTxId,
 			buyer,
@@ -146,7 +146,7 @@ async function executeBuyRequest(
 
 		await waitForCommitmentVictory({
 			ctx,
-			nftId: validated.customJsonOperation.payload.data.nftId,
+			assetId: validated.customJsonOperation.payload.data.assetId,
 			buyTxHash: buyTxId,
 		});
 
@@ -157,7 +157,7 @@ async function executeBuyRequest(
 		buyBroadcast = true;
 
 		log.info("Buy multisig broadcast succeeded", {
-			nftId: validated.customJsonOperation.payload.data.nftId,
+			assetId: validated.customJsonOperation.payload.data.assetId,
 			buyer,
 			buyTxId: broadcastResult.txId,
 			commitmentOpTxId,
@@ -189,13 +189,13 @@ async function executeBuyRequest(
 		// still decides the winner across nodes; this local hold closes the retry
 		// race inside this settlement node.
 		//
-		// Note: the lock acquire path uses `ON CONFLICT (nft_id) DO NOTHING`, so
+		// Note: the lock acquire path uses `ON CONFLICT (asset_id) DO NOTHING`, so
 		// the SAME buyer re-issuing the same buyTxId inside the lock window also
-		// hits NFT_LOCKED — that is intentional, not a refresh. Clients must
+		// hits ASSET_LOCKED — that is intentional, not a refresh. Clients must
 		// reconcile the existing commitment_op_tx_id (202) or wait the full lock
 		// TTL (BUY_TX_TTL_MS) before retrying.
 		if (!commitmentBroadcast || buyBroadcast) {
-			await ctx.buyLock.release(validated.customJsonOperation.payload.data.nftId, buyTxId);
+			await ctx.buyLock.release(validated.customJsonOperation.payload.data.assetId, buyTxId);
 		}
 	}
 }
@@ -299,30 +299,30 @@ async function validateBuyAgainstState(
 	ctx: MultisigBuyContext,
 	chainReferenceTimeMs: number,
 ): Promise<void> {
-	const nft = await getNftWithCollectionRules(payload.data.nftId, ctx.db);
-	if (!nft) {
-		throw createMultisigError("NFT_NOT_FOUND", `NFT '${payload.data.nftId}' not found`);
+	const asset = await getAssetWithCollectionRules(payload.data.assetId, ctx.db);
+	if (!asset) {
+		throw createMultisigError("ASSET_NOT_FOUND", `Asset '${payload.data.assetId}' not found`);
 	}
-	if (nft.status !== NFT_STATUS_LISTED) {
-		throw createMultisigError("NFT_NOT_LISTED", `NFT '${payload.data.nftId}' is not currently listed`);
+	if (asset.status !== ASSET_STATUS_LISTED) {
+		throw createMultisigError("ASSET_NOT_LISTED", `Asset '${payload.data.assetId}' is not currently listed`);
 	}
-	if (nft.nft_type !== NFT_KIND_INSTANCE) {
-		throw createMultisigError("NFT_NOT_INSTANCE", "Only instances can be bought through the marketplace");
+	if (asset.asset_type !== ASSET_KIND_INSTANCE) {
+		throw createMultisigError("ASSET_NOT_INSTANCE", "Only instances can be bought through the marketplace");
 	}
-	if (buyer === nft.owner) {
-		throw createMultisigError("CANNOT_BUY_OWN", "Buyer cannot purchase their own NFT");
+	if (buyer === asset.owner) {
+		throw createMultisigError("CANNOT_BUY_OWN", "Buyer cannot purchase their own Asset");
 	}
-	if (!nft.transferable) {
-		throw createMultisigError("NFT_NOT_TRANSFERABLE", "NFT collection is not transferable");
+	if (!asset.transferable) {
+		throw createMultisigError("ASSET_NOT_TRANSFERABLE", "Asset collection is not transferable");
 	}
-	if (nft.listing_id !== payload.data.listingId) {
+	if (asset.listing_id !== payload.data.listingId) {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "buy payload listingId does not match the current listing");
 	}
-	if (nft.listing_tx_id !== payload.data.listTxId) {
+	if (asset.listing_tx_id !== payload.data.listTxId) {
 		throw createMultisigError("INVALID_PROTOCOL_PAYLOAD", "buy payload listTxId does not match the current listing");
 	}
-	assertListingAlive(nft.listing_expires_at, chainReferenceTimeMs);
-	assertPaymentSplit(nft, transferOperations, payload.data.nftId, ctx.nodeAccount);
+	assertListingAlive(asset.listing_expires_at, chainReferenceTimeMs);
+	assertPaymentSplit(asset, transferOperations, payload.data.assetId, ctx.nodeAccount);
 }
 
 function assertListingAlive(
@@ -332,29 +332,29 @@ function assertListingAlive(
 	if (!listingExpiresAt) return;
 	const expiresMs = Date.parse(listingExpiresAt);
 	if (Number.isNaN(expiresMs)) {
-		throw createMultisigError("INTERNAL_ERROR", "NFT listing expiration is invalid");
+		throw createMultisigError("INTERNAL_ERROR", "Asset listing expiration is invalid");
 	}
 	if (chainReferenceTimeMs >= expiresMs) {
-		throw createMultisigError("NFT_EXPIRED_LISTING", "Listing has already expired");
+		throw createMultisigError("ASSET_EXPIRED_LISTING", "Listing has already expired");
 	}
 }
 
 function assertPaymentSplit(
-	nft: Awaited<ReturnType<typeof getNftWithCollectionRules>>,
+	asset: Awaited<ReturnType<typeof getAssetWithCollectionRules>>,
 	transferOperations: ReadonlyArray<ValidatedTransferOp>,
-	nftId: string,
+	assetId: string,
 	nodeAccount: string,
 ): void {
-	if (!nft || !nft.listing_price || !nft.listing_currency) {
-		throw createMultisigError("NFT_NOT_LISTED", "NFT has no listing price or currency");
+	if (!asset || !asset.listing_price || !asset.listing_currency) {
+		throw createMultisigError("ASSET_NOT_LISTED", "Asset has no listing price or currency");
 	}
 
-	const totalPrice = Number(nft.listing_price);
+	const totalPrice = Number(asset.listing_price);
 	if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
-		throw createMultisigError("INTERNAL_ERROR", "NFT listing price is invalid");
+		throw createMultisigError("INTERNAL_ERROR", "Asset listing price is invalid");
 	}
 
-	const royaltyPct = Number(nft.royalty_pct ?? 0);
+	const royaltyPct = Number(asset.royalty_pct ?? 0);
 	if (!Number.isFinite(royaltyPct) || royaltyPct < 0 || royaltyPct > MAX_ROYALTY_PCT) {
 		throw createMultisigError("INTERNAL_ERROR", "Collection royalty_pct is invalid");
 	}
@@ -362,13 +362,13 @@ function assertPaymentSplit(
 	try {
 		const { split } = verifyTransfers({
 			transfers: extractTransfers(transferOperations),
-			seller: nft.owner,
+			seller: asset.owner,
 			totalPrice,
-			currency: requireSupportedCurrency(nft.listing_currency, "listing_currency"),
+			currency: requireSupportedCurrency(asset.listing_currency, "listing_currency"),
 			royaltyPct,
-			royaltyRecipient: nft.royalty_recipient ?? null,
+			royaltyRecipient: asset.royalty_recipient ?? null,
 			feeAccount: nodeAccount,
-			nftId,
+			assetId,
 		});
 
 		const expectedTransfers = computeExpectedTransferCount(split);
@@ -423,7 +423,7 @@ async function readSyncState(ctx: MultisigBuyContext): Promise<SyncStateSnapshot
 // ─── Commitment broadcast ───────────────────────────────
 
 type BroadcastCommitmentInput = Readonly<{
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
 	readonly buyer: string;
@@ -435,7 +435,7 @@ type BroadcastCommitmentInput = Readonly<{
 async function broadcastBuyCommitment(input: BroadcastCommitmentInput): Promise<string> {
 	const data: BuyCommitmentData = {
 		txHash: input.buyTxHash,
-		nftId: input.nftId,
+		assetId: input.assetId,
 		listingId: input.listingId,
 		listTxId: input.listTxId,
 		buyer: input.buyer,
@@ -478,7 +478,7 @@ async function broadcastBuyCommitment(input: BroadcastCommitmentInput): Promise<
 
 type WaitForVictoryInput = Readonly<{
 	readonly ctx: MultisigBuyContext;
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly buyTxHash: string;
 }>;
 
@@ -488,23 +488,23 @@ async function waitForCommitmentVictory(input: WaitForVictoryInput): Promise<voi
 	const expectedNode = input.ctx.nodeAccount;
 
 	while (Date.now() < deadline) {
-		const nft = await getNftForProcessing(input.nftId, input.ctx.db);
-		if (!nft) {
+		const asset = await getAssetForProcessing(input.assetId, input.ctx.db);
+		if (!asset) {
 			throw createMultisigError(
-				"NFT_NOT_FOUND",
-				`NFT '${input.nftId}' disappeared while waiting for commitment`,
+				"ASSET_NOT_FOUND",
+				`Asset '${input.assetId}' disappeared while waiting for commitment`,
 			);
 		}
 
-		if (nft.status === NFT_STATUS_PENDING_SALE
-			&& nft.sale_commitment_buy_tx_hash !== null) {
-			const observedHash = nft.sale_commitment_buy_tx_hash.toLowerCase();
-			if (observedHash === expectedHash && nft.sale_settlement_node === expectedNode) {
+		if (asset.status === ASSET_STATUS_PENDING_SALE
+			&& asset.sale_commitment_buy_tx_hash !== null) {
+			const observedHash = asset.sale_commitment_buy_tx_hash.toLowerCase();
+			if (observedHash === expectedHash && asset.sale_settlement_node === expectedNode) {
 				return; // victory
 			}
 			throw createMultisigError(
 				"CROSS_NODE_RESERVATION",
-				`NFT '${input.nftId}' reserved by ${nft.sale_settlement_node} (commitment ${observedHash}); retry later`,
+				`Asset '${input.assetId}' reserved by ${asset.sale_settlement_node} (commitment ${observedHash}); retry later`,
 				{ retryAfterMs: BUY_TX_TTL_MS },
 			);
 		}
@@ -516,7 +516,7 @@ async function waitForCommitmentVictory(input: WaitForVictoryInput): Promise<voi
 		"COMMITMENT_INCLUSION_TIMEOUT",
 		`buy_commitment not observed within ${COMMITMENT_INCLUSION_TIMEOUT_MS}ms`,
 		// The on-chain commitment TTL is BUY_TX_TTL_MS; the local lock is held
-		// for the same window. Any retry inside this window will hit NFT_LOCKED,
+		// for the same window. Any retry inside this window will hit ASSET_LOCKED,
 		// so the client must wait the full TTL before a fresh attempt is
 		// reconcilable against the existing commitment_op_tx_id.
 		{ retryAfterMs: BUY_TX_TTL_MS },

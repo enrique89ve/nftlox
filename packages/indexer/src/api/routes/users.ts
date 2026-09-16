@@ -1,15 +1,15 @@
 import { Elysia, t } from "elysia";
 import { countCollectionsByCreator, getCollectionsByCreator } from "@/db/queries/collections.ts";
 import { countLoansByAccount, parseLoanRole, queryLoansByAccount } from "@/db/queries/loans.ts";
-import { getUserNftCounts, queryNfts, queryNftsWithCounts, parseNftStatus, parseNftKind, NFT_KIND_SEED } from "@/db/queries/nfts.ts";
+import { getUserAssetCounts, queryAssets, queryAssetsWithCounts, parseAssetStatus, parseAssetKind, ASSET_KIND_SEED } from "@/db/queries/assets.ts";
 
 const DEFAULT_ASSETS_PREVIEW_LIMIT = 6;
 
 export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
-	.get("/:username/assets", async ({ params, query }) => {
+	.get("/:username/assets/overview", async ({ params, query }) => {
 		const previewLimit = query.previewLimit ?? DEFAULT_ASSETS_PREVIEW_LIMIT;
 		const [
-			nftCounts,
+			assetCounts,
 			collectionsCount,
 			lentOutCount,
 			borrowedCount,
@@ -19,12 +19,12 @@ export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 			borrowed,
 			collections,
 		] = await Promise.all([
-			getUserNftCounts(params.username),
+			getUserAssetCounts(params.username),
 			countCollectionsByCreator(params.username),
 			countLoansByAccount(params.username, "lender"),
 			countLoansByAccount(params.username, "borrower"),
-			queryNfts({ by: "owner", owner: params.username }, { limit: previewLimit, offset: 0 }),
-			queryNfts({ by: "owner", owner: params.username, type: NFT_KIND_SEED }, { limit: previewLimit, offset: 0 }),
+			queryAssets({ by: "owner", owner: params.username }, { limit: previewLimit, offset: 0 }),
+			queryAssets({ by: "owner", owner: params.username, type: ASSET_KIND_SEED }, { limit: previewLimit, offset: 0 }),
 			queryLoansByAccount(params.username, "lender", { limit: previewLimit, offset: 0 }),
 			queryLoansByAccount(params.username, "borrower", { limit: previewLimit, offset: 0 }),
 			getCollectionsByCreator(params.username, previewLimit, 0),
@@ -32,8 +32,8 @@ export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 		return {
 			username: params.username,
 			counts: {
-				owned: nftCounts.total,
-				seeds: nftCounts.seeds,
+				owned: assetCounts.total,
+				seeds: assetCounts.seeds,
 				collections: collectionsCount,
 				lentOut: lentOutCount,
 				borrowed: borrowedCount,
@@ -54,14 +54,14 @@ export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 		}),
 		detail: {
 			summary: "Get user assets overview",
-			description: "Returns a dashboard-oriented overview: owned NFTs, seeds, active loans by role, and created collections. Use paginated domain routes for full lists.",
+			description: "Returns a dashboard-oriented overview: owned Assets, seeds, active loans by role, and created collections. Use paginated domain routes for full lists.",
 		},
 	})
-	.get("/:username/nfts", async ({ params, query }) => {
-		const result = await queryNftsWithCounts(
+	.get("/:username/assets", async ({ params, query }) => {
+		const result = await queryAssetsWithCounts(
 			params.username,
-			parseNftStatus(query.status),
-			parseNftKind(query.type),
+			parseAssetStatus(query.status),
+			parseAssetKind(query.type),
 			{ limit: query.limit, offset: query.offset },
 		);
 		return { ...result, offset: query.offset, limit: query.limit };
@@ -73,13 +73,13 @@ export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
-		detail: { summary: "Get user's NFTs with counts" },
+		detail: { summary: "Get user's Assets with counts" },
 	})
-	.get("/:username/nfts/count", async ({ params }) => {
-		return getUserNftCounts(params.username);
+	.get("/:username/assets/count", async ({ params }) => {
+		return getUserAssetCounts(params.username);
 	}, {
 		params: t.Object({ username: t.String({ minLength: 3, maxLength: 16 }) }),
-		detail: { summary: "Get user's NFT counts", description: "Total counts by type (seeds, instances)" },
+		detail: { summary: "Get user's Asset counts", description: "Total counts by type (seeds, instances)" },
 	})
 	.get("/:username/loans", async ({ params, query }) => {
 		const role = parseLoanRole(query.role) ?? "all";
@@ -101,7 +101,7 @@ export const usersRoutes = new Elysia({ prefix: "/api/users", tags: ["Users"] })
 		}),
 		detail: {
 			summary: "Get user's active loans",
-			description: "Returns active lending custody records by lender, borrower, or both. Ownership remains defined by NFT owner fields.",
+			description: "Returns active lending custody records by lender, borrower, or both. Ownership remains defined by Asset owner fields.",
 		},
 	})
 	.get("/:username/collections", async ({ params, query }) => {

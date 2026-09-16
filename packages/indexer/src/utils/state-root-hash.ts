@@ -1,10 +1,10 @@
-// State-root hash — incremental rolling XOR of per-NFT row hashes.
+// State-root hash — incremental rolling XOR of per-Asset row hashes.
 //
 // Why this shape:
 //   root = SHA256(row_1) XOR SHA256(row_2) XOR ... XOR SHA256(row_N)
 //
 // - O(1) per mutation: an ownership change only needs to XOR out the old row
-//   hash and XOR in the new one. Scales identically at 1k NFTs or 100M NFTs.
+//   hash and XOR in the new one. Scales identically at 1k Assets or 100M Assets.
 // - Order-independent: XOR is commutative and associative, so two indexers
 //   processing the same multiset of operations in different orders converge
 //   to the same root. This is critical for multi-node parity without a
@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 // Only the SPV-visible ownership fields contribute to the root. Any mutation
 // that doesn't change these fields (e.g. listing updates, data refs) is a
 // no-op for state-root purposes — by construction the row hash is unchanged.
-export type NftStateRow = Readonly<{
+export type AssetStateRow = Readonly<{
 	id: string;
 	owner: string;
 	previous_owner: string | null;
@@ -36,9 +36,9 @@ export type NftStateRow = Readonly<{
 }>;
 
 export type StateRootDelta =
-	| Readonly<{ type: "insert"; newRow: NftStateRow }>
-	| Readonly<{ type: "update"; oldRow: NftStateRow; newRow: NftStateRow }>
-	| Readonly<{ type: "delete"; oldRow: NftStateRow }>;
+	| Readonly<{ type: "insert"; newRow: AssetStateRow }>
+	| Readonly<{ type: "update"; oldRow: AssetStateRow; newRow: AssetStateRow }>
+	| Readonly<{ type: "delete"; oldRow: AssetStateRow }>;
 
 // ============ PRIMITIVES ============
 
@@ -71,16 +71,16 @@ export function xorInto(target: Uint8Array, operand: Uint8Array): Uint8Array {
 
 // The row is handed directly to canonicalJson. Do NOT reconstruct a literal
 // here and enumerate keys by hand — that would create a silent footgun where
-// adding a field to NftStateRow compiles fine but silently drops the field
+// adding a field to AssetStateRow compiles fine but silently drops the field
 // from the hash, fracturing convergence between indexers running old vs new
 // code. The type alone is the consensus surface.
-export async function hashRow(row: NftStateRow): Promise<Uint8Array> {
+export async function hashRow(row: AssetStateRow): Promise<Uint8Array> {
 	const canonical = canonicalJson(row as unknown as Record<string, unknown>);
 	const encoded = new TextEncoder().encode(canonical);
 	// The indexer is a server-side Bun/Node process. Keeping the Promise API
 	// preserves the existing state-root contract, while the synchronous native
 	// implementation avoids WebCrypto's per-call scheduling overhead on the hot
-	// per-NFT path. The algorithm, canonical bytes, and 32-byte output are
+	// per-Asset path. The algorithm, canonical bytes, and 32-byte output are
 	// unchanged.
 	return new Uint8Array(createHash("sha256").update(encoded).digest());
 }
@@ -110,11 +110,11 @@ export async function applyDelta(
 
 // ============ REFERENCE FULL-SCAN ============
 
-// Reference implementation — O(N) in NFT count. Used ONLY for bootstrap (one
+// Reference implementation — O(N) in Asset count. Used ONLY for bootstrap (one
 // time, at startup with pre-existing data) and for the audit job that verifies
 // the incremental root hasn't drifted. Never call on the hot path.
 export async function computeStateRootFullScan(
-	rows: Iterable<NftStateRow>,
+	rows: Iterable<AssetStateRow>,
 ): Promise<Uint8Array> {
 	let root = emptyStateRoot();
 	for (const row of rows) {

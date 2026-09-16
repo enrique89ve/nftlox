@@ -32,12 +32,12 @@ const ART_ID = "art-cnsmd-1";
 
 async function cleanDb(): Promise<void> {
 	await sql`DELETE FROM sales`;
-	await sql`DELETE FROM nft_allowances`;
+	await sql`DELETE FROM asset_allowances`;
 	await sql`DELETE FROM collection_allowances`;
-	// TRUNCATE nfts (and counters/collections downstream via CASCADE) skips
-	// per-row triggers — necessary because tests corrupt owner_nft_counts
+	// TRUNCATE assets (and counters/collections downstream via CASCADE) skips
+	// per-row triggers — necessary because tests corrupt owner_asset_counts
 	// on purpose and the AFTER DELETE counter trigger would then RAISE.
-	await sql`TRUNCATE nfts, owner_nft_counts, collection_stats, collections RESTART IDENTITY CASCADE`;
+	await sql`TRUNCATE assets, owner_asset_counts, collection_stats, collections RESTART IDENTITY CASCADE`;
 	await sql`DELETE FROM invalid_operations`;
 	await sql`DELETE FROM confirmed_operations`;
 	await sql`DELETE FROM orphaned_buys`;
@@ -55,7 +55,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 	afterEach(cleanDb);
 
 	it("reverts consumed indices when a mutation inside the savepoint fails", async () => {
-		// Setup an NFT owned by alice with a corrupted counter so the transfer handler will fail.
+		// Setup an Asset owned by alice with a corrupted counter so the transfer handler will fail.
 		await withTransaction(async (txn) => {
 			const feeAmount = parseFloat(PROTOCOL_COLLECTION_FEE_HBD);
 			const createOp: ParsedOperation = {
@@ -111,7 +111,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "alice",
-					nftType: "seed",
+					assetType: "seed",
 					maxSupply: 5,
 				},
 			};
@@ -119,7 +119,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 		});
 
 		// Break alice's counter so the next transfer fails inside the handler.
-		await sql`DELETE FROM owner_nft_counts WHERE owner = 'alice'`;
+		await sql`DELETE FROM owner_asset_counts WHERE owner = 'alice'`;
 
 		// The transfer op carries a shared transferPool that pre-populates one
 		// "already consumed" index — representing another op in the same Hive
@@ -139,7 +139,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 			signer: "alice",
 			authLevel: "posting",
 			action: ACTION_TRANSFER,
-			data: { nftId: seedId, to: "bob" },
+			data: { assetId: seedId, to: "bob" },
 			pairedTransfers: [],
 			transferPool: pool,
 		};
@@ -157,7 +157,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 
 	// This case DOES exercise the bug the rollback fix targets: verifyTransfers
 	// runs inside handleBuy, stages + commits three indices to the shared
-	// consumed set, and then updateNftOwner throws (seller's owner_nft_counts
+	// consumed set, and then updateAssetOwner throws (seller's owner_asset_counts
 	// row has been deleted mid-test). Without the router's snapshot/restore,
 	// those three indices would leak into the next op's view of the pool.
 	it("restores consumed indices when verifyTransfers has already mutated them", async () => {
@@ -220,13 +220,13 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "alice",
-					nftType: "seed",
+					assetType: "seed",
 					maxSupply: 5,
 				},
 			};
 			await handleMint(mintOp, txn);
 
-			const [seedRow] = await txn`SELECT created_tx_id AS tx_id FROM nfts WHERE id = ${seedId}`;
+			const [seedRow] = await txn`SELECT created_tx_id AS tx_id FROM assets WHERE id = ${seedId}`;
 			const seedTxId = seedRow!.tx_id as string;
 
 			const distributeOp: ParsedOperation = {
@@ -242,7 +242,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 			};
 			await handleBulkDistribute(distributeOp, txn);
 
-			const [inst] = await txn`SELECT id FROM nfts WHERE seed_id = ${seedId} LIMIT 1`;
+			const [inst] = await txn`SELECT id FROM assets WHERE seed_id = ${seedId} LIMIT 1`;
 			instanceId = inst!.id as string;
 
 			const nonce = generateListingNonce();
@@ -251,7 +251,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 			// previously passed `expiresAt: 0`, which now rejects.
 			const expiresAt = Date.now() + 14 * 86_400_000;
 			const listingId = await generateListingId({
-				nftId: instanceId,
+				assetId: instanceId,
 				owner: "alice",
 				marketplace: "",
 				priceAmount: "10.000",
@@ -269,7 +269,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 				authLevel: "posting",
 				action: ACTION_LIST,
 				data: {
-					nftId: instanceId,
+					assetId: instanceId,
 					listingId,
 					listingNonce: nonce,
 					price: { amount: "10.000", currency: "HIVE" },
@@ -280,7 +280,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 
 			const [listed] = await txn`
 				SELECT listing_id, listing_tx_id, created_tx_id AS tx_id
-				FROM nfts WHERE id = ${instanceId}
+				FROM assets WHERE id = ${instanceId}
 			`;
 			listingMeta = {
 				listingId: listed!.listing_id as string,
@@ -291,7 +291,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 
 		// Trip the handler AFTER verifyTransfers has mutated consumed by
 		// yanking the seller's counter row.
-		await sql`DELETE FROM owner_nft_counts WHERE owner = 'alice'`;
+		await sql`DELETE FROM owner_asset_counts WHERE owner = 'alice'`;
 
 		// Valid buy triplet (seller / fee; no royalty because royaltyPct = 0).
 		const split = calculatePaymentSplit(10, "HIVE", 0, null, "alice", config.hiveAccount);
@@ -326,7 +326,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 			authLevel: "active",
 			action: ACTION_BUY,
 			data: {
-				nftId: instanceId,
+				assetId: instanceId,
 				listingId: listingMeta.listingId,
 				listTxId: listingMeta.listTxId,
 				txId: listingMeta.txId,
@@ -341,7 +341,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 		});
 
 		// Rollback invariant: verifyTransfers added indices 1 and 2 to the pool,
-		// then updateNftOwner failed. Without the router's consumed-snapshot
+		// then updateAssetOwner failed. Without the router's consumed-snapshot
 		// restore, the pool would contain {0, 1, 2} and leak those claims to
 		// the next op in the same Hive tx. The test fails loudly if that
 		// regression returns.

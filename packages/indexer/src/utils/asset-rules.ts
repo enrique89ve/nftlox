@@ -1,4 +1,4 @@
-// Pure business rules for NFT operations.
+// Pure business rules for Asset operations.
 // Zero I/O, zero side-effects — testable with plain values.
 import { protocolReject } from "@/processor/protocol-rejection.ts";
 

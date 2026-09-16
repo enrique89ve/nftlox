@@ -13,7 +13,7 @@ export type ProtocolRejectionError = Error & Readonly<{
 }>;
 
 export const DELEGATED_BURN_REJECTION_REASON =
-	"Delegated NFT transfers cannot target the burn account";
+	"Delegated Asset transfers cannot target the burn account";
 
 export function protocolReject(
 	message: string,

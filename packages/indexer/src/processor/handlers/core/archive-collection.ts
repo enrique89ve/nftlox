@@ -14,9 +14,9 @@ export async function handleArchiveCollection(op: ParsedOperation, txn: Queryabl
 	if (collection.creator !== op.signer) {
 		throw protocolReject(`Signer ${op.signer} is not creator of collection ${collectionId}`);
 	}
-	if (collection.nft_count > 0) {
+	if (collection.asset_count > 0) {
 		throw protocolReject(
-			`Collection ${collectionId} cannot be deleted: ${collection.nft_count} NFTs still exist`,
+			`Collection ${collectionId} cannot be deleted: ${collection.asset_count} Assets still exist`,
 		);
 	}
 

@@ -1,18 +1,18 @@
-// Unified NFT status validation helpers
+// Unified Asset status validation helpers
 // Inspired by ICRC-7 (consistent validation) and AtomicAssets (re-validate at execution time)
 
-import type { NftStatus, NftKind } from "@/db/queries/nfts.ts";
-import { NFT_KIND_INSTANCE, NFT_STATUS_LENT, NFT_STATUS_LISTED, NFT_STATUS_PENDING_SALE } from "@/db/queries/nfts.ts";
+import type { AssetStatus, AssetKind } from "@/db/queries/assets.ts";
+import { ASSET_KIND_INSTANCE, ASSET_STATUS_LENT, ASSET_STATUS_LISTED, ASSET_STATUS_PENDING_SALE } from "@/db/queries/assets.ts";
 import { protocolReject } from "@/processor/protocol-rejection.ts";
 
 /** Minimal shape needed for status assertions — any row with status qualifies. */
-type HasStatus = { readonly status: NftStatus };
+type HasStatus = { readonly status: AssetStatus };
 
 /** Extended shape for transferability checks — needs listing expiration info. */
 type HasListingExpiry = HasStatus & { readonly listing_expires_at: string | null };
 
 /** Shape for seed guards — needs kind (and optionally distributed count). */
-type HasKind = { readonly nft_type: NftKind };
+type HasKind = { readonly asset_type: AssetKind };
 type HasKindAndDistributed = HasKind & { readonly distributed: number };
 
 export function isListingExpired(expiresAt: string | null, blockTimestamp: string): boolean {
@@ -20,58 +20,58 @@ export function isListingExpired(expiresAt: string | null, blockTimestamp: strin
 	return new Date(blockTimestamp).getTime() >= new Date(expiresAt).getTime();
 }
 
-export function assertNotLent(nft: HasStatus, nftId: string): void {
-	if (nft.status === NFT_STATUS_LENT) {
-		throw protocolReject(`NFT is lent and cannot be modified: ${nftId}`);
+export function assertNotLent(asset: HasStatus, assetId: string): void {
+	if (asset.status === ASSET_STATUS_LENT) {
+		throw protocolReject(`Asset is lent and cannot be modified: ${assetId}`);
 	}
 }
 
-export function assertNotListed(nft: HasStatus, nftId: string): void {
-	if (nft.status === NFT_STATUS_LISTED) {
-		throw protocolReject(`NFT is listed and must be unlisted first: ${nftId}`);
+export function assertNotListed(asset: HasStatus, assetId: string): void {
+	if (asset.status === ASSET_STATUS_LISTED) {
+		throw protocolReject(`Asset is listed and must be unlisted first: ${assetId}`);
 	}
 }
 
 /**
- * Rejects NFTs currently reserved by a settlement node's buy_commitment.
+ * Rejects Assets currently reserved by a settlement node's buy_commitment.
  * Every ownership-mutating or transfer-authorizing handler must call this
  * before touching the row: a successful commitment means a buyer-signed
  * buy tx is in flight and our txn must not race it. The row returns to
  * `listed` automatically once `sale_expires_block` elapses (sync-engine
  * sweep in `sweepExpiredBuyCommitments`).
  */
-export function assertNotPendingSale(nft: HasStatus, nftId: string): void {
-	if (nft.status === NFT_STATUS_PENDING_SALE) {
-		throw protocolReject(`NFT ${nftId} is pending_sale — cannot mutate while a buy_commitment is active`);
+export function assertNotPendingSale(asset: HasStatus, assetId: string): void {
+	if (asset.status === ASSET_STATUS_PENDING_SALE) {
+		throw protocolReject(`Asset ${assetId} is pending_sale — cannot mutate while a buy_commitment is active`);
 	}
 }
 
 /**
  * Asserts seeds cannot be delegated (approved/lent to a spender).
- * Seeds are master NFTs — delegation has no valid use case since
+ * Seeds are master Assets — delegation has no valid use case since
  * bulk_distribute doesn't use the allowance system.
  */
-export function assertNotSeed(nft: HasKind, nftId: string): void {
-	if (nft.nft_type === "seed") {
-		throw protocolReject(`Seeds cannot be delegated: ${nftId}`);
+export function assertNotSeed(asset: HasKind, assetId: string): void {
+	if (asset.asset_type === "seed") {
+		throw protocolReject(`Seeds cannot be delegated: ${assetId}`);
 	}
 }
 
-export function assertMarketplaceInstance(nft: HasKind, nftId: string): void {
-	if (nft.nft_type !== NFT_KIND_INSTANCE) {
-		throw protocolReject(`Only instances can be listed or bought: ${nftId}`);
+export function assertMarketplaceInstance(asset: HasKind, assetId: string): void {
+	if (asset.asset_type !== ASSET_KIND_INSTANCE) {
+		throw protocolReject(`Only instances can be listed or bought: ${assetId}`);
 	}
 }
 
 /**
  * Asserts a seed with distributed instances cannot change ownership.
  * Following AtomicAssets pattern: templates (seeds) with issued assets are locked.
- * Seeds with distributed === 0 are treated as normal NFTs.
+ * Seeds with distributed === 0 are treated as normal Assets.
  */
-export function assertSeedNotDistributed(nft: HasKindAndDistributed, nftId: string): void {
-	if (nft.nft_type === "seed" && nft.distributed > 0) {
+export function assertSeedNotDistributed(asset: HasKindAndDistributed, assetId: string): void {
+	if (asset.asset_type === "seed" && asset.distributed > 0) {
 		throw protocolReject(
-			`Seed ${nftId} has ${nft.distributed} distributed instance(s) — ownership transfer blocked`,
+			`Seed ${assetId} has ${asset.distributed} distributed instance(s) — ownership transfer blocked`,
 		);
 	}
 }
@@ -80,32 +80,32 @@ export function assertSeedNotDistributed(nft: HasKindAndDistributed, nftId: stri
  * Asserts a seed with reserved supply cannot change ownership.
  * Even if distributed === 0, some external module has already committed this seed's supply.
  */
-export function assertSeedNotReserved(nft: { readonly nft_type: NftKind; readonly reserved_supply?: number }, nftId: string): void {
-	if (nft.nft_type === "seed" && (nft.reserved_supply ?? 0) > 0) {
-		throw protocolReject(`Seed ${nftId} has reserved supply — cannot transfer`);
+export function assertSeedNotReserved(asset: { readonly asset_type: AssetKind; readonly reserved_supply?: number }, assetId: string): void {
+	if (asset.asset_type === "seed" && (asset.reserved_supply ?? 0) > 0) {
+		throw protocolReject(`Seed ${assetId} has reserved supply — cannot transfer`);
 	}
 }
 
 /**
- * Base validation: rejects lent NFTs.
- * Every handler that operates on an NFT should call this first.
- * Burned NFTs are hard-deleted so they won't reach this point (NFT not found).
+ * Base validation: rejects lent Assets.
+ * Every handler that operates on an Asset should call this first.
+ * Burned Assets are hard-deleted so they won't reach this point (Asset not found).
  */
-export function assertActionable(nft: HasStatus, nftId: string): void {
-	assertNotLent(nft, nftId);
+export function assertActionable(asset: HasStatus, assetId: string): void {
+	assertNotLent(asset, assetId);
 }
 
 /**
- * Asserts the NFT can be transferred.
+ * Asserts the Asset can be transferred.
  * Rejects: burned, lent, listed (unless listing has expired).
  * Returns true if the listing was expired (caller should clean up listing fields).
  */
-export function assertTransferable(nft: HasListingExpiry, nftId: string, blockTimestamp: string): { hadExpiredListing: boolean } {
-	assertActionable(nft, nftId);
+export function assertTransferable(asset: HasListingExpiry, assetId: string, blockTimestamp: string): { hadExpiredListing: boolean } {
+	assertActionable(asset, assetId);
 
-	if (nft.status === NFT_STATUS_LISTED) {
-		if (!isListingExpired(nft.listing_expires_at, blockTimestamp)) {
-			throw protocolReject(`NFT is listed for sale and must be unlisted first: ${nftId}`);
+	if (asset.status === ASSET_STATUS_LISTED) {
+		if (!isListingExpired(asset.listing_expires_at, blockTimestamp)) {
+			throw protocolReject(`Asset is listed for sale and must be unlisted first: ${assetId}`);
 		}
 		return { hadExpiredListing: true };
 	}
@@ -116,15 +116,15 @@ export function assertTransferable(nft: HasListingExpiry, nftId: string, blockTi
 
 /**
  * Full ownership-change guard: actionable + not a distributed seed.
- * Use for transfer, buy — any operation that changes the NFT owner.
+ * Use for transfer, buy — any operation that changes the Asset owner.
  */
 export function assertOwnershipChangeable(
-	nft: HasListingExpiry & HasKindAndDistributed,
-	nftId: string,
+	asset: HasListingExpiry & HasKindAndDistributed,
+	assetId: string,
 	blockTimestamp: string,
 ): { hadExpiredListing: boolean } {
-	const result = assertTransferable(nft, nftId, blockTimestamp);
-	assertSeedNotDistributed(nft, nftId);
-	assertSeedNotReserved(nft, nftId);
+	const result = assertTransferable(asset, assetId, blockTimestamp);
+	assertSeedNotDistributed(asset, assetId);
+	assertSeedNotReserved(asset, assetId);
 	return result;
 }

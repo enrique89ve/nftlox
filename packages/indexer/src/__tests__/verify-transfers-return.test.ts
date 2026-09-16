@@ -16,7 +16,7 @@ describe("verifyTransfers return shape", () => {
 			royaltyPct: 0,
 			royaltyRecipient: null,
 			feeAccount: "nftlox",
-			nftId: "inst_x",
+			assetId: "inst_x",
 			consumedIndices: new Set<number>(),
 		});
 		expect(result.split.sellerAmount).toBeCloseTo(0.99, 3);
@@ -41,7 +41,7 @@ describe("verifyTransfers return shape", () => {
 			royaltyPct: 0,
 			royaltyRecipient: null,
 			feeAccount: "nftlox",
-			nftId: "inst_x",
+			assetId: "inst_x",
 			consumedIndices: consumed,
 		});
 
@@ -65,7 +65,7 @@ describe("verifyTransfers return shape", () => {
 				royaltyPct: 0,
 				royaltyRecipient: null,
 				feeAccount: "nftlox",
-				nftId: "inst_x",
+				assetId: "inst_x",
 				consumedIndices: new Set<number>(),
 			}),
 		).toThrow(/Ambiguous protocol fee/);

@@ -5,7 +5,7 @@ import {
 	getCollectionsByCreator,
 	getCollectionStats,
 } from "@/db/queries/collections.ts";
-import { queryNfts, parseNftKind } from "@/db/queries/nfts.ts";
+import { queryAssets, parseAssetKind } from "@/db/queries/assets.ts";
 import { getSchemaChain } from "@/db/queries/schema-versions.ts";
 
 export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: ["Collections"] })
@@ -35,7 +35,7 @@ export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: 
 		params: t.Object({ id: t.String({ minLength: 1, maxLength: 128 }) }),
 		detail: { summary: "Get collection by ID" },
 	})
-	.get("/:id/nfts", async ({ params, query }) => {
+	.get("/:id/assets", async ({ params, query }) => {
 		const row = await getCollectionById(params.id);
 		if (!row) {
 			return new Response(JSON.stringify({ error: "Collection not found" }), {
@@ -43,18 +43,18 @@ export const collectionsRoutes = new Elysia({ prefix: "/api/collections", tags: 
 				headers: { "Content-Type": "application/json" },
 			});
 		}
-		return queryNfts(
-			{ by: "collection", collectionId: params.id, type: parseNftKind(query.type) },
+		return queryAssets(
+			{ by: "collection", collectionId: params.id, type: parseAssetKind(query.type) },
 			{ limit: query.limit, offset: query.offset },
 		);
 	}, {
 		params: t.Object({ id: t.String({ minLength: 1, maxLength: 128 }) }),
 		query: t.Object({
-			type: t.Optional(t.String({ description: "Filter by nft_type: seed, instance" })),
+			type: t.Optional(t.String({ description: "Filter by asset_type: seed, instance" })),
 			limit: t.Number({ default: 50, minimum: 1, maximum: 200 }),
 			offset: t.Number({ default: 0, minimum: 0 }),
 		}),
-		detail: { summary: "List NFTs in collection" },
+		detail: { summary: "List Assets in collection" },
 	})
 	.get("/:id/schema-history", async ({ params }) => {
 		const row = await getCollectionById(params.id);

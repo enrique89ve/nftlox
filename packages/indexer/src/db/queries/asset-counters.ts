@@ -1,10 +1,10 @@
-// Counter tables (owner_nft_counts, collection_stats) are now maintained by
-// the DB trigger `maintain_nft_counters` (see db/schema.sql). INSERT /
-// DELETE / UPDATE-of-owner on `nfts` automatically adjusts the counters
+// Counter tables (owner_asset_counts, collection_stats) are now maintained by
+// the DB trigger `maintain_asset_counters` (see db/schema.sql). INSERT /
+// DELETE / UPDATE-of-owner on `assets` automatically adjusts the counters
 // inside the same transaction, so no handler needs to call them.
 //
 // `adjustCollectionListed` is the only helper that survives: listed/unlisted
-// state on `collection_stats` is not a function of nfts-row lifecycle, it's
+// state on `collection_stats` is not a function of assets-row lifecycle, it's
 // driven by marketplace handlers and stays app-level.
 
 import { type Queryable } from "@/db/client.ts";

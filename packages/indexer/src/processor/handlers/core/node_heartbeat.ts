@@ -110,5 +110,5 @@ export async function handleNodeHeartbeat(
 		WHERE account = ${op.signer}
 	`;
 
-	return []; // This action evaluates node state, it emits no immutable NFT ids
+	return []; // This action evaluates node state, it emits no immutable Asset ids
 }

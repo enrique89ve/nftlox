@@ -8,9 +8,9 @@ describe("STATE_SINGLETONS", () => {
 	});
 
 	it("does not include any projected tables", () => {
-		expect(STATE_SINGLETONS.has("nfts")).toBe(false);
+		expect(STATE_SINGLETONS.has("assets")).toBe(false);
 		expect(STATE_SINGLETONS.has("collections")).toBe(false);
-		expect(STATE_SINGLETONS.has("burned_nfts")).toBe(false);
+		expect(STATE_SINGLETONS.has("burned_assets")).toBe(false);
 	});
 });
 
@@ -19,21 +19,21 @@ describe("buildProjectionTruncateStmt", () => {
 		const stmt = buildProjectionTruncateStmt([
 			"state_meta",
 			"sync_state",
-			"nfts",
+			"assets",
 			"collections",
 		]);
-		expect(stmt).toBe(`TRUNCATE TABLE "nfts", "collections" CASCADE`);
+		expect(stmt).toBe(`TRUNCATE TABLE "assets", "collections" CASCADE`);
 	});
 
 	it("preserves input order of non-singleton tables", () => {
 		const stmt = buildProjectionTruncateStmt([
-			"nfts",
+			"assets",
 			"state_meta",
 			"collections",
 			"sync_state",
-			"burned_nfts",
+			"burned_assets",
 		]);
-		expect(stmt).toBe(`TRUNCATE TABLE "nfts", "collections", "burned_nfts" CASCADE`);
+		expect(stmt).toBe(`TRUNCATE TABLE "assets", "collections", "burned_assets" CASCADE`);
 	});
 
 	it("returns null when only singletons are present (empty install)", () => {
@@ -57,12 +57,12 @@ describe("buildProjectionTruncateStmt", () => {
 	it("handles a realistic full schema (snapshot over current tables)", () => {
 		const stmt = buildProjectionTruncateStmt([
 			"state_meta", "sync_state",
-			"collections", "nfts",
-			"nft_loans", "nft_allowances", "collection_allowances", "schema_versions",
+			"collections", "assets",
+			"asset_loans", "asset_allowances", "collection_allowances", "schema_versions",
 			"data_operators",
 			"orphaned_buys", "invalid_operations", "confirmed_operations",
-			"owner_nft_counts", "collection_stats",
-			"sales", "burned_nfts", "archived_collections",
+			"owner_asset_counts", "collection_stats",
+			"sales", "burned_assets", "archived_collections",
 			"multisig_buy_locks",
 			"multisig_collection_locks",
 			"l2_node_heartbeats", "l2_nodes",
@@ -71,9 +71,9 @@ describe("buildProjectionTruncateStmt", () => {
 		expect(stmt).not.toBeNull();
 		expect(stmt).not.toContain(`"state_meta"`);
 		expect(stmt).not.toContain(`"sync_state"`);
-		expect(stmt).toContain(`"nfts"`);
+		expect(stmt).toContain(`"assets"`);
 		expect(stmt).toContain(`"collections"`);
-		expect(stmt).toContain(`"burned_nfts"`);
+		expect(stmt).toContain(`"burned_assets"`);
 		expect(stmt).toContain(`"schema_versions"`);
 		expect(stmt).toContain(`"multisig_buy_locks"`);
 		expect(stmt).toContain(`"multisig_collection_locks"`);

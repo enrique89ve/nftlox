@@ -111,7 +111,7 @@ async function wipeAllProjectedData(newSchemaHash: string | null): Promise<void>
 		await txn`
 			UPDATE state_meta
 			SET state_root = decode(repeat('00', 32), 'hex'),
-			    nft_count = 0,
+			    asset_count = 0,
 			    last_block_num = 0,
 			    divergent_at_block = NULL,
 			    updated_at = NOW()
@@ -141,21 +141,21 @@ async function checkGenesisReset(): Promise<void> {
 	log.info("Database reset completed — syncing from new genesis block");
 }
 
-// Rebuilds state_meta from a full nft scan when the singleton is still zero
+// Rebuilds state_meta from a full asset scan when the singleton is still zero
 // but rows already exist — the case for indexers upgraded from a version that
 // didn't track the incremental root. Safe to run on every boot: when the
 // root is already populated, this no-ops in O(1).
 async function ensureStateRootBootstrapped(): Promise<void> {
 	const meta = await getStateMeta();
 	if (!rootsEqual(meta.state_root, emptyStateRoot())) return;
-	const [countRow] = await sql`SELECT COUNT(*)::bigint AS c FROM nfts`;
-	const nftCount = Number(countRow?.c ?? 0);
-	if (nftCount === 0) return;
+	const [countRow] = await sql`SELECT COUNT(*)::bigint AS c FROM assets`;
+	const assetCount = Number(countRow?.c ?? 0);
+	if (assetCount === 0) return;
 
-	log.info("Bootstrapping state_meta from nft full-scan", { nftCount });
+	log.info("Bootstrapping state_meta from asset full-scan", { assetCount });
 	const rebuilt = await withTransaction((txn) => bootstrapStateRootFromFullScan(txn));
 	log.info("state_meta bootstrapped", {
-		nft_count: rebuilt.nft_count,
+		asset_count: rebuilt.asset_count,
 		last_block_num: rebuilt.last_block_num,
 	});
 }

@@ -1,11 +1,11 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import {
-	getNftForProcessingForUpdate,
-	updateNftListing,
-	NFT_STATUS_LISTED,
-} from "@/db/queries/nfts.ts";
-import type { ListingCtx } from "@/db/queries/nfts.ts";
+	getAssetForProcessingForUpdate,
+	updateAssetListing,
+	ASSET_STATUS_LISTED,
+} from "@/db/queries/assets.ts";
+import type { ListingCtx } from "@/db/queries/assets.ts";
 import { requireString } from "@/utils/validation.ts";
 import { assertNotPendingSale } from "@/utils/status-checks.ts";
 import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
@@ -19,22 +19,22 @@ import { protocolReject } from "@/processor/protocol-rejection.ts";
  * already enforced exclusivity.
  */
 export async function handleUnlist(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
-	const nftId = requireString(op.data.nftId, "nftId");
+	const assetId = requireString(op.data.assetId, "assetId");
 
-	const nft = await getNftForProcessingForUpdate(nftId, txn);
-	if (!nft) throw protocolReject(`NFT not found: ${nftId}`);
+	const asset = await getAssetForProcessingForUpdate(assetId, txn);
+	if (!asset) throw protocolReject(`Asset not found: ${assetId}`);
 
-	await validateSeedProvenance(op, nft, txn);
+	await validateSeedProvenance(op, asset, txn);
 
-	assertNotPendingSale(nft, nftId);
-	if (nft.status !== NFT_STATUS_LISTED) throw protocolReject(`NFT not listed: ${nftId}`);
-	if (nft.owner !== op.signer) throw protocolReject(`Signer ${op.signer} is not owner of ${nftId}`);
+	assertNotPendingSale(asset, assetId);
+	if (asset.status !== ASSET_STATUS_LISTED) throw protocolReject(`Asset not listed: ${assetId}`);
+	if (asset.owner !== op.signer) throw protocolReject(`Signer ${op.signer} is not owner of ${assetId}`);
 
 	const ctx: ListingCtx = {
-		collectionId: nft.collection_id,
+		collectionId: asset.collection_id,
 		wasListed: true,
 	};
-	await updateNftListing(nftId, null, null, null, null, null, null, ctx, txn);
+	await updateAssetListing(assetId, null, null, null, null, null, null, ctx, txn);
 
-	return [nftId];
+	return [assetId];
 }

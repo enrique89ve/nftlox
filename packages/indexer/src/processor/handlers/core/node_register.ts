@@ -51,5 +51,5 @@ export async function handleNodeRegister(op: ParsedOperation, txn: Queryable): P
 			updated_at = NOW()
 	`;
 
-	return []; // This action evaluates node state, it emits no immutable NFT ids
+	return []; // This action evaluates node state, it emits no immutable Asset ids
 }

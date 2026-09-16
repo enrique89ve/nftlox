@@ -22,7 +22,7 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 	test("on partial match failure, shared consumedIndices stays clean", () => {
 		// Pool contains only the seller payment — royalty + fee transfers are missing.
 		const transfers: TransferDetail[] = [
-			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:nft_1" }),
+			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:asset_1" }),
 		];
 		const consumed = new Set<number>();
 
@@ -35,7 +35,7 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 				royaltyPct: 10,
 				royaltyRecipient: "artist",
 				feeAccount: "feeacc",
-				nftId: "nft_1",
+				assetId: "asset_1",
 				consumedIndices: consumed,
 			}),
 		).toThrow();
@@ -48,9 +48,9 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 
 	test("on full match success, consumedIndices receives all staged entries", () => {
 		const transfers: TransferDetail[] = [
-			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:nft_1" }),
-			makeTransfer({ to: "artist", amount: 1.0, memo: "NFTLox ROY:nft_1" }),
-			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:nft_1" }),
+			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:asset_1" }),
+			makeTransfer({ to: "artist", amount: 1.0, memo: "NFTLox ROY:asset_1" }),
+			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:asset_1" }),
 		];
 		const consumed = new Set<number>();
 
@@ -62,7 +62,7 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 			royaltyPct: 10,
 			royaltyRecipient: "artist",
 			feeAccount: "feeacc",
-			nftId: "nft_1",
+			assetId: "asset_1",
 			consumedIndices: consumed,
 		});
 
@@ -74,12 +74,12 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 		// Two buys with identical amounts but different memos. Each buy has its own
 		// seller/royalty/fee triple; the pool must give each op its own indices.
 		const transfers: TransferDetail[] = [
-			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:nft_1" }),
-			makeTransfer({ to: "artist", amount: 1.0, memo: "NFTLox ROY:nft_1" }),
-			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:nft_1" }),
-			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:nft_2" }),
-			makeTransfer({ to: "artist", amount: 1.0, memo: "NFTLox ROY:nft_2" }),
-			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:nft_2" }),
+			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:asset_1" }),
+			makeTransfer({ to: "artist", amount: 1.0, memo: "NFTLox ROY:asset_1" }),
+			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:asset_1" }),
+			makeTransfer({ to: "seller", amount: 8.9, memo: "NFTLox BUY:asset_2" }),
+			makeTransfer({ to: "artist", amount: 1.0, memo: "NFTLox ROY:asset_2" }),
+			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:asset_2" }),
 		];
 		const consumed = new Set<number>();
 
@@ -94,8 +94,8 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 			consumedIndices: consumed,
 		};
 
-		verifyTransfers({ ...base, nftId: "nft_1" });
-		verifyTransfers({ ...base, nftId: "nft_2" });
+		verifyTransfers({ ...base, assetId: "asset_1" });
+		verifyTransfers({ ...base, assetId: "asset_2" });
 
 		expect(consumed.size).toBe(6);
 	});
@@ -104,7 +104,7 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 		// First call fails (missing fee). Pool must stay empty so the caller can
 		// retry with a corrected pool — validates no dirty state leaks.
 		const incomplete: TransferDetail[] = [
-			makeTransfer({ to: "seller", amount: 9.9, memo: "NFTLox BUY:nft_1" }),
+			makeTransfer({ to: "seller", amount: 9.9, memo: "NFTLox BUY:asset_1" }),
 		];
 		const consumed = new Set<number>();
 
@@ -117,15 +117,15 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 				royaltyPct: 0,
 				royaltyRecipient: null,
 				feeAccount: "feeacc",
-				nftId: "nft_1",
+				assetId: "asset_1",
 				consumedIndices: consumed,
 			}),
 		).toThrow();
 		expect(consumed.size).toBe(0);
 
 		const complete: TransferDetail[] = [
-			makeTransfer({ to: "seller", amount: 9.9, memo: "NFTLox BUY:nft_1" }),
-			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:nft_1" }),
+			makeTransfer({ to: "seller", amount: 9.9, memo: "NFTLox BUY:asset_1" }),
+			makeTransfer({ to: "feeacc", amount: 0.1, memo: "NFTLox FEE:asset_1" }),
 		];
 		verifyTransfers({
 			transfers: complete,
@@ -135,7 +135,7 @@ describe("verifyTransfers — TransferPool atomicity", () => {
 			royaltyPct: 0,
 			royaltyRecipient: null,
 			feeAccount: "feeacc",
-			nftId: "nft_1",
+			assetId: "asset_1",
 			consumedIndices: consumed,
 		});
 		expect(consumed.size).toBe(2);

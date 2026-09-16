@@ -28,9 +28,9 @@ import {
 let COL_ID = "";
 
 async function cleanDb(): Promise<void> {
-	await sql`DELETE FROM nfts`;
+	await sql`DELETE FROM assets`;
 	await sql`DELETE FROM schema_versions`;
-	await sql`DELETE FROM owner_nft_counts`;
+	await sql`DELETE FROM owner_asset_counts`;
 	await sql`DELETE FROM collection_stats`;
 	await sql`DELETE FROM collections`;
 }
@@ -101,9 +101,9 @@ async function mintSeed(): Promise<string> {
 		artId: "seed1",
 		edition: 1,
 		owner: "alice",
-		nftType: "seed",
+		assetType: "seed",
 		maxSupply: 10,
-		metadata: { name: "Seed 1", imageUrl: "https://example.com/nft.png", imageHash: "img_seed1" },
+		metadata: { name: "Seed 1", imageUrl: "https://example.com/asset.png", imageHash: "img_seed1" },
 		immutableData: { rarity: 5 },
 	});
 	await withTransaction((txn) => handleMint(op, txn));
@@ -112,7 +112,7 @@ async function mintSeed(): Promise<string> {
 
 async function burnSeed(seedId: string): Promise<void> {
 	const op = makeOp(ACTION_TRANSFER, {
-		nftId: seedId,
+		assetId: seedId,
 		to: "null",
 	});
 	await withTransaction((txn) => handleTransfer(op, txn));

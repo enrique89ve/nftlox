@@ -8,8 +8,8 @@ import {
 	seedCollection,
 	fixtureHiveTxId,
 	fixtureListingId,
-	fixtureNftId,
-} from "./helpers/nft-fixtures.ts";
+	fixtureAssetId,
+} from "./helpers/asset-fixtures.ts";
 import { useSingletonLock } from "./helpers/singleton-lock.ts";
 import type { BuyLockHandle, MultisigBuyContext } from "@/api/services/multisig/types.ts";
 import {
@@ -33,7 +33,7 @@ const PROTOCOL_ID = config.protocolId;
 const SELLER = "seller.one";
 const BUYER = "buyer.one";
 const COLLECTION_ID = "col_multisig_buy_orchestration";
-const NFT_ID = fixtureNftId("orchestration");
+const ASSET_ID = fixtureAssetId("orchestration");
 const LISTING_ID = fixtureListingId("orchestration");
 const LIST_TX_ID = fixtureHiveTxId("orchestration");
 const DIVERGENT_BLOCK = 123_456;
@@ -99,8 +99,8 @@ function expirationFromNow(offsetMs: number): string {
 }
 
 function buildBuyBody(): Readonly<Record<string, unknown>> {
-	const sellerMemo = `${MEMO_PREFIX_BUY}${NFT_ID}`;
-	const feeMemo = `${MEMO_PREFIX_FEE}${NFT_ID}`;
+	const sellerMemo = `${MEMO_PREFIX_BUY}${ASSET_ID}`;
+	const feeMemo = `${MEMO_PREFIX_FEE}${ASSET_ID}`;
 	return {
 		transaction: {
 			ref_block_num: 1,
@@ -138,7 +138,7 @@ function buildBuyBody(): Readonly<Record<string, unknown>> {
 							version: MIN_PROTOCOL_VERSION,
 							action: ACTION_BUY,
 							data: {
-								nftId: NFT_ID,
+								assetId: ASSET_ID,
 								listingId: LISTING_ID,
 								listTxId: LIST_TX_ID,
 							},
@@ -194,16 +194,16 @@ function isPendingSaleRows(value: unknown): boolean {
 
 function buildCtx(): MultisigBuyContext {
 	const buyLock: BuyLockHandle = {
-		acquire: async (_nftId, _listingId, _listTxId, holder) => {
+		acquire: async (_assetId, _listingId, _listTxId, holder) => {
 			await sql`
-				UPDATE nfts
+				UPDATE assets
 				SET status = 'pending_sale',
 				    sale_buyer = ${BUYER},
 				    sale_settlement_node = ${NODE_ACCOUNT},
 				    sale_commitment_buy_tx_hash = ${holder},
 				    sale_commitment_op_tx_id = 'commitment-op',
 				    sale_expires_block = 200
-				WHERE id = ${NFT_ID}
+				WHERE id = ${ASSET_ID}
 			`;
 			return { acquired: true };
 		},
@@ -230,7 +230,7 @@ describe("buy multisig post-victory orchestration gate", () => {
 		await setSyncState();
 		await seedCollection(COLLECTION_ID, SELLER);
 		await insertListedInstance({
-			nftId: NFT_ID,
+			assetId: ASSET_ID,
 			collectionId: COLLECTION_ID,
 			seller: SELLER,
 			listingId: LISTING_ID,

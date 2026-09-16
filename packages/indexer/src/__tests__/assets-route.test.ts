@@ -1,89 +1,89 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-type NftRow = Readonly<{ id: string; owner: string; collection_id: string }>;
+type AssetRow = Readonly<{ id: string; owner: string; collection_id: string }>;
 
 // Shared state between the test body and the mock so each test can dictate the
 // resolved rows without rewiring mock.module in every case.
-let mockNftsById: Map<string, NftRow> = new Map();
+let mockAssetsById: Map<string, AssetRow> = new Map();
 
-mock.module("@/db/queries/nfts.ts", () => ({
-	getNftById: (id: string) => Promise.resolve(mockNftsById.get(id) ?? null),
-	getNftsByIds: (ids: readonly string[]) => {
-		const rows: NftRow[] = [];
+mock.module("@/db/queries/assets.ts", () => ({
+	getAssetById: (id: string) => Promise.resolve(mockAssetsById.get(id) ?? null),
+	getAssetsByIds: (ids: readonly string[]) => {
+		const rows: AssetRow[] = [];
 		for (const id of ids) {
-			const row = mockNftsById.get(id);
+			const row = mockAssetsById.get(id);
 			if (row) rows.push(row);
 		}
 		return Promise.resolve(rows);
 	},
-	getNftOwnerClaim: () => Promise.resolve(null),
-	getNftOwnershipProof: () => Promise.resolve(null),
+	getAssetOwnerClaim: () => Promise.resolve(null),
+	getAssetOwnershipProof: () => Promise.resolve(null),
 	getSeedSummary: () => Promise.resolve(null),
-	queryNfts: () => Promise.resolve([]),
+	queryAssets: () => Promise.resolve([]),
 	queryRawInstances: () => Promise.resolve([]),
 }));
 
 mock.module("@/db/queries/loans.ts", () => ({
-	getNftLoan: () => Promise.resolve(null),
+	getAssetLoan: () => Promise.resolve(null),
 }));
 
 const { Elysia } = await import("elysia");
-const { nftsRoutes } = await import("@/api/routes/nfts.ts");
+const { assetsRoutes } = await import("@/api/routes/assets.ts");
 
 function buildApp() {
-	return new Elysia().use(nftsRoutes);
+	return new Elysia().use(assetsRoutes);
 }
 
-function row(id: string): NftRow {
+function row(id: string): AssetRow {
 	return { id, owner: "alice", collection_id: "col_1" };
 }
 
-describe("GET /api/nfts?ids=...", () => {
+describe("GET /api/assets?ids=...", () => {
 	beforeEach(() => {
-		mockNftsById = new Map();
+		mockAssetsById = new Map();
 	});
 	afterEach(() => {
-		mockNftsById = new Map();
+		mockAssetsById = new Map();
 	});
 
 	test("returns items and empty missing array for happy-path batch", async () => {
-		mockNftsById.set("nft_1", row("nft_1"));
-		mockNftsById.set("nft_2", row("nft_2"));
+		mockAssetsById.set("asset_1", row("asset_1"));
+		mockAssetsById.set("asset_2", row("asset_2"));
 		const app = buildApp();
 
 		const response = await app.handle(
-			new Request("http://localhost/api/nfts?ids=nft_1,nft_2"),
+			new Request("http://localhost/api/assets?ids=asset_1,asset_2"),
 		);
-		const json = (await response.json()) as { items: NftRow[]; missing: string[] };
+		const json = (await response.json()) as { items: AssetRow[]; missing: string[] };
 
 		expect(response.status).toBe(200);
-		expect(json.items.map(i => i.id).sort()).toEqual(["nft_1", "nft_2"]);
+		expect(json.items.map(i => i.id).sort()).toEqual(["asset_1", "asset_2"]);
 		expect(json.missing).toEqual([]);
 	});
 
 	test("reports not-yet-indexed ids in missing[] rather than 404", async () => {
-		mockNftsById.set("nft_1", row("nft_1"));
+		mockAssetsById.set("asset_1", row("asset_1"));
 		const app = buildApp();
 
 		const response = await app.handle(
-			new Request("http://localhost/api/nfts?ids=nft_1,nft_ghost"),
+			new Request("http://localhost/api/assets?ids=asset_1,asset_ghost"),
 		);
-		const json = (await response.json()) as { items: NftRow[]; missing: string[] };
+		const json = (await response.json()) as { items: AssetRow[]; missing: string[] };
 
 		expect(response.status).toBe(200);
 		expect(json.items).toHaveLength(1);
-		expect(json.items[0]!.id).toBe("nft_1");
-		expect(json.missing).toEqual(["nft_ghost"]);
+		expect(json.items[0]!.id).toBe("asset_1");
+		expect(json.missing).toEqual(["asset_ghost"]);
 	});
 
 	test("dedupes duplicate ids before querying", async () => {
-		mockNftsById.set("nft_1", row("nft_1"));
+		mockAssetsById.set("asset_1", row("asset_1"));
 		const app = buildApp();
 
 		const response = await app.handle(
-			new Request("http://localhost/api/nfts?ids=nft_1,nft_1,nft_1"),
+			new Request("http://localhost/api/assets?ids=asset_1,asset_1,asset_1"),
 		);
-		const json = (await response.json()) as { items: NftRow[]; missing: string[] };
+		const json = (await response.json()) as { items: AssetRow[]; missing: string[] };
 
 		expect(response.status).toBe(200);
 		expect(json.items).toHaveLength(1);
@@ -91,11 +91,11 @@ describe("GET /api/nfts?ids=...", () => {
 	});
 
 	test("returns 400 when the batch exceeds the 200-id cap", async () => {
-		const ids = Array.from({ length: 201 }, (_, i) => `nft_${i}`).join(",");
+		const ids = Array.from({ length: 201 }, (_, i) => `asset_${i}`).join(",");
 		const app = buildApp();
 
 		const response = await app.handle(
-			new Request(`http://localhost/api/nfts?ids=${ids}`),
+			new Request(`http://localhost/api/assets?ids=${ids}`),
 		);
 		const json = (await response.json()) as { error: string };
 
@@ -108,7 +108,7 @@ describe("GET /api/nfts?ids=...", () => {
 		const overlong = "a".repeat(129);
 
 		const response = await app.handle(
-			new Request(`http://localhost/api/nfts?ids=${overlong}`),
+			new Request(`http://localhost/api/assets?ids=${overlong}`),
 		);
 		const json = (await response.json()) as { error: string };
 
@@ -120,7 +120,7 @@ describe("GET /api/nfts?ids=...", () => {
 		const app = buildApp();
 
 		const response = await app.handle(
-			new Request("http://localhost/api/nfts?ids=,,,"),
+			new Request("http://localhost/api/assets?ids=,,,"),
 		);
 		const json = (await response.json()) as { error: string };
 
@@ -129,15 +129,15 @@ describe("GET /api/nfts?ids=...", () => {
 	});
 
 	test("the batch handler does not swallow the singleton /:id path", async () => {
-		mockNftsById.set("nft_single", row("nft_single"));
+		mockAssetsById.set("asset_single", row("asset_single"));
 		const app = buildApp();
 
 		const response = await app.handle(
-			new Request("http://localhost/api/nfts/nft_single"),
+			new Request("http://localhost/api/assets/asset_single"),
 		);
-		const json = (await response.json()) as NftRow;
+		const json = (await response.json()) as AssetRow;
 
 		expect(response.status).toBe(200);
-		expect(json.id).toBe("nft_single");
+		expect(json.id).toBe("asset_single");
 	});
 });

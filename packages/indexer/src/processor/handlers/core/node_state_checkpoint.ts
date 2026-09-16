@@ -86,5 +86,5 @@ export async function handleNodeStateCheckpoint(
 		)
 	`;
 
-	return []; // This action evaluates node state, it emits no immutable NFT ids
+	return []; // This action evaluates node state, it emits no immutable Asset ids
 }

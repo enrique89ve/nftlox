@@ -27,9 +27,9 @@ import {
 let COL_ID = "";
 
 async function cleanDb(): Promise<void> {
-	await sql`DELETE FROM nfts`;
+	await sql`DELETE FROM assets`;
 	await sql`DELETE FROM schema_versions`;
-	await sql`DELETE FROM owner_nft_counts`;
+	await sql`DELETE FROM owner_asset_counts`;
 	await sql`DELETE FROM collection_stats`;
 	await sql`DELETE FROM collections`;
 }
@@ -137,7 +137,7 @@ describe("JSONB round-trip for schema and immutableData", () => {
 		});
 	});
 
-	test("nfts.immutable_data stored via handleMint reads back as object", async () => {
+	test("assets.immutable_data stored via handleMint reads back as object", async () => {
 		await createCollectionWithSchema();
 		const seedId = await generateDeterministicSeedId(COL_ID, "seed1");
 		const op = makeOp(ACTION_MINT, {
@@ -146,13 +146,13 @@ describe("JSONB round-trip for schema and immutableData", () => {
 			artId: "seed1",
 			edition: 1,
 			owner: "alice",
-			nftType: "seed",
+			assetType: "seed",
 			maxSupply: 10,
-			metadata: { name: "Seed", imageUrl: "https://example.com/nft.png", imageHash: "img_seed" },
+			metadata: { name: "Seed", imageUrl: "https://example.com/asset.png", imageHash: "img_seed" },
 			immutableData: { rarity: 7 },
 		});
 		await withTransaction((txn) => handleMint(op, txn));
-		const [row] = await sql`SELECT immutable_data FROM nfts WHERE id = ${seedId}`;
+		const [row] = await sql`SELECT immutable_data FROM assets WHERE id = ${seedId}`;
 		expect(typeof row?.immutable_data).toBe("object");
 		expect(row?.immutable_data).toEqual({ rarity: 7 });
 	});

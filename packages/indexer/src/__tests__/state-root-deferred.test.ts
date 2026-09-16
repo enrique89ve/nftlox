@@ -2,15 +2,15 @@ import { describe, it, expect, beforeEach } from "bun:test";
 import { sql, withTransaction, getStateRootBuffer } from "@/db/client.ts";
 import { useSingletonLock } from "./helpers/singleton-lock.ts";
 import { flushStateRootBuffer, getStateMeta, queueStateRootDelta } from "@/db/queries/state-root.ts";
-import { computeStateRootFullScan, type NftStateRow } from "@/utils/state-root-hash.ts";
-import { insertNft } from "@/db/queries/nft-mutations.ts";
+import { computeStateRootFullScan, type AssetStateRow } from "@/utils/state-root-hash.ts";
+import { insertAsset } from "@/db/queries/asset-mutations.ts";
 
 // Requires the postgres test harness this repo ships with (see scripts/test.sh).
 // This suite uses the shared container and truncates affected rows on setup.
 
-async function truncateNftsTx(): Promise<void> {
-	await sql`TRUNCATE TABLE nfts, collections, owner_nft_counts, collection_stats CASCADE`;
-	await sql`UPDATE state_meta SET state_root = decode(repeat('00', 32), 'hex'), nft_count = 0, last_block_num = 0 WHERE id = 1`;
+async function truncateAssetsTx(): Promise<void> {
+	await sql`TRUNCATE TABLE assets, collections, owner_asset_counts, collection_stats CASCADE`;
+	await sql`UPDATE state_meta SET state_root = decode(repeat('00', 32), 'hex'), asset_count = 0, last_block_num = 0 WHERE id = 1`;
 }
 
 async function seedCollection(): Promise<string> {
@@ -25,19 +25,19 @@ async function seedCollection(): Promise<string> {
 describe("state-root deferred flush", () => {
 	useSingletonLock();
 
-	beforeEach(truncateNftsTx);
+	beforeEach(truncateAssetsTx);
 
 	it("bulk inserts in one tx → state_meta updated exactly once", async () => {
 		const collectionId = await seedCollection();
 		const N = 100;
-		const rows: NftStateRow[] = [];
+		const rows: AssetStateRow[] = [];
 
 		await withTransaction(async (txn) => {
 			for (let i = 0; i < N; i++) {
-				const id = `nft-${i}`;
-				await insertNft({
-					id, collectionId, nftType: "seed", edition: 1, owner: "alice",
-					nftDna: null,
+				const id = `asset-${i}`;
+				await insertAsset({
+					id, collectionId, assetType: "seed", edition: 1, owner: "alice",
+					assetDna: null,
 					name: `N${i}`, imageUrl: null,
 					maxSupply: 1, seedId: null, instanceNumber: null, artId: `art-${i}`,
 					immutableData: null, dataOperationId: null, dataHash: null,
@@ -54,7 +54,7 @@ describe("state-root deferred flush", () => {
 		});
 
 		const meta = await getStateMeta();
-		expect(meta.nft_count).toBe(N);
+		expect(meta.asset_count).toBe(N);
 		expect(meta.last_block_num).toBe(100 + N - 1);
 
 		const reference = await computeStateRootFullScan(rows);
@@ -67,9 +67,9 @@ describe("state-root deferred flush", () => {
 		const before = await getStateMeta();
 
 		await withTransaction(async (txn) => {
-			await insertNft({
-				id: "ephemeral", collectionId, nftType: "seed", edition: 1, owner: "alice",
-				nftDna: null,
+			await insertAsset({
+				id: "ephemeral", collectionId, assetType: "seed", edition: 1, owner: "alice",
+				assetDna: null,
 				name: "ephemeral", imageUrl: null,
 				maxSupply: 1, seedId: null, instanceNumber: null, artId: "eph",
 				immutableData: null, dataOperationId: null, dataHash: null,
@@ -78,7 +78,7 @@ describe("state-root deferred flush", () => {
 				createdOperationId: "op-e", createdBlockNum: 200,
 				createdTxId: "tx-e", createdAt: new Date().toISOString(),
 			}, txn);
-			await txn`DELETE FROM nfts WHERE id = 'ephemeral'`;
+			await txn`DELETE FROM assets WHERE id = 'ephemeral'`;
 			queueStateRootDelta(getStateRootBuffer(txn), {
 				type: "delete",
 				oldRow: {
@@ -90,14 +90,14 @@ describe("state-root deferred flush", () => {
 		});
 
 		const after = await getStateMeta();
-		expect(after.nft_count).toBe(before.nft_count);
+		expect(after.asset_count).toBe(before.asset_count);
 		expect(Buffer.from(after.state_root).toString("hex"))
 			.toBe(Buffer.from(before.state_root).toString("hex"));
 	});
 
 	it("manual flush inside a transaction is not applied again at commit", async () => {
 		const collectionId = await seedCollection();
-		const row: NftStateRow = {
+		const row: AssetStateRow = {
 			id: "manual-flush",
 			owner: "alice",
 			previous_owner: null,
@@ -107,9 +107,9 @@ describe("state-root deferred flush", () => {
 		};
 
 		await withTransaction(async (txn) => {
-			await insertNft({
-				id: row.id, collectionId, nftType: "seed", edition: 1, owner: row.owner,
-				nftDna: null,
+			await insertAsset({
+				id: row.id, collectionId, assetType: "seed", edition: 1, owner: row.owner,
+				assetDna: null,
 				name: "manual", imageUrl: null,
 				maxSupply: 1, seedId: null, instanceNumber: null, artId: "manual-art",
 				immutableData: null, dataOperationId: null, dataHash: null,
@@ -125,7 +125,7 @@ describe("state-root deferred flush", () => {
 		});
 
 		const meta = await getStateMeta();
-		expect(meta.nft_count).toBe(1);
+		expect(meta.asset_count).toBe(1);
 		expect(meta.last_block_num).toBe(row.owner_block_num);
 
 		const reference = await computeStateRootFullScan([row]);

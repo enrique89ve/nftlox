@@ -3,20 +3,20 @@
 -- ============ ENUMS ============
 
 DO $$ BEGIN
-	CREATE TYPE nft_kind AS ENUM ('seed', 'instance');
+	CREATE TYPE asset_kind AS ENUM ('seed', 'instance');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-	CREATE TYPE nft_status AS ENUM ('active', 'listed', 'pending_sale', 'lent');
+	CREATE TYPE asset_status AS ENUM ('active', 'listed', 'pending_sale', 'lent');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- nft_owner_action enumerates every protocol action that can change ownership.
--- Keep in lock-step with `chk_nfts_owner_action` and the router's ACTION_*
+-- asset_owner_action enumerates every protocol action that can change ownership.
+-- Keep in lock-step with `chk_assets_owner_action` and the router's ACTION_*
 -- constants. Adding a new action is ALTER TYPE ... ADD VALUE (online in PG).
 DO $$ BEGIN
-	CREATE TYPE nft_owner_action AS ENUM ('mint', 'bulk_distribute', 'transfer', 'nft_transfer_from', 'buy');
+	CREATE TYPE asset_owner_action AS ENUM ('mint', 'bulk_distribute', 'transfer', 'asset_transfer_from', 'buy');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS sync_state (
 );
 INSERT INTO sync_state (last_block) VALUES (0) ON CONFLICT (id) DO NOTHING;
 
--- State root (singleton row) — incremental XOR over per-NFT SPV row hashes.
+-- State root (singleton row) — incremental XOR over per-Asset SPV row hashes.
 -- See src/utils/state-root-hash.ts for the algorithm and invariants.
 -- state_root is stored as raw 32-byte BYTEA (not hex) so XOR arithmetic runs
 -- in application code against Uint8Array without parse overhead. Endpoint
@@ -61,7 +61,7 @@ INSERT INTO sync_state (last_block) VALUES (0) ON CONFLICT (id) DO NOTHING;
 CREATE TABLE IF NOT EXISTS state_meta (
 	id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
 	state_root BYTEA NOT NULL CHECK (octet_length(state_root) = 32),
-	nft_count BIGINT NOT NULL DEFAULT 0 CHECK (nft_count >= 0),
+	asset_count BIGINT NOT NULL DEFAULT 0 CHECK (asset_count >= 0),
 	last_block_num BIGINT NOT NULL DEFAULT 0,
 	-- Local multisig integrity interlock. NULL = signing is not blocked by local
 	-- integrity policy. Non-null = block associated with an independently verified
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS collections (
 	-- Canonical DNA of this collection. Pure function of `id` (see
 	-- protocol/dna.ts::generateOriginDna). Stored here as the single source of
 	-- truth so seeds and instances can JOIN for it — never duplicated on
-	-- `nfts` rows. Immutable post-insert (enforced by
+	-- `assets` rows. Immutable post-insert (enforced by
 	-- prevent_collection_immutable_update).
 	origin_dna TEXT NOT NULL,
 	total_potential INTEGER NOT NULL DEFAULT 0 CHECK (total_potential >= 0),
@@ -109,28 +109,28 @@ CREATE TABLE IF NOT EXISTS collections (
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- NFTs (unified: seeds and instances)
+-- Assets (unified: seeds and instances)
 --
 -- CHECK constraints:
--- - chk_nfts_listed_coherent: status='listed' requires full listing snapshot so
+-- - chk_assets_listed_coherent: status='listed' requires full listing snapshot so
 --   the marketplace never serves a NULL price.
--- - chk_nfts_pending_sale_coherent: status='pending_sale' requires the full
+-- - chk_assets_pending_sale_coherent: status='pending_sale' requires the full
 --   sale_* snapshot, and any other status forbids sale_* population. Keeps the
 --   buy_commitment projection self-consistent with its state discriminator.
--- - chk_nfts_pending_sale_has_listing: a buy_commitment always reserves a live
+-- - chk_assets_pending_sale_has_listing: a buy_commitment always reserves a live
 --   listing, so listing_* must remain populated while status='pending_sale'.
--- - chk_nfts_supply_bounded: distributed + reserved_supply <= max_supply when
+-- - chk_assets_supply_bounded: distributed + reserved_supply <= max_supply when
 --   bounded (max_supply > 0). Hard backstop against a buggy handler writing over
 --   the cap; `supply_exhausted` (generated) only reports the state.
-CREATE TABLE IF NOT EXISTS nfts (
+CREATE TABLE IF NOT EXISTS assets (
 	id TEXT PRIMARY KEY,
 	collection_id TEXT NOT NULL REFERENCES collections(id),
-	nft_type nft_kind NOT NULL,
-	status nft_status NOT NULL DEFAULT 'active',
+	asset_type asset_kind NOT NULL,
+	status asset_status NOT NULL DEFAULT 'active',
 	edition INTEGER NOT NULL DEFAULT 1,
 	owner TEXT NOT NULL,
 	-- origin_dna lives on `collections` — read via JOIN, never cached here.
-	-- nft_dna: the DNA hash emitted under the generateSeedDna() /
+	-- asset_dna: the DNA hash emitted under the generateSeedDna() /
 	-- generateInstanceDna() algorithm live at the moment this row was created.
 	-- Kept as an IMMUTABLE AUDIT TRAIL (not a cache of a pure function) because
 	-- the algorithm can rotate — domain constants or preimage shape may change
@@ -138,14 +138,14 @@ CREATE TABLE IF NOT EXISTS nfts (
 	-- signed on-chain in the original custom_json. Same pattern as
 	-- created_*/owner_* audit columns. Per-row, never shared between rows
 	-- of the same seed (each instance has its own hash keyed by instance_number).
-	nft_dna TEXT,
+	asset_dna TEXT,
 	name TEXT NOT NULL,
 	image_url TEXT,
 	max_supply INTEGER NOT NULL DEFAULT 1 CHECK (max_supply >= 0),
 	distributed INTEGER NOT NULL DEFAULT 0 CHECK (distributed >= 0),
 	reserved_supply INTEGER NOT NULL DEFAULT 0,
 	supply_exhausted BOOLEAN GENERATED ALWAYS AS (max_supply > 0 AND (distributed + reserved_supply) >= max_supply) STORED,
-	seed_id TEXT REFERENCES nfts(id) ON DELETE SET NULL,
+	seed_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
 	instance_number INTEGER,
 	-- Creator-chosen per-seed asset identifier. Bound to seeds only via the
 	-- partial UNIQUE index below. Populated when indexer canonical-validates
@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS nfts (
 	schema_version INTEGER,
 	previous_owner TEXT,
 	owner_operation_id TEXT NOT NULL,
-	owner_action nft_owner_action NOT NULL,
+	owner_action asset_owner_action NOT NULL,
 	owner_block_num BIGINT NOT NULL,
 	listing_id TEXT,
 	listing_tx_id TEXT,
@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS nfts (
 	created_tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
 	indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	CONSTRAINT chk_nfts_listed_coherent CHECK (
+	CONSTRAINT chk_assets_listed_coherent CHECK (
 		status <> 'listed'
 		OR (listing_price IS NOT NULL
 			AND listing_currency IS NOT NULL
@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS nfts (
 	-- snapshot, and every other status forbids any sale_* column from being
 	-- populated. Any handler that writes an inconsistent transition hits this
 	-- constraint instead of silently projecting a broken state-root.
-	CONSTRAINT chk_nfts_pending_sale_coherent CHECK (
+	CONSTRAINT chk_assets_pending_sale_coherent CHECK (
 		(status = 'pending_sale'
 			AND sale_buyer IS NOT NULL
 			AND sale_settlement_node IS NOT NULL
@@ -215,18 +215,18 @@ CREATE TABLE IF NOT EXISTS nfts (
 			AND sale_commitment_op_tx_id IS NULL
 			AND sale_commitment_buy_tx_hash IS NULL)
 	),
-	-- `pending_sale` is a reservation on an already-listed NFT; the listing
+	-- `pending_sale` is a reservation on an already-listed Asset; the listing
 	-- row must stay populated so `buy` can resolve price/currency against it.
 	-- Clearing listing_* while keeping status='pending_sale' would leave the
 	-- buy handler without a price to validate transfers against.
-	CONSTRAINT chk_nfts_pending_sale_has_listing CHECK (
+	CONSTRAINT chk_assets_pending_sale_has_listing CHECK (
 		status <> 'pending_sale'
 		OR (listing_id IS NOT NULL
 			AND listing_tx_id IS NOT NULL
 			AND listing_price IS NOT NULL
 			AND listing_currency IS NOT NULL)
 	),
-	CONSTRAINT chk_nfts_supply_bounded CHECK (
+	CONSTRAINT chk_assets_supply_bounded CHECK (
 		max_supply = 0 OR (distributed + reserved_supply) <= max_supply
 	)
 );
@@ -238,8 +238,8 @@ CREATE TABLE IF NOT EXISTS archived_collections (
 	tx_id TEXT NOT NULL
 );
 
--- Burned NFTs (lightweight audit — blockchain is source of truth)
-CREATE TABLE IF NOT EXISTS burned_nfts (
+-- Burned Assets (lightweight audit — blockchain is source of truth)
+CREATE TABLE IF NOT EXISTS burned_assets (
 	id TEXT PRIMARY KEY,
 	collection_id TEXT NOT NULL,
 	burned_by TEXT NOT NULL,
@@ -269,9 +269,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_invalid_ops_unique ON invalid_operations(t
 CREATE INDEX IF NOT EXISTS idx_invalid_ops_indexed_at ON invalid_operations(indexed_at);
 
 -- Confirmed operations (append-only tracking of successful handler executions).
--- Stores immutable NFT IDs for lightweight per-NFT operations. Bulk creation ops
--- can intentionally store an empty array because each NFT stores its own origin.
--- Durable: nfts.owner_operation_id / nfts.created_operation_id and auditor
+-- Stores immutable Asset IDs for lightweight per-Asset operations. Bulk creation ops
+-- can intentionally store an empty array because each Asset stores its own origin.
+-- Durable: assets.owner_operation_id / assets.created_operation_id and auditor
 -- invariants join back to this table, so retention cleanup must not prune it.
 CREATE TABLE IF NOT EXISTS confirmed_operations (
 	operation_id TEXT PRIMARY KEY,
@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS confirmed_operations (
 	block_num BIGINT NOT NULL,
 	signer TEXT NOT NULL,
 	action TEXT NOT NULL,
-	nft_ids TEXT[] NOT NULL DEFAULT '{}',
+	asset_ids TEXT[] NOT NULL DEFAULT '{}',
 	created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_confirmed_ops_tx ON confirmed_operations(tx_id);
@@ -293,7 +293,7 @@ CREATE TABLE IF NOT EXISTS orphaned_buys (
 	tx_id TEXT NOT NULL,
 	operation_id TEXT,
 	buyer TEXT NOT NULL,
-	nft_id TEXT,
+	asset_id TEXT,
 	reason TEXT NOT NULL,
 	transfers JSONB NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -305,8 +305,8 @@ CREATE INDEX IF NOT EXISTS idx_orphaned_buys_created_at ON orphaned_buys(created
 
 -- ============ ALLOWANCE TABLES ============
 
-CREATE TABLE IF NOT EXISTS nft_allowances (
-	nft_id TEXT PRIMARY KEY REFERENCES nfts(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS asset_allowances (
+	asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
 	owner TEXT NOT NULL,
 	approved_spender TEXT NOT NULL,
 	block_num BIGINT NOT NULL,
@@ -338,8 +338,8 @@ CREATE TABLE IF NOT EXISTS data_operators (
 
 -- ============ LENDING ============
 
-CREATE TABLE IF NOT EXISTS nft_loans (
-	nft_id TEXT PRIMARY KEY REFERENCES nfts(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS asset_loans (
+	asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
 	lender TEXT NOT NULL,
 	borrower TEXT NOT NULL,
 	operation_id TEXT NOT NULL,
@@ -366,7 +366,7 @@ CREATE TABLE IF NOT EXISTS schema_versions (
 
 CREATE TABLE IF NOT EXISTS sales (
 	id BIGSERIAL PRIMARY KEY,
-	nft_id TEXT NOT NULL,
+	asset_id TEXT NOT NULL,
 	collection_id TEXT NOT NULL,
 	listing_id TEXT NOT NULL,
 	seller TEXT NOT NULL,
@@ -380,12 +380,12 @@ CREATE TABLE IF NOT EXISTS sales (
 	tx_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
 	CHECK (seller <> buyer),
-	UNIQUE (nft_id, listing_id, tx_id)
+	UNIQUE (asset_id, listing_id, tx_id)
 );
 
--- ============ OWNER NFT COUNTS ============
+-- ============ OWNER Asset COUNTS ============
 
-CREATE TABLE IF NOT EXISTS owner_nft_counts (
+CREATE TABLE IF NOT EXISTS owner_asset_counts (
 	owner TEXT PRIMARY KEY,
 	total INT NOT NULL DEFAULT 0 CHECK (total >= 0),
 	seeds INT NOT NULL DEFAULT 0 CHECK (seeds >= 0),
@@ -480,13 +480,13 @@ CREATE TABLE IF NOT EXISTS state_root_checkpoints (
 -- they prevent this node from issuing two competing signatures while the
 -- underlying unsigned tx is still valid, but they do not alter on-chain state.
 
--- Scoped by NFT listing: a single node must not co-sign two competing buys for
--- the same NFT while the first unsigned tx is still within its broadcast
+-- Scoped by Asset listing: a single node must not co-sign two competing buys for
+-- the same Asset while the first unsigned tx is still within its broadcast
 -- window. Holder is a deterministic tx identity for diagnostics, but every
 -- existing row is contested until expiry; exact retries must reconcile rather
 -- than refresh or overwrite the lock.
 CREATE TABLE IF NOT EXISTS multisig_buy_locks (
-	nft_id TEXT PRIMARY KEY,
+	asset_id TEXT PRIMARY KEY,
 	listing_id TEXT NOT NULL,
 	listing_tx_id TEXT NOT NULL,
 	holder TEXT NOT NULL,
@@ -517,44 +517,44 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_creator_symbol ON collections(
 -- Presence in `collections` == active. Archived collections live in `archived_collections`.
 CREATE INDEX IF NOT EXISTS idx_collections_created_at ON collections(created_at DESC);
 
--- NFTs
-CREATE INDEX IF NOT EXISTS idx_nfts_owner_created ON nfts(owner, created_at DESC);
+-- Assets
+CREATE INDEX IF NOT EXISTS idx_assets_owner_created ON assets(owner, created_at DESC);
 -- Logical instance identity is (seed_id, instance_number). `id` is also
 -- deterministic from that tuple, but the DB must reject duplicate ordinals even
 -- if a future handler bug supplies a different id.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_nfts_seed_instances ON nfts(seed_id, instance_number) WHERE seed_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_seed_instances ON assets(seed_id, instance_number) WHERE seed_id IS NOT NULL;
 -- Serves bulk-distribute idempotency: WHERE seed_id = X AND created_operation_id = Y.
-CREATE INDEX IF NOT EXISTS idx_nfts_seed_created_operation ON nfts(seed_id, created_operation_id) WHERE seed_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_nfts_owner_type_status ON nfts(owner, nft_type, status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_nfts_owner_active_instances ON nfts(owner, created_at DESC) WHERE nft_type = 'instance' AND status = 'active';
-CREATE INDEX IF NOT EXISTS idx_nfts_owner_active_seeds ON nfts(owner, collection_id) WHERE nft_type = 'seed' AND status = 'active';
-CREATE INDEX IF NOT EXISTS idx_nfts_seeds_available ON nfts(collection_id, distributed) WHERE nft_type = 'seed' AND supply_exhausted = FALSE;
-CREATE INDEX IF NOT EXISTS idx_nfts_collection_type ON nfts(collection_id, nft_type, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_nfts_listed ON nfts(listing_price, listing_currency) WHERE status = 'listed';
-CREATE INDEX IF NOT EXISTS idx_nfts_listed_recent ON nfts(created_at DESC) WHERE status = 'listed';
-CREATE INDEX IF NOT EXISTS idx_nfts_listing_id ON nfts(listing_id) WHERE listing_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_nfts_listing_expires ON nfts(listing_expires_at) WHERE status = 'listed' AND listing_expires_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_assets_seed_created_operation ON assets(seed_id, created_operation_id) WHERE seed_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_assets_owner_type_status ON assets(owner, asset_type, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_assets_owner_active_instances ON assets(owner, created_at DESC) WHERE asset_type = 'instance' AND status = 'active';
+CREATE INDEX IF NOT EXISTS idx_assets_owner_active_seeds ON assets(owner, collection_id) WHERE asset_type = 'seed' AND status = 'active';
+CREATE INDEX IF NOT EXISTS idx_assets_seeds_available ON assets(collection_id, distributed) WHERE asset_type = 'seed' AND supply_exhausted = FALSE;
+CREATE INDEX IF NOT EXISTS idx_assets_collection_type ON assets(collection_id, asset_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_assets_listed ON assets(listing_price, listing_currency) WHERE status = 'listed';
+CREATE INDEX IF NOT EXISTS idx_assets_listed_recent ON assets(created_at DESC) WHERE status = 'listed';
+CREATE INDEX IF NOT EXISTS idx_assets_listing_id ON assets(listing_id) WHERE listing_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_assets_listing_expires ON assets(listing_expires_at) WHERE status = 'listed' AND listing_expires_at IS NOT NULL;
 -- buy_commitment lookups (all partial on status='pending_sale'):
 --   buyer_pending:   per-buyer reservation count (audit / UI).
 --   sale_expires:    lazy sweep of expired reservations in sync-engine (per-block
 --                    UPDATE ... WHERE sale_expires_block < currentBlock).
 --   settlement_node: MAX_ACTIVE_COMMITMENTS_PER_NODE enforcement in
 --                    handleBuyCommitment, plus per-node metrics / dashboards.
--- Partial indexes keep each at ~zero cost whenever the NFT is not reserved.
-CREATE INDEX IF NOT EXISTS idx_nfts_sale_buyer_pending ON nfts(sale_buyer) WHERE status = 'pending_sale';
-CREATE INDEX IF NOT EXISTS idx_nfts_sale_expires ON nfts(sale_expires_block) WHERE status = 'pending_sale';
-CREATE INDEX IF NOT EXISTS idx_nfts_sale_settlement_node ON nfts(sale_settlement_node) WHERE status = 'pending_sale';
+-- Partial indexes keep each at ~zero cost whenever the Asset is not reserved.
+CREATE INDEX IF NOT EXISTS idx_assets_sale_buyer_pending ON assets(sale_buyer) WHERE status = 'pending_sale';
+CREATE INDEX IF NOT EXISTS idx_assets_sale_expires ON assets(sale_expires_block) WHERE status = 'pending_sale';
+CREATE INDEX IF NOT EXISTS idx_assets_sale_settlement_node ON assets(sale_settlement_node) WHERE status = 'pending_sale';
 -- DB-level backstop against non-canonical seeds: two seeds in the same collection
 -- cannot share an art_id. Paired with the application-level canonical check in
 -- handleMint, this defends against a handler bug ever bypassing the recomputation.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_nfts_collection_art_unique ON nfts(collection_id, art_id) WHERE nft_type = 'seed' AND art_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_collection_art_unique ON assets(collection_id, art_id) WHERE asset_type = 'seed' AND art_id IS NOT NULL;
 
 -- Invalid operations: idx_invalid_ops_unique covers lookups by tx_id via leading col.
 -- (no standalone indexes — the unique partial index serves all query shapes)
 
 -- Orphaned buys: idx_orphaned_buys_unique covers lookups by tx_id via leading col.
 
--- Allowances: nft_allowances PK is nft_id; collection_allowances PK leads with owner.
+-- Allowances: asset_allowances PK is asset_id; collection_allowances PK leads with owner.
 -- idx_collection_allowances_collection supports CASCADE delete on collection archive
 -- (without it PG falls back to seq scan on the referencing table).
 CREATE INDEX IF NOT EXISTS idx_collection_allowances_collection ON collection_allowances(collection_id);
@@ -563,14 +563,14 @@ CREATE INDEX IF NOT EXISTS idx_collection_allowances_active ON collection_allowa
 -- Data operators: PK is (collection_id, operator) — leading col serves CASCADE.
 
 -- Lending
-CREATE INDEX IF NOT EXISTS idx_nft_loans_lender ON nft_loans(lender);
-CREATE INDEX IF NOT EXISTS idx_nft_loans_borrower ON nft_loans(borrower);
+CREATE INDEX IF NOT EXISTS idx_asset_loans_lender ON asset_loans(lender);
+CREATE INDEX IF NOT EXISTS idx_asset_loans_borrower ON asset_loans(borrower);
 
 -- Schema versions
 CREATE INDEX IF NOT EXISTS idx_schema_versions_hash ON schema_versions(schema_hash);
 
 -- Sales
-CREATE INDEX IF NOT EXISTS idx_sales_nft ON sales(nft_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_asset ON sales(asset_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_collection ON sales(collection_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_seller ON sales(seller, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
@@ -588,84 +588,84 @@ CREATE INDEX IF NOT EXISTS idx_sales_buyer ON sales(buyer, created_at DESC);
 -- → true, ('x', 'x') → false. Plain `=` would treat NULL transitions as
 -- "unchanged" and let them through silently.
 
-CREATE OR REPLACE FUNCTION prevent_nft_immutable_update()
+CREATE OR REPLACE FUNCTION prevent_asset_immutable_update()
 RETURNS TRIGGER AS $$
 BEGIN
 	IF NEW.id IS DISTINCT FROM OLD.id THEN
-		RAISE EXCEPTION 'nfts.id is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.id is immutable for %', OLD.id;
 	END IF;
 	IF NEW.collection_id IS DISTINCT FROM OLD.collection_id THEN
-		RAISE EXCEPTION 'nfts.collection_id is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.collection_id is immutable for %', OLD.id;
 	END IF;
-	IF NEW.nft_type IS DISTINCT FROM OLD.nft_type THEN
-		RAISE EXCEPTION 'nfts.nft_type is immutable for %', OLD.id;
+	IF NEW.asset_type IS DISTINCT FROM OLD.asset_type THEN
+		RAISE EXCEPTION 'assets.asset_type is immutable for %', OLD.id;
 	END IF;
 	IF NEW.edition IS DISTINCT FROM OLD.edition THEN
-		RAISE EXCEPTION 'nfts.edition is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.edition is immutable for %', OLD.id;
 	END IF;
-	IF NEW.nft_dna IS DISTINCT FROM OLD.nft_dna THEN
-		RAISE EXCEPTION 'nfts.nft_dna is immutable for %', OLD.id;
+	IF NEW.asset_dna IS DISTINCT FROM OLD.asset_dna THEN
+		RAISE EXCEPTION 'assets.asset_dna is immutable for %', OLD.id;
 	END IF;
 	IF NEW.name IS DISTINCT FROM OLD.name THEN
-		RAISE EXCEPTION 'nfts.name is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.name is immutable for %', OLD.id;
 	END IF;
 	IF NEW.image_url IS DISTINCT FROM OLD.image_url THEN
-		RAISE EXCEPTION 'nfts.image_url is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.image_url is immutable for %', OLD.id;
 	END IF;
 	IF NEW.max_supply IS DISTINCT FROM OLD.max_supply THEN
-		RAISE EXCEPTION 'nfts.max_supply is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.max_supply is immutable for %', OLD.id;
 	END IF;
 	IF NEW.seed_id IS DISTINCT FROM OLD.seed_id THEN
-		RAISE EXCEPTION 'nfts.seed_id is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.seed_id is immutable for %', OLD.id;
 	END IF;
 	IF NEW.instance_number IS DISTINCT FROM OLD.instance_number THEN
-		RAISE EXCEPTION 'nfts.instance_number is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.instance_number is immutable for %', OLD.id;
 	END IF;
 	IF NEW.art_id IS DISTINCT FROM OLD.art_id THEN
-		RAISE EXCEPTION 'nfts.art_id is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.art_id is immutable for %', OLD.id;
 	END IF;
 	IF NEW.immutable_data IS DISTINCT FROM OLD.immutable_data THEN
-		RAISE EXCEPTION 'nfts.immutable_data is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.immutable_data is immutable for %', OLD.id;
 	END IF;
 	IF NEW.schema_version IS DISTINCT FROM OLD.schema_version THEN
-		RAISE EXCEPTION 'nfts.schema_version is immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.schema_version is immutable for %', OLD.id;
 	END IF;
 	IF NEW.created_operation_id IS DISTINCT FROM OLD.created_operation_id
 	   OR NEW.created_block_num IS DISTINCT FROM OLD.created_block_num
 	   OR NEW.created_tx_id IS DISTINCT FROM OLD.created_tx_id
 	   OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
-		RAISE EXCEPTION 'nfts.created_* fields are immutable for %', OLD.id;
+		RAISE EXCEPTION 'assets.created_* fields are immutable for %', OLD.id;
 	END IF;
 	RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_prevent_nft_immutable_update ON nfts;
-CREATE TRIGGER trg_prevent_nft_immutable_update
-	BEFORE UPDATE ON nfts
+DROP TRIGGER IF EXISTS trg_prevent_asset_immutable_update ON assets;
+CREATE TRIGGER trg_prevent_asset_immutable_update
+	BEFORE UPDATE ON assets
 	FOR EACH ROW
-	EXECUTE FUNCTION prevent_nft_immutable_update();
+	EXECUTE FUNCTION prevent_asset_immutable_update();
 
 -- owner_block_num is monotonically non-decreasing. A regression means a
 -- stale/out-of-order apply would hash against an older ownership snapshot and
 -- silently fork state_root across replicas.
-CREATE OR REPLACE FUNCTION prevent_nft_owner_block_regression()
+CREATE OR REPLACE FUNCTION prevent_asset_owner_block_regression()
 RETURNS TRIGGER AS $$
 BEGIN
 	IF NEW.owner_block_num < OLD.owner_block_num THEN
 		RAISE EXCEPTION
-			'nfts.owner_block_num regression for % (old=%, new=%) — SPV invariant violation',
+			'assets.owner_block_num regression for % (old=%, new=%) — SPV invariant violation',
 			OLD.id, OLD.owner_block_num, NEW.owner_block_num;
 	END IF;
 	RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_prevent_nft_owner_block_regression ON nfts;
-CREATE TRIGGER trg_prevent_nft_owner_block_regression
-	BEFORE UPDATE OF owner_block_num ON nfts
+DROP TRIGGER IF EXISTS trg_prevent_asset_owner_block_regression ON assets;
+CREATE TRIGGER trg_prevent_asset_owner_block_regression
+	BEFORE UPDATE OF owner_block_num ON assets
 	FOR EACH ROW
-	EXECUTE FUNCTION prevent_nft_owner_block_regression();
+	EXECUTE FUNCTION prevent_asset_owner_block_regression();
 
 -- Freeze the structural identity of a collection. Only `schema` and
 -- `schema_version` are legitimately mutable (set_schema flow via
@@ -716,23 +716,23 @@ CREATE TRIGGER trg_prevent_collection_immutable_update
 	EXECUTE FUNCTION prevent_collection_immutable_update();
 
 -- Counter maintenance — single source of truth in DB. Before this trigger,
--- `owner_nft_counts` and `collection_stats` were maintained by app-level
--- helpers (`adjustOwnerNftCount`, `recordCollectionMint`,
+-- `owner_asset_counts` and `collection_stats` were maintained by app-level
+-- helpers (`adjustOwnerAssetCount`, `recordCollectionMint`,
 -- `recordCollectionBurn`) that each handler had to remember to call.
--- Missing one call silently drifted the counters from the actual `nfts`
+-- Missing one call silently drifted the counters from the actual `assets`
 -- rows; no DB-level defense existed. Moving the logic here makes INSERT /
 -- DELETE / UPDATE-of-owner atomic with the counter update inside the same
 -- transaction, independent of any specific handler path.
 --
--- DELETE and UPDATE-of-owner RAISE EXCEPTION `'Owner NFT count missing
+-- DELETE and UPDATE-of-owner RAISE EXCEPTION `'Owner Asset count missing
 -- for …'` when the old owner's row is not found — preserves the exact
--- contract `adjustOwnerNftCount(-1)` had, so tests that force
+-- contract `adjustOwnerAssetCount(-1)` had, so tests that force
 -- counter-missing failure paths stay reproducible.
 --
 -- `collection_stats.listed` is NOT touched here — listed/unlisted state
 -- is managed by the marketplace handlers via `adjustCollectionListed`
 -- and is orthogonal to owner/kind counting.
-CREATE OR REPLACE FUNCTION maintain_nft_counters()
+CREATE OR REPLACE FUNCTION maintain_asset_counters()
 RETURNS TRIGGER AS $$
 DECLARE
 	seed_delta_new   INTEGER;
@@ -741,15 +741,15 @@ DECLARE
 	inst_delta_old   INTEGER;
 BEGIN
 	IF TG_OP = 'INSERT' THEN
-		seed_delta_new := CASE WHEN NEW.nft_type = 'seed'     THEN 1 ELSE 0 END;
-		inst_delta_new := CASE WHEN NEW.nft_type = 'instance' THEN 1 ELSE 0 END;
+		seed_delta_new := CASE WHEN NEW.asset_type = 'seed'     THEN 1 ELSE 0 END;
+		inst_delta_new := CASE WHEN NEW.asset_type = 'instance' THEN 1 ELSE 0 END;
 
-		INSERT INTO owner_nft_counts (owner, total, seeds, instances)
+		INSERT INTO owner_asset_counts (owner, total, seeds, instances)
 		VALUES (NEW.owner, 1, seed_delta_new, inst_delta_new)
 		ON CONFLICT (owner) DO UPDATE SET
-			total     = owner_nft_counts.total     + 1,
-			seeds     = owner_nft_counts.seeds     + seed_delta_new,
-			instances = owner_nft_counts.instances + inst_delta_new;
+			total     = owner_asset_counts.total     + 1,
+			seeds     = owner_asset_counts.seeds     + seed_delta_new,
+			instances = owner_asset_counts.instances + inst_delta_new;
 
 		INSERT INTO collection_stats (collection_id, total, seeds, instances, listed, burned)
 		VALUES (NEW.collection_id, 1, seed_delta_new, inst_delta_new, 0, 0)
@@ -762,16 +762,16 @@ BEGIN
 	END IF;
 
 	IF TG_OP = 'DELETE' THEN
-		seed_delta_old := CASE WHEN OLD.nft_type = 'seed'     THEN 1 ELSE 0 END;
-		inst_delta_old := CASE WHEN OLD.nft_type = 'instance' THEN 1 ELSE 0 END;
+		seed_delta_old := CASE WHEN OLD.asset_type = 'seed'     THEN 1 ELSE 0 END;
+		inst_delta_old := CASE WHEN OLD.asset_type = 'instance' THEN 1 ELSE 0 END;
 
-		UPDATE owner_nft_counts SET
+		UPDATE owner_asset_counts SET
 			total     = total     - 1,
 			seeds     = seeds     - seed_delta_old,
 			instances = instances - inst_delta_old
 			WHERE owner = OLD.owner;
 		IF NOT FOUND THEN
-			RAISE EXCEPTION 'Owner NFT count missing for %', OLD.owner;
+			RAISE EXCEPTION 'Owner Asset count missing for %', OLD.owner;
 		END IF;
 
 		UPDATE collection_stats SET
@@ -785,26 +785,26 @@ BEGIN
 	END IF;
 
 	IF TG_OP = 'UPDATE' AND OLD.owner IS DISTINCT FROM NEW.owner THEN
-		-- nft_type is immutable (protected by prevent_nft_immutable_update),
-		-- so OLD.nft_type == NEW.nft_type; use NEW uniformly.
-		seed_delta_new := CASE WHEN NEW.nft_type = 'seed'     THEN 1 ELSE 0 END;
-		inst_delta_new := CASE WHEN NEW.nft_type = 'instance' THEN 1 ELSE 0 END;
+		-- asset_type is immutable (protected by prevent_asset_immutable_update),
+		-- so OLD.asset_type == NEW.asset_type; use NEW uniformly.
+		seed_delta_new := CASE WHEN NEW.asset_type = 'seed'     THEN 1 ELSE 0 END;
+		inst_delta_new := CASE WHEN NEW.asset_type = 'instance' THEN 1 ELSE 0 END;
 
-		UPDATE owner_nft_counts SET
+		UPDATE owner_asset_counts SET
 			total     = total     - 1,
 			seeds     = seeds     - seed_delta_new,
 			instances = instances - inst_delta_new
 			WHERE owner = OLD.owner;
 		IF NOT FOUND THEN
-			RAISE EXCEPTION 'Owner NFT count missing for %', OLD.owner;
+			RAISE EXCEPTION 'Owner Asset count missing for %', OLD.owner;
 		END IF;
 
-		INSERT INTO owner_nft_counts (owner, total, seeds, instances)
+		INSERT INTO owner_asset_counts (owner, total, seeds, instances)
 		VALUES (NEW.owner, 1, seed_delta_new, inst_delta_new)
 		ON CONFLICT (owner) DO UPDATE SET
-			total     = owner_nft_counts.total     + 1,
-			seeds     = owner_nft_counts.seeds     + seed_delta_new,
-			instances = owner_nft_counts.instances + inst_delta_new;
+			total     = owner_asset_counts.total     + 1,
+			seeds     = owner_asset_counts.seeds     + seed_delta_new,
+			instances = owner_asset_counts.instances + inst_delta_new;
 
 		RETURN NEW;
 	END IF;
@@ -813,11 +813,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_maintain_nft_counters ON nfts;
-CREATE TRIGGER trg_maintain_nft_counters
-	AFTER INSERT OR DELETE OR UPDATE OF owner ON nfts
+DROP TRIGGER IF EXISTS trg_maintain_asset_counters ON assets;
+CREATE TRIGGER trg_maintain_asset_counters
+	AFTER INSERT OR DELETE OR UPDATE OF owner ON assets
 	FOR EACH ROW
-	EXECUTE FUNCTION maintain_nft_counters();
+	EXECUTE FUNCTION maintain_asset_counters();
 
 -- Per-collection instance cap. `collections.max_instances = 0` means the
 -- creator opted out of a per-collection cap (unlimited, subject only to
@@ -835,7 +835,7 @@ DECLARE
 	cap INTEGER;
 	current_count INTEGER;
 BEGIN
-	IF NEW.nft_type = 'instance' THEN
+	IF NEW.asset_type = 'instance' THEN
 		SELECT max_instances INTO cap
 			FROM collections
 			WHERE id = NEW.collection_id;
@@ -845,7 +845,7 @@ BEGIN
 				WHERE collection_id = NEW.collection_id;
 			IF COALESCE(current_count, 0) + 1 > cap THEN
 				RAISE EXCEPTION
-					'nfts.instance cap exceeded for collection %: current=% + 1 > max_instances=%',
+					'assets.instance cap exceeded for collection %: current=% + 1 > max_instances=%',
 					NEW.collection_id, COALESCE(current_count, 0), cap;
 			END IF;
 		END IF;
@@ -854,13 +854,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_enforce_max_instances ON nfts;
+DROP TRIGGER IF EXISTS trg_enforce_max_instances ON assets;
 CREATE TRIGGER trg_enforce_max_instances
-	BEFORE INSERT ON nfts
+	BEFORE INSERT ON assets
 	FOR EACH ROW
 	EXECUTE FUNCTION enforce_max_instances();
 
--- `nfts.collection_id` on an instance row is a deliberate desnormalization —
+-- `assets.collection_id` on an instance row is a deliberate desnormalization —
 -- we keep it so ownership/collection queries stay linear without a JOIN to
 -- the parent seed. The price of that cache is that a buggy handler (or a
 -- rogue INSERT) could write an instance whose `collection_id` disagrees
@@ -877,13 +877,13 @@ DECLARE
 BEGIN
 	IF NEW.seed_id IS NOT NULL THEN
 		SELECT collection_id INTO seed_collection_id
-			FROM nfts
+			FROM assets
 			WHERE id = NEW.seed_id;
 		-- If seed not found the FK will raise after; no point double-reporting.
 		IF seed_collection_id IS NOT NULL
 		   AND NEW.collection_id IS DISTINCT FROM seed_collection_id THEN
 			RAISE EXCEPTION
-				'nfts.collection_id mismatch: instance % claims collection %, parent seed % belongs to collection %',
+				'assets.collection_id mismatch: instance % claims collection %, parent seed % belongs to collection %',
 				NEW.id, NEW.collection_id, NEW.seed_id, seed_collection_id;
 		END IF;
 	END IF;
@@ -891,9 +891,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_enforce_instance_collection_matches_seed ON nfts;
+DROP TRIGGER IF EXISTS trg_enforce_instance_collection_matches_seed ON assets;
 CREATE TRIGGER trg_enforce_instance_collection_matches_seed
-	BEFORE INSERT ON nfts
+	BEFORE INSERT ON assets
 	FOR EACH ROW
 	EXECUTE FUNCTION enforce_instance_collection_matches_seed();
 

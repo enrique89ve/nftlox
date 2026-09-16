@@ -84,9 +84,9 @@ async function makeCreateCollectionOp(
 async function cleanDb() {
 	// TRUNCATE instead of per-row DELETE: the AFTER DELETE counter trigger
 	// would fire on every row and crash when tests have pre-emptively
-	// invalidated owner_nft_counts to force a handler failure. TRUNCATE
+	// invalidated owner_asset_counts to force a handler failure. TRUNCATE
 	// skips per-row triggers and resets every table atomically.
-	await sql`TRUNCATE nfts, owner_nft_counts, collection_stats, collections, invalid_operations, confirmed_operations RESTART IDENTITY CASCADE`;
+	await sql`TRUNCATE assets, owner_asset_counts, collection_stats, collections, invalid_operations, confirmed_operations RESTART IDENTITY CASCADE`;
 }
 
 describe("handler savepoint isolation", () => {
@@ -97,8 +97,8 @@ describe("handler savepoint isolation", () => {
 	afterEach(cleanDb);
 
 	it("should revert database mutations when handler fails mid-execution", async () => {
-		// Setup: Create collection, mint NFT for alice, then delete alice's counter
-		// to force the transfer handler to fail in adjustOwnerNftCount()
+		// Setup: Create collection, mint Asset for alice, then delete alice's counter
+		// to force the transfer handler to fail in adjustOwnerAssetCount()
 		const seedIdA = await canonicalSeedId(ART_ID_A, COL_ID);
 
 		await withTransaction(async (txn) => {
@@ -118,24 +118,24 @@ describe("handler savepoint isolation", () => {
 				collectionId: COL_ID,
 				edition: 1,
 				owner: "alice",
-				nftType: "seed",
+				assetType: "seed",
 				maxSupply: 5,
 			});
 			await handleMint(mintOp, txn);
 		});
 
-		// Verify alice owns the NFT
-		const nftBefore = await sql`SELECT owner FROM nfts WHERE id = ${seedIdA}`;
-		expect(nftBefore).toHaveLength(1);
-		expect(nftBefore[0]?.owner).toBe("alice");
+		// Verify alice owns the Asset
+		const assetBefore = await sql`SELECT owner FROM assets WHERE id = ${seedIdA}`;
+		expect(assetBefore).toHaveLength(1);
+		expect(assetBefore[0]?.owner).toBe("alice");
 
 		// Now delete the owner counter for alice to force handler failure
-		await sql`DELETE FROM owner_nft_counts WHERE owner = 'alice'`;
+		await sql`DELETE FROM owner_asset_counts WHERE owner = 'alice'`;
 
-		// Attempt transfer alice -> bob (which will fail in adjustOwnerNftCount)
+		// Attempt transfer alice -> bob (which will fail in adjustOwnerAssetCount)
 		const transferOp = makeOp(
 			ACTION_TRANSFER,
-			{ nftId: seedIdA, to: "bob" },
+			{ assetId: seedIdA, to: "bob" },
 			{ signer: "alice", operationId: "test-sp-iso-partial-mutation" },
 		);
 
@@ -144,9 +144,9 @@ describe("handler savepoint isolation", () => {
 			expect(result.kind).toBe("fatal"); // Counter corruption is infrastructure failure
 		});
 
-		// Verify NFT owner is still "alice" (savepoint rolled back the mutation)
-		const nftAfter = await sql`SELECT owner FROM nfts WHERE id = ${seedIdA}`;
-		expect(nftAfter[0]?.owner).toBe("alice");
+		// Verify Asset owner is still "alice" (savepoint rolled back the mutation)
+		const assetAfter = await sql`SELECT owner FROM assets WHERE id = ${seedIdA}`;
+		expect(assetAfter[0]?.owner).toBe("alice");
 
 		// Fatal infrastructure errors must not be downgraded to protocol-invalid.
 		const invalid = await sql`SELECT reason FROM invalid_operations WHERE operation_id = ${"test-sp-iso-partial-mutation"}`;
@@ -154,7 +154,7 @@ describe("handler savepoint isolation", () => {
 	});
 
 	it("should allow successful handler mutations to persist", async () => {
-		// Setup: Create collection, mint NFT for charlie with valid counters
+		// Setup: Create collection, mint Asset for charlie with valid counters
 		const seedIdA = await canonicalSeedId(ART_ID_A, COL_ID);
 
 		await withTransaction(async (txn) => {
@@ -176,7 +176,7 @@ describe("handler savepoint isolation", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "charlie",
-					nftType: "seed",
+					assetType: "seed",
 					maxSupply: 5,
 				},
 				{ signer: "alice" },
@@ -187,7 +187,7 @@ describe("handler savepoint isolation", () => {
 		// Execute successful transfer
 		const transferOp = makeOp(
 			ACTION_TRANSFER,
-			{ nftId: seedIdA, to: "diana" },
+			{ assetId: seedIdA, to: "diana" },
 			{ signer: "charlie", operationId: "test-sp-iso-successful-transfer" },
 		);
 
@@ -197,12 +197,12 @@ describe("handler savepoint isolation", () => {
 		});
 
 		// Verify ownership changed
-		const nftAfter = await sql`SELECT owner FROM nfts WHERE id = ${seedIdA}`;
-		expect(nftAfter[0]?.owner).toBe("diana");
+		const assetAfter = await sql`SELECT owner FROM assets WHERE id = ${seedIdA}`;
+		expect(assetAfter[0]?.owner).toBe("diana");
 	});
 
 	it("should prevent contamination when one handler fails and next succeeds in same batch", async () => {
-		// Setup: Create collection, mint two NFTs:
+		// Setup: Create collection, mint two Assets:
 		// - seedIdA: alice with corrupted counter (will be deleted)
 		// - seedIdB: charlie with valid counter
 		const seedIdA = await canonicalSeedId(ART_ID_A, COL_ID);
@@ -227,7 +227,7 @@ describe("handler savepoint isolation", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "alice",
-					nftType: "seed",
+					assetType: "seed",
 					maxSupply: 5,
 				},
 				{ signer: "alice" },
@@ -242,7 +242,7 @@ describe("handler savepoint isolation", () => {
 					collectionId: COL_ID,
 					edition: 1,
 					owner: "charlie",
-					nftType: "seed",
+					assetType: "seed",
 					maxSupply: 5,
 				},
 				{ signer: "alice" },
@@ -251,18 +251,18 @@ describe("handler savepoint isolation", () => {
 		});
 
 		// Delete alice's counter to force the first transfer to fail
-		await sql`DELETE FROM owner_nft_counts WHERE owner = 'alice'`;
+		await sql`DELETE FROM owner_asset_counts WHERE owner = 'alice'`;
 
 		// Execute both transfers in same transaction
 		const failingOp = makeOp(
 			ACTION_TRANSFER,
-			{ nftId: seedIdA, to: "bob" },
+			{ assetId: seedIdA, to: "bob" },
 			{ signer: "alice", operationId: "test-sp-iso-batch-failing" },
 		);
 
 		const succeedingOp = makeOp(
 			ACTION_TRANSFER,
-			{ nftId: seedIdB, to: "diana" },
+			{ assetId: seedIdB, to: "diana" },
 			{ signer: "charlie", operationId: "test-sp-iso-batch-succeeding" },
 		);
 
@@ -275,15 +275,15 @@ describe("handler savepoint isolation", () => {
 				if (result1.kind === "fatal") throw new Error(result1.reason);
 				await routeOperationDetailed(succeedingOp, txn);
 			}),
-		).rejects.toThrow("Owner NFT count missing");
+		).rejects.toThrow("Owner Asset count missing");
 
-		// Verify NFT_A still owned by alice (no contamination from failed handler)
-		const nftA = await sql`SELECT owner FROM nfts WHERE id = ${seedIdA}`;
-		expect(nftA[0]?.owner).toBe("alice");
+		// Verify Asset_A still owned by alice (no contamination from failed handler)
+		const assetA = await sql`SELECT owner FROM assets WHERE id = ${seedIdA}`;
+		expect(assetA[0]?.owner).toBe("alice");
 
-		// Verify NFT_B ownership did not change after the batch abort
-		const nftB = await sql`SELECT owner FROM nfts WHERE id = ${seedIdB}`;
-		expect(nftB[0]?.owner).toBe("charlie");
+		// Verify Asset_B ownership did not change after the batch abort
+		const assetB = await sql`SELECT owner FROM assets WHERE id = ${seedIdB}`;
+		expect(assetB[0]?.owner).toBe("charlie");
 
 		// Neither the fatal operation nor the unprocessed successor is protocol-invalid.
 		const invalid = await sql`SELECT operation_id FROM invalid_operations WHERE operation_id = ${"test-sp-iso-batch-failing"}`;

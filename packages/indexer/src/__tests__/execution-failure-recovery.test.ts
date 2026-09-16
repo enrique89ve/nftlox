@@ -45,7 +45,7 @@ function makeOp(
 }
 
 async function cleanDb(): Promise<void> {
-	await sql`TRUNCATE nfts, owner_nft_counts, collection_stats, collections,
+	await sql`TRUNCATE assets, owner_asset_counts, collection_stats, collections,
 		invalid_operations, confirmed_operations, orphaned_buys RESTART IDENTITY CASCADE`;
 }
 
@@ -88,7 +88,7 @@ async function seedFixture(): Promise<void> {
 				collectionId,
 				edition: 1,
 				owner: "alice",
-				nftType: "seed",
+				assetType: "seed",
 				maxSupply: 1,
 			}, { operationId }), txn);
 		}
@@ -107,11 +107,11 @@ describe("execution failure recovery with PostgreSQL", () => {
 	afterEach(cleanDb);
 
 	it("rolls back the whole batch on a real lock timeout, then retries exactly once", async () => {
-		const firstTransfer = makeOp(ACTION_TRANSFER, { nftId: seedA, to: "bob" }, {
+		const firstTransfer = makeOp(ACTION_TRANSFER, { assetId: seedA, to: "bob" }, {
 			operationId: "op-recovery-transfer-a",
 			txId: "a".repeat(40),
 		});
-		const blockedTransfer = makeOp(ACTION_TRANSFER, { nftId: seedB, to: "bob" }, {
+		const blockedTransfer = makeOp(ACTION_TRANSFER, { assetId: seedB, to: "bob" }, {
 			operationId: "op-recovery-transfer-b",
 			txId: "b".repeat(40),
 		});
@@ -122,7 +122,7 @@ describe("execution failure recovery with PostgreSQL", () => {
 		const locked = new Promise<void>((resolve) => { signalLocked = resolve; });
 		const lockerPromise = sql.begin(async (txn) => {
 			const lockQuery = txn as unknown as typeof sql;
-			await lockQuery`SELECT id FROM nfts WHERE id = ${seedB} FOR UPDATE`;
+			await lockQuery`SELECT id FROM assets WHERE id = ${seedB} FOR UPDATE`;
 			signalLocked();
 			await release;
 		});
@@ -145,7 +145,7 @@ describe("execution failure recovery with PostgreSQL", () => {
 			await expect(runBlockedBatch).rejects.toThrow();
 
 			const [afterRollbackA, afterRollbackB] = await sql`
-				SELECT id, owner FROM nfts WHERE id IN (${seedA}, ${seedB}) ORDER BY id
+				SELECT id, owner FROM assets WHERE id IN (${seedA}, ${seedB}) ORDER BY id
 			`;
 			expect(afterRollbackA?.owner).toBe("alice");
 			expect(afterRollbackB?.owner).toBe("alice");
@@ -168,8 +168,8 @@ describe("execution failure recovery with PostgreSQL", () => {
 			});
 			const [confirmationCount] = await sql`SELECT COUNT(*)::int AS count FROM confirmed_operations WHERE operation_id IN (${firstTransfer.operationId}, ${blockedTransfer.operationId})`;
 			expect(confirmationCount?.count).toBe(2);
-			expect((await sql`SELECT owner FROM nfts WHERE id = ${seedA}`)[0]!.owner).toBe("bob");
-			expect((await sql`SELECT owner FROM nfts WHERE id = ${seedB}`)[0]!.owner).toBe("bob");
+			expect((await sql`SELECT owner FROM assets WHERE id = ${seedA}`)[0]!.owner).toBe("bob");
+			expect((await sql`SELECT owner FROM assets WHERE id = ${seedB}`)[0]!.owner).toBe("bob");
 		} finally {
 			unlock();
 			await lockerPromise;

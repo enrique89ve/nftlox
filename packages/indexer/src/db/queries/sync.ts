@@ -128,7 +128,7 @@ export async function insertInvalidOperation(
 /**
  * Fast existence check keyed on the PK. Used by the router to skip handler
  * dispatch when an op has already been processed during crash-replay. Without
- * this gate, replaying a successful transfer/buy re-adjusts owner_nft_counts
+ * this gate, replaying a successful transfer/buy re-adjusts owner_asset_counts
  * and collection_stats, drifting the denormalized counters.
  */
 export async function isOperationConfirmed(
@@ -148,20 +148,20 @@ export async function insertConfirmedOperation(
 		blockNum: number;
 		signer: string;
 		action: string;
-		nftIds: ReadonlyArray<string>;
+		assetIds: ReadonlyArray<string>;
 		createdAt: string;
 	},
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
-		INSERT INTO confirmed_operations (operation_id, tx_id, block_num, signer, action, nft_ids, created_at)
+		INSERT INTO confirmed_operations (operation_id, tx_id, block_num, signer, action, asset_ids, created_at)
 		VALUES (
 			${op.operationId},
 			${op.txId},
 			${op.blockNum},
 			${op.signer},
 			${op.action},
-			${sql.array([...op.nftIds], PG_TEXT_OID)},
+			${sql.array([...op.assetIds], PG_TEXT_OID)},
 			${op.createdAt}
 		)
 		ON CONFLICT (operation_id) DO NOTHING
@@ -172,7 +172,7 @@ export async function insertConfirmedOperation(
 
 const RETENTION_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
 // confirmed_operations is durable provenance, not ephemeral retention data:
-// nfts.owner_operation_id / nfts.created_operation_id and auditor invariants
+// assets.owner_operation_id / assets.created_operation_id and auditor invariants
 // intentionally join back to it. Only invalid/orphaned diagnostic rows expire.
 
 // Hard cap per ephemeral retention table. Time-based TTL alone does not bound row count:
@@ -244,7 +244,7 @@ export interface OperationStatusEntry {
 	reason: string | null;
 	blockNum: number | null;
 	timestamp: string | null;
-	nftIds: ReadonlyArray<string>;
+	assetIds: ReadonlyArray<string>;
 }
 
 export interface OperationStatusResult {
@@ -267,7 +267,7 @@ export interface OperationStatusResult {
  * mixed results (e.g., 1 confirmed + 1 invalid within the same tx).
  *
  * Optionally filters by operationId and/or action.
- * For confirmed operations, includes the IDs of NFTs affected when storing the
+ * For confirmed operations, includes the IDs of Assets affected when storing the
  * list is bounded. Bulk creation operations may intentionally return [].
  */
 export async function getOperationStatus(
@@ -291,13 +291,13 @@ export async function getOperationStatus(
 			reason: row.reason ?? null,
 			blockNum: Number(row.block_num),
 			timestamp: String(row.indexed_at),
-			nftIds: [],
+			assetIds: [],
 		});
 	}
 
 	// 2. Check orphaned_buys (may have multiple per tx)
 	const orphaneds = await sql`
-		SELECT operation_id, buyer, nft_id, reason, block_num, created_at
+		SELECT operation_id, buyer, asset_id, reason, block_num, created_at
 		FROM orphaned_buys WHERE tx_id = ${txId}
 	`;
 	for (const row of orphaneds) {
@@ -309,21 +309,21 @@ export async function getOperationStatus(
 			reason: row.reason ?? null,
 			blockNum: Number(row.block_num),
 			timestamp: String(row.created_at),
-			nftIds: row.nft_id ? [String(row.nft_id)] : [],
+			assetIds: row.asset_id ? [String(row.asset_id)] : [],
 		});
 	}
 
-	// 3. Check confirmed_operations using the immutable nft_ids snapshot captured
+	// 3. Check confirmed_operations using the immutable asset_ids snapshot captured
 	// at confirmation time. Bulk creation ops may intentionally store [] because
-	// each NFT row stores its own immutable origin.
+	// each Asset row stores its own immutable origin.
 	const confirmed = await sql`
-		SELECT c.operation_id, c.signer, c.action, c.block_num, c.created_at, c.nft_ids
+		SELECT c.operation_id, c.signer, c.action, c.block_num, c.created_at, c.asset_ids
 		FROM confirmed_operations c
 		WHERE c.tx_id = ${txId}
 	`;
 	for (const row of confirmed) {
-		const nftIds = Array.isArray(row.nft_ids)
-			? row.nft_ids.map(nftId => String(nftId))
+		const assetIds = Array.isArray(row.asset_ids)
+			? row.asset_ids.map(assetId => String(assetId))
 			: [];
 		results.push({
 			status: "confirmed",
@@ -333,7 +333,7 @@ export async function getOperationStatus(
 			reason: null,
 			blockNum: Number(row.block_num),
 			timestamp: String(row.created_at),
-			nftIds,
+			assetIds,
 		});
 	}
 
@@ -373,20 +373,20 @@ export async function insertOrphanedBuy(
 		txId: string;
 		operationId: string | null;
 		buyer: string;
-		nftId: string | null;
+		assetId: string | null;
 		reason: string;
 		transfers: ReadonlyArray<OrphanedBuyTransfer>;
 	},
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
-		INSERT INTO orphaned_buys (block_num, tx_id, operation_id, buyer, nft_id, reason, transfers)
+		INSERT INTO orphaned_buys (block_num, tx_id, operation_id, buyer, asset_id, reason, transfers)
 		VALUES (
 			${op.blockNum},
 			${op.txId},
 			${op.operationId},
 			${op.buyer},
-			${op.nftId},
+			${op.assetId},
 			${op.reason},
 			${toJsonb(op.transfers)}
 		)

@@ -5,14 +5,14 @@ import {
 } from "@nftlox/protocol";
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import type { NftProcessingRow } from "@/db/queries/nft-types.ts";
+import type { AssetProcessingRow } from "@/db/queries/asset-types.ts";
 import { protocolReject } from "@/processor/protocol-rejection.ts";
 
-// Narrowed shape of the NFT row needed by `validateSeedProvenance`. Handlers
-// typically already fetch the full `NftProcessingRow` via
-// `getNftForProcessing[ForUpdate]` — this alias keeps the helper decoupled
+// Narrowed shape of the Asset row needed by `validateSeedProvenance`. Handlers
+// typically already fetch the full `AssetProcessingRow` via
+// `getAssetForProcessing[ForUpdate]` — this alias keeps the helper decoupled
 // from fields it does not consume.
-type NftForProvenance = Pick<NftProcessingRow, "nft_type" | "seed_id">;
+type AssetForProvenance = Pick<AssetProcessingRow, "asset_type" | "seed_id">;
 
 type SeedCreatedTxRow = { created_tx_id: string };
 
@@ -35,29 +35,29 @@ type SeedCreatedTxRow = { created_tx_id: string };
  */
 export async function validateSeedProvenance(
 	op: ParsedOperation,
-	nft: NftForProvenance,
+	asset: AssetForProvenance,
 	txn: Queryable,
 ): Promise<void> {
 	const declared = readDeclaredProvenance(op.data);
 	if (declared === undefined) return;
 
-	assertProvenanceTarget(declared, nft.nft_type);
+	assertProvenanceTarget(declared, asset.asset_type);
 
 	let seedCreatedTxId: string | null = null;
 	if (declared.seedTxId !== undefined) {
-		if (nft.seed_id === null) {
-			throw protocolReject("Cannot validate seedTxId: NFT has no parent seed");
+		if (asset.seed_id === null) {
+			throw protocolReject("Cannot validate seedTxId: Asset has no parent seed");
 		}
 		const [row] = await txn<SeedCreatedTxRow[]>`
-			SELECT created_tx_id FROM nfts WHERE id = ${nft.seed_id}
+			SELECT created_tx_id FROM assets WHERE id = ${asset.seed_id}
 		`;
 		if (!row) {
 			throw protocolReject(
-				`Seed not found while validating seedTxId: ${nft.seed_id}`,
+				`Seed not found while validating seedTxId: ${asset.seed_id}`,
 			);
 		}
 		seedCreatedTxId = row.created_tx_id;
 	}
 
-	matchProvenance(declared, { seedId: nft.seed_id, seedCreatedTxId });
+	matchProvenance(declared, { seedId: asset.seed_id, seedCreatedTxId });
 }

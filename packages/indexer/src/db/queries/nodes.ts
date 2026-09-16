@@ -35,7 +35,7 @@ type IndexedNodeOperationRow = Readonly<{
 	reason: string | null;
 	block_num: number | string;
 	timestamp: Date | string;
-	nft_ids: ReadonlyArray<string> | null;
+	asset_ids: ReadonlyArray<string> | null;
 }>;
 
 export type SettlementNodeSnapshot = Readonly<{
@@ -78,7 +78,7 @@ export type IndexedNodeOperation = Readonly<{
 	reason: string | null;
 	blockNum: number;
 	timestamp: string;
-	nftIds: ReadonlyArray<string>;
+	assetIds: ReadonlyArray<string>;
 }>;
 
 export type IndexedNodeOperationsPage = Readonly<{
@@ -241,7 +241,7 @@ export async function listIndexedNodeOperations(
 				(SELECT COUNT(*) FROM invalid_operations WHERE signer = ${normalizedAccount}) AS total
 		`,
 		txn<IndexedNodeOperationRow[]>`
-			SELECT status, tx_id, operation_id, signer, action, reason, block_num, timestamp, nft_ids
+			SELECT status, tx_id, operation_id, signer, action, reason, block_num, timestamp, asset_ids
 			FROM (
 				SELECT
 					'confirmed'::text AS status,
@@ -252,7 +252,7 @@ export async function listIndexedNodeOperations(
 					NULL::text AS reason,
 					block_num,
 					created_at AS timestamp,
-					nft_ids
+					asset_ids
 				FROM confirmed_operations
 				WHERE signer = ${normalizedAccount}
 				UNION ALL
@@ -265,7 +265,7 @@ export async function listIndexedNodeOperations(
 					reason,
 					block_num,
 					indexed_at AS timestamp,
-					NULL::text[] AS nft_ids
+					NULL::text[] AS asset_ids
 				FROM invalid_operations
 				WHERE signer = ${normalizedAccount}
 			) ops
@@ -289,7 +289,7 @@ export async function listIndexedNodeOperations(
 			reason: row.reason,
 			blockNum: toSafeBlock(row.block_num, "node operations block_num"),
 			timestamp: toIsoString(row.timestamp),
-			nftIds: Array.isArray(row.nft_ids) ? row.nft_ids.map((id) => String(id)) : [],
+			assetIds: Array.isArray(row.asset_ids) ? row.asset_ids.map((id) => String(id)) : [],
 		})),
 	};
 }

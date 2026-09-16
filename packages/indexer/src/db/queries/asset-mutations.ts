@@ -1,23 +1,23 @@
 import { sql, toJsonb, type Queryable } from "@/db/client.ts";
-import type { InsertNftParams, OwnerChangeCtx, BurnCtx, ListingCtx, NftStatus } from "./nft-types.ts";
-import { NFT_KIND_INSTANCE, NFT_STATUS_ACTIVE, NFT_STATUS_LISTED, NFT_STATUS_PENDING_SALE } from "./nft-types.ts";
-import { adjustCollectionListed } from "./nft-counters.ts";
-import { queueStateRootDelta, parseNftStateRow } from "./state-root.ts";
+import type { InsertAssetParams, OwnerChangeCtx, BurnCtx, ListingCtx, AssetStatus } from "./asset-types.ts";
+import { ASSET_KIND_INSTANCE, ASSET_STATUS_ACTIVE, ASSET_STATUS_LISTED, ASSET_STATUS_PENDING_SALE } from "./asset-types.ts";
+import { adjustCollectionListed } from "./asset-counters.ts";
+import { queueStateRootDelta, parseAssetStateRow } from "./state-root.ts";
 import { getStateRootBuffer } from "@/db/client.ts";
-import type { NftStateRow } from "@/utils/state-root-hash.ts";
+import type { AssetStateRow } from "@/utils/state-root-hash.ts";
 
 // Reads the SPV-visible fields that contribute to the state-root hash. Must
 // be called with the same txn that is about to mutate the row, and BEFORE
 // the UPDATE/DELETE, otherwise we'd XOR a stale/already-modified snapshot.
-async function readStateRow(nftId: string, txn: Queryable): Promise<NftStateRow | null> {
+async function readStateRow(assetId: string, txn: Queryable): Promise<AssetStateRow | null> {
 	const [row] = await txn`
 		SELECT id, owner, previous_owner, owner_action, owner_operation_id, owner_block_num
-		FROM nfts
-		WHERE id = ${nftId}
+		FROM assets
+		WHERE id = ${assetId}
 		FOR UPDATE
 	`;
 	if (!row) return null;
-	return parseNftStateRow(row as Record<string, unknown>);
+	return parseAssetStateRow(row as Record<string, unknown>);
 }
 
 export type MarketplaceListingCleanupResult = Readonly<{
@@ -25,11 +25,11 @@ export type MarketplaceListingCleanupResult = Readonly<{
 	readonly reconciledCollections: number;
 }>;
 
-export async function insertNft(params: InsertNftParams, txn: Queryable = sql): Promise<boolean> {
+export async function insertAsset(params: InsertAssetParams, txn: Queryable = sql): Promise<boolean> {
 	const result = await txn`
-		INSERT INTO nfts (
-			id, collection_id, nft_type, status, edition, owner,
-			nft_dna,
+		INSERT INTO assets (
+			id, collection_id, asset_type, status, edition, owner,
+			asset_dna,
 			name, image_url,
 			max_supply, distributed,
 			seed_id, instance_number, art_id,
@@ -38,9 +38,9 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 			schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
 			created_operation_id, created_block_num, created_tx_id, created_at
 		) VALUES (
-			${params.id}, ${params.collectionId}, ${params.nftType},
-			${params.status ?? NFT_STATUS_ACTIVE}, ${params.edition}, ${params.owner},
-			${params.nftDna},
+			${params.id}, ${params.collectionId}, ${params.assetType},
+			${params.status ?? ASSET_STATUS_ACTIVE}, ${params.edition}, ${params.owner},
+			${params.assetDna},
 			${params.name}, ${params.imageUrl},
 			${params.maxSupply}, ${params.distributed ?? 0},
 			${params.seedId}, ${params.instanceNumber}, ${params.artId},
@@ -57,11 +57,11 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 		ON CONFLICT (id) DO NOTHING
 	`;
 	if (result.count > 0) {
-		// Counters (owner_nft_counts, collection_stats) are maintained by the
-		// AFTER INSERT trigger `maintain_nft_counters`. The state-root delta
+		// Counters (owner_asset_counts, collection_stats) are maintained by the
+		// AFTER INSERT trigger `maintain_asset_counters`. The state-root delta
 		// stays here because it lives in a txn-local buffer, not in SQL, so
 		// no trigger equivalent exists.
-		const newRow: NftStateRow = {
+		const newRow: AssetStateRow = {
 			id: params.id,
 			owner: params.owner,
 			previous_owner: null,
@@ -78,8 +78,8 @@ export async function insertNft(params: InsertNftParams, txn: Queryable = sql): 
 	return result.count > 0;
 }
 
-export async function updateNftOwner(
-	nftId: string,
+export async function updateAssetOwner(
+	assetId: string,
 	newOwner: string,
 	ownerOperationId: string,
 	ctx: OwnerChangeCtx,
@@ -88,11 +88,11 @@ export async function updateNftOwner(
 	// Read old SPV row under FOR UPDATE before mutating, so the state-root
 	// delta is computed against the exact pre-image of the UPDATE. Any crash
 	// between here and the buffered flush rolls back the entire batch.
-	const oldRow = await readStateRow(nftId, txn);
-	if (!oldRow) throw new Error(`updateNftOwner: nft ${nftId} not found`);
+	const oldRow = await readStateRow(assetId, txn);
+	if (!oldRow) throw new Error(`updateAssetOwner: asset ${assetId} not found`);
 	await txn`
-		UPDATE nfts
-		SET owner = ${newOwner}, status = ${NFT_STATUS_ACTIVE},
+		UPDATE assets
+		SET owner = ${newOwner}, status = ${ASSET_STATUS_ACTIVE},
 		    previous_owner = ${ctx.oldOwner},
 		    owner_operation_id = ${ownerOperationId},
 		    owner_action = ${ctx.ownerAction},
@@ -101,13 +101,13 @@ export async function updateNftOwner(
 		    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL,
 		    sale_buyer = NULL, sale_settlement_node = NULL,
 		    sale_expires_block = NULL, sale_commitment_op_tx_id = NULL, sale_commitment_buy_tx_hash = NULL
-		WHERE id = ${nftId}
+		WHERE id = ${assetId}
 	`;
-	// Queue the delta BEFORE counter updates. See insertNft for rationale —
+	// Queue the delta BEFORE counter updates. See insertAsset for rationale —
 	// any counter failure between here and the state-root flush would leave
-	// the committed nfts row without a corresponding delta.
-	const newRow: NftStateRow = {
-		id: nftId,
+	// the committed assets row without a corresponding delta.
+	const newRow: AssetStateRow = {
+		id: assetId,
 		owner: newOwner,
 		previous_owner: ctx.oldOwner,
 		owner_action: ctx.ownerAction,
@@ -121,20 +121,20 @@ export async function updateNftOwner(
 		blockNum: ctx.ownerBlockNum,
 	});
 	// Owner counters (both sides of the ownership move) are applied by the
-	// AFTER UPDATE OF owner trigger `maintain_nft_counters`. It raises
-	// `"Owner NFT count missing for …"` when OLD.owner has no counter row —
-	// exactly the error adjustOwnerNftCount(-1) used to throw.
+	// AFTER UPDATE OF owner trigger `maintain_asset_counters`. It raises
+	// `"Owner Asset count missing for …"` when OLD.owner has no counter row —
+	// exactly the error adjustOwnerAssetCount(-1) used to throw.
 	if (ctx.wasListed) {
 		await adjustCollectionListed(ctx.collectionId, -1, txn);
 	}
 }
 
-export async function updateNftStatus(nftId: string, status: NftStatus, txn: Queryable = sql) {
-	await txn`UPDATE nfts SET status = ${status} WHERE id = ${nftId}`;
+export async function updateAssetStatus(assetId: string, status: AssetStatus, txn: Queryable = sql) {
+	await txn`UPDATE assets SET status = ${status} WHERE id = ${assetId}`;
 }
 
-export async function hardDeleteNft(
-	nftId: string,
+export async function hardDeleteAsset(
+	assetId: string,
 	burnedBy: string,
 	txId: string,
 	operationId: string,
@@ -145,16 +145,16 @@ export async function hardDeleteNft(
 	// that was previously XORed in on insert/update. Without FOR UPDATE, a
 	// racing handler could delete the row first and leave us with nothing
 	// to un-hash — that's the failure mode the state-root tests call out.
-	const oldRow = await readStateRow(nftId, txn);
-	if (!oldRow) throw new Error(`hardDeleteNft: nft ${nftId} not found`);
+	const oldRow = await readStateRow(assetId, txn);
+	if (!oldRow) throw new Error(`hardDeleteAsset: asset ${assetId} not found`);
 	await txn`
-		INSERT INTO burned_nfts (id, collection_id, burned_by, tx_id, operation_id, created_at)
-		VALUES (${nftId}, ${ctx.collectionId}, ${burnedBy}, ${txId}, ${operationId}, ${ctx.createdAt})
+		INSERT INTO burned_assets (id, collection_id, burned_by, tx_id, operation_id, created_at)
+		VALUES (${assetId}, ${ctx.collectionId}, ${burnedBy}, ${txId}, ${operationId}, ${ctx.createdAt})
 		ON CONFLICT (id) DO NOTHING
 	`;
-	await txn`DELETE FROM nfts WHERE id = ${nftId}`;
+	await txn`DELETE FROM assets WHERE id = ${assetId}`;
 	// Counter decrement and `collection_stats.burned` increment happen in
-	// the AFTER DELETE trigger `maintain_nft_counters`.
+	// the AFTER DELETE trigger `maintain_asset_counters`.
 	queueStateRootDelta(getStateRootBuffer(txn), {
 		type: "delete",
 		oldRow,
@@ -162,8 +162,8 @@ export async function hardDeleteNft(
 	});
 }
 
-export async function updateNftListing(
-	nftId: string,
+export async function updateAssetListing(
+	assetId: string,
 	price: number | null,
 	currency: string | null,
 	expiresAt: number | null,
@@ -175,11 +175,11 @@ export async function updateNftListing(
 ): Promise<void> {
 	if (price === null) {
 		await txn`
-			UPDATE nfts
-			SET status = ${NFT_STATUS_ACTIVE},
+			UPDATE assets
+			SET status = ${ASSET_STATUS_ACTIVE},
 			    listing_id = NULL, listing_tx_id = NULL,
 			    listing_price = NULL, listing_currency = NULL, listing_expires_at = NULL, listing_marketplace = NULL
-			WHERE id = ${nftId}
+			WHERE id = ${assetId}
 		`;
 		if (ctx.wasListed) {
 			await adjustCollectionListed(ctx.collectionId, -1, txn);
@@ -187,12 +187,12 @@ export async function updateNftListing(
 	} else {
 		const expiresIso = expiresAt ? new Date(expiresAt).toISOString() : null;
 		await txn`
-			UPDATE nfts
-			SET status = ${NFT_STATUS_LISTED},
+			UPDATE assets
+			SET status = ${ASSET_STATUS_LISTED},
 			    listing_id = ${listingId}, listing_tx_id = ${listingTxId},
 			    listing_price = ${price}, listing_currency = ${currency},
 			    listing_expires_at = ${expiresIso}, listing_marketplace = ${marketplace}
-			WHERE id = ${nftId}
+			WHERE id = ${assetId}
 		`;
 		if (!ctx.wasListed) {
 			await adjustCollectionListed(ctx.collectionId, 1, txn);
@@ -201,7 +201,7 @@ export async function updateNftListing(
 }
 
 /**
- * Returns every NFT whose `sale_expires_block < currentBlock` back to
+ * Returns every Asset whose `sale_expires_block < currentBlock` back to
  * `status='listed'`, clearing the five sale_* snapshot columns. Called by
  * the sync engine before routing any op at `currentBlock`, so every handler
  * observes a post-sweep world and can never settle a stale lock.
@@ -211,36 +211,36 @@ export async function updateNftListing(
  * rows, so the listed↔pending_sale transition is counter-invariant.
  *
  * Runs under the batch transaction — rollback of the batch rolls back the
- * sweep. The partial index `idx_nfts_sale_expires` keeps this at ~0 cost
+ * sweep. The partial index `idx_assets_sale_expires` keeps this at ~0 cost
  * when no rows are due.
  */
 export async function sweepExpiredBuyCommitments(currentBlock: number, txn: Queryable): Promise<number> {
 	const result = await txn`
-		UPDATE nfts
-		SET status = ${NFT_STATUS_LISTED},
+		UPDATE assets
+		SET status = ${ASSET_STATUS_LISTED},
 		    sale_buyer = NULL, sale_settlement_node = NULL,
 		    sale_expires_block = NULL, sale_commitment_op_tx_id = NULL, sale_commitment_buy_tx_hash = NULL
-		WHERE status = ${NFT_STATUS_PENDING_SALE}
+		WHERE status = ${ASSET_STATUS_PENDING_SALE}
 		  AND sale_expires_block < ${currentBlock}
 	`;
 	return result.count;
 }
 
 export async function incrementDistributedBy(seedId: string, quantity: number, txn: Queryable = sql) {
-	await txn`UPDATE nfts SET distributed = distributed + ${quantity} WHERE id = ${seedId}`;
+	await txn`UPDATE assets SET distributed = distributed + ${quantity} WHERE id = ${seedId}`;
 }
 
-export async function updateNftDataRef(
-	nftId: string,
+export async function updateAssetDataRef(
+	assetId: string,
 	dataHash: string,
 	dataOperationId: string,
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
-		UPDATE nfts
+		UPDATE assets
 		SET data_hash = ${dataHash},
 			data_operation_id = ${dataOperationId}
-		WHERE id = ${nftId}
+		WHERE id = ${assetId}
 	`;
 }
 
@@ -256,13 +256,13 @@ export async function cleanupInvalidMarketplaceListings(
 	txn: Queryable = sql,
 ): Promise<MarketplaceListingCleanupResult> {
 	const cleared = await txn`
-		UPDATE nfts
-		SET status = ${NFT_STATUS_ACTIVE},
+		UPDATE assets
+		SET status = ${ASSET_STATUS_ACTIVE},
 		    listing_id = NULL, listing_tx_id = NULL,
 		    listing_price = NULL, listing_currency = NULL,
 		    listing_expires_at = NULL, listing_marketplace = NULL
-		WHERE status = ${NFT_STATUS_LISTED}
-			AND nft_type <> ${NFT_KIND_INSTANCE}
+		WHERE status = ${ASSET_STATUS_LISTED}
+			AND asset_type <> ${ASSET_KIND_INSTANCE}
 	`;
 
 	const reconciled = await txn`
@@ -271,9 +271,9 @@ export async function cleanupInvalidMarketplaceListings(
 				cs.collection_id,
 				COUNT(n.id)::int AS listed
 			FROM collection_stats cs
-			LEFT JOIN nfts n ON n.collection_id = cs.collection_id
-				AND n.nft_type = ${NFT_KIND_INSTANCE}
-				AND n.status IN (${NFT_STATUS_LISTED}, ${NFT_STATUS_PENDING_SALE})
+			LEFT JOIN assets n ON n.collection_id = cs.collection_id
+				AND n.asset_type = ${ASSET_KIND_INSTANCE}
+				AND n.status IN (${ASSET_STATUS_LISTED}, ${ASSET_STATUS_PENDING_SALE})
 			GROUP BY cs.collection_id
 		)
 		UPDATE collection_stats cs

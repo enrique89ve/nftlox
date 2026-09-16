@@ -1,13 +1,13 @@
-import type { NftStateRow } from "./state-root-hash.ts";
+import type { AssetStateRow } from "./state-root-hash.ts";
 
 // Discriminated union of the three SPV-affecting row changes: insert, update,
 // delete. Lives in memory until the tx commits.
 export type BufferedMutation =
-	| Readonly<{ type: "insert"; newRow: NftStateRow; blockNum: number }>
-	| Readonly<{ type: "update"; oldRow: NftStateRow; newRow: NftStateRow; blockNum: number }>
-	| Readonly<{ type: "delete"; oldRow: NftStateRow; blockNum: number }>;
+	| Readonly<{ type: "insert"; newRow: AssetStateRow; blockNum: number }>
+	| Readonly<{ type: "update"; oldRow: AssetStateRow; newRow: AssetStateRow; blockNum: number }>
+	| Readonly<{ type: "delete"; oldRow: AssetStateRow; blockNum: number }>;
 
-// Net delta for a single NFT across a transaction. Merging rules:
+// Net delta for a single Asset across a transaction. Merging rules:
 //   insert → { firstOld: null,       lastNew: newRow }
 //   update → { firstOld: oldRow,     lastNew: newRow }
 //   delete → { firstOld: oldRow,     lastNew: null   }
@@ -15,8 +15,8 @@ export type BufferedMutation =
 // lastNew is overwritten. This collapses N serial mutations into one net XOR
 // pair (or a no-op if insert+delete cancel).
 export type NetEntry = Readonly<{
-	firstOld: NftStateRow | null;
-	lastNew: NftStateRow | null;
+	firstOld: AssetStateRow | null;
+	lastNew: AssetStateRow | null;
 	blockNum: number;
 }>;
 
@@ -40,7 +40,7 @@ export type StateRootBuffer = Readonly<{
 // it here is a type error.
 function narrow(
 	m: BufferedMutation,
-): Readonly<{ id: string; incomingOld: NftStateRow | null; incomingNew: NftStateRow | null }> {
+): Readonly<{ id: string; incomingOld: AssetStateRow | null; incomingNew: AssetStateRow | null }> {
 	switch (m.type) {
 		case "insert":
 			return { id: m.newRow.id, incomingOld: null, incomingNew: m.newRow };

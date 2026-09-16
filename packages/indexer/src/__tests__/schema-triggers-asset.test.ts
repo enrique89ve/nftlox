@@ -1,31 +1,31 @@
 import { describe, it, expect, beforeEach, afterAll } from "bun:test";
 import { sql } from "@/db/client.ts";
 
-// Verifies the schema-level triggers on `nfts` that enforce post-INSERT
+// Verifies the schema-level triggers on `assets` that enforce post-INSERT
 // invariants (defense-in-depth for SPV hash correctness and structural
 // immutability). The application code never attempts these UPDATEs — the
 // triggers exist to catch a future handler bug, schema drift, or manual
 // ad-hoc SQL that would silently corrupt projected state.
 
-const NFT_ID = "trigger-test-nft-1";
+const ASSET_ID = "trigger-test-asset-1";
 const COLLECTION_ID = "trigger-test-coll";
 
 async function resetFixture(): Promise<void> {
-	await sql`TRUNCATE TABLE nfts, collections, owner_nft_counts, collection_stats CASCADE`;
+	await sql`TRUNCATE TABLE assets, collections, owner_asset_counts, collection_stats CASCADE`;
 	await sql`
 		INSERT INTO collections (id, name, symbol, creator, origin_dna, block_num, tx_id, created_at)
 		VALUES (${COLLECTION_ID}, 'TriggerTest', 'TRG0001', 'alice', 'odna_trg', 100, 'tx-trg-coll', NOW())
 	`;
 	await sql`
-		INSERT INTO nfts (
-			id, collection_id, nft_type, status, edition, owner,
-			nft_dna, name, image_url,
+		INSERT INTO assets (
+			id, collection_id, asset_type, status, edition, owner,
+			asset_dna, name, image_url,
 			max_supply, distributed, seed_id, instance_number, art_id,
 			immutable_data, data_operation_id, data_hash,
 			schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
 			created_operation_id, created_block_num, created_tx_id, created_at
 		) VALUES (
-			${NFT_ID}, ${COLLECTION_ID}, 'seed', 'active', 1, 'alice',
+			${ASSET_ID}, ${COLLECTION_ID}, 'seed', 'active', 1, 'alice',
 			NULL, 'Name-1', 'https://img.example/1.png',
 			10, 0, NULL, NULL, 'art-trg-1',
 			'{"tier":"gold"}'::jsonb, 'op-mint-1', 'hash-1',
@@ -59,9 +59,9 @@ async function insertInstanceRow(id: string, seedId: string, collectionId: strin
 	const opId = `op-${id}`;
 	const txId = `tx-${id}`;
 	await sql`
-		INSERT INTO nfts (
-			id, collection_id, nft_type, status, edition, owner,
-			nft_dna, name, image_url, max_supply, distributed,
+		INSERT INTO assets (
+			id, collection_id, asset_type, status, edition, owner,
+			asset_dna, name, image_url, max_supply, distributed,
 			seed_id, instance_number, art_id,
 			immutable_data, data_operation_id, data_hash,
 			schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
@@ -81,33 +81,33 @@ afterAll(async () => {
 	await sql.end();
 });
 
-describe("nfts triggers — immutable columns", () => {
+describe("assets triggers — immutable columns", () => {
 	beforeEach(resetFixture);
 
 	it("rejects UPDATE of id (primary key re-anchor would desync state_root)", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET id = 'nft-tampered' WHERE id = ${NFT_ID}`,
-			/nfts\.id is immutable/,
+			() => sql`UPDATE assets SET id = 'asset-tampered' WHERE id = ${ASSET_ID}`,
+			/assets\.id is immutable/,
 		);
 	});
 
 	it("rejects UPDATE of collection_id", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET collection_id = 'other-coll' WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET collection_id = 'other-coll' WHERE id = ${ASSET_ID}`,
 			/collection_id is immutable/,
 		);
 	});
 
-	it("rejects UPDATE of nft_type", async () => {
+	it("rejects UPDATE of asset_type", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET nft_type = 'instance' WHERE id = ${NFT_ID}`,
-			/nft_type is immutable/,
+			() => sql`UPDATE assets SET asset_type = 'instance' WHERE id = ${ASSET_ID}`,
+			/asset_type is immutable/,
 		);
 	});
 
 	it("rejects UPDATE of edition", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET edition = 2 WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET edition = 2 WHERE id = ${ASSET_ID}`,
 			/edition is immutable/,
 		);
 	});
@@ -116,32 +116,32 @@ describe("nfts triggers — immutable columns", () => {
 	// carry it. The equivalent immutability test has moved to
 	// schema-triggers-collections.test.ts ("rejects UPDATE of origin_dna").
 
-	it("rejects UPDATE of nft_dna (NULL → value — NULL-safe IS DISTINCT FROM)", async () => {
-		// Fixture leaves nft_dna NULL (seed NFT). A silent write of a DNA
+	it("rejects UPDATE of asset_dna (NULL → value — NULL-safe IS DISTINCT FROM)", async () => {
+		// Fixture leaves asset_dna NULL (seed Asset). A silent write of a DNA
 		// value would break the cryptographic identity recorded at mint time.
 		await expectQueryError(
-			() => sql`UPDATE nfts SET nft_dna = 'dna-tampered' WHERE id = ${NFT_ID}`,
-			/nft_dna is immutable/,
+			() => sql`UPDATE assets SET asset_dna = 'dna-tampered' WHERE id = ${ASSET_ID}`,
+			/asset_dna is immutable/,
 		);
 	});
 
 	it("rejects UPDATE of name", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET name = 'Renamed' WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET name = 'Renamed' WHERE id = ${ASSET_ID}`,
 			/name is immutable/,
 		);
 	});
 
 	it("rejects UPDATE of image_url", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET image_url = 'https://img.example/2.png' WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET image_url = 'https://img.example/2.png' WHERE id = ${ASSET_ID}`,
 			/image_url is immutable/,
 		);
 	});
 
 	it("rejects UPDATE of max_supply", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET max_supply = 100 WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET max_supply = 100 WHERE id = ${ASSET_ID}`,
 			/max_supply is immutable/,
 		);
 	});
@@ -150,97 +150,97 @@ describe("nfts triggers — immutable columns", () => {
 		// BEFORE UPDATE fires before FK validation, so the trigger catches the
 		// immutability violation even when the target seed id does not exist.
 		await expectQueryError(
-			() => sql`UPDATE nfts SET seed_id = 'seed-tampered' WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET seed_id = 'seed-tampered' WHERE id = ${ASSET_ID}`,
 			/seed_id is immutable/,
 		);
 	});
 
 	it("rejects UPDATE of instance_number (ordinal identity of an instance)", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET instance_number = 7 WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET instance_number = 7 WHERE id = ${ASSET_ID}`,
 			/instance_number is immutable/,
 		);
 	});
 
 	it("rejects UPDATE of art_id", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET art_id = 'art-other' WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET art_id = 'art-other' WHERE id = ${ASSET_ID}`,
 			/art_id is immutable/,
 		);
 	});
 
 	it("rejects UPDATE of immutable_data", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET immutable_data = '{"tier":"silver"}'::jsonb WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET immutable_data = '{"tier":"silver"}'::jsonb WHERE id = ${ASSET_ID}`,
 			/immutable_data is immutable/,
 		);
 	});
 
 	it("rejects UPDATE of schema_version", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET schema_version = 99 WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET schema_version = 99 WHERE id = ${ASSET_ID}`,
 			/schema_version is immutable/,
 		);
 	});
 
 	it("rejects UPDATE of created_operation_id", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET created_operation_id = 'op-tampered' WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET created_operation_id = 'op-tampered' WHERE id = ${ASSET_ID}`,
 			/created_.* immutable/,
 		);
 	});
 
 	it("rejects UPDATE of created_block_num", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET created_block_num = 999 WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET created_block_num = 999 WHERE id = ${ASSET_ID}`,
 			/created_.* immutable/,
 		);
 	});
 
 	it("allows UPDATE of mutable columns (reserved_supply)", async () => {
-		await sql`UPDATE nfts SET reserved_supply = 3 WHERE id = ${NFT_ID}`;
-		const [row] = await sql`SELECT reserved_supply FROM nfts WHERE id = ${NFT_ID}`;
+		await sql`UPDATE assets SET reserved_supply = 3 WHERE id = ${ASSET_ID}`;
+		const [row] = await sql`SELECT reserved_supply FROM assets WHERE id = ${ASSET_ID}`;
 		expect(Number(row?.reserved_supply)).toBe(3);
 	});
 
 	it("allows UPDATE of distributed (seed mint counter)", async () => {
-		await sql`UPDATE nfts SET distributed = distributed + 3 WHERE id = ${NFT_ID}`;
-		const [row] = await sql`SELECT distributed FROM nfts WHERE id = ${NFT_ID}`;
+		await sql`UPDATE assets SET distributed = distributed + 3 WHERE id = ${ASSET_ID}`;
+		const [row] = await sql`SELECT distributed FROM assets WHERE id = ${ASSET_ID}`;
 		expect(Number(row?.distributed)).toBe(3);
 	});
 
 	it("allows UPDATE of ownership fields together (transfer path)", async () => {
 		await sql`
-			UPDATE nfts SET
+			UPDATE assets SET
 				owner = 'bob',
 				previous_owner = 'alice',
 				owner_operation_id = 'op-xfer-1',
 				owner_action = 'transfer',
 				owner_block_num = 105
-			WHERE id = ${NFT_ID}
+			WHERE id = ${ASSET_ID}
 		`;
-		const [row] = await sql`SELECT owner, previous_owner, owner_block_num FROM nfts WHERE id = ${NFT_ID}`;
+		const [row] = await sql`SELECT owner, previous_owner, owner_block_num FROM assets WHERE id = ${ASSET_ID}`;
 		expect(row?.owner).toBe("bob");
 		expect(row?.previous_owner).toBe("alice");
 		expect(Number(row?.owner_block_num)).toBe(105);
 	});
 
 	it("allows UPDATE of data ref columns (set_data path)", async () => {
-		await sql`UPDATE nfts SET data_hash = 'hash-new', data_operation_id = 'op-setdata-1' WHERE id = ${NFT_ID}`;
-		const [row] = await sql`SELECT data_hash FROM nfts WHERE id = ${NFT_ID}`;
+		await sql`UPDATE assets SET data_hash = 'hash-new', data_operation_id = 'op-setdata-1' WHERE id = ${ASSET_ID}`;
+		const [row] = await sql`SELECT data_hash FROM assets WHERE id = ${ASSET_ID}`;
 		expect(row?.data_hash).toBe("hash-new");
 	});
 });
 
-describe("nfts schema — seed and instance uniqueness", () => {
+describe("assets schema — seed and instance uniqueness", () => {
 	beforeEach(resetFixture);
 
 	it("rejects duplicate seed art_id within the same collection", async () => {
 		await expectQueryError(
 			() => sql`
-				INSERT INTO nfts (
-					id, collection_id, nft_type, status, edition, owner,
-					nft_dna, name, image_url,
+				INSERT INTO assets (
+					id, collection_id, asset_type, status, edition, owner,
+					asset_dna, name, image_url,
 					max_supply, distributed, seed_id, instance_number, art_id,
 					immutable_data, data_operation_id, data_hash,
 					schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
@@ -254,20 +254,20 @@ describe("nfts schema — seed and instance uniqueness", () => {
 					'op-dup-art', 101, 'tx-dup-art', NOW()
 				)
 			`,
-			/idx_nfts_collection_art_unique|duplicate key/,
+			/idx_assets_collection_art_unique|duplicate key/,
 		);
 	});
 
 	it("rejects duplicate instance_number within the same seed even with a different id", async () => {
-		await insertInstanceRow("trigger-test-inst-ord-1", NFT_ID, COLLECTION_ID, 1);
+		await insertInstanceRow("trigger-test-inst-ord-1", ASSET_ID, COLLECTION_ID, 1);
 		await expectQueryError(
-			() => insertInstanceRow("trigger-test-inst-ord-1-alt-id", NFT_ID, COLLECTION_ID, 1),
-			/idx_nfts_seed_instances|duplicate key/,
+			() => insertInstanceRow("trigger-test-inst-ord-1-alt-id", ASSET_ID, COLLECTION_ID, 1),
+			/idx_assets_seed_instances|duplicate key/,
 		);
 	});
 });
 
-describe("nfts triggers — instance.collection_id matches parent seed", () => {
+describe("assets triggers — instance.collection_id matches parent seed", () => {
 	const OTHER_COLLECTION_ID = "trigger-test-coll-other";
 
 	beforeEach(async () => {
@@ -286,9 +286,9 @@ describe("nfts triggers — instance.collection_id matches parent seed", () => {
 		// state_root between replicas if the app-level path ever wrote it.
 		await expectQueryError(
 			() => sql`
-				INSERT INTO nfts (
-					id, collection_id, nft_type, status, edition, owner,
-					nft_dna, name, image_url, max_supply, distributed,
+				INSERT INTO assets (
+					id, collection_id, asset_type, status, edition, owner,
+					asset_dna, name, image_url, max_supply, distributed,
 					seed_id, instance_number, art_id,
 					immutable_data, data_operation_id, data_hash,
 					schema_version, previous_owner, owner_operation_id,
@@ -297,7 +297,7 @@ describe("nfts triggers — instance.collection_id matches parent seed", () => {
 				) VALUES (
 					'trigger-test-instance-1', ${OTHER_COLLECTION_ID}, 'instance', 'active', 1, 'bob',
 					'idna-inst-1', '', NULL, 0, 0,
-					${NFT_ID}, 1, NULL,
+					${ASSET_ID}, 1, NULL,
 					NULL, NULL, NULL,
 					0, NULL, 'op-dist-1',
 					'bulk_distribute', 150,
@@ -310,9 +310,9 @@ describe("nfts triggers — instance.collection_id matches parent seed", () => {
 
 	it("accepts INSERT of instance with matching collection_id", async () => {
 		await sql`
-			INSERT INTO nfts (
-				id, collection_id, nft_type, status, edition, owner,
-				nft_dna, name, image_url, max_supply, distributed,
+			INSERT INTO assets (
+				id, collection_id, asset_type, status, edition, owner,
+				asset_dna, name, image_url, max_supply, distributed,
 				seed_id, instance_number, art_id,
 				immutable_data, data_operation_id, data_hash,
 				schema_version, previous_owner, owner_operation_id,
@@ -321,22 +321,22 @@ describe("nfts triggers — instance.collection_id matches parent seed", () => {
 			) VALUES (
 				'trigger-test-instance-ok', ${COLLECTION_ID}, 'instance', 'active', 1, 'bob',
 				'idna-inst-ok', '', NULL, 0, 0,
-				${NFT_ID}, 1, NULL,
+				${ASSET_ID}, 1, NULL,
 				NULL, NULL, NULL,
 				0, NULL, 'op-dist-ok',
 				'bulk_distribute', 150,
 				'op-dist-ok', 150, 'tx-dist-ok', NOW()
 			)
 		`;
-		const [row] = await sql`SELECT collection_id FROM nfts WHERE id = 'trigger-test-instance-ok'`;
+		const [row] = await sql`SELECT collection_id FROM assets WHERE id = 'trigger-test-instance-ok'`;
 		expect(row?.collection_id).toBe(COLLECTION_ID);
 	});
 
 	it("allows INSERT of seed (seed_id NULL) — trigger skips the check", async () => {
 		await sql`
-			INSERT INTO nfts (
-				id, collection_id, nft_type, status, edition, owner,
-				nft_dna, name, image_url, max_supply, distributed,
+			INSERT INTO assets (
+				id, collection_id, asset_type, status, edition, owner,
+				asset_dna, name, image_url, max_supply, distributed,
 				seed_id, instance_number, art_id,
 				immutable_data, data_operation_id, data_hash,
 				schema_version, previous_owner, owner_operation_id,
@@ -352,55 +352,55 @@ describe("nfts triggers — instance.collection_id matches parent seed", () => {
 				'op-mint-2', 120, 'tx-mint-2', NOW()
 			)
 		`;
-		const [row] = await sql`SELECT seed_id FROM nfts WHERE id = 'trigger-test-seed-2'`;
+		const [row] = await sql`SELECT seed_id FROM assets WHERE id = 'trigger-test-seed-2'`;
 		expect(row?.seed_id).toBeNull();
 	});
 });
 
-describe("nfts triggers — owner_block_num regression", () => {
+describe("assets triggers — owner_block_num regression", () => {
 	beforeEach(resetFixture);
 
 	it("rejects UPDATE setting owner_block_num below current", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET owner_block_num = 50 WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET owner_block_num = 50 WHERE id = ${ASSET_ID}`,
 			/owner_block_num regression/,
 		);
 	});
 
 	it("allows UPDATE with equal owner_block_num (intra-block mutation)", async () => {
-		await sql`UPDATE nfts SET owner_block_num = 100 WHERE id = ${NFT_ID}`;
-		const [row] = await sql`SELECT owner_block_num FROM nfts WHERE id = ${NFT_ID}`;
+		await sql`UPDATE assets SET owner_block_num = 100 WHERE id = ${ASSET_ID}`;
+		const [row] = await sql`SELECT owner_block_num FROM assets WHERE id = ${ASSET_ID}`;
 		expect(Number(row?.owner_block_num)).toBe(100);
 	});
 
 	it("allows UPDATE with higher owner_block_num (forward progress)", async () => {
-		await sql`UPDATE nfts SET owner_block_num = 250 WHERE id = ${NFT_ID}`;
-		const [row] = await sql`SELECT owner_block_num FROM nfts WHERE id = ${NFT_ID}`;
+		await sql`UPDATE assets SET owner_block_num = 250 WHERE id = ${ASSET_ID}`;
+		const [row] = await sql`SELECT owner_block_num FROM assets WHERE id = ${ASSET_ID}`;
 		expect(Number(row?.owner_block_num)).toBe(250);
 	});
 
 	it("raises the SPV-invariant-violation message (clear diagnostic)", async () => {
 		await expectQueryError(
-			() => sql`UPDATE nfts SET owner_block_num = 99 WHERE id = ${NFT_ID}`,
+			() => sql`UPDATE assets SET owner_block_num = 99 WHERE id = ${ASSET_ID}`,
 			/SPV invariant violation/,
 		);
 	});
 });
 
-describe("nfts triggers — enforce_max_instances (collection cap backstop)", () => {
+describe("assets triggers — enforce_max_instances (collection cap backstop)", () => {
 	const CAPPED_COL = "cap-test-coll";
 	const CAPPED_SEED = "cap-test-seed";
 
 	async function seedCappedFixture(cap: number): Promise<void> {
-		await sql`TRUNCATE TABLE nfts, collections, owner_nft_counts, collection_stats CASCADE`;
+		await sql`TRUNCATE TABLE assets, collections, owner_asset_counts, collection_stats CASCADE`;
 		await sql`
 			INSERT INTO collections (id, name, symbol, creator, origin_dna, max_instances, block_num, tx_id, created_at)
 			VALUES (${CAPPED_COL}, 'Capped', 'CAP0001', 'alice', 'odna_cap', ${cap}, 100, 'tx-cap-coll', NOW())
 		`;
 		await sql`
-			INSERT INTO nfts (
-				id, collection_id, nft_type, status, edition, owner,
-				nft_dna, name, image_url,
+			INSERT INTO assets (
+				id, collection_id, asset_type, status, edition, owner,
+				asset_dna, name, image_url,
 				max_supply, distributed, seed_id, instance_number, art_id,
 				immutable_data, data_operation_id, data_hash,
 				schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
@@ -433,7 +433,7 @@ describe("nfts triggers — enforce_max_instances (collection cap backstop)", ()
 		await seedCappedFixture(5);
 		await sql`UPDATE collection_stats SET instances = 2 WHERE collection_id = ${CAPPED_COL}`;
 		await insertInstanceRow("cap-test-inst-ok", CAPPED_SEED, CAPPED_COL, 3);
-		const [row] = await sql`SELECT id FROM nfts WHERE id = 'cap-test-inst-ok'`;
+		const [row] = await sql`SELECT id FROM assets WHERE id = 'cap-test-inst-ok'`;
 		expect(row?.id).toBe("cap-test-inst-ok");
 	});
 
@@ -443,7 +443,7 @@ describe("nfts triggers — enforce_max_instances (collection cap backstop)", ()
 		// the check because cap = 0 means unlimited.
 		await sql`UPDATE collection_stats SET instances = 10000 WHERE collection_id = ${CAPPED_COL}`;
 		await insertInstanceRow("cap-test-inst-unl", CAPPED_SEED, CAPPED_COL, 10001);
-		const [row] = await sql`SELECT id FROM nfts WHERE id = 'cap-test-inst-unl'`;
+		const [row] = await sql`SELECT id FROM assets WHERE id = 'cap-test-inst-unl'`;
 		expect(row?.id).toBe("cap-test-inst-unl");
 	});
 
@@ -453,9 +453,9 @@ describe("nfts triggers — enforce_max_instances (collection cap backstop)", ()
 		// blocked by this trigger (seeds don't count against instance cap).
 		await sql`UPDATE collection_stats SET instances = 1 WHERE collection_id = ${CAPPED_COL}`;
 		await sql`
-			INSERT INTO nfts (
-				id, collection_id, nft_type, status, edition, owner,
-				nft_dna, name, image_url,
+			INSERT INTO assets (
+				id, collection_id, asset_type, status, edition, owner,
+				asset_dna, name, image_url,
 				max_supply, distributed, seed_id, instance_number, art_id,
 				immutable_data, data_operation_id, data_hash,
 				schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
@@ -469,7 +469,7 @@ describe("nfts triggers — enforce_max_instances (collection cap backstop)", ()
 				'op-cap-mint-2', 120, 'tx-cap-mint-2', NOW()
 			)
 		`;
-		const [row] = await sql`SELECT id FROM nfts WHERE id = 'cap-test-seed-2'`;
+		const [row] = await sql`SELECT id FROM assets WHERE id = 'cap-test-seed-2'`;
 		expect(row?.id).toBe("cap-test-seed-2");
 	});
 });

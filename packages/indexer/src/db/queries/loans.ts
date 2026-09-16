@@ -1,13 +1,13 @@
 import { sql, type Queryable, clampLimit } from "@/db/client.ts";
-import type { NftKind, NftStatus, OwnershipAction, Pagination } from "./nft-types.ts";
+import type { AssetKind, AssetStatus, OwnershipAction, Pagination } from "./asset-types.ts";
 
 export type LoanRole = "lender" | "borrower" | "all";
 
-export type NftLoanRow = Readonly<{
-	readonly nft_id: string;
+export type AssetLoanRow = Readonly<{
+	readonly asset_id: string;
 	readonly collection_id: string;
-	readonly nft_type: NftKind;
-	readonly status: NftStatus;
+	readonly asset_type: AssetKind;
+	readonly status: AssetStatus;
 	readonly owner: string;
 	readonly name: string;
 	readonly image_url: string | null;
@@ -31,9 +31,9 @@ export const parseLoanRole = (value: string | undefined): LoanRole | undefined =
 	value !== undefined && VALID_LOAN_ROLES.has(value as LoanRole) ? value as LoanRole : undefined;
 
 const LOAN_LIST_COLUMNS = sql`
-	l.nft_id,
+	l.asset_id,
 	n.collection_id,
-	n.nft_type,
+	n.asset_type,
 	n.status,
 	n.owner,
 	COALESCE(NULLIF(n.name, ''), s.name) AS name,
@@ -64,7 +64,7 @@ function loanRoleFilter(username: string, role: LoanRole) {
 }
 
 export interface InsertLoanParams {
-	nftId: string;
+	assetId: string;
 	lender: string;
 	borrower: string;
 	operationId: string;
@@ -77,20 +77,20 @@ export async function insertLoan(
 	txn: Queryable = sql,
 ): Promise<void> {
 	await txn`
-		INSERT INTO nft_loans (nft_id, lender, borrower, operation_id, block_num, tx_id)
-		VALUES (${params.nftId}, ${params.lender}, ${params.borrower}, ${params.operationId}, ${params.blockNum}, ${params.txId})
+		INSERT INTO asset_loans (asset_id, lender, borrower, operation_id, block_num, tx_id)
+		VALUES (${params.assetId}, ${params.lender}, ${params.borrower}, ${params.operationId}, ${params.blockNum}, ${params.txId})
 	`;
 }
 
 export async function deleteLoan(
-	nftId: string,
+	assetId: string,
 	txn: Queryable = sql,
 ): Promise<void> {
-	await txn`DELETE FROM nft_loans WHERE nft_id = ${nftId}`;
+	await txn`DELETE FROM asset_loans WHERE asset_id = ${assetId}`;
 }
 
 export interface LoanRecord {
-	nft_id: string;
+	asset_id: string;
 	lender: string;
 	borrower: string;
 	operation_id: string;
@@ -99,16 +99,16 @@ export interface LoanRecord {
 }
 
 export async function getLoan(
-	nftId: string,
+	assetId: string,
 	txn: Queryable = sql,
 ): Promise<LoanRecord | null> {
 	const [row] = await txn`
-		SELECT nft_id, lender, borrower, operation_id, block_num, tx_id
-		FROM nft_loans WHERE nft_id = ${nftId}
+		SELECT asset_id, lender, borrower, operation_id, block_num, tx_id
+		FROM asset_loans WHERE asset_id = ${assetId}
 	`;
 	if (!row) return null;
 	return {
-		nft_id: String(row.nft_id),
+		asset_id: String(row.asset_id),
 		lender: String(row.lender),
 		borrower: String(row.borrower),
 		operation_id: String(row.operation_id),
@@ -117,13 +117,13 @@ export async function getLoan(
 	};
 }
 
-export async function getNftLoan(nftId: string, txn: Queryable = sql): Promise<NftLoanRow | null> {
-	const [row] = await txn<NftLoanRow[]>`
+export async function getAssetLoan(assetId: string, txn: Queryable = sql): Promise<AssetLoanRow | null> {
+	const [row] = await txn<AssetLoanRow[]>`
 		SELECT ${LOAN_LIST_COLUMNS}
-		FROM nft_loans l
-		JOIN nfts n ON n.id = l.nft_id
-		LEFT JOIN nfts s ON s.id = n.seed_id
-		WHERE l.nft_id = ${nftId}
+		FROM asset_loans l
+		JOIN assets n ON n.id = l.asset_id
+		LEFT JOIN assets s ON s.id = n.seed_id
+		WHERE l.asset_id = ${assetId}
 	`;
 	return row ?? null;
 }
@@ -136,7 +136,7 @@ export async function countLoansByAccount(
 	const filter = loanRoleFilter(username, role);
 	const [row] = await txn<{ readonly count: number }[]>`
 		SELECT COUNT(*)::int AS count
-		FROM nft_loans l
+		FROM asset_loans l
 		WHERE ${filter}
 	`;
 	return row?.count ?? 0;
@@ -147,15 +147,15 @@ export async function queryLoansByAccount(
 	role: LoanRole,
 	page?: Pagination,
 	txn: Queryable = sql,
-): Promise<NftLoanRow[]> {
+): Promise<AssetLoanRow[]> {
 	const safeLimit = clampLimit(page?.limit ?? 50);
 	const offset = page?.offset ?? 0;
 	const filter = loanRoleFilter(username, role);
-	return txn<NftLoanRow[]>`
+	return txn<AssetLoanRow[]>`
 		SELECT ${LOAN_LIST_COLUMNS}
-		FROM nft_loans l
-		JOIN nfts n ON n.id = l.nft_id
-		LEFT JOIN nfts s ON s.id = n.seed_id
+		FROM asset_loans l
+		JOIN assets n ON n.id = l.asset_id
+		LEFT JOIN assets s ON s.id = n.seed_id
 		WHERE ${filter}
 		ORDER BY l.created_at DESC
 		LIMIT ${safeLimit} OFFSET ${offset}

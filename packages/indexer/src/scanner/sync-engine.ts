@@ -6,7 +6,7 @@ import {
   cleanupExpiredOperations,
   insertInvalidOperation,
 } from "@/db/queries/sync.ts";
-import { sweepExpiredBuyCommitments } from "@/db/queries/nft-mutations.ts";
+import { sweepExpiredBuyCommitments } from "@/db/queries/asset-mutations.ts";
 import {
   flushStateRootBuffer,
   getStateMeta,
@@ -300,7 +300,7 @@ export async function syncCycle(): Promise<void> {
 
   // API readiness: mark as synced when within tolerance (small natural lag).
   // This separates "is the data useful?" from "are there blocks to fetch?".
-  // A 10-block lag (~30s) is still valid data for an NFT marketplace.
+  // A 10-block lag (~30s) is still valid data for an Asset marketplace.
   setSynced(behind <= SYNC_TOLERANCE_BLOCKS);
 
   if (behind <= 0) {
@@ -440,8 +440,8 @@ export async function syncCycle(): Promise<void> {
     // a `buy` landing at block B observes only locks whose sale_expires_block
     // >= B. It also runs once more at the batch boundary so a quiet window
     // (no ops inside a range that contains an expiration) still returns the
-    // NFT to `listed` before the cursor advances. The partial index
-    // `idx_nfts_sale_expires` keeps the UPDATE at ~zero cost when no rows are due.
+    // Asset to `listed` before the cursor advances. The partial index
+    // `idx_assets_sale_expires` keeps the UPDATE at ~zero cost when no rows are due.
     await withSyncWriteTransaction(async (txn) => {
       if (hasOps) {
         let sweptThrough: number | null = null;

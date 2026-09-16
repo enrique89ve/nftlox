@@ -1,20 +1,20 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
-import { getNftForProcessingForUpdate, updateNftStatus, NFT_STATUS_ACTIVE, NFT_STATUS_LENT } from "@/db/queries/nfts.ts";
+import { getAssetForProcessingForUpdate, updateAssetStatus, ASSET_STATUS_ACTIVE, ASSET_STATUS_LENT } from "@/db/queries/assets.ts";
 import { getLoan, deleteLoan } from "@/db/queries/loans.ts";
 import { requireString } from "@/utils/validation.ts";
 import { validateSeedProvenance } from "@/utils/seed-provenance.ts";
 import { protocolReject } from "@/processor/protocol-rejection.ts";
 
-export async function handleNftReturn(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
+export async function handleAssetReturn(op: ParsedOperation, txn: Queryable): Promise<ReadonlyArray<string>> {
 	const instanceId = requireString(op.data.instanceId, "instanceId");
 
-	const nft = await getNftForProcessingForUpdate(instanceId, txn);
-	if (!nft) throw protocolReject(`NFT not found: ${instanceId}`);
+	const asset = await getAssetForProcessingForUpdate(instanceId, txn);
+	if (!asset) throw protocolReject(`Asset not found: ${instanceId}`);
 
-	await validateSeedProvenance(op, nft, txn);
+	await validateSeedProvenance(op, asset, txn);
 
-	if (nft.status !== NFT_STATUS_LENT) throw protocolReject(`NFT is not lent: ${instanceId}`);
+	if (asset.status !== ASSET_STATUS_LENT) throw protocolReject(`Asset is not lent: ${instanceId}`);
 
 	const loan = await getLoan(instanceId, txn);
 	if (!loan) throw protocolReject(`No active loan found for: ${instanceId}`);
@@ -26,7 +26,7 @@ export async function handleNftReturn(op: ParsedOperation, txn: Queryable): Prom
 		throw protocolReject(`Signer ${op.signer} is neither lender nor borrower of ${instanceId}`);
 	}
 
-	await updateNftStatus(instanceId, NFT_STATUS_ACTIVE, txn);
+	await updateAssetStatus(instanceId, ASSET_STATUS_ACTIVE, txn);
 	await deleteLoan(instanceId, txn);
 
 	return [instanceId];

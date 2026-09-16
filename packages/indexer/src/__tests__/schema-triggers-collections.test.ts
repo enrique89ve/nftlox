@@ -72,7 +72,7 @@ describe("collections triggers — structural immutability", () => {
 	});
 
 	it("rejects UPDATE of origin_dna (single source of truth for seed/instance DNA chain)", async () => {
-		// origin_dna used to live on nfts (duplicated per row). It now lives on
+		// origin_dna used to live on assets (duplicated per row). It now lives on
 		// collections and is read by seed/instance queries via JOIN. If a rogue
 		// UPDATE changed it, every downstream DNA derivation would silently
 		// mismatch the protocol's pure function of collection.id.

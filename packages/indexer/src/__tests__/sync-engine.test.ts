@@ -27,7 +27,7 @@ function fatalRouteResult(reason: string): MockRouteOperationResult {
 // The sync engine only needs genesisBlock, syncIntervalMs, and protocolId.
 mock.module("@/config.ts", () => ({
 	config: {
-		genesisBlock: 105530500,
+		genesisBlock: 109974058,
 		syncIntervalMs: 3000,
 		protocolId: "nftlox_testnet",
 		logLevel: "info",
@@ -166,26 +166,26 @@ mock.module("@/processor/action-router.ts", () => ({
 // state-root queries are exercised by sync-engine.ts at batch-end (flush +
 // snapshot for the F3.A checkpoint emitter). The full DB layer never runs in
 // these tests — the txn is a mock — so we stub the three call sites with
-// no-op implementations that satisfy the real signatures. parseNftStateRow,
-// queueStateRootDelta, etc. are kept as inert stubs because nft-mutations.ts
+// no-op implementations that satisfy the real signatures. parseAssetStateRow,
+// queueStateRootDelta, etc. are kept as inert stubs because asset-mutations.ts
 // imports them at module load even though no real path here invokes them.
 mock.module("@/db/queries/state-root.ts", () => ({
 	flushStateRootBuffer: mock(() => Promise.resolve()),
 	getStateMeta: mock(() =>
 		Promise.resolve({
 			state_root: new Uint8Array(32),
-			nft_count: 0,
+			asset_count: 0,
 			last_block_num: 0,
 			updated_at: "1970-01-01T00:00:00.000Z",
 		}),
 	),
 	recordCheckpointIfBoundary: mock(() => Promise.resolve()),
-	parseNftStateRow: mock((row: unknown) => row),
+	parseAssetStateRow: mock((row: unknown) => row),
 	queueStateRootDelta: mock(() => undefined),
 	bootstrapStateRootFromFullScan: mock(() =>
 		Promise.resolve({
 			state_root: new Uint8Array(32),
-			nft_count: 0,
+			asset_count: 0,
 			last_block_num: 0,
 			updated_at: "1970-01-01T00:00:00.000Z",
 		}),
@@ -193,7 +193,7 @@ mock.module("@/db/queries/state-root.ts", () => ({
 	getFormattedStateRoot: mock(() =>
 		Promise.resolve({
 			state_root: `sha256:${"0".repeat(64)}`,
-			nft_count: 0,
+			asset_count: 0,
 			last_block_num: 0,
 			updated_at: "1970-01-01T00:00:00.000Z",
 		}),
@@ -201,7 +201,7 @@ mock.module("@/db/queries/state-root.ts", () => ({
 	computeStateRootFullScan: mock(() => Promise.resolve(new Uint8Array(32))),
 }));
 
-// Minimal StateRootBuffer stub — only the fields that nft-mutations.ts and
+// Minimal StateRootBuffer stub — only the fields that asset-mutations.ts and
 // state-root.ts touch at runtime (all through the mock txn, which never
 // reaches real DB code). Keeping it structurally complete avoids TS import
 // errors from transitively-imported query modules.
@@ -221,14 +221,14 @@ mock.module("@/db/client.ts", () => ({
 			json: (v: unknown) => v,
 		},
 	),
-	// Used by nft-mutations.ts and action-router.ts for state-root tracking.
+	// Used by asset-mutations.ts and action-router.ts for state-root tracking.
 	// The mock txn never triggers real flush paths, so returning the stub is safe.
 	getStateRootBuffer: (_txn: unknown) => mockBuffer,
 	getTxSavepointHandle: (_txn: unknown) => ({
 		savepoint: (fn: (sp: unknown) => Promise<unknown>) => fn(mockTxn),
 	}),
 	attachScope: (queryable: unknown, _ctx: unknown) => queryable,
-	// toJsonb is used by nft-mutations.ts and sync.ts — just pass through the value.
+	// toJsonb is used by asset-mutations.ts and sync.ts — just pass through the value.
 	toJsonb: (value: unknown) => value,
 	clampLimit: (limit: number, defaultVal = 50) => {
 		if (limit < 1 || !Number.isFinite(limit)) return defaultVal;

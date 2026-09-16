@@ -65,7 +65,7 @@ mock.module("@/scanner/sync-engine.ts", () => ({
 mock.module("@/config.ts", () => ({
 	config: {
 		protocolId: "nftlox_testnet",
-		genesisBlock: 105558142,
+		genesisBlock: 109974058,
 		hiveAccount: "gametest.ing",
 		nodeUrl: "",
 		indexerRole: "both",
@@ -90,7 +90,7 @@ mock.module("@/protocol/index.ts", () => ({
 	...realProtocol,
 	PROTOCOL_FEE_BPS: 250,
 	MAX_ROYALTY_PCT: 50,
-	PROTOCOL_GENESIS_BLOCK: 105558142,
+	PROTOCOL_GENESIS_BLOCK: 109974058,
 }));
 
 const { Elysia } = await import("elysia");
@@ -109,7 +109,7 @@ describe("status route", () => {
 		expect(json.multisigClockDriftMs).toBe(20000);
 		expect(json.protocolFeeBps).toBe(250);
 		expect(json.maxRoyaltyBps).toBe(5000);
-		expect(json.genesisBlock).toBe(105558142);
+		expect(json.genesisBlock).toBe(109974058);
 	});
 
 	test("does not expose any HIVE↔HBD price feed (HBD-only fees: consensus performs no conversion)", async () => {

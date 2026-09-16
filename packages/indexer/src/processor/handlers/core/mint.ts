@@ -1,7 +1,7 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import { getCollectionRules, countSeedsByCreator } from "@/db/queries/collections.ts";
-import { insertNft, nftExists, isBurnedId } from "@/db/queries/nfts.ts";
+import { insertAsset, assetExists, isBurnedId } from "@/db/queries/assets.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
 import {
 	requireBoundedString,
@@ -13,7 +13,7 @@ import {
 	optionalObject,
 	optionalStoredCollectionSchema,
 } from "@/utils/validation.ts";
-import { validateSeedCap } from "@/utils/nft-rules.ts";
+import { validateSeedCap } from "@/utils/asset-rules.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { createLogger } from "@/utils/logger.ts";
 import {
@@ -59,8 +59,8 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 		);
 	}
 
-	if (await nftExists(canonicalId, txn)) {
-		log.info("Mint skipped: NFT already exists", { nftId: canonicalId, signer: op.signer, txId: op.txId });
+	if (await assetExists(canonicalId, txn)) {
+		log.info("Mint skipped: Asset already exists", { assetId: canonicalId, signer: op.signer, txId: op.txId });
 		return [];
 	}
 	const collection = await getCollectionRules(collectionId, txn);
@@ -68,13 +68,13 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	if (collection.creator !== op.signer) throw protocolReject(`Only the collection creator can mint in ${collectionId}`);
 
 	const metadata = optionalObject(d.metadata) ?? {};
-	// Payload must declare nftType explicitly — we never infer it from id prefix
+	// Payload must declare assetType explicitly — we never infer it from id prefix
 	// or action context. This keeps the custom_json self-describing so an
 	// auditor can recreate ownership from the Hive API without the indexer.
-	const nftType = requireBoundedString(d.nftType, "nftType", 16);
-	if (nftType !== "seed") {
+	const assetType = requireBoundedString(d.assetType, "assetType", 16);
+	if (assetType !== "seed") {
 		throw protocolReject(
-			`mint requires nftType="seed" (got "${nftType}"). Instances are created via bulk_distribute.`,
+			`mint requires assetType="seed" (got "${assetType}"). Instances are created via bulk_distribute.`,
 		);
 	}
 
@@ -101,10 +101,10 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 
 	// DNA is always computed by the indexer — never trust user-supplied values.
 	// origin_dna lives on the collection row (single source of truth); we just
-	// read it here to feed into the seed's nft_dna derivation.
+	// read it here to feed into the seed's asset_dna derivation.
 	const edition = optionalNumber(d.edition) ?? 1;
 	const imageHash = optionalString(metadata.imageHash) ?? "";
-	const nftDna = await generateSeedDna(canonicalId, collection.origin_dna, edition, imageHash);
+	const assetDna = await generateSeedDna(canonicalId, collection.origin_dna, edition, imageHash);
 	const ownerRaw = Object.prototype.hasOwnProperty.call(d, "owner")
 		? requireString(d.owner, "owner")
 		: null;
@@ -115,11 +115,11 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 		throw protocolReject(`maxSupply must be >= 1 for seeds, got ${maxSupply}`);
 	}
 
-	await insertNft({
-		id: canonicalId, collectionId, nftType: "seed",
+	await insertAsset({
+		id: canonicalId, collectionId, assetType: "seed",
 		edition,
 		owner,
-		nftDna,
+		assetDna,
 		name: optionalBoundedString(metadata.name, "metadata.name", MAX_NAME_LENGTH) ?? optionalBoundedString(d.name, "name", MAX_NAME_LENGTH) ?? "",
 		imageUrl: optionalBoundedString(metadata.imageUrl, "metadata.imageUrl", MAX_IMAGE_URL_LENGTH),
 		maxSupply,

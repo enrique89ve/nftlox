@@ -14,13 +14,13 @@ import {
 	ACTION_SET_DATA,
 	ACTION_LIST,
 	ACTION_UNLIST,
-	ACTION_NFT_APPROVE,
-	ACTION_NFT_APPROVE_ALL,
-	ACTION_NFT_TRANSFER_FROM,
+	ACTION_ASSET_APPROVE,
+	ACTION_ASSET_APPROVE_ALL,
+	ACTION_ASSET_TRANSFER_FROM,
 	ACTION_DATA_OPERATOR_APPROVE,
 	ACTION_SET_DATA_FROM,
-	ACTION_NFT_LEND,
-	ACTION_NFT_RETURN,
+	ACTION_ASSET_LEND,
+	ACTION_ASSET_RETURN,
 	ACTION_EXTEND_SCHEMA,
 	ACTION_ARCHIVE_COLLECTION,
 	ACTION_NODE_REGISTER,
@@ -61,17 +61,17 @@ import { handleBuyCommitment } from "./handlers/marketplace/buy-commitment.ts";
 import { handleBuy } from "./handlers/marketplace/buy.ts";
 
 // Allowances (Approve & TransferFrom)
-import { handleNftApprove } from "./handlers/allowances/nft-approve.ts";
-import { handleNftApproveAll } from "./handlers/allowances/nft-approve-all.ts";
-import { handleNftTransferFrom } from "./handlers/allowances/nft-transfer-from.ts";
+import { handleAssetApprove } from "./handlers/allowances/asset-approve.ts";
+import { handleAssetApproveAll } from "./handlers/allowances/asset-approve-all.ts";
+import { handleAssetTransferFrom } from "./handlers/allowances/asset-transfer-from.ts";
 
 // Data Operators
 import { handleDataOperatorApprove } from "./handlers/allowances/data-operator-approve.ts";
 import { handleSetDataFrom } from "./handlers/allowances/set-data-from.ts";
 
 // Lending
-import { handleNftLend } from "./handlers/lending/nft-lend.ts";
-import { handleNftReturn } from "./handlers/lending/nft-return.ts";
+import { handleAssetLend } from "./handlers/lending/asset-lend.ts";
+import { handleAssetReturn } from "./handlers/lending/asset-return.ts";
 
 const log = createLogger("router");
 
@@ -91,9 +91,9 @@ export type RouteOperationResult =
 			readonly cause: unknown;
 		}>;
 
-function confirmedOperationNftIds(action: ProtocolAction, nftIds: ReadonlyArray<string>): ReadonlyArray<string> {
+function confirmedOperationAssetIds(action: ProtocolAction, assetIds: ReadonlyArray<string>): ReadonlyArray<string> {
 	if (action === ACTION_BULK_DISTRIBUTE) return [];
-	return nftIds;
+	return assetIds;
 }
 
 /**
@@ -103,7 +103,7 @@ function confirmedOperationNftIds(action: ProtocolAction, nftIds: ReadonlyArray<
  */
 const NATURAL_KEY_EXTRACTORS: Readonly<Record<MemoKey, (op: ParsedOperation) => string>> = {
 	collectionId: (op) => (typeof op.data.id === "string" ? op.data.id : ""),
-	nftId: (op) => (typeof op.data.nftId === "string" ? op.data.nftId : ""),
+	assetId: (op) => (typeof op.data.assetId === "string" ? op.data.assetId : ""),
 	seedId: (op) => (typeof op.data.seedId === "string" ? op.data.seedId : ""),
 	// opDigest — reserved fallback; not used by any current action.
 	opDigest: (op) => op.operationId,
@@ -146,7 +146,7 @@ function requirementNeedsActiveNodeSigner(requirement: PaymentRequirement): bool
  * silently bypassing validation. `targetAccount` is derived from the
  * declarative `recipient` token via `resolvePaymentRecipient` — identical on
  * every indexer because it reads `op.signer`, not local node config. Returns
- * `null` for `split`, which is deferred to the handler (needs a DB-locked NFT
+ * `null` for `split`, which is deferred to the handler (needs a DB-locked Asset
  * row for price lookup).
  */
 function runPreHandlerPaymentValidation(
@@ -198,17 +198,17 @@ const handlers: Record<ProtocolAction, Handler> = {
 	[ACTION_BUY]: handleBuy,
 
 	// Allowances
-	[ACTION_NFT_APPROVE]: handleNftApprove,
-	[ACTION_NFT_APPROVE_ALL]: handleNftApproveAll,
-	[ACTION_NFT_TRANSFER_FROM]: handleNftTransferFrom,
+	[ACTION_ASSET_APPROVE]: handleAssetApprove,
+	[ACTION_ASSET_APPROVE_ALL]: handleAssetApproveAll,
+	[ACTION_ASSET_TRANSFER_FROM]: handleAssetTransferFrom,
 
 	// Data Operators
 	[ACTION_DATA_OPERATOR_APPROVE]: handleDataOperatorApprove,
 	[ACTION_SET_DATA_FROM]: handleSetDataFrom,
 
 	// Lending
-	[ACTION_NFT_LEND]: handleNftLend,
-	[ACTION_NFT_RETURN]: handleNftReturn,
+	[ACTION_ASSET_LEND]: handleAssetLend,
+	[ACTION_ASSET_RETURN]: handleAssetReturn,
 };
 
 /**
@@ -267,7 +267,7 @@ export async function routeOperationDetailed(
 
 			// Pre-handler payment dispatch. `none` / `fixed` / `scaled` run here;
 			// `split` (buy) is deferred to the handler — it needs a DB-locked
-			// NFT row. The router owns consumed-set mutation so a failed handler
+			// Asset row. The router owns consumed-set mutation so a failed handler
 			// can't leak indices. Exhaustive switch inside the helper gives a
 			// compile error if a new PaymentRequirement variant is introduced.
 			const requirement = getPaymentRequirement(op.action);
@@ -293,7 +293,7 @@ export async function routeOperationDetailed(
 			const preMatch = runPreHandlerPaymentValidation(op, requirement);
 			if (preMatch) op.payment = preMatch;
 
-			const nftIds = await txHandle
+			const assetIds = await txHandle
 				.savepoint((spSql) => {
 					const scoped = attachScope(spSql as unknown as Queryable, {
 						buffer,
@@ -326,7 +326,7 @@ export async function routeOperationDetailed(
 				blockNum: op.blockNum,
 				signer: op.signer,
 				action: op.action,
-				nftIds: confirmedOperationNftIds(op.action, nftIds),
+				assetIds: confirmedOperationAssetIds(op.action, assetIds),
 				createdAt: op.timestamp,
 			}, txn);
 			return { kind: "applied" };
@@ -361,7 +361,7 @@ export async function routeOperationDetailed(
 			}, txn);
 
 			// Flag failed buy operations that had HIVE transfers as orphaned buys.
-			// These represent cases where funds moved on-chain but NFT ownership was NOT updated.
+			// These represent cases where funds moved on-chain but Asset ownership was NOT updated.
 			const isBuyAction = op.action === ACTION_BUY;
 			const transfers = op.pairedTransfers;
 			const firstTransfer = transfers?.[0];
@@ -377,7 +377,7 @@ export async function routeOperationDetailed(
 					txId: op.txId,
 					operationId: op.operationId,
 					buyer: firstTransfer.from,
-					nftId: typeof op.data.nftId === "string" ? op.data.nftId : null,
+					assetId: typeof op.data.assetId === "string" ? op.data.assetId : null,
 					reason,
 					transfers,
 				}, txn);

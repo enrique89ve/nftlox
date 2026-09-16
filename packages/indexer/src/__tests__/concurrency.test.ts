@@ -124,18 +124,18 @@ mock.module("@/db/queries/state-root.ts", () => ({
 	getStateMeta: mock(() =>
 		Promise.resolve({
 			state_root: new Uint8Array(32),
-			nft_count: 0,
+			asset_count: 0,
 			last_block_num: 0,
 			updated_at: "1970-01-01T00:00:00.000Z",
 		}),
 	),
 	recordCheckpointIfBoundary: mock(() => Promise.resolve()),
-	parseNftStateRow: mock((row: unknown) => row),
+	parseAssetStateRow: mock((row: unknown) => row),
 	queueStateRootDelta: mock(() => undefined),
 	bootstrapStateRootFromFullScan: mock(() =>
 		Promise.resolve({
 			state_root: new Uint8Array(32),
-			nft_count: 0,
+			asset_count: 0,
 			last_block_num: 0,
 			updated_at: "1970-01-01T00:00:00.000Z",
 		}),
@@ -143,7 +143,7 @@ mock.module("@/db/queries/state-root.ts", () => ({
 	getFormattedStateRoot: mock(() =>
 		Promise.resolve({
 			state_root: `sha256:${"0".repeat(64)}`,
-			nft_count: 0,
+			asset_count: 0,
 			last_block_num: 0,
 			updated_at: "1970-01-01T00:00:00.000Z",
 		}),
@@ -157,7 +157,7 @@ mock.module("@/db/queries/state-root.ts", () => ({
 mock.module("@/config.ts", () => ({
 	config: {
 		protocolId: "nftlox_testnet",
-		genesisBlock: 105558142,
+		genesisBlock: 109974058,
 		hiveAccount: "gametest.ing",
 		nodeUrl: "",
 		indexerRole: "sync",

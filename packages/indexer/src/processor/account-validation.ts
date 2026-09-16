@@ -1,8 +1,8 @@
 import {
 	ACTION_BULK_DISTRIBUTE,
 	ACTION_MINT,
-	ACTION_NFT_LEND,
-	ACTION_NFT_TRANSFER_FROM,
+	ACTION_ASSET_LEND,
+	ACTION_ASSET_TRANSFER_FROM,
 	ACTION_TRANSFER,
 	BURN_RECIPIENT,
 	getAuthMismatchReason,
@@ -87,7 +87,7 @@ function targetForOperation(op: ParsedOperation): AccountTarget {
 		if (target.kind === "lookup" && target.account === op.signer) {
 			return {
 				kind: "rejected",
-				reason: "Cannot transfer NFT to yourself",
+				reason: "Cannot transfer Asset to yourself",
 			};
 		}
 		return target;
@@ -105,11 +105,11 @@ function targetForOperation(op: ParsedOperation): AccountTarget {
 		return accountTarget(data.to, "to", op.signer, true, true, op.timestamp);
 	}
 
-	if (op.action === ACTION_NFT_TRANSFER_FROM) {
+	if (op.action === ACTION_ASSET_TRANSFER_FROM) {
 		return accountTarget(data.to, "to", op.signer, true, false, op.timestamp);
 	}
 
-	if (op.action === ACTION_NFT_LEND) {
+	if (op.action === ACTION_ASSET_LEND) {
 		return accountTarget(data.borrower, "borrower", op.signer, true, true, op.timestamp);
 	}
 

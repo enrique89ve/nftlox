@@ -26,7 +26,7 @@ export function sumBuyerOutgoing(
 /**
  * Anti-grief gate: refuses to broadcast a buy_commitment when the buyer cannot
  * cover the transfers. Hive consensus would reject the buy-tx anyway at block
- * production, but the commitment IS broadcast first and locks the NFT in
+ * production, but the commitment IS broadcast first and locks the Asset in
  * `pending_sale` until BUY_COMMITMENT_TTL_BLOCKS expires (~30s). Without this
  * gate an attacker with empty accounts can grief popular listings at zero cost.
  *

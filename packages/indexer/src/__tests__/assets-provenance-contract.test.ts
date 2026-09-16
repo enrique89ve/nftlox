@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 // SPV provenance contract
 // -----------------------
-// The indexer's public NFT reads must expose enough ownership metadata for a
+// The indexer's public Asset reads must expose enough ownership metadata for a
 // client to verify the current owner against HafAH without trusting us.
 //
 // The minimum set is:
 //   - owner              : current owner account
-//   - previous_owner     : account that held the NFT before the latest change
+//   - previous_owner     : account that held the Asset before the latest change
 //   - owner_action       : which protocol action last changed ownership
 //   - owner_operation_id : HafAH operation id of that action
 //   - owner_block_num    : block in which the action landed
@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 // With those five fields the client can pick any HafAH lookup path
 // (`/operations/{id}`, `/accounts/:acc/operations`, `get_ops_in_block`, ...)
 // and re-derive the tx_id, signatures, and custom_json body independently.
-// This test fails if any NFT-returning endpoint drops one of those fields.
+// This test fails if any Asset-returning endpoint drops one of those fields.
 
 type ProvenanceFixture = Readonly<{
 	owner: string;
@@ -35,11 +35,11 @@ const PROVENANCE: ProvenanceFixture = Object.freeze({
 	owner_block_num: 105_530_600,
 });
 
-function makeNftRow(id: string): Record<string, unknown> {
+function makeAssetRow(id: string): Record<string, unknown> {
 	return {
 		id,
 		collection_id: "col_1",
-		nft_type: "instance",
+		asset_type: "instance",
 		status: "active",
 		...PROVENANCE,
 	};
@@ -59,37 +59,37 @@ function makeOwnershipProof(id: string): Record<string, unknown> {
 		created_operation_id: "3448858700000",
 		created_block_num: 105_530_500,
 		created_tx_id: "abc123",
-		nft_type: "instance",
+		asset_type: "instance",
 		seed_id: "seed_1",
 		instance_number: 1,
-		nft_dna: "0x" + "b".repeat(40),
+		asset_dna: "0x" + "b".repeat(40),
 		collection_id: "col_1",
 		collection_created_block_num: 105_530_400,
 		collection_created_tx_id: "0".repeat(40),
 	};
 }
 
-mock.module("@/db/queries/nfts.ts", () => ({
-	getNftById: (id: string) => Promise.resolve(makeNftRow(id)),
-	getNftsByIds: (ids: readonly string[]) =>
-		Promise.resolve(ids.map((id) => makeNftRow(id))),
-	getNftOwnerClaim: (id: string) => Promise.resolve(makeOwnerClaim(id)),
-	getNftOwnershipProof: (id: string) => Promise.resolve(makeOwnershipProof(id)),
-	getSeedSummary: (id: string) => Promise.resolve(makeNftRow(id)),
-	queryNfts: (query: { seedId?: string }) =>
-		Promise.resolve([makeNftRow(query.seedId ?? "nft_1")]),
-	queryRawInstances: () => Promise.resolve([makeNftRow("inst_1")]),
+mock.module("@/db/queries/assets.ts", () => ({
+	getAssetById: (id: string) => Promise.resolve(makeAssetRow(id)),
+	getAssetsByIds: (ids: readonly string[]) =>
+		Promise.resolve(ids.map((id) => makeAssetRow(id))),
+	getAssetOwnerClaim: (id: string) => Promise.resolve(makeOwnerClaim(id)),
+	getAssetOwnershipProof: (id: string) => Promise.resolve(makeOwnershipProof(id)),
+	getSeedSummary: (id: string) => Promise.resolve(makeAssetRow(id)),
+	queryAssets: (query: { seedId?: string }) =>
+		Promise.resolve([makeAssetRow(query.seedId ?? "asset_1")]),
+	queryRawInstances: () => Promise.resolve([makeAssetRow("inst_1")]),
 }));
 
 mock.module("@/db/queries/loans.ts", () => ({
-	getNftLoan: () => Promise.resolve(null),
+	getAssetLoan: () => Promise.resolve(null),
 }));
 
 const { Elysia } = await import("elysia");
-const { nftsRoutes } = await import("@/api/routes/nfts.ts");
+const { assetsRoutes } = await import("@/api/routes/assets.ts");
 
 function buildApp() {
-	return new Elysia().use(nftsRoutes);
+	return new Elysia().use(assetsRoutes);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -136,43 +136,43 @@ function extractCompactInstances(body: unknown): readonly unknown[] {
 
 const CASES: readonly EndpointCase[] = [
 	{
-		name: "GET /api/nfts?ids=...",
-		path: "/api/nfts?ids=nft_1,nft_2",
+		name: "GET /api/assets?ids=...",
+		path: "/api/assets?ids=asset_1,asset_2",
 		extract: extractBatch,
 	},
 	{
-		name: "GET /api/nfts/:id",
-		path: "/api/nfts/nft_1",
+		name: "GET /api/assets/:id",
+		path: "/api/assets/asset_1",
 		extract: (body) => [body],
 	},
 	{
-		name: "GET /api/nfts/:id/owner",
-		path: "/api/nfts/nft_1/owner",
+		name: "GET /api/assets/:id/owner",
+		path: "/api/assets/asset_1/owner",
 		extract: (body) => [body],
 	},
 	{
-		name: "GET /api/nfts/:id/ownership",
-		path: "/api/nfts/nft_1/ownership",
+		name: "GET /api/assets/:id/ownership",
+		path: "/api/assets/asset_1/ownership",
 		extract: (body) => [body],
 	},
 	{
-		name: "GET /api/nfts/:id/proof",
-		path: "/api/nfts/nft_1/proof",
+		name: "GET /api/assets/:id/proof",
+		path: "/api/assets/asset_1/proof",
 		extract: (body) => [body],
 	},
 	{
-		name: "GET /api/nfts/:id/instances (non-compact)",
-		path: "/api/nfts/seed_1/instances",
+		name: "GET /api/assets/:id/instances (non-compact)",
+		path: "/api/assets/seed_1/instances",
 		extract: (body) => (Array.isArray(body) ? body : []),
 	},
 	{
-		name: "GET /api/nfts/:id/instances?compact=true",
-		path: "/api/nfts/seed_1/instances?compact=true",
+		name: "GET /api/assets/:id/instances?compact=true",
+		path: "/api/assets/seed_1/instances?compact=true",
 		extract: extractCompactInstances,
 	},
 ];
 
-describe("SPV provenance contract across NFT reads", () => {
+describe("SPV provenance contract across Asset reads", () => {
 	let app: ReturnType<typeof buildApp>;
 
 	beforeEach(() => {
@@ -212,7 +212,7 @@ describe("SPV provenance contract across NFT reads", () => {
 	});
 
 	test("ownership proof exposes the collection L1 anchor used by SPV buy checks", async () => {
-		const response = await app.handle(new Request("http://localhost/api/nfts/nft_1/proof"));
+		const response = await app.handle(new Request("http://localhost/api/assets/asset_1/proof"));
 		expect(response.status).toBe(200);
 		const body = (await response.json()) as unknown;
 		expect(hasCollectionAnchor(body)).toBe(true);

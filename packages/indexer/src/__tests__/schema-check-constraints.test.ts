@@ -96,11 +96,11 @@ describe("sales — seller <> buyer", () => {
     await expectQueryError(
       () => sql`
 				INSERT INTO sales (
-					nft_id, collection_id, listing_id, seller, buyer,
+					asset_id, collection_id, listing_id, seller, buyer,
 					gross_amount, currency, seller_net,
 					block_num, tx_id, created_at
 				) VALUES (
-					'nft-self', 'coll-self', 'lst-1', 'alice', 'alice',
+					'asset-self', 'coll-self', 'lst-1', 'alice', 'alice',
 					10, 'HIVE', 10,
 					100, 'tx-self', NOW()
 				)
@@ -112,16 +112,16 @@ describe("sales — seller <> buyer", () => {
   it("accepts distinct seller and buyer", async () => {
     await sql`
 			INSERT INTO sales (
-				nft_id, collection_id, listing_id, seller, buyer,
+				asset_id, collection_id, listing_id, seller, buyer,
 				gross_amount, currency, seller_net,
 				block_num, tx_id, created_at
 			) VALUES (
-				'nft-ab', 'coll-ab', 'lst-2', 'alice', 'bob',
+				'asset-ab', 'coll-ab', 'lst-2', 'alice', 'bob',
 				10, 'HIVE', 10,
 				100, 'tx-ab', NOW()
 			)
 		`;
-    const [row] = await sql`SELECT buyer FROM sales WHERE nft_id = 'nft-ab'`;
+    const [row] = await sql`SELECT buyer FROM sales WHERE asset_id = 'asset-ab'`;
     expect(row?.buyer).toBe("bob");
   });
 });

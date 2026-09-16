@@ -1,6 +1,6 @@
 import type { Queryable } from "@/db/client.ts";
 import type { CollectionRulesRow } from "@/db/queries/collections.ts";
-import type { NftProcessingRow } from "@/db/queries/nfts.ts";
+import type { AssetProcessingRow } from "@/db/queries/assets.ts";
 import {
 	ACTION_BUY,
 	ACTION_CREATE_COLLECTION,
@@ -25,7 +25,7 @@ export type ValidatedTransferOp = Readonly<{
 export type ValidatedBuyPayload = Readonly<{
 	readonly action: typeof ACTION_BUY;
 	readonly data: Readonly<{
-		readonly nftId: string;
+		readonly assetId: string;
 		readonly listingId: string;
 		readonly listTxId: string;
 	}>;
@@ -79,10 +79,10 @@ export type MultisigRules = Pick<
 	"id" | "creator" | "transferable" | "burnable" | "royalty_pct" | "royalty_recipient"
 >;
 
-export type NftStateResult = Readonly<{
-	readonly nft: NftProcessingRow;
+export type AssetStateResult = Readonly<{
+	readonly asset: AssetProcessingRow;
 	readonly rules: MultisigRules;
-	readonly nftTxId: string;
+	readonly assetTxId: string;
 }>;
 
 export type SignResult = Readonly<{
@@ -107,13 +107,13 @@ export type CollectionLockHandle = Readonly<{
 
 export type BuyLockHandle = Readonly<{
 	readonly acquire: (
-		nftId: string,
+		assetId: string,
 		listingId: string,
 		listTxId: string,
 		holder: string,
 		expirationMs: number,
 	) => Promise<BuyLockAcquisition>;
-	readonly release: (nftId: string, holder: string) => Promise<void>;
+	readonly release: (assetId: string, holder: string) => Promise<void>;
 }>;
 
 // Split the request contexts so each multisig flow only sees the lock handle

@@ -17,10 +17,10 @@ import {
 	seedCollection,
 	insertListedInstance,
 	cleanCommonTables,
-	fixtureNftId,
+	fixtureAssetId,
 	fixtureListingId,
 	fixtureHiveTxId,
-} from "./helpers/nft-fixtures.ts";
+} from "./helpers/asset-fixtures.ts";
 
 // Tests that validate the action-router gate for NODE_SIGNED_ACTIONS
 // (buy_commitment, buy): op.signer MUST be registered and active in l2_nodes
@@ -45,7 +45,7 @@ const STALE_BLOCK = REGISTERED_BLOCK + MAX_NODE_HEARTBEAT_STALENESS_BLOCKS + 1;
  * fee-bypass that existed before the fix.
  */
 function makeBuyOp(params: {
-	readonly nftId: string;
+	readonly assetId: string;
 	readonly listingId: string;
 	readonly listTxId: string;
 	readonly buyer: string;
@@ -63,7 +63,7 @@ function makeBuyOp(params: {
 			to: params.seller,
 			amount: split.sellerAmount,
 			currency: "HIVE",
-			memo: `${MEMO_PREFIX_BUY}${params.nftId}`,
+			memo: `${MEMO_PREFIX_BUY}${params.assetId}`,
 		},
 	];
 	if (split.feeAmount > 0) {
@@ -72,7 +72,7 @@ function makeBuyOp(params: {
 			to: params.signer,
 			amount: split.feeAmount,
 			currency: "HIVE",
-			memo: `${MEMO_PREFIX_FEE}${params.nftId}`,
+			memo: `${MEMO_PREFIX_FEE}${params.assetId}`,
 		});
 	}
 	return _makeOp({
@@ -81,7 +81,7 @@ function makeBuyOp(params: {
 		blockNum: params.blockNum,
 		txId: params.buyTxHash,
 		data: {
-			nftId: params.nftId,
+			assetId: params.assetId,
 			listingId: params.listingId,
 			listTxId: params.listTxId,
 			txId: params.buyTxHash,
@@ -97,7 +97,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-	await sql`DELETE FROM nfts`;
+	await sql`DELETE FROM assets`;
 	await sql`DELETE FROM invalid_operations`;
 	await sql`DELETE FROM confirmed_operations`;
 	await sql`DELETE FROM orphaned_buys`;
@@ -111,17 +111,17 @@ afterAll(async () => {
 
 describe("router node-signer gate — buy_commitment", () => {
 	test("rejects a non-registered signer (DOS prevention)", async () => {
-		const nftId = fixtureNftId("gate-a");
+		const assetId = fixtureAssetId("gate-a");
 		const listingId = fixtureListingId("a");
 		const listTxId = fixtureHiveTxId("a");
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
+		await insertListedInstance({ assetId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 		const op = _makeOp({
 			action: ACTION_BUY_COMMITMENT,
 			signer: STRANGER,
 			blockNum: FRESH_BLOCK,
 			data: {
-				nftId,
+				assetId,
 				listingId,
 				listTxId,
 				buyer: BUYER,
@@ -132,11 +132,11 @@ describe("router node-signer gate — buy_commitment", () => {
 		const ok = await withTransaction((txn) => routeOperation(op, txn));
 		expect(ok).toBe(false);
 
-		const [nft] = await sql<{ status: string; sale_buyer: string | null }[]>`
-			SELECT status, sale_buyer FROM nfts WHERE id = ${nftId}
+		const [asset] = await sql<{ status: string; sale_buyer: string | null }[]>`
+			SELECT status, sale_buyer FROM assets WHERE id = ${assetId}
 		`;
-		expect(nft?.status).toBe("listed");
-		expect(nft?.sale_buyer).toBeNull();
+		expect(asset?.status).toBe("listed");
+		expect(asset?.sale_buyer).toBeNull();
 
 		const invalid = await sql<{ reason: string }[]>`
 			SELECT reason FROM invalid_operations WHERE operation_id = ${op.operationId}
@@ -147,17 +147,17 @@ describe("router node-signer gate — buy_commitment", () => {
 
 	test("accepts a registered + fresh node signer (happy path)", async () => {
 		await seedActiveSettlementNode(REGISTERED_NODE, { registeredBlock: REGISTERED_BLOCK });
-		const nftId = fixtureNftId("gate-b");
+		const assetId = fixtureAssetId("gate-b");
 		const listingId = fixtureListingId("b");
 		const listTxId = fixtureHiveTxId("b");
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
+		await insertListedInstance({ assetId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 		const op = _makeOp({
 			action: ACTION_BUY_COMMITMENT,
 			signer: REGISTERED_NODE,
 			blockNum: FRESH_BLOCK,
 			data: {
-				nftId,
+				assetId,
 				listingId,
 				listTxId,
 				buyer: BUYER,
@@ -168,29 +168,29 @@ describe("router node-signer gate — buy_commitment", () => {
 		const ok = await withTransaction((txn) => routeOperation(op, txn));
 		expect(ok).toBe(true);
 
-		const [nft] = await sql<
+		const [asset] = await sql<
 			{ status: string; sale_settlement_node: string | null; sale_expires_block: string | null }[]
 		>`
-			SELECT status, sale_settlement_node, sale_expires_block FROM nfts WHERE id = ${nftId}
+			SELECT status, sale_settlement_node, sale_expires_block FROM assets WHERE id = ${assetId}
 		`;
-		expect(nft?.status).toBe("pending_sale");
-		expect(nft?.sale_settlement_node).toBe(REGISTERED_NODE);
-		expect(Number(nft?.sale_expires_block)).toBe(FRESH_BLOCK + BUY_COMMITMENT_TTL_BLOCKS);
+		expect(asset?.status).toBe("pending_sale");
+		expect(asset?.sale_settlement_node).toBe(REGISTERED_NODE);
+		expect(Number(asset?.sale_expires_block)).toBe(FRESH_BLOCK + BUY_COMMITMENT_TTL_BLOCKS);
 	});
 
 	test("rejects a registered node with a stale heartbeat", async () => {
 		await seedActiveSettlementNode(REGISTERED_NODE, { registeredBlock: REGISTERED_BLOCK });
-		const nftId = fixtureNftId("gate-c");
+		const assetId = fixtureAssetId("gate-c");
 		const listingId = fixtureListingId("c");
 		const listTxId = fixtureHiveTxId("c");
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
+		await insertListedInstance({ assetId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 
 		const op = _makeOp({
 			action: ACTION_BUY_COMMITMENT,
 			signer: REGISTERED_NODE,
 			blockNum: STALE_BLOCK,
 			data: {
-				nftId,
+				assetId,
 				listingId,
 				listTxId,
 				buyer: BUYER,
@@ -201,10 +201,10 @@ describe("router node-signer gate — buy_commitment", () => {
 		const ok = await withTransaction((txn) => routeOperation(op, txn));
 		expect(ok).toBe(false);
 
-		const [nft] = await sql<{ status: string }[]>`
-			SELECT status FROM nfts WHERE id = ${nftId}
+		const [asset] = await sql<{ status: string }[]>`
+			SELECT status FROM assets WHERE id = ${assetId}
 		`;
-		expect(nft?.status).toBe("listed");
+		expect(asset?.status).toBe("listed");
 
 		const invalid = await sql<{ reason: string }[]>`
 			SELECT reason FROM invalid_operations WHERE operation_id = ${op.operationId}
@@ -222,10 +222,10 @@ describe("router node-signer gate — buy", () => {
 		// buy BEFORE it reaches the handler, without altering the reservation.
 		await seedActiveSettlementNode(REGISTERED_NODE, { registeredBlock: REGISTERED_BLOCK });
 
-		const nftId = fixtureNftId("gate-buy");
+		const assetId = fixtureAssetId("gate-buy");
 		const listingId = fixtureListingId("buy");
 		const listTxId = fixtureHiveTxId("buy");
-		await insertListedInstance({ nftId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
+		await insertListedInstance({ assetId, collectionId: COLLECTION_ID, seller: SELLER, listingId, listTxId });
 		const buyTxHash = "e".repeat(40);
 
 		const commitOp = _makeOp({
@@ -233,7 +233,7 @@ describe("router node-signer gate — buy", () => {
 			signer: REGISTERED_NODE,
 			blockNum: FRESH_BLOCK,
 			data: {
-				nftId,
+				assetId,
 				listingId,
 				listTxId,
 				buyer: BUYER,
@@ -246,7 +246,7 @@ describe("router node-signer gate — buy", () => {
 		// Attacker: same tx_hash as the reservation, but signs with a non-node
 		// account and self-directs the fee (signer === feeAccount).
 		const buyOp = makeBuyOp({
-			nftId,
+			assetId,
 			listingId,
 			listTxId,
 			buyer: BUYER,
@@ -260,18 +260,18 @@ describe("router node-signer gate — buy", () => {
 		expect(ok).toBe(false);
 
 		// Reservation is still intact — handleBuy did not run.
-		const [nft] = await sql<
+		const [asset] = await sql<
 			{ status: string; sale_buyer: string | null; owner: string; sale_commitment_buy_tx_hash: string | null }[]
 		>`
-			SELECT status, sale_buyer, owner, sale_commitment_buy_tx_hash FROM nfts WHERE id = ${nftId}
+			SELECT status, sale_buyer, owner, sale_commitment_buy_tx_hash FROM assets WHERE id = ${assetId}
 		`;
-		expect(nft?.status).toBe("pending_sale");
-		expect(nft?.sale_buyer).toBe(BUYER);
-		expect(nft?.owner).toBe(SELLER);
-		expect(nft?.sale_commitment_buy_tx_hash).toBe(buyTxHash);
+		expect(asset?.status).toBe("pending_sale");
+		expect(asset?.sale_buyer).toBe(BUYER);
+		expect(asset?.owner).toBe(SELLER);
+		expect(asset?.sale_commitment_buy_tx_hash).toBe(buyTxHash);
 
 		// No sale was recorded.
-		const sales = await sql`SELECT id FROM sales WHERE nft_id = ${nftId}`;
+		const sales = await sql`SELECT id FROM sales WHERE asset_id = ${assetId}`;
 		expect(sales).toHaveLength(0);
 
 		// The reason in invalid_operations must come from the gate, not the handler.
@@ -285,7 +285,7 @@ describe("router node-signer gate — buy", () => {
 		// transfers have already occurred before processing. The router's
 		// catch records that fact in orphaned_buys with the same gate reason
 		// — the fix's mitigation is not "recover the funds" but "prevent the
-		// NFT from changing hands without paying the fee to the legitimate
+		// Asset from changing hands without paying the fee to the legitimate
 		// node". Ensuring this record keeps operational traceability.
 		const orphaned = await sql<{ reason: string }[]>`
 			SELECT reason FROM orphaned_buys WHERE tx_id = ${buyOp.txId}

@@ -180,7 +180,7 @@ describe("protocol auth parser", () => {
 			data: {
 				from: "alice",
 				to: "bob",
-				nftId: "nft_1",
+				assetId: "asset_1",
 				__proto__: { polluted: true },
 				constructor: { prototype: { polluted: true } },
 			},

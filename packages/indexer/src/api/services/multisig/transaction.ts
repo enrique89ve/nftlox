@@ -243,7 +243,7 @@ export function parseBuyPayload(json: string, protocolId: string): ValidatedBuyP
 	return {
 		action: ACTION_BUY,
 		data: {
-			nftId: validateShapedPayloadString(parsed.data.nftId, "nftId", isInstanceId, "nft_<20 hex>_<instance>"),
+			assetId: validateShapedPayloadString(parsed.data.assetId, "assetId", isInstanceId, "asset_<20 hex>_<instance>"),
 			listingId: validateShapedPayloadString(parsed.data.listingId, "listingId", isListingId, "list_<32 hex>"),
 			listTxId: validateShapedPayloadString(parsed.data.listTxId, "listTxId", isHiveTxId, "<40 lowercase hex>"),
 		},
@@ -331,7 +331,7 @@ export function validateExactLengthPayloadString(value: unknown, fieldName: stri
 // (id prefixes, hex widths). The predicate is a pure protocol guard
 // (`isInstanceId`, `isListingId`, `isHiveTxId`) so the multisig and handler
 // reject the same string for the same reason. `shapeDescription` should name
-// the canonical shape ("nft_<20 hex>_<n>") so client logs surface why the
+// the canonical shape ("asset_<20 hex>_<n>") so client logs surface why the
 // payload was rejected.
 export function validateShapedPayloadString(
 	value: unknown,

@@ -64,7 +64,7 @@ export interface VerifyTransfersParams {
 	royaltyPct: number;
 	royaltyRecipient: string | null;
 	feeAccount: string;
-	nftId: string;
+	assetId: string;
 	consumedIndices?: ReadonlySet<number>;
 }
 
@@ -128,7 +128,7 @@ function findUniqueTransferIndex(params: {
 }
 
 export function planVerifiedTransfers(params: VerifyTransfersParams): VerifyTransfersResult {
-	const { transfers, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, nftId, consumedIndices } = params;
+	const { transfers, seller, totalPrice, currency, royaltyPct, royaltyRecipient, feeAccount, assetId, consumedIndices } = params;
 
 	if (transfers.length === 0) {
 		throw protocolReject("No transfers found. Payment split is required.");
@@ -137,7 +137,7 @@ export function planVerifiedTransfers(params: VerifyTransfersParams): VerifyTran
 	const split = calculatePaymentSplit(totalPrice, currency, royaltyPct, royaltyRecipient, seller, feeAccount);
 
 	const AMOUNT_TOLERANCE = 0.0005;
-	const sellerMemo = `${MEMO_PREFIX_BUY}${nftId}`;
+	const sellerMemo = `${MEMO_PREFIX_BUY}${assetId}`;
 
 	// Seller leg uniquely identifies the buyer. Match by (to, amount, currency,
 	// memo) WITHOUT a `from` filter — the `from` is exactly what we're trying
@@ -191,11 +191,11 @@ export function planVerifiedTransfers(params: VerifyTransfersParams): VerifyTran
 	}
 
 	if (split.royaltyAmount > 0 && split.royaltyRecipient) {
-		expectBuyerTransfer(split.royaltyRecipient, split.royaltyAmount, "royalty payment", `${MEMO_PREFIX_ROYALTY}${nftId}`);
+		expectBuyerTransfer(split.royaltyRecipient, split.royaltyAmount, "royalty payment", `${MEMO_PREFIX_ROYALTY}${assetId}`);
 	}
 
 	if (split.feeAmount > 0) {
-		expectBuyerTransfer(split.feeAccount, split.feeAmount, "protocol fee", `${MEMO_PREFIX_FEE}${nftId}`);
+		expectBuyerTransfer(split.feeAccount, split.feeAmount, "protocol fee", `${MEMO_PREFIX_FEE}${assetId}`);
 	}
 
 	return { split, buyerFromTransfer, consumedIndices: stagedIndices };
@@ -223,7 +223,7 @@ export function requireSymbol(value: unknown, fieldName: string): string {
 	const str = requireString(value, fieldName);
 	if (!isSymbol(str)) {
 		throw protocolReject(
-			`Invalid ${fieldName}: "${str}" must be 3-10 uppercase chars, start with letter (e.g. "CARD", "NFT01")`,
+			`Invalid ${fieldName}: "${str}" must be 3-10 uppercase chars, start with letter (e.g. "CARD", "Asset01")`,
 		);
 	}
 	return str;

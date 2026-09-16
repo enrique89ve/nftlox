@@ -4,7 +4,7 @@ import { cors } from "@elysiajs/cors";
 import { config } from "@/config.ts";
 import { createLogger } from "@/utils/logger.ts";
 import { collectionsRoutes } from "./routes/collections.ts";
-import { nftsRoutes } from "./routes/nfts.ts";
+import { assetsRoutes } from "./routes/assets.ts";
 import { usersRoutes } from "./routes/users.ts";
 import { marketplaceRoutes } from "./routes/marketplace.ts";
 import { statusRoutes } from "./routes/status.ts";
@@ -140,12 +140,12 @@ export function startApiServer(): void {
 				info: {
 					title: "NFTLox Indexer API",
 					version: "0.1.0",
-					description: "REST API for the NFTLox Protocol blockchain indexer. Provides queryable state for collections, NFTs, marketplace, and user activity on Hive blockchain.",
+					description: "REST API for the NFTLox Protocol blockchain indexer. Provides queryable state for collections, Assets, marketplace, and user activity on Hive blockchain.",
 				},
 				tags: [
 					{ name: "Status", description: "Indexer sync status and protocol stats" },
-					{ name: "Collections", description: "NFT collections" },
-					{ name: "NFTs", description: "Individual NFTs (seeds and instances)" },
+					{ name: "Collections", description: "Asset collections" },
+					{ name: "Assets", description: "Individual Assets (seeds and instances)" },
 					{ name: "Users", description: "User portfolios and activity" },
 					{ name: "Marketplace", description: "Listings and sales" },
 					{ name: "Nodes", description: "Settlement node registry, heartbeat, and protocol activity" },
@@ -156,7 +156,7 @@ export function startApiServer(): void {
 
 	app
 		.use(collectionsRoutes)
-		.use(nftsRoutes)
+		.use(assetsRoutes)
 		.use(usersRoutes)
 		.use(marketplaceRoutes)
 		.use(statusRoutes)

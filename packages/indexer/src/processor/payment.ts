@@ -1,6 +1,6 @@
 // Router-level payment validation. Dispatcher maps each PaymentRequirement.kind
 // to its validator. `none` and `fixed` / `scaled` run pre-handler in the
-// router; `split` stays in the handler because it needs a DB-locked NFT row.
+// router; `split` stays in the handler because it needs a DB-locked Asset row.
 
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import type { PaymentRequirement, PaymentSplit } from "@/protocol/index.ts";

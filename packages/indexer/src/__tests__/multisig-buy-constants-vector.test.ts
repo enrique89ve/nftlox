@@ -40,7 +40,7 @@ describe("multisig buy-time constants — frozen vectors", () => {
 	test("BUY_COMMITMENT_TTL_BLOCKS = BUY_TX_TTL_MS / HIVE_BLOCK_TIME_MS", () => {
 		// Source-of-truth derivation: 120_000 / 3_000 = 40 blocks. The
 		// commitment lives on chain for this many blocks before the handler
-		// sweep returns the NFT to listed.
+		// sweep returns the Asset to listed.
 		expect(BUY_COMMITMENT_TTL_BLOCKS).toBe(40);
 		expect(BUY_TX_TTL_MS / HIVE_BLOCK_TIME_MS).toBe(BUY_COMMITMENT_TTL_BLOCKS);
 	});

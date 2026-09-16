@@ -1,5 +1,5 @@
 import { sql, toJsonb, type Queryable, clampLimit } from "@/db/client.ts";
-import { NFT_KIND_INSTANCE, NFT_STATUS_LISTED } from "./nft-types.ts";
+import { ASSET_KIND_INSTANCE, ASSET_STATUS_LISTED } from "./asset-types.ts";
 
 // A collection row's presence in `collections` IS its "active" state. Archived
 // collections are moved to `archived_collections` and removed from `collections`,
@@ -70,7 +70,7 @@ export interface CollectionRulesRow {
 	total_potential: number;
 	seed_count: number;
 	// True once any seed has ever been minted in this collection — even if all
-	// seeds were later burned. Backed by: seeds>0 OR EXISTS burned_nfts.
+	// seeds were later burned. Backed by: seeds>0 OR EXISTS burned_assets.
 	// Used by extend_schema to freeze the immutable namespace permanently,
 	// closing the mint→burn→extend→remint bypass.
 	has_minted: boolean;
@@ -85,7 +85,7 @@ export interface CollectionRulesRow {
 export interface CollectionArchiveSnapshotRow {
 	id: string;
 	creator: string;
-	nft_count: number;
+	asset_count: number;
 }
 
 export async function getCollectionRules(
@@ -99,7 +99,7 @@ export async function getCollectionRules(
 			COALESCE(cs.seeds, 0)::int AS seed_count,
 			(
 				COALESCE(cs.seeds, 0) > 0
-				OR EXISTS (SELECT 1 FROM burned_nfts bn WHERE bn.collection_id = c.id)
+				OR EXISTS (SELECT 1 FROM burned_assets bn WHERE bn.collection_id = c.id)
 			) AS has_minted
 		FROM collections c
 		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
@@ -116,7 +116,7 @@ export async function getCollectionArchiveSnapshot(
 		SELECT
 			c.id,
 			c.creator,
-			COALESCE(cs.total, 0)::int AS nft_count
+			COALESCE(cs.total, 0)::int AS asset_count
 		FROM collections c
 		LEFT JOIN collection_stats cs ON cs.collection_id = c.id
 		WHERE c.id = ${id}
@@ -193,7 +193,7 @@ export async function countInstancesByCreator(creator: string, txn: Queryable = 
 
 // Current materialized instance count for a single collection. Used by the
 // per-collection cap check inside bulk_distribute. `collection_stats` is
-// maintained explicitly (see nft-counters.ts), so this returns the same value
+// maintained explicitly (see asset-counters.ts), so this returns the same value
 // the next mint would observe.
 export async function countInstancesByCollection(
 	collectionId: string,
@@ -245,19 +245,19 @@ export async function getCollectionStats(collectionId: string) {
 			COALESCE(cs.seeds, 0) AS total_seeds,
 			COALESCE(cs.instances, 0) AS total_instances,
 			COALESCE((
-				SELECT COUNT(*) FROM nfts
+				SELECT COUNT(*) FROM assets
 				WHERE collection_id = ${collectionId}
-					AND nft_type = ${NFT_KIND_INSTANCE}
-					AND status = ${NFT_STATUS_LISTED}
+					AND asset_type = ${ASSET_KIND_INSTANCE}
+					AND status = ${ASSET_STATUS_LISTED}
 					AND (listing_expires_at IS NULL OR listing_expires_at > NOW())
 			), 0)::int AS total_listed,
 			COALESCE(cs.burned, 0) AS total_burned,
-			COALESCE((SELECT COUNT(DISTINCT owner) FROM nfts WHERE collection_id = ${collectionId}), 0)::int AS unique_owners,
+			COALESCE((SELECT COUNT(DISTINCT owner) FROM assets WHERE collection_id = ${collectionId}), 0)::int AS unique_owners,
 			(
-				SELECT MIN(listing_price) FROM nfts
+				SELECT MIN(listing_price) FROM assets
 				WHERE collection_id = ${collectionId}
-					AND nft_type = ${NFT_KIND_INSTANCE}
-					AND status = ${NFT_STATUS_LISTED}
+					AND asset_type = ${ASSET_KIND_INSTANCE}
+					AND status = ${ASSET_STATUS_LISTED}
 					AND (listing_expires_at IS NULL OR listing_expires_at > NOW())
 			) AS floor_price
 		FROM collection_stats cs

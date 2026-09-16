@@ -1,7 +1,7 @@
 // Multisig <-> handler payload parity for `buy`.
 //
 // Sister to multisig-collection-payload-parity.test.ts. Handler-side
-// `handleBuy` calls `requireString` on `nftId` / `listingId` / `listTxId`,
+// `handleBuy` calls `requireString` on `assetId` / `listingId` / `listTxId`,
 // which rejects empty strings. The multisig pre-broadcast path must reject
 // the same payloads to avoid the fee-orphan vector: a co-signed but
 // chain-bouncing buy_commitment forfeits the buyer's fee transfer.
@@ -19,7 +19,7 @@ import {
 } from "@/protocol/index.ts";
 import { parseBuyPayload } from "@/api/services/multisig/transaction.ts";
 import { isMultisigError } from "@/api/services/multisig/errors.ts";
-import { fixtureHiveTxId, fixtureListingId, fixtureNftId } from "./helpers/nft-fixtures.ts";
+import { fixtureHiveTxId, fixtureListingId, fixtureAssetId } from "./helpers/asset-fixtures.ts";
 
 function buildJson(data: Record<string, unknown>): string {
 	return JSON.stringify({
@@ -31,7 +31,7 @@ function buildJson(data: Record<string, unknown>): string {
 }
 
 const VALID = {
-	nftId: fixtureNftId("parity-happy"),
+	assetId: fixtureAssetId("parity-happy"),
 	listingId: fixtureListingId("parity-happy"),
 	listTxId: fixtureHiveTxId("parity-happy"),
 };
@@ -40,13 +40,13 @@ describe("parseBuyPayload — handler parity on required id fields", () => {
 	test("accepts a fully-populated buy payload", () => {
 		const result = parseBuyPayload(buildJson(VALID), PROTOCOL_ID);
 		expect(result.action).toBe(ACTION_BUY);
-		expect(result.data.nftId).toBe(VALID.nftId);
+		expect(result.data.assetId).toBe(VALID.assetId);
 		expect(result.data.listingId).toBe(VALID.listingId);
 		expect(result.data.listTxId).toBe(VALID.listTxId);
 	});
 
 	test.each([
-		["nftId", { ...VALID, nftId: "" }],
+		["assetId", { ...VALID, assetId: "" }],
 		["listingId", { ...VALID, listingId: "" }],
 		["listTxId", { ...VALID, listTxId: "" }],
 	])("rejects empty %s with INVALID_PROTOCOL_PAYLOAD", (field, data) => {
@@ -72,8 +72,8 @@ describe("parseBuyPayload — handler parity on required id fields", () => {
 	// (isInstanceId / isListingId / isHiveTxId), so parity is structural; this
 	// test pins the multisig layer's contribution.
 	test.each([
-		["nftId", { ...VALID, nftId: "nft_zz_1" }, "shape nft_<20 hex>_<instance>"],
-		["nftId", { ...VALID, nftId: VALID.nftId.toUpperCase() }, "shape nft_<20 hex>_<instance>"],
+		["assetId", { ...VALID, assetId: "asset_zz_1" }, "shape asset_<20 hex>_<instance>"],
+		["assetId", { ...VALID, assetId: VALID.assetId.toUpperCase() }, "shape asset_<20 hex>_<instance>"],
 		["listingId", { ...VALID, listingId: `list_${"z".repeat(32)}` }, "shape list_<32 hex>"],
 		["listingId", { ...VALID, listingId: `list_${"a".repeat(31)}` }, "shape list_<32 hex>"],
 		["listTxId", { ...VALID, listTxId: "A".repeat(40) }, "shape <40 lowercase hex>"],

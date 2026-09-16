@@ -91,7 +91,7 @@ function detTxId(tag: string): string {
 }
 
 // Builds a stable operation id from a tag. Hashed into the state-root via
-// `nfts.owner_operation_id` (see NftStateRow), so it MUST NOT depend on the
+// `assets.owner_operation_id` (see AssetStateRow), so it MUST NOT depend on the
 // `makeOp` global counter — the counter advances across tests and breaks
 // idempotence between fixture replays.
 function detOpId(tag: string): string {
@@ -100,9 +100,9 @@ function detOpId(tag: string): string {
 
 async function cleanDb(): Promise<void> {
 	await sql`DELETE FROM sales`;
-	await sql`DELETE FROM nft_allowances`;
+	await sql`DELETE FROM asset_allowances`;
 	await sql`DELETE FROM collection_allowances`;
-	await sql`TRUNCATE nfts, owner_nft_counts, collection_stats, collections RESTART IDENTITY CASCADE`;
+	await sql`TRUNCATE assets, owner_asset_counts, collection_stats, collections RESTART IDENTITY CASCADE`;
 	await sql`DELETE FROM invalid_operations`;
 	await sql`DELETE FROM confirmed_operations`;
 	await sql`DELETE FROM orphaned_buys`;
@@ -116,7 +116,7 @@ async function cleanDb(): Promise<void> {
 	await sql`
 		UPDATE state_meta
 		SET state_root = decode(repeat('00', 32), 'hex'),
-			nft_count = 0,
+			asset_count = 0,
 			last_block_num = 0
 		WHERE id = 1
 	`;
@@ -128,7 +128,7 @@ async function cleanDb(): Promise<void> {
 // generator.
 async function resolveInstanceId(seedId: string): Promise<string> {
 	const [row] = await sql<{ id: string }[]>`
-		SELECT id FROM nfts WHERE seed_id = ${seedId} LIMIT 1
+		SELECT id FROM assets WHERE seed_id = ${seedId} LIMIT 1
 	`;
 	if (!row) throw new Error(`No instance found for seed ${seedId}`);
 	return row.id;
@@ -223,7 +223,7 @@ async function replayFixture(): Promise<string> {
 			collectionId,
 			edition: 1,
 			owner: ALICE,
-			nftType: "seed",
+			assetType: "seed",
 			maxSupply: 1,
 		},
 	}));
@@ -240,7 +240,7 @@ async function replayFixture(): Promise<string> {
 			collectionId,
 			edition: 1,
 			owner: ALICE,
-			nftType: "seed",
+			assetType: "seed",
 			maxSupply: 1,
 		},
 	}));
@@ -272,7 +272,7 @@ async function replayFixture(): Promise<string> {
 	const instanceA = await resolveInstanceId(seedIdA);
 	const instanceB = await resolveInstanceId(seedIdB);
 
-	// 6. transfer NFT_A from alice → bob.
+	// 6. transfer Asset_A from alice → bob.
 	await applyOp(makeOp({
 		action: ACTION_TRANSFER,
 		signer: ALICE,
@@ -280,13 +280,13 @@ async function replayFixture(): Promise<string> {
 		txId: detTxId("transfer_a_to_bob"),
 		operationId: detOpId("transfer_a_to_bob"),
 		timestamp: blockTimestamp(blocks.transferAtoBob),
-		data: { nftId: instanceA, to: BOB },
+		data: { assetId: instanceA, to: BOB },
 	}));
 
-	// 7. list NFT_B — replay-deterministic listingId requires the same nonce
+	// 7. list Asset_B — replay-deterministic listingId requires the same nonce
 	//    each run. No royalty is configured so the buy split is seller+fee.
 	const listingId = await generateListingId({
-		nftId: instanceB,
+		assetId: instanceB,
 		owner: ALICE,
 		marketplace: "",
 		priceAmount: PRICE,
@@ -303,7 +303,7 @@ async function replayFixture(): Promise<string> {
 		operationId: detOpId("list_b"),
 		timestamp: blockTimestamp(blocks.listB),
 		data: {
-			nftId: instanceB,
+			assetId: instanceB,
 			listingId,
 			listingNonce: LISTING_NONCE,
 			price: { amount: PRICE, currency: "HIVE" },
@@ -311,7 +311,7 @@ async function replayFixture(): Promise<string> {
 		},
 	}));
 
-	// 8. buy_commitment — node reserves NFT_B for carol against the future buy.
+	// 8. buy_commitment — node reserves Asset_B for carol against the future buy.
 	//    txHash MUST be the buy op's txId (lower-cased) so handleBuy passes the
 	//    commitment digest check.
 	const buyTxId = detTxId("buy_b");
@@ -323,7 +323,7 @@ async function replayFixture(): Promise<string> {
 		operationId: detOpId("buy_commitment"),
 		timestamp: blockTimestamp(blocks.buyCommitment),
 		data: {
-			nftId: instanceB,
+			assetId: instanceB,
 			listingId,
 			listTxId: listingTxId,
 			buyer: CAROL,
@@ -357,7 +357,7 @@ async function replayFixture(): Promise<string> {
 		operationId: detOpId("buy_b"),
 		timestamp: blockTimestamp(blocks.buy),
 		data: {
-			nftId: instanceB,
+			assetId: instanceB,
 			listingId,
 			listTxId: listingTxId,
 			txId: listingTxId,
@@ -365,7 +365,7 @@ async function replayFixture(): Promise<string> {
 		pairedTransfers: buyTransfers,
 	}));
 
-	// 10. transfer NFT_A from bob → alice (round-trip; ends with
+	// 10. transfer Asset_A from bob → alice (round-trip; ends with
 	//     owner=alice, previous_owner=bob, owner_action='transfer').
 	await applyOp(makeOp({
 		action: ACTION_TRANSFER,
@@ -374,7 +374,7 @@ async function replayFixture(): Promise<string> {
 		txId: detTxId("transfer_a_back"),
 		operationId: detOpId("transfer_a_back"),
 		timestamp: blockTimestamp(blocks.transferAback),
-		data: { nftId: instanceA, to: ALICE },
+		data: { assetId: instanceA, to: ALICE },
 	}));
 
 	const meta = await getStateMeta();

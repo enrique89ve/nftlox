@@ -1,12 +1,12 @@
 import type { Queryable } from "@/db/client.ts";
 import type { ParsedOperation } from "@/scanner/operation-parser.ts";
 import {
-	insertNft,
-	nftExists,
+	insertAsset,
+	assetExists,
 	isBurnedId,
 	getSeedWithSchemaForUpdate,
 	incrementDistributedBy,
-} from "@/db/queries/nfts.ts";
+} from "@/db/queries/assets.ts";
 import { countInstancesByCollection, countInstancesByCreator } from "@/db/queries/collections.ts";
 import { assertWithinLimit } from "@/utils/action-limits.ts";
 import { assertActionable } from "@/utils/status-checks.ts";
@@ -21,7 +21,7 @@ import {
 	optionalStoredCollectionSchema,
 } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
-import { computeInstanceBaseline, validateSeedSupplyForDistribution } from "@/utils/nft-rules.ts";
+import { computeInstanceBaseline, validateSeedSupplyForDistribution } from "@/utils/asset-rules.ts";
 import {
 	generateDeterministicInstanceId,
 	generateInstanceDna,
@@ -95,7 +95,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 		const seed = await getSeedWithSchemaForUpdate(seedId, txn);
 		if (!seed) throw protocolReject(`Seed not found: ${seedId}`);
 		assertActionable(seed, seedId);
-		if (seed.nft_type !== "seed") throw protocolReject(`${seedId} is not a seed`);
+		if (seed.asset_type !== "seed") throw protocolReject(`${seedId} is not a seed`);
 
 		if (seed.created_tx_id !== seedTxId) {
 			throw protocolReject(`Invalid seedTxId for ${seedId}: expected ${seed.created_tx_id}, got ${seedTxId}`);
@@ -152,7 +152,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 
 		// Idempotency: count instances already created by THIS operation.
 		const [existingFromOp] = await txn`
-			SELECT COUNT(*)::int AS count FROM nfts
+			SELECT COUNT(*)::int AS count FROM assets
 			WHERE seed_id = ${seedId}
 				AND created_operation_id = ${op.operationId}
 		`;
@@ -168,7 +168,7 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 			const instanceNumber = baseDistributed + i + 1;
 			const instanceId = await generateDeterministicInstanceId(seedId, instanceNumber);
 
-			if (await nftExists(instanceId, txn)) continue;
+			if (await assetExists(instanceId, txn)) continue;
 
 			// Defense-in-depth against resurrection of a burned instance. The
 			// `distributed` counter is monotonic so this branch is unreachable in
@@ -182,19 +182,19 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				);
 			}
 
-			const nftDna = await generateInstanceDna(
+			const assetDna = await generateInstanceDna(
 				seedId, instanceNumber, op.txId, op.blockNum,
 			);
 
 			// Instance stores only references; name, image, and origin_dna are
 			// inherited via JOIN at query time (seed→collection chain).
-			await insertNft({
+			await insertAsset({
 				id: instanceId,
 				collectionId: seed.collection_id,
-				nftType: "instance",
+				assetType: "instance",
 				edition: 1,
 				owner: to,
-				nftDna,
+				assetDna,
 				name: "",
 				imageUrl: null,
 				maxSupply: 0,
