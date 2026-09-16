@@ -89,7 +89,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					symbol: c.symbol,
 					creator: c.creator,
 					totalPotential: c.total_potential,
-					status: c.status,
 				})),
 			});
 		}),
@@ -183,7 +182,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					totalPotential: c.total_potential,
 					seedCount: c.seed_count,
 					instanceCount: c.instance_count,
-					status: c.status,
 				})),
 			});
 		}),
