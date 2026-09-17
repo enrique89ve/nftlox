@@ -8,7 +8,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-nftlox_indexer}
       POSTGRES_USER: ${POSTGRES_USER:-nftlox}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # The internal profile is enabled only when DATABASE_MODE resolves to
+      # internal. compose.sh validates this value before starting that profile.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./src/db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
@@ -32,8 +34,10 @@ services:
 
   indexer:
     build:
-      context: .
-      dockerfile: Dockerfile
+      # The Dockerfiles copy workspace manifests from the monorepo root.
+      # Keep this context explicit so `compose.sh` works from packages/indexer.
+      context: ../..
+      dockerfile: packages/indexer/Dockerfile
     restart: always
     init: true
     stop_grace_period: 30s
@@ -60,7 +64,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-nftlox_indexer}
       POSTGRES_USER: ${POSTGRES_USER:-nftlox}
       NODE_ENV: production
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # External PostgreSQL deployments do not need this value. The indexer
+      # validates it at startup whenever DATABASE_MODE=internal.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     deploy:
       resources:
         limits:

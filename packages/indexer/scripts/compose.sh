@@ -9,7 +9,7 @@ print_help() {
   echo
   echo "Modes:"
   echo "  dokploy  Full Docker deployment behind an external platform proxy"
-  echo "           Uses DATABASE_MODE from .env to decide internal vs external DB"
+  echo "           Uses the bundled Dokploy image and DATABASE_MODE from .env"
   echo "  server   Same compose, but also enables the bundled Nginx profile"
   echo "  dev      PostgreSQL in Docker only; run the indexer on the host"
   echo "  external Backward-compatible alias for dokploy with DATABASE_MODE=external"
@@ -113,16 +113,24 @@ run_compose() {
         echo "DATABASE_MODE=external requires DATABASE_URL" >&2
         exit 1
       fi
+      if [ "$effective_database_mode" = "internal" ] && [ -z "${POSTGRES_PASSWORD:-}" ]; then
+        echo "DATABASE_MODE=internal requires POSTGRES_PASSWORD" >&2
+        exit 1
+      fi
       set_compose_profiles "dokploy" "$effective_database_mode"
       if [ -n "${DOCKER_SUBNET:-}" ]; then
-        exec docker compose -f docker-compose.yml -f docker-compose.network.yml "$@"
+        exec docker compose -f docker-compose.yml -f docker-compose.dokploy.yml -f docker-compose.network.yml "$@"
       fi
-      exec docker compose -f docker-compose.yml "$@"
+      exec docker compose -f docker-compose.yml -f docker-compose.dokploy.yml "$@"
       ;;
     server|standalone)
       effective_database_mode="$(resolve_database_mode)"
       if [ "$effective_database_mode" = "external" ] && [ -z "${DATABASE_URL:-}" ]; then
         echo "DATABASE_MODE=external requires DATABASE_URL" >&2
+        exit 1
+      fi
+      if [ "$effective_database_mode" = "internal" ] && [ -z "${POSTGRES_PASSWORD:-}" ]; then
+        echo "DATABASE_MODE=internal requires POSTGRES_PASSWORD" >&2
         exit 1
       fi
       set_compose_profiles "server" "$effective_database_mode"

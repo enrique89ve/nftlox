@@ -2,14 +2,15 @@
 set -eu
 
 script_dir="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
-project_dir="$(CDPATH= cd -- "$script_dir/.." && pwd)"
+package_dir="$(CDPATH= cd -- "$script_dir/.." && pwd)"
+project_dir="$(CDPATH= cd -- "$package_dir/../.." && pwd)"
 
 . "$script_dir/dev-env.sh"
 
 print_help() {
   echo "Usage: $0 [image-tag]"
   echo
-  echo "Build the standalone indexer image from packages/indexer."
+  echo "Build the standalone indexer image from the monorepo root context."
   echo "Set DOCKER_BUILD_NETWORK=host only if Docker bridge networking is flaky on your machine."
   echo
   echo "Examples:"
@@ -49,8 +50,8 @@ set -- "$@" \
 
 if has_docker_buildx; then
   echo "Using docker buildx for the indexer image." >&2
-  exec docker buildx build --load "$@" -t "$image_tag" -f Dockerfile .
+  exec docker buildx build --load "$@" -t "$image_tag" -f packages/indexer/Dockerfile .
 fi
 
 echo "Using legacy docker build for the indexer image." >&2
-exec docker build "$@" -t "$image_tag" -f Dockerfile .
+exec docker build "$@" -t "$image_tag" -f packages/indexer/Dockerfile .

@@ -1,0 +1,10 @@
+# Dokploy build override.
+#
+# The optimized image bundles the indexer and its sync worker. The base
+# compose file remains the source of truth for runtime, networking, health,
+# and database settings; this file only selects the Dokploy build.
+services:
+  indexer:
+    build:
+      context: ../..
+      dockerfile: packages/indexer/Dockerfile.dokploy
