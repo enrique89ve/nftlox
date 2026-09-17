@@ -1,10 +1,16 @@
 #!/bin/sh
 set -eu
 
-cd /app
+if [ -d /app/packages/indexer ]; then
+  cd /app/packages/indexer
+  script_root=/app/packages/indexer/scripts
+else
+  cd /app
+  script_root=/app/scripts
+fi
 
-# Production images set INDEXER_ENTRY=dist/indexer.js (bundled, protocol
-# inlined). Dev / compose images leave it unset and run TS source directly.
+# Production images set INDEXER_ENTRY to the bundled entrypoint. The standard
+# image runs the workspace source from the indexer package directory.
 entry="${INDEXER_ENTRY:-src/index.ts}"
 
 command_name="${1:-start}"
@@ -28,7 +34,7 @@ case "$command_name" in
     ;;
   healthcheck)
     shift
-    exec /app/scripts/docker-healthcheck.sh "$@"
+    exec "$script_root/docker-healthcheck.sh" "$@"
     ;;
   *)
     exec "$@"

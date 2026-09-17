@@ -55,9 +55,9 @@ function scheduleSyncWorkerRestart(): void {
 }
 
 function startSyncWorker(): void {
-	// In bundle: sync-worker is at /app/packages/indexer/dist/sync-worker.js
-	// In dev: sync-worker is at src/scanner/sync-worker.ts (relative to this file)
-	const workerPath = import.meta.url.startsWith("file:///app")
+	// Dokploy sets INDEXER_ENTRY for the bundled image. The standard image
+	// runs source files from the workspace and must load the TypeScript worker.
+	const workerPath = process.env.INDEXER_ENTRY
 		? "/app/packages/indexer/dist/sync-worker.js"
 		: new URL("./scanner/sync-worker.ts", import.meta.url).href;
 

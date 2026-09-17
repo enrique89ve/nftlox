@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 
 COPY . .
 
-RUN chmod +x /app/scripts/*.sh && \
+RUN chmod +x /app/packages/indexer/scripts/*.sh && \
 	chown -R bun:bun /app
 
 USER bun
@@ -42,7 +42,7 @@ ENV NODE_ENV=production
 ENV ENABLE_SWAGGER=false
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
-	CMD ["/app/scripts/docker-healthcheck.sh"]
+	CMD ["/app/packages/indexer/scripts/docker-healthcheck.sh"]
 
 EXPOSE 3050
 

@@ -58,7 +58,9 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_MODE: ${DATABASE_MODE:-internal}
+      # Keep auto-selection aligned with compose.sh: DATABASE_URL means
+      # external, otherwise the internal PostgreSQL profile is used.
+      DATABASE_MODE: ${DATABASE_MODE:-auto}
       # Pass the URL explicitly so Dokploy/Compose environment variables are
       # available even when no package-local .env file is mounted.
       DATABASE_URL: ${DATABASE_URL:-}
