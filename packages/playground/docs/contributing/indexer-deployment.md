@@ -72,16 +72,38 @@ cd ../..
 bun run dev:indexer
 ```
 
-### Behind an external proxy (Dokploy, Coolify, Traefik)
+### Dokploy (recommended)
 
-Your platform handles TLS and routing. One compose file, one command:
+Configure the Dokploy service to build the repository with:
+
+| Setting | Value |
+|---|---|
+| Build context | repository root (`/`) |
+| Dockerfile | `packages/indexer/Dockerfile.dokploy` |
+| Container port | `3050` |
+| Health check | `GET /api/health` |
+
+The Dokploy Dockerfile bundles the API and sync worker into one image. Set
+`DATABASE_MODE=external` and a managed PostgreSQL `DATABASE_URL` in Dokploy's
+environment. If the service uses `INDEXER_ROLE=both` (the default), also set
+`ACTIVE_KEY`; a sync-only service can use `INDEXER_ROLE=sync` without a key.
+
+For a repository checkout or a Dokploy shell that runs Compose, the equivalent
+command is:
 
 ```bash
 cd packages/indexer
-./scripts/compose.sh dokploy up -d
+./scripts/compose.sh dokploy up -d --build
 ```
 
-Route traffic to the indexer on internal port `3050`.
+This selects `docker-compose.dokploy.yml`, which uses the same root build
+context and `Dockerfile.dokploy`. Route traffic to the indexer on internal port
+`3050`; Dokploy owns TLS and the public hostname.
+
+### Behind another external proxy (Coolify, Traefik)
+
+Use the same `./scripts/compose.sh dokploy up -d --build` command and route
+traffic to internal port `3050`.
 
 ### VPS with bundled Nginx overlay
 
@@ -142,7 +164,20 @@ DATABASE_URL=postgres://user:password@your-host:5432/nftlox_indexer
 ./scripts/compose.sh dokploy up -d
 ```
 
-The indexer runs schema migrations automatically on startup (`CREATE TABLE IF NOT EXISTS`). It never drops or alters existing columns.
+The indexer applies the idempotent baseline on startup. During the current
+development cutover from the legacy NFT projection to the canonical Asset
+projection, it deliberately stops if legacy `nft*` tables or columns are
+present. Reset that testnet database once before deploying the new image:
+
+```bash
+cd packages/indexer
+printf 'yes\n' | env DATABASE_URL='postgres://user:password@your-host:5432/nftlox_indexer' ./scripts/reset_db.sh
+./scripts/compose.sh dokploy up -d --build
+```
+
+Run the reset while the old indexer is stopped. It drops the projection and
+replays from protocol genesis `109974058`; it must never run against a
+production database with data that must be preserved.
 
 ### Building the image directly
 
@@ -174,7 +209,9 @@ git pull
 ./scripts/compose.sh dokploy up -d --build
 ```
 
-The indexer picks up schema changes on restart. No manual migrations needed.
+Compatible baseline changes are applied on restart. A future incompatible
+development cutover will stop with an explicit reset error instead of mixing
+schemas; follow the database reset procedure above before restarting.
 
 ## Architecture modes
 

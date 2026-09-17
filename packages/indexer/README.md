@@ -1,8 +1,8 @@
 # @nftlox/indexer
 
-Hive scanner and deterministic state projection for NFTLox. The indexer reads
-Hive L1 operations, validates them against `@nftlox/protocol`, stores the
-projection in PostgreSQL, and exposes a REST API.
+Hive scanner and deterministic Asset state projection for NFTLox. The indexer
+reads Hive L1 operations, validates them against `@nftlox/protocol`, stores the
+single canonical Asset projection in PostgreSQL, and exposes a REST API.
 
 PostgreSQL is a query projection. Hive remains the authority, and applications
 can use the SDK's SPV helpers to verify ownership edges before irreversible
