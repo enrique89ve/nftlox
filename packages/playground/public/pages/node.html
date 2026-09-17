@@ -1,57 +1,45 @@
 <div class="page" id="page-node">
-  <div class="page-header">
-    <h1 class="page-title">Node</h1>
-    <p class="page-desc">
-      Registry state, settlement readiness, and recent protocol activity for
-      this indexer node.
-    </p>
-  </div>
+  <header class="page-header node-header">
+    <div>
+      <p class="node-eyebrow">Infrastructure / connected indexer</p>
+      <h1 class="page-title">Node workspace</h1>
+      <p class="page-desc">Check participation, maintain registration, and trace what this node signed.</p>
+    </div>
+    <button class="btn btn-secondary" id="btn-node-refresh">Refresh status</button>
+  </header>
 
-  <div class="node-summary-grid" id="node-summary">
-    <div class="stat-box">
-      <div class="stat-label">Node</div>
-      <div class="stat-value">-</div>
+  <section class="node-overview" aria-label="Node status">
+    <div class="node-identity">
+      <div><p class="node-eyebrow">Node account</p><h2 id="node-account">Checking node…</h2></div>
+      <p id="node-status-message" role="status">Fetching the connected indexer's latest status.</p>
     </div>
-    <div class="stat-box">
-      <div class="stat-label">Registry</div>
-      <div class="stat-value">-</div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-label">Settlement</div>
-      <div class="stat-value">-</div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-label">Sync</div>
-      <div class="stat-value">-</div>
-    </div>
-  </div>
+    <div class="node-summary-grid" id="node-summary" aria-live="polite"></div>
+  </section>
 
   <div class="node-layout">
     <div class="node-column">
       <section class="card">
         <div class="card-header">
-          <span class="card-title">Node Profile</span>
-          <div class="btn-group">
-            <button class="btn btn-secondary btn-sm" id="btn-node-refresh">
-              Refresh
-            </button>
-          </div>
+          <h2 class="card-title">Node evidence</h2>
+          <span class="node-eyebrow">Indexer snapshot</span>
         </div>
         <p class="node-card-copy">
-          Reads the projected node record from <code>l2_nodes</code> plus the
-          current sync and multisig status from the indexer.
+          Registration, heartbeat and sync facts reported by this indexer.
+          Settlement eligibility is reported separately from signer availability.
         </p>
+        <details class="node-evidence"><summary>View technical details</summary>
         <div class="node-kv-grid" id="node-profile-grid">
           <div class="node-kv">
             <div class="node-kv-label">Loading</div>
             <div class="node-kv-value">Fetching node profile...</div>
           </div>
         </div>
+        </details>
       </section>
 
       <section class="card">
         <div class="card-header">
-          <span class="card-title">Indexed Operations</span>
+          <h2 class="card-title">Indexed activity</h2>
           <div class="btn-group">
             <button
               class="btn btn-secondary btn-sm"
@@ -62,11 +50,11 @@
           </div>
         </div>
         <p class="node-card-copy">
-          Confirmed and invalid protocol operations whose signer is this node in
-          the indexer's own projection.
+          How this indexer processed operations signed by the node. Expand a
+          result to inspect rejection reasons or affected assets.
         </p>
         <div class="node-ops-meta" id="node-indexed-meta"></div>
-        <div class="node-table-wrap" id="node-indexed-operations">
+        <div class="node-table-wrap" id="node-indexed-operations" tabindex="0" role="region" aria-label="Indexed operations">
           <div class="empty-state">
             <p class="empty-state-text">Loading indexed node operations...</p>
           </div>
@@ -77,13 +65,13 @@
     <div class="node-column">
       <section class="card">
         <div class="card-header">
-          <span class="card-title">Register Node</span>
+          <h2 class="card-title">Maintain registration</h2>
           <span class="asset-badge posting">POSTING KEY</span>
         </div>
         <p class="node-card-copy">
-          Emit <code>node_register</code> for the node account. Once the node is
-          registered and <code>NODE_REGISTER=true</code>, the heartbeat daemon
-          can begin publishing <code>node_heartbeat</code>.
+          Publish this node's public endpoint on Hive using its Posting key.
+          Registration alone does not confirm settlement eligibility.
+          <a href="/docs/#/contributing/indexer-deployment">Node setup guide ↗</a>
         </p>
         <div class="form-row">
           <div class="form-group">
@@ -93,6 +81,8 @@
             <input
               class="form-input"
               id="node-register-endpoint"
+              type="url" autocomplete="url" spellcheck="false"
+              aria-describedby="node-register-note node-register-feedback"
               placeholder="https://your-node.example.com"
             />
           </div>
@@ -100,8 +90,9 @@
         <p class="node-register-note" id="node-register-note">
           Connect the node account in Keychain to broadcast <code>node_register</code>.
         </p>
+        <p id="node-register-feedback" class="node-register-feedback" role="status"></p>
         <div class="btn-group">
-          <button class="btn btn-primary" id="btn-node-register">
+          <button class="btn btn-primary" id="btn-node-register" disabled>
             Register Node via Keychain
           </button>
         </div>
@@ -109,13 +100,13 @@
 
       <section class="card">
         <div class="card-header">
-          <span class="card-title">Hive L1 Protocol Ops</span>
+          <h2 class="card-title">Verify on Hive</h2>
           <div class="btn-group">
             <button
               class="btn btn-secondary btn-sm"
               id="btn-node-refresh-hive"
             >
-              Reload
+              Scan Hive
             </button>
           </div>
         </div>
@@ -147,9 +138,9 @@
           </div>
         </div>
         <div class="node-ops-meta" id="node-hive-meta"></div>
-        <div class="node-table-wrap" id="node-hive-operations">
+        <div class="node-table-wrap" id="node-hive-operations" tabindex="0" role="region" aria-label="Hive operations">
           <div class="empty-state">
-            <p class="empty-state-text">Loading Hive protocol operations...</p>
+            <p class="empty-state-text">Choose a block window, then scan Hive to compare chain evidence.</p>
           </div>
         </div>
       </section>

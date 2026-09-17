@@ -168,6 +168,29 @@ type BuildNodeRegisterResponse = Readonly<{
 let currentNodeAccount: string | null = null;
 let currentStatus: NodeStatusSummary | null = null;
 let currentProfile: NodeProfile | null = null;
+let loadingNode = false;
+let scanningHive = false;
+let loadingIndexed = false;
+let registeringNode = false;
+
+function registrationFeedback(message: string, tone = ""): void {
+  const target = $("node-register-feedback");
+  if (target) {
+    target.textContent = message;
+    target.dataset.tone = tone;
+  }
+}
+
+function registerBusy(busy: boolean): void {
+  registeringNode = busy;
+  const input = $("node-register-endpoint") as HTMLInputElement | null;
+  if (input) input.readOnly = busy;
+  const button = $("btn-node-register") as HTMLButtonElement | null;
+  if (button) {
+    button.disabled = busy || loadingNode || !currentStatus;
+    button.textContent = busy ? "Waiting for Keychain…" : "Publish endpoint via Keychain";
+  }
+}
 
 function shortHash(
   value: string | null | undefined,
@@ -202,47 +225,36 @@ function renderSummary(
   const container = $("node-summary");
   if (!container) return;
 
-  if (!status) {
-    container.innerHTML = `
-			<div class="stat-box"><div class="stat-label">Node</div><div class="stat-value">-</div></div>
-			<div class="stat-box"><div class="stat-label">Registry</div><div class="stat-value">-</div></div>
-			<div class="stat-box"><div class="stat-label">Settlement</div><div class="stat-value">-</div></div>
-			<div class="stat-box"><div class="stat-label">Sync</div><div class="stat-value">-</div></div>
-		`;
-    return;
-  }
+  const identity = $("node-account");
+  const message = $("node-status-message");
+  if (identity) identity.textContent = status ? `@${status.nodeAccount}` : "Node unavailable";
+  if (message) message.textContent = !status
+    ? "Could not read node status. Check the indexer connection, then refresh status to retry."
+    : status.nodeRegistered === false
+      ? "This node is not registered. Publish its endpoint below, then refresh to verify the indexed registration."
+      : !status.inSync
+        ? "The indexer is catching up. Check the block gap before relying on its latest results."
+        : profile && !profile.activeForSettlement
+          ? `The registry reports this node as ineligible for settlement. ${profile.reason ?? "Inspect the node evidence for registration and heartbeat details."}`
+          : !profile
+            ? "Sync status is available, but registry evidence is missing. Settlement eligibility remains unknown."
+            : "Registry evidence is available. Inspect signer availability separately and compare indexed activity with Hive when needed.";
 
-  const registryValue = status.nodeRegistered ? "Registered" : "Missing";
-  const settlementValue = profile?.activeForSettlement
-    ? "Ready"
-    : profile?.reason
-      ? "Blocked"
-      : "Unknown";
-  const multisigValue =
-    status.multisigEnabled && status.multisigSignerReady ? "Ready" : "Degraded";
-  const syncValue = status.inSync
-    ? "Ready"
-    : `${formatNumber(status.blocksBehind)} behind`;
-
-  container.innerHTML = `
-		<div class="stat-box">
-			<div class="stat-label">Node</div>
-			<div class="stat-value">${escapeHtml(status.nodeAccount)}</div>
-		</div>
-		<div class="stat-box">
-			<div class="stat-label">Registry</div>
-			<div class="stat-value">${escapeHtml(registryValue)}</div>
-		</div>
-		<div class="stat-box">
-			<div class="stat-label">Settlement</div>
-			<div class="stat-value">${escapeHtml(settlementValue)}</div>
-		</div>
-		<div class="stat-box">
-			<div class="stat-label">Sync / Multisig</div>
-			<div class="stat-value">${escapeHtml(syncValue)}</div>
-			<div style="margin-top: 6px; font-size: 11px; color: var(--text-dim);">${escapeHtml(multisigValue)}</div>
-		</div>
-	`;
+  const metrics = [
+    ["Registry", status?.nodeRegistered === true ? "Registered" : status?.nodeRegistered === false ? "Not registered" : "Unknown",
+      status?.nodeStatus ?? "On-chain registration"],
+    ["Settlement eligibility", profile ? (profile.activeForSettlement ? "Eligible" : "Not eligible") : "Unknown",
+      profile?.reason ?? (profile ? "Reported by the node registry" : "Registry evidence unavailable")],
+    ["Indexer sync", status ? (status.inSync ? "In sync" : "Catching up") : "Unknown",
+      status ? `${formatNumber(status.blocksBehind)} blocks behind · head ${formatNumber(status.headBlock)}` : "Sync evidence unavailable"],
+    ["Multisig signer", !status ? "Unknown" : !status.multisigEnabled ? "Disabled" : status.multisigSignerReady === true ? "Ready" : status.multisigSignerReady === false ? "Unavailable" : "Unknown",
+      !status ? "Signer evidence unavailable" : status.multisigClockDriftOk === false ? "Clock drift requires attention" : "Signer state is separate from registry eligibility"],
+  ];
+  container.innerHTML = metrics.map(([label, value, note]) => `
+    <div class="stat-box"><div class="stat-label">${escapeHtml(label)}</div>
+    <div class="stat-value">${escapeHtml(value)}</div>
+    <p class="node-stat-note">${escapeHtml(note)}</p></div>
+  `).join("");
 }
 
 function renderProfile(
@@ -266,7 +278,7 @@ function renderProfile(
     ["Node account", status.nodeAccount],
     ["Endpoint", profile?.endpoint ?? status.nodeUrl ?? "-"],
     ["Registry status", profile?.status ?? status.nodeStatus ?? "-"],
-    ["Registered", status.nodeRegistered ? "yes" : "no"],
+    ["Registered", status.nodeRegistered === true ? "yes" : status.nodeRegistered === false ? "no" : "unknown"],
     [
       "Registration block",
       formatMaybe(profile?.registeredBlock ?? status.nodeRegistrationBlock),
@@ -289,12 +301,12 @@ function renderProfile(
     ],
     [
       "Settlement reason",
-      profile?.reason ?? (status.nodeActivityFresh ? "fresh" : "not fresh"),
+      profile?.reason ?? "Not reported",
     ],
     ["Sync last block", formatNumber(status.lastBlock)],
     ["Irreversible block", formatMaybe(status.irreversibleBlock)],
     ["Blocks behind", formatNumber(status.blocksBehind)],
-    ["Multisig signer", status.multisigSignerReady ? "ready" : "unavailable"],
+    ["Multisig signer", status.multisigSignerReady === true ? "ready" : status.multisigSignerReady === false ? "unavailable" : "unknown"],
     [
       "Clock drift",
       status.multisigClockDriftMs != null
@@ -324,8 +336,9 @@ function updateRegisterForm(
 ): void {
   const endpointInput = $("node-register-endpoint") as HTMLInputElement | null;
   const note = $("node-register-note");
-  if (endpointInput)
+  if (endpointInput && !endpointInput.matches(":focus") && !endpointInput.dataset.edited)
     endpointInput.value = profile?.endpoint ?? status.nodeUrl ?? "";
+  registerBusy(registeringNode);
 
   const connectedUser = getConnectedUser();
   const sameUser = Boolean(
@@ -461,18 +474,26 @@ function renderHiveOperations(page: HiveNodeOperationsPage): void {
 
 async function loadIndexedOperations(): Promise<void> {
   const container = $("node-indexed-operations");
-  if (!container || !currentNodeAccount) return;
+  if (!container || !currentNodeAccount || loadingIndexed) return;
+  loadingIndexed = true;
+  const reload = $("btn-node-refresh-operations") as HTMLButtonElement | null;
+  if (reload) reload.disabled = true;
+  if ($("node-indexed-meta")) $("node-indexed-meta")!.textContent = "";
   container.innerHTML =
     '<div class="empty-state"><p class="empty-state-text">Loading indexed node operations...</p></div>';
 
   try {
-    const response = await fetch("/api/node/operations?limit=50&offset=0");
+    const response = await fetch("/api/node/operations?limit=50&offset=0", { signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) throw new Error(`Indexer HTTP ${response.status}`);
     const page = (await response.json()) as IndexedNodeOperationsPage;
     renderIndexedOperations(page);
   } catch (error) {
     container.innerHTML =
       '<div class="empty-state"><p class="empty-state-text">Failed to load indexed node operations.</p></div>';
     log(`Node indexed operations failed: ${(error as Error).message}`, "error");
+  } finally {
+    loadingIndexed = false;
+    if (reload) reload.disabled = false;
   }
 }
 
@@ -584,7 +605,11 @@ async function scanHafAH(
 
 async function loadHiveOperations(): Promise<void> {
   const container = $("node-hive-operations");
-  if (!container || !currentNodeAccount || !currentStatus) return;
+  if (!container || !currentNodeAccount || !currentStatus || scanningHive) return;
+  scanningHive = true;
+  const reload = $("btn-node-refresh-hive") as HTMLButtonElement | null;
+  if (reload) { reload.disabled = true; reload.textContent = "Scanning…"; }
+  if ($("node-hive-meta")) $("node-hive-meta")!.textContent = "";
   container.innerHTML =
     '<div class="empty-state"><p class="empty-state-text">Loading Hive protocol operations...</p></div>';
 
@@ -627,24 +652,28 @@ async function loadHiveOperations(): Promise<void> {
         : "Failed to load Hive protocol operations.";
     container.innerHTML = `<div class="empty-state"><p class="empty-state-text">${escapeHtml(message)}</p></div>`;
     log(`Node Hive operations failed: ${cause.message}`, "error");
+  } finally {
+    scanningHive = false;
+    if (reload) { reload.disabled = false; reload.textContent = "Scan Hive"; }
   }
 }
 
 async function registerNode(): Promise<void> {
+  if (registeringNode) return;
   const status = currentStatus;
   if (!status) {
-    log("Node status unavailable", "error");
+    registrationFeedback("Refresh node status before publishing an endpoint.", "error");
     return;
   }
 
   const connectedUser = getConnectedUser();
   if (!connectedUser) {
-    log("Connect wallet first", "error");
+    registrationFeedback(`Connect @${status.nodeAccount} in Keychain to publish this endpoint.`, "error");
     return;
   }
 
   if (connectedUser !== status.nodeAccount.toLowerCase()) {
-    log(
+    registrationFeedback(
       `Connected wallet @${connectedUser} does not match node account @${status.nodeAccount}`,
       "error",
     );
@@ -656,10 +685,14 @@ async function registerNode(): Promise<void> {
     "";
 
   if (!endpoint) {
-    log("Endpoint is required", "error");
+    registrationFeedback("Enter the public endpoint URL for this node.", "error");
     return;
   }
 
+  const input = $("node-register-endpoint") as HTMLInputElement | null;
+  if (input && !input.reportValidity()) return;
+  registerBusy(true);
+  registrationFeedback("Preparing the operation. Review and approve it in Keychain.");
   try {
     const response = await fetch("/api/build/node-register", {
       method: "POST",
@@ -669,10 +702,12 @@ async function registerNode(): Promise<void> {
         endpoint,
       }),
     });
+    if (!response.ok) throw new Error(`Build API HTTP ${response.status}`);
     const result = (await response.json()) as BuildNodeRegisterResponse;
     if (!result.success || !result.operation) {
       const firstError = result.errors?.[0]?.message;
-      log(
+      registerBusy(false);
+      registrationFeedback(
         `node_register preview failed: ${result.error || firstError || "Unknown error"}`,
         "error",
       );
@@ -690,14 +725,22 @@ async function registerNode(): Promise<void> {
             : typeof res?.result?.tx_id === "string"
               ? res.result.tx_id
               : "pending";
+        registerBusy(false);
+        registrationFeedback(`Broadcast sent: ${txId}. Waiting for indexer confirmation; refresh status to verify registration.`, "success");
         log(`node_register broadcast: ${txId}`, "success");
         setTimeout(() => {
           void loadNodeView(true);
         }, 4000);
       },
-      (err) => log(`node_register failed: ${err}`, "error"),
+      (err) => {
+        registerBusy(false);
+        registrationFeedback(`Registration was not completed: ${err}. You can try again.`, "error");
+        log(`node_register failed: ${err}`, "error");
+      },
     );
   } catch (error) {
+    registerBusy(false);
+    registrationFeedback(`Registration failed: ${(error as Error).message}. Try again.`, "error");
     log(`node_register failed: ${(error as Error).message}`, "error");
   }
 }
@@ -709,10 +752,16 @@ export async function loadNodeView(logSuccess = false): Promise<void> {
   const hiveMeta = $("node-hive-meta");
   const indexedOperations = $("node-indexed-operations");
   const hiveOperations = $("node-hive-operations");
-  if (!summary || !profileGrid) return;
+  if (!summary || !profileGrid || loadingNode) return;
+  loadingNode = true;
+  registerBusy(registeringNode);
+  const refresh = $("btn-node-refresh") as HTMLButtonElement | null;
+  if (refresh) { refresh.disabled = true; refresh.textContent = "Refreshing…"; }
+  if ($("node-status-message")) $("node-status-message")!.textContent = "Fetching the latest node status…";
 
   try {
-    const response = await fetch("/api/node");
+    const response = await fetch("/api/node", { signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) throw new Error(`Indexer HTTP ${response.status}`);
     const data = (await response.json()) as NodePageResponse;
     currentNodeAccount = data.account ?? null;
     currentStatus = data.status ?? null;
@@ -722,7 +771,7 @@ export async function loadNodeView(logSuccess = false): Promise<void> {
     renderProfile(currentStatus, currentProfile);
 
     if (currentNodeAccount) {
-      await Promise.all([loadIndexedOperations(), loadHiveOperations()]);
+      await loadIndexedOperations();
     } else {
       if (indexedMeta) indexedMeta.innerHTML = "";
       if (hiveMeta) hiveMeta.innerHTML = "";
@@ -740,6 +789,10 @@ export async function loadNodeView(logSuccess = false): Promise<void> {
       log(`Node view refreshed for @${currentNodeAccount}`, "success");
     }
   } catch (error) {
+    currentNodeAccount = null;
+    currentStatus = null;
+    currentProfile = null;
+    registerBusy(registeringNode);
     renderSummary(null, null);
     renderProfile(null, null);
     if (indexedMeta) indexedMeta.innerHTML = "";
@@ -753,6 +806,10 @@ export async function loadNodeView(logSuccess = false): Promise<void> {
         '<div class="empty-state"><p class="empty-state-text">Failed to load Hive protocol operations.</p></div>';
     }
     log(`Node view failed: ${(error as Error).message}`, "error");
+  } finally {
+    loadingNode = false;
+    registerBusy(registeringNode);
+    if (refresh) { refresh.disabled = false; refresh.textContent = "Refresh status"; }
   }
 }
 
@@ -769,11 +826,9 @@ export function initNode(): void {
   $("btn-node-register")?.addEventListener("click", () => {
     void registerNode();
   });
-  $("node-hive-window")?.addEventListener("change", () => {
-    void loadHiveOperations();
-  });
-  $("node-hive-limit")?.addEventListener("change", () => {
-    void loadHiveOperations();
+  $("node-register-endpoint")?.addEventListener("input", () => {
+    const input = $("node-register-endpoint");
+    if (input) input.dataset.edited = "true";
   });
   (window as Window & { loadNodeView?: () => Promise<void> }).loadNodeView =
     () => loadNodeView(false);
