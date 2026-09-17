@@ -9,3 +9,6 @@ OPERATIONS.md
 .claude/settings.json
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+
+# Local interface review artifacts (at any workspace depth)
+.interface-harness/
