@@ -2,6 +2,8 @@
 **/.env
 *.log
 docs/
+docs_ref/
+**/.git
 **/node_modules
 .claude/
 **/.DS_Store
