@@ -59,6 +59,9 @@ services:
         required: false
     environment:
       DATABASE_MODE: ${DATABASE_MODE:-internal}
+      # Pass the URL explicitly so Dokploy/Compose environment variables are
+      # available even when no package-local .env file is mounted.
+      DATABASE_URL: ${DATABASE_URL:-}
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-nftlox_indexer}
