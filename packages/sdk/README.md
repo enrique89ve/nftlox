@@ -30,7 +30,7 @@ const client = createNftloxClient({
 	indexerUrl: "https://api-nftlox.hivecreators.co",
 });
 
-const inventory = await client.indexer.getUserNfts("alice");
+const inventory = await client.indexer.getUserAssets("alice");
 const result = await client.builders.list({
 	assetId: inventory.assets[0]!.id,
 	owner: "alice",
@@ -50,7 +50,7 @@ if (!result.success) throw new Error(JSON.stringify(result.errors));
 - The `create_collection` and node-last `buy` multisig clients.
 - SPV verification helpers.
 
-`buildNftTransferFrom()` accepts ordinary Hive account destinations only. The
+`buildAssetTransferFrom()` accepts ordinary Hive account destinations only. The
 reserved burn account (`null`) is intentionally rejected by the SDK schema;
 delegated approval is not a second burn mechanism. Use the owner's direct
 `transfer` action when the collection permits burning.
