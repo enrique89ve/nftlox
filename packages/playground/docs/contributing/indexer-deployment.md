@@ -78,7 +78,7 @@ Configure the Dokploy service to build the repository with:
 
 | Setting | Value |
 |---|---|
-| Build context | repository root (`/`) |
+| Build context | repository root (directory containing `package.json` and `bun.lock`) |
 | Dockerfile | `packages/indexer/Dockerfile.dokploy` |
 | Container port | `3050` |
 | Health check | `GET /api/health` |
