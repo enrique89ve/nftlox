@@ -163,7 +163,6 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 					name: COLLECTION_NAME,
 					symbol: COLLECTION_SYMBOL,
 					description: "Dragon Masters Trading Card Game — fully on-chain card game",
-					imageUrl: "https://example.com/dragon-masters-logo.png",
 					totalPotential: 100000,
 					maxInstances: 0,
 					transferable: true,
@@ -190,13 +189,11 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 						{
 							artId: "FIRE-DRAGON-001",
 							name: "Inferno Drake",
-							imageUrl: "https://example.com/inferno-drake.png",
 							maxSupply: 50,
 						},
 						{
 							artId: "STARTER-WOLF-001",
 							name: "Shadow Wolf",
-							imageUrl: "https://example.com/shadow-wolf.png",
 							maxSupply: 50000,
 						},
 					],
@@ -204,6 +201,7 @@ export const scenarioRoutes: Record<string, RouteHandler> = {
 				notes: [
 					"maxSupply controls scarcity: Legendary=50, Starter=50000",
 					"artId is deterministic — re-minting with same artId is idempotent",
+					"No artwork on-chain: the game maps artId/seedId to its own card art and hosting",
 				],
 			},
 			{

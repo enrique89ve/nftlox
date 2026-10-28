@@ -7,11 +7,11 @@ import {
 	requireBoundedString,
 	requireString,
 	requireUsername,
-	optionalString,
 	optionalBoundedString,
 	optionalNumber,
 	optionalObject,
 	optionalStoredCollectionSchema,
+	rejectRetiredMediaKeys,
 } from "@/utils/validation.ts";
 import { validateSeedCap } from "@/utils/asset-rules.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
@@ -25,7 +25,6 @@ import {
 	MAX_ID_LENGTH,
 	MAX_ART_ID_LENGTH,
 	MAX_NAME_LENGTH,
-	MAX_IMAGE_URL_LENGTH,
 } from "@/protocol/index.ts";
 import { protocolReject } from "@/processor/protocol-rejection.ts";
 
@@ -68,6 +67,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	if (collection.creator !== op.signer) throw protocolReject(`Only the collection creator can mint in ${collectionId}`);
 
 	const metadata = optionalObject(d.metadata) ?? {};
+	rejectRetiredMediaKeys(metadata, "metadata");
 	// Payload must declare assetType explicitly — we never infer it from id prefix
 	// or action context. This keeps the custom_json self-describing so an
 	// auditor can recreate ownership from the Hive API without the indexer.
@@ -103,8 +103,7 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 	// origin_dna lives on the collection row (single source of truth); we just
 	// read it here to feed into the seed's asset_dna derivation.
 	const edition = optionalNumber(d.edition) ?? 1;
-	const imageHash = optionalString(metadata.imageHash) ?? "";
-	const assetDna = await generateSeedDna(canonicalId, collection.origin_dna, edition, imageHash);
+	const assetDna = await generateSeedDna(canonicalId, collection.origin_dna, edition);
 	const ownerRaw = Object.prototype.hasOwnProperty.call(d, "owner")
 		? requireString(d.owner, "owner")
 		: null;
@@ -121,7 +120,6 @@ export async function handleMint(op: ParsedOperation, txn: Queryable): Promise<R
 		owner,
 		assetDna,
 		name: optionalBoundedString(metadata.name, "metadata.name", MAX_NAME_LENGTH) ?? optionalBoundedString(d.name, "name", MAX_NAME_LENGTH) ?? "",
-		imageUrl: optionalBoundedString(metadata.imageUrl, "metadata.imageUrl", MAX_IMAGE_URL_LENGTH),
 		maxSupply,
 		seedId: null, instanceNumber: null,
 		artId,

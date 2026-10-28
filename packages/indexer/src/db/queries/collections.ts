@@ -14,7 +14,6 @@ export interface InsertCollectionParams {
 	totalPotential: number;
 	maxInstances: number;
 	description: string | null;
-	imageUrl: string | null;
 	externalUrl: string | null;
 	transferable: boolean;
 	burnable: boolean;
@@ -31,7 +30,7 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 	const result = await txn`
 		INSERT INTO collections (
 			id, name, symbol, creator, origin_dna, total_potential, max_instances,
-			description, image_url, external_url,
+			description, external_url,
 			transferable, burnable, royalty_pct, royalty_recipient,
 			schema, schema_version,
 			block_num, tx_id, created_at
@@ -39,7 +38,7 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 			${params.id}, ${params.name}, ${params.symbol},
 			${params.creator}, ${params.originDna},
 			${params.totalPotential}, ${params.maxInstances},
-			${params.description}, ${params.imageUrl}, ${params.externalUrl},
+			${params.description}, ${params.externalUrl},
 			${params.transferable}, ${params.burnable}, ${params.royaltyPct},
 			${params.royaltyRecipient},
 			${toJsonb(params.schema)}, ${params.schemaVersion},
@@ -54,7 +53,7 @@ export async function insertCollection(params: InsertCollectionParams, txn: Quer
 export async function getCollectionById(id: string): Promise<Record<string, unknown> | null> {
 	const [row] = await sql`
 		SELECT id, name, symbol, creator, origin_dna, total_potential,
-			description, image_url, external_url,
+			description, external_url,
 			transferable, burnable, royalty_pct, royalty_recipient,
 			schema, schema_version, tx_id, created_at
 		FROM collections
@@ -209,7 +208,7 @@ export async function countInstancesByCollection(
 
 const COLLECTION_LIST_COLUMNS = sql`
 	c.id, c.name, c.symbol, c.creator, c.total_potential,
-	c.description, c.image_url, c.external_url,
+	c.description, c.external_url,
 	c.transferable, c.burnable, c.royalty_pct, c.royalty_recipient,
 	c.schema_version, c.tx_id, c.created_at,
 	COALESCE(cs.seeds, 0)::int AS seed_count,

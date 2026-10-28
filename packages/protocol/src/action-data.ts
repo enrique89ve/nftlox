@@ -12,9 +12,10 @@ import type { AssetKind } from "./constants";
 
 // Collection
 
+// Media-agnostic: no image or artwork field. Consuming applications own
+// presentation; the indexer rejects legacy `image` keys.
 export type CollectionMetadata = {
 	readonly description: string;
-	readonly image: string;
 	readonly externalUrl?: string | undefined;
 };
 
@@ -59,11 +60,12 @@ export type ExtendSchemaData = {
 
 // ASSET (mint / seed)
 
+// Media-agnostic: no image or artwork field. Applications that want an
+// on-chain content anchor declare it in `immutableData` via the collection
+// schema; the indexer rejects legacy `imageUrl` / `imageHash` keys.
 export type AssetMetadata = {
 	readonly name: string;
 	readonly description?: string | undefined;
-	readonly imageUrl: string;
-	readonly imageHash: string;
 };
 
 export type AssetData = {
@@ -108,10 +110,6 @@ export type BulkDistributeData = {
 
 // Transfer (burn = transfer to "null")
 //
-// Image metadata is intentionally absent: seeds carry their own imageUrl/hash
-// in the `assets` row (written at mint), and instances inherit via the
-// seed→collection FK chain. Duplicating it on transfer would reintroduce drift.
-//
 // `from` is intentionally absent: the owner is derived from `op.signer` (the
 // Hive custom_json authority), which is the cryptographic source of truth.
 // Any payload that ships a `from` field is rejected by the transfer handler.
@@ -148,10 +146,6 @@ export type SetDataFromData = SeedProvenance & {
 
 // Marketplace
 
-// Listings resolve image metadata via FK (listing → asset → seed → collection).
-// Seeds are immutable, so a snapshot on the listing payload would add
-// duplication without protecting against any real mutation.
-//
 // `expiresAt` is mandatory in 1.0.0+ — every listing carries an end time, in
 // line with OpenSea / LooksRare. The accepted window is bounded by
 // `MIN_LISTING_TTL_MS` / `MAX_LISTING_TTL_MS` against the listing block

@@ -255,7 +255,6 @@ describe("mintInputSchema collectionBlock", () => {
 		edition: 1,
 		owner: "testuser",
 		name: "Asset #1",
-		imageUrl: "https://example.com/asset.png",
 		collectionBlock: 90000000,
 	};
 

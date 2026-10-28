@@ -48,6 +48,7 @@ import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateOriginDna,
+	generateSeedDna,
 	PROTOCOL_COLLECTION_FEE_HBD,
 } from "@/protocol/index.ts";
 import { makeOp as _makeOp } from "./helpers/make-op.ts";
@@ -127,7 +128,7 @@ async function seedCollection(txn?: Queryable): Promise<void> {
 		name: "Test Collection",
 		symbol: "TEST",
 		totalPotential: 1000,
-		metadata: { description: "A test collection", image: "https://example.com/img.png" },
+		metadata: { description: "A test collection" },
 		rules: { transferable: true, burnable: true, royaltyPct: 5, royaltyRecipient: "alice" },
 	});
 	if (txn) {
@@ -153,7 +154,7 @@ async function makeCanonicalCollection(
 			name,
 			symbol,
 			totalPotential: 100,
-			metadata: { description: "Test", image: "https://example.com/img.png" },
+			metadata: { description: "Test" },
 			rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			...overrides,
 		},
@@ -192,7 +193,7 @@ async function makeMintOp(
 		owner: "alice",
 		assetType: "seed",
 		maxSupply: 10,
-		metadata: { name: `Seed ${artId}`, imageUrl: "https://example.com/asset.png", imageHash: `img_${artId}` },
+		metadata: { name: `Seed ${artId}` },
 		...overrides,
 		id,
 		artId,
@@ -203,7 +204,7 @@ async function makeMintOp(
 async function seedMint(txn?: Queryable): Promise<void> {
 	const { op } = await makeMintOp("test1", {
 		maxSupply: 10,
-		metadata: { name: "Test Seed", imageUrl: "https://example.com/asset.png", imageHash: "img_abc" },
+		metadata: { name: "Test Seed" },
 	});
 	if (txn) {
 		await handleMint(op, txn);
@@ -336,7 +337,7 @@ describe("Handlers (integration)", () => {
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: 100,
-				metadata: { description: "Test", image: "https://example.com/img.png" },
+				metadata: { description: "Test" },
 				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
 			await expect(withTransaction((txn) => handleCreateCollection(op, txn))).rejects.toThrow("Non-canonical collectionId");
@@ -356,7 +357,7 @@ describe("Handlers (integration)", () => {
 				symbol: "TEST",
 				totalPotential: 100,
 				originDna: "oFAKEORIGINDEAD0",
-				metadata: { description: "Test", image: "https://example.com/img.png" },
+				metadata: { description: "Test" },
 				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
 			await expect(withTransaction((txn) => handleCreateCollection(op, txn)))
@@ -380,10 +381,28 @@ describe("Handlers (integration)", () => {
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: 100,
-				metadata: { image: "https://example.com/img.png" },
+				metadata: {},
 				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
 			await expect(withTransaction((txn) => handleCreateCollection(op, txn))).rejects.toThrow("metadata.description");
+		});
+
+		test.each(["image", "imageUrl", "imageHash"])("rejects retired media key metadata.%s", async (key) => {
+			const op = await makeCreateCollectionOp({
+				id: COL_ID,
+				name: "Test Collection",
+				symbol: "TEST",
+				totalPotential: 100,
+				metadata: { description: "Test", [key]: "https://example.com/img.png" },
+				rules: { transferable: true, burnable: true, royaltyPct: 0 },
+			});
+			await expect(withTransaction((txn) => handleCreateCollection(op, txn))).rejects.toThrow(`metadata.${key}`);
+		});
+
+		test("accepts a collection with no media", async () => {
+			await seedCollection();
+			const [row] = await sql`SELECT id FROM collections WHERE id = ${COL_ID}`;
+			expect(row?.id).toBe(COL_ID);
 		});
 
 		test("rejects missing rules", async () => {
@@ -392,7 +411,7 @@ describe("Handlers (integration)", () => {
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: 100,
-				metadata: { description: "Test", image: "https://example.com/img.png" },
+				metadata: { description: "Test" },
 			});
 			await expect(withTransaction((txn) => handleCreateCollection(op, txn))).rejects.toThrow("rules");
 		});
@@ -403,7 +422,7 @@ describe("Handlers (integration)", () => {
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: 100,
-				metadata: { description: "Test", image: "https://example.com/img.png" },
+				metadata: { description: "Test" },
 				rules: { burnable: true, royaltyPct: 0 },
 			});
 			await expect(withTransaction((txn) => handleCreateCollection(op, txn))).rejects.toThrow("rules.transferable");
@@ -415,7 +434,7 @@ describe("Handlers (integration)", () => {
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: 100,
-				metadata: { description: "Test", image: "https://example.com/img.png" },
+				metadata: { description: "Test" },
 				rules: { transferable: true, burnable: true, royaltyPct: 60 },
 			});
 			await expect(withTransaction((txn) => handleCreateCollection(op, txn))).rejects.toThrow("royaltyPct");
@@ -427,7 +446,7 @@ describe("Handlers (integration)", () => {
 				name: "Test Collection",
 				symbol: "TEST",
 				totalPotential: -5,
-				metadata: { description: "Test", image: "https://example.com/img.png" },
+				metadata: { description: "Test" },
 				rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			});
 			await expect(withTransaction((txn) => handleCreateCollection(op, txn))).rejects.toThrow("totalPotential");
@@ -561,7 +580,7 @@ describe("Handlers (integration)", () => {
 				originDna: "FAKE_ORIGIN_DNA",
 				assetDna: "FAKE_ASSET_DNA",
 				uniqueAccessKey: "FAKEKEY1",
-				metadata: { name: "DNA Test", imageHash: "hash_abc" },
+				metadata: { name: "DNA Test" },
 			});
 			await withTransaction((txn) => handleMint(op, txn));
 
@@ -581,10 +600,26 @@ describe("Handlers (integration)", () => {
 			expect(asset!.asset_dna).toBeTruthy();
 		});
 
+		test("seed DNA is the media-agnostic (seedId, originDna, edition) hash", async () => {
+			await seedCollection();
+			const { op, id } = await makeMintOp("dna_v2", { edition: 3 });
+			await withTransaction((txn) => handleMint(op, txn));
+
+			const [asset] = await sql`SELECT asset_dna FROM assets WHERE id = ${id}`;
+			const originDna = await generateOriginDna(COL_ID);
+			expect(asset!.asset_dna).toBe(await generateSeedDna(id, originDna, 3));
+		});
+
+		test.each(["image", "imageUrl", "imageHash"])("mint rejects retired media key metadata.%s", async (key) => {
+			await seedCollection();
+			const { op } = await makeMintOp("media_key", { metadata: { name: "Media", [key]: "https://example.com/a.png" } });
+			await expect(withTransaction((txn) => handleMint(op, txn))).rejects.toThrow(`metadata.${key}`);
+		});
+
 		test("mint DNA is deterministic across replays", async () => {
 			await seedCollection();
 
-			const replayOverrides = { metadata: { name: "Replay", imageHash: "hash_xyz" } };
+			const replayOverrides = { metadata: { name: "Replay" } };
 			const { op: op1, id: replayId } = await makeMintOp("replay_dna", replayOverrides);
 			// Force same txId for both calls
 			(op1 as any).txId = "tx_fixed_replay";

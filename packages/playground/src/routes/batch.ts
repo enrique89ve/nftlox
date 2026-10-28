@@ -57,7 +57,6 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 					symbol: string;
 					totalPotential: number;
 					nodeAccount: string;
-					image?: string;
 					description?: string;
 				};
 
@@ -71,7 +70,7 @@ export const batchRoutes: Record<string, { POST: RouteHandler }> = {
 					body.symbol,
 					body.totalPotential || 1000000,
 					body.nodeAccount,
-					{ image: body.image, description: body.description },
+					{ description: body.description },
 				);
 
 				return json({

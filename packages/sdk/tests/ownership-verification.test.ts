@@ -77,7 +77,7 @@ describe("verifyAssetOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "1.0.0",
+								version: "2.0.0",
 								action: ACTION_TRANSFER,
 								data: params.data,
 							}),
@@ -134,7 +134,7 @@ describe("verifyAssetOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "1.0.0",
+								version: "2.0.0",
 								action: ACTION_TRANSFER,
 								data: {
 									assetId: "asset_1",
@@ -394,7 +394,7 @@ describe("verifyAssetOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "1.0.0",
+								version: "2.0.0",
 								action: ACTION_BUY,
 								data: {
 									assetId: "asset_buy_1",
@@ -437,7 +437,7 @@ describe("verifyAssetOwnership", () => {
 								id: "nftlox_testnet",
 								json: JSON.stringify({
 									protocol: "nftlox_testnet",
-									version: "1.0.0",
+									version: "2.0.0",
 									action: ACTION_CREATE_COLLECTION,
 									data: {
 										id: collectionId,
@@ -446,7 +446,7 @@ describe("verifyAssetOwnership", () => {
 										totalPotential: 0,
 										maxInstances: 0,
 										originDna: "0".repeat(40),
-										metadata: { description: "Buy collection", image: "https://example.com/image.png" },
+										metadata: { description: "Buy collection" },
 										rules: {
 											transferable: true,
 											burnable: true,
@@ -477,7 +477,7 @@ describe("verifyAssetOwnership", () => {
 								id: "nftlox_testnet",
 								json: JSON.stringify({
 									protocol: "nftlox_testnet",
-									version: "1.0.0",
+									version: "2.0.0",
 									action: ACTION_LIST,
 									data: {
 										assetId: "asset_buy_1",
@@ -531,7 +531,7 @@ describe("verifyAssetOwnership", () => {
 											id: "nftlox_testnet",
 											json: JSON.stringify({
 												protocol: "nftlox_testnet",
-												version: "1.0.0",
+												version: "2.0.0",
 												action: ACTION_BUY_COMMITMENT,
 												data: {
 													txHash: "other_buy_tx",
@@ -559,7 +559,7 @@ describe("verifyAssetOwnership", () => {
 									id: "nftlox_testnet",
 									json: JSON.stringify({
 										protocol: "nftlox_testnet",
-										version: "1.0.0",
+										version: "2.0.0",
 										action: ACTION_BUY_COMMITMENT,
 										data: {
 											txHash: "buy_tx_1",
@@ -733,7 +733,7 @@ describe("verifyAssetOwnership", () => {
 							id: "nftlox_testnet",
 							json: JSON.stringify({
 								protocol: "nftlox_testnet",
-								version: "1.0.0",
+								version: "2.0.0",
 								action: ACTION_TRANSFER,
 								data: {
 									assetId: "asset_2",

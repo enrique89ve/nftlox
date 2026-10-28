@@ -171,7 +171,6 @@ export async function buildCollection(
 		originDna,
 		metadata: {
 			description: data.metadata.description,
-			image: toWireUrl(data.metadata.image),
 			...(data.metadata.externalUrl !== undefined && {
 				externalUrl: toWireUrl(data.metadata.externalUrl),
 			}),

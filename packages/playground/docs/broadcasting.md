@@ -22,7 +22,7 @@ Every builder returns Hive-native tuples:
 	"required_auths": [],
 	"required_posting_auths": ["alice"],
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"1.0.0\",\"action\":\"mint\",\"data\":{…}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"2.0.0\",\"action\":\"mint\",\"data\":{…}}"
 }]
 ```
 
@@ -79,7 +79,6 @@ const result = await buildSeed({
 	signer: "alice",
 	artId: "founders-card",
 	name: "Founder's Card",
-	imageUrl: "https://example.com/cards/founder.png",
 	maxSupply: 100,
 	edition: 1,
 });
@@ -278,7 +277,7 @@ const result = await buildCollection({
 	symbol: "HERO",
 	creator: "alice",
 	totalPotential: 1000,
-	metadata: { description: "Hero cards", image: "https://…" },
+	metadata: { description: "Hero cards" },
 	rules: { transferable: true, burnable: true, royaltyPct: 5 },
 	schema: createSchemaBuilder()
 		.immutable("rarity", "string")

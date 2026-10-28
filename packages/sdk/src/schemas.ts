@@ -4,7 +4,6 @@ import {
 	MAX_SYMBOL_LENGTH,
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
-	MAX_IMAGE_URL_LENGTH,
 	MAX_MARKETPLACE_LENGTH,
 	MAX_ROYALTY_PCT,
 	SUPPORTED_CURRENCIES,
@@ -132,7 +131,6 @@ export const createCollectionInputSchema = z.object({
 		),
 	metadata: z.object({
 		description: z.string().min(1, "Description is required").max(MAX_DESCRIPTION_LENGTH, `Description must be at most ${MAX_DESCRIPTION_LENGTH} characters`),
-		image: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH, `Image URL must be at most ${MAX_IMAGE_URL_LENGTH} characters`),
 		externalUrl: httpUrlSchema.optional(),
 	}),
 	rules: z.object({
@@ -152,8 +150,6 @@ export const mintInputSchema = z.object({
 	assetType: z.literal("seed").default("seed"),
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH),
 	description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
-	imageUrl: httpUrlSchema.max(MAX_IMAGE_URL_LENGTH),
-	imageHash: z.string().optional(),
 	maxSupply: z.number().int().min(1, "Max supply must be at least 1").optional(),
 	immutableData: z.record(z.string(), z.unknown()).optional().refine(
 		(obj) => !obj || Object.keys(obj).length <= 64,
@@ -202,8 +198,6 @@ export const importedAssetSchema = z.object({
 	assetId: z.string().min(1, "Asset ID is required"),
 	name: z.string().min(1, "Name is required"),
 	brief: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
-	imageUrl: httpUrlSchema,
-	imageHash: z.string().optional(),
 	maxSupply: z.number().int().min(1).default(1),
 });
 export type ImportedAsset = z.infer<typeof importedAssetSchema>;

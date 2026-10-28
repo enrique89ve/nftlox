@@ -143,7 +143,7 @@ En desarrollo/testnet, ejecuta:
 ```
 
 Después inicia el indexador para reconstruir la proyección desde el génesis
-`109974058`.
+`111145991` (génesis del protocolo 2.0.0).
 
 ---
 

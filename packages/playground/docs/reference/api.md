@@ -29,9 +29,9 @@ Sync status and node information.
 
 ```json
 {
-	"protocolVersion": "1.0.0",
+	"protocolVersion": "2.0.0",
 	"protocolId": "nftlox_testnet",
-	"genesisBlock": 109974058,
+	"genesisBlock": 111145991,
 	"nodeAccount": "nftlox",
 	"nodeUrl": "https://api-nftlox.hivecreators.co",
 	"multisigEnabled": true,
@@ -374,7 +374,7 @@ Get full details for a single Asset.
 | `id` | Asset ID |
 
 **Response:** Complete Asset object including:
-- `id`, `name`, `image_url`
+- `id`, `name`
 - `collection_id`, `edition`, `asset_type` (seed/instance)
 - `owner`, `status` (active/listed/lent)
 - `origin_dna`, `asset_dna`, `immutable_data`, `data_hash`

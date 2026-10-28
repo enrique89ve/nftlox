@@ -74,7 +74,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 					originDna: await generateOriginDna(COL_ID),
 					totalPotential: 10,
 					maxInstances: 0,
-					metadata: { description: "x", image: "https://example.com/x.png" },
+					metadata: { description: "x" },
 					rules: { transferable: true, burnable: false, royaltyPct: 0 },
 				},
 				pairedTransfers: [
@@ -183,7 +183,7 @@ describe("router — TransferPool.consumed rollback on handler failure", () => {
 					originDna: await generateOriginDna(COL_ID),
 					totalPotential: 10,
 					maxInstances: 0,
-					metadata: { description: "x", image: "https://example.com/x.png" },
+					metadata: { description: "x" },
 					rules: { transferable: true, burnable: false, royaltyPct: 0 },
 				},
 				pairedTransfers: [

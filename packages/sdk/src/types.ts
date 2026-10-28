@@ -9,7 +9,6 @@ export type SeedAssetWithArtId = {
 	readonly artId: string;
 	readonly name: string;
 	readonly brief?: string | undefined;
-	readonly imageUrl: string;
 	readonly maxSupply: number;
 };
 

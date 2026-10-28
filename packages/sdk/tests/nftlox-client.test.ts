@@ -124,12 +124,12 @@ describe("createNftloxClient", () => {
 			indexerUrl: INDEXER_URL,
 			http: {
 				fetch: (async () => new Response(JSON.stringify({
-					protocolVersion: "1.1.0",
+					protocolVersion: "1.0.0",
 					protocolId: PROTOCOL_ID,
 				}), { status: 200 })) as unknown as typeof fetch,
 			},
 		});
-		await expect(client.connect()).rejects.toThrow(/expected version '1\.0\.0', got '1\.1\.0'/);
+		await expect(client.connect()).rejects.toThrow(/expected version '2\.0\.0', got '1\.0\.0'/);
 	});
 
 	test("connect() rejects an indexer on a different protocol id", async () => {

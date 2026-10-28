@@ -51,7 +51,6 @@ describe("SDK input schemas", () => {
 			maxInstances: 0,
 			metadata: {
 				description: "Test desc",
-				image: "https://example.com/img.png",
 			},
 			rules: {
 				transferable: true,
@@ -79,7 +78,6 @@ describe("SDK input schemas", () => {
 			edition: 1,
 			owner: "user",
 			name: "Asset #1",
-			imageUrl: "https://example.com/asset.png",
 			collectionBlock: 90000000,
 		};
 

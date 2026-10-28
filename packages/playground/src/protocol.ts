@@ -32,7 +32,6 @@ export interface BatchMintResult {
 // ============ COLLECTION CREATION ============
 
 export interface CollectionOptions {
-	image?: string;
 	description?: string;
 }
 
@@ -53,7 +52,6 @@ function buildCollectionInput(
 		maxInstances: 0,
 		metadata: {
 			description: options?.description || `${name} - NFTLox Protocol Collection`,
-			image: options?.image || "https://placehold.co/400x400?text=Asset",
 		},
 		rules: {
 			transferable: true,
@@ -167,7 +165,6 @@ export async function loadSampleAssets(filePath: string): Promise<SeedAssetWithA
 		assetId: item.assetId,
 		name: item.name,
 		brief: item.brief,
-		imageUrl: item.imageUrl,
 		maxSupply: item.maxSupply ?? 1,
 	}));
 }
@@ -239,7 +236,6 @@ export async function createDeterministicSeedMintOperations(
 			owner,
 			edition: i + 1,
 			name: asset.name,
-			imageUrl: asset.imageUrl,
 			maxSupply: asset.maxSupply,
 			...(asset.brief !== undefined && { brief: asset.brief }),
 		});
@@ -277,7 +273,6 @@ export async function loadSampleAssetsWithArtId(filePath: string): Promise<SeedA
 		artId: item.artId || "",
 		name: item.name,
 		brief: item.brief,
-		imageUrl: item.imageUrl,
 		maxSupply: item.maxSupply ?? 1,
 	}));
 }

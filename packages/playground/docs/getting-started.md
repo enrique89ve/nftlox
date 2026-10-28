@@ -2,8 +2,8 @@
 
 This guide takes you from zero to a minted Asset on the NFTLox testnet in a single file. Everything runs client-side: the indexer only serves **read** endpoints and the **multisig** co-signing endpoint — it never holds your keys and never builds payloads for you.
 
-The current public-test protocol is `1.0.0`. It is not wire-compatible with
-`0.10.x`: custody and delegation operations require the Hive active key.
+The current public-test protocol is `2.0.0`. Payloads below that version are
+rejected. Custody and delegation operations require the Hive active key.
 
 ## Prerequisites
 
@@ -47,9 +47,9 @@ curl https://api-nftlox.hivecreators.co/api/status
 
 ```json
 {
-	"protocolVersion": "1.0.0",
+	"protocolVersion": "2.0.0",
 	"protocolId": "nftlox_testnet",
-	"genesisBlock": 109974058,
+	"genesisBlock": 111145991,
 	"nodeAccount": "nftlox",
 	"multisigEnabled": true,
 	"multisigSignerReady": true,
@@ -114,7 +114,6 @@ const result = await buildSeed({
 	signer: HIVE_ACCOUNT,
 	artId: "founders-card",
 	name: "Founder's Card",
-	imageUrl: "https://example.com/cards/founder.png",
 	maxSupply: 100,
 	edition: 1,
 	immutableData: {
@@ -193,8 +192,8 @@ console.log(`${confirmation.confirmed}/${confirmation.totalOperations} ops confi
 | Property | Value |
 |---|---|
 | Protocol ID | `nftlox_testnet` |
-| Version | `1.0.0` |
-| Minimum supported | `1.0.0` |
+| Version | `2.0.0` |
+| Minimum supported | `2.0.0` |
 | Blockchain | Hive L1 |
 | Finality | ~3 s (block time) |
 | Max ops per custom_json tx | 5 |

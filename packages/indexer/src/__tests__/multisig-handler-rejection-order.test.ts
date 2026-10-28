@@ -116,7 +116,6 @@ async function buildPayloadData(overrides: FixtureOverrides): Promise<Record<str
 		maxInstances: "maxInstances" in overrides ? overrides.maxInstances : 0,
 		metadata: {
 			description: "description" in overrides ? overrides.description : "order-pin fixture",
-			image: "https://example.com/order-pin.png",
 		},
 		rules: {
 			transferable: true,

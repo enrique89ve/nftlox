@@ -196,7 +196,6 @@ export async function handleBulkDistribute(op: ParsedOperation, txn: Queryable):
 				owner: to,
 				assetDna,
 				name: "",
-				imageUrl: null,
 				maxSupply: 0,
 				seedId,
 				instanceNumber,

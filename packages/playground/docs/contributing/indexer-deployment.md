@@ -164,10 +164,10 @@ DATABASE_URL=postgres://user:password@your-host:5432/nftlox_indexer
 ./scripts/compose.sh dokploy up -d
 ```
 
-The indexer applies the idempotent baseline on startup. During the current
-development cutover from the legacy NFT projection to the canonical Asset
-projection, it deliberately stops if legacy `nft*` tables or columns are
-present. Reset that testnet database once before deploying the new image:
+The indexer applies the idempotent baseline on startup. It deliberately stops
+if it finds a legacy projection: `nft*` tables or columns, or the protocol 1.x
+`image_url` media columns. Protocol 2.0.0 restarts the testnet from a new
+genesis, so reset that database once before deploying the new image:
 
 ```bash
 cd packages/indexer
@@ -176,7 +176,7 @@ printf 'yes\n' | env DATABASE_URL='postgres://user:password@your-host:5432/nftlo
 ```
 
 Run the reset while the old indexer is stopped. It drops the projection and
-replays from protocol genesis `109974058`; it must never run against a
+replays from protocol genesis `111145991`; it must never run against a
 production database with data that must be preserved.
 
 ### Building the image directly

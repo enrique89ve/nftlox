@@ -19,10 +19,11 @@
 // ============================================================================
 
 export const PROTOCOL_ID = "nftlox_testnet";
-// 1.0.0 hard fork: custody/delegation actions moved from posting to active.
-// MIN tracks the release because 0.x payloads use the old authority map.
-export const PROTOCOL_VERSION = "1.0.0";
-export const MIN_PROTOCOL_VERSION = "1.0.0";
+// 2.0.0 hard fork: asset identity is media-agnostic. Image fields are gone
+// from collection/seed payloads and seed DNA no longer hashes an image. MIN
+// tracks the release because 1.x payloads carry the old seed-DNA preimage.
+export const PROTOCOL_VERSION = "2.0.0";
+export const MIN_PROTOCOL_VERSION = "2.0.0";
 export const HASH_VERSION = "v1";
 
 // ============================================================================
@@ -183,7 +184,6 @@ export const SAFE_PAYLOAD_MAX_BYTES = Math.floor(HIVE_CUSTOM_JSON_MAX_BYTES * 0.
 
 export const MAX_NAME_LENGTH = 100;
 export const MAX_DESCRIPTION_LENGTH = 250;
-export const MAX_IMAGE_URL_LENGTH = 500;
 export const MAX_URL_LENGTH = 500;
 export const MAX_ID_LENGTH = 128;
 // Optional `marketplace` field in `list` payloads. The string is hashed into
@@ -218,7 +218,6 @@ export const INSTANCE_DNA_LENGTH = 20;
 export const ACCESS_KEY_LENGTH = 8;
 export const INSTANCE_ID_HASH_LENGTH = 20;
 export const COLLECTION_ID_HASH_LENGTH = 20;  // was 14 (56 bits) — now 80 bits to match other IDs
-export const IMAGE_ID_HASH_LENGTH = 16;
 
 // ID and DNA textual prefixes — normative. Each emitter (SDK builders,
 // indexer queries, test fixtures) must derive from these; any raw literal in
@@ -227,7 +226,6 @@ export const IMAGE_ID_HASH_LENGTH = 16;
 export const COLLECTION_ID_PREFIX = "col_";
 export const SEED_ID_PREFIX = "seed_";
 export const INSTANCE_ID_PREFIX = "asset_";
-export const IMAGE_ID_PREFIX = "img_";
 export const ORIGIN_DNA_PREFIX = "o";
 // Every ASSET DNA (seed or instance) starts with this letter. Seed vs instance
 // are distinguished by the hash-domain salt on the preimage
@@ -417,8 +415,10 @@ export const HASH_DOMAIN_ORIGIN = "nftlox:origin:";
 export const HASH_DOMAIN_SEED = "nftlox:seed:";
 export const HASH_DOMAIN_DNA = "nftlox:dna:";
 export const HASH_DOMAIN_KEY = "nftlox:key:";
-export const HASH_DOMAIN_SEED_DNA = "nftlox:seed-dna:";
-export const HASH_DOMAIN_IMG = "nftlox:img:";
+// Preimage is seedId:originDna:edition with no media input. The retired
+// unversioned domain "nftlox:seed-dna:" also hashed an image id; the "v1:"
+// separator keeps current seed DNA disjoint from those values.
+export const HASH_DOMAIN_SEED_DNA = "nftlox:seed-dna:v1:";
 export const HASH_DOMAIN_LISTING = "nftlox:listing:v1:";
 
 // ============================================================================

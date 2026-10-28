@@ -16,7 +16,7 @@ The implementation in this package is normative:
 | `src/action-data.ts` | The `data` shape for each protocol action |
 | `src/types.ts` | Shared wire, schema, payment, and multisig types; discriminated `TypedProtocolPayload` |
 | `src/payload.ts` | `ProtocolPayload` creation and Hive `custom_json` wrapping |
-| `src/dna.ts` | Deterministic collection, seed, instance, DNA, image, access-key, and listing ids |
+| `src/dna.ts` | Deterministic collection, seed, instance, DNA, access-key, and listing ids |
 | `src/payment-requirements.ts` | Native-token payment requirements per action |
 | `src/payment.ts` | Payment-split math and Hive-amount precision helpers (HIVE_PRECISION, rounding, basis-points) |
 | `src/schema.ts` | Collection schema validation, canonical JSON, data hashing |
@@ -33,8 +33,8 @@ specification. If prose and code diverge, this package wins.
 | Property | Value |
 |---|---|
 | Protocol id | `nftlox_testnet` |
-| Protocol version | `1.0.0` |
-| Minimum accepted version | `1.0.0` |
+| Protocol version | `2.0.0` |
+| Minimum accepted version | `2.0.0` |
 | Transport | Hive `custom_json` |
 | Max JSON payload | `8000` bytes |
 | Hive hard cap | `8192` bytes |
@@ -47,13 +47,28 @@ specification. If prose and code diverge, this package wins.
 NFTLox has no smart contract. State is reconstructed by deterministic indexers
 that replay accepted Hive operations from the configured genesis block.
 
-### 1.0.0 activation boundary
+### 2.0.0 activation boundary (media-agnostic assets)
 
-Version `1.0.0` is a protocol hard fork for the public test phase: custody
-and delegation actions now require Hive `active` authority, and `0.11.x`
-payloads are below `MIN_PROTOCOL_VERSION`. Deploy the SDK and indexer as one
-release and perform a clean testnet reindex (or an explicitly coordinated
-migration) before accepting public traffic.
+Version `2.0.0` makes asset identity independent of any visual media.
+Collection and seed payloads no longer carry `image`, `imageUrl` or
+`imageHash`; the indexer rejects those keys. Seed DNA is
+`sha256("nftlox:seed-dna:v1:" + seedId + ":" + originDna + ":" + edition)`,
+with a versioned hash domain so no current DNA can collide with a 1.x value. Ownership,
+ids, instance DNA, access keys, listing ids and the ownership state-root are
+unchanged. `1.x` payloads are below `MIN_PROTOCOL_VERSION`.
+
+The public testnet restarts from genesis block `111145991`
+(`069ff4075ae2710bb9527ed3decd3ad3519cc94f`); 1.x history is not replayed.
+Deploy the SDK and indexer as one release and reset the indexer database
+before accepting traffic. Applications own artwork, hosting, licensing and
+moderation; map media from `collectionId` / `artId` / `seedId`, or anchor a
+content hash in `immutableData` through the collection schema.
+
+### 1.0.0 activation boundary (superseded)
+
+Version `1.0.0` required Hive `active` authority for custody and delegation,
+and rejected `0.11.x`. Protocol `2.0.0` supersedes it: a `1.0.0` payload is
+below `MIN_PROTOCOL_VERSION` and the indexer does not replay that history.
 
 ## Wire Envelope
 
@@ -143,17 +158,16 @@ the base protocol and ultimately emits normal `bulk_distribute` operations.
 
 ## Instance Inheritance
 
-Only `mint` carries image metadata on the wire. Instances are never self-describing:
+Only `mint` carries descriptive metadata on the wire, and no action carries
+media. Instances are never self-describing:
 
-- A **seed** stores its own `imageUrl` / `imageHash` in the `assets` row written
-  at mint time (via `AssetMetadata` in `AssetData`).
-- An **instance** (created by `bulk_distribute`) has `image_url = NULL` and
-  inherits name, image, and origin-DNA via the `instance → seed → collection`
-  foreign-key chain resolved at read time.
-- `transfer`, `list`, and `unlist` payloads **do not carry** `imageUrl` or
-  `imageHash`. Explorers and clients resolve the image by following the same
-  FK chain. Seeds are immutable, so there is no "snapshot at listing time" to
-  preserve.
+- A **seed** stores its own `name` and `immutableData` in the `assets` row
+  written at mint time (via `AssetMetadata` in `AssetData`).
+- An **instance** (created by `bulk_distribute`) inherits name, immutable data
+  and origin-DNA via the `instance → seed → collection` foreign-key chain
+  resolved at read time.
+- `transfer`, `list`, and `unlist` payloads carry no metadata. Seeds are
+  immutable, so there is no "snapshot at listing time" to preserve.
 
 This keeps the on-chain payload autodescriptive without reintroducing
 duplication that the database would have to reconcile on every read.
@@ -238,7 +252,7 @@ base operations instead of a second copy of the type system.
   effects; `buy_commitment` is the node-side reservation op that precedes `buy`.
 - Hash domain separators are permanent historical commitments.
 - Id/DNA prefixes (`COLLECTION_ID_PREFIX`, `SEED_ID_PREFIX`, `INSTANCE_ID_PREFIX`,
-  `IMAGE_ID_PREFIX`, `ORIGIN_DNA_PREFIX`, `ASSET_DNA_PREFIX`) are single sources
+  `ORIGIN_DNA_PREFIX`, `ASSET_DNA_PREFIX`) are single sources
   of truth: raw literals outside `constants.ts` are rejected by
   `tests/no-magic-prefixes.test.ts`.
 - Free-form string inputs to every deterministic-id helper in `src/dna.ts`
@@ -250,10 +264,6 @@ base operations instead of a second copy of the type system.
     upstream and exempt.
   - `generateDeterministicSeedId(collectionId, artId)` — `artId` is
     normalized inside the helper.
-  - `generateImageHash(imageUrl)` — `imageUrl` flows through `toWireUrl`,
-    which NFC-normalizes after trim. The on-chain wire bytes are also NFC
-    as a consequence, so DB-persisted URL fields and the hash preimage
-    agree byte-for-byte.
   Frozen NFC vs NFD vectors in `tests/dna.test.ts` lock these invariants.
 - Any action that changes ownership must preserve deterministic replay.
 

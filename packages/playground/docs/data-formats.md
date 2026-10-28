@@ -7,7 +7,7 @@ Every mutation in NFTLox is a Hive operation whose payload is a `ProtocolPayload
 ```typescript
 type ProtocolPayload<T> = {
 	readonly protocol: string;         // "nftlox_testnet"
-	readonly version: string;          // "1.0.0"
+	readonly version: string;          // "2.0.0"
 	readonly action: ProtocolAction;
 	readonly data: T;                  // shape depends on action
 };
@@ -20,15 +20,17 @@ Emitted as a Hive `custom_json`:
 	"required_auths": ["alice"],             // active-auth actions
 	"required_posting_auths": [],            // or the inverse for posting-auth actions
 	"id": "nftlox_testnet",
-	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"1.0.0\",\"action\":\"mint\",\"data\":{…}}"
+	"json": "{\"protocol\":\"nftlox_testnet\",\"version\":\"2.0.0\",\"action\":\"mint\",\"data\":{…}}"
 }]
 ```
 
 The `id` on the Hive op equals `PROTOCOL_ID`. The indexer filters custom_jsons by this id before parsing.
 
-## Image & external URL wire format
+## Media and external URL wire format
 
-Every URL-bearing field — `metadata.image` (collection), `metadata.externalUrl`, and `metadata.imageUrl` (seed mint) — is transported on-chain with the `https://` prefix **stripped**. This saves ~8 bytes per URL. Instance-level payloads (`bulk_distribute`, `transfer`, `list`, `unlist`) do not carry image URLs: instances inherit `image_url` from their seed via the FK chain at read time.
+Since protocol 2.0.0 assets are media-agnostic: collection and seed payloads carry no image fields, seed DNA hashes no media, and the indexer rejects the retired keys `metadata.image`, `metadata.imageUrl` and `metadata.imageHash`. Applications own artwork, hosting and presentation; map it from `collectionId` / `artId` / `seedId`, or anchor a content hash in `immutableData` via the collection schema if you need on-chain integrity.
+
+The only URL-bearing protocol field left is `metadata.externalUrl` (collection), transported on-chain with the `https://` prefix **stripped** to save ~8 bytes.
 
 Canonical rule, implemented once in `@nftlox/protocol`:
 
@@ -43,9 +45,7 @@ fromWireUrl("example.com/img.png")                // → "https://example.com/im
 fromWireUrl("http://legacy.example/img.png")      // → "http://legacy.example/img.png"
 ```
 
-SDK consumers never see the wire form: builders apply `toWireUrl` before emitting and `createIndexerClient`'s reader applies `fromWireUrl` on every returned `image_url` / `external_url` field. Integrators that bypass the SDK (parse raw Hive ops or hit `/api/*` with their own HTTP client) must apply these transforms themselves — both helpers are re-exported from `nftlox-sdk` and `@nftlox/protocol`.
-
-`generateImageHash(url)` applies `toWireUrl` internally, so any shape of URL produces the canonical `img_*` id.
+SDK consumers never see the wire form: builders apply `toWireUrl` before emitting and `createIndexerClient`'s reader applies `fromWireUrl` on every returned `external_url` field. Integrators that bypass the SDK (parse raw Hive ops or hit `/api/*` with their own HTTP client) must apply these transforms themselves — both helpers are re-exported from `nftlox-sdk` and `@nftlox/protocol`.
 
 ## Action → auth level
 
@@ -111,7 +111,6 @@ type CollectionData = {
 	readonly originDna: string;              // "o<15 upper-hex>", deterministic
 	readonly metadata: {
 		readonly description: string;          // ≤250
-		readonly image: string;                // https URL
 		readonly externalUrl?: string;         // optional https URL
 	};
 	readonly rules: {
@@ -181,8 +180,6 @@ type AssetData = {
 	readonly metadata: {
 		readonly name: string;                 // ≤100
 		readonly description?: string;         // ≤250
-		readonly imageUrl: string;             // ≤500
-		readonly imageHash: string;            // "img_<16 hex>"
 	};
 	readonly maxSupply: number;
 	readonly immutableData?: Record<string, unknown>;   // validated against the collection schema
@@ -479,8 +476,7 @@ Rules:
 | `o<15 upper-hex>` | collection origin DNA | `sha256("nftlox:origin:" + collectionId)` |
 | `seed_<20 hex>` | seed | `sha256("nftlox:seed:" + collectionId + ":" + artId.lower())` |
 | `asset_<20 hex>_<n>` | instance | `seed_<suffix>_<instanceNumber>` |
-| `i<19 upper-hex>` | Asset DNA (seed or instance) | `sha256("nftlox:seed-dna:" + assetId + ":" + originDna + ":" + edition + ":" + imageHash)` (seeds) / `sha256("nftlox:dna:" + seedId + ":" + n + ":" + txId + ":" + blockNum)` (bulk-distributed instances). Both share `ASSET_DNA_PREFIX = "i"`; the distinct hash-domain salts prevent cross-kind collisions. |
-| `img_<16 hex>` | image hash | `sha256("nftlox:img:" + imageUrl)` |
+| `i<19 upper-hex>` | Asset DNA (seed or instance) | `sha256("nftlox:seed-dna:v1:" + assetId + ":" + originDna + ":" + edition)` (seeds, media-agnostic) / `sha256("nftlox:dna:" + seedId + ":" + n + ":" + txId + ":" + blockNum)` (bulk-distributed instances). Both share `ASSET_DNA_PREFIX = "i"`; the distinct hash-domain salts prevent cross-kind collisions. |
 | `list_<32 hex>` | listing | `sha256("nftlox:listing:v1:" + assetId + ":" + owner + ":" + marketplace + ":" + priceAmount + ":" + priceCurrency + ":" + expiresAt + ":" + nonce)` |
 
 Domain separators (`nftlox:col:`, `nftlox:seed:`, …) are immutable — changing them would fork every historical ID.

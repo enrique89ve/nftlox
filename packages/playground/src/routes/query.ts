@@ -61,7 +61,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					edition: asset.edition,
 					owner: asset.owner,
 					name: asset.name,
-					imageUrl: asset.image_url,
 					originDna: asset.origin_dna,
 					assetDna: asset.asset_dna,
 					seedId: asset.seed_id,
@@ -130,7 +129,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 				asset: {
 					id: asset.id,
 					name: asset.name,
-					imageUrl: asset.image_url,
 					owner: asset.owner,
 					collectionId: asset.collection_id,
 					edition: asset.edition,
@@ -154,7 +152,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 				original: original ? {
 					id: original.id,
 					name: original.name,
-					imageUrl: original.image_url,
 					owner: original.owner,
 				} : null,
 				instances: {
@@ -209,7 +206,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					items: seeds.map(asset => ({
 						id: asset.id,
 						name: asset.name,
-						imageUrl: asset.image_url,
 						owner: asset.owner,
 						maxSupply: asset.max_supply,
 						distributed: asset.distributed || 0,
@@ -222,7 +218,6 @@ export const queryRoutes: Record<string, ((req: Request) => Promise<Response>) |
 					items: instances.map(asset => ({
 						id: asset.id,
 						name: asset.name,
-						imageUrl: asset.image_url,
 						owner: asset.owner,
 						seedId: asset.seed_id,
 						instanceNumber: asset.instance_number,

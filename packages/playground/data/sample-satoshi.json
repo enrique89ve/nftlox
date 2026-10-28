@@ -4,7 +4,6 @@
 		"symbol": "GSB",
 		"totalPotential": 10040,
 		"description": "Exclusive Satoshi, Gold and Silver digital artifacts.",
-		"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23u64jtH44hTDBxvZoA9GcmfHUnqciWU2ZjB2NJQg4JvVzDg1E7v5rRUcXoRGLDNDXrLY.png",
 		"externalUrl": "https://nftlox.tech",
 		"transferable": true,
 		"burnable": true,
@@ -15,7 +14,6 @@
 			"artId": "gold",
 			"name": "Gold Edition",
 			"description": "Ultra rare 24k Gold digital asset",
-			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23uQvjZTsjNvA9ATYitG7YDU1oQQh8tzh1u746rzcs5j5nh1xiChz8bDp59JafVWR6ALy.png",
 			"maxSupply": 20,
 			"attributes": {
 				"rarity": "Legendary",
@@ -30,7 +28,6 @@
 			"artId": "silver",
 			"name": "Silver Edition",
 			"description": "Rare .999 Silver digital asset",
-			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23uQpem5oHYnhJqptoySjzLtm4evBkyP6efkhVBb8eU7DteELGjokhpQhb4mTQ8fqBVq2.png",
 			"maxSupply": 20,
 			"attributes": {
 				"rarity": "Epic",
@@ -45,7 +42,6 @@
 			"artId": "satoshi",
 			"name": "Satoshi Core",
 			"description": "The base foundation of Satoshi digital artifacts",
-			"imageUrl": "https://files.peakd.com/file/peakd-hive/enrique89/23tHBwHxKMLQEAQtbwiq7TVt4qTZvcxKbQSQWt8SkMsTiRm9CiLwXcnHqtfRvmJ4kt1Bj.png",
 			"maxSupply": 10000,
 			"attributes": {
 				"rarity": "Common",

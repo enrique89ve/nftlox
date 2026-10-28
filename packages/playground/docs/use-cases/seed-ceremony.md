@@ -25,16 +25,15 @@ Seeds are keyed by `artId` — a creator-chosen stable slug. It is the primary i
 type Card = {
 	readonly artId: string;           // sanitized slug; see validateArtId()
 	readonly name: string;
-	readonly imageUrl: string;
 	readonly maxSupply: number;       // how many instances can be distributed
 	readonly rarity: "common" | "rare" | "epic" | "legendary";
 	readonly basePower: number;       // uint16
 };
 
 const CATALOGUE: readonly Card[] = [
-	{ artId: "warrior",  name: "Warrior",  imageUrl: "https://…/warrior.png",  maxSupply: 1000, rarity: "common",    basePower: 50 },
-	{ artId: "mage",     name: "Mage",     imageUrl: "https://…/mage.png",     maxSupply:  500, rarity: "rare",      basePower: 80 },
-	{ artId: "dragon",   name: "Dragon",   imageUrl: "https://…/dragon.png",   maxSupply:   50, rarity: "legendary", basePower: 250 },
+	{ artId: "warrior",  name: "Warrior",  maxSupply: 1000, rarity: "common",    basePower: 50 },
+	{ artId: "mage",     name: "Mage",     maxSupply:  500, rarity: "rare",      basePower: 80 },
+	{ artId: "dragon",   name: "Dragon",   maxSupply:   50, rarity: "legendary", basePower: 250 },
 	// …
 ];
 ```
@@ -88,7 +87,6 @@ async function ceremony() {
 		totalPotential: CATALOGUE.reduce((n, c) => n + c.maxSupply, 0),
 		metadata: {
 			description: "Playable hero cards",
-			image: "https://…/cover.png",
 		},
 		rules: { transferable: true, burnable: true, royaltyPct: 5 },
 		schema: createSchemaBuilder()
@@ -100,7 +98,6 @@ async function ceremony() {
 		seeds: CATALOGUE.map(c => ({
 			artId: c.artId,
 			name: c.name,
-			imageUrl: c.imageUrl,
 			maxSupply: c.maxSupply,
 			immutableData: { rarity: c.rarity, base_power: c.basePower },
 		})),

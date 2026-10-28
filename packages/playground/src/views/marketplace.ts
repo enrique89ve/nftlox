@@ -14,8 +14,6 @@ interface MarketplaceListing {
 	owner?: string | null;
 	collection_id?: string | null;
 	collectionId?: string | null;
-	image_url?: string | null;
-	imageUrl?: string | null;
 	listing_price?: string | null;
 	listingPrice?: string | null;
 	listing_currency?: string | null;
@@ -156,7 +154,7 @@ function renderListings() {
 
 		return `
 			<article class="asset-card js-listing-card" data-id="${escapeHtml(asset.id)}">
-				<img class="asset-image" src="${escapeHtml(getListingImage(asset))}" onerror="this.src='${PLACEHOLDER_SM}'" alt="${escapeHtml(getListingName(asset))}">
+				<img class="asset-image" src="${PLACEHOLDER_SM}" alt="${escapeHtml(getListingName(asset))}">
 				<div class="asset-card-body">
 					<div class="asset-name">${escapeHtml(getListingName(asset))}</div>
 					<div class="asset-owner">@${escapeHtml(owner || "unknown")}</div>
@@ -266,10 +264,6 @@ function getListingOwner(listing: MarketplaceListing): string {
 
 function getListingCollectionId(listing: MarketplaceListing): string {
 	return listing.collection_id || listing.collectionId || "";
-}
-
-function getListingImage(listing: MarketplaceListing): string {
-	return listing.image_url || listing.imageUrl || "";
 }
 
 function getListingPrice(listing: MarketplaceListing): string {

@@ -95,7 +95,6 @@ CREATE TABLE IF NOT EXISTS collections (
 	-- here is only the >= 0 invariant the DB needs to know about.
 	max_instances INTEGER NOT NULL DEFAULT 0 CHECK (max_instances >= 0),
 	description TEXT,
-	image_url TEXT,
 	external_url TEXT,
 	transferable BOOLEAN NOT NULL DEFAULT TRUE,
 	burnable BOOLEAN NOT NULL DEFAULT TRUE,
@@ -140,7 +139,6 @@ CREATE TABLE IF NOT EXISTS assets (
 	-- of the same seed (each instance has its own hash keyed by instance_number).
 	asset_dna TEXT,
 	name TEXT NOT NULL,
-	image_url TEXT,
 	max_supply INTEGER NOT NULL DEFAULT 1 CHECK (max_supply >= 0),
 	distributed INTEGER NOT NULL DEFAULT 0 CHECK (distributed >= 0),
 	reserved_supply INTEGER NOT NULL DEFAULT 0,
@@ -609,9 +607,6 @@ BEGIN
 	IF NEW.name IS DISTINCT FROM OLD.name THEN
 		RAISE EXCEPTION 'assets.name is immutable for %', OLD.id;
 	END IF;
-	IF NEW.image_url IS DISTINCT FROM OLD.image_url THEN
-		RAISE EXCEPTION 'assets.image_url is immutable for %', OLD.id;
-	END IF;
 	IF NEW.max_supply IS DISTINCT FROM OLD.max_supply THEN
 		RAISE EXCEPTION 'assets.max_supply is immutable for %', OLD.id;
 	END IF;
@@ -672,7 +667,7 @@ CREATE TRIGGER trg_prevent_asset_owner_block_regression
 -- updateCollectionSchema). Every other column is either the structural
 -- identity (id/creator/symbol/total_potential) or the audit trail anchored
 -- to the Hive block (block_num/tx_id/created_at). Policy fields (name,
--- description, image_url, royalty_*, transferable, burnable) are left free
+-- description, royalty_*, transferable, burnable) are left free
 -- so a future update_collection op can touch them without a schema change.
 
 CREATE OR REPLACE FUNCTION prevent_collection_immutable_update()

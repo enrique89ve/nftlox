@@ -126,7 +126,7 @@ async function seedFixture(): Promise<void> {
 		originDna: await generateOriginDna(collectionId),
 		totalPotential: 10,
 		maxInstances: 0,
-		metadata: { description: "sync cycle recovery test", image: "https://example.com/sync-cycle.png" },
+		metadata: { description: "sync cycle recovery test" },
 		rules: { transferable: true, burnable: false, royaltyPct: 0 },
 	}, { signer: config.hiveAccount, operationId: "op-sync-cycle-create" });
 	const feeAmount = Number(PROTOCOL_COLLECTION_FEE_HBD);

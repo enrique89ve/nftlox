@@ -63,7 +63,6 @@ type IndexerStatusResponse = {
 type BuildSeedsRequestSeed = Readonly<{
 	artId: string;
 	name: string;
-	imageUrl: string;
 	maxSupply: number;
 	brief?: string | undefined;
 	immutableData?: Record<string, unknown> | undefined;
@@ -251,7 +250,6 @@ export const buildRoutes: Record<string, { POST: RouteHandler }> = {
 				artId: seed.artId,
 				collectionId: requestBody.collectionId,
 				name: seed.name,
-				imageUrl: seed.imageUrl,
 				maxSupply: seed.maxSupply,
 				signer: result.signer,
 				owner: requestBody.owner,

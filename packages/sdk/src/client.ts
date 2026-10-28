@@ -207,7 +207,6 @@ export interface IndexerCollectionBase {
 	total_potential: number;
 	description: string | null;
 	origin_dna: string;
-	image_url: string | null;
 	external_url: string | null;
 	transferable: boolean;
 	burnable: boolean;
@@ -263,7 +262,6 @@ export interface IndexerAssetSummary {
 	edition: number;
 	owner: string;
 	name: string;
-	image_url: string | null;
 	origin_dna: string | null;
 	immutable_data: Record<string, unknown> | null;
 	asset_dna: string | null;
@@ -325,7 +323,6 @@ export interface IndexerAssetLoan {
 	status: IndexerAssetStatus;
 	owner: string;
 	name: string;
-	image_url: string | null;
 	seed_id: string | null;
 	seed_tx_id: string | null;
 	instance_number: number | null;
@@ -479,39 +476,15 @@ function denormalizeOptionalUrl(value: string | null): string | null {
 function denormalizeCollection<T extends IndexerCollectionBase>(c: T): T {
 	return {
 		...c,
-		image_url: denormalizeOptionalUrl(c.image_url),
 		external_url: denormalizeOptionalUrl(c.external_url),
 	};
-}
-
-function denormalizeAssetSummary<T extends IndexerAssetSummary>(n: T): T {
-	return { ...n, image_url: denormalizeOptionalUrl(n.image_url) };
-}
-
-function denormalizeLoan(l: IndexerAssetLoan): IndexerAssetLoan {
-	return { ...l, image_url: denormalizeOptionalUrl(l.image_url) };
-}
-
-function denormalizeAssetLoanStatus(s: IndexerAssetLoanStatus): IndexerAssetLoanStatus {
-	return { ...s, loan: s.loan === null ? null : denormalizeLoan(s.loan) };
-}
-
-function denormalizeUserAssetsPage(page: UserAssetsPage): UserAssetsPage {
-	return { ...page, assets: page.assets.map(denormalizeAssetSummary) };
-}
-
-function denormalizeUserLoansPage(page: UserLoansPage): UserLoansPage {
-	return { ...page, loans: page.loans.map(denormalizeLoan) };
 }
 
 function denormalizeUserAssetsOverview(o: UserAssetsOverview): UserAssetsOverview {
 	return {
 		...o,
 		assets: {
-			owned: o.assets.owned.map(denormalizeAssetSummary),
-			seeds: o.assets.seeds.map(denormalizeAssetSummary),
-			lentOut: o.assets.lentOut.map(denormalizeLoan),
-			borrowed: o.assets.borrowed.map(denormalizeLoan),
+			...o.assets,
 			collections: o.assets.collections.map(denormalizeCollection),
 		},
 	};
@@ -705,15 +678,13 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 		getCollectionSchemaHistory: (id) =>
 			get<SchemaHistoryEntry[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/schema-history`, undefined, http),
 		getCollectionAssets: (id, params) =>
-			get<IndexerAssetSummary[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/assets`, params, http)
-				.then((arr) => arr.map(denormalizeAssetSummary)),
+			get<IndexerAssetSummary[]>(baseUrl, `/api/collections/${encodeURIComponent(id)}/assets`, params, http),
 		getCollectionStats: (id) =>
 			get<CollectionStats>(baseUrl, `/api/collections/${encodeURIComponent(id)}/stats`, undefined, http),
 
 		// ---- Assets ----
 		getAsset: (id) =>
-			get<IndexerAsset>(baseUrl, `/api/assets/${encodeURIComponent(id)}`, undefined, http)
-				.then(denormalizeAssetSummary),
+			get<IndexerAsset>(baseUrl, `/api/assets/${encodeURIComponent(id)}`, undefined, http),
 		getAssetOwner: (id) =>
 			get<IndexerAssetOwner>(baseUrl, `/api/assets/${encodeURIComponent(id)}/owner`, undefined, http),
 		getAssetOwnership: (id) =>
@@ -721,19 +692,14 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 		getAssetProof: (id) =>
 			get<IndexerAssetProof>(baseUrl, `/api/assets/${encodeURIComponent(id)}/proof`, undefined, http),
 		getAssetLoan: (id) =>
-			get<IndexerAssetLoanStatus>(baseUrl, `/api/assets/${encodeURIComponent(id)}/loan`, undefined, http)
-				.then(denormalizeAssetLoanStatus),
+			get<IndexerAssetLoanStatus>(baseUrl, `/api/assets/${encodeURIComponent(id)}/loan`, undefined, http),
 		getAssetInstances: async (id, params) => {
 			const path = `/api/assets/${encodeURIComponent(id)}/instances`;
 			if (params?.compact) {
 				const { seed, instances } = await get<CompactInstancesResponse>(baseUrl, path, { ...params, compact: true }, http);
-				const denormalizedSeed = denormalizeAssetSummary(seed);
-				return instances
-					.map(denormalizeAssetSummary)
-					.map((inst) => resolveInstance(inst, denormalizedSeed));
+				return instances.map((inst) => resolveInstance(inst, seed));
 			}
-			const arr = await get<IndexerAssetSummary[]>(baseUrl, path, params, http);
-			return arr.map(denormalizeAssetSummary);
+			return get<IndexerAssetSummary[]>(baseUrl, path, params, http);
 		},
 		getAssetsByIds: async (ids) => {
 			const result = await get<{ items: IndexerAsset[]; missing: string[] }>(
@@ -743,7 +709,7 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 				http,
 			);
 			return {
-				items: result.items.map(denormalizeAssetSummary),
+				items: result.items,
 				missing: result.missing,
 			};
 		},
@@ -754,21 +720,18 @@ export function createIndexerClient(baseUrl: string, options?: HttpOptions): Ind
 			get<UserAssetsOverview>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets/overview`, params, http)
 				.then(denormalizeUserAssetsOverview),
 		getUserAssets: (username, params) =>
-			get<UserAssetsPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets`, params, http)
-				.then(denormalizeUserAssetsPage),
+			get<UserAssetsPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets`, params, http),
 		getUserAssetCounts: (username) =>
 			get<UserAssetCounts>(baseUrl, `/api/users/${encodeURIComponent(username)}/assets/count`, undefined, http),
 		getUserCollections: (username, params) =>
 			get<IndexerCollectionSummary[]>(baseUrl, `/api/users/${encodeURIComponent(username)}/collections`, params, http)
 				.then((arr) => arr.map(denormalizeCollection)),
 		getUserLoans: (username, params) =>
-			get<UserLoansPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/loans`, params, http)
-				.then(denormalizeUserLoansPage),
+			get<UserLoansPage>(baseUrl, `/api/users/${encodeURIComponent(username)}/loans`, params, http),
 
 		// ---- Marketplace ----
 		getListings: (params) =>
-			get<IndexerAssetSummary[]>(baseUrl, "/api/marketplace/listings", params, http)
-				.then((arr) => arr.map(denormalizeAssetSummary)),
+			get<IndexerAssetSummary[]>(baseUrl, "/api/marketplace/listings", params, http),
 		getSales: (params) =>
 			get<MarketplaceSale[]>(baseUrl, "/api/marketplace/sales", params, http),
 		getSalesVolume: (params) =>

@@ -73,7 +73,6 @@ export type InsertAssetParams = {
 	readonly owner: string;
 	readonly assetDna: string | null;
 	readonly name: string;
-	readonly imageUrl: string | null;
 	readonly maxSupply: number;
 	readonly distributed?: number;
 	readonly seedId: string | null;
@@ -151,7 +150,6 @@ export type SeedWithDnaRow = {
 	readonly collection_id: string;
 	readonly asset_dna: string | null;
 	readonly origin_dna: string | null;
-	readonly image_url: string | null;
 	readonly created_tx_id: string;
 	readonly schema_version: number;
 };
@@ -187,7 +185,6 @@ export type AssetListRow = {
 	readonly edition: number;
 	readonly owner: string;
 	readonly name: string;
-	readonly image_url: string | null;
 	readonly origin_dna: string | null;
 	readonly immutable_data: Record<string, unknown> | null;
 	readonly asset_dna: string | null;

@@ -89,7 +89,6 @@ Every builder validates its input with a Zod schema; the schema is exported alon
 	maxInstances: number;            // 0 (unlimited) OR a positive multiple of INSTANCE_FEE_PER_N (1000)
 	metadata: {
 		description: string;           // 1–250 chars
-		image: string;                 // https URL, ≤500 chars
 		externalUrl?: string;          // https URL, optional
 	};
 	rules: {
@@ -125,7 +124,6 @@ A **seed** is the non-distributable template. It carries the visual asset, max s
 	artId: string;                   // creator-chosen, sanitized; see `validateArtId`
 	edition: number;                 // integer ≥ 1
 	name: string;                    // ≤100 chars
-	imageUrl: string;                // any valid URL, ≤500 chars
 	maxSupply: number;               // integer ≥ 1 (how many instances can be distributed)
 	brief?: string;                  // ≤250 chars
 	immutableData?: Record<string, unknown>;   // ≤64 keys, validated against schema
@@ -148,7 +146,7 @@ A **seed** is the non-distributable template. It carries the visual asset, max s
 }
 ```
 
-Instances inherit `name`, `image_url`, and `art_id` from the seed via the `instance → seed → collection` FK chain. The payload never carries per-instance image metadata; resolve imagery at read time through the indexer or a JOIN.
+Instances inherit `name` and `art_id` from the seed via the `instance → seed → collection` FK chain. NFTLox stores no media: applications resolve artwork from `artId` / `seedId` on their own side.
 
 Caps: `MAX_BULK_DISTRIBUTE_ITEMS = 50` distinct seeds and `MAX_BULK_DISTRIBUTE_TOTAL_QUANTITY = 250` instances per call. Duplicate `seedId`s are rejected — aggregate the quantity instead.
 
@@ -253,9 +251,8 @@ generateDeterministicCollectionId(creator, name, symbol)   // "col_<20 hex>"
 generateDeterministicSeedId(collectionId, artId)           // "seed_<20 hex>"
 generateDeterministicInstanceId(seedId, instanceNumber)    // "asset_<20 hex>_<n>"
 generateOriginDna(collectionId)                            // "o<15 upper-hex>"
-generateSeedDna(assetId, originDna, edition, imageHash)      // "i<19 upper-hex>" — seed DNA (mint / buildSeed)
+generateSeedDna(assetId, originDna, edition)               // "i<19 upper-hex>" — seed DNA (mint / buildSeed), media-agnostic
 generateInstanceDna(seedId, n, txId, blockNum)             // "i<19 upper-hex>" — instance DNA (bulk_distribute)
-generateImageHash(imageUrl)                                // "img_<16 hex>"
 generateListingNonce()                                     // 12-char random
 generateListingId(params)                                  // "list_<32 hex>"
 ```
@@ -421,8 +418,8 @@ Re-exported from `@nftlox/protocol`:
 | Constant | Value | Meaning |
 |---|---|---|
 | `PROTOCOL_ID` | `"nftlox_testnet"` | The `id` field on every `custom_json`. |
-| `PROTOCOL_VERSION` | `"1.0.0"` | The `version` field in every payload. |
-| `MIN_PROTOCOL_VERSION` | `"1.0.0"` | Lowest protocol version the indexer still accepts. |
+| `PROTOCOL_VERSION` | `"2.0.0"` | The `version` field in every payload. |
+| `MIN_PROTOCOL_VERSION` | `"2.0.0"` | Lowest protocol version the indexer still accepts. |
 | `HIVE_BLOCK_TIME_MS` | `3000` | Hive block cadence. Every `*_BLOCKS` window converts to wall time through this. |
 | `HIVE_DECIMALS` / `HIVE_PRECISION` | `3` / `1000` | Decimals and micro-unit multiplier for HIVE/HBD amounts. |
 | `MAX_OPERATIONS_PER_TX` | `5` | Hard cap per Hive transaction. |
@@ -448,7 +445,7 @@ Re-exported from `@nftlox/protocol`:
 | `MAX_NODE_HEARTBEAT_STALENESS_BLOCKS` | `10_000` | Block gap (2 × `MIN_HEARTBEAT_INTERVAL_BLOCKS`) after which a settlement node is no longer considered active for buy co-signing. |
 | `BURN_RECIPIENT` | `"null"` | Hive's reserved burn account; `buildBurn` transfers `to` this value. |
 | `HASH_FORMAT_PREFIX` | `"sha256:"` | Canonical textual form for protocol hashes (data hashes, state roots). |
-| `COLLECTION_ID_PREFIX` / `SEED_ID_PREFIX` / `INSTANCE_ID_PREFIX` / `IMAGE_ID_PREFIX` | `"col_"` / `"seed_"` / `"asset_"` / `"img_"` | Id classification prefixes — use these instead of raw string literals. |
+| `COLLECTION_ID_PREFIX` / `SEED_ID_PREFIX` / `INSTANCE_ID_PREFIX` | `"col_"` / `"seed_"` / `"asset_"` | Id classification prefixes — use these instead of raw string literals. |
 
 ## Type re-exports
 

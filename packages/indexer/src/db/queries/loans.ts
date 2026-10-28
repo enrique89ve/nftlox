@@ -10,7 +10,6 @@ export type AssetLoanRow = Readonly<{
 	readonly status: AssetStatus;
 	readonly owner: string;
 	readonly name: string;
-	readonly image_url: string | null;
 	readonly seed_id: string | null;
 	readonly seed_tx_id: string | null;
 	readonly instance_number: number | null;
@@ -37,7 +36,6 @@ const LOAN_LIST_COLUMNS = sql`
 	n.status,
 	n.owner,
 	COALESCE(NULLIF(n.name, ''), s.name) AS name,
-	COALESCE(n.image_url, s.image_url) AS image_url,
 	n.seed_id,
 	s.created_tx_id AS seed_tx_id,
 	n.instance_number,

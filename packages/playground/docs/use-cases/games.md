@@ -78,11 +78,11 @@ Define your Asset types upfront with **typed schemas** — immutable stats (rari
 
 ```typescript
 const HEROES = [
-	{ artId: "warrior", name: "Warrior", imageUrl: "https://…/warrior.png", maxSupply: 1000,
+	{ artId: "warrior", name: "Warrior", maxSupply: 1000,
 		immutableData: { rarity: "common",    base_power: 50 } },
-	{ artId: "mage",    name: "Mage",    imageUrl: "https://…/mage.png",    maxSupply:  500,
+	{ artId: "mage",    name: "Mage",    maxSupply:  500,
 		immutableData: { rarity: "rare",      base_power: 80 } },
-	{ artId: "dragon",  name: "Dragon",  imageUrl: "https://…/dragon.png",  maxSupply:   50,
+	{ artId: "dragon",  name: "Dragon",  maxSupply:   50,
 		immutableData: { rarity: "legendary", base_power: 250 } },
 ];
 
@@ -91,7 +91,7 @@ const plan = await buildCollectionWithSeeds({
 	symbol: "HERO",
 	creator: CREATOR,
 	totalPotential: HEROES.reduce((n, h) => n + h.maxSupply, 0),
-	metadata: { description: "Playable hero cards", image: "https://…/cover.png" },
+	metadata: { description: "Playable hero cards" },
 	rules: { transferable: true, burnable: true, royaltyPct: 5 },
 	schema: createSchemaBuilder()
 		.immutable("rarity", "string")

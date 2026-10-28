@@ -7,11 +7,9 @@ import {
 	ACCESS_KEY_LENGTH,
 	INSTANCE_ID_HASH_LENGTH,
 	COLLECTION_ID_HASH_LENGTH,
-	IMAGE_ID_HASH_LENGTH,
 	COLLECTION_ID_PREFIX,
 	SEED_ID_PREFIX,
 	INSTANCE_ID_PREFIX,
-	IMAGE_ID_PREFIX,
 	ORIGIN_DNA_PREFIX,
 	ASSET_DNA_PREFIX,
 	LISTING_ID_PREFIX,
@@ -26,10 +24,8 @@ import {
 	HASH_DOMAIN_DNA,
 	HASH_DOMAIN_KEY,
 	HASH_DOMAIN_SEED_DNA,
-	HASH_DOMAIN_IMG,
 	HASH_DOMAIN_LISTING,
 } from "./constants";
-import { toWireUrl } from "./url";
 
 // Hash
 
@@ -50,7 +46,9 @@ export async function generateOriginDna(collectionId: string): Promise<string> {
 	return ORIGIN_DNA_PREFIX + fullHash.slice(0, ORIGIN_DNA_LENGTH - ORIGIN_DNA_PREFIX.length).toUpperCase();
 }
 
-// Seed DNA — hashed from (seedId, originDna, edition, imageHash). The only
+// Seed DNA — hashed from (seedId, originDna, edition). Media-agnostic: no
+// image, URL or other presentation input reaches the preimage, so consumers
+// can rehost or replace artwork without touching asset identity. The only
 // caller is `handleMint` / the SDK's `buildSeed` to produce a seed Asset's
 // identity. Stored in the `assets.asset_dna` column (one DNA per row, seed or
 // instance). Uses HASH_DOMAIN_SEED_DNA; instance DNA uses the distinct
@@ -59,26 +57,10 @@ export async function generateSeedDna(
 	assetId: string,
 	originDna: string,
 	edition: number,
-	imageHash: string,
 ): Promise<string> {
-	const input = `${HASH_DOMAIN_SEED_DNA}${assetId}:${originDna}:${edition}:${imageHash}`;
+	const input = `${HASH_DOMAIN_SEED_DNA}${assetId}:${originDna}:${edition}`;
 	const fullHash = await generateHash(input);
 	return ASSET_DNA_PREFIX + fullHash.slice(0, INSTANCE_DNA_LENGTH - ASSET_DNA_PREFIX.length).toUpperCase();
-}
-
-// Image Hash
-//
-// Third-party consumers can pass any shape of URL (full https, full http, or
-// already-stripped wire form). `toWireUrl` canonicalises to the on-chain wire
-// form before hashing, so the SDK builder and the indexer always derive the
-// same image id for the same logical image — regardless of who holds the
-// scheme prefix at call time.
-
-export async function generateImageHash(imageUrl: string): Promise<string> {
-	const canonical = toWireUrl(imageUrl);
-	const input = `${HASH_DOMAIN_IMG}${canonical}`;
-	const fullHash = await generateHash(input);
-	return `${IMAGE_ID_PREFIX}${fullHash.slice(0, IMAGE_ID_HASH_LENGTH)}`;
 }
 
 // Deterministic IDs

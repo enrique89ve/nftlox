@@ -103,7 +103,6 @@ export async function buildCollectionWithSeeds(
 	const sampleBuildResult = await buildSeed({
 		artId: firstSeed.artId,
 		name: firstSeed.name,
-		imageUrl: firstSeed.imageUrl,
 		maxSupply: firstSeed.maxSupply,
 		brief: firstSeed.brief,
 		immutableData: firstSeed.immutableData,
@@ -165,7 +164,6 @@ export async function buildCollectionWithSeeds(
 				return buildSeed({
 					artId: planItem.artId,
 					name: planItem.name,
-					imageUrl: planItem.imageUrl,
 					maxSupply: planItem.maxSupply,
 					brief: planItem.brief,
 					immutableData: planItem.immutableData,

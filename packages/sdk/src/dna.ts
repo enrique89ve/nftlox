@@ -5,7 +5,6 @@ export {
 	generateHash,
 	generateOriginDna,
 	generateSeedDna,
-	generateImageHash,
 	generateInstanceId,
 	extractSeedId,
 	extractInstanceNumber,

@@ -38,7 +38,7 @@ describe("state-root deferred flush", () => {
 				await insertAsset({
 					id, collectionId, assetType: "seed", edition: 1, owner: "alice",
 					assetDna: null,
-					name: `N${i}`, imageUrl: null,
+					name: `N${i}`,
 					maxSupply: 1, seedId: null, instanceNumber: null, artId: `art-${i}`,
 					immutableData: null, dataOperationId: null, dataHash: null,
 					schemaVersion: 0,
@@ -70,7 +70,7 @@ describe("state-root deferred flush", () => {
 			await insertAsset({
 				id: "ephemeral", collectionId, assetType: "seed", edition: 1, owner: "alice",
 				assetDna: null,
-				name: "ephemeral", imageUrl: null,
+				name: "ephemeral",
 				maxSupply: 1, seedId: null, instanceNumber: null, artId: "eph",
 				immutableData: null, dataOperationId: null, dataHash: null,
 				schemaVersion: 0,
@@ -110,7 +110,7 @@ describe("state-root deferred flush", () => {
 			await insertAsset({
 				id: row.id, collectionId, assetType: "seed", edition: 1, owner: row.owner,
 				assetDna: null,
-				name: "manual", imageUrl: null,
+				name: "manual",
 				maxSupply: 1, seedId: null, instanceNumber: null, artId: "manual-art",
 				immutableData: null, dataOperationId: null, dataHash: null,
 				schemaVersion: 0,

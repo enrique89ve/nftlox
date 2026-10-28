@@ -16,6 +16,7 @@ import {
 	collectionSchemaToRecord,
 	requireUsername,
 	optionalUsername,
+	rejectRetiredMediaKeys,
 } from "@/utils/validation.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import {
@@ -26,7 +27,6 @@ import {
 	isCollectionId,
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
-	MAX_IMAGE_URL_LENGTH,
 	MAX_URL_LENGTH,
 	MAX_ROYALTY_PCT,
 	INSTANCE_FEE_PER_N,
@@ -84,7 +84,7 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 	// H3: Require metadata with mandatory fields
 	const metadata = requireObject(d.metadata, "metadata");
 	const description = requireBoundedString(metadata.description, "metadata.description", MAX_DESCRIPTION_LENGTH);
-	const imageUrl = requireBoundedString(metadata.image, "metadata.image", MAX_IMAGE_URL_LENGTH);
+	rejectRetiredMediaKeys(metadata, "metadata");
 
 	// H4: Require rules with explicit boolean fields
 	const rules = requireObject(d.rules, "rules");
@@ -166,7 +166,6 @@ export async function handleCreateCollection(op: ParsedOperation, txn: Queryable
 		totalPotential,
 		maxInstances,
 		description,
-		imageUrl,
 		externalUrl: optionalBoundedString(metadata.externalUrl, "metadata.externalUrl", MAX_URL_LENGTH),
 		transferable,
 		burnable,

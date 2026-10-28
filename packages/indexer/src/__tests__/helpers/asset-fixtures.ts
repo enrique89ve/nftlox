@@ -77,14 +77,14 @@ export async function insertListedInstance(params: {
 	await sql`
 		INSERT INTO assets (
 			id, collection_id, asset_type, status, edition, owner, name,
-			image_url, asset_dna, max_supply, distributed, reserved_supply,
+			asset_dna, max_supply, distributed, reserved_supply,
 			previous_owner, owner_operation_id, owner_action, owner_block_num,
 			listing_id, listing_tx_id, listing_price, listing_currency,
 			listing_expires_at, listing_marketplace,
 			created_operation_id, created_block_num, created_tx_id, created_at
 		) VALUES (
 			${params.assetId}, ${params.collectionId}, 'instance', 'listed', 1, ${params.seller}, 'test',
-			'https://img.example/i.png', ${"1".repeat(40)}, 0, 0, 0,
+			${"1".repeat(40)}, 0, 0, 0,
 			NULL, ${opId}, 'mint', 90000001,
 			${params.listingId}, ${params.listTxId}, ${price}, 'HIVE',
 			${expiresAtIso}, NULL,

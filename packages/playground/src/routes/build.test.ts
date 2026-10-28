@@ -45,7 +45,6 @@ describe("POST /api/build/seeds", () => {
 					{
 						artId: "play-seed-001",
 						name: "Playground Seed",
-						imageUrl: "https://example.com/playground-seed.png",
 						maxSupply: 25,
 						immutableData,
 					},

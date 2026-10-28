@@ -20,11 +20,10 @@ import {
 } from "@/api/services/multisig/transaction.ts";
 import { formatSchemaErrors } from "@/utils/data-transforms.ts";
 import { feeValidator } from "@/utils/fee-validator.ts";
-import { optionalCollectionSchema } from "@/utils/validation.ts";
+import { optionalCollectionSchema, RETIRED_MEDIA_KEYS } from "@/utils/validation.ts";
 import {
 	INSTANCE_FEE_PER_N,
 	MAX_DESCRIPTION_LENGTH,
-	MAX_IMAGE_URL_LENGTH,
 	MAX_INSTANCES_PER_COLLECTION,
 	MAX_NAME_LENGTH,
 	MAX_ROYALTY_PCT,
@@ -311,7 +310,14 @@ function validateCollectionMetadata(value: unknown): void {
 	}
 
 	validateNonEmptyBoundedPayloadString(value.description, "metadata.description", MAX_DESCRIPTION_LENGTH);
-	validateNonEmptyBoundedPayloadString(value.image, "metadata.image", MAX_IMAGE_URL_LENGTH);
+	for (const key of RETIRED_MEDIA_KEYS) {
+		if (Object.prototype.hasOwnProperty.call(value, key)) {
+			throw createMultisigError(
+				"INVALID_PROTOCOL_PAYLOAD",
+				`Payload data.metadata.${key} is not part of protocol 2.0.0: media is managed by applications`,
+			);
+		}
+	}
 	if (value.externalUrl !== undefined && value.externalUrl !== null) {
 		validateBoundedPayloadString(value.externalUrl, "metadata.externalUrl", MAX_URL_LENGTH);
 	}

@@ -30,7 +30,7 @@ export async function insertAsset(params: InsertAssetParams, txn: Queryable = sq
 		INSERT INTO assets (
 			id, collection_id, asset_type, status, edition, owner,
 			asset_dna,
-			name, image_url,
+			name,
 			max_supply, distributed,
 			seed_id, instance_number, art_id,
 			immutable_data,
@@ -41,7 +41,7 @@ export async function insertAsset(params: InsertAssetParams, txn: Queryable = sq
 			${params.id}, ${params.collectionId}, ${params.assetType},
 			${params.status ?? ASSET_STATUS_ACTIVE}, ${params.edition}, ${params.owner},
 			${params.assetDna},
-			${params.name}, ${params.imageUrl},
+			${params.name},
 			${params.maxSupply}, ${params.distributed ?? 0},
 			${params.seedId}, ${params.instanceNumber}, ${params.artId},
 			${toJsonb(params.immutableData)},

@@ -55,7 +55,7 @@ async function buildCreateCollectionOp(args: {
 			originDna,
 			totalPotential: 5,
 			maxInstances: args.maxInstances ?? 0,
-			metadata: { description: "piggy test", image: "https://example.com/x.png" },
+			metadata: { description: "piggy test" },
 			rules: { transferable: true, burnable: false, royaltyPct: 0 },
 		},
 		pairedTransfers: [

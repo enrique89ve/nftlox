@@ -1,8 +1,8 @@
 /**
  * Canonical read path for Asset rows with inheritance resolved.
  *
- * The `assets` table is normalized: instance rows intentionally leave `name`,
- * `image_url`, and `immutable_data` blank/null (they're inherited from the
+ * The `assets` table is normalized: instance rows intentionally leave `name`
+ * and `immutable_data` blank/null (they're inherited from the
  * parent seed), and `origin_dna` lives only on `collections` (pure function
  * of `collection_id`). Any user-facing query that returns an Asset must go
  * through this module, because only here do we `JOIN collections c ON c.id
@@ -21,7 +21,6 @@ import { ASSET_KIND_INSTANCE, ASSET_STATUS_LISTED } from "./asset-types.ts";
 const LIST_COLUMNS = sql`
 	n.id, n.collection_id, n.asset_type, n.status, n.edition, n.owner,
 	COALESCE(NULLIF(n.name, ''), s.name) AS name,
-	COALESCE(n.image_url, s.image_url) AS image_url,
 	c.origin_dna AS origin_dna,
 	COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
 	n.asset_dna,
@@ -72,7 +71,7 @@ export async function queryAssetsWithCounts(
 	return { assets, counts };
 }
 
-// "Raw" in the sense that `name`, `image_url`, and `immutable_data` are
+// "Raw" in the sense that `name` and `immutable_data` are
 // returned verbatim from the instance row (no COALESCE/fallback to the
 // seed). `origin_dna` still JOINs `collections` because it has no copy on
 // assets — that's the single source of truth, not a cache. Callers of this
@@ -80,7 +79,7 @@ export async function queryAssetsWithCounts(
 // client-side (compact-mode endpoint).
 const RAW_INSTANCE_COLUMNS = sql`
 	n.id, n.collection_id, n.asset_type, n.status, n.edition, n.owner,
-	n.name, n.image_url, c.origin_dna AS origin_dna, n.immutable_data,
+	n.name, c.origin_dna AS origin_dna, n.immutable_data,
 	n.asset_dna,
 	n.seed_id, n.instance_number, NULL::text AS seed_tx_id,
 	n.max_supply, n.distributed, n.supply_exhausted,

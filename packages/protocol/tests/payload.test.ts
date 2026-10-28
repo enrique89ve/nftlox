@@ -20,10 +20,15 @@ describe("createPayload", () => {
 	test("accepts explicit protocol/version override", () => {
 		const payload = createPayload("transfer", { assetId: "asset_1", to: "bob" }, {
 			protocol: "nftlox_mainnet",
-			version: "1.0.0",
+			version: "2.0.0",
 		});
 		expect(payload.protocol).toBe("nftlox_mainnet");
-		expect(payload.version).toBe("1.0.0");
+		expect(payload.version).toBe("2.0.0");
+	});
+
+	test("rejects 1.x payloads (pre media-agnostic seed DNA)", () => {
+		expect(() => createPayload("transfer", { assetId: "asset_1", to: "bob" }, { version: "1.0.0" }))
+			.toThrow("below MIN_PROTOCOL_VERSION");
 	});
 
 	test("rejects invalid action", () => {
@@ -71,7 +76,7 @@ describe("createHiveOperation", () => {
 			totalPotential: 1,
 			maxInstances: 0,
 			originDna: "a".repeat(32),
-			metadata: { description: "d", image: "img" },
+			metadata: { description: "d" },
 			rules: { transferable: true, burnable: true, royaltyPct: 0 },
 		});
 		const op = createHiveOperation(payload, "alice");

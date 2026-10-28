@@ -13,13 +13,13 @@ async function resetFixture(): Promise<void> {
 	await sql`
 		INSERT INTO collections (
 			id, name, symbol, creator, origin_dna, total_potential,
-			description, image_url, external_url,
+			description, external_url,
 			transferable, burnable, royalty_pct, royalty_recipient,
 			schema, schema_version,
 			block_num, tx_id, created_at
 		) VALUES (
 			${COL_ID}, 'TrigColl', 'TRCOL01', 'alice', 'odna_trigcoll', 100,
-			'A collection', 'https://img/c.png', 'https://x/c',
+			'A collection', 'https://x/c',
 			TRUE, TRUE, 5.00, 'alice',
 			NULL, 0,
 			200, 'tx-coll-1', NOW()
@@ -148,7 +148,7 @@ describe("collections triggers — legitimate mutations still allowed", () => {
 	});
 
 	it("allows UPDATE of policy fields (not locked down — future-feature surface)", async () => {
-		// Policy fields (name, description, image_url, transferable, royalty_*)
+		// Policy fields (name, description, transferable, royalty_*)
 		// are not structurally locked. The app doesn't write them today, but
 		// freezing them at the DB layer would encode a product decision the
 		// current code doesn't enforce. Keep the trigger conservative.

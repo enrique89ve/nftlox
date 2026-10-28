@@ -36,7 +36,6 @@ The node's signature is requested via `requestCreateCollectionMultisig(indexerBa
 | `totalPotential` | number | Non-negative integer (0 = unlimited seeds) |
 | `maxInstances` | number | `0` (unlimited) **or** a positive multiple of `INSTANCE_FEE_PER_N` (`1000`). Caps total instances mintable across all seeds. Stored immutably; drives the scaled-fee math when `INSTANCE_FEE_ENABLED` is on. |
 | `metadata.description` | string | 1–250 characters |
-| `metadata.image` | string | HTTP/HTTPS URL, ≤ 500 chars |
 | `rules` | object | See [Collection rules](#2-collection-rules) |
 
 ### Optional fields
@@ -69,7 +68,6 @@ const result = await buildCollection(
 		maxInstances: 0,              // 0 = unlimited; otherwise a multiple of 1000
 		metadata: {
 			description: "Playable hero cards",
-			image: "https://…/cover.webp",
 			externalUrl: "https://heroes.ragnarok.gg",
 		},
 		rules: {

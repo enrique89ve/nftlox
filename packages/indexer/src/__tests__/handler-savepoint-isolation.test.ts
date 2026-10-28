@@ -107,7 +107,7 @@ describe("handler savepoint isolation", () => {
 				name: COL_NAME,
 				symbol: COL_SYMBOL,
 				totalPotential: 100,
-				metadata: { description: "Test", image: "https://example.com/test.png" },
+				metadata: { description: "Test" },
 				rules: { transferable: true, burnable: false, royaltyPct: 0 },
 			});
 			await handleCreateCollection(createOp, txn);
@@ -163,7 +163,7 @@ describe("handler savepoint isolation", () => {
 				name: COL_NAME,
 				symbol: COL_SYMBOL,
 				totalPotential: 100,
-				metadata: { description: "Test", image: "https://example.com/test.png" },
+				metadata: { description: "Test" },
 				rules: { transferable: true, burnable: false, royaltyPct: 0 },
 			});
 			await handleCreateCollection(createOp, txn);
@@ -214,7 +214,7 @@ describe("handler savepoint isolation", () => {
 				name: COL_NAME,
 				symbol: COL_SYMBOL,
 				totalPotential: 100,
-				metadata: { description: "Test", image: "https://example.com/test.png" },
+				metadata: { description: "Test" },
 				rules: { transferable: true, burnable: false, royaltyPct: 0 },
 			});
 			await handleCreateCollection(createOp, txn);

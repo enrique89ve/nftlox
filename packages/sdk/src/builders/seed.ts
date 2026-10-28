@@ -8,14 +8,11 @@ import { createSdkPayload } from "../sdk-payload";
 import {
 	generateDeterministicSeedId,
 	generateOriginDna,
-	generateImageHash,
 	generateSeedDna,
 	createHiveOperation,
 	getKeyType,
-	toWireUrl,
 	MAX_NAME_LENGTH,
 	MAX_DESCRIPTION_LENGTH,
-	MAX_IMAGE_URL_LENGTH,
 	type AssetData,
 } from "@nftlox/protocol";
 
@@ -27,7 +24,6 @@ const seedDataSchema = z.record(z.string(), z.unknown()).refine(
 export const seedInputSchema = z.object({
 	artId: z.string(),
 	name: z.string().min(1, "Name is required").max(MAX_NAME_LENGTH, `Name must be at most ${MAX_NAME_LENGTH} characters`),
-	imageUrl: z.url("Invalid image URL format").max(MAX_IMAGE_URL_LENGTH, `Image URL must be at most ${MAX_IMAGE_URL_LENGTH} characters`),
 	maxSupply: z.number().int().positive("Max supply must be greater than 0"),
 	brief: z.string().max(MAX_DESCRIPTION_LENGTH, `Brief must be at most ${MAX_DESCRIPTION_LENGTH} characters`).optional(),
 	immutableData: seedDataSchema.optional(),
@@ -67,8 +63,7 @@ export async function buildSeed(
 	const seedId = await generateDeterministicSeedId(data.collectionId, data.artId);
 	const originDna = await generateOriginDna(data.collectionId);
 	const owner = data.owner ?? data.signer;
-	const imageHash = await generateImageHash(data.imageUrl);
-	const assetDna = await generateSeedDna(seedId, originDna, data.edition, imageHash);
+	const assetDna = await generateSeedDna(seedId, originDna, data.edition);
 
 	// The seed's primary id IS the canonical seedId — not a derived instance id.
 	// Instances minted via bulk_distribute get their own `asset_<seedSuffix>_<n>_<hash>`
@@ -88,8 +83,6 @@ export async function buildSeed(
 		metadata: {
 			name: data.name,
 			...(data.brief !== undefined && { description: data.brief }),
-			imageUrl: toWireUrl(data.imageUrl),
-			imageHash,
 		},
 		maxSupply: data.maxSupply,
 		...(data.immutableData !== undefined && { immutableData: data.immutableData }),
@@ -124,7 +117,6 @@ export type SeedBatchPlanItem = {
 	readonly seedId: string;
 	readonly artId: string;
 	readonly name: string;
-	readonly imageUrl: string;
 	readonly maxSupply: number;
 	readonly brief?: string | undefined;
 	readonly immutableData?: Record<string, unknown> | undefined;
@@ -191,7 +183,6 @@ export async function buildSeedBatch(input: SeedBatchInput): Promise<SeedBatchPl
 				seedId,
 				artId: seed.artId,
 				name: seed.name,
-				imageUrl: seed.imageUrl,
 				maxSupply: seed.maxSupply,
 				...(seed.brief !== undefined && { brief: seed.brief }),
 				...(seed.immutableData !== undefined && { immutableData: seed.immutableData }),

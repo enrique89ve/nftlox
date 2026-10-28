@@ -190,7 +190,7 @@ async function replayFixture(): Promise<string> {
 			originDna,
 			totalPotential: 10,
 			maxInstances: 0,
-			metadata: { description: "deterministic", image: "https://example.com/det.png" },
+			metadata: { description: "deterministic" },
 			rules: { transferable: true, burnable: false, royaltyPct: 0 },
 		},
 		pairedTransfers: [

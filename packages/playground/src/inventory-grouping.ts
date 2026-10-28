@@ -3,7 +3,6 @@ export type GroupableAsset = {
 	collectionId?: string | null;
 	edition?: string | number | null;
 	name?: string | null;
-	imageUrl?: string | null;
 	seedId?: string | null;
 	instanceNumber?: number | null;
 	listingPrice?: string | null;
@@ -17,7 +16,6 @@ export type InstanceGroup = {
 	collectionId: string;
 	edition: number | string;
 	name: string;
-	imageUrl: string;
 	count: number;
 	listedCount: number;
 	instances: GroupableAsset[];
@@ -51,7 +49,6 @@ export function groupInstancesBySeed(assets: GroupableAsset[]): InstanceGroup[] 
 			collectionId: asset.collectionId ?? "",
 			edition: asset.edition ?? "",
 			name: asset.name ?? "Untitled Asset",
-			imageUrl: asset.imageUrl ?? "",
 			count: 1,
 			listedCount: asset.listingPrice ? 1 : 0,
 			instances: [asset],

@@ -79,7 +79,6 @@ async function buildCollectionBody(params: Readonly<{
 		maxInstances: 0,
 		metadata: {
 			description: "safety gate test collection",
-			image: "https://example.com/safety.png",
 		},
 		rules: {
 			transferable: true,

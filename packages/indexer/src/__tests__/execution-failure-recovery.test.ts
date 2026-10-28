@@ -58,7 +58,7 @@ async function seedFixture(): Promise<void> {
 		originDna: await generateOriginDna(collectionId),
 		totalPotential: 10,
 		maxInstances: 0,
-		metadata: { description: "execution failure test", image: "https://example.com/recovery.png" },
+		metadata: { description: "execution failure test" },
 		rules: { transferable: true, burnable: false, royaltyPct: 0 },
 	}, { signer: config.hiveAccount, operationId: "op-recovery-create" });
 	createOp.pairedTransfers = [{

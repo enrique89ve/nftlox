@@ -69,7 +69,6 @@ const plan = await buildCollectionWithSeeds(
 		totalPotential: 10,
 		metadata: {
 			description: "SDK smoke test collection",
-			image: "https://example.com/smoke.png",
 		},
 		rules: {
 			transferable: true,
@@ -80,7 +79,6 @@ const plan = await buildCollectionWithSeeds(
 			{
 				artId: "hero-smoke-001",
 				name: "Smoke Hero",
-				imageUrl: "https://example.com/smoke-hero.png",
 				maxSupply: 10,
 			},
 		],
@@ -182,7 +180,6 @@ const collectionPlan = await buildCollectionWithSeeds(
 		totalPotential: 1000,
 		metadata: {
 			description: "Playable starter heroes",
-			image: "https://example.com/heroes.png",
 		},
 		rules: {
 			transferable: true,
@@ -204,7 +201,6 @@ const collectionPlan = await buildCollectionWithSeeds(
 			{
 				artId: "hero-warrior-001",
 				name: "Kael the Brave",
-				imageUrl: "https://example.com/heroes/kael.png",
 				maxSupply: 500,
 				immutableData: {
 					hero_class: "warrior",
@@ -214,7 +210,6 @@ const collectionPlan = await buildCollectionWithSeeds(
 			{
 				artId: "hero-mage-001",
 				name: "Lyra the Arcane",
-				imageUrl: "https://example.com/heroes/lyra.png",
 				maxSupply: 250,
 				immutableData: {
 					hero_class: "mage",

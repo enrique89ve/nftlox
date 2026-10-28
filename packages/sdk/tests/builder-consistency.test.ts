@@ -8,6 +8,8 @@ import {
 	buildSeedBatch,
 	resolveNodeAccountFromStatus,
 	PROTOCOL_VERSION,
+	generateOriginDna,
+	generateSeedDna,
 	type CreateCollectionInput,
 	type HiveOperation,
 } from "../src/index";
@@ -91,7 +93,6 @@ describe("buildCollection consistency", () => {
 		maxInstances: 0,
 		metadata: {
 			description: "A collection for builder consistency tests",
-			image: "https://example.com/collection.png",
 		},
 		rules: {
 			transferable: true,
@@ -255,7 +256,6 @@ describe("buildSeed consistency", () => {
 		owner: "testowner",
 		edition: 1,
 		name: "Seed Builder Test",
-		imageUrl: "https://example.com/seed.png",
 		maxSupply: 100,
 	};
 
@@ -278,6 +278,24 @@ describe("buildSeed consistency", () => {
 		if (!result.success) throw new Error("Expected success");
 
 		expect(result.payload.data.id.startsWith("seed_")).toBe(true);
+	});
+
+	test("seed payload is media-agnostic: no image fields in metadata", async () => {
+		const result = await buildSeed(validInput);
+		if (!result.success) throw new Error("Expected success");
+
+		expect(Object.keys(result.payload.data.metadata).sort()).toEqual(["name"]);
+		expect(JSON.stringify(result.operations)).not.toMatch(/image/i);
+	});
+
+	test("seed assetDna is derived from (seedId, originDna, edition) only", async () => {
+		const result = await buildSeed(validInput);
+		if (!result.success) throw new Error("Expected success");
+
+		const originDna = await generateOriginDna(validInput.collectionId);
+		expect(result.payload.data.assetDna).toBe(
+			await generateSeedDna(result.payload.data.id, originDna, validInput.edition),
+		);
 	});
 
 	test("payload.data.artId is forwarded for indexer canonical validation", async () => {
@@ -365,14 +383,12 @@ describe("buildSeed consistency", () => {
 				{
 					artId: "art-batch-001",
 					name: "Batch Seed One",
-					imageUrl: "https://example.com/batch-one.png",
 					maxSupply: 10,
 					immutableData: firstImmutableData,
 				},
 				{
 					artId: "art-batch-002",
 					name: "Batch Seed Two",
-					imageUrl: "https://example.com/batch-two.png",
 					maxSupply: 20,
 					immutableData: secondImmutableData,
 				},

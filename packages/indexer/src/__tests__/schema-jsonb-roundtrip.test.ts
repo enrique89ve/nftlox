@@ -72,7 +72,7 @@ async function createCollectionWithSchema(): Promise<void> {
 			originDna,
 			totalPotential: 100,
 			maxInstances: 0,
-			metadata: { description: "round-trip test", image: "https://example.com/img.png" },
+			metadata: { description: "round-trip test" },
 			rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			schema: {
 				immutable: [{ name: "rarity", type: "uint32" }],
@@ -148,7 +148,7 @@ describe("JSONB round-trip for schema and immutableData", () => {
 			owner: "alice",
 			assetType: "seed",
 			maxSupply: 10,
-			metadata: { name: "Seed", imageUrl: "https://example.com/asset.png", imageHash: "img_seed" },
+			metadata: { name: "Seed" },
 			immutableData: { rarity: 7 },
 		});
 		await withTransaction((txn) => handleMint(op, txn));

@@ -73,7 +73,7 @@ async function createCollectionWithSchema(): Promise<void> {
 			originDna,
 			totalPotential: 100,
 			maxInstances: 0,
-			metadata: { description: "freeze test", image: "https://example.com/img.png" },
+			metadata: { description: "freeze test" },
 			rules: { transferable: true, burnable: true, royaltyPct: 0 },
 			schema: {
 				immutable: [{ name: "rarity", type: "uint32" }],
@@ -103,7 +103,7 @@ async function mintSeed(): Promise<string> {
 		owner: "alice",
 		assetType: "seed",
 		maxSupply: 10,
-		metadata: { name: "Seed 1", imageUrl: "https://example.com/asset.png", imageHash: "img_seed1" },
+		metadata: { name: "Seed 1" },
 		immutableData: { rarity: 5 },
 	});
 	await withTransaction((txn) => handleMint(op, txn));

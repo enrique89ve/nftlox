@@ -19,14 +19,14 @@ async function resetFixture(): Promise<void> {
 	await sql`
 		INSERT INTO assets (
 			id, collection_id, asset_type, status, edition, owner,
-			asset_dna, name, image_url,
+			asset_dna, name,
 			max_supply, distributed, seed_id, instance_number, art_id,
 			immutable_data, data_operation_id, data_hash,
 			schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
 			created_operation_id, created_block_num, created_tx_id, created_at
 		) VALUES (
 			${ASSET_ID}, ${COLLECTION_ID}, 'seed', 'active', 1, 'alice',
-			NULL, 'Name-1', 'https://img.example/1.png',
+			NULL, 'Name-1',
 			10, 0, NULL, NULL, 'art-trg-1',
 			'{"tier":"gold"}'::jsonb, 'op-mint-1', 'hash-1',
 			0, NULL, 'op-mint-1', 'mint', 100,
@@ -61,14 +61,14 @@ async function insertInstanceRow(id: string, seedId: string, collectionId: strin
 	await sql`
 		INSERT INTO assets (
 			id, collection_id, asset_type, status, edition, owner,
-			asset_dna, name, image_url, max_supply, distributed,
+			asset_dna, name, max_supply, distributed,
 			seed_id, instance_number, art_id,
 			immutable_data, data_operation_id, data_hash,
 			schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
 			created_operation_id, created_block_num, created_tx_id, created_at
 		) VALUES (
 			${id}, ${collectionId}, 'instance', 'active', 1, 'bob',
-			${"idna_" + id}, '', NULL, 0, 0,
+			${"idna_" + id}, '', 0, 0,
 			${seedId}, ${instanceNumber}, NULL,
 			NULL, NULL, NULL,
 			0, NULL, ${opId}, 'bulk_distribute', 150,
@@ -129,13 +129,6 @@ describe("assets triggers — immutable columns", () => {
 		await expectQueryError(
 			() => sql`UPDATE assets SET name = 'Renamed' WHERE id = ${ASSET_ID}`,
 			/name is immutable/,
-		);
-	});
-
-	it("rejects UPDATE of image_url", async () => {
-		await expectQueryError(
-			() => sql`UPDATE assets SET image_url = 'https://img.example/2.png' WHERE id = ${ASSET_ID}`,
-			/image_url is immutable/,
 		);
 	});
 
@@ -240,14 +233,14 @@ describe("assets schema — seed and instance uniqueness", () => {
 			() => sql`
 				INSERT INTO assets (
 					id, collection_id, asset_type, status, edition, owner,
-					asset_dna, name, image_url,
+					asset_dna, name,
 					max_supply, distributed, seed_id, instance_number, art_id,
 					immutable_data, data_operation_id, data_hash,
 					schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
 					created_operation_id, created_block_num, created_tx_id, created_at
 				) VALUES (
 					'trigger-test-seed-dup-art', ${COLLECTION_ID}, 'seed', 'active', 1, 'alice',
-					NULL, 'DupArt', 'https://img.example/dup.png',
+					NULL, 'DupArt',
 					10, 0, NULL, NULL, 'art-trg-1',
 					NULL, 'op-dup-art', NULL,
 					0, NULL, 'op-dup-art', 'mint', 101,
@@ -288,7 +281,7 @@ describe("assets triggers — instance.collection_id matches parent seed", () =>
 			() => sql`
 				INSERT INTO assets (
 					id, collection_id, asset_type, status, edition, owner,
-					asset_dna, name, image_url, max_supply, distributed,
+					asset_dna, name, max_supply, distributed,
 					seed_id, instance_number, art_id,
 					immutable_data, data_operation_id, data_hash,
 					schema_version, previous_owner, owner_operation_id,
@@ -296,7 +289,7 @@ describe("assets triggers — instance.collection_id matches parent seed", () =>
 					created_operation_id, created_block_num, created_tx_id, created_at
 				) VALUES (
 					'trigger-test-instance-1', ${OTHER_COLLECTION_ID}, 'instance', 'active', 1, 'bob',
-					'idna-inst-1', '', NULL, 0, 0,
+					'idna-inst-1', '', 0, 0,
 					${ASSET_ID}, 1, NULL,
 					NULL, NULL, NULL,
 					0, NULL, 'op-dist-1',
@@ -312,7 +305,7 @@ describe("assets triggers — instance.collection_id matches parent seed", () =>
 		await sql`
 			INSERT INTO assets (
 				id, collection_id, asset_type, status, edition, owner,
-				asset_dna, name, image_url, max_supply, distributed,
+				asset_dna, name, max_supply, distributed,
 				seed_id, instance_number, art_id,
 				immutable_data, data_operation_id, data_hash,
 				schema_version, previous_owner, owner_operation_id,
@@ -320,7 +313,7 @@ describe("assets triggers — instance.collection_id matches parent seed", () =>
 				created_operation_id, created_block_num, created_tx_id, created_at
 			) VALUES (
 				'trigger-test-instance-ok', ${COLLECTION_ID}, 'instance', 'active', 1, 'bob',
-				'idna-inst-ok', '', NULL, 0, 0,
+				'idna-inst-ok', '', 0, 0,
 				${ASSET_ID}, 1, NULL,
 				NULL, NULL, NULL,
 				0, NULL, 'op-dist-ok',
@@ -336,7 +329,7 @@ describe("assets triggers — instance.collection_id matches parent seed", () =>
 		await sql`
 			INSERT INTO assets (
 				id, collection_id, asset_type, status, edition, owner,
-				asset_dna, name, image_url, max_supply, distributed,
+				asset_dna, name, max_supply, distributed,
 				seed_id, instance_number, art_id,
 				immutable_data, data_operation_id, data_hash,
 				schema_version, previous_owner, owner_operation_id,
@@ -344,7 +337,7 @@ describe("assets triggers — instance.collection_id matches parent seed", () =>
 				created_operation_id, created_block_num, created_tx_id, created_at
 			) VALUES (
 				'trigger-test-seed-2', ${COLLECTION_ID}, 'seed', 'active', 1, 'alice',
-				NULL, 'Name-2', 'https://img.example/2.png', 10, 0,
+				NULL, 'Name-2', 10, 0,
 				NULL, NULL, 'art-trg-2',
 				NULL, 'op-mint-2', NULL,
 				0, NULL, 'op-mint-2',
@@ -400,14 +393,14 @@ describe("assets triggers — enforce_max_instances (collection cap backstop)", 
 		await sql`
 			INSERT INTO assets (
 				id, collection_id, asset_type, status, edition, owner,
-				asset_dna, name, image_url,
+				asset_dna, name,
 				max_supply, distributed, seed_id, instance_number, art_id,
 				immutable_data, data_operation_id, data_hash,
 				schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
 				created_operation_id, created_block_num, created_tx_id, created_at
 			) VALUES (
 				${CAPPED_SEED}, ${CAPPED_COL}, 'seed', 'active', 1, 'alice',
-				NULL, 'CapSeed', 'https://img.example/cap.png',
+				NULL, 'CapSeed',
 				1000, 0, NULL, NULL, 'art-cap',
 				NULL, 'op-cap-mint', NULL,
 				0, NULL, 'op-cap-mint', 'mint', 100,
@@ -455,14 +448,14 @@ describe("assets triggers — enforce_max_instances (collection cap backstop)", 
 		await sql`
 			INSERT INTO assets (
 				id, collection_id, asset_type, status, edition, owner,
-				asset_dna, name, image_url,
+				asset_dna, name,
 				max_supply, distributed, seed_id, instance_number, art_id,
 				immutable_data, data_operation_id, data_hash,
 				schema_version, previous_owner, owner_operation_id, owner_action, owner_block_num,
 				created_operation_id, created_block_num, created_tx_id, created_at
 			) VALUES (
 				'cap-test-seed-2', ${CAPPED_COL}, 'seed', 'active', 1, 'alice',
-				NULL, 'CapSeed2', 'https://img.example/cap2.png',
+				NULL, 'CapSeed2',
 				100, 0, NULL, NULL, 'art-cap-2',
 				NULL, 'op-cap-mint-2', NULL,
 				0, NULL, 'op-cap-mint-2', 'mint', 120,

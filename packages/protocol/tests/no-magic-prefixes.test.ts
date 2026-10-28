@@ -17,14 +17,12 @@ const FORBIDDEN_LITERALS: ReadonlyArray<{ pattern: string; use: string }> = [
 	{ pattern: '"seed_"', use: "SEED_ID_PREFIX" },
 	{ pattern: '"asset_"', use: "INSTANCE_ID_PREFIX" },
 	{ pattern: '"col_"', use: "COLLECTION_ID_PREFIX" },
-	{ pattern: '"img_"', use: "IMAGE_ID_PREFIX" },
 	{ pattern: '"sha256:"', use: "HASH_FORMAT_PREFIX" },
 	// Template literals such as `seed_${x}` emit the prefix without quotes.
 	// Backtick check covers that variant.
 	{ pattern: "`seed_", use: "SEED_ID_PREFIX" },
 	{ pattern: "`asset_", use: "INSTANCE_ID_PREFIX" },
 	{ pattern: "`col_", use: "COLLECTION_ID_PREFIX" },
-	{ pattern: "`img_", use: "IMAGE_ID_PREFIX" },
 	{ pattern: "`sha256:", use: "HASH_FORMAT_PREFIX" },
 ];
 

@@ -9,7 +9,6 @@ const make = (overrides: Partial<GroupableAsset>): GroupableAsset => ({
 	collectionId: overrides.collectionId ?? "col",
 	edition: overrides.edition ?? 1,
 	name: overrides.name ?? "Card",
-	imageUrl: overrides.imageUrl ?? "img",
 	seedId: overrides.seedId ?? null,
 	instanceNumber: overrides.instanceNumber ?? null,
 	listingPrice: overrides.listingPrice ?? null,

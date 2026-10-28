@@ -141,7 +141,6 @@ type AssetCardData = {
   edition?: string | number | null;
   owner?: string | null;
   name?: string | null;
-  imageUrl?: string | null;
   assetDna?: string | null;
   distributed?: number | null;
   maxSupply?: number | null;
@@ -171,7 +170,6 @@ type AssetDetailListingPrice = {
 type AssetDetailAsset = {
   id: string;
   name: string;
-  imageUrl: string | null;
   owner: string;
   collectionId: string;
   edition: number;
@@ -196,7 +194,6 @@ type AssetDetailAsset = {
 type AssetDetailOriginal = {
   id: string;
   name: string;
-  imageUrl: string | null;
   owner: string;
 }
 
@@ -757,7 +754,7 @@ async function loadCollectionDetail(collectionId: string) {
           .map(
             (asset: any) => `
 					<div class="asset-card" data-id="${escapeHtml(asset.id)}">
-						<img class="asset-image" src="${escapeHtml(asset.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
+						<img class="asset-image" src="${PLACEHOLDER_SM}" alt="">
 						<div class="asset-card-body">
 							<div class="asset-name">${escapeHtml(asset.name)}</div>
 							<div class="asset-owner">@${escapeHtml(asset.owner)}</div>
@@ -792,7 +789,7 @@ async function loadCollectionDetail(collectionId: string) {
           .map(
             (asset: any) => `
 					<div class="asset-card" data-id="${escapeHtml(asset.id)}">
-						<img class="asset-image" src="${escapeHtml(asset.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
+						<img class="asset-image" src="${PLACEHOLDER_SM}" alt="">
 						<div class="asset-card-body">
 							<div class="asset-name">${escapeHtml(asset.name)}</div>
 							<div class="asset-owner">@${escapeHtml(asset.owner)}</div>
@@ -938,12 +935,7 @@ async function loadAssetDetail(assetId: string) {
     const imageEl = $("asset-detail-image") as HTMLImageElement;
     const nameEl = $("asset-detail-name");
     const ownerEl = $("asset-detail-owner");
-    if (imageEl) {
-      imageEl.src = escapeHtml(asset.imageUrl);
-      imageEl.onerror = () => {
-        imageEl.src = PLACEHOLDER_LG;
-      };
-    }
+    if (imageEl) imageEl.src = PLACEHOLDER_LG;
     if (nameEl) nameEl.textContent = asset.name;
     if (ownerEl) ownerEl.textContent = `@${asset.owner}`;
 
@@ -1270,12 +1262,7 @@ async function loadSeedGroup(seedId: string) {
     if (summaryEl) {
       summaryEl.style.display = "grid";
       const image = $("seed-group-image") as HTMLImageElement | null;
-      if (image) {
-        image.src = seed.imageUrl ?? PLACEHOLDER_SM;
-        image.onerror = () => {
-          image.src = PLACEHOLDER_SM;
-        };
-      }
+      if (image) image.src = PLACEHOLDER_SM;
       const collectionEl = $("seed-group-collection");
       const editionEl = $("seed-group-edition");
       const ownedEl = $("seed-group-owned");
@@ -1642,7 +1629,7 @@ function renderAssets(
       return `
 			<div class="asset-card" data-id="${escapeHtml(asset.id)}" data-collection="${escapeHtml(asset.collectionId)}"
 				 data-edition="${escapeHtml(String(asset.edition ?? ""))}" data-dna="${escapeHtml(asset.assetDna)}">
-				<img class="asset-image" src="${escapeHtml(asset.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
+				<img class="asset-image" src="${PLACEHOLDER_SM}" alt="">
 				<div class="asset-card-body">
 					<div class="asset-name">${escapeHtml(asset.name ?? "Untitled Asset")}</div>
 					<div class="asset-owner">@${escapeHtml(asset.owner ?? "unknown")}</div>
@@ -1692,7 +1679,7 @@ function renderInstanceGroups(
       return `
 				<div class="asset-card" data-seed="${escapeHtml(g.seedId)}">
 					${showCount ? `<span class="asset-card-group-badge">x${g.count}</span>` : ""}
-					<img class="asset-image" src="${escapeHtml(g.imageUrl)}" onerror="this.src='${PLACEHOLDER_SM}'">
+					<img class="asset-image" src="${PLACEHOLDER_SM}" alt="">
 					<div class="asset-card-body">
 						<div class="asset-name">${escapeHtml(g.name)}</div>
 						<div class="asset-owner">@${escapeHtml(connectedUser ?? "")}</div>
@@ -1872,11 +1859,9 @@ async function handleFileUpload(file: File) {
       const col = parsed.collection;
       const nameInput = $("col-name") as HTMLInputElement;
       const symbolInput = $("col-symbol") as HTMLInputElement;
-      const imageInput = $("col-image") as HTMLInputElement;
       const descInput = $("col-description") as HTMLTextAreaElement;
       if (nameInput) nameInput.value = col.name || "";
       if (symbolInput) symbolInput.value = col.symbol || "";
-      if (imageInput) imageInput.value = col.imageUrl || "";
       if (descInput) descInput.value = col.description || "";
       log(
         `Loaded collection "${col.name}" with ${uploadedSeeds.length} seeds from ${file.name}`,
@@ -1939,12 +1924,10 @@ async function loadSampleCollection() {
     // Auto-fill Step 1 fields
     const nameInput = $("col-name") as HTMLInputElement;
     const symbolInput = $("col-symbol") as HTMLInputElement;
-    const imageInput = $("col-image") as HTMLInputElement;
     const descInput = $("col-description") as HTMLTextAreaElement;
 
     if (nameInput) nameInput.value = collection.name || "";
     if (symbolInput) symbolInput.value = collection.symbol || "";
-    if (imageInput) imageInput.value = collection.imageUrl || "";
     if (descInput) descInput.value = collection.description || "";
 
     // Load seeds into uploadedSeeds
@@ -2424,7 +2407,6 @@ async function createCollection() {
   const creator =
     ($("col-creator") as HTMLInputElement)?.value.trim().toLowerCase() ||
     connectedUser;
-  const colImage = ($("col-image") as HTMLInputElement)?.value.trim();
   const colDescription = (
     $("col-description") as HTMLTextAreaElement
   )?.value.trim();
@@ -2436,11 +2418,6 @@ async function createCollection() {
 
   if (!colName || !colSymbol) {
     log("Collection name and symbol required", "error");
-    return;
-  }
-
-  if (!colImage) {
-    log("Collection image URL is required", "error");
     return;
   }
 
@@ -2502,7 +2479,6 @@ async function createCollection() {
         maxInstances: 0,
         metadata: {
           description,
-          image: colImage,
         },
         rules: {
           transferable: true,
@@ -3498,15 +3474,6 @@ validateField("col-symbol", (v) => {
 validateField("col-creator", (v) =>
   v.length < 3 ? "Username must be at least 3 characters" : null,
 );
-validateField("col-image", (v) => {
-  if (!v) return "Image URL is required for the collection";
-  try {
-    new URL(v);
-    return null;
-  } catch {
-    return "Must be a valid URL";
-  }
-});
 
 // ============ INIT ============
 

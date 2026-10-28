@@ -52,7 +52,6 @@ export const MAX_TRANSFER_BATCH_SIZE = protocol.MAX_TRANSFER_BATCH_SIZE;
 
 export const MAX_NAME_LENGTH = protocol.MAX_NAME_LENGTH;
 export const MAX_DESCRIPTION_LENGTH = protocol.MAX_DESCRIPTION_LENGTH;
-export const MAX_IMAGE_URL_LENGTH = protocol.MAX_IMAGE_URL_LENGTH;
 export const MAX_URL_LENGTH = protocol.MAX_URL_LENGTH;
 export const MAX_ID_LENGTH = protocol.MAX_ID_LENGTH;
 // Hashed into listingId; integrators capping their form inputs hit the same
@@ -79,11 +78,9 @@ export const INSTANCE_DNA_LENGTH = protocol.INSTANCE_DNA_LENGTH;
 export const ACCESS_KEY_LENGTH = protocol.ACCESS_KEY_LENGTH;
 export const INSTANCE_ID_HASH_LENGTH = protocol.INSTANCE_ID_HASH_LENGTH;
 export const COLLECTION_ID_HASH_LENGTH = protocol.COLLECTION_ID_HASH_LENGTH;
-export const IMAGE_ID_HASH_LENGTH = protocol.IMAGE_ID_HASH_LENGTH;
 export const COLLECTION_ID_PREFIX = protocol.COLLECTION_ID_PREFIX;
 export const SEED_ID_PREFIX = protocol.SEED_ID_PREFIX;
 export const INSTANCE_ID_PREFIX = protocol.INSTANCE_ID_PREFIX;
-export const IMAGE_ID_PREFIX = protocol.IMAGE_ID_PREFIX;
 
 // Canonical "sha256:<hex>" textual form shared by data hashes and state roots.
 export const HASH_FORMAT_PREFIX = protocol.HASH_FORMAT_PREFIX;
@@ -95,7 +92,6 @@ export const HASH_DOMAIN_SEED = protocol.HASH_DOMAIN_SEED;
 export const HASH_DOMAIN_DNA = protocol.HASH_DOMAIN_DNA;
 export const HASH_DOMAIN_KEY = protocol.HASH_DOMAIN_KEY;
 export const HASH_DOMAIN_SEED_DNA = protocol.HASH_DOMAIN_SEED_DNA;
-export const HASH_DOMAIN_IMG = protocol.HASH_DOMAIN_IMG;
 export const HASH_DOMAIN_LISTING = protocol.HASH_DOMAIN_LISTING;
 
 // ============================================================================
@@ -223,7 +219,6 @@ export const mergeSchemas = protocol.mergeSchemas;
 export const generateHash = protocol.generateHash;
 export const generateOriginDna = protocol.generateOriginDna;
 export const generateSeedDna = protocol.generateSeedDna;
-export const generateImageHash = protocol.generateImageHash;
 export const generateDeterministicCollectionId = protocol.generateDeterministicCollectionId;
 export const generateDeterministicSeedId = protocol.generateDeterministicSeedId;
 export const generateDeterministicInstanceId = protocol.generateDeterministicInstanceId;

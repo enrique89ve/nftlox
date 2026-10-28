@@ -399,6 +399,19 @@ export function requireObject(value: unknown, fieldName: string): Record<string,
 	return value as Record<string, unknown>;
 }
 
+// Protocol 2.0.0 retired every media key from collection/seed metadata. A
+// payload that still ships one is rejected rather than silently stripped so
+// no indexer stores presentation data that is not part of asset identity.
+export const RETIRED_MEDIA_KEYS = ["image", "imageUrl", "imageHash"] as const;
+
+export function rejectRetiredMediaKeys(value: Record<string, unknown>, fieldName: string): void {
+	for (const key of RETIRED_MEDIA_KEYS) {
+		if (Object.prototype.hasOwnProperty.call(value, key)) {
+			throw protocolReject(`${fieldName}.${key} is not part of protocol 2.0.0: media is managed by applications`);
+		}
+	}
+}
+
 export function optionalObject(value: unknown): Record<string, unknown> | null {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 	return value as Record<string, unknown>;

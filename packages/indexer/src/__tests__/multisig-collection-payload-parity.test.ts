@@ -130,7 +130,7 @@ type CollectionPayloadOverrides = Readonly<{
 	readonly name?: unknown;
 	readonly symbol?: unknown;
 	readonly description?: unknown;
-	readonly image?: unknown;
+	readonly extraMetadata?: Readonly<Record<string, unknown>>;
 	readonly originDna?: unknown;
 	readonly maxInstances?: unknown;
 	readonly royaltyPct?: number;
@@ -153,7 +153,7 @@ async function buildPassingCollectionBody(
 		maxInstances: "maxInstances" in overrides ? overrides.maxInstances : 0,
 		metadata: {
 			description: "description" in overrides ? overrides.description : "parity test collection",
-			image: "image" in overrides ? overrides.image : "https://example.com/parity.png",
+			...overrides.extraMetadata,
 		},
 		rules: {
 			transferable: true,
@@ -269,7 +269,6 @@ describe("M5 multisig <-> handler payload parity", () => {
 	test.each([
 		["name", { name: "" }] as const,
 		["metadata.description", { description: "" }] as const,
-		["metadata.image", { image: "" }] as const,
 	])("rejects empty %s", async (fieldName, overrides) => {
 		const body = await buildPassingCollectionBody(overrides);
 
@@ -280,6 +279,22 @@ describe("M5 multisig <-> handler payload parity", () => {
 			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
 			expect(outcome.message).toContain(fieldName);
 			expect(outcome.message).toContain("non-empty");
+		}
+	});
+
+	test.each([
+		["image", "https://example.com/parity.png"],
+		["imageUrl", "https://example.com/parity.png"],
+		["imageHash", "img_0000000000000000"],
+	])("rejects retired media key metadata.%s", async (key, value) => {
+		const body = await buildPassingCollectionBody({ extraMetadata: { [key]: value } });
+
+		const outcome = await callCollection(body);
+
+		expect(outcome.thrown).toBe(true);
+		if (outcome.thrown) {
+			expect(outcome.code).toBe("INVALID_PROTOCOL_PAYLOAD");
+			expect(outcome.message).toContain(`metadata.${key}`);
 		}
 	});
 

@@ -5,7 +5,7 @@ import {
 	generateDeterministicCollectionId,
 	generateDeterministicSeedId,
 	generateDeterministicInstanceId,
-	generateImageHash,
+	generateSeedDna,
 	generateListingId,
 	isCollectionId,
 	isSeedId,
@@ -134,11 +134,19 @@ describe("DNA generation", () => {
 		expect(nonce.length).toBe(12);
 	});
 
-	test("generateImageHash is deterministic", async () => {
-		const a = await generateImageHash("https://example.com/img.png");
-		const b = await generateImageHash("https://example.com/img.png");
-		expect(a).toBe(b);
-		expect(a.startsWith("img_")).toBe(true);
+	test("generateSeedDna depends only on (seedId, originDna, edition)", async () => {
+		const seedId = await generateDeterministicSeedId("col_abc", "art-001");
+		const originDna = await generateOriginDna("col_abc");
+		expect(generateSeedDna.length).toBe(3);
+		expect(await generateSeedDna(seedId, originDna, 1)).toBe(await generateSeedDna(seedId, originDna, 1));
+		expect(await generateSeedDna(seedId, originDna, 1)).not.toBe(await generateSeedDna(seedId, originDna, 2));
+	});
+
+	test("seed DNA is disjoint from the retired media-bound preimage", async () => {
+		const seedId = await generateDeterministicSeedId("col_abc", "art-001");
+		const originDna = await generateOriginDna("col_abc");
+		const legacy = await generateHash(`nftlox:seed-dna:${seedId}:${originDna}:1:`);
+		expect(await generateSeedDna(seedId, originDna, 1)).not.toBe(`i${legacy.slice(0, 19).toUpperCase()}`);
 	});
 });
 
@@ -173,9 +181,13 @@ describe("DNA frozen vectors (cross-implementation contract)", () => {
 		);
 	});
 
-	test("generateImageHash('https://example.com/img.png')", async () => {
-		expect(await generateImageHash("https://example.com/img.png")).toBe(
-			"img_c035880b799db97a",
+	test("generateSeedDna(seed_8632f01162b516dea169, oBF07E2EE801CE6E, 1|2)", async () => {
+		expect(await generateOriginDna("col_abc")).toBe("oBF07E2EE801CE6E");
+		expect(await generateSeedDna("seed_8632f01162b516dea169", "oBF07E2EE801CE6E", 1)).toBe(
+			"i28ACFB5DE3B9266C433",
+		);
+		expect(await generateSeedDna("seed_8632f01162b516dea169", "oBF07E2EE801CE6E", 2)).toBe(
+			"i1D2B2783A9C78C1FA2C",
 		);
 	});
 });
@@ -204,15 +216,6 @@ describe("DNA helpers normalize Unicode inputs", () => {
 		const fromNfd = await generateDeterministicSeedId("col_abc", `${NFD_NAIVE}-001`);
 		expect(fromNfc).toBe(fromNfd);
 		expect(fromNfc).toBe("seed_54bc09b235b1c5274d2a");
-	});
-
-	// NFC normalization lives inside `toWireUrl` so any third-party indexer
-	// reproducing image-hash derivation must apply NFC before hashing the URL.
-	test("NFC and NFD image URLs map to the same image id", async () => {
-		const fromNfc = await generateImageHash(`https://example.com/${NFC_NAIVE}.png`);
-		const fromNfd = await generateImageHash(`https://example.com/${NFD_NAIVE}.png`);
-		expect(fromNfc).toBe(fromNfd);
-		expect(fromNfc).toBe("img_090e5c2b65c65667");
 	});
 
 	test("NFC and NFD marketplace strings map to the same listing id", async () => {

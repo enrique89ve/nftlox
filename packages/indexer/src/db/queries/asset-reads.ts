@@ -81,7 +81,6 @@ export async function getAssetById(id: string) {
 		SELECT
 			n.id, n.collection_id, n.asset_type, n.status, n.edition, n.owner,
 			COALESCE(NULLIF(n.name, ''), s.name) AS name,
-			COALESCE(n.image_url, s.image_url) AS image_url,
 			c.origin_dna AS origin_dna,
 			n.asset_dna,
 			COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
@@ -118,7 +117,6 @@ export async function getAssetsByIds(ids: readonly string[]) {
 		SELECT
 			n.id, n.collection_id, n.asset_type, n.status, n.edition, n.owner,
 			COALESCE(NULLIF(n.name, ''), s.name) AS name,
-			COALESCE(n.image_url, s.image_url) AS image_url,
 			c.origin_dna AS origin_dna,
 			n.asset_dna,
 			COALESCE(n.immutable_data, s.immutable_data) AS immutable_data,
@@ -291,7 +289,7 @@ export async function getSeedSummary(id: string): Promise<AssetListRow | null> {
 	const [row] = await sql<AssetListRow[]>`
 		SELECT
 			n.id, n.collection_id, n.asset_type, n.status, n.edition, n.owner,
-			n.name, n.image_url, c.origin_dna AS origin_dna, n.immutable_data,
+			n.name, c.origin_dna AS origin_dna, n.immutable_data,
 			n.asset_dna,
 			n.seed_id, n.instance_number, NULL::text AS seed_tx_id,
 			n.max_supply, n.distributed, n.supply_exhausted,
@@ -308,7 +306,7 @@ export async function getSeedWithSchemaForUpdate(id: string, txn: Queryable): Pr
 	const [row] = await txn<SeedWithSchemaRow[]>`
 		SELECT n.id, n.owner, n.status, n.asset_type, n.name, n.seed_id, n.max_supply, n.distributed,
 			n.reserved_supply,
-			n.collection_id, n.asset_dna, c.origin_dna, n.image_url, n.created_tx_id,
+			n.collection_id, n.asset_dna, c.origin_dna, n.created_tx_id,
 			c.schema, c.schema_version, c.creator, c.max_instances
 		FROM assets n
 		JOIN collections c ON c.id = n.collection_id

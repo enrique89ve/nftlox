@@ -24,8 +24,8 @@ function createLegacySchemaError(markers: readonly LegacySchemaColumn[]): Error 
 	const details = markers.slice(0, 5).map((marker) => `${marker.table_name}.${marker.column_name}`);
 	const suffix = markers.length > details.length ? ` (+${markers.length - details.length} more)` : "";
 	const error = new Error(
-		`Legacy NFT schema detected (${details.join(", ")}${suffix}). ` +
-		"This Asset migration uses a clean development baseline; run " +
+		`Legacy schema detected (${details.join(", ")}${suffix}). ` +
+		"Protocol 2.0.0 uses a clean baseline from a new genesis; run " +
 		"packages/indexer/scripts/reset_db.sh and replay from genesis before starting the indexer.",
 	);
 	error.name = SCHEMA_MIGRATION_ERROR_NAME;
@@ -40,7 +40,11 @@ async function assertCompatibleSchema(): Promise<void> {
 		SELECT table_name, column_name
 		FROM information_schema.columns
 		WHERE table_schema = 'public'
-		  AND (table_name LIKE 'nft%' OR column_name LIKE 'nft%')
+		  AND (
+			table_name LIKE 'nft%' OR column_name LIKE 'nft%'
+			-- Protocol 1.x media projection; 2.0.0 restarts from a new genesis.
+			OR (table_name IN ('assets', 'collections') AND column_name = 'image_url')
+		  )
 		ORDER BY table_name, column_name
 		LIMIT 25
 	`;
